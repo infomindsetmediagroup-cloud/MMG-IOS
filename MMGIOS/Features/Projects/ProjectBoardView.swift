@@ -1,7 +1,9 @@
+import SwiftData
 import SwiftUI
 
 struct ProjectBoardView: View {
-    let projectStore: LocalProjectStore
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \PersistedProjectRecord.updatedAt, order: .reverse) private var projects: [PersistedProjectRecord]
     @State private var showingEditor = false
 
     var body: some View {
@@ -18,19 +20,20 @@ struct ProjectBoardView: View {
                 }
 
                 Section("All Projects") {
-                    ForEach(projectStore.projects) { project in
+                    ForEach(projects) { project in
                         NavigationLink {
-                            ProjectDetailView(projectStore: projectStore, project: project)
+                            ProjectDetailView(project: project)
                         } label: {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(project.title)
                                     .font(.headline)
-                                Text("\(project.area.rawValue) • \(project.status.rawValue) • \(project.priority.rawValue)")
+                                Text("\(project.areaRawValue) • \(project.statusRawValue) • \(project.priorityRawValue)")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                         }
                     }
+                    .onDelete(perform: deleteProjects)
                 }
             }
             .navigationTitle("Projects")
@@ -44,12 +47,30 @@ struct ProjectBoardView: View {
                 }
             }
             .sheet(isPresented: $showingEditor) {
-                ProjectEditorView(projectStore: projectStore)
+                ProjectEditorView()
             }
+            .task {
+                seedProjectsIfNeeded()
+            }
+        }
+    }
+
+    private func seedProjectsIfNeeded() {
+        guard projects.isEmpty else { return }
+
+        for project in SampleData.projects {
+            modelContext.insert(PersistedProjectRecord(project: project))
+        }
+    }
+
+    private func deleteProjects(at offsets: IndexSet) {
+        for index in offsets {
+            modelContext.delete(projects[index])
         }
     }
 }
 
 #Preview {
-    ProjectBoardView(projectStore: LocalProjectStore())
+    ProjectBoardView()
+        .modelContainer(for: PersistedProjectRecord.self, inMemory: true)
 }
