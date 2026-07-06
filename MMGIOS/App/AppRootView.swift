@@ -10,6 +10,11 @@ struct AppRootView: View {
                     Label("Command", systemImage: "square.grid.2x2")
                 }
 
+            ProjectBoardView(projectStore: projectStore)
+                .tabItem {
+                    Label("Projects", systemImage: "folder")
+                }
+
             AdminOperationsView(projectStore: projectStore)
                 .tabItem {
                     Label("Admin", systemImage: "building.2")
