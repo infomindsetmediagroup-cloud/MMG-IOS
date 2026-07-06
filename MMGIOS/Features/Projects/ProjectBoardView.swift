@@ -59,7 +59,9 @@ struct ProjectBoardView: View {
         guard projects.isEmpty else { return }
 
         for project in SampleData.projects {
-            modelContext.insert(PersistedProjectRecord(project: project))
+            let record = PersistedProjectRecord(project: project)
+            record.updateTasks(project.tasks)
+            modelContext.insert(record)
         }
     }
 
@@ -72,5 +74,5 @@ struct ProjectBoardView: View {
 
 #Preview {
     ProjectBoardView()
-        .modelContainer(for: PersistedProjectRecord.self, inMemory: true)
+        .modelContainer(try! PersistenceContainerFactory.makeContainer(inMemory: true))
 }
