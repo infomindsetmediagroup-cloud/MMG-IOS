@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct CommandCenterView: View {
+    let projectStore: LocalProjectStore
     private let columns = [GridItem(.adaptive(minimum: 160), spacing: 14)]
 
     var body: some View {
@@ -14,8 +15,19 @@ struct CommandCenterView: View {
                     )
 
                     LazyVGrid(columns: columns, spacing: 14) {
-                        ForEach(CommandCenterRegistry.metrics) { metric in
+                        MetricCard(metric: OperationalMetric(title: "Active Projects", value: "\(projectStore.activeProjects.count)", caption: "Open Kairos records", systemImage: "folder.badge.gearshape"))
+                        MetricCard(metric: OperationalMetric(title: "Blocked", value: "\(projectStore.blockedProjects.count)", caption: "Requires intervention", systemImage: "exclamationmark.triangle"))
+                        ForEach(CommandCenterRegistry.metrics.prefix(2)) { metric in
                             MetricCard(metric: metric)
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("Priority Workflow")
+                            .font(.title2.bold())
+
+                        ForEach(projectStore.activeProjects.prefix(4)) { project in
+                            ProjectCard(project: project)
                         }
                     }
 
@@ -43,5 +55,5 @@ struct CommandCenterView: View {
 }
 
 #Preview {
-    CommandCenterView()
+    CommandCenterView(projectStore: LocalProjectStore())
 }
