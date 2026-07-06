@@ -1,5 +1,10 @@
 import { kairosState } from "./state.js";
 
+const skin = document.createElement("link");
+skin.rel = "stylesheet";
+skin.href = "./styles/command-center.css";
+document.head.appendChild(skin);
+
 const nav = document.querySelector("#module-nav");
 const view = document.querySelector("#dashboard-view");
 const title = document.querySelector("#page-title");
@@ -9,7 +14,7 @@ mode.textContent = kairosState.mode;
 
 function renderNav(active = "dashboard") {
   nav.innerHTML = kairosState.modules.map(module => `
-    <button class="nav-button ${module.id === active ? "active" : ""}" data-module="${module.id}">${module.label}</button>
+    <button class="nav-button ${module.id === active ? "active" : ""}" data-module="${module.id}"><span class="nav-icon">${module.icon || "•"}</span>${module.label}</button>
   `).join("");
 
   nav.querySelectorAll("button").forEach(button => {
@@ -18,9 +23,13 @@ function renderNav(active = "dashboard") {
 }
 
 function badgeClass(value) {
-  if (["Active", "Low"].includes(value)) return "badge";
-  if (["Medium", "Queued"].includes(value)) return "badge warning";
+  if (["Active", "Low", "P1"].includes(value)) return "badge good";
+  if (["Medium", "Queued", "P2"].includes(value)) return "badge warning";
   return "badge danger";
+}
+
+function progress(value) {
+  return `<div class="progress-shell"><div class="progress-bar" style="width:${value}%"></div></div>`;
 }
 
 function list(items, statusKey = "status") {
@@ -38,27 +47,35 @@ function list(items, statusKey = "status") {
 function renderDashboard() {
   title.textContent = "Dashboard";
   view.innerHTML = `
-    <article class="card large">
+    <article class="card hero-panel">
       <div class="card-header">
         <div>
           <p class="eyebrow">Good evening, ${kairosState.operator}</p>
           <h3>${kairosState.activeBatch}</h3>
         </div>
-        <span class="badge">Phase 1</span>
+        <span class="badge good">Live</span>
       </div>
       <p class="metric">${kairosState.health}%</p>
-      <p class="muted">System health across website, Shopify, products, reviews, revenue, and knowledge operations.</p>
+      <p class="muted">Kairos is online as the Phase 1 web operations command center.</p>
+      <div class="action-row">
+        <button class="action-button">Start Daily Ops</button>
+        <button class="action-button">Run Website Audit</button>
+        <button class="action-button">Prepare Shopify Queue</button>
+      </div>
     </article>
 
-    <article class="card">
-      <div class="card-header"><h3>Operational Readiness</h3><span class="badge warning">Build</span></div>
-      <p class="metric">${kairosState.readiness}%</p>
-      <p class="muted">Dashboard shell is active. Live integrations remain queued.</p>
-    </article>
+    <section class="kpi-grid">
+      ${kairosState.kpis.map(kpi => `
+        <article class="card kpi-card">
+          <div class="card-header"><h3>${kpi.label}</h3><span class="trend ${kpi.tone}">${kpi.trend}</span></div>
+          <p class="metric">${kpi.value}</p>
+        </article>
+      `).join("")}
+    </section>
 
     <article class="card large">
-      <div class="card-header"><h3>Today's Priorities</h3><span class="badge">Active Queue</span></div>
-      ${list(kairosState.priorities)}
+      <div class="card-header"><h3>Today's Priorities</h3><span class="badge good">Active Queue</span></div>
+      ${list(kairosState.priorities, "priority")}
     </article>
 
     <article class="card">
@@ -66,9 +83,23 @@ function renderDashboard() {
       ${list(kairosState.approvals, "risk")}
     </article>
 
+    <article class="card large">
+      <div class="card-header"><h3>Operational Pipelines</h3><span class="badge">Runtime</span></div>
+      <div class="list">
+        ${kairosState.pipelines.map(item => `<div class="list-item"><div><strong>${item.label}</strong>${progress(item.complete)}</div><span class="badge">${item.complete}%</span></div>`).join("")}
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="card-header"><h3>Activity Feed</h3><span class="badge">Now</span></div>
+      <div class="list">${kairosState.activity.map(item => `<div class="list-item"><strong>${item}</strong></div>`).join("")}</div>
+    </article>
+
     <article class="card full">
       <div class="card-header"><h3>Managed Subsystems</h3><span class="badge">Kairos Managed</span></div>
-      ${list(kairosState.systems)}
+      <div class="list">
+        ${kairosState.systems.map(item => `<div class="list-item"><div><strong>${item.title}</strong><p class="muted">${item.status}</p>${progress(item.health)}</div><span class="badge">${item.health}%</span></div>`).join("")}
+      </div>
     </article>
   `;
 }
@@ -83,19 +114,10 @@ function renderModule(moduleId) {
     return;
   }
 
-  const moduleCopy = {
-    website: ["Run homepage audit", "Validate navigation", "Create production backlog", "Fix SEO and internal links"],
-    shopify: ["Validate Judge.me widgets", "Create bundle structure", "Prepare product templates", "Audit checkout offers"],
-    products: ["Create product health score", "Generate product guides", "Map vault access", "Package white-label deliverables"],
-    knowledge: ["Build Free Vault", "Classify articles", "Map revenue modules", "Create MMG Passport entry"],
-    revenue: ["Welcome popup", "Checkout discount", "Bundle engine", "Email capture"],
-    customers: ["Customer portal", "Vault access", "License records", "Review follow-up"],
-    ai: ["Model routing", "Research queue", "Writing tasks", "Code review tasks"],
-    system: ["Integrations", "Runtime health", "Backups", "Golden Master"]
-  }[moduleId] || [];
+  const moduleCopy = kairosState.commandCenters[moduleId] || [];
 
   view.innerHTML = `
-    <article class="card full">
+    <article class="card hero-panel">
       <div class="card-header">
         <div>
           <p class="eyebrow">Command Center</p>
@@ -103,6 +125,11 @@ function renderModule(moduleId) {
         </div>
         <span class="badge warning">Build Queue</span>
       </div>
+      <p class="muted">Kairos-managed workspace for ${module?.label} operations.</p>
+      <div class="action-row"><button class="action-button">Execute Next Task</button><button class="action-button">Create Backlog Item</button></div>
+    </article>
+    <article class="card full">
+      <div class="card-header"><h3>Execution Queue</h3><span class="badge warning">Queued</span></div>
       <div class="list">
         ${moduleCopy.map(task => `<div class="list-item"><strong>${task}</strong><span class="badge warning">Queued</span></div>`).join("")}
       </div>
