@@ -64,7 +64,7 @@ private struct ChecklistContentView: View {
     private var qualityGatesSection: some View {
         Section("Quality Gates") {
             ForEach(checklist.decodedGates) { gate in
-                QualityGateRow(gate: gate) { status in
+                InternalQualityGateRow(gate: gate) { status in
                     checklist.setGateStatus(gateID: gate.id, status: status)
                 }
             }
@@ -72,7 +72,7 @@ private struct ChecklistContentView: View {
     }
 }
 
-private struct QualityGateRow: View {
+private struct InternalQualityGateRow: View {
     let gate: QualityGate
     let setStatus: (QualityGateStatus) -> Void
 
