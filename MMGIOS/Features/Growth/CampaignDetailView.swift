@@ -1,91 +1,121 @@
+import SwiftData
 import SwiftUI
 
 struct CampaignDetailView: View {
-    let campaignStore: LocalCampaignStore
     let sessionStore: LocalSessionStore
-    let campaign: Campaign
+    @Environment(\.modelContext) private var modelContext
+    @Bindable var campaign: PersistedCampaignRecord
 
-    private var currentCampaign: Campaign {
-        campaignStore.campaigns.first(where: { $0.id == campaign.id }) ?? campaign
+    private var canLaunch: Bool {
+        !campaign.requiresApproval ||
+        campaign.approvedBy != nil ||
+        campaign.statusRawValue == CampaignStatus.approved.rawValue ||
+        campaign.statusRawValue == CampaignStatus.scheduled.rawValue ||
+        campaign.statusRawValue == CampaignStatus.live.rawValue ||
+        campaign.statusRawValue == CampaignStatus.completed.rawValue
     }
 
     var body: some View {
         List {
-            Section {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(currentCampaign.channel.rawValue.uppercased())
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.mmgBlue)
-                        .tracking(1.2)
-
-                    Text(currentCampaign.title)
-                        .font(.largeTitle.bold())
-
-                    Text(currentCampaign.objective)
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.vertical, 8)
-            }
-
-            Section("Campaign") {
-                LabeledContent("Status", value: currentCampaign.status.rawValue)
-                LabeledContent("Audience", value: currentCampaign.audience.rawValue)
-                LabeledContent("Offer", value: currentCampaign.offer)
-                LabeledContent("Landing Page", value: currentCampaign.landingPagePath)
-                LabeledContent("Can Launch", value: currentCampaign.canLaunch ? "Yes" : "No")
-            }
-
-            if let promo = currentCampaign.promoCode {
-                Section("Promo Code") {
-                    LabeledContent("Code", value: promo.code)
-                    LabeledContent("Discount", value: promo.discountDescription)
-                    LabeledContent("Active", value: promo.isActive ? "Yes" : "No")
-
-                    Button {
-                        campaignStore.togglePromo(campaignID: currentCampaign.id)
-                    } label: {
-                        Label(promo.isActive ? "Deactivate Promo" : "Activate Promo", systemImage: "tag")
-                    }
-                }
-            }
-
-            Section("Approval") {
-                if let approvedBy = currentCampaign.approvedBy {
-                    LabeledContent("Approved By", value: approvedBy)
-                } else {
-                    Button {
-                        campaignStore.approve(campaignID: currentCampaign.id, approver: sessionStore.session.user.name)
-                    } label: {
-                        Label("Approve Campaign", systemImage: "hand.thumbsup")
-                    }
-                }
-            }
-
-            Section("Status") {
-                ForEach(CampaignStatus.allCases) { status in
-                    Button {
-                        campaignStore.updateStatus(campaignID: currentCampaign.id, status: status)
-                    } label: {
-                        HStack {
-                            Text(status.rawValue)
-                            Spacer()
-                            if currentCampaign.status == status {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(.mmgBlue)
-                            }
-                        }
-                    }
-                }
-            }
+            headerSection
+            campaignSection
+            approvalSection
+            statusSection
+            actionsSection
         }
         .navigationTitle("Campaign")
         .navigationBarTitleDisplayMode(.inline)
     }
+
+    private var headerSection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(campaign.channelRawValue.uppercased())
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.mmgBlue)
+                    .tracking(1.2)
+
+                Text(campaign.title)
+                    .font(.largeTitle.bold())
+
+                Text(campaign.objective)
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 8)
+        }
+    }
+
+    private var campaignSection: some View {
+        Section("Campaign") {
+            LabeledContent("Status", value: campaign.statusRawValue)
+            LabeledContent("Audience", value: campaign.audienceRawValue)
+            LabeledContent("Offer", value: campaign.offer)
+            LabeledContent("Landing Page", value: campaign.landingPagePath)
+            LabeledContent("Can Launch", value: canLaunch ? "Yes" : "No")
+        }
+    }
+
+    private var approvalSection: some View {
+        Section("Approval") {
+            if let approvedBy = campaign.approvedBy {
+                LabeledContent("Approved By", value: approvedBy)
+            } else {
+                Button {
+                    campaign.approvedBy = sessionStore.session.user.name
+                    campaign.statusRawValue = CampaignStatus.approved.rawValue
+                    campaign.updatedAt = Date()
+                } label: {
+                    Label("Approve Campaign", systemImage: "hand.thumbsup")
+                }
+            }
+        }
+    }
+
+    private var statusSection: some View {
+        Section("Status") {
+            ForEach(CampaignStatus.allCases) { status in
+                Button {
+                    campaign.statusRawValue = status.rawValue
+                    campaign.updatedAt = Date()
+                } label: {
+                    CampaignStatusRow(status: status, selectedStatus: campaign.statusRawValue)
+                }
+            }
+        }
+    }
+
+    private var actionsSection: some View {
+        Section("Actions") {
+            Button(role: .destructive) {
+                modelContext.delete(campaign)
+            } label: {
+                Label("Delete Campaign", systemImage: "trash")
+            }
+        }
+    }
+}
+
+private struct CampaignStatusRow: View {
+    let status: CampaignStatus
+    let selectedStatus: String
+
+    var body: some View {
+        HStack {
+            Text(status.rawValue)
+            Spacer()
+            if selectedStatus == status.rawValue {
+                Image(systemName: "checkmark")
+                    .foregroundStyle(.mmgBlue)
+            }
+        }
+    }
 }
 
 #Preview {
-    NavigationStack {
-        CampaignDetailView(campaignStore: LocalCampaignStore(), sessionStore: LocalSessionStore(), campaign: SampleData.campaigns[0])
+    let campaign = PersistedCampaignRecord(campaign: SampleData.campaigns[0])
+    return NavigationStack {
+        CampaignDetailView(sessionStore: LocalSessionStore(), campaign: campaign)
     }
+    .modelContainer(for: PersistedCampaignRecord.self, inMemory: true)
 }
