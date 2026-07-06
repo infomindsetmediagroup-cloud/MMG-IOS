@@ -23,14 +23,14 @@ struct AppRootView: View {
             }
 
             if AccessPolicy.canAccess(.system, role: role) {
-                ShopifyOperationsEngineView()
+                ShopifyOperationsRuntimeView()
                     .tabItem {
                         Label("Shopify", systemImage: "bag")
                     }
             }
 
             if AccessPolicy.canAccess(.system, role: role) {
-                KairosOperationalOrchestratorView()
+                KairosOperationalOrchestratorRuntimeView()
                     .tabItem {
                         Label("Orchestrator", systemImage: "arrow.triangle.branch")
                     }
