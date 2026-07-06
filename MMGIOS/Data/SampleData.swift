@@ -56,6 +56,25 @@ enum SampleData {
         )
     ]
 
+    static let customerRequests: [CustomerPortalRequest] = [
+        CustomerPortalRequest(
+            customerName: "MMG Demo Customer",
+            email: "customer@example.com",
+            requestType: .onboarding,
+            status: .needsReview,
+            subject: "Service onboarding started",
+            message: "Customer has entered the portal and needs the standard service onboarding workflow reviewed."
+        ),
+        CustomerPortalRequest(
+            customerName: "Publishing Client",
+            email: "publishing@example.com",
+            requestType: .manuscript,
+            status: .received,
+            subject: "Manuscript files submitted",
+            message: "Customer submitted source files for publishing review and production routing."
+        )
+    ]
+
     static func releaseChecklists(for projects: [KairosProject]) -> [ReleaseChecklist] {
         projects.map { project in
             ReleaseChecklist(
