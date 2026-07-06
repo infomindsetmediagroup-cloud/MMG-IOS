@@ -1,5 +1,6 @@
 import { kairosState } from "./state.js";
 import { bundlePackages, bundleMetrics } from "./bundles.js";
+import { websiteAudit, websiteMetrics } from "./website-ops.js";
 
 const skin = document.createElement("link");
 skin.rel = "stylesheet";
@@ -26,8 +27,8 @@ function renderNav(active = "dashboard") {
 function badgeClass(value) {
   const normalized = String(value || "").toLowerCase();
   if (["active", "ready", "live", "low", "p1", "architecture ready", "package queue active"].includes(normalized)) return "badge good";
-  if (["medium", "queued", "p2", "approval", "build", "installed / mapping required", "popup + bundle build queued", "route audit required", "needs widget validation"].includes(normalized)) return "badge warning";
-  if (["high", "blocked", "failed", "danger"].includes(normalized)) return "badge danger";
+  if (["medium", "queued", "p2", "approval", "build", "installed / mapping required", "popup + bundle build queued", "route audit required", "needs widget validation", "open"].includes(normalized)) return "badge warning";
+  if (["critical", "high", "blocked", "failed", "danger"].includes(normalized)) return "badge danger";
   return "badge";
 }
 
@@ -40,7 +41,7 @@ function list(items, statusKey = "status") {
     <div class="list-item">
       <div>
         <strong>${item.title}</strong>
-        <p class="muted">${item.lane || item.status || item.risk || "Kairos"}</p>
+        <p class="muted">${item.lane || item.status || item.risk || item.area || "Kairos"}</p>
       </div>
       <span class="${badgeClass(item[statusKey])}">${item[statusKey]}</span>
     </div>
@@ -49,6 +50,7 @@ function list(items, statusKey = "status") {
 
 function renderDashboard() {
   const metrics = bundleMetrics();
+  const site = websiteMetrics();
   title.textContent = "Dashboard";
   view.innerHTML = `
     <article class="card hero-panel">
@@ -63,8 +65,8 @@ function renderDashboard() {
       <p class="muted">Kairos is online as the Phase 1 web operations command center.</p>
       <div class="action-row">
         <button class="action-button">Start Daily Ops</button>
+        <button class="action-button">Run Website Audit</button>
         <button class="action-button">Package Bundles</button>
-        <button class="action-button">Prepare Shopify Queue</button>
       </div>
     </article>
 
@@ -78,6 +80,21 @@ function renderDashboard() {
     </section>
 
     <article class="card large">
+      <div class="card-header"><h3>Website Operations</h3><span class="badge warning">${site.open} Open</span></div>
+      <p class="metric">${site.score}%</p>
+      <p class="muted">Site health for ${websiteAudit.site}</p>
+      ${progress(site.score)}
+    </article>
+
+    <article class="card">
+      <div class="card-header"><h3>Site Risks</h3><span class="badge danger">${site.critical} Critical</span></div>
+      <div class="list">
+        <div class="list-item"><strong>High Priority</strong><span class="badge danger">${site.high}</span></div>
+        <div class="list-item"><strong>Opportunities</strong><span class="badge">${site.opportunities}</span></div>
+      </div>
+    </article>
+
+    <article class="card large">
       <div class="card-header"><h3>Bundle Packages</h3><span class="badge good">${metrics.projectedRevenue}</span></div>
       <div class="list">
         ${bundlePackages.map(bundle => `<div class="list-item"><div><strong>${bundle.title}</strong><p class="muted">${bundle.price} • ${bundle.destination}</p></div><span class="${badgeClass(bundle.status)}">${bundle.status}</span></div>`).join("")}
@@ -85,34 +102,13 @@ function renderDashboard() {
     </article>
 
     <article class="card">
-      <div class="card-header"><h3>Bundle Metrics</h3><span class="badge good">Active</span></div>
-      <div class="list">
-        <div class="list-item"><strong>Packages</strong><span class="badge">${metrics.activeBundles}</span></div>
-        <div class="list-item"><strong>Ready</strong><span class="badge good">${metrics.ready}</span></div>
-        <div class="list-item"><strong>Approvals</strong><span class="badge warning">${metrics.approvals}</span></div>
-      </div>
-    </article>
-
-    <article class="card large">
-      <div class="card-header"><h3>Today's Priorities</h3><span class="badge good">Active Queue</span></div>
-      ${list(kairosState.priorities, "priority")}
-    </article>
-
-    <article class="card">
       <div class="card-header"><h3>Awaiting Approval</h3><span class="badge warning">${kairosState.approvals.length}</span></div>
       ${list(kairosState.approvals, "risk")}
     </article>
 
-    <article class="card large">
-      <div class="card-header"><h3>Operational Pipelines</h3><span class="badge">Runtime</span></div>
-      <div class="list">
-        ${kairosState.pipelines.map(item => `<div class="list-item"><div><strong>${item.label}</strong>${progress(item.complete)}</div><span class="badge">${item.complete}%</span></div>`).join("")}
-      </div>
-    </article>
-
-    <article class="card">
-      <div class="card-header"><h3>Activity Feed</h3><span class="badge">Now</span></div>
-      <div class="list">${kairosState.activity.map(item => `<div class="list-item"><strong>${item}</strong></div>`).join("")}</div>
+    <article class="card full">
+      <div class="card-header"><h3>Today's Priorities</h3><span class="badge good">Active Queue</span></div>
+      ${list(kairosState.priorities, "priority")}
     </article>
   `;
 }
@@ -136,20 +132,36 @@ function renderBundles() {
   `;
 }
 
+function renderWebsite() {
+  const site = websiteMetrics();
+  title.textContent = "Website Ops";
+  view.innerHTML = `
+    <article class="card hero-panel">
+      <div class="card-header"><div><p class="eyebrow">Website Intelligence</p><h3>Website Operations Command Center</h3></div><span class="badge warning">${site.open} Open</span></div>
+      <p class="metric">${site.score}%</p>
+      <p class="muted">${websiteAudit.site} • ${websiteAudit.lastRun}</p>
+      ${progress(site.score)}
+      <div class="action-row"><button class="action-button">Run Website Audit</button><button class="action-button">Generate Backlog</button><button class="action-button">Approve Fix Batch</button></div>
+    </article>
+    <article class="card large">
+      <div class="card-header"><h3>Audit Findings</h3><span class="badge danger">${site.critical} Critical</span></div>
+      ${list(websiteAudit.findings, "severity")}
+    </article>
+    <article class="card">
+      <div class="card-header"><h3>Opportunities</h3><span class="badge">${site.opportunities}</span></div>
+      <div class="list">${websiteAudit.opportunities.map(item => `<div class="list-item"><strong>${item}</strong><span class="badge warning">Queued</span></div>`).join("")}</div>
+    </article>
+  `;
+}
+
 function renderModule(moduleId) {
   renderNav(moduleId);
   const module = kairosState.modules.find(item => item.id === moduleId);
   title.textContent = module?.label || "Dashboard";
 
-  if (moduleId === "dashboard") {
-    renderDashboard();
-    return;
-  }
-
-  if (moduleId === "bundles") {
-    renderBundles();
-    return;
-  }
+  if (moduleId === "dashboard") return renderDashboard();
+  if (moduleId === "bundles") return renderBundles();
+  if (moduleId === "website") return renderWebsite();
 
   const moduleCopy = kairosState.commandCenters[moduleId] || [];
   view.innerHTML = `
