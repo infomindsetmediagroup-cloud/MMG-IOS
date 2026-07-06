@@ -10,7 +10,6 @@ enum PersistenceContainerFactory {
         PersistedCampaignRecord.self
     ])
 
-    @MainActor
     static func makeContainer(inMemory: Bool = false) throws -> ModelContainer {
         let configuration = ModelConfiguration(
             schema: schema,
