@@ -4,7 +4,8 @@ import SwiftUI
 @main
 struct MMGIOSApp: App {
     private let modelContainer: ModelContainer
-    @State private var kairosRuntime = KairosRuntime()
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var kairosRuntime = LocalKairosRuntimeStore.restore()
 
     init() {
         do {
@@ -18,6 +19,11 @@ struct MMGIOSApp: App {
         WindowGroup {
             AuthGateView()
                 .environment(kairosRuntime)
+                .onChange(of: scenePhase) { _, newPhase in
+                    if newPhase != .active {
+                        LocalKairosRuntimeStore.save(kairosRuntime)
+                    }
+                }
         }
         .modelContainer(modelContainer)
     }
