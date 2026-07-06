@@ -34,5 +34,5 @@ jobs:
           xcodebuild \
             -project MMGIOS.xcodeproj \
             -scheme MMGIOS \
-            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -destination 'generic/platform=iOS Simulator' \
             clean build
