@@ -5,25 +5,11 @@ on:
     branches:
       - main
       - master
-    paths:
-      - 'MMGIOS/**'
-      - 'project.yml'
-      - '.github/workflows/ios-build.yml'
-      - 'Makefile'
   pull_request:
     branches:
       - main
       - master
-    paths:
-      - 'MMGIOS/**'
-      - 'project.yml'
-      - '.github/workflows/ios-build.yml'
-      - 'Makefile'
   workflow_dispatch:
-
-concurrency:
-  group: ios-build-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   build:
@@ -39,27 +25,10 @@ jobs:
         run: sudo xcode-select -s /Applications/Xcode_16.2.app
 
       - name: Install XcodeGen
-        run: |
-          if ! command -v xcodegen >/dev/null 2>&1; then
-            brew install xcodegen
-          fi
+        run: brew install xcodegen
 
       - name: Generate Xcode project
         run: xcodegen generate
 
       - name: Build
-        run: |
-          set -o pipefail
-          xcodebuild \
-            -project MMGIOS.xcodeproj \
-            -scheme MMGIOS \
-            -destination 'generic/platform=iOS Simulator' \
-            CODE_SIGNING_ALLOWED=NO \
-            -quiet \
-            clean build 2>&1 | tee xcodebuild.log
-
-      - name: Print build errors
-        if: failure()
-        run: |
-          echo "---- Build error summary ----"
-          grep -n -E "error:|warning:|BUILD FAILED|SwiftCompile" xcodebuild.log | tail -n 120 || true
+        run: xcodebuild -project MMGIOS.xcodeproj -scheme MMGIOS -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO clean build
