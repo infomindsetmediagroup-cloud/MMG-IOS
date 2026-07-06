@@ -6,6 +6,7 @@ struct AppRootView: View {
     @State private var qualityStore = LocalQualityStore()
     @State private var customerStore = LocalCustomerPortalStore()
     @State private var publishingStore = LocalPublishingStore()
+    @State private var releaseStore = LocalReleasePackageStore()
 
     private var role: UserRole {
         sessionStore.session.user.role
@@ -52,6 +53,13 @@ struct AppRootView: View {
                 QualityReleaseView(projectStore: projectStore, qualityStore: qualityStore)
                     .tabItem {
                         Label("Quality", systemImage: "checkmark.seal")
+                    }
+            }
+
+            if AccessPolicy.canAccess(.releases, role: role) {
+                ReleasePackageBuilderView(releaseStore: releaseStore)
+                    .tabItem {
+                        Label("Releases", systemImage: "archivebox")
                     }
             }
 
