@@ -4,38 +4,62 @@ struct AppRootView: View {
     let sessionStore: LocalSessionStore
     @State private var projectStore = LocalProjectStore()
     @State private var qualityStore = LocalQualityStore()
+    @State private var customerStore = LocalCustomerPortalStore()
+
+    private var role: UserRole {
+        sessionStore.session.user.role
+    }
 
     var body: some View {
         TabView {
-            CommandCenterView(projectStore: projectStore)
-                .tabItem {
-                    Label("Command", systemImage: "square.grid.2x2")
-                }
+            if AccessPolicy.canAccess(.command, role: role) {
+                CommandCenterView(projectStore: projectStore)
+                    .tabItem {
+                        Label("Command", systemImage: "square.grid.2x2")
+                    }
+            }
 
-            ProjectBoardView(projectStore: projectStore)
-                .tabItem {
-                    Label("Projects", systemImage: "folder")
-                }
+            if AccessPolicy.canAccess(.customer, role: role) {
+                CustomerPortalView(sessionStore: sessionStore, customerStore: customerStore)
+                    .tabItem {
+                        Label("Customer", systemImage: "person.text.rectangle")
+                    }
+            }
 
-            ProductionCommandCenterView(projectStore: projectStore)
-                .tabItem {
-                    Label("Production", systemImage: "shippingbox")
-                }
+            if AccessPolicy.canAccess(.projects, role: role) {
+                ProjectBoardView(projectStore: projectStore)
+                    .tabItem {
+                        Label("Projects", systemImage: "folder")
+                    }
+            }
 
-            QualityReleaseView(projectStore: projectStore, qualityStore: qualityStore)
-                .tabItem {
-                    Label("Quality", systemImage: "checkmark.seal")
-                }
+            if AccessPolicy.canAccess(.production, role: role) {
+                ProductionCommandCenterView(projectStore: projectStore)
+                    .tabItem {
+                        Label("Production", systemImage: "shippingbox")
+                    }
+            }
 
-            GrowthMarketingView(projectStore: projectStore)
-                .tabItem {
-                    Label("Growth", systemImage: "chart.line.uptrend.xyaxis")
-                }
+            if AccessPolicy.canAccess(.quality, role: role) {
+                QualityReleaseView(projectStore: projectStore, qualityStore: qualityStore)
+                    .tabItem {
+                        Label("Quality", systemImage: "checkmark.seal")
+                    }
+            }
 
-            SystemSettingsView(projectStore: projectStore, sessionStore: sessionStore)
-                .tabItem {
-                    Label("System", systemImage: "gearshape")
-                }
+            if AccessPolicy.canAccess(.growth, role: role) {
+                GrowthMarketingView(projectStore: projectStore)
+                    .tabItem {
+                        Label("Growth", systemImage: "chart.line.uptrend.xyaxis")
+                    }
+            }
+
+            if AccessPolicy.canAccess(.system, role: role) {
+                SystemSettingsView(projectStore: projectStore, sessionStore: sessionStore)
+                    .tabItem {
+                        Label("System", systemImage: "gearshape")
+                    }
+            }
         }
         .tint(.mmgBlue)
     }
