@@ -5,6 +5,7 @@ struct AppRootView: View {
     @State private var projectStore = LocalProjectStore()
     @State private var qualityStore = LocalQualityStore()
     @State private var customerStore = LocalCustomerPortalStore()
+    @State private var publishingStore = LocalPublishingStore()
 
     private var role: UserRole {
         sessionStore.session.user.role
@@ -30,6 +31,13 @@ struct AppRootView: View {
                 ProjectBoardView(projectStore: projectStore)
                     .tabItem {
                         Label("Projects", systemImage: "folder")
+                    }
+            }
+
+            if AccessPolicy.canAccess(.publishing, role: role) {
+                PublishingCommandCenterView(publishingStore: publishingStore)
+                    .tabItem {
+                        Label("Publishing", systemImage: "books.vertical")
                     }
             }
 
