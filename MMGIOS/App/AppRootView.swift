@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AppRootView: View {
     @State private var projectStore = LocalProjectStore()
+    @State private var qualityStore = LocalQualityStore()
 
     var body: some View {
         TabView {
@@ -15,14 +16,14 @@ struct AppRootView: View {
                     Label("Projects", systemImage: "folder")
                 }
 
-            AdminOperationsView(projectStore: projectStore)
-                .tabItem {
-                    Label("Admin", systemImage: "building.2")
-                }
-
             ProductionCommandCenterView(projectStore: projectStore)
                 .tabItem {
                     Label("Production", systemImage: "shippingbox")
+                }
+
+            QualityReleaseView(projectStore: projectStore, qualityStore: qualityStore)
+                .tabItem {
+                    Label("Quality", systemImage: "checkmark.seal")
                 }
 
             GrowthMarketingView(projectStore: projectStore)
