@@ -3,7 +3,7 @@ import SwiftUI
 
 struct QualityChecklistView: View {
     let project: PersistedProjectRecord
-    @Bindable var checklist: PersistedReleaseChecklistRecord?
+    @State var checklist: PersistedReleaseChecklistRecord?
 
     var body: some View {
         List {
