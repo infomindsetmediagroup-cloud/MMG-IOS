@@ -1,13 +1,11 @@
 import SwiftUI
 
 struct AdminOperationsView: View {
-    private let tasks = [
-        "Navigation and critical-link validation",
-        "Customer portal intake review",
-        "Publishing standard enforcement",
-        "Service-product backlog execution",
-        "Release readiness checkpointing"
-    ]
+    let projectStore: LocalProjectStore
+
+    private var adminProjects: [KairosProject] {
+        projectStore.projects(in: .admin) + projectStore.projects(in: .publishing)
+    }
 
     var body: some View {
         NavigationStack {
@@ -22,9 +20,19 @@ struct AdminOperationsView: View {
                     .listRowBackground(Color.clear)
                 }
 
-                Section("Operational Queue") {
-                    ForEach(tasks, id: \.self) { task in
-                        Label(task, systemImage: "checkmark.circle")
+                Section("Operational Records") {
+                    ForEach(adminProjects) { project in
+                        NavigationLink {
+                            ProjectDetailView(projectStore: projectStore, project: project)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(project.title)
+                                    .font(.headline)
+                                Text(project.status.rawValue)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                     }
                 }
 
@@ -41,5 +49,5 @@ struct AdminOperationsView: View {
 }
 
 #Preview {
-    AdminOperationsView()
+    AdminOperationsView(projectStore: LocalProjectStore())
 }
