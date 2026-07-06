@@ -1,4 +1,5 @@
 import { kairosState } from "./state.js";
+import { bundlePackages, bundleMetrics } from "./bundles.js";
 
 const skin = document.createElement("link");
 skin.rel = "stylesheet";
@@ -23,7 +24,7 @@ function renderNav(active = "dashboard") {
 }
 
 function badgeClass(value) {
-  if (["Active", "Low", "P1"].includes(value)) return "badge good";
+  if (["Active", "Ready", "Low", "P1"].includes(value)) return "badge good";
   if (["Medium", "Queued", "P2"].includes(value)) return "badge warning";
   return "badge danger";
 }
@@ -45,6 +46,7 @@ function list(items, statusKey = "status") {
 }
 
 function renderDashboard() {
+  const metrics = bundleMetrics();
   title.textContent = "Dashboard";
   view.innerHTML = `
     <article class="card hero-panel">
@@ -59,7 +61,7 @@ function renderDashboard() {
       <p class="muted">Kairos is online as the Phase 1 web operations command center.</p>
       <div class="action-row">
         <button class="action-button">Start Daily Ops</button>
-        <button class="action-button">Run Website Audit</button>
+        <button class="action-button">Package Bundles</button>
         <button class="action-button">Prepare Shopify Queue</button>
       </div>
     </article>
@@ -72,6 +74,22 @@ function renderDashboard() {
         </article>
       `).join("")}
     </section>
+
+    <article class="card large">
+      <div class="card-header"><h3>Bundle Packages</h3><span class="badge good">${metrics.projectedRevenue}</span></div>
+      <div class="list">
+        ${bundlePackages.map(bundle => `<div class="list-item"><div><strong>${bundle.title}</strong><p class="muted">${bundle.price} • ${bundle.destination}</p></div><span class="${badgeClass(bundle.status)}">${bundle.status}</span></div>`).join("")}
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="card-header"><h3>Bundle Metrics</h3><span class="badge good">Active</span></div>
+      <div class="list">
+        <div class="list-item"><strong>Packages</strong><span class="badge">${metrics.activeBundles}</span></div>
+        <div class="list-item"><strong>Ready</strong><span class="badge good">${metrics.ready}</span></div>
+        <div class="list-item"><strong>Approvals</strong><span class="badge warning">${metrics.approvals}</span></div>
+      </div>
+    </article>
 
     <article class="card large">
       <div class="card-header"><h3>Today's Priorities</h3><span class="badge good">Active Queue</span></div>
@@ -94,11 +112,23 @@ function renderDashboard() {
       <div class="card-header"><h3>Activity Feed</h3><span class="badge">Now</span></div>
       <div class="list">${kairosState.activity.map(item => `<div class="list-item"><strong>${item}</strong></div>`).join("")}</div>
     </article>
+  `;
+}
 
+function renderBundles() {
+  const metrics = bundleMetrics();
+  title.textContent = "Bundles";
+  view.innerHTML = `
+    <article class="card hero-panel">
+      <div class="card-header"><div><p class="eyebrow">Package Engine</p><h3>Bundle Command Center</h3></div><span class="badge good">${metrics.activeBundles} Active</span></div>
+      <p class="metric">${metrics.projectedRevenue}</p>
+      <p class="muted">Projected package revenue across active bundle offers.</p>
+      <div class="action-row"><button class="action-button">Package Next Bundle</button><button class="action-button">Create Shopify Listing</button><button class="action-button">Assign Vault Access</button></div>
+    </article>
     <article class="card full">
-      <div class="card-header"><h3>Managed Subsystems</h3><span class="badge">Kairos Managed</span></div>
+      <div class="card-header"><h3>Bundle Queue</h3><span class="badge warning">Packaging</span></div>
       <div class="list">
-        ${kairosState.systems.map(item => `<div class="list-item"><div><strong>${item.title}</strong><p class="muted">${item.status}</p>${progress(item.health)}</div><span class="badge">${item.health}%</span></div>`).join("")}
+        ${bundlePackages.map(bundle => `<div class="list-item"><div><strong>${bundle.title}</strong><p class="muted">${bundle.items.join(" • ")}</p><p class="muted">${bundle.value} value → ${bundle.price}</p></div><span class="${badgeClass(bundle.status)}">${bundle.status}</span></div>`).join("")}
       </div>
     </article>
   `;
@@ -114,25 +144,21 @@ function renderModule(moduleId) {
     return;
   }
 
-  const moduleCopy = kairosState.commandCenters[moduleId] || [];
+  if (moduleId === "bundles") {
+    renderBundles();
+    return;
+  }
 
+  const moduleCopy = kairosState.commandCenters[moduleId] || [];
   view.innerHTML = `
     <article class="card hero-panel">
-      <div class="card-header">
-        <div>
-          <p class="eyebrow">Command Center</p>
-          <h3>${module?.label}</h3>
-        </div>
-        <span class="badge warning">Build Queue</span>
-      </div>
+      <div class="card-header"><div><p class="eyebrow">Command Center</p><h3>${module?.label}</h3></div><span class="badge warning">Build Queue</span></div>
       <p class="muted">Kairos-managed workspace for ${module?.label} operations.</p>
       <div class="action-row"><button class="action-button">Execute Next Task</button><button class="action-button">Create Backlog Item</button></div>
     </article>
     <article class="card full">
       <div class="card-header"><h3>Execution Queue</h3><span class="badge warning">Queued</span></div>
-      <div class="list">
-        ${moduleCopy.map(task => `<div class="list-item"><strong>${task}</strong><span class="badge warning">Queued</span></div>`).join("")}
-      </div>
+      <div class="list">${moduleCopy.map(task => `<div class="list-item"><strong>${task}</strong><span class="badge warning">Queued</span></div>`).join("")}</div>
     </article>
   `;
 }
