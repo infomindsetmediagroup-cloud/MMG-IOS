@@ -15,6 +15,13 @@ struct AppRootView: View {
 
     var body: some View {
         TabView {
+            if AccessPolicy.canAccess(.system, role: role) {
+                KairosOperationsDashboardView()
+                    .tabItem {
+                        Label("Operations", systemImage: "command.circle")
+                    }
+            }
+
             if AccessPolicy.canAccess(.command, role: role) {
                 CommandCenterView(projectStore: projectStore)
                     .tabItem {
