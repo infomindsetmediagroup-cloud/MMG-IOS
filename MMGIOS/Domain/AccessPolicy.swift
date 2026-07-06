@@ -8,6 +8,7 @@ enum AppDestination: String, CaseIterable, Identifiable {
     case admin = "Admin"
     case production = "Production"
     case quality = "Quality"
+    case releases = "Releases"
     case growth = "Growth"
     case system = "System"
 
@@ -22,7 +23,7 @@ enum AccessPolicy {
         case .admin:
             return true
         case .operatorRole:
-            return [.command, .customer, .projects, .publishing, .production, .quality, .system].contains(destination)
+            return [.command, .customer, .projects, .publishing, .production, .quality, .releases, .system].contains(destination)
         case .customer:
             return [.customer, .system].contains(destination)
         }
