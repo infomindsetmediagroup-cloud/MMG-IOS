@@ -10,6 +10,7 @@ final class PersistedProjectRecord {
     var statusRawValue: String
     var priorityRawValue: String
     var summary: String
+    var taskPayload: String
     var createdAt: Date
     var updatedAt: Date
 
@@ -21,6 +22,7 @@ final class PersistedProjectRecord {
         statusRawValue: String,
         priorityRawValue: String,
         summary: String,
+        taskPayload: String = "[]",
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
@@ -31,6 +33,7 @@ final class PersistedProjectRecord {
         self.statusRawValue = statusRawValue
         self.priorityRawValue = priorityRawValue
         self.summary = summary
+        self.taskPayload = taskPayload
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
