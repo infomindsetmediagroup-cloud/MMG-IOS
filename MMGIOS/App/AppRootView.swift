@@ -22,6 +22,13 @@ struct AppRootView: View {
                     }
             }
 
+            if AccessPolicy.canAccess(.system, role: role) {
+                ShopifyOperationsEngineView()
+                    .tabItem {
+                        Label("Shopify", systemImage: "bag")
+                    }
+            }
+
             if AccessPolicy.canAccess(.command, role: role) {
                 CommandCenterView(projectStore: projectStore)
                     .tabItem {
