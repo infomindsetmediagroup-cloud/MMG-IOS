@@ -66,6 +66,13 @@ extension PersistedReleaseChecklistRecord {
         updatedAt = Date()
     }
 
+    func setGateStatus(gateID: UUID, status: QualityGateStatus) {
+        var gates = decodedGates
+        guard let index = gates.firstIndex(where: { $0.id == gateID }) else { return }
+        gates[index].status = status
+        updateGates(gates)
+    }
+
     func toggleGate(gateID: UUID) {
         var gates = decodedGates
         guard let index = gates.firstIndex(where: { $0.id == gateID }) else { return }
