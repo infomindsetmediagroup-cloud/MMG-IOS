@@ -1,10 +1,12 @@
+import SwiftData
 import SwiftUI
 
 struct ProductionCommandCenterView: View {
     let projectStore: LocalProjectStore
+    @Query(sort: \PersistedProjectRecord.updatedAt, order: .reverse) private var projects: [PersistedProjectRecord]
 
-    private var productionProjects: [KairosProject] {
-        projectStore.projects(in: .production)
+    private var productionProjects: [PersistedProjectRecord] {
+        projects.filter { $0.areaRawValue == WorkflowArea.production.rawValue }
     }
 
     private let stages = [
@@ -46,13 +48,18 @@ struct ProductionCommandCenterView: View {
             Text("Production Records")
                 .font(.title2.bold())
 
-            ForEach(productionProjects) { project in
-                NavigationLink {
-                    ProjectDetailView(projectStore: projectStore, project: project)
-                } label: {
-                    ProjectCard(project: project)
+            if productionProjects.isEmpty {
+                Text("No production records yet.")
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(productionProjects) { project in
+                    NavigationLink {
+                        ProjectDetailView(project: project)
+                    } label: {
+                        PersistedProjectCard(project: project)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
     }
@@ -66,6 +73,30 @@ struct ProductionCommandCenterView: View {
                 DeliveryStageRow(index: index, stage: stage)
             }
         }
+    }
+}
+
+private struct PersistedProjectCard: View {
+    let project: PersistedProjectRecord
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(project.title)
+                .font(.headline)
+                .foregroundStyle(.primary)
+
+            Text("\(project.areaRawValue) • \(project.statusRawValue) • \(project.priorityRawValue)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Text(project.summary)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Color.mmgSurface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 }
 
@@ -93,4 +124,5 @@ private struct DeliveryStageRow: View {
 
 #Preview {
     ProductionCommandCenterView(projectStore: LocalProjectStore())
+        .modelContainer(for: PersistedProjectRecord.self, inMemory: true)
 }
