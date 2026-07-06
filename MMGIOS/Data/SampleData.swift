@@ -55,4 +55,25 @@ enum SampleData {
             ]
         )
     ]
+
+    static func releaseChecklists(for projects: [KairosProject]) -> [ReleaseChecklist] {
+        projects.map { project in
+            ReleaseChecklist(
+                projectID: project.id,
+                title: "\(project.title) Release Checklist",
+                gates: defaultGates(),
+                releaseNotes: "Initial release validation record for \(project.title)."
+            )
+        }
+    }
+
+    private static func defaultGates() -> [QualityGate] {
+        [
+            QualityGate(title: "Scope confirmed", detail: "The deliverable scope is documented and aligned to the active MMG doctrine."),
+            QualityGate(title: "Content complete", detail: "All required customer-facing and internal content is present."),
+            QualityGate(title: "Navigation validated", detail: "Critical links, page routes, and handoff paths have been checked."),
+            QualityGate(title: "Release notes prepared", detail: "Release notes summarize the change, impact, and remaining risks."),
+            QualityGate(title: "Approval captured", detail: "Human approval is recorded before external release or campaign launch.")
+        ]
+    }
 }
