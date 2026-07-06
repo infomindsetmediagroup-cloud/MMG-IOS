@@ -106,6 +106,25 @@ enum SampleData {
         )
     ]
 
+    static let releasePackages: [ReleasePackage] = [
+        ReleasePackage(
+            title: "Canonical Service Onboarding PDF v1 Release",
+            status: .readyForReview,
+            summary: "Release package for the canonical onboarding PDF update and Customer Portal routing standard.",
+            customerImpact: "Customers receive one clear onboarding path after any MMG service purchase.",
+            internalNotes: "Confirm portal URL, service workflow language, and canonical file naming before ship.",
+            validationSummary: "Requires scope, content, navigation, release notes, and approval validation."
+        ),
+        ReleasePackage(
+            title: "Production Command Center v1 Internal Release",
+            status: .draft,
+            summary: "Internal release package for the Production Command Center vertical slice.",
+            customerImpact: "Improves delivery tracking and service-production reliability.",
+            internalNotes: "Ship internally before exposing production-state visibility to customers.",
+            validationSummary: "Pending production workflow QA and release gate review."
+        )
+    ]
+
     static func releaseChecklists(for projects: [KairosProject]) -> [ReleaseChecklist] {
         projects.map { project in
             ReleaseChecklist(
