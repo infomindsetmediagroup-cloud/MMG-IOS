@@ -7,6 +7,7 @@ struct AppRootView: View {
     @State private var customerStore = LocalCustomerPortalStore()
     @State private var publishingStore = LocalPublishingStore()
     @State private var releaseStore = LocalReleasePackageStore()
+    @State private var campaignStore = LocalCampaignStore()
 
     private var role: UserRole {
         sessionStore.session.user.role
@@ -64,7 +65,7 @@ struct AppRootView: View {
             }
 
             if AccessPolicy.canAccess(.growth, role: role) {
-                GrowthMarketingView(projectStore: projectStore)
+                CampaignEngineView(campaignStore: campaignStore, sessionStore: sessionStore)
                     .tabItem {
                         Label("Growth", systemImage: "chart.line.uptrend.xyaxis")
                     }
