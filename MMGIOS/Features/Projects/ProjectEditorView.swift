@@ -1,8 +1,9 @@
+import SwiftData
 import SwiftUI
 
 struct ProjectEditorView: View {
-    let projectStore: LocalProjectStore
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
 
     @State private var title = ""
     @State private var clientName = "MMG Internal"
@@ -10,8 +11,6 @@ struct ProjectEditorView: View {
     @State private var status: WorkflowStatus = .intake
     @State private var priority: WorkflowPriority = .standard
     @State private var summary = ""
-    @State private var taskDraft = ""
-    @State private var tasks: [KairosTask] = []
 
     var body: some View {
         NavigationStack {
@@ -42,23 +41,6 @@ struct ProjectEditorView: View {
                         }
                     }
                 }
-
-                Section("Tasks") {
-                    HStack {
-                        TextField("Add task", text: $taskDraft)
-                        Button("Add") {
-                            addTask()
-                        }
-                        .disabled(taskDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    }
-
-                    ForEach(tasks) { task in
-                        Text(task.title)
-                    }
-                    .onDelete { indexSet in
-                        tasks.remove(atOffsets: indexSet)
-                    }
-                }
             }
             .navigationTitle("New Project")
             .toolbar {
@@ -74,13 +56,6 @@ struct ProjectEditorView: View {
         }
     }
 
-    private func addTask() {
-        let trimmedTask = taskDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedTask.isEmpty else { return }
-        tasks.append(KairosTask(title: trimmedTask))
-        taskDraft = ""
-    }
-
     private func saveProject() {
         let project = KairosProject(
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -88,15 +63,15 @@ struct ProjectEditorView: View {
             area: area,
             status: status,
             priority: priority,
-            summary: summary.trimmingCharacters(in: .whitespacesAndNewlines),
-            tasks: tasks
+            summary: summary.trimmingCharacters(in: .whitespacesAndNewlines)
         )
 
-        projectStore.add(project)
+        modelContext.insert(PersistedProjectRecord(project: project))
         dismiss()
     }
 }
 
 #Preview {
-    ProjectEditorView(projectStore: LocalProjectStore())
+    ProjectEditorView()
+        .modelContainer(for: PersistedProjectRecord.self, inMemory: true)
 }
