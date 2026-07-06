@@ -125,6 +125,30 @@ enum SampleData {
         )
     ]
 
+    static let campaigns: [Campaign] = [
+        Campaign(
+            title: "Creator Education Starter Campaign",
+            status: .review,
+            channel: .email,
+            audience: .newCreators,
+            objective: "Move new creators into the AI Prompting for Beginners product path.",
+            offer: "Starter education bundle positioning with direct product CTA.",
+            landingPagePath: "/products/ai-prompting-for-beginners",
+            promoCode: PromoCode(code: "STARTER10", discountDescription: "10% off starter creator education products", usageLimit: 100),
+            requiresApproval: true
+        ),
+        Campaign(
+            title: "Publishing Services Awareness Push",
+            status: .draft,
+            channel: .landingPage,
+            audience: .authors,
+            objective: "Introduce authors to MMG service onboarding and portal-first publishing support.",
+            offer: "Publishing workflow consultation and service onboarding path.",
+            landingPagePath: "/pages/publishing-services",
+            requiresApproval: true
+        )
+    ]
+
     static func releaseChecklists(for projects: [KairosProject]) -> [ReleaseChecklist] {
         projects.map { project in
             ReleaseChecklist(
