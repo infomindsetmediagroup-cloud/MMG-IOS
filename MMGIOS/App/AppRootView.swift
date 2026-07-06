@@ -1,29 +1,31 @@
 import SwiftUI
 
 struct AppRootView: View {
+    @State private var projectStore = LocalProjectStore()
+
     var body: some View {
         TabView {
-            CommandCenterView()
+            CommandCenterView(projectStore: projectStore)
                 .tabItem {
                     Label("Command", systemImage: "square.grid.2x2")
                 }
 
-            AdminOperationsView()
+            AdminOperationsView(projectStore: projectStore)
                 .tabItem {
                     Label("Admin", systemImage: "building.2")
                 }
 
-            ProductionCommandCenterView()
+            ProductionCommandCenterView(projectStore: projectStore)
                 .tabItem {
                     Label("Production", systemImage: "shippingbox")
                 }
 
-            GrowthMarketingView()
+            GrowthMarketingView(projectStore: projectStore)
                 .tabItem {
                     Label("Growth", systemImage: "chart.line.uptrend.xyaxis")
                 }
 
-            SystemSettingsView()
+            SystemSettingsView(projectStore: projectStore)
                 .tabItem {
                     Label("System", systemImage: "gearshape")
                 }
