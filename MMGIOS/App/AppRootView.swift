@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct AppRootView: View {
+    let sessionStore: LocalSessionStore
     @State private var projectStore = LocalProjectStore()
     @State private var qualityStore = LocalQualityStore()
 
@@ -31,7 +32,7 @@ struct AppRootView: View {
                     Label("Growth", systemImage: "chart.line.uptrend.xyaxis")
                 }
 
-            SystemSettingsView(projectStore: projectStore)
+            SystemSettingsView(projectStore: projectStore, sessionStore: sessionStore)
                 .tabItem {
                     Label("System", systemImage: "gearshape")
                 }
@@ -41,5 +42,5 @@ struct AppRootView: View {
 }
 
 #Preview {
-    AppRootView()
+    AppRootView(sessionStore: LocalSessionStore())
 }
