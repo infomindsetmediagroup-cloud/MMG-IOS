@@ -1,26 +1,23 @@
+import SwiftData
 import SwiftUI
 
 struct ProjectDetailView: View {
-    let projectStore: LocalProjectStore
-    let project: KairosProject
-
-    private var currentProject: KairosProject {
-        projectStore.projects.first(where: { $0.id == project.id }) ?? project
-    }
+    @Environment(\.modelContext) private var modelContext
+    @Bindable var project: PersistedProjectRecord
 
     var body: some View {
         List {
             Section {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(currentProject.area.rawValue.uppercased())
+                    Text(project.areaRawValue.uppercased())
                         .font(.caption.weight(.bold))
                         .foregroundStyle(.mmgBlue)
                         .tracking(1.2)
 
-                    Text(currentProject.title)
+                    Text(project.title)
                         .font(.largeTitle.bold())
 
-                    Text(currentProject.summary)
+                    Text(project.summary)
                         .font(.body)
                         .foregroundStyle(.secondary)
                 }
@@ -28,42 +25,55 @@ struct ProjectDetailView: View {
             }
 
             Section("Record") {
-                LabeledContent("Client", value: currentProject.clientName)
-                LabeledContent("Status", value: currentProject.status.rawValue)
-                LabeledContent("Priority", value: currentProject.priority.rawValue)
+                LabeledContent("Client", value: project.clientName)
+                Picker("Status", selection: $project.statusRawValue) {
+                    ForEach(WorkflowStatus.allCases) { status in
+                        Text(status.rawValue).tag(status.rawValue)
+                    }
+                }
+                Picker("Priority", selection: $project.priorityRawValue) {
+                    ForEach(WorkflowPriority.allCases) { priority in
+                        Text(priority.rawValue).tag(priority.rawValue)
+                    }
+                }
             }
 
-            Section("Tasks") {
-                ForEach(currentProject.tasks) { task in
-                    Button {
-                        projectStore.toggleTask(projectID: currentProject.id, taskID: task.id)
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: task.isComplete ? "checkmark.circle.fill" : "circle")
-                                .foregroundStyle(task.isComplete ? .green : .secondary)
-
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(task.title)
-                                    .foregroundStyle(.primary)
-
-                                if !task.notes.isEmpty {
-                                    Text(task.notes)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
+            Section("Workflow Area") {
+                Picker("Area", selection: $project.areaRawValue) {
+                    ForEach(WorkflowArea.allCases) { area in
+                        Text(area.rawValue).tag(area.rawValue)
                     }
+                }
+            }
+
+            Section("Project Text") {
+                TextField("Title", text: $project.title)
+                TextField("Summary", text: $project.summary, axis: .vertical)
+                    .lineLimit(4, reservesSpace: true)
+            }
+
+            Section("Actions") {
+                Button(role: .destructive) {
+                    modelContext.delete(project)
+                } label: {
+                    Label("Delete Project", systemImage: "trash")
                 }
             }
         }
         .navigationTitle("Project")
         .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: project.title) { _, _ in project.updatedAt = Date() }
+        .onChange(of: project.summary) { _, _ in project.updatedAt = Date() }
+        .onChange(of: project.areaRawValue) { _, _ in project.updatedAt = Date() }
+        .onChange(of: project.statusRawValue) { _, _ in project.updatedAt = Date() }
+        .onChange(of: project.priorityRawValue) { _, _ in project.updatedAt = Date() }
     }
 }
 
 #Preview {
-    NavigationStack {
-        ProjectDetailView(projectStore: LocalProjectStore(), project: SampleData.projects[0])
+    let project = PersistedProjectRecord(project: SampleData.projects[0])
+    return NavigationStack {
+        ProjectDetailView(project: project)
     }
+    .modelContainer(for: PersistedProjectRecord.self, inMemory: true)
 }
