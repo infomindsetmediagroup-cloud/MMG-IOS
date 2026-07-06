@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct SystemSettingsView: View {
+    let projectStore: LocalProjectStore
+
     var body: some View {
         NavigationStack {
             List {
@@ -13,14 +15,15 @@ struct SystemSettingsView: View {
                 Section("Build Status") {
                     Label("GitHub connected", systemImage: "checkmark.seal")
                     Label("Native SwiftUI scaffold active", systemImage: "iphone")
-                    Label("Core command centers seeded", systemImage: "square.grid.2x2")
+                    Label("Local JSON persistence active", systemImage: "externaldrive.badge.checkmark")
+                    LabeledContent("Stored records", value: "\(projectStore.projects.count)")
                 }
 
                 Section("Next Engineering Targets") {
-                    Label("Local persistence", systemImage: "externaldrive")
+                    Label("Create/edit project forms", systemImage: "square.and.pencil")
                     Label("Authentication shell", systemImage: "lock.shield")
-                    Label("Project database models", systemImage: "tablecells")
                     Label("Quality gate workflows", systemImage: "checkmark.rectangle.stack")
+                    Label("Release package builder", systemImage: "archivebox")
                 }
             }
             .navigationTitle("System")
@@ -29,5 +32,5 @@ struct SystemSettingsView: View {
 }
 
 #Preview {
-    SystemSettingsView()
+    SystemSettingsView(projectStore: LocalProjectStore())
 }
