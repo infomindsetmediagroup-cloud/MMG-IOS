@@ -64,8 +64,8 @@ private struct ChecklistContentView: View {
     private var qualityGatesSection: some View {
         Section("Quality Gates") {
             ForEach(checklist.decodedGates) { gate in
-                QualityGateRow(gate: gate) {
-                    checklist.toggleGate(gateID: gate.id)
+                QualityGateRow(gate: gate) { status in
+                    checklist.setGateStatus(gateID: gate.id, status: status)
                 }
             }
         }
@@ -74,34 +74,94 @@ private struct ChecklistContentView: View {
 
 private struct QualityGateRow: View {
     let gate: QualityGate
-    let toggle: () -> Void
+    let setStatus: (QualityGateStatus) -> Void
 
     var body: some View {
-        Button(action: toggle) {
-            HStack(alignment: .top, spacing: 12) {
-                gateIcon
-                gateText
-                Spacer()
-            }
+        HStack(alignment: .top, spacing: 12) {
+            gateIcon
+            gateText
+            Spacer(minLength: 12)
+            statusMenu
         }
-        .buttonStyle(.plain)
+        .padding(.vertical, 4)
     }
 
     private var gateIcon: some View {
-        Image(systemName: gate.status == .passed ? "checkmark.circle.fill" : "circle")
-            .foregroundStyle(gate.status == .passed ? .mmgBlue : .secondary)
+        Image(systemName: iconName)
+            .foregroundStyle(statusColor)
+            .font(.title3)
+            .accessibilityHidden(true)
     }
 
     private var gateText: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(gate.title)
-                .font(.headline)
+            HStack(spacing: 6) {
+                Text(gate.title)
+                    .font(.headline)
+
+                if gate.required {
+                    Text("Required")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Text(gate.detail)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
             Text(gate.status.rawValue)
-                .font(.caption2)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(statusColor)
+        }
+    }
+
+    private var statusMenu: some View {
+        Menu {
+            ForEach(QualityGateStatus.allCases) { status in
+                Button {
+                    setStatus(status)
+                } label: {
+                    Label(status.rawValue, systemImage: status == gate.status ? "checkmark" : status.iconName)
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(.title3)
                 .foregroundStyle(.secondary)
+                .accessibilityLabel("Change gate status")
+        }
+    }
+
+    private var iconName: String {
+        gate.status.iconName
+    }
+
+    private var statusColor: Color {
+        switch gate.status {
+        case .pending:
+            return .secondary
+        case .passed:
+            return .mmgBlue
+        case .failed:
+            return .red
+        case .waived:
+            return .orange
+        }
+    }
+}
+
+private extension QualityGateStatus {
+    var iconName: String {
+        switch self {
+        case .pending:
+            return "circle"
+        case .passed:
+            return "checkmark.circle.fill"
+        case .failed:
+            return "xmark.octagon.fill"
+        case .waived:
+            return "exclamationmark.triangle.fill"
         }
     }
 }
