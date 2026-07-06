@@ -4,18 +4,20 @@ import SwiftUI
 @main
 struct MMGIOSApp: App {
     private let modelContainer: ModelContainer
+    @State private var kairosRuntime = KairosRuntime()
 
     init() {
         do {
             modelContainer = try PersistenceContainerFactory.makeContainer()
         } catch {
-            fatalError("Failed to initialize SwiftData model container: \(error.localizedDescription)")
+            preconditionFailure("SwiftData model container initialization failed")
         }
     }
 
     var body: some Scene {
         WindowGroup {
             AuthGateView()
+                .environment(kairosRuntime)
         }
         .modelContainer(modelContainer)
     }
