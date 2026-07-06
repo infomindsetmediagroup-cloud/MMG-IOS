@@ -12,27 +12,34 @@ on:
       - master
 
 jobs:
-  build:
-    name: Generate and Build MMGIOS
-    runs-on: macos-latest
-    timeout-minutes: 30
-
+  diagnostic:
+    name: Workflow Startup Diagnostic
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Confirm workflow startup
+        run: echo "MMG-IOS workflow startup succeeded"
+      - name: List repository root
+        run: ls -la
 
+  build:
+    name: Generate and Build MMGIOS
+    needs: diagnostic
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
       - name: Show Xcode version
         run: xcodebuild -version
-
       - name: Install XcodeGen
         run: |
           if ! command -v xcodegen >/dev/null 2>&1; then
             brew install xcodegen
           fi
           xcodegen --version
-
       - name: Generate Xcode project
         run: xcodegen generate
-
       - name: Build
         run: xcodebuild -project MMGIOS.xcodeproj -scheme MMGIOS -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO clean build
