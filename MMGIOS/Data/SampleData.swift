@@ -75,6 +75,37 @@ enum SampleData {
         )
     ]
 
+    static let publishingAssets: [PublishingAsset] = [
+        PublishingAsset(
+            title: "Canonical Service Onboarding PDF",
+            assetType: .onboardingPDF,
+            status: .inProduction,
+            canonicalPath: "/assets/mmg-service-onboarding.pdf",
+            summary: "Canonical PDF for every MMG service purchase, directing customers into the Customer Portal."
+        ),
+        PublishingAsset(
+            title: "AI Prompting for Beginners Product Page",
+            assetType: .shopifyPage,
+            status: .qa,
+            canonicalPath: "/products/ai-prompting-for-beginners",
+            summary: "Standard product page using the approved single-variant product framework."
+        ),
+        PublishingAsset(
+            title: "The Creator's Bible",
+            assetType: .book,
+            status: .published,
+            canonicalPath: "/products/the-creators-bible",
+            summary: "Flagship creator education book and catalog anchor."
+        ),
+        PublishingAsset(
+            title: "Editorial Publishing Engine Article Queue",
+            assetType: .article,
+            status: .drafted,
+            canonicalPath: "/blogs/knowledge-library",
+            summary: "Production-ready Shopify article pipeline for MMG editorial publishing."
+        )
+    ]
+
     static func releaseChecklists(for projects: [KairosProject]) -> [ReleaseChecklist] {
         projects.map { project in
             ReleaseChecklist(
