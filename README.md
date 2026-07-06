@@ -2,7 +2,7 @@
 
 MMG IOS is the native iOS foundation and canonical GitHub repository for the Mindset Media Group / Kairos operating system.
 
-This repository stores and versions the connected MMG ecosystem: native iOS source, Kairos platform architecture, Shopify site source, page/product code, assets, documentation, registries, backlog records, QA notes, and release packages.
+This repository stores and versions the connected MMG ecosystem: native iOS source, Kairos platform architecture, Shopify site source, assets, documentation, registries, backlog records, QA notes, and release packages.
 
 ## Product Direction
 
@@ -27,19 +27,47 @@ releases/              Release packages, QA records, changelogs, and deployment 
 The current native app scaffold establishes:
 
 - SwiftUI application entry point
-- Tab-based operational shell
+- Authentication gate and local session persistence
+- Role-gated tab shell
 - Kairos Command Center registry
-- Admin Operations dashboard
-- Publishing backlog workspace
 - Customer Portal workspace
-- Settings / system status workspace
-- Xcode project structure for iOS development
+- Project Board workspace
+- Publishing Command Center
+- Production Command Center
+- Quality and Release Center
+- Release Package Builder
+- Growth Campaign Engine
+- System status workspace
+- Local JSON persistence stores for current vertical slices
+- XcodeGen project configuration
 
-## Development Notes
+## Local Development
 
-Open `MMGIOS.xcodeproj` in Xcode and run the `MMGIOS` scheme on an iPhone simulator.
+Install XcodeGen and generate the Xcode project:
+
+```bash
+make bootstrap
+make generate
+make open
+```
+
+Or manually:
+
+```bash
+brew install xcodegen
+xcodegen generate
+open MMGIOS.xcodeproj
+```
+
+Run the MMGIOS scheme on an iPhone simulator.
 
 Minimum target: iOS 17.0.
+
+## Build Validation
+
+GitHub Actions contains an iOS build validation workflow at `.github/workflows/ios-build.yml`.
+
+The workflow checks out the repository, installs XcodeGen, regenerates the Xcode project, and runs an Xcode clean build against the MMGIOS scheme on an iOS simulator.
 
 ## Operating Rule
 
