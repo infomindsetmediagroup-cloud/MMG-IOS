@@ -149,6 +149,36 @@ enum SampleData {
         )
     ]
 
+    static let intelligenceItems: [IntelligenceItem] = [
+        IntelligenceItem(
+            title: "Release gate needs validation",
+            sourceName: "Quality & Release Center",
+            itemType: .quality,
+            status: .reviewing,
+            confidence: .high,
+            summary: "A release record is waiting on scope, navigation, release notes, and approval validation before shipment.",
+            recommendation: "Open the release checklist, complete required gates, then move the package into ready-for-review status."
+        ),
+        IntelligenceItem(
+            title: "Campaign launch requires approval",
+            sourceName: "Growth Engine",
+            itemType: .growth,
+            status: .detected,
+            confidence: .high,
+            summary: "A campaign can be prepared internally, but external launch remains blocked until human approval is recorded.",
+            recommendation: "Review campaign objective, offer, audience, and landing path before marking the item approved."
+        ),
+        IntelligenceItem(
+            title: "Portal-first onboarding dependency",
+            sourceName: "Customer Portal",
+            itemType: .customer,
+            status: .detected,
+            confidence: .medium,
+            summary: "Service onboarding assets should continue routing customer work into the portal before production starts.",
+            recommendation: "Confirm the onboarding PDF, portal copy, and project intake language are aligned before release."
+        )
+    ]
+
     static func releaseChecklists(for projects: [KairosProject]) -> [ReleaseChecklist] {
         projects.map { project in
             ReleaseChecklist(
