@@ -4,7 +4,7 @@ import SwiftUI
 struct MMGIOSApp: App {
     var body: some Scene {
         WindowGroup {
-            AppRootView()
+            AuthGateView()
         }
     }
 }
