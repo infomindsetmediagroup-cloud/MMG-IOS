@@ -1,7 +1,8 @@
+import SwiftData
 import SwiftUI
 
 struct PublishingAssetEditorView: View {
-    let publishingStore: LocalPublishingStore
+    @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
     @State private var title = ""
@@ -14,39 +15,49 @@ struct PublishingAssetEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Asset") {
-                    TextField("Title", text: $title)
-                    TextField("Owner", text: $owner)
-                    TextField("Canonical Path", text: $canonicalPath)
-                    TextField("Summary", text: $summary, axis: .vertical)
-                        .lineLimit(4, reservesSpace: true)
-                }
-
-                Section("Publishing") {
-                    Picker("Type", selection: $assetType) {
-                        ForEach(PublishingAssetType.allCases) { type in
-                            Text(type.rawValue).tag(type)
-                        }
-                    }
-
-                    Picker("Status", selection: $status) {
-                        ForEach(PublishingAssetStatus.allCases) { status in
-                            Text(status.rawValue).tag(status)
-                        }
-                    }
-                }
+                assetSection
+                publishingSection
             }
             .navigationTitle("New Asset")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
+            .toolbar { toolbarContent }
+        }
+    }
 
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { saveAsset() }
-                        .disabled(!canSave)
+    private var assetSection: some View {
+        Section("Asset") {
+            TextField("Title", text: $title)
+            TextField("Owner", text: $owner)
+            TextField("Canonical Path", text: $canonicalPath)
+            TextField("Summary", text: $summary, axis: .vertical)
+                .lineLimit(4, reservesSpace: true)
+        }
+    }
+
+    private var publishingSection: some View {
+        Section("Publishing") {
+            Picker("Type", selection: $assetType) {
+                ForEach(PublishingAssetType.allCases) { type in
+                    Text(type.rawValue).tag(type)
                 }
             }
+
+            Picker("Status", selection: $status) {
+                ForEach(PublishingAssetStatus.allCases) { status in
+                    Text(status.rawValue).tag(status)
+                }
+            }
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .cancellationAction) {
+            Button("Cancel") { dismiss() }
+        }
+
+        ToolbarItem(placement: .confirmationAction) {
+            Button("Save") { saveAsset() }
+                .disabled(!canSave)
         }
     }
 
@@ -57,20 +68,21 @@ struct PublishingAssetEditorView: View {
     }
 
     private func saveAsset() {
-        publishingStore.add(
-            PublishingAsset(
-                title: title,
-                assetType: assetType,
-                status: status,
-                owner: owner,
-                canonicalPath: canonicalPath,
-                summary: summary
-            )
+        let asset = PublishingAsset(
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            assetType: assetType,
+            status: status,
+            owner: owner.trimmingCharacters(in: .whitespacesAndNewlines),
+            canonicalPath: canonicalPath.trimmingCharacters(in: .whitespacesAndNewlines),
+            summary: summary.trimmingCharacters(in: .whitespacesAndNewlines)
         )
+
+        modelContext.insert(PersistedPublishingAssetRecord(asset: asset))
         dismiss()
     }
 }
 
 #Preview {
-    PublishingAssetEditorView(publishingStore: LocalPublishingStore())
+    PublishingAssetEditorView()
+        .modelContainer(for: PersistedPublishingAssetRecord.self, inMemory: true)
 }
