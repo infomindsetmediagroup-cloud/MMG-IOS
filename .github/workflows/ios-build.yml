@@ -31,8 +31,17 @@ jobs:
 
       - name: Build
         run: |
+          set -o pipefail
           xcodebuild \
             -project MMGIOS.xcodeproj \
             -scheme MMGIOS \
             -destination 'generic/platform=iOS Simulator' \
-            clean build
+            CODE_SIGNING_ALLOWED=NO \
+            -quiet \
+            clean build 2>&1 | tee xcodebuild.log
+
+      - name: Print build errors
+        if: failure()
+        run: |
+          echo "---- Build error summary ----"
+          grep -n -E "error:|warning:|BUILD FAILED|SwiftCompile" xcodebuild.log | tail -n 120 || true
