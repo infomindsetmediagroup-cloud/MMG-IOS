@@ -24,9 +24,11 @@ function renderNav(active = "dashboard") {
 }
 
 function badgeClass(value) {
-  if (["Active", "Ready", "Low", "P1"].includes(value)) return "badge good";
-  if (["Medium", "Queued", "P2"].includes(value)) return "badge warning";
-  return "badge danger";
+  const normalized = String(value || "").toLowerCase();
+  if (["active", "ready", "live", "low", "p1", "architecture ready", "package queue active"].includes(normalized)) return "badge good";
+  if (["medium", "queued", "p2", "approval", "build", "installed / mapping required", "popup + bundle build queued", "route audit required", "needs widget validation"].includes(normalized)) return "badge warning";
+  if (["high", "blocked", "failed", "danger"].includes(normalized)) return "badge danger";
+  return "badge";
 }
 
 function progress(value) {
