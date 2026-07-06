@@ -7,6 +7,13 @@ extension Color {
     static let mmgSurface = Color(red: 0.96, green: 0.98, blue: 1.0)
 }
 
+extension ShapeStyle where Self == Color {
+    static var mmgBlue: Color { Color.mmgBlue }
+    static var mmgDeepBlue: Color { Color.mmgDeepBlue }
+    static var mmgInk: Color { Color.mmgInk }
+    static var mmgSurface: Color { Color.mmgSurface }
+}
+
 struct AppTheme {
     static let appName = "Kairos"
     static let companyName = "Mindset Media Group™"
