@@ -30,7 +30,7 @@ struct AppRootView: View {
             }
 
             if AccessPolicy.canAccess(.projects, role: role) {
-                ProjectBoardView(projectStore: projectStore)
+                ProjectBoardView()
                     .tabItem {
                         Label("Projects", systemImage: "folder")
                     }
