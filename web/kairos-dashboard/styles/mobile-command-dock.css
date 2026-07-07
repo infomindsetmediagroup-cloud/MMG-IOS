@@ -19,6 +19,7 @@
   overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
+  pointer-events: auto;
 }
 
 .mobile-command-dock::-webkit-scrollbar {
@@ -26,6 +27,7 @@
 }
 
 .dock-button {
+  appearance: none;
   flex: 0 0 auto;
   min-width: max-content;
   border: 1px solid rgba(79,216,255,0.18);
@@ -36,6 +38,20 @@
   font-size: 11px;
   font-weight: 800;
   white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.dock-button:hover,
+.dock-button:focus-visible {
+  border-color: rgba(79,216,255,0.42);
+  background: rgba(79,216,255,0.16);
+  outline: none;
+}
+
+.dock-button.is-active {
+  border-color: rgba(109,242,166,0.44);
+  background: rgba(109,242,166,0.14);
 }
 
 .dock-button:active {
