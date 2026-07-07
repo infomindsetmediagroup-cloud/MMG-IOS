@@ -1,5 +1,5 @@
 import "./completion-gate-panel.js";
-import { queueCommandWorkItem } from "./live-work-queue.js";
+import { submitCommandPipeline } from "./command-pipeline.js";
 
 function escapeHTML(value) {
   return String(value || "").replace(/[&<>"]/g, character => ({
@@ -23,12 +23,12 @@ function renderCommandBlockPanel() {
         <p class="eyebrow">AI Work Intake</p>
         <h3>Kairos Command Block</h3>
       </div>
-      <span class="badge good">P1</span>
+      <span class="badge good">Pipeline</span>
     </div>
-    <p class="muted" style="margin-top:10px;">Type an operational request. Kairos converts it into a structured queued work item with lane, type, status, priority, and source metadata.</p>
+    <p class="muted" style="margin-top:10px;">Type an operational request. Kairos converts it into a structured work item, creates an execution run, records history, and routes it into the Command Center pipeline.</p>
     <form class="auth-form" data-command-block-form style="margin-top:16px;">
       <input data-command-block-input placeholder="Create a product, update an image, queue a website change, add a Shopify listing...">
-      <button class="action-button" type="submit">Queue Work</button>
+      <button class="action-button" type="submit">Queue Pipeline</button>
     </form>
     <div class="list" data-command-block-result style="margin-top:16px;">
       <div class="list-item"><strong>Awaiting operational command</strong><span class="badge warning">Ready</span></div>
@@ -48,16 +48,19 @@ function renderCommandBlockPanel() {
       return;
     }
 
-    const item = queueCommandWorkItem(command);
+    const response = submitCommandPipeline(command);
+    const item = response.item;
+    const run = response.run;
+    const pipeline = response.pipelineItem;
     result.innerHTML = `
       <div class="list-item">
         <div>
-          <strong>${escapeHTML(item.id)} • ${escapeHTML(item.title)}</strong>
-          <p class="muted">${escapeHTML(item.lane)} • ${escapeHTML(item.type)} • ${escapeHTML(item.source)}</p>
+          <strong>${escapeHTML(pipeline.id)} • ${escapeHTML(item.id)} • ${escapeHTML(item.title)}</strong>
+          <p class="muted">${escapeHTML(item.lane)} • ${escapeHTML(item.type)} • Run: ${escapeHTML(run.id)} • Stage: ${escapeHTML(pipeline.stage)}</p>
         </div>
         <div class="action-row" style="margin-top:0;">
           <span class="badge warning">${escapeHTML(item.priority)}</span>
-          <span class="badge">${escapeHTML(item.status)}</span>
+          <span class="badge">${escapeHTML(pipeline.status)}</span>
         </div>
       </div>
     `;
