@@ -37,10 +37,19 @@ export function getMobileDockActions() {
 }
 
 export function setMobileDockActions(actions) {
-  localStorage.setItem(dockKey, JSON.stringify(actions));
+  const allowed = new Set([commandBlockAction.id, ...quickLaunchActions.map(action => action.id)]);
+  const next = [...new Set(actions)].filter(id => allowed.has(id));
+  localStorage.setItem(dockKey, JSON.stringify(next.length ? next : defaultDock));
   pushNotification("Quick links updated", "Bottom dashboard action strip saved.", "Success");
-  window.dispatchEvent(new CustomEvent("kairos:mobile-dock-updated", { detail: { actions } }));
-  return actions;
+  window.dispatchEvent(new CustomEvent("kairos:mobile-dock-updated", { detail: { actions: next } }));
+  return next;
+}
+
+export function resetMobileDockActions() {
+  localStorage.removeItem(dockKey);
+  window.dispatchEvent(new CustomEvent("kairos:mobile-dock-updated", { detail: { actions: defaultDock } }));
+  pushNotification("Quick links reset", "Bottom dashboard action strip restored to defaults.", "Info");
+  return defaultDock;
 }
 
 function findTarget(id) {
@@ -62,8 +71,15 @@ function focusTarget(id) {
   return true;
 }
 
+function markDockButton(id) {
+  document.querySelectorAll("[data-dock-action]").forEach(button => {
+    button.classList.toggle("is-active", button.dataset.dockAction === id);
+  });
+}
+
 function runMappedAction(id) {
   if (focusTarget(id)) {
+    markDockButton(id);
     const action = getDockActionDetails().find(item => item.id === id);
     pushNotification("Quick link opened", `${action?.title || id} opened from the bottom action strip.`, "Info");
     return { id, opened: true };
