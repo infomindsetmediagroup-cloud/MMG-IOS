@@ -1,0 +1,36 @@
+body[data-density="compact"] .card {
+  padding: 16px;
+}
+
+body[data-density="compact"] .list-item {
+  padding: 10px 0;
+}
+
+body[data-density="compact"] .metric {
+  font-size: clamp(28px, 4vw, 44px);
+}
+
+body[data-density="compact"] .dashboard-grid {
+  gap: 12px;
+}
+
+body[data-density="mobile"] .card {
+  border-radius: 22px;
+  padding: 18px;
+}
+
+body[data-density="mobile"] .action-button,
+body[data-density="mobile"] .dock-button {
+  min-height: 44px;
+}
+
+body[data-density="mobile"] .list-item {
+  align-items: flex-start;
+  gap: 14px;
+}
+
+@media (max-width: 760px) {
+  body[data-density="comfortable"] .card {
+    padding: 18px;
+  }
+}
