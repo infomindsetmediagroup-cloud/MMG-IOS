@@ -4,6 +4,7 @@ import { websiteAudit, websiteMetrics } from "./website-ops.js";
 import { shopifyOps, shopifyMetrics } from "./shopify-ops.js";
 import { knowledgeOps, knowledgeMetrics } from "./knowledge-ops.js";
 import { revenueOps, revenueMetrics } from "./revenue-ops.js";
+import { customerOps, customerMetrics } from "./customer-ops.js";
 import { getActionLog, recordAction } from "./runtime-actions.js";
 
 const skin = document.createElement("link");
@@ -28,7 +29,7 @@ function renderNav(active = "dashboard") {
 function badgeClass(value) {
   const normalized = String(value || "").toLowerCase();
   if (["active", "ready", "live", "low", "p1", "architecture ready", "package queue active", "free"].includes(normalized)) return "badge good";
-  if (["medium", "queued", "p2", "approval", "build", "installed / mapping required", "popup + bundle build queued", "route audit required", "needs widget validation", "open", "seeding", "paid", "high", "not connected", "discount", "lead magnet", "bundle", "upsell"].includes(normalized)) return "badge warning";
+  if (["medium", "queued", "p2", "approval", "build", "installed / mapping required", "popup + bundle build queued", "route audit required", "needs widget validation", "open", "seeding", "paid", "high", "not connected", "discount", "lead magnet", "bundle", "upsell", "purchased", "premium", "lead", "customer", "activation", "trust", "expansion"].includes(normalized)) return "badge warning";
   if (["critical", "blocked", "failed", "danger", "license"].includes(normalized)) return "badge danger";
   return "badge";
 }
@@ -51,7 +52,7 @@ function bindActions() {
 }
 
 function list(items, statusKey = "status") {
-  return `<div class="list">${items.map(item => `<div class="list-item"><div><strong>${item.title || item.label}</strong><p class="muted">${item.lane || item.status || item.risk || item.area || item.access || item.type || item.trigger || "Kairos"}</p></div><span class="${badgeClass(item[statusKey])}">${item[statusKey]}</span></div>`).join("")}</div>`;
+  return `<div class="list">${items.map(item => `<div class="list-item"><div><strong>${item.title || item.label}</strong><p class="muted">${item.lane || item.status || item.risk || item.area || item.access || item.type || item.trigger || item.stage || "Kairos"}</p></div><span class="${badgeClass(item[statusKey])}">${item[statusKey]}</span></div>`).join("")}</div>`;
 }
 
 function actionLogCard() {
@@ -65,6 +66,7 @@ function renderDashboard() {
   const shop = shopifyMetrics();
   const knowledge = knowledgeMetrics();
   const revenue = revenueMetrics();
+  const customer = customerMetrics();
   title.textContent = "Dashboard";
   view.innerHTML = `
     <article class="card hero-panel"><div class="card-header"><div><p class="eyebrow">Good evening, ${kairosState.operator}</p><h3>${kairosState.activeBatch}</h3></div><span class="badge good">Live</span></div><p class="metric">${kairosState.health}%</p><p class="muted">Kairos is online as the Phase 1 web operations command center.</p><div class="action-row">${actionButton("Start Daily Ops", "Start Daily Ops", "Daily operations run queued.")}${actionButton("Run Website Audit", "Run Website Audit", "Website audit workflow queued.")}${actionButton("Prepare Shopify Queue", "Prepare Shopify Queue", "Shopify operations queue staged.")}</div></article>
@@ -73,8 +75,8 @@ function renderDashboard() {
     <article class="card"><div class="card-header"><h3>Shopify Operations</h3><span class="badge danger">${shop.critical} Critical</span></div><p class="metric">${shop.score}%</p><p class="muted">${shopifyOps.store}</p>${progress(shop.score)}</article>
     <article class="card"><div class="card-header"><h3>Knowledge Bank</h3><span class="badge warning">${knowledge.queuedModules} Modules</span></div><p class="metric">${knowledge.score}%</p><p class="muted">${knowledgeOps.activeVault}</p>${progress(knowledge.score)}</article>
     <article class="card"><div class="card-header"><h3>Revenue Engine</h3><span class="badge warning">${revenue.queued} Queued</span></div><p class="metric">${revenue.score}%</p><p class="muted">${revenueOps.activeFunnel}</p>${progress(revenue.score)}</article>
+    <article class="card"><div class="card-header"><h3>Customer Ops</h3><span class="badge warning">${customer.queues} Queued</span></div><p class="metric">${customer.score}%</p><p class="muted">${customerOps.activePortal}</p>${progress(customer.score)}</article>
     <article class="card large"><div class="card-header"><h3>Bundle Packages</h3><span class="badge good">${metrics.projectedRevenue}</span></div><div class="list">${bundlePackages.map(bundle => `<div class="list-item"><div><strong>${bundle.title}</strong><p class="muted">${bundle.price} • ${bundle.destination}</p></div><span class="${badgeClass(bundle.status)}">${bundle.status}</span></div>`).join("")}</div></article>
-    <article class="card full"><div class="card-header"><h3>Today's Priorities</h3><span class="badge good">Active Queue</span></div>${list(kairosState.priorities, "priority")}</article>
     ${actionLogCard()}
   `;
   bindActions();
@@ -115,6 +117,13 @@ function renderRevenue() {
   bindActions();
 }
 
+function renderCustomers() {
+  const customer = customerMetrics();
+  title.textContent = "Customers";
+  view.innerHTML = `<article class="card hero-panel"><div class="card-header"><div><p class="eyebrow">Customer Operations</p><h3>Customer Command Center</h3></div><span class="badge warning">${customer.queues} Queued</span></div><p class="metric">${customer.score}%</p><p class="muted">${customerOps.activePortal} • ${customerOps.lastRun}</p>${progress(customer.score)}<div class="action-row">${actionButton("Map Customer Portal", "Map Customer Portal", "Customer portal access mapping queued.")}${actionButton("Create License Record", "Create License Record", "License record template queued.")}${actionButton("Build Download Center", "Build Download Center", "Download center structure queued.")}</div></article><article class="card large"><div class="card-header"><h3>Customer Queue</h3><span class="badge warning">${customer.queues}</span></div>${list(customerOps.queues, "priority")}</article><article class="card"><div class="card-header"><h3>Account Types</h3><span class="badge warning">${customer.accountTypes}</span></div>${list(customerOps.accountTypes, "access")}</article><article class="card full"><div class="card-header"><h3>Lifecycle</h3><span class="badge">${customer.lifecycle}</span></div>${list(customerOps.lifecycle, "stage")}</article>${actionLogCard()}`;
+  bindActions();
+}
+
 function renderModule(moduleId) {
   renderNav(moduleId);
   const module = kairosState.modules.find(item => item.id === moduleId);
@@ -125,6 +134,7 @@ function renderModule(moduleId) {
   if (moduleId === "shopify") return renderShopify();
   if (moduleId === "knowledge") return renderKnowledge();
   if (moduleId === "revenue") return renderRevenue();
+  if (moduleId === "customers") return renderCustomers();
   const moduleCopy = kairosState.commandCenters[moduleId] || [];
   view.innerHTML = `<article class="card hero-panel"><div class="card-header"><div><p class="eyebrow">Command Center</p><h3>${module?.label}</h3></div><span class="badge warning">Build Queue</span></div><p class="muted">Kairos-managed workspace for ${module?.label} operations.</p><div class="action-row">${actionButton("Execute Next Task", `Execute ${module?.label} Task`, `${module?.label} execution task queued.`)}${actionButton("Create Backlog Item", `Create ${module?.label} Backlog Item`, `${module?.label} backlog item queued.`)}</div></article><article class="card full"><div class="card-header"><h3>Execution Queue</h3><span class="badge warning">Queued</span></div><div class="list">${moduleCopy.map(task => `<div class="list-item"><strong>${task}</strong><span class="badge warning">Queued</span></div>`).join("")}</div></article>${actionLogCard()}`;
   bindActions();
