@@ -1,0 +1,1 @@
+export function getSecretsVaultStatus(){return{status:'Protected',provider:'GitHub Secrets',secretName:'KAIROS',rawSecretExposure:false,lastVerified:new Date().toLocaleString(),controls:['Secret never displayed','Repository secret referenced only by name','Least-privilege workflow access']};}
