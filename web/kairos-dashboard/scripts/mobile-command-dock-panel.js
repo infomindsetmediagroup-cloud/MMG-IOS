@@ -10,25 +10,31 @@ function dockLabel(action) {
 }
 
 function renderMobileCommandDock() {
-  if (document.querySelector("[data-mobile-command-dock]")) return;
-
+  let dock = document.querySelector("[data-mobile-command-dock]");
   const actions = getDockActionDetails();
-  const dock = document.createElement("nav");
-  dock.className = "mobile-command-dock";
-  dock.dataset.mobileCommandDock = "true";
-  dock.setAttribute("aria-label", "Mobile command dock");
+
+  if (!dock) {
+    dock = document.createElement("nav");
+    dock.className = "mobile-command-dock";
+    dock.dataset.mobileCommandDock = "true";
+    dock.setAttribute("aria-label", "Dashboard quick link actions");
+    document.body.appendChild(dock);
+  }
+
   dock.innerHTML = actions.map(action => `
-    <button class="dock-button" data-dock-action="${action.id}" aria-label="${action.title}">
+    <button class="dock-button" type="button" data-dock-action="${action.id}" aria-label="${action.title}" title="${action.title}">
       <span>${dockLabel(action)}</span>
     </button>
   `).join("");
 
-  document.body.appendChild(dock);
-
   dock.querySelectorAll("[data-dock-action]").forEach(button => {
-    button.addEventListener("click", () => runDockAction(button.dataset.dockAction));
+    button.addEventListener("click", event => {
+      event.preventDefault();
+      runDockAction(button.dataset.dockAction);
+    });
   });
 }
 
 window.addEventListener("DOMContentLoaded", renderMobileCommandDock);
 window.addEventListener("kairos:auth", renderMobileCommandDock);
+window.addEventListener("kairos:mobile-dock-updated", renderMobileCommandDock);
