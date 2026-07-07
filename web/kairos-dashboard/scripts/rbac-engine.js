@@ -1,0 +1,1 @@
+export function getRBACStatus(){return{status:'Configured',roles:['Executive','Administrator','Editor','Customer','Viewer'],principle:'Least privilege',enforcement:'Role-based access control',updated:new Date().toLocaleString()};}
