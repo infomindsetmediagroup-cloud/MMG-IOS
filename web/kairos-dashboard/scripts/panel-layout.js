@@ -27,12 +27,16 @@ function layoutButtonFor(header, id) {
   return header.querySelector(`[data-panel-layout-toggle="${CSS.escape(id)}"]`);
 }
 
+function compactLayoutLabel(isHidden) {
+  return window.matchMedia("(max-width: 520px)").matches ? (isHidden ? "Show" : "Hide") : (isHidden ? "Expand" : "Collapse");
+}
+
 function applyStateToPanel(card, isHidden) {
   card.classList.toggle("is-minimized", isHidden);
   card.setAttribute("aria-expanded", isHidden ? "false" : "true");
   const button = card.querySelector(`[data-panel-layout-toggle="${CSS.escape(card.dataset.panelId)}"]`);
   if (button) {
-    button.textContent = isHidden ? "Expand" : "Collapse";
+    button.textContent = compactLayoutLabel(isHidden);
     button.setAttribute("aria-label", `${isHidden ? "Expand" : "Collapse"} ${card.querySelector("h3")?.textContent || "panel"}`);
   }
 }
@@ -93,7 +97,7 @@ export function applyPanelLayoutControls() {
     button.className = "panel-layout-button";
     button.type = "button";
     button.dataset.panelLayoutToggle = id;
-    button.textContent = hidden.includes(id) ? "Expand" : "Collapse";
+    button.textContent = compactLayoutLabel(hidden.includes(id));
     button.addEventListener("click", () => {
       const next = togglePanelVisibility(id);
       applyStateToPanel(card, next.includes(id));
@@ -101,3 +105,9 @@ export function applyPanelLayoutControls() {
     header.appendChild(button);
   });
 }
+
+window.addEventListener("resize", () => {
+  document.querySelectorAll("#dashboard-view article.card").forEach(card => {
+    applyStateToPanel(card, card.classList.contains("is-minimized"));
+  });
+});
