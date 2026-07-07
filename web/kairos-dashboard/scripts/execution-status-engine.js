@@ -1,0 +1,1 @@
+import{getSessionSummary}from'./session-summary-engine.js';export function getExecutionStatus(){const s=getSessionSummary();return{state:s.status,headline:s.headline,summary:s.summary,alerts:s.alerts,timestamp:new Date().toLocaleString()};}
