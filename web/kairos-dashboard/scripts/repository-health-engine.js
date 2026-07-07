@@ -1,0 +1,1 @@
+import{getGitHubSyncStatus}from'./github-sync-status-engine.js';export function getRepositoryHealth(){const s=getGitHubSyncStatus();return{healthy:s.healthy,status:s.status,lastSync:s.lastSync,summary:s.healthy?'Repository synchronized and ready':'Repository requires attention'};}
