@@ -1,4 +1,4 @@
-import { applyPanelLayoutControls, getHiddenPanels } from "./panel-layout.js";
+import { applyPanelLayoutControls, collapseAllPanels, expandAllPanels, getHiddenPanels } from "./panel-layout.js";
 
 function renderPanelLayoutPanel() {
   const view = document.querySelector("#dashboard-view");
@@ -14,11 +14,34 @@ function renderPanelLayoutPanel() {
         <p class="eyebrow">Layout</p>
         <h3>Panel Layout Controls</h3>
       </div>
-      <span class="badge warning">${count} Minimized</span>
+      <span class="badge warning">${count} Collapsed</span>
     </div>
-    <p class="muted">Use panel controls to reduce page length while keeping modules available.</p>
+    <p class="muted">Collapse departments to keep the dashboard short. Jumping to a collapsed section automatically expands the destination.</p>
+    <div class="action-row" style="margin-top:16px;">
+      <button class="action-button" data-collapse-all-panels>Collapse All</button>
+      <button class="action-button" data-expand-all-panels>Expand All</button>
+    </div>
   `;
   view.prepend(card);
+  applyPanelLayoutControls();
+
+  card.querySelector("[data-collapse-all-panels]").addEventListener("click", () => {
+    collapseAllPanels();
+    card.remove();
+    renderPanelLayoutPanel();
+  });
+
+  card.querySelector("[data-expand-all-panels]").addEventListener("click", () => {
+    expandAllPanels();
+    card.remove();
+    renderPanelLayoutPanel();
+  });
+}
+
+function refreshPanelLayoutPanel() {
+  const existing = document.querySelector("[data-panel-layout-panel]");
+  if (existing) existing.remove();
+  renderPanelLayoutPanel();
   applyPanelLayoutControls();
 }
 
@@ -38,3 +61,5 @@ window.addEventListener("kairos:auth", () => {
   renderPanelLayoutPanel();
   applyPanelLayoutControls();
 });
+
+window.addEventListener("kairos:panel-layout-updated", refreshPanelLayoutPanel);
