@@ -1,0 +1,15 @@
+.command-pipeline-item {
+  align-items: flex-start;
+}
+
+.command-pipeline-item .muted + .muted {
+  margin-top: 6px;
+  color: rgba(245,248,255,0.56);
+}
+
+@media (max-width: 760px) {
+  .command-pipeline-item .action-row {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
