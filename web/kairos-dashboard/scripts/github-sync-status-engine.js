@@ -1,0 +1,1 @@
+import{getGitHubRefresh}from'./github-refresh-engine.js';export function getGitHubSyncStatus(){const g=getGitHubRefresh();return{status:g.status,route:g.route,commitMode:g.commitMode,lastSync:new Date().toLocaleString(),healthy:g.ready};}
