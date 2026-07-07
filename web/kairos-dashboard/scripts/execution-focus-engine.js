@@ -1,0 +1,1 @@
+import{getActionPriority}from'./action-priority-engine.js';export function getExecutionFocus(){const p=getActionPriority();return{headline:p.primary,urgency:p.urgency,score:p.score,queue:[p.primary,...p.secondary],updated:new Date().toLocaleString()};}
