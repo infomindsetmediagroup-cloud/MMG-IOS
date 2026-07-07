@@ -1,0 +1,1 @@
+import{getExecutionFocus}from'./execution-focus-engine.js';export function getDecisionCenter(){const f=getExecutionFocus();return{decision:f.score>=80?'EXECUTE':'REVIEW',reason:f.headline,queue:f.queue,updated:new Date().toLocaleString()};}
