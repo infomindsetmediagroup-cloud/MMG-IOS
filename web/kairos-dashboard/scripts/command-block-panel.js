@@ -1,3 +1,4 @@
+import "./completion-gate-panel.js";
 import { queueCommandWorkItem } from "./live-work-queue.js";
 
 function escapeHTML(value) {
