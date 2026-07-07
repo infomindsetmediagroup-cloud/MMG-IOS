@@ -1,0 +1,1 @@
+import{getDecisionCenter}from'./decision-center-engine.js';export function getMissionControl(){const d=getDecisionCenter();return{status:d.decision,headline:d.reason,tasks:d.queue.slice(0,5),updated:new Date().toLocaleString()};}
