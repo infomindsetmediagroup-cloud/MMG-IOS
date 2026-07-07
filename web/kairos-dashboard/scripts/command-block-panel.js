@@ -1,6 +1,7 @@
 import "./completion-gate-panel.js";
 import "./dashboard-mode-gate-panel.js";
 import "./product-ops-workflow-panel.js";
+import "./website-build-workflow-panel.js";
 import { submitCommandPipeline } from "./command-pipeline.js";
 
 function escapeHTML(value) {
