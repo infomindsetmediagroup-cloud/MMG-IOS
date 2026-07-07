@@ -1,0 +1,1 @@
+import{getProductionMetrics}from'./production-metrics-engine.js';import{getOperatorInsights}from'./operator-insights.js';export function getSystemHealthSummary(){const m=getProductionMetrics();return{score:m.health,status:m.health>90?'Excellent':m.health>75?'Good':m.health>50?'Attention':'Critical',updated:m.updatedAt,highlights:getOperatorInsights().slice(0,3)}}
