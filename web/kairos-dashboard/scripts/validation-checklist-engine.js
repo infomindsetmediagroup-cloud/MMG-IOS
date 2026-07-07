@@ -1,0 +1,1 @@
+import{getDeploymentReadiness}from'./deployment-readiness-engine.js';export function getValidationChecklist(){const d=getDeploymentReadiness();return{ready:d.ready,items:[{name:'Repository health',done:d.ready},{name:'Deployment readiness',done:d.ready},{name:'Operator review',done:false}],next:d.next,updated:new Date().toLocaleString()};}
