@@ -1,14 +1,51 @@
-name: MMG IOS Smoke Test
+name: MMG IOS Manual Build Verification
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mmg-ios-build-verification-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  smoke:
-    runs-on: ubuntu-latest
+  xcode-build:
+    name: Xcode Build Verification
+    runs-on: macos-latest
     steps:
-      - name: Startup
-        run: echo ok
+      - name: Validate Kairos secret presence
+        run: |
+          if [ -z "${KAIROS_TOKEN_PRESENT}" ]; then
+            echo "KAIROS secret is not available."
+            exit 1
+          fi
+          echo "KAIROS secret is configured."
+        env:
+          KAIROS_TOKEN_PRESENT: ${{ secrets.KAIROS }}
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.KAIROS }}
+          persist-credentials: false
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Resolve package dependencies
+        run: |
+          xcodebuild \
+            -project MMGIOS.xcodeproj \
+            -resolvePackageDependencies
+
+      - name: Build Debug for iOS Simulator
+        run: |
+          xcodebuild \
+            -project MMGIOS.xcodeproj \
+            -scheme MMGIOS \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
+            CODE_SIGNING_ALLOWED=NO \
+            build
