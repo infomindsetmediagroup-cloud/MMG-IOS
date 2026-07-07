@@ -1,0 +1,1 @@
+import{getOpsState}from'./ops-state-engine.js';import{getOpsAlerts}from'./ops-alert-engine.js';export function getSessionSummary(){const s=getOpsState();const a=getOpsAlerts();return{headline:s.primary,status:s.mode,summary:s.summary,alerts:a.alerts.length,updated:new Date().toLocaleString()};}
