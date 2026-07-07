@@ -12,7 +12,7 @@ body {
 .nav-button:hover, .nav-button.active { background: linear-gradient(90deg, rgba(79,216,255,0.14), rgba(0,123,255,0.05)); border-color: rgba(79,216,255,0.26); }
 .card { border-radius: 28px; box-shadow: 0 32px 100px rgba(0,0,0,0.42); }
 .hero-panel { grid-column: span 12; min-height: 230px; }
-.kpi-grid { grid-column: span 12; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.kpi-grid { grid-column: span 12; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; width: 100%; }
 .kpi-card { min-height: 132px; }
 .trend { margin-top: 12px; display: inline-flex; border-radius: 999px; padding: 6px 10px; font-size: 12px; font-weight: 800; background: rgba(79,216,255,0.12); color: var(--kairos-blue); }
 .trend.good { background: rgba(109,242,166,0.12); color: var(--green); }
@@ -22,4 +22,42 @@ body {
 .action-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
 .action-button { border: 1px solid rgba(79,216,255,0.28); background: rgba(79,216,255,0.14); color: var(--text); border-radius: 999px; padding: 10px 14px; font-weight: 850; }
 @media (max-width: 1100px) { .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 900px) { .kpi-grid { grid-template-columns: 1fr; } }
+@media (max-width: 900px) {
+  .workspace {
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+
+  .dashboard-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    width: 100% !important;
+  }
+
+  .dashboard-grid > *,
+  .hero-panel,
+  .kpi-grid,
+  .card,
+  .card.large,
+  .card.full {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    grid-column: 1 / -1 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  .kpi-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: none !important;
+  }
+
+  .kpi-grid > .card,
+  .kpi-card {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
