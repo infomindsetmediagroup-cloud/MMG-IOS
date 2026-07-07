@@ -1,0 +1,28 @@
+.workflow-automation-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.workflow-automation-mini {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 22px;
+  background: rgba(255,255,255,0.045);
+}
+
+.workflow-automation-mini .card-header {
+  margin-bottom: 12px;
+}
+
+.workflow-automation-mini .list-item {
+  align-items: flex-start;
+}
+
+@media (max-width: 860px) {
+  .workflow-automation-grid {
+    grid-template-columns: 1fr;
+  }
+}
