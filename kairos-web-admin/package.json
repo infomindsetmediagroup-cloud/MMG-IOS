@@ -1,0 +1,11 @@
+{
+  "name": "kairos-web-admin",
+  "version": "1.7.0-alpha",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "operate": "node scripts/kairos-operate-local.mjs",
+    "start": "node scripts/kairos-operate-local.mjs",
+    "shopify:check": "node scripts/check-shopify-read-only.mjs"
+  }
+}
