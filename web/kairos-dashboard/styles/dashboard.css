@@ -14,6 +14,8 @@
 
 * { box-sizing: border-box; }
 
+html, body { width: 100%; overflow-x: hidden; }
+
 body {
   margin: 0;
   background: radial-gradient(circle at top left, rgba(79, 216, 255, 0.18), transparent 32rem), var(--ink);
@@ -94,7 +96,7 @@ h3 { font-size: 18px; }
   border-color: var(--line);
 }
 
-.workspace { padding: 32px; }
+.workspace { padding: 32px; min-width: 0; }
 
 .topbar {
   display: flex;
@@ -127,10 +129,13 @@ h3 { font-size: 18px; }
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 16px;
+  width: 100%;
+  max-width: 100%;
 }
 
 .card {
   grid-column: span 4;
+  min-width: 0;
   min-height: 160px;
   padding: 20px;
   border-radius: 26px;
@@ -185,9 +190,59 @@ h3 { font-size: 18px; }
 .badge.danger { color: var(--red); background: rgba(255, 107, 107, 0.12); }
 
 @media (max-width: 900px) {
-  .kairos-app { grid-template-columns: 1fr; }
-  .sidebar { position: static; height: auto; }
-  .workspace { padding: 20px; }
-  .topbar { flex-direction: column; }
-  .card, .card.large, .card.full { grid-column: span 12; }
+  .kairos-app {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .sidebar {
+    position: static;
+    height: auto;
+    width: 100%;
+    max-width: 100%;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .workspace {
+    width: 100%;
+    max-width: 100%;
+    padding: 20px;
+  }
+
+  .topbar { flex-direction: column; width: 100%; }
+  .operator-card { width: 100%; }
+
+  .dashboard-grid {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    max-width: 100%;
+    gap: 16px;
+  }
+
+  .dashboard-grid > *,
+  .card,
+  .card.large,
+  .card.full,
+  .kpi-grid,
+  .hero-panel {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0;
+  }
+
+  .card {
+    border-radius: 24px;
+  }
+}
+
+@media (max-width: 520px) {
+  .workspace { padding: 20px 16px 120px; }
+  .sidebar { padding: 20px 16px; }
+  .card { padding: 18px; }
+  .card-header { align-items: flex-start; }
 }
