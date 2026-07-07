@@ -15,20 +15,9 @@ jobs:
     name: Xcode Build Verification
     runs-on: macos-latest
     steps:
-      - name: Validate Kairos secret presence
-        run: |
-          if [ -z "${KAIROS_TOKEN_PRESENT}" ]; then
-            echo "KAIROS secret is not available."
-            exit 1
-          fi
-          echo "KAIROS secret is configured."
-        env:
-          KAIROS_TOKEN_PRESENT: ${{ secrets.KAIROS }}
-
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.KAIROS }}
           persist-credentials: false
 
       - name: Show Xcode version
