@@ -1,0 +1,10 @@
+.is-jump-target {
+  outline: 2px solid rgba(79,216,255,0.72);
+  box-shadow: 0 0 0 8px rgba(79,216,255,0.12), 0 30px 120px rgba(0,123,255,0.24);
+}
+
+[data-section-jump-panel] .action-row {
+  max-height: 240px;
+  overflow: auto;
+  padding-right: 4px;
+}
