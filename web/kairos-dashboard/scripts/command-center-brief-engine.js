@@ -1,0 +1,1 @@
+import{getMissionControl}from'./mission-control-engine.js';import{getOperationsSnapshot}from'./operations-snapshot-engine.js';export function getCommandCenterBrief(){const m=getMissionControl();const s=getOperationsSnapshot();return{title:'Command Center Brief',status:m.status,summary:s.summary,primary:m.headline,tasks:m.tasks,updated:new Date().toLocaleString()};}
