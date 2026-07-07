@@ -1,0 +1,1 @@
+import{getFinalHandoff}from'./final-handoff-engine.js';export function getExecutionLedger(){const h=getFinalHandoff();return{status:h.status,ready:h.ready,entry:`${h.updated} — ${h.headline}`,summary:h.summary};}
