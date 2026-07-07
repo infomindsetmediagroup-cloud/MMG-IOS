@@ -1,0 +1,1 @@
+export function getSecurityAudit(){return{status:'Pending Review',score:null,checks:[{name:'Secrets protected',passed:true},{name:'Authentication review',passed:false},{name:'Authorization review',passed:false},{name:'Dependency scan',passed:false}],updated:new Date().toLocaleString()};}
