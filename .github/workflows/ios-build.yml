@@ -33,6 +33,6 @@ jobs:
             -project MMGIOS.xcodeproj \
             -scheme MMGIOS \
             -configuration Debug \
-            -destination 'platform=iOS Simulator,name=Any iOS Simulator Device' \
+            -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO \
             build
