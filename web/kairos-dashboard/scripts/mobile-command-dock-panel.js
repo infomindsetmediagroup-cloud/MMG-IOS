@@ -1,5 +1,14 @@
 import { getDockActionDetails, runDockAction } from "./mobile-command-dock.js";
 
+function dockLabel(action) {
+  if (action.shortLabel) return action.shortLabel;
+  return String(action.title || action.id || "Action")
+    .replace(/^(Run|Create|Build|Stage|Prepare|Validate)\s+/i, "")
+    .split(" ")
+    .slice(0, 2)
+    .join(" ");
+}
+
 function renderMobileCommandDock() {
   if (document.querySelector("[data-mobile-command-dock]")) return;
 
@@ -9,8 +18,8 @@ function renderMobileCommandDock() {
   dock.dataset.mobileCommandDock = "true";
   dock.setAttribute("aria-label", "Mobile command dock");
   dock.innerHTML = actions.map(action => `
-    <button class="dock-button" data-dock-action="${action.id}">
-      <span>${action.title.split(" ")[0]}</span>
+    <button class="dock-button" data-dock-action="${action.id}" aria-label="${action.title}">
+      <span>${dockLabel(action)}</span>
     </button>
   `).join("");
 
