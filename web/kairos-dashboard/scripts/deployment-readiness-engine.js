@@ -1,0 +1,1 @@
+import{getRepositoryHealth}from'./repository-health-engine.js';export function getDeploymentReadiness(){const h=getRepositoryHealth();return{ready:h.healthy,status:h.status,summary:h.summary,next:h.healthy?'Ready for validation':'Resolve repository issues first',updated:new Date().toLocaleString()};}
