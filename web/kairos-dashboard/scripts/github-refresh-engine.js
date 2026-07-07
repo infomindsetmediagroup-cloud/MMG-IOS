@@ -1,0 +1,1 @@
+import{getCommandRefresh}from'./command-refresh-engine.js';export function getGitHubRefresh(){const r=getCommandRefresh();return{status:r.status,ready:r.ready,route:'GitHub connector direct write path',commitMode:'Sequential commits with [skip ci]',shaPolicy:'Fetch current file SHA before updates',action:r.action,updated:new Date().toLocaleString()};}
