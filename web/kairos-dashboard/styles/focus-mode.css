@@ -1,0 +1,25 @@
+body[data-focus-mode="ops"] [data-runtime-panel],
+body[data-focus-mode="ops"] [data-notification-panel] {
+  opacity: 0.68;
+}
+
+body[data-focus-mode="revenue"] [data-diagnostics-panel],
+body[data-focus-mode="revenue"] [data-runtime-panel] {
+  opacity: 0.58;
+}
+
+body[data-focus-mode="system"] [data-search-panel],
+body[data-focus-mode="system"] [data-operator-panel] {
+  opacity: 0.62;
+}
+
+body[data-focus-mode="system"] [data-diagnostics-panel],
+body[data-focus-mode="system"] [data-runtime-panel],
+body[data-focus-mode="system"] [data-notification-panel] {
+  border-color: rgba(79,216,255,0.32);
+  box-shadow: 0 32px 100px rgba(0,123,255,0.18);
+}
+
+body[data-focus-mode="revenue"] .card:has(h3:nth-child(1)) {
+  transition: opacity 180ms ease, border-color 180ms ease;
+}
