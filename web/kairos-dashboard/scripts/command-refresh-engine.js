@@ -1,0 +1,1 @@
+import{getExecutionLedger}from'./execution-ledger-engine.js';export function getCommandRefresh(){const l=getExecutionLedger();return{status:l.status,ready:l.ready,summary:l.summary,action:l.ready?'Continue execution':'Review active blockers',updated:new Date().toLocaleString()};}
