@@ -6,6 +6,7 @@ import { knowledgeOps, knowledgeMetrics } from "./knowledge-ops.js";
 import { revenueOps, revenueMetrics } from "./revenue-ops.js";
 import { customerOps, customerMetrics } from "./customer-ops.js";
 import { aiOps, aiMetrics } from "./ai-ops.js";
+import { systemOps, systemMetrics } from "./system-ops.js";
 import { getActionLog, recordAction } from "./runtime-actions.js";
 
 const skin = document.createElement("link");
@@ -30,7 +31,7 @@ function renderNav(active = "dashboard") {
 function badgeClass(value) {
   const normalized = String(value || "").toLowerCase();
   if (["active", "ready", "live", "low", "p1", "architecture ready", "package queue active", "free"].includes(normalized)) return "badge good";
-  if (["medium", "queued", "p2", "approval", "build", "installed / mapping required", "popup + bundle build queued", "route audit required", "needs widget validation", "open", "seeding", "paid", "high", "not connected", "discount", "lead magnet", "bundle", "upsell", "purchased", "premium", "lead", "customer", "activation", "trust", "expansion"].includes(normalized)) return "badge warning";
+  if (["medium", "queued", "p2", "approval", "build", "installed / mapping required", "popup + bundle build queued", "route audit required", "needs widget validation", "open", "seeding", "paid", "high", "not connected", "discount", "lead magnet", "bundle", "upsell", "purchased", "premium", "lead", "customer", "activation", "trust", "expansion", "planned"].includes(normalized)) return "badge warning";
   if (["critical", "blocked", "failed", "danger", "license"].includes(normalized)) return "badge danger";
   return "badge";
 }
@@ -69,6 +70,7 @@ function renderDashboard() {
   const revenue = revenueMetrics();
   const customer = customerMetrics();
   const ai = aiMetrics();
+  const system = systemMetrics();
   title.textContent = "Dashboard";
   view.innerHTML = `
     <article class="card hero-panel"><div class="card-header"><div><p class="eyebrow">Good evening, ${kairosState.operator}</p><h3>${kairosState.activeBatch}</h3></div><span class="badge good">Live</span></div><p class="metric">${kairosState.health}%</p><p class="muted">Kairos is online as the Phase 1 web operations command center.</p><div class="action-row">${actionButton("Start Daily Ops", "Start Daily Ops", "Daily operations run queued.")}${actionButton("Run Website Audit", "Run Website Audit", "Website audit workflow queued.")}${actionButton("Prepare Shopify Queue", "Prepare Shopify Queue", "Shopify operations queue staged.")}</div></article>
@@ -79,6 +81,7 @@ function renderDashboard() {
     <article class="card"><div class="card-header"><h3>Revenue Engine</h3><span class="badge warning">${revenue.queued} Queued</span></div><p class="metric">${revenue.score}%</p><p class="muted">${revenueOps.activeFunnel}</p>${progress(revenue.score)}</article>
     <article class="card"><div class="card-header"><h3>Customer Ops</h3><span class="badge warning">${customer.queues} Queued</span></div><p class="metric">${customer.score}%</p><p class="muted">${customerOps.activePortal}</p>${progress(customer.score)}</article>
     <article class="card"><div class="card-header"><h3>AI Workforce</h3><span class="badge warning">${ai.queuedTasks} Tasks</span></div><p class="metric">${ai.score}%</p><p class="muted">${aiOps.activeQueue}</p>${progress(ai.score)}</article>
+    <article class="card"><div class="card-header"><h3>System</h3><span class="badge good">${system.active} Active</span></div><p class="metric">${system.score}%</p><p class="muted">${systemOps.activeMode}</p>${progress(system.score)}</article>
     <article class="card large"><div class="card-header"><h3>Bundle Packages</h3><span class="badge good">${metrics.projectedRevenue}</span></div><div class="list">${bundlePackages.map(bundle => `<div class="list-item"><div><strong>${bundle.title}</strong><p class="muted">${bundle.price} • ${bundle.destination}</p></div><span class="${badgeClass(bundle.status)}">${bundle.status}</span></div>`).join("")}</div></article>
     ${actionLogCard()}
   `;
@@ -134,6 +137,13 @@ function renderAI() {
   bindActions();
 }
 
+function renderSystem() {
+  const system = systemMetrics();
+  title.textContent = "System";
+  view.innerHTML = `<article class="card hero-panel"><div class="card-header"><div><p class="eyebrow">System Administration</p><h3>System Command Center</h3></div><span class="badge good">${system.active} Active</span></div><p class="metric">${system.score}%</p><p class="muted">${systemOps.activeMode} • ${systemOps.lastRun}</p>${progress(system.score)}<div class="action-row">${actionButton("Create Golden Master", "Create Golden Master", "Golden Master snapshot queued.")}${actionButton("Check Runtime Health", "Check Runtime Health", "Runtime health check queued.")}${actionButton("Prepare Milestone Validation", "Prepare Milestone Validation", "Milestone validation queued without continuous workflow burn.")}</div></article><article class="card large"><div class="card-header"><h3>Integrations</h3><span class="badge">${system.integrations}</span></div><div class="list">${systemOps.integrations.map(item => `<div class="list-item"><div><strong>${item.title}</strong><p class="muted">${item.status}</p>${progress(item.health)}</div><span class="${badgeClass(item.status)}">${item.health}%</span></div>`).join("")}</div></article><article class="card"><div class="card-header"><h3>Safeguards</h3><span class="badge good">${system.safeguards}</span></div>${list(systemOps.safeguards, "priority")}</article><article class="card full"><div class="card-header"><h3>Release Queue</h3><span class="badge warning">${system.releaseItems}</span></div>${list(systemOps.releaseQueue, "priority")}</article>${actionLogCard()}`;
+  bindActions();
+}
+
 function renderModule(moduleId) {
   renderNav(moduleId);
   const module = kairosState.modules.find(item => item.id === moduleId);
@@ -146,6 +156,7 @@ function renderModule(moduleId) {
   if (moduleId === "revenue") return renderRevenue();
   if (moduleId === "customers") return renderCustomers();
   if (moduleId === "ai") return renderAI();
+  if (moduleId === "system") return renderSystem();
   const moduleCopy = kairosState.commandCenters[moduleId] || [];
   view.innerHTML = `<article class="card hero-panel"><div class="card-header"><div><p class="eyebrow">Command Center</p><h3>${module?.label}</h3></div><span class="badge warning">Build Queue</span></div><p class="muted">Kairos-managed workspace for ${module?.label} operations.</p><div class="action-row">${actionButton("Execute Next Task", `Execute ${module?.label} Task`, `${module?.label} execution task queued.`)}${actionButton("Create Backlog Item", `Create ${module?.label} Backlog Item`, `${module?.label} backlog item queued.`)}</div></article><article class="card full"><div class="card-header"><h3>Execution Queue</h3><span class="badge warning">Queued</span></div><div class="list">${moduleCopy.map(task => `<div class="list-item"><strong>${task}</strong><span class="badge warning">Queued</span></div>`).join("")}</div></article>${actionLogCard()}`;
   bindActions();
