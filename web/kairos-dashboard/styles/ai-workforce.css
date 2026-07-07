@@ -1,0 +1,28 @@
+.ai-workforce-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.4fr);
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.ai-workforce-mini {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 22px;
+  background: rgba(255,255,255,0.045);
+}
+
+.ai-workforce-mini .card-header {
+  margin-bottom: 12px;
+}
+
+.ai-workforce-mini .list-item {
+  align-items: flex-start;
+}
+
+@media (max-width: 860px) {
+  .ai-workforce-grid {
+    grid-template-columns: 1fr;
+  }
+}
