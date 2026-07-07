@@ -1,0 +1,54 @@
+.queue-toolbar {
+  display: grid;
+  gap: 12px;
+}
+
+.queue-toolbar input {
+  width: 100%;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 18px;
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  padding: 13px 14px;
+  font: inherit;
+  font-weight: 700;
+  outline: none;
+}
+
+.queue-toolbar input:focus {
+  border-color: rgba(79,216,255,0.38);
+  box-shadow: 0 0 0 3px rgba(79,216,255,0.1);
+}
+
+.queue-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.action-button.is-active {
+  background: rgba(79,216,255,0.28);
+  border-color: rgba(79,216,255,0.48);
+}
+
+.work-queue-item {
+  align-items: flex-start;
+}
+
+.work-queue-actions {
+  justify-content: flex-end;
+  min-width: min(360px, 100%);
+}
+
+@media (max-width: 760px) {
+  .queue-filters,
+  .work-queue-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .queue-filters .action-button,
+  .work-queue-actions .action-button {
+    flex: 1 1 auto;
+  }
+}
