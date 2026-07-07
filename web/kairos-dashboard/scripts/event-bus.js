@@ -1,0 +1,1 @@
+const listeners=new Map();export function subscribe(e,h){if(!listeners.has(e))listeners.set(e,new Set());listeners.get(e).add(h);return()=>listeners.get(e)?.delete(h)} export function publish(e,p={}){listeners.get(e)?.forEach(h=>h(p));window.dispatchEvent(new CustomEvent('kairos:'+e,{detail:p}));} export function clearEventBus(){listeners.clear();}
