@@ -91,21 +91,40 @@ body,
   }
 
   .card-header {
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 8px;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: start;
+    justify-content: stretch;
+    column-gap: 8px;
+    row-gap: 10px;
+    width: 100%;
   }
 
   .card-header > div {
-    flex: 1 1 155px;
+    grid-column: 1;
+    min-width: 0;
+    width: 100%;
   }
 
   .card-header .badge,
   .card-header .trend,
   .card-header .panel-layout-button {
-    flex: 0 1 auto;
+    align-self: start;
+    justify-self: end;
+    flex: none;
     font-size: 10px;
     padding: 6px 9px;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .card-header .badge:nth-last-child(2),
+  .card-header .trend:nth-last-child(2) {
+    grid-column: 2;
+  }
+
+  .card-header .panel-layout-button {
+    grid-column: 3;
   }
 
   .list-item {
@@ -117,5 +136,24 @@ body,
 @media (max-width: 520px) {
   .workspace {
     padding-bottom: 124px !important;
+  }
+
+  .card-header {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .card-header > div,
+  .card-header .badge,
+  .card-header .trend,
+  .card-header .panel-layout-button {
+    grid-column: 1 !important;
+    justify-self: start;
+  }
+
+  .card-header .badge,
+  .card-header .trend,
+  .card-header .panel-layout-button {
+    width: fit-content;
+    max-width: 100%;
   }
 }
