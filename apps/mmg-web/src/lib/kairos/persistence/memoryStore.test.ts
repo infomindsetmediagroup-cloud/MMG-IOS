@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createInMemoryKairosPersistenceStore } from './memoryStore';
-import type { KairosRecordOwner } from './models';
+import type { KairosConversationRecord, KairosRecordOwner } from './models';
+import type { KairosCreateRecord } from './repositories';
 
 const customerOwner: KairosRecordOwner = { type: 'customer', subject: 'customer-1' };
 const otherOwner: KairosRecordOwner = { type: 'customer', subject: 'customer-2' };
@@ -65,7 +66,7 @@ describe('createInMemoryKairosPersistenceStore', () => {
       id: 'caller-id',
       createdAt: 'bad-created-at',
       updatedAt: 'bad-updated-at'
-    };
+    } as KairosCreateRecord<KairosConversationRecord>;
 
     const conversation = store.conversations.create(unsafeConversationInput);
 
