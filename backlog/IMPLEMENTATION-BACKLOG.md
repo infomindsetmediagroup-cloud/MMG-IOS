@@ -7,6 +7,7 @@
 - Customer Platform
 - Knowledge Platform
 - AI Gateway
+  - Kairos OpenAI API Runtime Wiring (`backlog/KAIROS-OPENAI-API-RUNTIME-WIRING.md`)
 
 ## P1
 - Executive Dashboard
