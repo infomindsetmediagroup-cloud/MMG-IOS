@@ -5,6 +5,9 @@ struct DesignStudioWorkspaceView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \PersistedDesignStudioProject.updatedAt, order: .reverse) private var projects: [PersistedDesignStudioProject]
     @Query(sort: \PersistedDesignStudioAsset.updatedAt, order: .reverse) private var assets: [PersistedDesignStudioAsset]
+    @Query(sort: \PersistedDesignStudioVersionRecord.createdAt, order: .reverse) private var versions: [PersistedDesignStudioVersionRecord]
+    @Query(sort: \PersistedDesignStudioExportJob.updatedAt, order: .reverse) private var exportJobs: [PersistedDesignStudioExportJob]
+    @Query(sort: \PersistedDesignStudioPermissionRecord.updatedAt, order: .reverse) private var permissions: [PersistedDesignStudioPermissionRecord]
 
     private var activeProjects: [PersistedDesignStudioProject] {
         projects.filter { $0.statusRawValue != DesignStudioProjectStatus.archived.rawValue }
@@ -12,6 +15,10 @@ struct DesignStudioWorkspaceView: View {
 
     private var exportReadyAssets: [PersistedDesignStudioAsset] {
         assets.filter { $0.statusRawValue == DesignStudioAssetStatus.exported.rawValue || $0.exportFormat.isEmpty == false }
+    }
+
+    private var approvalRequiredJobs: [PersistedDesignStudioExportJob] {
+        exportJobs.filter { $0.approvalRequired && $0.statusRawValue != DesignStudioExportStatus.released.rawValue }
     }
 
     var body: some View {
@@ -29,7 +36,10 @@ struct DesignStudioWorkspaceView: View {
             Section("Studio Status") {
                 LabeledContent("Active projects", value: "\(activeProjects.count)")
                 LabeledContent("Managed assets", value: "\(assets.count)")
-                LabeledContent("Export-ready assets", value: "\(exportReadyAssets.count)")
+                LabeledContent("Version records", value: "\(versions.count)")
+                LabeledContent("Export jobs", value: "\(exportJobs.count)")
+                LabeledContent("Permission records", value: "\(permissions.count)")
+                LabeledContent("Approval gates", value: "\(approvalRequiredJobs.count)")
                 Label("Kairos-assisted production routing enabled", systemImage: "sparkles")
             }
 
@@ -53,6 +63,9 @@ struct DesignStudioWorkspaceView: View {
                             Text(project.summary)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
+                            Text("Vault: \(project.knowledgeVaultKey.isEmpty ? "Not linked" : project.knowledgeVaultKey)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -72,6 +85,74 @@ struct DesignStudioWorkspaceView: View {
                             Text(asset.storagePath)
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
+                            if !asset.kairosHistorySummary.isEmpty {
+                                Text("Kairos: \(asset.kairosHistorySummary)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Section("Version History") {
+                if versions.isEmpty {
+                    Text("No version records yet.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(versions) { version in
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("\(version.assetTitle) • \(version.versionLabel)")
+                                .font(.headline)
+                            Text(version.changeSummary)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("Changed by \(version.changedBy)\(version.kairosAssisted ? " with Kairos assistance" : "")")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+
+            Section("Export Jobs") {
+                if exportJobs.isEmpty {
+                    Text("No export jobs yet.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(exportJobs) { job in
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(job.assetTitle).font(.headline)
+                            Text("\(job.requestedFormat) • \(job.statusRawValue)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(job.destinationPath)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            if job.approvalRequired {
+                                Label("Approval required before customer release", systemImage: "checkmark.seal")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Section("Permissions") {
+                if permissions.isEmpty {
+                    Text("No permission records yet.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(permissions) { permission in
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(permission.principalName).font(.headline)
+                            Text("\(permission.projectTitle) • \(permission.permissionLevelRawValue)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("Export approved deliverables: \(permission.canExportApprovedDeliverables ? "Yes" : "No") • Intermediate assets: \(permission.canAccessIntermediateAssets ? "Yes" : "No")")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -87,7 +168,7 @@ struct DesignStudioWorkspaceView: View {
     }
 
     private func seedDesignStudioIfNeeded() {
-        guard projects.isEmpty, assets.isEmpty else { return }
+        guard projects.isEmpty, assets.isEmpty, versions.isEmpty, exportJobs.isEmpty, permissions.isEmpty else { return }
 
         let bookProject = PersistedDesignStudioProject(
             title: "Creator Education Starter Guide",
@@ -112,31 +193,100 @@ struct DesignStudioWorkspaceView: View {
         modelContext.insert(bookProject)
         modelContext.insert(imageProject)
 
+        let manuscriptAsset = PersistedDesignStudioAsset(
+            title: "Starter Guide Draft Manuscript",
+            projectTitle: bookProject.title,
+            assetType: .manuscript,
+            status: .editing,
+            sourceDescription: "Customer-uploaded source draft prepared for Kairos refinement.",
+            storagePath: "/customers/demo/design-studio/creator-education-starter-guide/manuscript-v1.md",
+            exportFormat: "PDF",
+            versionLabel: "v1",
+            kairosHistorySummary: "Ready for rewrite, formatting, and export preparation."
+        )
+
+        let thumbnailAsset = PersistedDesignStudioAsset(
+            title: "Launch Thumbnail Concept",
+            projectTitle: imageProject.title,
+            assetType: .socialGraphic,
+            status: .generated,
+            sourceDescription: "Kairos-generated visual concept retained inside the MMG/Kairos production workspace.",
+            storagePath: "/customers/demo/design-studio/launch-social-asset-set/thumbnail-v1.png",
+            exportFormat: "PNG 9:16",
+            versionLabel: "v1",
+            kairosHistorySummary: "Generated from customer brand kit and launch objective."
+        )
+
+        modelContext.insert(manuscriptAsset)
+        modelContext.insert(thumbnailAsset)
+
         modelContext.insert(
-            PersistedDesignStudioAsset(
-                title: "Starter Guide Draft Manuscript",
+            PersistedDesignStudioVersionRecord(
+                assetTitle: manuscriptAsset.title,
                 projectTitle: bookProject.title,
-                assetType: .manuscript,
-                status: .editing,
-                sourceDescription: "Customer-uploaded source draft prepared for Kairos refinement.",
-                storagePath: "/customers/demo/design-studio/creator-education-starter-guide/manuscript-v1.md",
-                exportFormat: "PDF",
                 versionLabel: "v1",
-                kairosHistorySummary: "Ready for rewrite, formatting, and export preparation."
+                changeSummary: "Initial uploaded manuscript captured for editing, formatting, and export preparation.",
+                changedBy: "MMG Demo Customer",
+                kairosAssisted: false
             )
         )
 
         modelContext.insert(
-            PersistedDesignStudioAsset(
-                title: "Launch Thumbnail Concept",
+            PersistedDesignStudioVersionRecord(
+                assetTitle: thumbnailAsset.title,
                 projectTitle: imageProject.title,
-                assetType: .socialGraphic,
-                status: .generated,
-                sourceDescription: "Kairos-generated visual concept retained inside the MMG/Kairos production workspace.",
-                storagePath: "/customers/demo/design-studio/launch-social-asset-set/thumbnail-v1.png",
-                exportFormat: "PNG 9:16",
                 versionLabel: "v1",
-                kairosHistorySummary: "Generated from customer brand kit and launch objective."
+                changeSummary: "First Kairos-assisted thumbnail concept generated from customer brand kit and launch objective.",
+                changedBy: "Kairos",
+                kairosAssisted: true
+            )
+        )
+
+        modelContext.insert(
+            PersistedDesignStudioExportJob(
+                assetTitle: manuscriptAsset.title,
+                projectTitle: bookProject.title,
+                requestedFormat: "PDF",
+                destinationPath: "/customers/demo/exports/creator-education-starter-guide-v1.pdf",
+                status: .readyForReview,
+                requestedBy: "Kairos",
+                approvalRequired: true,
+                releaseNotes: "Export requires approval before becoming a customer deliverable."
+            )
+        )
+
+        modelContext.insert(
+            PersistedDesignStudioExportJob(
+                assetTitle: thumbnailAsset.title,
+                projectTitle: imageProject.title,
+                requestedFormat: "PNG 9:16",
+                destinationPath: "/customers/demo/exports/launch-thumbnail-v1.png",
+                status: .queued,
+                requestedBy: "MMG Internal",
+                approvalRequired: true,
+                releaseNotes: "Generated intermediate asset remains in-house until approved."
+            )
+        )
+
+        modelContext.insert(
+            PersistedDesignStudioPermissionRecord(
+                customerName: "MMG Demo Customer",
+                projectTitle: bookProject.title,
+                principalName: "MMG Demo Customer",
+                permissionLevel: .reviewer,
+                canExportApprovedDeliverables: true,
+                canAccessIntermediateAssets: false
+            )
+        )
+
+        modelContext.insert(
+            PersistedDesignStudioPermissionRecord(
+                customerName: "MMG Demo Customer",
+                projectTitle: imageProject.title,
+                principalName: "MMG Production",
+                permissionLevel: .productionOnly,
+                canExportApprovedDeliverables: true,
+                canAccessIntermediateAssets: true
             )
         )
 
@@ -167,6 +317,9 @@ struct DesignStudioWorkspaceView: View {
     }
     .modelContainer(for: [
         PersistedDesignStudioProject.self,
-        PersistedDesignStudioAsset.self
+        PersistedDesignStudioAsset.self,
+        PersistedDesignStudioVersionRecord.self,
+        PersistedDesignStudioExportJob.self,
+        PersistedDesignStudioPermissionRecord.self
     ], inMemory: true)
 }
