@@ -12,7 +12,7 @@ export interface KairosEnvironmentStatus {
 
 export function getKairosEnvironmentStatus(): KairosEnvironmentStatus {
   const hasOpenAiKey = Boolean(process.env.OPENAI_API_KEY);
-  const model = process.env.KAIROS_OPENAI_MODEL ?? 'gpt-4.1-mini';
+  const model = process.env.KAIROS_OPENAI_MODEL || 'gpt-4.1-mini';
   const environment = process.env.NODE_ENV ?? 'development';
 
   const checks: KairosEnvironmentStatus['checks'] = [
