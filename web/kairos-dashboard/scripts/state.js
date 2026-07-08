@@ -1,4 +1,139 @@
-export const kairosState = {
+const validGroupStatuses = ["Live", "Build", "Active", "Protected", "Queued", "Ready", "Completed"];
+const validTones = ["good", "warning", "danger"];
+
+function clampPercent(value, fallback = 0) {
+  const numeric = Number(String(value).replace("%", ""));
+  return Math.max(0, Math.min(100, Number.isFinite(numeric) ? numeric : fallback));
+}
+
+function asText(value, fallback = "") {
+  return String(value || fallback);
+}
+
+function asArray(items) {
+  return Array.isArray(items) ? items : [];
+}
+
+function normalizeStatus(status, fallback = "Queued") {
+  const value = asText(status, fallback);
+  return validGroupStatuses.includes(value) ? value : fallback;
+}
+
+function normalizeTone(tone) {
+  const value = asText(tone, "good");
+  return validTones.includes(value) ? value : "good";
+}
+
+function normalizeModule(module, index) {
+  return {
+    id: asText(module?.id, `module-${index + 1}`),
+    label: asText(module?.label, "Module"),
+    icon: asText(module?.icon, "•")
+  };
+}
+
+function normalizeCoreGroup(group, index) {
+  const health = clampPercent(group?.metric, 0);
+  return {
+    id: asText(group?.id, `group-${index + 1}`),
+    label: asText(group?.label, "Kairos"),
+    metric: `${health}%`,
+    status: normalizeStatus(group?.status),
+    summary: asText(group?.summary, "System details are queued for configuration."),
+    nodes: asArray(group?.nodes).map(node => asText(node, "Node")).slice(0, 5)
+  };
+}
+
+function normalizePathway(path, index) {
+  return {
+    title: asText(path?.title, `Path ${index + 1}`),
+    detail: asText(path?.detail, "Pathway details are queued for configuration.")
+  };
+}
+
+function normalizeBrandDoctrine(doctrine = {}) {
+  return {
+    promise: asText(doctrine.promise, "Your Knowledge Has Value."),
+    support: asText(doctrine.support, "Helping you discover it, build it, and share it with the world."),
+    positioning: asText(doctrine.positioning, "Build around the value only you can provide."),
+    customerOutcome: asText(doctrine.customerOutcome, "Turn knowledge, experience, skill, creativity, and perspective into durable digital assets and long-term opportunity."),
+    messageSequence: asArray(doctrine.messageSequence).map(step => asText(step, "Message Layer")),
+    valuePathways: asArray(doctrine.valuePathways).map(normalizePathway),
+    forbiddenTone: asArray(doctrine.forbiddenTone).map(rule => asText(rule, "Avoid hype")),
+    approvedTone: asArray(doctrine.approvedTone).map(rule => asText(rule, "Use guidance"))
+  };
+}
+
+function normalizeStewardshipDoctrine(doctrine = {}) {
+  return {
+    role: asText(doctrine.role, "Kairos is the steady guide that preserves context, recommends next actions, and helps users compound their body of work."),
+    assetModel: asText(doctrine.assetModel, "Ideas, posts, books, videos, services, products, lessons, and workflows should be connected into durable knowledge assets."),
+    operatingRule: asText(doctrine.operatingRule, "Every surface should help the user become more capable, more organized, and closer to sharing value with the right audience."),
+    customerGuidanceRule: asText(doctrine.customerGuidanceRule, "Every recommendation should connect the customer's existing knowledge to one stronger asset, one clearer message, or one more executable next step.")
+  };
+}
+
+function normalizeKpi(item) {
+  return {
+    label: asText(item?.label, "Metric"),
+    value: asText(item?.value, "0"),
+    trend: asText(item?.trend, "Stable"),
+    tone: normalizeTone(item?.tone)
+  };
+}
+
+function normalizePriority(item) {
+  return {
+    title: asText(item?.title, "Untitled Priority"),
+    lane: asText(item?.lane, "System"),
+    status: asText(item?.status, "Queued"),
+    priority: asText(item?.priority, "P2")
+  };
+}
+
+function normalizeApproval(item) {
+  return {
+    title: asText(item?.title, "Untitled Approval"),
+    risk: asText(item?.risk, "Medium")
+  };
+}
+
+function normalizeSystem(item) {
+  return {
+    title: asText(item?.title, "System"),
+    status: asText(item?.status, "Queued"),
+    health: clampPercent(item?.health, 0)
+  };
+}
+
+function normalizePipeline(item) {
+  return {
+    label: asText(item?.label, "Pipeline"),
+    complete: clampPercent(item?.complete, 0)
+  };
+}
+
+function normalizeState(state) {
+  return {
+    operator: asText(state.operator, "Mike"),
+    mode: asText(state.mode, "Operation"),
+    health: clampPercent(state.health, 0),
+    readiness: clampPercent(state.readiness, 0),
+    activeBatch: asText(state.activeBatch, "Kairos Runtime"),
+    modules: asArray(state.modules).map(normalizeModule),
+    coreGroups: asArray(state.coreGroups).map(normalizeCoreGroup),
+    brandDoctrine: normalizeBrandDoctrine(state.brandDoctrine),
+    stewardshipDoctrine: normalizeStewardshipDoctrine(state.stewardshipDoctrine),
+    kpis: asArray(state.kpis).map(normalizeKpi),
+    priorities: asArray(state.priorities).map(normalizePriority),
+    approvals: asArray(state.approvals).map(normalizeApproval),
+    systems: asArray(state.systems).map(normalizeSystem),
+    pipelines: asArray(state.pipelines).map(normalizePipeline),
+    activity: asArray(state.activity).map(item => asText(item, "Runtime activity recorded."))
+  };
+}
+
+export const kairosState = normalizeState({
   operator: "Mike",
   mode: "Operation",
   health: 98,
@@ -127,4 +262,4 @@ export const kairosState = {
     "Dashboard state switched into Customer Value Runtime.",
     "GitHub commit strategy locked to skip-CI batching until final validation."
   ]
-};
+});
