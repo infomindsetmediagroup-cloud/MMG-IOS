@@ -5,21 +5,8 @@ const nav = document.querySelector("#module-nav");
 const view = document.querySelector("#dashboard-view");
 const title = document.querySelector("#page-title");
 const mode = document.querySelector("#runtime-mode");
-
-const brandDoctrine = {
-  promise: "Your Knowledge Has Value.",
-  support: "Helping you discover it, build it, and share it with the world.",
-  mission: "Kairos helps uncover, organize, package, and preserve the value already inside the customer so it can become durable assets over time.",
-  positioning: "Build around the value only you can provide.",
-  sequence: ["Outcome", "Identity", "Agency", "Guidance", "System"],
-  pathways: [
-    { title: "Income Path", detail: "Help the customer identify practical ways their knowledge can support extra income without promising results." },
-    { title: "Asset Path", detail: "Turn experience into reusable content, guides, products, services, or education assets." },
-    { title: "Audience Path", detail: "Translate lived skill and perspective into trustworthy public-facing positioning." },
-    { title: "Execution Path", detail: "Convert scattered ideas into specific next actions, drafts, reviews, and delivery steps." }
-  ],
-  guardrails: ["No income guarantees", "No shortcut claims", "No hype-first language", "Practical guidance only"]
-};
+const brandDoctrine = kairosState.brandDoctrine;
+const stewardshipDoctrine = kairosState.stewardshipDoctrine;
 
 mode.textContent = kairosState.mode;
 
@@ -67,7 +54,7 @@ function brandDoctrineCard() {
     <p class="metric">Discover. Build. Share.</p>
     <p class="muted">${brandDoctrine.support}</p>
     <p class="muted">${brandDoctrine.positioning}</p>
-    <div class="list core-node-list">${brandDoctrine.sequence.map(step => `<div class="list-item"><strong>${step}</strong><span class="badge">Message Layer</span></div>`).join("")}</div>
+    <div class="list core-node-list">${brandDoctrine.messageSequence.map(step => `<div class="list-item"><strong>${step}</strong><span class="badge">Message Layer</span></div>`).join("")}</div>
     <div class="action-row">${actionButton("Queue Brand Work", "Queue Brand Work", "Customer value doctrine queued for website and product surfaces.")}${actionButton("Preserve Doctrine", "Preserve Doctrine", "Brand philosophy preserved as a Kairos operating standard.")}</div>
   </article>`;
 }
@@ -75,26 +62,27 @@ function brandDoctrineCard() {
 function valuePathwaysCard() {
   return `<article class="card full" data-priority-card="ready">
     <div class="card-header"><div><p class="eyebrow">Value Pathways</p><h3>Package knowledge into practical opportunities.</h3></div><span class="badge good">Active</span></div>
-    <p class="muted">The dashboard now treats every customer-facing build as a path from existing knowledge to organized assets, audience positioning, and practical income opportunities without get-rich language.</p>
-    <div class="list core-node-list">${brandDoctrine.pathways.map(path => `<div class="list-item"><div><strong>${path.title}</strong><p class="muted">${path.detail}</p></div><span class="badge good">Path</span></div>`).join("")}</div>
+    <p class="muted">${brandDoctrine.customerOutcome}</p>
+    <div class="list core-node-list">${brandDoctrine.valuePathways.map(path => `<div class="list-item"><div><strong>${path.title}</strong><p class="muted">${path.detail}</p></div><span class="badge good">Path</span></div>`).join("")}</div>
   </article>`;
 }
 
 function guardrailsCard() {
   return `<article class="card full" data-priority-card="protected">
     <div class="card-header"><div><p class="eyebrow">Messaging Guardrails</p><h3>Guidance over hype.</h3></div><span class="badge good">Protected</span></div>
-    <div class="list core-node-list">${brandDoctrine.guardrails.map(rule => `<div class="list-item"><strong>${rule}</strong><span class="badge warning">Guardrail</span></div>`).join("")}</div>
+    <div class="list core-node-list">${brandDoctrine.forbiddenTone.map(rule => `<div class="list-item"><strong>${rule}</strong><span class="badge warning">Avoid</span></div>`).join("")}</div>
+    <div class="list core-node-list">${brandDoctrine.approvedTone.map(rule => `<div class="list-item"><strong>${rule}</strong><span class="badge good">Use</span></div>`).join("")}</div>
   </article>`;
 }
 
 function stewardshipCard(group) {
   return `<article class="card full" data-priority-card="ready">
     <div class="card-header"><div><p class="eyebrow">Guidance Layer</p><h3>Knowledge Stewardship</h3></div><span class="badge good">Active</span></div>
-    <p class="muted">${brandDoctrine.mission}</p>
+    <p class="muted">${stewardshipDoctrine.role}</p>
     <div class="list core-node-list">
-      <div class="list-item"><div><strong>Preserve Context</strong><p class="muted">Treat customer work as a connected body of work, not isolated content.</p></div><span class="badge good">Core</span></div>
-      <div class="list-item"><div><strong>Recommend Next Action</strong><p class="muted">Guide steady progress through the ${group.label} system without generic motivation.</p></div><span class="badge warning">Runtime</span></div>
-      <div class="list-item"><div><strong>Compound Assets</strong><p class="muted">Turn ideas, posts, products, and lessons into durable knowledge assets over time.</p></div><span class="badge good">Doctrine</span></div>
+      <div class="list-item"><div><strong>Preserve Context</strong><p class="muted">${stewardshipDoctrine.assetModel}</p></div><span class="badge good">Core</span></div>
+      <div class="list-item"><div><strong>Recommend Next Action</strong><p class="muted">${stewardshipDoctrine.customerGuidanceRule}</p></div><span class="badge warning">Runtime</span></div>
+      <div class="list-item"><div><strong>Compound Assets</strong><p class="muted">${stewardshipDoctrine.operatingRule}</p></div><span class="badge good">Doctrine</span></div>
     </div>
   </article>`;
 }
