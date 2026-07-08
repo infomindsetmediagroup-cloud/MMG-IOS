@@ -1,15 +1,22 @@
 :root {
-  --ink: #030711;
-  --surface: #0a1020;
-  --surface-2: #10182a;
-  --panel: rgba(9, 16, 31, 0.82);
-  --line: rgba(111, 198, 255, 0.18);
-  --text: #f6f9ff;
-  --muted: rgba(246, 249, 255, 0.66);
-  --blue: #62dfff;
-  --blue-2: #1b91ff;
-  --kairos-deep: #06122a;
-  --kairos-navy: #173a72;
+  --kairos-blue-primary: #4FD8FF;
+  --kairos-blue-secondary: #007BFF;
+  --kairos-blue-accent: #003CFF;
+  --kairos-deep-space: #0A0F1A;
+  --kairos-surface-dark: #1A1F2B;
+  --kairos-text-light: #E6E9EF;
+  --kairos-white: #FFFFFF;
+  --ink: var(--kairos-deep-space);
+  --surface: #0d1322;
+  --surface-2: var(--kairos-surface-dark);
+  --panel: rgba(13, 19, 34, 0.82);
+  --line: rgba(79, 216, 255, 0.22);
+  --text: var(--kairos-text-light);
+  --muted: rgba(230, 233, 239, 0.68);
+  --blue: var(--kairos-blue-primary);
+  --blue-2: var(--kairos-blue-secondary);
+  --kairos-deep: var(--kairos-blue-accent);
+  --kairos-navy: #15386e;
   --kairos-glass: #6d7da0;
   --kairos-soft: #d7f7ff;
   --green: #6df2a6;
@@ -24,9 +31,9 @@ html, body { width: 100%; overflow-x: hidden; }
 body {
   margin: 0;
   background:
-    radial-gradient(circle at 16% 0%, rgba(98, 223, 255, 0.18), transparent 32rem),
-    radial-gradient(circle at 82% 8%, rgba(27, 145, 255, 0.13), transparent 28rem),
-    linear-gradient(180deg, #020612 0%, #050914 48%, #02050c 100%);
+    radial-gradient(circle at 16% 0%, rgba(79, 216, 255, 0.18), transparent 32rem),
+    radial-gradient(circle at 82% 8%, rgba(0, 123, 255, 0.13), transparent 28rem),
+    linear-gradient(180deg, #020612 0%, var(--kairos-deep-space) 48%, #02050c 100%);
   color: var(--text);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
@@ -44,8 +51,8 @@ body {
   top: 0;
   z-index: 30;
   padding: 18px 28px;
-  background: linear-gradient(180deg, rgba(4, 9, 20, 0.96), rgba(4, 9, 20, 0.86));
-  border-bottom: 1px solid rgba(98, 223, 255, 0.14);
+  background: linear-gradient(180deg, rgba(10, 15, 26, 0.97), rgba(10, 15, 26, 0.88));
+  border-bottom: 1px solid rgba(79, 216, 255, 0.18);
   backdrop-filter: blur(18px);
 }
 
@@ -73,36 +80,48 @@ body {
 
 .brand-copy {
   display: grid;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
 }
 
 .brand-copy h1 {
-  font-family: "Avenir Next", "Trebuchet MS", Inter, ui-sans-serif, system-ui, sans-serif;
-  font-size: clamp(44px, 7.2vw, 88px);
-  line-height: 0.92;
-  font-weight: 900;
-  letter-spacing: -0.075em;
-  color: var(--text);
-  text-shadow: 0 0 32px rgba(98, 223, 255, 0.2);
+  font-family: "Montserrat", "Avenir Next", Inter, ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(44px, 7vw, 86px);
+  line-height: 0.88;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--kairos-white);
+  text-shadow: 0 0 34px rgba(79, 216, 255, 0.2);
+}
+
+.brand-copy h1::after {
+  content: "OPERATING SYSTEM";
+  display: block;
+  margin-top: 10px;
+  color: var(--kairos-blue-primary);
+  font-size: clamp(10px, 1.35vw, 15px);
+  line-height: 1;
+  font-weight: 500;
+  letter-spacing: 0.56em;
 }
 
 .brand-copy p {
-  color: #ffffff;
-  font-size: clamp(12px, 1.7vw, 18px);
-  line-height: 1;
-  font-weight: 800;
-  letter-spacing: 0.2em;
+  color: var(--kairos-white);
+  font-size: clamp(11px, 1.35vw, 16px);
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   white-space: nowrap;
-  opacity: 0.9;
+  opacity: 0.94;
 }
 
 .sidebar {
   grid-column: 1;
   grid-row: 2;
   border-right: 1px solid var(--line);
-  background: linear-gradient(180deg, rgba(5, 10, 21, 0.88), rgba(3, 7, 17, 0.94));
+  background: linear-gradient(180deg, rgba(10, 15, 26, 0.9), rgba(3, 7, 17, 0.94));
   padding: 24px;
   position: sticky;
   top: 128px;
@@ -115,7 +134,7 @@ h2 { font-size: clamp(28px, 4vw, 48px); letter-spacing: -0.04em; }
 h3 { font-size: 18px; }
 
 .eyebrow {
-  color: var(--blue);
+  color: var(--kairos-blue-primary);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.16em;
@@ -142,8 +161,8 @@ h3 { font-size: 18px; }
 
 .nav-button:hover, .nav-button.active {
   color: var(--text);
-  background: linear-gradient(135deg, rgba(98, 223, 255, 0.12), rgba(23, 58, 114, 0.14));
-  border-color: rgba(98, 223, 255, 0.24);
+  background: linear-gradient(135deg, rgba(79, 216, 255, 0.12), rgba(0, 123, 255, 0.14));
+  border-color: rgba(79, 216, 255, 0.28);
 }
 
 .workspace {
@@ -194,7 +213,7 @@ h3 { font-size: 18px; }
   min-height: 160px;
   padding: 20px;
   border-radius: 26px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.064), rgba(5, 12, 25, 0.7));
+  background: linear-gradient(180deg, rgba(230, 233, 239, 0.058), rgba(10, 15, 26, 0.76));
   border: 1px solid var(--line);
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.22);
 }
@@ -202,8 +221,8 @@ h3 { font-size: 18px; }
 .card.large { grid-column: span 8; }
 .card.full { grid-column: span 12; }
 .card[data-priority-card="critical"] { order: -40; border-color: rgba(255, 177, 79, 0.42); }
-.card[data-priority-card="decision"] { order: -35; border-color: rgba(98, 223, 255, 0.36); }
-.card[data-priority-card="ready"] { order: -30; border-color: rgba(109, 242, 166, 0.34); }
+.card[data-priority-card="decision"] { order: -35; border-color: rgba(79, 216, 255, 0.38); }
+.card[data-priority-card="ready"] { order: -30; border-color: rgba(0, 123, 255, 0.42); }
 .card[data-priority-card="active"] { order: -20; }
 .card[data-priority-card="support"] { order: 10; }
 
@@ -262,8 +281,8 @@ h3 { font-size: 18px; }
   white-space: nowrap;
   border-radius: 999px;
   padding: 6px 9px;
-  background: rgba(98, 223, 255, 0.12);
-  color: var(--blue);
+  background: rgba(79, 216, 255, 0.12);
+  color: var(--kairos-blue-primary);
   font-size: 11px;
   font-weight: 800;
   line-height: 1;
@@ -293,12 +312,19 @@ h3 { font-size: 18px; }
   }
 
   .brand-copy h1 {
-    font-size: clamp(44px, 10.5vw, 64px);
+    font-size: clamp(38px, 10vw, 56px);
+    letter-spacing: 0.12em;
+  }
+
+  .brand-copy h1::after {
+    font-size: 9px;
+    letter-spacing: 0.34em;
+    margin-top: 8px;
   }
 
   .brand-copy p {
-    font-size: 11px;
-    letter-spacing: 0.12em;
+    font-size: 10px;
+    letter-spacing: 0.08em;
     white-space: normal;
   }
 
