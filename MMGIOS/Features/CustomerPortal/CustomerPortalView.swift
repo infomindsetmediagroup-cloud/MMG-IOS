@@ -23,8 +23,8 @@ struct CustomerPortalView: View {
 
     private var valueProfile: PersistedValueDiscoveryProfile? { valueProfiles.first }
 
-    private var draftProfile: PersistedValueDiscoveryProfile {
-        PersistedValueDiscoveryProfile(
+    private var draftProfile: ValueDiscoveryDraftProfile {
+        ValueDiscoveryDraftProfile(
             knowledgeExpertise: knowledgeExpertise,
             skills: skills,
             professionalExperience: professionalExperience,
