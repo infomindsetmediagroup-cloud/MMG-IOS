@@ -39,7 +39,15 @@ jobs:
           if-no-files-found: ignore
 
       - name: Lint
-        run: npm run lint
+        run: npm run lint 2>&1 | tee lint.log
+
+      - name: Upload lint log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmg-web-lint-log
+          path: apps/mmg-web/lint.log
+          if-no-files-found: ignore
 
       - name: Test
         run: npm run test
