@@ -7,10 +7,21 @@ struct CustomerPortalView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \PersistedCustomerRequestRecord.updatedAt, order: .reverse) private var requests: [PersistedCustomerRequestRecord]
+    @Query(sort: \PersistedValueDiscoveryProfile.updatedAt, order: .reverse) private var valueProfiles: [PersistedValueDiscoveryProfile]
     @State private var showingNewRequest = false
+    @State private var knowledgeExpertise = ""
+    @State private var skills = ""
+    @State private var professionalExperience = ""
+    @State private var lifeExperience = ""
+    @State private var interests = ""
+    @State private var desiredOutcomes = ""
 
     private var openRequests: [PersistedCustomerRequestRecord] {
         requests.filter { $0.statusRawValue != CustomerRequestStatus.complete.rawValue }
+    }
+
+    private var valueProfile: PersistedValueDiscoveryProfile? {
+        valueProfiles.first
     }
 
     var body: some View {
@@ -18,6 +29,8 @@ struct CustomerPortalView: View {
             List {
                 headerSection
                 portalStatusSection
+                valueDiscoverySection
+                recommendationsSection
                 requestsSection
             }
             .navigationTitle("Customer")
@@ -25,16 +38,19 @@ struct CustomerPortalView: View {
             .sheet(isPresented: $showingNewRequest) {
                 CustomerRequestEditorView(sessionStore: sessionStore)
             }
-            .task { seedRequestsIfNeeded() }
+            .task {
+                seedRequestsIfNeeded()
+                loadValueDiscoveryProfile()
+            }
         }
     }
 
     private var headerSection: some View {
         Section {
             SectionHeader(
-                eyebrow: "Portal First",
+                eyebrow: "Your Knowledge Has Value",
                 title: "Customer Portal",
-                bodyText: "Customer-facing intake, service onboarding, file-submission routing, support requests, and project handoff tracking."
+                bodyText: "Customer-facing intake, Value Discovery, service onboarding, file-submission routing, support requests, and project handoff tracking."
             )
             .listRowInsets(EdgeInsets())
             .listRowBackground(Color.clear)
@@ -45,7 +61,48 @@ struct CustomerPortalView: View {
         Section("Portal Status") {
             LabeledContent("Signed in as", value: sessionStore.session.user.name)
             LabeledContent("Open requests", value: "\(openRequests.count)")
+            LabeledContent("Value Discovery", value: "\(valueProfile?.completionScore ?? 0)%")
             Label("Canonical service onboarding enabled", systemImage: "checkmark.seal")
+        }
+    }
+
+    private var valueDiscoverySection: some View {
+        Section("Value Discovery") {
+            Text("Capture the customer profile Kairos uses to recommend positioning, assets, audience paths, and next execution steps.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            TextField("Knowledge and expertise", text: $knowledgeExpertise, axis: .vertical)
+            TextField("Skills", text: $skills, axis: .vertical)
+            TextField("Professional experience", text: $professionalExperience, axis: .vertical)
+            TextField("Life experience", text: $lifeExperience, axis: .vertical)
+            TextField("Interests", text: $interests, axis: .vertical)
+            TextField("Desired outcomes", text: $desiredOutcomes, axis: .vertical)
+
+            Button {
+                saveValueDiscoveryProfile()
+            } label: {
+                Label("Save Value Discovery", systemImage: "square.and.arrow.down")
+            }
+        }
+    }
+
+    private var recommendationsSection: some View {
+        Section("Kairos Recommendations") {
+            if let valueProfile {
+                ForEach(valueProfile.recommendations) { recommendation in
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(recommendation.title)
+                            .font(.headline)
+                        Text("\(recommendation.lane) • \(recommendation.detail)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } else {
+                Text("Save the Value Discovery profile to generate recommendations.")
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -83,6 +140,31 @@ struct CustomerPortalView: View {
             modelContext.insert(PersistedCustomerRequestRecord(request: request))
         }
     }
+
+    private func loadValueDiscoveryProfile() {
+        guard let profile = valueProfile else { return }
+        knowledgeExpertise = profile.knowledgeExpertise
+        skills = profile.skills
+        professionalExperience = profile.professionalExperience
+        lifeExperience = profile.lifeExperience
+        interests = profile.interests
+        desiredOutcomes = profile.desiredOutcomes
+    }
+
+    private func saveValueDiscoveryProfile() {
+        let profile = valueProfile ?? PersistedValueDiscoveryProfile()
+        profile.knowledgeExpertise = knowledgeExpertise
+        profile.skills = skills
+        profile.professionalExperience = professionalExperience
+        profile.lifeExperience = lifeExperience
+        profile.interests = interests
+        profile.desiredOutcomes = desiredOutcomes
+        profile.updatedAt = .now
+
+        if valueProfile == nil {
+            modelContext.insert(profile)
+        }
+    }
 }
 
 private struct CustomerRequestRow: View {
@@ -101,5 +183,8 @@ private struct CustomerRequestRow: View {
 
 #Preview {
     CustomerPortalView(sessionStore: LocalSessionStore(), customerStore: LocalCustomerPortalStore())
-        .modelContainer(for: PersistedCustomerRequestRecord.self, inMemory: true)
+        .modelContainer(for: [
+            PersistedCustomerRequestRecord.self,
+            PersistedValueDiscoveryProfile.self
+        ], inMemory: true)
 }
