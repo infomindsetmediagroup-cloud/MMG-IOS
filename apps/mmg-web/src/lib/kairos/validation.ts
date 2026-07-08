@@ -35,7 +35,8 @@ export function parseKairosRuntimeRequest(value: unknown): KairosRuntimeRequest 
     mode: candidate.mode as KairosMode,
     surface: candidate.surface as KairosSurface,
     message,
-    context: parseContext(candidate.context)
+    context: parseContext(candidate.context),
+    conversationId: parseOptionalString(candidate.conversationId, 'conversationId')
   };
 }
 
@@ -58,6 +59,19 @@ function parseContext(value: unknown): Record<string, string> {
   }
 
   return context;
+}
+
+function parseOptionalString(value: unknown, fieldName: string): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== 'string') {
+    throw runtimeError('invalid_optional_field', `${fieldName} must be a string when provided.`, 400);
+  }
+
+  const normalized = value.trim();
+  return normalized || undefined;
 }
 
 export function runtimeError(code: string, message: string, statusCode = 500): Error & { code: string; statusCode: number } {
