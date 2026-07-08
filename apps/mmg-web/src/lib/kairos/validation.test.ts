@@ -14,8 +14,20 @@ describe('parseKairosRuntimeRequest', () => {
       mode: 'public',
       surface: 'website',
       message: 'Hello Kairos',
-      context: { department: 'knowledge' }
+      context: { department: 'knowledge' },
+      conversationId: undefined
     });
+  });
+
+  it('normalizes optional conversation IDs', () => {
+    expect(
+      parseKairosRuntimeRequest({
+        mode: 'public',
+        surface: 'website',
+        message: 'Hello Kairos',
+        conversationId: '  conversation-123  '
+      })
+    ).toMatchObject({ conversationId: 'conversation-123' });
   });
 
   it('rejects empty messages', () => {
