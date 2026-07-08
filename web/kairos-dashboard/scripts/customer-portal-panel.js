@@ -24,8 +24,12 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
-function renderFields(profile) {
-  return getValueDiscoveryFields().map(field => `
+function safeArray(items) {
+  return Array.isArray(items) ? items : [];
+}
+
+function renderFields(profile = {}) {
+  return safeArray(getValueDiscoveryFields()).map(field => `
     <label class="value-discovery-field">
       <strong>${escapeHtml(field.label)}</strong>
       <span class="muted">${escapeHtml(field.prompt)}</span>
@@ -34,8 +38,8 @@ function renderFields(profile) {
   `).join("");
 }
 
-function renderRecommendations(items) {
-  return items.map(item => `
+function renderRecommendations(items = []) {
+  return safeArray(items).map(item => `
     <div class="list-item" data-value-recommendation>
       <div>
         <strong>${escapeHtml(item.title)}</strong>
@@ -48,6 +52,7 @@ function renderRecommendations(items) {
 
 function readDraftProfile(card) {
   const input = {};
+  if (!card) return input;
   card.querySelectorAll("[data-field]").forEach(field => {
     input[field.dataset.field] = field.value;
   });
@@ -55,7 +60,7 @@ function readDraftProfile(card) {
 }
 
 function refreshDraftRecommendations(card) {
-  const list = card.querySelector("[data-value-recommendations]");
+  const list = card?.querySelector("[data-value-recommendations]");
   if (!list) return;
   const recommendations = deriveKairosRecommendations(readDraftProfile(card));
   list.innerHTML = renderRecommendations(recommendations);
@@ -65,9 +70,10 @@ function renderCustomerPortalPanel() {
   const view = document.querySelector("#dashboard-view");
   if (!view || view.querySelector("[data-customer-portal-panel]")) return;
 
-  const latest = getCustomerPortalRuns()[0];
+  const latest = safeArray(getCustomerPortalRuns())[0];
   const profile = getCustomerValueProfile();
   const recommendations = getKairosRecommendations();
+  const latestItems = safeArray(latest?.items);
   const card = document.createElement("article");
   card.className = "card full";
   card.dataset.customerPortalPanel = "true";
@@ -88,7 +94,7 @@ function renderCustomerPortalPanel() {
     <div class="list" style="margin-top:16px;">
       <div class="list-item"><div><strong>Value Discovery Profile</strong><p class="muted">Completion: ${escapeHtml(profile.completionScore || 0)}%</p></div><span class="badge good">Profile</span></div>
       <div data-value-recommendations>${renderRecommendations(recommendations)}</div>
-      ${latest ? latest.items.map(item => `
+      ${latest ? latestItems.map(item => `
         <div class="list-item">
           <div>
             <strong>${escapeHtml(item.title)}</strong>
@@ -105,17 +111,23 @@ function renderCustomerPortalPanel() {
     field.addEventListener("input", () => refreshDraftRecommendations(card));
   });
 
-  card.querySelector("[data-run-customer-portal]").addEventListener("click", () => {
-    runCustomerPortalBuild();
-    card.remove();
-    renderCustomerPortalPanel();
-  });
+  const runButton = card.querySelector("[data-run-customer-portal]");
+  if (runButton) {
+    runButton.addEventListener("click", () => {
+      runCustomerPortalBuild();
+      card.remove();
+      renderCustomerPortalPanel();
+    });
+  }
 
-  card.querySelector("[data-save-value-discovery]").addEventListener("click", () => {
-    saveCustomerValueProfile(readDraftProfile(card));
-    card.remove();
-    renderCustomerPortalPanel();
-  });
+  const saveButton = card.querySelector("[data-save-value-discovery]");
+  if (saveButton) {
+    saveButton.addEventListener("click", () => {
+      saveCustomerValueProfile(readDraftProfile(card));
+      card.remove();
+      renderCustomerPortalPanel();
+    });
+  }
 }
 
 const observer = new MutationObserver(() => renderCustomerPortalPanel());
