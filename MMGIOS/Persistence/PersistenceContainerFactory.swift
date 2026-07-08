@@ -9,7 +9,8 @@ enum PersistenceContainerFactory {
         PersistedReleasePackageRecord.self,
         PersistedCampaignRecord.self,
         PersistedReleaseChecklistRecord.self,
-        PersistedIntelligenceItemRecord.self
+        PersistedIntelligenceItemRecord.self,
+        PersistedValueDiscoveryProfile.self
     ])
 
     static func makeContainer(inMemory: Bool = false) throws -> ModelContainer {
