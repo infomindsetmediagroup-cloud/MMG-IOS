@@ -15,6 +15,7 @@ workflows/      Repeatable production workflows and execution procedures.
 ## Active Doctrine Records
 
 - `doctrine/customer-portal-design-studio-production-only-asset-doctrine.md` — Locks the Customer Portal Design Studio as an MMG/Kairos production workspace where generated, editable, intermediate, reusable, and source assets stay in-house by default and flow through the MMG production pipeline unless explicitly released as approved final deliverables.
+- `doctrine/continuous-production-learning-doctrine.md` — Establishes that MMG/Kairos production work should learn from each implementation cycle and become more effective, efficient, accurate, reusable, and traceable until the finished product is complete.
 
 ## Active Architecture Records
 
