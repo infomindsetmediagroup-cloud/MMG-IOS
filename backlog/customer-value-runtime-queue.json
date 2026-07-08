@@ -1,0 +1,74 @@
+{
+  "queue": "customer-value-runtime",
+  "status": "active",
+  "version": "1.0.0",
+  "operatingRule": "Build customer-facing surfaces around the value the user already possesses, then connect that value to guided execution and durable assets.",
+  "items": [
+    {
+      "id": "CVR-001",
+      "title": "Homepage hero customer promise rewrite",
+      "lane": "website",
+      "priority": "P1",
+      "status": "queued",
+      "outcome": "The homepage leads with Your Knowledge Has Value before product categories or platform features.",
+      "acceptanceCriteria": [
+        "Hero headline uses canonical promise or approved derivative.",
+        "Subheadline explains discover, build, and share value.",
+        "CTA path points users toward Kairos, Knowledge Library, or starter resources.",
+        "No get-rich, shortcut, or hype-first phrasing."
+      ]
+    },
+    {
+      "id": "CVR-002",
+      "title": "Kairos guidance card expansion",
+      "lane": "dashboard",
+      "priority": "P1",
+      "status": "active",
+      "outcome": "Dashboard modules show Kairos as a steady guide that preserves context and recommends next actions.",
+      "acceptanceCriteria": [
+        "Guidance language appears in module views.",
+        "Customer work is framed as a body of work.",
+        "Next actions are presented as execution support, not motivation."
+      ]
+    },
+    {
+      "id": "CVR-003",
+      "title": "Customer onboarding value capture",
+      "lane": "customer-portal",
+      "priority": "P1",
+      "status": "planned",
+      "outcome": "Onboarding captures profession, skills, goals, content interests, and desired asset paths.",
+      "acceptanceCriteria": [
+        "Customer profile includes use case and interest categories.",
+        "Kairos can recommend content and next actions from onboarding inputs.",
+        "Onboarding language emphasizes discovery and guidance."
+      ]
+    },
+    {
+      "id": "CVR-004",
+      "title": "Knowledge Library value framing",
+      "lane": "knowledge-library",
+      "priority": "P1",
+      "status": "queued",
+      "outcome": "Knowledge Library is presented as practical education for building durable assets.",
+      "acceptanceCriteria": [
+        "Library copy connects learning to execution.",
+        "Recommended content can be personalized by interest profile.",
+        "Content packages reinforce customer capability."
+      ]
+    },
+    {
+      "id": "CVR-005",
+      "title": "Shopify product ecosystem positioning",
+      "lane": "commerce",
+      "priority": "P2",
+      "status": "queued",
+      "outcome": "Products are positioned as tools inside the larger MMG value-building system.",
+      "acceptanceCriteria": [
+        "Product pages include system-context copy.",
+        "Digital downloads are connected to next steps.",
+        "Service products preserve onboarding workflow references."
+      ]
+    }
+  ]
+}
