@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizeKairosRequest, resolveKairosSession } from '@/lib/kairos/auth';
+import { recordKairosAuditEvent } from '@/lib/kairos/audit';
 import { resolveKairosDepartment } from '@/lib/kairos/departmentRouter';
 import { toSafeErrorResponse } from '@/lib/kairos/errors';
 import { logKairosRuntimeEvent } from '@/lib/kairos/logging';
@@ -34,8 +35,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     department = resolveKairosDepartment(runtimeRequest);
 
     const runtimeResponse = await withKairosTimeout(runKairosCore(runtimeRequest));
+    const durationMs = Date.now() - startedAt;
 
-    logKairosRuntimeEvent({ requestId, mode, surface, department, status: 'ok', durationMs: Date.now() - startedAt });
+    logKairosRuntimeEvent({ requestId, mode, surface, department, status: 'ok', durationMs });
+    recordKairosAuditEvent({ requestId, mode, surface, department, status: 'ok', durationMs });
 
     return NextResponse.json(runtimeResponse, {
       status: 200,
@@ -43,8 +46,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
   } catch (error) {
     const safeError = toSafeErrorResponse(error);
+    const durationMs = Date.now() - startedAt;
 
-    logKairosRuntimeEvent({ requestId, mode, surface, department, status: 'error', durationMs: Date.now() - startedAt, errorCode: safeError.body.code });
+    logKairosRuntimeEvent({ requestId, mode, surface, department, status: 'error', durationMs, errorCode: safeError.body.code });
+    recordKairosAuditEvent({ requestId, mode, surface, department, status: 'error', durationMs, errorCode: safeError.body.code });
 
     return NextResponse.json(safeError.body, {
       status: safeError.statusCode,
