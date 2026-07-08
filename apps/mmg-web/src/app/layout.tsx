@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { KairosAssistantBadge } from '@/components/kairos/KairosAssistantBadge';
 import './globals.css';
+import './admin/command-center.css';
 
 export const metadata: Metadata = {
   title: 'Mindset Media Group',
