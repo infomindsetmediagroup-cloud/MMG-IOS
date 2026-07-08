@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authorizeKairosRequest, resolveKairosSession } from '@/lib/kairos/auth';
+import { authorizeKairosRequest, resolveKairosSession, type KairosSession } from '@/lib/kairos/auth';
 import { recordKairosAuditEvent } from '@/lib/kairos/audit';
 import {
   persistKairosAuditRecord,
@@ -13,7 +13,6 @@ import { toSafeErrorResponse } from '@/lib/kairos/errors';
 import { logKairosRuntimeEvent } from '@/lib/kairos/logging';
 import { runKairosCore } from '@/lib/kairos/provider';
 import { enforceKairosRateLimit, resolveRateLimitKey } from '@/lib/kairos/rateLimit';
-import type { KairosSession } from '@/lib/kairos/session';
 import { withKairosTimeout } from '@/lib/kairos/timeout';
 import { parseKairosRuntimeRequest, runtimeError } from '@/lib/kairos/validation';
 
@@ -79,7 +78,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       session,
       event: 'kairos.runtime.request',
       status: 'error',
-      metadata: { mode, surface, department, errorCode: safeError.body.code, durationMs: String(durationMs) }
+      metadata: {
+        mode,
+        surface,
+        department,
+        errorCode: safeError.body.code,
+        durationMs: String(durationMs),
+        ...(conversationId ? { conversationId } : {})
+      }
     });
 
     return NextResponse.json(safeError.body, {
