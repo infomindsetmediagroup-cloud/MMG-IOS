@@ -3,6 +3,19 @@
 ## Status
 Active. Foundation baseline accepted and frozen. Production operationalization has started.
 
+## Immediate Priority
+P0 next work is Command Center Live Operations.
+
+The next implementation pass must align the Command Center with `docs/COMMAND-CENTER-LIVE-OPERATIONS-DOCTRINE.md` before broad Command Center expansion continues.
+
+Required first pass:
+- Main Control Panel with five primary parent cards.
+- Parent selection that switches the lower content area into that parent only.
+- Return action from every focused parent view back to the Main Control Panel.
+- Live-state contracts for status, workflow progress, queues, processing states, and activity streams.
+- Replaceable development adapter where production telemetry is not yet available.
+- Reusable live-status components.
+
 ## Objective
 Move Kairos from validated runtime scaffold to operational production system. This phase turns the current web/iOS runtime bridge into a deployed, authenticated, persistent, knowledge-grounded, approval-gated platform foundation.
 
@@ -23,149 +36,45 @@ The foundation PR establishes:
 - Trusted-auth session resolver seam started.
 - Persistence domain models and repository interfaces started.
 - In-memory persistence adapter added for development and tests only.
+- Command Center Live Operations doctrine added and elevated as next immediate work.
 
 ## Operationalization Scope
 
-### 1. Production Deployment
+### 1. Command Center Live Operations
+Establish the live Command Center architecture before further Command Center expansion.
+
+Acceptance criteria:
+- Command Center supports home to focused parent view to home.
+- Dynamic visuals are connected to a state contract or isolated development adapter.
+- No visual activity is treated as production truth unless backed by real state.
+
+### 2. Production Deployment
 Implement a deployable production target.
 
-Requirements:
-- Select and configure hosting target.
-- Configure build command and output settings.
-- Configure required environment variables.
-- Add deployment documentation.
-- Verify production health route.
-- Confirm `/api/kairos` executes server-side only.
-
-Acceptance criteria:
-- Production deployment builds successfully.
-- `/api/health` returns `ok` in production.
-- `/api/kairos` does not expose provider credentials client-side.
-
-### 2. Trusted Authentication
+### 3. Trusted Authentication
 Replace temporary role-header development behavior with trusted session resolution.
 
-Requirements:
-- Add customer authentication provider.
-- Add admin authentication provider or admin role mapping.
-- Protect dashboard routes.
-- Protect admin routes.
-- Ensure customer/admin mode cannot be requested by unauthenticated clients.
-- Preserve local-only development override for controlled testing only.
+### 4. Persistence Layer
+Add durable storage for conversations, messages, audit events, knowledge candidates, work orders, and approvals.
 
-Acceptance criteria:
-- Public users can only use public mode.
-- Authenticated customers can use customer mode only for their own account.
-- Admin users can access admin routes and admin mode.
-- Spoofed client headers cannot elevate access.
-
-### 3. Persistence Layer
-Add durable storage for operational state.
-
-Required data domains:
-- Conversations.
-- Messages and transcripts.
-- Customer profile references.
-- Audit events.
-- Knowledge Event candidates.
-- Work orders.
-- Approval records.
-
-Current implementation:
-- Canonical persistence models exist.
-- Repository interfaces exist.
-- Development-only in-memory adapter exists.
-
-Remaining production work:
-- Select production datastore.
-- Implement durable adapter.
-- Add migration/schema management.
-- Replace in-memory audit buffering with durable audit writes.
-- Add retention rules for anonymous records.
-
-Acceptance criteria:
-- Conversations persist across sessions when authenticated.
-- Anonymous conversations are handled according to privacy policy and retention rules.
-- Audit events survive server restarts.
-- Knowledge candidates are stored without secrets or unsafe raw data.
-
-### 4. Knowledge Grounding
+### 5. Knowledge Grounding
 Connect Kairos to approved MMG knowledge sources.
 
-Initial sources:
-- Public product/service information.
-- Knowledge Library metadata.
-- Policies and FAQs.
-- Customer-owned resources and purchases.
-- Admin-only operational documentation.
+### 6. Command Center Work Loop
+Implement the executive operating loop with approval-gated work.
 
-Acceptance criteria:
-- Public mode uses only public knowledge.
-- Customer mode uses only that customer's permissioned context plus approved public knowledge.
-- Admin mode can use approved internal operational knowledge.
-- Responses should indicate uncertainty rather than invent unsupported business facts.
+### 7. Text-to-Speech Output
+Add optional spoken Kairos responses while preserving text transcripts.
 
-### 5. Command Center Workflow
-Implement the executive operating loop.
-
-Canonical flow:
-1. Executive input through text or voice.
-2. Transcript normalization.
-3. Intent analysis.
-4. Execution plan generation.
-5. Approval gate.
-6. Department execution.
-7. QA verification.
-8. Final deliverable.
-9. Final executive acceptance.
-
-Acceptance criteria:
-- No privileged operation executes without approval.
-- Every work order has status, owner, timestamps, approval trail, and final output.
-- Failed executions return actionable recovery information.
-
-### 6. Text-to-Speech Output
-Add optional spoken Kairos responses.
-
-Requirements:
-- User-controlled voice output setting.
-- Text transcript remains canonical.
-- Speech output falls back gracefully to text.
-- Future voice profile support remains extensible.
-
-Acceptance criteria:
-- Kairos can speak responses when enabled.
-- Text transcript is always displayed.
-- Disabled or failed audio does not break chat.
-
-### 7. Knowledge Lifecycle Engine
+### 8. Knowledge Lifecycle Engine
 Operationalize governed learning from interactions.
 
-Requirements:
-- Convert relevant conversations into Knowledge Event candidates.
-- Categorize candidates.
-- Store candidates for Trust Layer review.
-- Prevent automatic Constitutional Core changes.
-- Prevent cross-customer leakage.
-
-Acceptance criteria:
-- Knowledge candidates are generated from conversations.
-- Candidates require review before becoming institutional knowledge.
-- Customer-specific insights remain isolated.
-
-### 8. Production Quality Gate
-Every operationalization milestone must pass:
-- Type-check.
-- Lint.
-- Unit tests.
-- Production build.
-- Route smoke tests.
-- Auth boundary tests.
-- Data isolation tests.
-- Deployment health verification.
+### 9. Production Quality Gate
+Every operationalization milestone must pass type-check, lint, tests, production build, route smoke tests, auth boundary tests, data isolation tests, and deployment health verification.
 
 ## Not Yet Operational Until
 Kairos should not be considered operational until all of the following are true:
+- Command Center dynamic views are backed by live-state contracts or isolated replaceable adapters.
 - Production deployment is live.
 - Auth is trusted and route protection is active.
 - Durable persistence exists for conversations, audit, and work orders.
@@ -174,7 +83,7 @@ Kairos should not be considered operational until all of the following are true:
 - CI and production smoke tests pass.
 
 ## Implementation Sequence
-1. Merge or accept the runtime foundation baseline.
+1. Implement Command Center Live Operations.
 2. Configure production deployment.
 3. Add trusted auth and route protection.
 4. Add persistence layer.
