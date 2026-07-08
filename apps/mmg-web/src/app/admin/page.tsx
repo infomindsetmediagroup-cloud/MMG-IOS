@@ -1,6 +1,5 @@
 "use client";
 
-import "./command-center.css";
 import { useMemo, useState } from "react";
 
 type ProcessingState =
