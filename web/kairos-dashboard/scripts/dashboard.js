@@ -10,7 +10,15 @@ const brandDoctrine = {
   promise: "Your Knowledge Has Value.",
   support: "Helping you discover it, build it, and share it with the world.",
   mission: "Kairos helps uncover, organize, package, and preserve the value already inside the customer so it can become durable assets over time.",
-  sequence: ["Outcome", "Identity", "Agency", "Guidance", "System"]
+  positioning: "Build around the value only you can provide.",
+  sequence: ["Outcome", "Identity", "Agency", "Guidance", "System"],
+  pathways: [
+    { title: "Income Path", detail: "Help the customer identify practical ways their knowledge can support extra income without promising results." },
+    { title: "Asset Path", detail: "Turn experience into reusable content, guides, products, services, or education assets." },
+    { title: "Audience Path", detail: "Translate lived skill and perspective into trustworthy public-facing positioning." },
+    { title: "Execution Path", detail: "Convert scattered ideas into specific next actions, drafts, reviews, and delivery steps." }
+  ],
+  guardrails: ["No income guarantees", "No shortcut claims", "No hype-first language", "Practical guidance only"]
 };
 
 mode.textContent = kairosState.mode;
@@ -58,8 +66,24 @@ function brandDoctrineCard() {
     <div class="card-header"><div><p class="eyebrow">Customer Value Doctrine</p><h3>${brandDoctrine.promise}</h3></div><span class="badge good">Locked</span></div>
     <p class="metric">Discover. Build. Share.</p>
     <p class="muted">${brandDoctrine.support}</p>
+    <p class="muted">${brandDoctrine.positioning}</p>
     <div class="list core-node-list">${brandDoctrine.sequence.map(step => `<div class="list-item"><strong>${step}</strong><span class="badge">Message Layer</span></div>`).join("")}</div>
     <div class="action-row">${actionButton("Queue Brand Work", "Queue Brand Work", "Customer value doctrine queued for website and product surfaces.")}${actionButton("Preserve Doctrine", "Preserve Doctrine", "Brand philosophy preserved as a Kairos operating standard.")}</div>
+  </article>`;
+}
+
+function valuePathwaysCard() {
+  return `<article class="card full" data-priority-card="ready">
+    <div class="card-header"><div><p class="eyebrow">Value Pathways</p><h3>Package knowledge into practical opportunities.</h3></div><span class="badge good">Active</span></div>
+    <p class="muted">The dashboard now treats every customer-facing build as a path from existing knowledge to organized assets, audience positioning, and practical income opportunities without get-rich language.</p>
+    <div class="list core-node-list">${brandDoctrine.pathways.map(path => `<div class="list-item"><div><strong>${path.title}</strong><p class="muted">${path.detail}</p></div><span class="badge good">Path</span></div>`).join("")}</div>
+  </article>`;
+}
+
+function guardrailsCard() {
+  return `<article class="card full" data-priority-card="protected">
+    <div class="card-header"><div><p class="eyebrow">Messaging Guardrails</p><h3>Guidance over hype.</h3></div><span class="badge good">Protected</span></div>
+    <div class="list core-node-list">${brandDoctrine.guardrails.map(rule => `<div class="list-item"><strong>${rule}</strong><span class="badge warning">Guardrail</span></div>`).join("")}</div>
   </article>`;
 }
 
@@ -91,6 +115,7 @@ function renderDashboard() {
   view.innerHTML = `
     <article class="card hero-panel full"><div class="card-header"><div><p class="eyebrow">Good evening, ${kairosState.operator}</p><h3>${kairosState.activeBatch}</h3></div><span class="badge good">Five-Direction OS</span></div><p class="metric">${kairosState.health}%</p><p class="muted">Kairos is consolidated into five parent operating directions and now carries the MMG customer value doctrine into the runtime: ${brandDoctrine.promise}</p><div class="action-row">${actionButton("Start Daily Ops", "Start Daily Ops", "Daily operations run queued.")}${actionButton("Run Priority Chain", "Run Priority Chain", "Priority chain workflow queued.")}</div></article>
     ${brandDoctrineCard()}
+    ${valuePathwaysCard()}
     ${kairosState.coreGroups.map(groupCard).join("")}
     ${actionLogCard()}
   `;
@@ -104,6 +129,7 @@ function renderModule(moduleId) {
   view.innerHTML = `
     <article class="card hero-panel full"><div class="card-header"><div><p class="eyebrow">Parent Direction</p><h3>${group.label} System</h3></div><span class="${badgeClass(group.status)}">${group.status}</span></div><p class="metric">${group.metric}</p><p class="muted">${group.summary}</p>${progress(group.metric)}<div class="action-row">${actionButton(`Execute ${group.label}`, `Execute ${group.label}`, `${group.label} execution queued.`)}${actionButton(`Validate ${group.label}`, `Validate ${group.label}`, `${group.label} validation queued.`)}</div></article>
     ${stewardshipCard(group)}
+    ${guardrailsCard()}
     <article class="card full"><div class="card-header"><h3>${group.label} Child Nodes</h3><span class="badge">${group.nodes.length}/5</span></div><div class="list">${group.nodes.slice(0, 5).map(node => `<div class="list-item"><div><strong>${node}</strong><p class="muted">Child node under ${group.label}. Expands into specific workflows without adding new top-level panels.</p></div><span class="badge warning">Queued</span></div>`).join("")}</div></article>
     ${actionLogCard()}
   `;
