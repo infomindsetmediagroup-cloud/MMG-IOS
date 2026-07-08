@@ -2,6 +2,12 @@ import SwiftData
 import SwiftUI
 
 struct AppRootView: View {
+    let sessionStore: LocalSessionStore
+
+    init(sessionStore: LocalSessionStore = LocalSessionStore()) {
+        self.sessionStore = sessionStore
+    }
+
     var body: some View {
         TabView {
             CustomerValueOverviewView()
@@ -10,7 +16,7 @@ struct AppRootView: View {
                 }
 
             CustomerPortalView(
-                sessionStore: LocalSessionStore(),
+                sessionStore: sessionStore,
                 customerStore: LocalCustomerPortalStore()
             )
             .tabItem {
