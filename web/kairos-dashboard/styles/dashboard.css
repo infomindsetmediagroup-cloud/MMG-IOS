@@ -1,14 +1,16 @@
 :root {
-  --ink: #070b12;
-  --surface: #101723;
-  --surface-2: #172131;
-  --line: rgba(255, 255, 255, 0.11);
-  --text: #f5f8ff;
-  --muted: rgba(245, 248, 255, 0.68);
-  --blue: #4fd8ff;
-  --blue-2: #007bff;
-  --kairos-deep: #003cff;
+  --ink: #030711;
+  --surface: #0a1020;
+  --surface-2: #10182a;
+  --panel: rgba(9, 16, 31, 0.82);
+  --line: rgba(111, 198, 255, 0.18);
+  --text: #f6f9ff;
+  --muted: rgba(246, 249, 255, 0.66);
+  --blue: #62dfff;
+  --blue-2: #1b91ff;
+  --kairos-deep: #06122a;
   --kairos-navy: #173a72;
+  --kairos-glass: #6d7da0;
   --kairos-soft: #d7f7ff;
   --green: #6df2a6;
   --orange: #ffb14f;
@@ -21,7 +23,10 @@ html, body { width: 100%; overflow-x: hidden; }
 
 body {
   margin: 0;
-  background: radial-gradient(circle at top left, rgba(79, 216, 255, 0.18), transparent 32rem), var(--ink);
+  background:
+    radial-gradient(circle at 16% 0%, rgba(98, 223, 255, 0.18), transparent 32rem),
+    radial-gradient(circle at 82% 8%, rgba(27, 145, 255, 0.13), transparent 28rem),
+    linear-gradient(180deg, #020612 0%, #050914 48%, #02050c 100%);
   color: var(--text);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
@@ -30,31 +35,35 @@ body {
   min-height: 100vh;
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
-.sidebar {
-  border-right: 1px solid var(--line);
-  background: rgba(8, 12, 20, 0.84);
-  padding: 24px;
+.brand-header {
+  grid-column: 1 / -1;
   position: sticky;
   top: 0;
-  height: 100vh;
+  z-index: 30;
+  padding: 18px 28px;
+  background: linear-gradient(180deg, rgba(4, 9, 20, 0.96), rgba(4, 9, 20, 0.86));
+  border-bottom: 1px solid rgba(98, 223, 255, 0.14);
+  backdrop-filter: blur(18px);
 }
 
 .brand-mark {
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin-bottom: 32px;
+  gap: 22px;
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
 }
 
 .brand-logo {
-  width: 78px;
-  height: 78px;
-  object-fit: cover;
-  object-position: center;
+  width: clamp(84px, 9vw, 112px);
+  height: clamp(82px, 8.7vw, 109px);
+  object-fit: contain;
   display: block;
-  flex: 0 0 78px;
+  flex: 0 0 auto;
   background: transparent;
   border: 0;
   border-radius: 0;
@@ -62,11 +71,46 @@ body {
   outline: 0;
 }
 
-.brand-eyebrow { color: var(--kairos-navy); }
+.brand-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.brand-copy h1 {
+  font-family: "Avenir Next", "Trebuchet MS", Inter, ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(44px, 7.2vw, 88px);
+  line-height: 0.92;
+  font-weight: 900;
+  letter-spacing: -0.075em;
+  color: var(--text);
+  text-shadow: 0 0 32px rgba(98, 223, 255, 0.2);
+}
+
+.brand-copy p {
+  color: #ffffff;
+  font-size: clamp(12px, 1.7vw, 18px);
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0.9;
+}
+
+.sidebar {
+  grid-column: 1;
+  grid-row: 2;
+  border-right: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(5, 10, 21, 0.88), rgba(3, 7, 17, 0.94));
+  padding: 24px;
+  position: sticky;
+  top: 128px;
+  height: calc(100vh - 128px);
+}
 
 h1, h2, h3, p { margin: 0; }
 
-h1 { font-size: 22px; }
 h2 { font-size: clamp(28px, 4vw, 48px); letter-spacing: -0.04em; }
 h3 { font-size: 18px; }
 
@@ -98,11 +142,16 @@ h3 { font-size: 18px; }
 
 .nav-button:hover, .nav-button.active {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.07);
-  border-color: var(--line);
+  background: linear-gradient(135deg, rgba(98, 223, 255, 0.12), rgba(23, 58, 114, 0.14));
+  border-color: rgba(98, 223, 255, 0.24);
 }
 
-.workspace { padding: 32px; min-width: 0; }
+.workspace {
+  grid-column: 2;
+  grid-row: 2;
+  padding: 32px;
+  min-width: 0;
+}
 
 .topbar {
   display: flex;
@@ -119,7 +168,7 @@ h3 { font-size: 18px; }
   min-width: 150px;
   padding: 12px 14px;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.045);
   border: 1px solid var(--line);
 }
 
@@ -145,16 +194,16 @@ h3 { font-size: 18px; }
   min-height: 160px;
   padding: 20px;
   border-radius: 26px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.035));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.064), rgba(5, 12, 25, 0.7));
   border: 1px solid var(--line);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.22);
 }
 
 .card.large { grid-column: span 8; }
 .card.full { grid-column: span 12; }
-.card[data-priority-card="critical"] { order: -40; border-color: rgba(255, 177, 79, 0.34); }
-.card[data-priority-card="decision"] { order: -35; border-color: rgba(79, 216, 255, 0.32); }
-.card[data-priority-card="ready"] { order: -30; border-color: rgba(109, 242, 166, 0.3); }
+.card[data-priority-card="critical"] { order: -40; border-color: rgba(255, 177, 79, 0.42); }
+.card[data-priority-card="decision"] { order: -35; border-color: rgba(98, 223, 255, 0.36); }
+.card[data-priority-card="ready"] { order: -30; border-color: rgba(109, 242, 166, 0.34); }
 .card[data-priority-card="active"] { order: -20; }
 .card[data-priority-card="support"] { order: 10; }
 
@@ -196,7 +245,7 @@ h3 { font-size: 18px; }
   align-items: center;
   padding: 12px;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.055);
+  background: rgba(255, 255, 255, 0.052);
   min-width: 0;
 }
 
@@ -213,7 +262,7 @@ h3 { font-size: 18px; }
   white-space: nowrap;
   border-radius: 999px;
   padding: 6px 9px;
-  background: rgba(79, 216, 255, 0.12);
+  background: rgba(98, 223, 255, 0.12);
   color: var(--blue);
   font-size: 11px;
   font-weight: 800;
@@ -228,6 +277,29 @@ h3 { font-size: 18px; }
     display: block;
     width: 100%;
     max-width: 100%;
+  }
+
+  .brand-header {
+    padding: 18px 20px;
+  }
+
+  .brand-mark {
+    gap: 16px;
+  }
+
+  .brand-logo {
+    width: 84px;
+    height: 82px;
+  }
+
+  .brand-copy h1 {
+    font-size: clamp(44px, 10.5vw, 64px);
+  }
+
+  .brand-copy p {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    white-space: normal;
   }
 
   .sidebar {
@@ -276,6 +348,7 @@ h3 { font-size: 18px; }
 
 @media (max-width: 520px) {
   .workspace { padding: 20px 16px 120px; }
+  .brand-header { padding: 18px 16px; }
   .sidebar { padding: 20px 16px; }
   .card { padding: 18px; }
 
