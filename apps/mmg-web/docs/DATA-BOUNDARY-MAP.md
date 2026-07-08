@@ -47,3 +47,8 @@ Examples:
 
 ## Enforcement Rule
 Client-provided mode values are requests, not authority. The server must resolve actual permissions before using customer or admin data.
+
+## Temporary Development Override
+`x-kairos-role` and `x-kairos-subject` headers are not trusted by default. They may be used only for local development when `KAIROS_ENABLE_DEV_ROLE_HEADERS=true` and `NODE_ENV` is not `production`.
+
+Production customer and admin access must be backed by a real authenticated session before private data, audit data, customer intelligence, or operational controls are exposed.
