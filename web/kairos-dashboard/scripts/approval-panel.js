@@ -9,8 +9,9 @@ function badgeClass(status) {
 
 function renderApprovalPanel() {
   const view = document.querySelector("#dashboard-view");
-  if (!view || view.querySelector("[data-approval-panel]")) return;
+  if (!view) return;
 
+  view.querySelector("[data-approval-panel]")?.remove();
   seedApprovalQueue();
   const approvals = getApprovals();
   const pending = approvals.filter(item => item.status === "Pending").length;
@@ -30,12 +31,12 @@ function renderApprovalPanel() {
         <div class="list-item">
           <div>
             <strong>${item.title}</strong>
-            <p class="muted">${item.source} • ${item.createdAt}</p>
+            <p class="muted">${item.source} • ${item.updatedAt || item.createdAt}${item.relatedWorkId ? " • Linked execution item" : ""}</p>
           </div>
-          <div class="action-row" style="margin-top:0;">
+          <div class="action-row compact">
             <span class="${badgeClass(item.status)}">${item.status}</span>
-            <button class="action-button" data-approve="${item.id}">Approve</button>
-            <button class="action-button" data-reject="${item.id}">Reject</button>
+            <button class="action-button small" data-approve="${item.id}">Approve</button>
+            <button class="action-button small" data-reject="${item.id}">Reject</button>
           </div>
         </div>
       `).join("")}
@@ -46,7 +47,6 @@ function renderApprovalPanel() {
   card.querySelectorAll("[data-approve]").forEach(button => {
     button.addEventListener("click", () => {
       setApprovalStatus(button.dataset.approve, "Approved");
-      card.remove();
       renderApprovalPanel();
     });
   });
@@ -54,13 +54,16 @@ function renderApprovalPanel() {
   card.querySelectorAll("[data-reject]").forEach(button => {
     button.addEventListener("click", () => {
       setApprovalStatus(button.dataset.reject, "Rejected");
-      card.remove();
       renderApprovalPanel();
     });
   });
 }
 
-const observer = new MutationObserver(() => renderApprovalPanel());
+const observer = new MutationObserver(() => {
+  const view = document.querySelector("#dashboard-view");
+  if (view && !view.querySelector("[data-approval-panel]")) renderApprovalPanel();
+});
+
 window.addEventListener("DOMContentLoaded", () => {
   const view = document.querySelector("#dashboard-view");
   if (view) observer.observe(view, { childList: true });
@@ -68,3 +71,4 @@ window.addEventListener("DOMContentLoaded", () => {
 });
 
 window.addEventListener("kairos:auth", renderApprovalPanel);
+window.addEventListener("kairos:rendered", renderApprovalPanel);
