@@ -1,5 +1,8 @@
 # Implementation Backlog
 
+## P0 - Next Immediate Work
+- Command Center Live Operations Refactor (`backlog/COMMAND-CENTER-LIVE-OPERATIONS-REFACTOR.md`)
+
 ## P0
 - Constitution v1.0
 - Master Blueprint v1.0
@@ -12,14 +15,14 @@
 
 ## P1
 - Executive Dashboard
-  - Executive voice command planning and approval flow
+  - Executive voice planning and approval flow
 - Customer Dashboard
   - Customer-aware Kairos assistant guidance
 - Publishing System
 - Trust Layer
   - Knowledge Event candidate review pipeline
 - Workflow Engine
-  - Approval-gated department execution from conversational work orders
+  - Approval-gated department work from conversational requests
 
 ## Voice and Conversation Implementation Queue
 - Website assistant badge with Kairos chat panel
@@ -29,7 +32,7 @@
 - Voice settings and text fallback
 - Knowledge Event candidate capture
 - Customer context isolation
-- Executive Command Center voice work orders
+- Executive Command Center voice requests
 
 ## Backlog Rule
 Every task must map to a capability and constitutional authority before implementation.
