@@ -3,6 +3,11 @@ import SwiftUI
 struct AppRootView: View {
     var body: some View {
         TabView {
+            CustomerValueOverviewView()
+                .tabItem {
+                    Label("Value", systemImage: "person.crop.square.filled.and.at.rectangle")
+                }
+
             CommandCenterView()
                 .tabItem {
                     Label("Command", systemImage: "square.grid.2x2")
