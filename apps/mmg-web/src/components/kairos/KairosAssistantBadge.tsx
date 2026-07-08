@@ -1,6 +1,7 @@
 'use client';
 
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useMemo, useState } from 'react';
+import { useSpeechRecognition } from './useSpeechRecognition';
 import './kairos-assistant.css';
 
 type Message = {
@@ -11,7 +12,7 @@ type Message = {
 const welcomeMessage: Message = {
   role: 'kairos',
   content:
-    "Hi, I'm Kairos. I can help you navigate Mindset Media Group, find resources, and decide your next best step. You can type for now; voice support is mapped into the next implementation pass."
+    "Hi, I'm Kairos. I can help you navigate Mindset Media Group, find resources, and decide your next best step. You can type or tap the microphone to speak when your browser supports it."
 };
 
 export function KairosAssistantBadge() {
@@ -19,6 +20,12 @@ export function KairosAssistantBadge() {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([welcomeMessage]);
   const [isLoading, setIsLoading] = useState(false);
+
+  const handleTranscript = useCallback((transcript: string) => {
+    setInput(transcript);
+  }, []);
+
+  const { error: speechError, isListening, isSupported, startListening, stopListening } = useSpeechRecognition(handleTranscript);
 
   const canSubmit = useMemo(() => input.trim().length > 0 && !isLoading, [input, isLoading]);
 
@@ -69,6 +76,15 @@ export function KairosAssistantBadge() {
     }
   }
 
+  function toggleListening() {
+    if (isListening) {
+      stopListening();
+      return;
+    }
+
+    startListening();
+  }
+
   return (
     <div className="kairos-assistant" data-open={isOpen}>
       {isOpen ? (
@@ -92,14 +108,24 @@ export function KairosAssistantBadge() {
             {isLoading ? <div className="kairos-message" data-role="kairos">Thinking...</div> : null}
           </div>
 
+          {speechError ? <p className="kairos-status" role="status">{speechError}</p> : null}
+          {isListening ? <p className="kairos-status" role="status">Listening...</p> : null}
+
           <form className="kairos-input-row" onSubmit={submitMessage}>
-            <button type="button" className="kairos-mic" aria-label="Voice input mapped for upcoming implementation">
+            <button
+              type="button"
+              className="kairos-mic"
+              aria-label={isListening ? 'Stop voice input' : 'Start voice input'}
+              aria-pressed={isListening}
+              disabled={!isSupported}
+              onClick={toggleListening}
+            >
               🎤
             </button>
             <input
               aria-label="Ask Kairos"
               onChange={(event) => setInput(event.target.value)}
-              placeholder="Ask Kairos..."
+              placeholder={isListening ? 'Listening...' : 'Ask Kairos...'}
               value={input}
             />
             <button type="submit" disabled={!canSubmit}>
