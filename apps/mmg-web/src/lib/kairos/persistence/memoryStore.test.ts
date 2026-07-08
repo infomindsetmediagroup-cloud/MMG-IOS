@@ -58,14 +58,16 @@ describe('createInMemoryKairosPersistenceStore', () => {
 
   it('does not allow caller-supplied base fields to override generated metadata', () => {
     const store = createInMemoryKairosPersistenceStore();
-    const conversation = store.conversations.create({
+    const unsafeConversationInput = {
       owner: customerOwner,
-      mode: 'customer',
-      surface: 'dashboard',
+      mode: 'customer' as const,
+      surface: 'dashboard' as const,
       id: 'caller-id',
       createdAt: 'bad-created-at',
       updatedAt: 'bad-updated-at'
-    });
+    };
+
+    const conversation = store.conversations.create(unsafeConversationInput);
 
     expect(conversation.id).not.toBe('caller-id');
     expect(conversation.createdAt).not.toBe('bad-created-at');
