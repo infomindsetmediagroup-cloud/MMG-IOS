@@ -43,10 +43,11 @@ The voice and text experience should be synchronized enough to feel intentional,
 The narration should introduce:
 
 1. The time-based greeting.
-2. Today’s rundown.
-3. Priority tasks or recommended to-dos.
-4. Current project or system status where relevant.
-5. Recommended starting points.
+2. The morning check-in or evening wrap-up context.
+3. Today’s rundown or end-of-day runtime summary.
+4. Priority tasks, recommended to-dos, or next-cycle approvals.
+5. Current project or system status where relevant.
+6. Recommended starting points.
 
 ## Daily Rundown
 
@@ -64,19 +65,54 @@ The daily rundown should summarize what matters most for the user’s current wo
 
 This layer should become a practical operating briefing, not decorative animation only.
 
-## Five-Avenue Routing
+## Two-Checkpoint Operating Cycle Integration
 
-At the end of the intro conversation, Kairos should present five primary starting avenues aligned with the dashboard’s parent-card structure.
+The intro layer should connect to the Kairos two-checkpoint executive operating cycle.
 
-The exact avenue names may evolve with the final command center architecture, but the pattern is fixed:
+Kairos should expect two primary executive inputs per day:
 
-1. Continue current work.
-2. Review today’s priorities.
-3. Open production/publishing workflow.
-4. Enter growth/marketing/customer pipeline.
-5. Explore command centers, tools, or system areas.
+1. Morning Check-In
+2. Evening Wrap-Up / Overnight Approval
 
-The user chooses one of the five directions, and Kairos routes them into the relevant area.
+The morning check-in introduces the day’s queue, summarizes overnight preparation, incorporates approved items from prior cycles, and presents the recommended operating path.
+
+The evening wrap-up summarizes what happened during the day, reports business/system metrics and trajectory, records what was exported or completed, and presents the proposed overnight work cycle for approval.
+
+The interface should make these two checkpoints feel like the natural executive rhythm of the system.
+
+## Six-Avenue Routing
+
+At the end of the intro conversation, Kairos should present six primary starting avenues:
+
+1. Overall Health Check
+2. Parent Card 1
+3. Parent Card 2
+4. Parent Card 3
+5. Parent Card 4
+6. Parent Card 5
+
+The Overall Health Check gives a cross-system executive snapshot without requiring the user to enter each individual section.
+
+The five parent-card options route directly into the major command-center operating lanes.
+
+The exact parent-card names may evolve with the final command center architecture, but the six-button pattern is fixed: one whole-system health snapshot plus five direct operating lanes.
+
+## Overall Health Check
+
+The Overall Health Check should provide a concise view of:
+
+- Business health
+- Workflow health
+- Production status
+- Publishing status
+- Growth/marketing status
+- Customer/project status
+- Metrics and trajectory where available
+- Blockers and risks
+- Approval load
+- Recommended next action
+
+The health check should be fast, scannable, and useful as an executive command summary.
 
 ## Transition Into Dashboard
 
@@ -99,6 +135,9 @@ The intro layer must support:
 - First-time-user expanded orientation
 - Admin/customer role-specific variants
 - Context-aware briefings
+- Morning check-in mode
+- Evening wrap-up mode
+- Overnight approval mode
 
 The experience should enhance execution speed, not slow down power users.
 
@@ -106,7 +145,7 @@ The experience should enhance execution speed, not slow down power users.
 
 This feature is an identity layer for Kairos. It reinforces that Kairos is the intelligence/orchestration system sitting above the MMG operating environment.
 
-The goal is a premium command-center experience where the system greets the user, explains what matters, recommends where to begin, and then opens the correct workspace.
+The goal is a premium command-center experience where the system greets the user, explains what matters, recommends where to begin, collects key approvals, and then opens the correct workspace.
 
 The interface should feel cinematic, controlled, useful, and high-value. Visual polish must not override utility, speed, accessibility, or operational clarity.
 
@@ -117,9 +156,11 @@ The implementation should be modular and may ship progressively:
 1. Static dimmed overlay with Kairos emblem.
 2. Pulse/glow animation and typing dots.
 3. Text-only greeting and daily rundown.
-4. Five-card routing choices.
-5. Voice narration.
-6. Context-aware task and project briefing.
-7. Role-specific and workspace-specific variations.
+4. Six-button routing choices.
+5. Morning check-in and evening wrap-up variants.
+6. Voice narration.
+7. Context-aware task and project briefing.
+8. Approval queue and overnight-cycle approval.
+9. Role-specific and workspace-specific variations.
 
-The system should not require the full AI runtime to ship the first visual version. It can begin as a deterministic scripted onboarding layer and later connect to Kairos context, task data, user preferences, voice settings, and real daily operating intelligence.
+The system should not require the full AI runtime to ship the first visual version. It can begin as a deterministic scripted onboarding layer and later connect to Kairos context, task data, user preferences, voice settings, real daily operating intelligence, approval history, project records, metrics, and overnight-cycle preparation.
