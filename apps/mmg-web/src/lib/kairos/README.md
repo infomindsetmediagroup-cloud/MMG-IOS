@@ -36,6 +36,15 @@ Expected response shape:
 
 The route also returns an `x-kairos-request-id` response header.
 
+## Auth Boundary
+Kairos defaults every unauthenticated session to public mode.
+
+The temporary `x-kairos-role` and `x-kairos-subject` headers are ignored unless all of the following are true:
+- `NODE_ENV` is not `production`.
+- `KAIROS_ENABLE_DEV_ROLE_HEADERS=true` is explicitly configured.
+
+Never enable development role headers in production. Customer and admin mode must eventually be resolved through a trusted authentication/session provider, not client-controlled headers.
+
 ## iOS Integration
 Set `KAIROS_API_ENDPOINT` in the iOS app configuration to the deployed web route:
 
