@@ -52,6 +52,7 @@ struct CustomerPortalView: View {
             List {
                 headerSection
                 portalStatusSection
+                designStudioSection
                 ValueDiscoveryProfileSection(
                     knowledgeExpertise: $knowledgeExpertise,
                     skills: $skills,
@@ -94,6 +95,25 @@ struct CustomerPortalView: View {
             LabeledContent("Open requests", value: "\(openRequests.count)")
             LabeledContent("Value Discovery", value: "\(displayedCompletionScore)%")
             Label("Canonical service onboarding enabled", systemImage: "checkmark.seal")
+        }
+    }
+
+    private var designStudioSection: some View {
+        Section("Design Studio") {
+            NavigationLink {
+                DesignStudioWorkspaceView()
+            } label: {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Open Creative Production Workspace")
+                        .font(.headline)
+                    Text("Design, edit, generate, manage, version, and export customer production assets after Command Center routing.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Label("Production-only asset doctrine active", systemImage: "lock.shield")
+            Label("Projects, assets, versions, exports, and Kairos history are backend-ready", systemImage: "externaldrive.connected.to.line.below")
         }
     }
 
@@ -195,6 +215,8 @@ private struct CustomerRequestRow: View {
     CustomerPortalView(sessionStore: LocalSessionStore(), customerStore: LocalCustomerPortalStore())
         .modelContainer(for: [
             PersistedCustomerRequestRecord.self,
-            PersistedValueDiscoveryProfile.self
+            PersistedValueDiscoveryProfile.self,
+            PersistedDesignStudioProject.self,
+            PersistedDesignStudioAsset.self
         ], inMemory: true)
 }
