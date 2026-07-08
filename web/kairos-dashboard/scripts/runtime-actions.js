@@ -2,17 +2,37 @@ import { createRuntimeSnapshot, queueApproval, queueExecutionWork, setExecutionW
 import { pushNotification } from "./notifications.js";
 
 const storageKey = "kairos.action.log.v1";
+const maxActionLogItems = 20;
+
+function normalizeActionEvent(item) {
+  return {
+    id: String(item?.id || (crypto.randomUUID ? crypto.randomUUID() : Date.now())),
+    action: String(item?.action || "Untitled Action"),
+    detail: String(item?.detail || "Queued from dashboard"),
+    status: String(item?.status || "Queued"),
+    createdAt: String(item?.createdAt || new Date().toLocaleString()),
+    updatedAt: item?.updatedAt ? String(item.updatedAt) : null
+  };
+}
 
 export function getActionLog() {
   try {
-    return JSON.parse(localStorage.getItem(storageKey) || "[]");
+    const parsed = JSON.parse(localStorage.getItem(storageKey) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map(normalizeActionEvent).slice(0, maxActionLogItems);
   } catch {
     return [];
   }
 }
 
+function saveActionLog(items) {
+  const normalized = Array.isArray(items) ? items.map(normalizeActionEvent).slice(0, maxActionLogItems) : [];
+  localStorage.setItem(storageKey, JSON.stringify(normalized));
+  return normalized;
+}
+
 function inferExecutionStatus(action) {
-  const normalized = action.toLowerCase();
+  const normalized = String(action || "").toLowerCase();
   if (normalized.includes("complete") || normalized.includes("release")) return "Completed";
   if (normalized.includes("approve") || normalized.includes("prepare") || normalized.includes("stage")) return "Ready";
   if (normalized.includes("run") || normalized.includes("build") || normalized.includes("create") || normalized.includes("generate") || normalized.includes("validate") || normalized.includes("check")) return "In Progress";
@@ -20,37 +40,39 @@ function inferExecutionStatus(action) {
 }
 
 export function recordAction(action, detail = "Queued from dashboard") {
-  const event = {
+  const safeAction = String(action || "Untitled Action");
+  const safeDetail = String(detail || "Queued from dashboard");
+  const event = normalizeActionEvent({
     id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
-    action,
-    detail,
-    status: inferExecutionStatus(action),
+    action: safeAction,
+    detail: safeDetail,
+    status: inferExecutionStatus(safeAction),
     createdAt: new Date().toLocaleString()
-  };
-  const next = [event, ...getActionLog()].slice(0, 20);
-  localStorage.setItem(storageKey, JSON.stringify(next));
-  pushNotification(action, detail, "Info");
+  });
+  const next = saveActionLog([event, ...getActionLog()]);
+  pushNotification(event.action, event.detail, "Info");
 
-  const work = queueExecutionWork(action, "Dashboard Command", detail);
+  const work = queueExecutionWork(event.action, "Dashboard Command", event.detail);
   setExecutionWorkStatus(work.id, event.status);
 
-  if (action.toLowerCase().includes("approve")) {
-    queueApproval(action, "Dashboard Command");
-    pushNotification("Approval queued", action, "Warning");
+  if (event.action.toLowerCase().includes("approve")) {
+    queueApproval(event.action, "Dashboard Command");
+    pushNotification("Approval queued", event.action, "Warning");
   }
 
-  if (action.toLowerCase().includes("golden master") || action.toLowerCase().includes("snapshot")) {
-    createRuntimeSnapshot(action, { detail, status: event.status });
-    pushNotification("Runtime snapshot saved", action, "Success");
+  if (event.action.toLowerCase().includes("golden master") || event.action.toLowerCase().includes("snapshot")) {
+    createRuntimeSnapshot(event.action, { detail: event.detail, status: event.status });
+    pushNotification("Runtime snapshot saved", event.action, "Success");
   }
 
-  return event;
+  return next[0];
 }
 
 export function updateActionStatus(id, status) {
-  const next = getActionLog().map(item => item.id === id ? { ...item, status } : item);
-  localStorage.setItem(storageKey, JSON.stringify(next));
-  pushNotification("Action status updated", status, "Info");
+  const safeId = String(id || "");
+  const safeStatus = String(status || "Queued");
+  const next = saveActionLog(getActionLog().map(item => item.id === safeId ? { ...item, status: safeStatus, updatedAt: new Date().toLocaleString() } : item));
+  pushNotification("Action status updated", safeStatus, "Info");
   return next;
 }
 
