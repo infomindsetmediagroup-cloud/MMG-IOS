@@ -1,0 +1,44 @@
+name: MMG Web Verify
+
+on:
+  pull_request:
+    paths:
+      - 'apps/mmg-web/**'
+      - '.github/workflows/mmg-web-verify.yml'
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mmg-web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/mmg-web/package.json
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+        env:
+          OPENAI_API_KEY: ci-placeholder
+          KAIROS_OPENAI_MODEL: gpt-4.1-mini
+          NEXT_PUBLIC_KAIROS_API_ENDPOINT: /api/kairos
