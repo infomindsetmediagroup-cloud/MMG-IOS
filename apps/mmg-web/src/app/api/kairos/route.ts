@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizeKairosRequest, resolveKairosSession } from '@/lib/kairos/auth';
+import { resolveKairosDepartment } from '@/lib/kairos/departmentRouter';
 import { toSafeErrorResponse } from '@/lib/kairos/errors';
 import { logKairosRuntimeEvent } from '@/lib/kairos/logging';
 import { runKairosCore } from '@/lib/kairos/provider';
@@ -10,7 +11,7 @@ export const runtime = 'nodejs';
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const startedAt = Date.now();
   const requestId = crypto.randomUUID();
-  const department = 'kairos-core';
+  let department = 'kairos-core';
   let mode = 'public' as const;
   let surface = 'website' as const;
 
@@ -26,6 +27,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     mode = runtimeRequest.mode;
     surface = runtimeRequest.surface;
+    department = resolveKairosDepartment(runtimeRequest);
 
     const runtimeResponse = await runKairosCore(runtimeRequest);
 
