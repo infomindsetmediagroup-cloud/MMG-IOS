@@ -8,6 +8,14 @@ struct AppRootView: View {
                     Label("Value", systemImage: "person.crop.square.filled.and.at.rectangle")
                 }
 
+            CustomerPortalView(
+                sessionStore: LocalSessionStore(),
+                customerStore: LocalCustomerPortalStore()
+            )
+            .tabItem {
+                Label("Customer", systemImage: "person.text.rectangle")
+            }
+
             CommandCenterView()
                 .tabItem {
                     Label("Command", systemImage: "square.grid.2x2")
