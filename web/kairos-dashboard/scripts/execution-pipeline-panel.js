@@ -1,5 +1,9 @@
-import { getRuntimeStore, advanceExecutionWork, clearExecutionPipeline } from "./runtime-store.js";
+import { kairosState } from "./state.js";
+import { getRuntimeStore, advanceExecutionWork, clearExecutionPipeline, queueExecutionWork, setExecutionWorkStatus } from "./runtime-store.js";
 import { pushNotification } from "./notifications.js";
+
+let isRendering = false;
+let observerStarted = false;
 
 function badgeClass(status) {
   const normalized = String(status || "").toLowerCase();
@@ -8,9 +12,22 @@ function badgeClass(status) {
   return "badge";
 }
 
+function seedCurrentPriorities() {
+  const store = getRuntimeStore();
+  const existingTitles = new Set((store.executionPipeline || []).map(item => item.title));
+  kairosState.priorities
+    .filter(priority => !existingTitles.has(priority.title))
+    .forEach(priority => {
+      const work = queueExecutionWork(priority.title, priority.lane, `Priority ${priority.priority}`);
+      setExecutionWorkStatus(work.id, priority.status === "Active" ? "In Progress" : "Queued");
+    });
+  pushNotification("Priorities seeded", "Current Kairos priorities were added to the execution pipeline.", "Success");
+}
+
 function renderPipeline() {
   const root = document.querySelector("#dashboard-view");
-  if (!root) return;
+  if (!root || isRendering) return;
+  isRendering = true;
 
   let card = root.querySelector("[data-execution-pipeline-panel]");
   if (!card) {
@@ -47,7 +64,10 @@ function renderPipeline() {
       <span class="badge success">${items.length} Items</span>
     </div>
     <div class="list">${rows}</div>
-    <div class="action-row"><button class="action-button" data-clear-execution-pipeline="true">Clear Pipeline</button></div>`;
+    <div class="action-row">
+      <button class="action-button" data-seed-execution-pipeline="true">Seed Current Priorities</button>
+      <button class="action-button" data-clear-execution-pipeline="true">Clear Pipeline</button>
+    </div>`;
 
   card.querySelectorAll("[data-advance-execution]").forEach(button => {
     button.addEventListener("click", () => {
@@ -57,12 +77,32 @@ function renderPipeline() {
     });
   });
 
+  card.querySelector("[data-seed-execution-pipeline]")?.addEventListener("click", () => {
+    seedCurrentPriorities();
+    renderPipeline();
+  });
+
   card.querySelector("[data-clear-execution-pipeline]")?.addEventListener("click", () => {
     clearExecutionPipeline();
     pushNotification("Execution pipeline cleared", "Operational work queue reset for the next batch.", "Warning");
     renderPipeline();
   });
+
+  isRendering = false;
 }
 
-document.addEventListener("DOMContentLoaded", renderPipeline);
+function startPipelineObserver() {
+  const root = document.querySelector("#dashboard-view");
+  if (!root || observerStarted) return;
+  observerStarted = true;
+  const observer = new MutationObserver(() => {
+    if (!root.querySelector("[data-execution-pipeline-panel]")) renderPipeline();
+  });
+  observer.observe(root, { childList: true });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  renderPipeline();
+  startPipelineObserver();
+});
 document.addEventListener("kairos:rendered", renderPipeline);
