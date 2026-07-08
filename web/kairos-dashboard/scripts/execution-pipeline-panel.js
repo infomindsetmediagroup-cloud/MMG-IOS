@@ -1,4 +1,4 @@
-import { getRuntimeStore, advanceExecutionWork, clearExecutionPipeline } from "./runtime-store.js";
+import { getRuntimeStore, advanceExecutionWork, approveExecutionWork, clearExecutionPipeline, completeExecutionWork } from "./runtime-store.js";
 import { seedAllOperations, seedKairosPriorities, seedShopifyOperations, seedWebsiteOperations } from "./operations-seeder.js";
 import { pushNotification } from "./notifications.js";
 
@@ -7,8 +7,8 @@ let observerStarted = false;
 
 function badgeClass(status) {
   const normalized = String(status || "").toLowerCase();
-  if (["ready", "completed"].includes(normalized)) return "badge good";
-  if (["in progress", "queued"].includes(normalized)) return "badge warning";
+  if (["ready", "completed", "approved"].includes(normalized)) return "badge good";
+  if (["in progress", "queued", "pending"].includes(normalized)) return "badge warning";
   return "badge";
 }
 
@@ -36,6 +36,8 @@ function renderPipeline() {
       <div class="action-row compact">
         <span class="${badgeClass(item.status)}">${item.status}</span>
         <button class="action-button small" data-advance-execution="${item.id}">Advance</button>
+        <button class="action-button small" data-approve-execution="${item.id}">Approve</button>
+        <button class="action-button small" data-complete-execution="${item.id}">Complete</button>
       </div>
     </div>`).join("") : `
     <div class="list-item">
@@ -64,6 +66,22 @@ function renderPipeline() {
     button.addEventListener("click", () => {
       advanceExecutionWork(button.dataset.advanceExecution);
       pushNotification("Execution advanced", "Pipeline item moved to the next status.", "Success");
+      renderPipeline();
+    });
+  });
+
+  card.querySelectorAll("[data-approve-execution]").forEach(button => {
+    button.addEventListener("click", () => {
+      approveExecutionWork(button.dataset.approveExecution);
+      pushNotification("Execution approved", "Pipeline item approved and marked Ready.", "Success");
+      renderPipeline();
+    });
+  });
+
+  card.querySelectorAll("[data-complete-execution]").forEach(button => {
+    button.addEventListener("click", () => {
+      completeExecutionWork(button.dataset.completeExecution);
+      pushNotification("Execution completed", "Pipeline item marked Completed.", "Success");
       renderPipeline();
     });
   });
