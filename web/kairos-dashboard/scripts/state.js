@@ -5,16 +5,53 @@ export const kairosState = {
   readiness: 64,
   activeBatch: "Kairos Operation Mode",
   modules: [
-    { id: "dashboard", label: "Dashboard", icon: "⌘" },
-    { id: "website", label: "Website Ops", icon: "◎" },
-    { id: "shopify", label: "Shopify", icon: "◇" },
-    { id: "products", label: "Products", icon: "▣" },
-    { id: "bundles", label: "Bundles", icon: "⬡" },
-    { id: "knowledge", label: "Knowledge", icon: "◌" },
-    { id: "revenue", label: "Revenue", icon: "↗" },
-    { id: "customers", label: "Customers", icon: "◍" },
-    { id: "ai", label: "AI Workforce", icon: "✦" },
+    { id: "command", label: "Command", icon: "⌘" },
+    { id: "commerce", label: "Commerce", icon: "◇" },
+    { id: "content", label: "Content", icon: "▣" },
+    { id: "intelligence", label: "Intelligence", icon: "✦" },
     { id: "system", label: "System", icon: "⚙" }
+  ],
+  coreGroups: [
+    {
+      id: "command",
+      label: "Command",
+      metric: "97%",
+      status: "Live",
+      summary: "Executive decisions, daily operations, approvals, blockers, and next-best-action flow.",
+      nodes: ["Decision Queue", "Execution Pipeline", "Approval Gate", "Blockers", "Next Action"]
+    },
+    {
+      id: "commerce",
+      label: "Commerce",
+      metric: "64%",
+      status: "Build",
+      summary: "Shopify, products, bundles, checkout offers, and revenue capture.",
+      nodes: ["Shopify", "Products", "Bundles", "Revenue", "Offers"]
+    },
+    {
+      id: "content",
+      label: "Content",
+      metric: "72%",
+      status: "Queued",
+      summary: "Knowledge Bank, publishing assets, customer-facing education, and content packaging.",
+      nodes: ["Knowledge Bank", "Publishing", "Vault", "Library", "Content Batches"]
+    },
+    {
+      id: "intelligence",
+      label: "Intelligence",
+      metric: "78%",
+      status: "Active",
+      summary: "AI workforce, analytics, routing, customer intelligence, and business insights.",
+      nodes: ["AI Workforce", "Analytics", "Customer Intel", "Routing", "Forecasts"]
+    },
+    {
+      id: "system",
+      label: "System",
+      metric: "90%",
+      status: "Protected",
+      summary: "Runtime health, integrations, security, repository workflow, deployment, and rollback.",
+      nodes: ["Runtime", "Integrations", "Security", "GitHub", "Deployment"]
+    }
   ],
   kpis: [
     { label: "System Health", value: "97%", trend: "+1%", tone: "good" },
@@ -39,8 +76,7 @@ export const kairosState = {
     { title: "Official Kairos Asset", status: "Ready", health: 100 },
     { title: "GitHub Workflow", status: "Skip-CI batching active", health: 90 },
     { title: "Website System", status: "Queued", health: 68 },
-    { title: "Shopify Operations", status: "Queued", health: 64 },
-    { title: "System Vault", status: "Architecture ready", health: 78 }
+    { title: "Shopify Operations", status: "Queued", health: 64 }
   ],
   pipelines: [
     { label: "Dashboard Completion", complete: 72 },
@@ -48,17 +84,6 @@ export const kairosState = {
     { label: "Website System Queue", complete: 54 },
     { label: "Shopify Prep", complete: 52 }
   ],
-  commandCenters: {
-    website: ["Run homepage audit", "Validate navigation", "Create production backlog", "Fix SEO and internal links", "Review mobile layout"],
-    shopify: ["Validate Judge.me widgets", "Create bundle structure", "Prepare product templates", "Audit checkout offers", "Map product health scores"],
-    products: ["Create product health score", "Generate product guides", "Map vault access", "Package editable deliverables", "Build KDP-ready package template"],
-    bundles: ["Package Creator Launch Bundle", "Package Entrepreneur OS", "Package AI Business OS", "Prepare commercial rights package", "Map bundle vault access"],
-    knowledge: ["Build Free Vault", "Classify articles", "Map revenue modules", "Create MMG Passport entry", "Prepare Knowledge Library taxonomy"],
-    revenue: ["Welcome popup", "Checkout discount", "Bundle engine", "Email capture", "Cross-sell recommendations"],
-    customers: ["Customer portal", "Vault access", "Rights records", "Review follow-up", "Support queue"],
-    ai: ["Model routing", "Research queue", "Writing tasks", "Code review tasks", "Asset generation"],
-    system: ["Integrations", "Runtime health", "Backups", "Golden Master", "Deployment status"]
-  },
   activity: [
     "Kairos moved from architecture writing into execution mode.",
     "Operation Mode panel added to the dashboard.",
