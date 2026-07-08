@@ -1,0 +1,71 @@
+{
+  "registry": "customer-value-copy-bank",
+  "status": "active",
+  "version": "1.0.0",
+  "canonicalStatements": {
+    "primaryPromise": "Your Knowledge Has Value.",
+    "supportingPromise": "Helping you discover it, build it, and share it with the world.",
+    "strategicPositioning": "Build around the value only you can provide."
+  },
+  "homepage": {
+    "heroOptions": [
+      {
+        "id": "hero-001",
+        "headline": "Your Knowledge Has Value.",
+        "subheadline": "Mindset Media Group helps you discover what you already know, build it into useful assets, and share it with the people who need it.",
+        "primaryCta": "Start Building",
+        "secondaryCta": "Explore Kairos"
+      },
+      {
+        "id": "hero-002",
+        "headline": "Turn what you know into something you can build on.",
+        "subheadline": "Kairos helps organize your ideas, skills, experience, and creativity into projects, content, products, and long-term assets.",
+        "primaryCta": "Discover Your Value",
+        "secondaryCta": "See the System"
+      },
+      {
+        "id": "hero-003",
+        "headline": "Build around the value only you can provide.",
+        "subheadline": "MMG combines practical education, AI guidance, publishing, media, and business systems to help you bring your knowledge into the world with purpose.",
+        "primaryCta": "Begin the Journey",
+        "secondaryCta": "Learn How It Works"
+      }
+    ]
+  },
+  "kairos": {
+    "positioningLines": [
+      "Kairos is the guide that helps you keep moving forward.",
+      "Preserve your ideas. Organize your work. Build the next right thing.",
+      "Kairos turns scattered knowledge into structured progress.",
+      "Your work is not isolated content. It is a body of work in progress."
+    ],
+    "dashboardMicrocopy": [
+      "Start with what you already know.",
+      "Package the value. Preserve the context. Move the work forward.",
+      "Every idea can become part of the system.",
+      "The next action should make the asset stronger."
+    ]
+  },
+  "guardrails": {
+    "doUse": [
+      "discover",
+      "build",
+      "share",
+      "guide",
+      "organize",
+      "preserve",
+      "package",
+      "asset",
+      "capability",
+      "long-term value"
+    ],
+    "doNotUse": [
+      "guaranteed income",
+      "instant success",
+      "get rich",
+      "shortcut",
+      "no work required",
+      "overnight results"
+    ]
+  }
+}
