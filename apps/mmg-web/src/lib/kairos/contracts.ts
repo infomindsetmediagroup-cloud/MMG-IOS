@@ -6,6 +6,7 @@ export interface KairosRuntimeRequest {
   surface: KairosSurface;
   message: string;
   context?: Record<string, string>;
+  conversationId?: string;
 }
 
 export interface KairosRuntimeResponse {
@@ -13,6 +14,7 @@ export interface KairosRuntimeResponse {
   mode: KairosMode;
   department: string;
   status: 'ok';
+  conversationId?: string;
 }
 
 export interface KairosRuntimeErrorResponse {
