@@ -6,6 +6,13 @@ const view = document.querySelector("#dashboard-view");
 const title = document.querySelector("#page-title");
 const mode = document.querySelector("#runtime-mode");
 
+const brandDoctrine = {
+  promise: "Your Knowledge Has Value.",
+  support: "Helping you discover it, build it, and share it with the world.",
+  mission: "Kairos helps uncover, organize, package, and preserve the value already inside the customer so it can become durable assets over time.",
+  sequence: ["Outcome", "Identity", "Agency", "Guidance", "System"]
+};
+
 mode.textContent = kairosState.mode;
 
 function badgeClass(value) {
@@ -46,6 +53,28 @@ function actionLogCard() {
   return `<article class="card full"><div class="card-header"><h3>Command Log</h3><span class="badge good">${log.length}</span></div><div class="list">${(log.length ? log : [{ action: "Awaiting command", detail: "Select a parent system and queue the next operational action.", status: "Standby", createdAt: "Kairos" }]).slice(0, 5).map(item => `<div class="list-item"><div><strong>${item.action}</strong><p class="muted">${item.detail} • ${item.createdAt}</p></div><span class="${badgeClass(item.status)}">${item.status}</span></div>`).join("")}</div></article>`;
 }
 
+function brandDoctrineCard() {
+  return `<article class="card full" data-priority-card="decision">
+    <div class="card-header"><div><p class="eyebrow">Customer Value Doctrine</p><h3>${brandDoctrine.promise}</h3></div><span class="badge good">Locked</span></div>
+    <p class="metric">Discover. Build. Share.</p>
+    <p class="muted">${brandDoctrine.support}</p>
+    <div class="list core-node-list">${brandDoctrine.sequence.map(step => `<div class="list-item"><strong>${step}</strong><span class="badge">Message Layer</span></div>`).join("")}</div>
+    <div class="action-row">${actionButton("Queue Brand Work", "Queue Brand Work", "Customer value doctrine queued for website and product surfaces.")}${actionButton("Preserve Doctrine", "Preserve Doctrine", "Brand philosophy preserved as a Kairos operating standard.")}</div>
+  </article>`;
+}
+
+function stewardshipCard(group) {
+  return `<article class="card full" data-priority-card="ready">
+    <div class="card-header"><div><p class="eyebrow">Guidance Layer</p><h3>Knowledge Stewardship</h3></div><span class="badge good">Active</span></div>
+    <p class="muted">${brandDoctrine.mission}</p>
+    <div class="list core-node-list">
+      <div class="list-item"><div><strong>Preserve Context</strong><p class="muted">Treat customer work as a connected body of work, not isolated content.</p></div><span class="badge good">Core</span></div>
+      <div class="list-item"><div><strong>Recommend Next Action</strong><p class="muted">Guide steady progress through the ${group.label} system without generic motivation.</p></div><span class="badge warning">Runtime</span></div>
+      <div class="list-item"><div><strong>Compound Assets</strong><p class="muted">Turn ideas, posts, products, and lessons into durable knowledge assets over time.</p></div><span class="badge good">Doctrine</span></div>
+    </div>
+  </article>`;
+}
+
 function groupCard(group) {
   return `<article class="card core-card" data-core-group="${group.id}">
     <div class="card-header"><div><p class="eyebrow">${group.label}</p><h3>${group.label} System</h3></div><span class="${badgeClass(group.status)}">${group.status}</span></div>
@@ -60,7 +89,8 @@ function groupCard(group) {
 function renderDashboard() {
   title.textContent = "Dashboard";
   view.innerHTML = `
-    <article class="card hero-panel full"><div class="card-header"><div><p class="eyebrow">Good evening, ${kairosState.operator}</p><h3>${kairosState.activeBatch}</h3></div><span class="badge good">Five-Direction OS</span></div><p class="metric">${kairosState.health}%</p><p class="muted">Kairos is consolidated into five parent operating directions. Each parent contains no more than five child nodes.</p><div class="action-row">${actionButton("Start Daily Ops", "Start Daily Ops", "Daily operations run queued.")}${actionButton("Run Priority Chain", "Run Priority Chain", "Priority chain workflow queued.")}</div></article>
+    <article class="card hero-panel full"><div class="card-header"><div><p class="eyebrow">Good evening, ${kairosState.operator}</p><h3>${kairosState.activeBatch}</h3></div><span class="badge good">Five-Direction OS</span></div><p class="metric">${kairosState.health}%</p><p class="muted">Kairos is consolidated into five parent operating directions and now carries the MMG customer value doctrine into the runtime: ${brandDoctrine.promise}</p><div class="action-row">${actionButton("Start Daily Ops", "Start Daily Ops", "Daily operations run queued.")}${actionButton("Run Priority Chain", "Run Priority Chain", "Priority chain workflow queued.")}</div></article>
+    ${brandDoctrineCard()}
     ${kairosState.coreGroups.map(groupCard).join("")}
     ${actionLogCard()}
   `;
@@ -73,6 +103,7 @@ function renderModule(moduleId) {
   title.textContent = group.label;
   view.innerHTML = `
     <article class="card hero-panel full"><div class="card-header"><div><p class="eyebrow">Parent Direction</p><h3>${group.label} System</h3></div><span class="${badgeClass(group.status)}">${group.status}</span></div><p class="metric">${group.metric}</p><p class="muted">${group.summary}</p>${progress(group.metric)}<div class="action-row">${actionButton(`Execute ${group.label}`, `Execute ${group.label}`, `${group.label} execution queued.`)}${actionButton(`Validate ${group.label}`, `Validate ${group.label}`, `${group.label} validation queued.`)}</div></article>
+    ${stewardshipCard(group)}
     <article class="card full"><div class="card-header"><h3>${group.label} Child Nodes</h3><span class="badge">${group.nodes.length}/5</span></div><div class="list">${group.nodes.slice(0, 5).map(node => `<div class="list-item"><div><strong>${node}</strong><p class="muted">Child node under ${group.label}. Expands into specific workflows without adding new top-level panels.</p></div><span class="badge warning">Queued</span></div>`).join("")}</div></article>
     ${actionLogCard()}
   `;
