@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizeKairosRequest, resolveKairosSession } from '@/lib/kairos/auth';
 import { recordKairosAuditEvent } from '@/lib/kairos/audit';
+import type { KairosRuntimeRequest } from '@/lib/kairos/contracts';
 import { resolveKairosDepartment } from '@/lib/kairos/departmentRouter';
 import { toSafeErrorResponse } from '@/lib/kairos/errors';
 import { logKairosRuntimeEvent } from '@/lib/kairos/logging';
@@ -15,8 +16,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const startedAt = Date.now();
   const requestId = crypto.randomUUID();
   let department = 'kairos-core';
-  let mode = 'public' as const;
-  let surface = 'website' as const;
+  let mode: KairosRuntimeRequest['mode'] = 'public';
+  let surface: KairosRuntimeRequest['surface'] = 'website';
 
   try {
     enforceKairosRateLimit(resolveRateLimitKey(request.headers));
