@@ -1,0 +1,44 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { toSafeErrorResponse } from '@/lib/kairos/errors';
+import { logKairosRuntimeEvent } from '@/lib/kairos/logging';
+import { runKairosCore } from '@/lib/kairos/provider';
+import { parseKairosRuntimeRequest, runtimeError } from '@/lib/kairos/validation';
+
+export const runtime = 'nodejs';
+
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  const startedAt = Date.now();
+  const requestId = crypto.randomUUID();
+  const department = 'kairos-core';
+  let mode = 'public' as const;
+  let surface = 'website' as const;
+
+  try {
+    const contentType = request.headers.get('content-type') ?? '';
+    if (!contentType.includes('application/json')) {
+      throw runtimeError('invalid_content_type', 'Content-Type must be application/json.', 415);
+    }
+
+    const runtimeRequest = parseKairosRuntimeRequest(await request.json());
+    mode = runtimeRequest.mode;
+    surface = runtimeRequest.surface;
+
+    const runtimeResponse = await runKairosCore(runtimeRequest);
+
+    logKairosRuntimeEvent({ requestId, mode, surface, department, status: 'ok', durationMs: Date.now() - startedAt });
+
+    return NextResponse.json(runtimeResponse, {
+      status: 200,
+      headers: { 'x-kairos-request-id': requestId }
+    });
+  } catch (error) {
+    const safeError = toSafeErrorResponse(error);
+
+    logKairosRuntimeEvent({ requestId, mode, surface, department, status: 'error', durationMs: Date.now() - startedAt, errorCode: safeError.body.code });
+
+    return NextResponse.json(safeError.body, {
+      status: safeError.statusCode,
+      headers: { 'x-kairos-request-id': requestId }
+    });
+  }
+}
