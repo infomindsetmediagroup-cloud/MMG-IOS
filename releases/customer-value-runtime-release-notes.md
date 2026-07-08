@@ -19,6 +19,10 @@ This release package records the customer-value runtime work added to the MMG-IO
 - Added reusable SwiftUI customer value components for native app surfaces.
 - Added a native Customer Value overview screen.
 - Wired the Customer Value overview screen into the native app root as the first tab.
+- Rendered customer-value data inside the dashboard command-center brief panel.
+- Expanded the dashboard runtime with income, asset, audience, and execution pathways.
+- Seeded customer-value pathways, stronger guidance rules, and expanded tone guardrails into dashboard state.
+- Bound dashboard doctrine rendering directly to `kairosState.brandDoctrine` and `kairosState.stewardshipDoctrine`.
 
 ## Canonical Brand Language
 
@@ -38,10 +42,23 @@ Strategic positioning:
 
 Kairos should present itself as the steady guide that helps users preserve context, organize work, recommend next actions, and compound isolated ideas into a body of work.
 
+The dashboard runtime should now frame customer-facing work through four practical pathways:
+
+1. Income Path
+2. Asset Path
+3. Audience Path
+4. Execution Path
+
+These pathways must support practical opportunity without income guarantees, get-rich framing, shortcut claims, or hype-first language.
+
 ## Implementation Surfaces Updated
 
 - `kairos-web-admin/scripts/kairos-operate-local.mjs`
 - `kairos-web-admin/src/shopify/read-only-client.mjs`
+- `web/kairos-dashboard/scripts/state.js`
+- `web/kairos-dashboard/scripts/dashboard.js`
+- `web/kairos-dashboard/scripts/command-center-brief-engine.js`
+- `web/kairos-dashboard/scripts/command-center-brief-panel.js`
 - `MMGIOS/Shared/Components/MetricCard.swift`
 - `MMGIOS/Features/CustomerValue/CustomerValueOverviewView.swift`
 - `MMGIOS/App/AppRootView.swift`
@@ -54,4 +71,4 @@ Changes were committed through the connected GitHub app and marked to avoid unne
 
 ## Next Recommended Batch
 
-The next implementation batch should inspect the dashboard implementation views and wire the customer-value components directly into the Command, Admin, Production, Growth, or System screens where they provide the most immediate operational guidance.
+The next implementation batch should inspect the public website and Shopify-facing page source and wire the customer-value promise into the actual customer-facing hero, product, service, onboarding, or commerce surfaces.
