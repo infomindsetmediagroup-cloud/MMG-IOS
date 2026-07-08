@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 struct AppRootView: View {
@@ -47,4 +48,8 @@ struct AppRootView: View {
 
 #Preview {
     AppRootView()
+        .modelContainer(for: [
+            PersistedCustomerRequestRecord.self,
+            PersistedValueDiscoveryProfile.self
+        ], inMemory: true)
 }
