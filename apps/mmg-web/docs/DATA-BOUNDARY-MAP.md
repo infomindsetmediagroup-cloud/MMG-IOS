@@ -1,0 +1,49 @@
+# MMG Web Data Boundary Map
+
+## Public Data
+Allowed on public routes and public Kairos mode.
+
+Examples:
+- Public product information
+- Public brand doctrine
+- Public Knowledge Library descriptions
+- Public policies
+- Public founder story
+- Public education content
+
+## Customer Data
+Allowed only after authenticated customer access.
+
+Examples:
+- Purchases
+- Downloads
+- Subscription status
+- Customer profile
+- Project workspace records
+- Customer Knowledge Vault records
+- Personalized recommendations
+
+## Admin Data
+Allowed only after authenticated admin access.
+
+Examples:
+- Product publishing queues
+- Customer operations overview
+- Internal release checklists
+- Trust Layer audit records
+- Runtime health metadata
+- Department configuration
+
+## Server-Only Data
+Never exposed to clients.
+
+Examples:
+- Provider credentials
+- Privileged instructions
+- Internal routing logic
+- Environment variables
+- Operational notes
+- Sensitive logs
+
+## Enforcement Rule
+Client-provided mode values are requests, not authority. The server must resolve actual permissions before using customer or admin data.
