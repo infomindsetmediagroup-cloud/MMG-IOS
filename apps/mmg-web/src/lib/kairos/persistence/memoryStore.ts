@@ -37,7 +37,7 @@ export function createInMemoryKairosPersistenceStore(): KairosPersistenceStore {
   return {
     conversations: {
       create(record) {
-        const created = { ...createBaseRecord(), ...record } satisfies KairosConversationRecord;
+        const created = { ...record, ...createBaseRecord() } satisfies KairosConversationRecord;
         conversations.set(created.id, created);
         return created;
       },
@@ -50,7 +50,7 @@ export function createInMemoryKairosPersistenceStore(): KairosPersistenceStore {
     },
     messages: {
       append(record) {
-        const created = { ...createBaseRecord(), ...record } satisfies KairosMessageRecord;
+        const created = { ...record, ...createBaseRecord() } satisfies KairosMessageRecord;
         messages.set(created.id, created);
         return created;
       },
@@ -60,7 +60,7 @@ export function createInMemoryKairosPersistenceStore(): KairosPersistenceStore {
     },
     audit: {
       record(record) {
-        const created = { ...createBaseRecord(), ...record } satisfies KairosAuditRecord;
+        const created = { ...record, ...createBaseRecord() } satisfies KairosAuditRecord;
         auditRecords.set(created.id, created);
         return created;
       },
@@ -70,7 +70,7 @@ export function createInMemoryKairosPersistenceStore(): KairosPersistenceStore {
     },
     workOrders: {
       create(record) {
-        const created = { ...createBaseRecord(), ...record } satisfies KairosWorkOrderRecord;
+        const created = { ...record, ...createBaseRecord() } satisfies KairosWorkOrderRecord;
         workOrders.set(created.id, created);
         return created;
       },
@@ -96,7 +96,7 @@ export function createInMemoryKairosPersistenceStore(): KairosPersistenceStore {
     },
     knowledgeEvents: {
       create(record) {
-        const created = { ...createBaseRecord(), ...record } satisfies KairosKnowledgeEventRecord;
+        const created = { ...record, ...createBaseRecord() } satisfies KairosKnowledgeEventRecord;
         knowledgeEvents.set(created.id, created);
         return created;
       },
