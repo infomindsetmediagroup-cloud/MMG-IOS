@@ -15,12 +15,21 @@ function badgeClass(value) {
   return "badge";
 }
 
+function escapeHtml(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 function renderFields(profile) {
   return getValueDiscoveryFields().map(field => `
     <label class="value-discovery-field">
-      <strong>${field.label}</strong>
-      <span class="muted">${field.prompt}</span>
-      <textarea data-field="${field.id}" rows="2">${profile[field.id] || ""}</textarea>
+      <strong>${escapeHtml(field.label)}</strong>
+      <span class="muted">${escapeHtml(field.prompt)}</span>
+      <textarea data-field="${escapeHtml(field.id)}" rows="2">${escapeHtml(profile[field.id])}</textarea>
     </label>
   `).join("");
 }
@@ -29,8 +38,8 @@ function renderRecommendations(items) {
   return items.map(item => `
     <div class="list-item" data-value-recommendation>
       <div>
-        <strong>${item.title}</strong>
-        <p class="muted">${item.lane} - ${item.detail}</p>
+        <strong>${escapeHtml(item.title)}</strong>
+        <p class="muted">${escapeHtml(item.lane)} - ${escapeHtml(item.detail)}</p>
       </div>
       <span class="badge good">Kairos</span>
     </div>
@@ -68,7 +77,7 @@ function renderCustomerPortalPanel() {
         <p class="eyebrow">Executable Customers</p>
         <h3>Your Knowledge Has Value.</h3>
       </div>
-      <span class="badge ${latest ? "warning" : "good"}">${latest ? `${latest.score}%` : "Ready"}</span>
+      <span class="badge ${latest ? "warning" : "good"}">${latest ? `${escapeHtml(latest.score)}%` : "Ready"}</span>
     </div>
     <p class="muted">Capture knowledge, expertise, skills, professional experience, life experience, interests, and desired outcomes so Kairos can recommend the next useful asset or action.</p>
     <div class="action-row">
@@ -77,15 +86,15 @@ function renderCustomerPortalPanel() {
     </div>
     <div class="value-discovery-grid" style="margin-top:16px;">${renderFields(profile)}</div>
     <div class="list" style="margin-top:16px;">
-      <div class="list-item"><div><strong>Value Discovery Profile</strong><p class="muted">Completion: ${profile.completionScore || 0}%</p></div><span class="badge good">Profile</span></div>
+      <div class="list-item"><div><strong>Value Discovery Profile</strong><p class="muted">Completion: ${escapeHtml(profile.completionScore || 0)}%</p></div><span class="badge good">Profile</span></div>
       <div data-value-recommendations>${renderRecommendations(recommendations)}</div>
       ${latest ? latest.items.map(item => `
         <div class="list-item">
           <div>
-            <strong>${item.title}</strong>
-            <p class="muted">${item.lane} - ${latest.createdAt}</p>
+            <strong>${escapeHtml(item.title)}</strong>
+            <p class="muted">${escapeHtml(item.lane)} - ${escapeHtml(latest.createdAt)}</p>
           </div>
-          <span class="${badgeClass(item.status)}">${item.status}</span>
+          <span class="${badgeClass(item.status)}">${escapeHtml(item.status)}</span>
         </div>
       `).join("") : `<div class="list-item"><strong>No customer portal run yet</strong><span class="badge warning">Standby</span></div>`}
     </div>
