@@ -7,6 +7,10 @@ export interface KairosSession {
 }
 
 export function resolveKairosSession(headers: Headers): KairosSession {
+  if (!isDevelopmentRoleOverrideEnabled()) {
+    return { role: 'public' };
+  }
+
   const role = headers.get('x-kairos-role');
   const subject = headers.get('x-kairos-subject') ?? undefined;
 
@@ -35,4 +39,8 @@ export function authorizeKairosRequest(request: KairosRuntimeRequest, session: K
   }
 
   throw runtimeError('unauthorized_mode', 'Requested Kairos mode is not authorized for this session.', 403);
+}
+
+function isDevelopmentRoleOverrideEnabled(): boolean {
+  return process.env.NODE_ENV !== 'production' && process.env.KAIROS_ENABLE_DEV_ROLE_HEADERS === 'true';
 }
