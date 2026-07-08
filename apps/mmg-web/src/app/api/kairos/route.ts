@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authorizeKairosRequest, resolveKairosSession } from '@/lib/kairos/auth';
 import { toSafeErrorResponse } from '@/lib/kairos/errors';
 import { logKairosRuntimeEvent } from '@/lib/kairos/logging';
 import { runKairosCore } from '@/lib/kairos/provider';
@@ -20,6 +21,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     const runtimeRequest = parseKairosRuntimeRequest(await request.json());
+    const session = resolveKairosSession(request.headers);
+    authorizeKairosRequest(runtimeRequest, session);
+
     mode = runtimeRequest.mode;
     surface = runtimeRequest.surface;
 
