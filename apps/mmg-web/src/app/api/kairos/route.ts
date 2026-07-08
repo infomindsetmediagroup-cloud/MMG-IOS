@@ -4,6 +4,7 @@ import { resolveKairosDepartment } from '@/lib/kairos/departmentRouter';
 import { toSafeErrorResponse } from '@/lib/kairos/errors';
 import { logKairosRuntimeEvent } from '@/lib/kairos/logging';
 import { runKairosCore } from '@/lib/kairos/provider';
+import { enforceKairosRateLimit, resolveRateLimitKey } from '@/lib/kairos/rateLimit';
 import { parseKairosRuntimeRequest, runtimeError } from '@/lib/kairos/validation';
 
 export const runtime = 'nodejs';
@@ -16,6 +17,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   let surface = 'website' as const;
 
   try {
+    enforceKairosRateLimit(resolveRateLimitKey(request.headers));
+
     const contentType = request.headers.get('content-type') ?? '';
     if (!contentType.includes('application/json')) {
       throw runtimeError('invalid_content_type', 'Content-Type must be application/json.', 415);
