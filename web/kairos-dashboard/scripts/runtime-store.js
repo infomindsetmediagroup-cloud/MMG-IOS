@@ -61,14 +61,16 @@ export function createRuntimeSnapshot(label, payload = {}) {
   return snapshot;
 }
 
-export function queueApproval(title, source = "Kairos") {
+export function queueApproval(title, source = "Kairos", relatedWorkId = null) {
   const current = safeRead();
   const approval = {
     id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
     title,
     source,
+    relatedWorkId,
     status: "Pending",
-    createdAt: new Date().toLocaleString()
+    createdAt: new Date().toLocaleString(),
+    updatedAt: new Date().toLocaleString()
   };
   const next = {
     ...current,
@@ -128,6 +130,36 @@ export function setExecutionWorkStatus(id, status) {
   };
   localStorage.setItem(storeKey, JSON.stringify(next));
   return nextPipeline;
+}
+
+export function approveExecutionWork(id) {
+  const current = safeRead();
+  const target = (current.executionPipeline || []).find(item => item.id === id);
+  if (!target) return null;
+  const approval = {
+    id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+    title: `Approve ${target.title}`,
+    source: target.source,
+    relatedWorkId: id,
+    status: "Approved",
+    createdAt: new Date().toLocaleString(),
+    updatedAt: new Date().toLocaleString()
+  };
+  const nextPipeline = (current.executionPipeline || []).map(item => (
+    item.id === id ? { ...item, status: "Ready", updatedAt: approval.updatedAt } : item
+  ));
+  const next = {
+    ...current,
+    approvals: [approval, ...(current.approvals || [])].slice(0, 20),
+    executionPipeline: nextPipeline,
+    lastSavedAt: approval.updatedAt
+  };
+  localStorage.setItem(storeKey, JSON.stringify(next));
+  return approval;
+}
+
+export function completeExecutionWork(id) {
+  return setExecutionWorkStatus(id, "Completed");
 }
 
 export function clearExecutionPipeline() {
