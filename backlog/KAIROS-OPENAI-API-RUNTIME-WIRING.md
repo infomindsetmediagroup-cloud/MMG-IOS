@@ -1,7 +1,7 @@
 # Kairos OpenAI API Runtime Wiring
 
 ## Status
-Approved P0 execution work order.
+Approved P0 execution work order. Initial iOS client runtime scaffold committed in PR #9.
 
 ## Capability Mapping
 - P0: AI Gateway
@@ -101,6 +101,16 @@ The first implementation should preserve:
 - Error classification, if any.
 
 Do not log sensitive prompts, secrets, payment data, private customer vault content, or full personally identifiable information.
+
+## Initial iOS Runtime Scaffold
+PR #9 adds the iOS-side bridge for this contract:
+- `MMGIOS/Services/KairosRuntime/KairosRuntimeModels.swift`
+- `MMGIOS/Services/KairosRuntime/KairosRuntimeConfiguration.swift`
+- `MMGIOS/Services/KairosRuntime/KairosRuntimeClient.swift`
+- `MMGIOS/Services/KairosRuntime/README.md`
+- `docs/KAIROS-RUNTIME-CONFIGURATION.md`
+
+This establishes the client boundary without introducing direct provider calls into the iOS app.
 
 ## Acceptance Criteria
 - A server-side Kairos API endpoint exists.
