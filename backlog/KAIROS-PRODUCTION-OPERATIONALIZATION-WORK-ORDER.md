@@ -1,7 +1,7 @@
 # Kairos Production Operationalization Work Order
 
 ## Status
-Next-phase implementation work order. Begin after the Kairos runtime foundation PR is merged or otherwise accepted as the foundation baseline.
+Active. Foundation baseline accepted and frozen. Production operationalization has started.
 
 ## Objective
 Move Kairos from validated runtime scaffold to operational production system. This phase turns the current web/iOS runtime bridge into a deployed, authenticated, persistent, knowledge-grounded, approval-gated platform foundation.
@@ -17,6 +17,12 @@ The foundation PR establishes:
 - Basic validation, safe errors, logging, timeout handling, rate limiting, and audit buffer.
 - Hardened temporary auth boundary that defaults to public and ignores role headers in production.
 - CI verification for install, type-check, lint, tests, and build.
+
+## Operationalization Progress
+- Production readiness health contract started.
+- Trusted-auth session resolver seam started.
+- Persistence domain models and repository interfaces started.
+- In-memory persistence adapter added for development and tests only.
 
 ## Operationalization Scope
 
@@ -64,6 +70,18 @@ Required data domains:
 - Knowledge Event candidates.
 - Work orders.
 - Approval records.
+
+Current implementation:
+- Canonical persistence models exist.
+- Repository interfaces exist.
+- Development-only in-memory adapter exists.
+
+Remaining production work:
+- Select production datastore.
+- Implement durable adapter.
+- Add migration/schema management.
+- Replace in-memory audit buffering with durable audit writes.
+- Add retention rules for anonymous records.
 
 Acceptance criteria:
 - Conversations persist across sessions when authenticated.
@@ -150,7 +168,7 @@ Every operationalization milestone must pass:
 Kairos should not be considered operational until all of the following are true:
 - Production deployment is live.
 - Auth is trusted and route protection is active.
-- Persistence exists for conversations, audit, and work orders.
+- Durable persistence exists for conversations, audit, and work orders.
 - Knowledge grounding is connected.
 - Command Center approval workflow works end-to-end.
 - CI and production smoke tests pass.
