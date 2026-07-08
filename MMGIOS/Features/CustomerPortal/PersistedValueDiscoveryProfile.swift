@@ -78,7 +78,7 @@ final class PersistedValueDiscoveryProfile {
 
     private func firstSignal(from value: String, fallback: String) -> String {
         value
-            .components(separatedBy: CharacterSet(charactersIn: ",\n"))
+            .components(separatedBy: CharacterSet(charactersIn: ",.\n"))
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .first { !$0.isEmpty } ?? fallback
     }
