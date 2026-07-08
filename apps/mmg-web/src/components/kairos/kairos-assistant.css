@@ -88,6 +88,13 @@
   color: #ffffff;
 }
 
+.kairos-status {
+  color: #9ca3af;
+  font-size: 0.8rem;
+  margin: 0;
+  padding: 0 18px 10px;
+}
+
 .kairos-input-row {
   align-items: center;
   border-top: 1px solid rgba(255, 255, 255, 0.12);
@@ -127,4 +134,9 @@
 .kairos-mic {
   background: rgba(255, 255, 255, 0.1);
   color: #ffffff;
+}
+
+.kairos-mic[aria-pressed='true'] {
+  background: #4fd8ff;
+  color: #04111f;
 }
