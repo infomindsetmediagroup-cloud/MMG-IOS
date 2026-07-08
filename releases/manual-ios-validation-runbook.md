@@ -19,7 +19,7 @@ This workflow is intentionally manual so active development commits do not autom
 5. For `ref_name`, enter the branch or SHA to validate.
    - Recommended branch: `value-discovery-integration`
    - Current validated target candidate: latest branch head
-6. Leave `simulator_name` as `iPhone 16` unless the runner does not provide that simulator.
+6. Leave `simulator_destination` as `generic/platform=iOS Simulator` unless the workflow logs show that Xcode needs a more specific destination.
 7. Start the workflow.
 
 ## What the Workflow Does
@@ -29,6 +29,7 @@ This workflow is intentionally manual so active development commits do not autom
 - Installs XcodeGen.
 - Generates `MMGIOS.xcodeproj` from `project.yml`.
 - Lists available schemes.
+- Prints available simulator destinations with `xcodebuild -showdestinations`.
 - Resolves package dependencies.
 - Builds the `MMGIOS` scheme for iOS Simulator with signing disabled.
 - Verifies native Value Discovery source files exist.
@@ -45,6 +46,14 @@ This workflow is intentionally manual so active development commits do not autom
 5. Patch the repository.
 6. Commit the fix with `[skip ci]`.
 7. Re-run the manual validation workflow only when ready to spend another validation run.
+
+## Simulator Destination Fallback
+
+The default destination is:
+
+`generic/platform=iOS Simulator`
+
+If that fails, use the destinations printed by the workflow logs. Choose one exact destination from the `xcodebuild -showdestinations` output and enter it in the `simulator_destination` field on the next manual run.
 
 ## Expected Fix Loop
 
