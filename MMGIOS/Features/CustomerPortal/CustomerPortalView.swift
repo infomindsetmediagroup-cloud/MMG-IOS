@@ -15,6 +15,7 @@ struct CustomerPortalView: View {
     @State private var lifeExperience = ""
     @State private var interests = ""
     @State private var desiredOutcomes = ""
+    @State private var saveMessage = ""
 
     private var openRequests: [PersistedCustomerRequestRecord] {
         requests.filter { $0.statusRawValue != CustomerRequestStatus.complete.rawValue }
@@ -22,6 +23,17 @@ struct CustomerPortalView: View {
 
     private var valueProfile: PersistedValueDiscoveryProfile? {
         valueProfiles.first
+    }
+
+    private var displayedRecommendations: [ValueDiscoveryRecommendation] {
+        valueProfile?.recommendations ?? PersistedValueDiscoveryProfile(
+            knowledgeExpertise: knowledgeExpertise,
+            skills: skills,
+            professionalExperience: professionalExperience,
+            lifeExperience: lifeExperience,
+            interests: interests,
+            desiredOutcomes: desiredOutcomes
+        ).recommendations
     }
 
     var body: some View {
@@ -40,6 +52,9 @@ struct CustomerPortalView: View {
             }
             .task {
                 seedRequestsIfNeeded()
+                loadValueDiscoveryProfile()
+            }
+            .onChange(of: valueProfiles.count) { _, _ in
                 loadValueDiscoveryProfile()
             }
         }
@@ -84,13 +99,19 @@ struct CustomerPortalView: View {
             } label: {
                 Label("Save Value Discovery", systemImage: "square.and.arrow.down")
             }
+
+            if !saveMessage.isEmpty {
+                Text(saveMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
     private var recommendationsSection: some View {
         Section("Kairos Recommendations") {
-            if let valueProfile {
-                ForEach(valueProfile.recommendations) { recommendation in
+            if valueProfile != nil || hasDraftProfileInput {
+                ForEach(displayedRecommendations) { recommendation in
                     VStack(alignment: .leading, spacing: 5) {
                         Text(recommendation.title)
                             .font(.headline)
@@ -134,6 +155,11 @@ struct CustomerPortalView: View {
         }
     }
 
+    private var hasDraftProfileInput: Bool {
+        [knowledgeExpertise, skills, professionalExperience, lifeExperience, interests, desiredOutcomes]
+            .contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
+
     private func seedRequestsIfNeeded() {
         guard requests.isEmpty else { return }
         for request in SampleData.customerRequests {
@@ -163,6 +189,13 @@ struct CustomerPortalView: View {
 
         if valueProfile == nil {
             modelContext.insert(profile)
+        }
+
+        do {
+            try modelContext.save()
+            saveMessage = "Value Discovery saved. Kairos recommendations refreshed."
+        } catch {
+            saveMessage = "Value Discovery could not be saved. Review the profile and try again."
         }
     }
 }
