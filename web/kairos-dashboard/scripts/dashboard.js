@@ -1,3 +1,4 @@
+import "./customer-portal-panel.js";
 import { kairosState } from "./state.js";
 import { getActionLog, recordAction } from "./runtime-actions.js";
 
