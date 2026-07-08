@@ -39,12 +39,28 @@ struct CustomerPortalView: View {
             .contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
 
+    private var hasUnsavedValueDiscoveryChanges: Bool {
+        guard let valueProfile else { return hasDraftProfileInput }
+        return knowledgeExpertise != valueProfile.knowledgeExpertise
+            || skills != valueProfile.skills
+            || professionalExperience != valueProfile.professionalExperience
+            || lifeExperience != valueProfile.lifeExperience
+            || interests != valueProfile.interests
+            || desiredOutcomes != valueProfile.desiredOutcomes
+    }
+
     private var displayedCompletionScore: Int {
-        hasDraftProfileInput ? draftProfile.completionScore : (valueProfile?.completionScore ?? 0)
+        if hasUnsavedValueDiscoveryChanges || valueProfile == nil {
+            return draftProfile.completionScore
+        }
+        return valueProfile?.completionScore ?? 0
     }
 
     private var displayedRecommendations: [ValueDiscoveryRecommendation] {
-        valueProfile?.recommendations ?? draftProfile.recommendations
+        if hasUnsavedValueDiscoveryChanges || valueProfile == nil {
+            return draftProfile.recommendations
+        }
+        return valueProfile?.recommendations ?? []
     }
 
     var body: some View {
