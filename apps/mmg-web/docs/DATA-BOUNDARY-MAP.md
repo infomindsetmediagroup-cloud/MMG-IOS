@@ -45,6 +45,23 @@ Examples:
 - Operational notes
 - Sensitive logs
 
+## Persistence Boundary
+The persistence foundation defines repository contracts for:
+- Conversations.
+- Messages.
+- Audit records.
+- Work orders.
+- Knowledge Event candidates.
+
+The current in-memory implementation is a development adapter only. It provides runtime structure and test coverage but is not durable and must not be treated as production storage.
+
+Production storage must preserve:
+- Customer isolation.
+- Admin-only operational access.
+- Audit durability.
+- Knowledge Event review status.
+- Work-order lifecycle history.
+
 ## Enforcement Rule
 Client-provided mode values are requests, not authority. The server must resolve actual permissions before using customer or admin data.
 
