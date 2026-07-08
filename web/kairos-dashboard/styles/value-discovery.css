@@ -1,0 +1,45 @@
+.value-discovery-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.value-discovery-field {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid rgba(79, 216, 255, 0.18);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.value-discovery-field strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.value-discovery-field textarea {
+  width: 100%;
+  min-height: 74px;
+  resize: vertical;
+  border: 1px solid rgba(79, 216, 255, 0.22);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: rgba(2, 6, 18, 0.74);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.45;
+  outline: none;
+}
+
+.value-discovery-field textarea:focus {
+  border-color: rgba(79, 216, 255, 0.72);
+  box-shadow: 0 0 0 3px rgba(79, 216, 255, 0.12);
+}
+
+@media (max-width: 760px) {
+  .value-discovery-grid {
+    grid-template-columns: 1fr;
+  }
+}
