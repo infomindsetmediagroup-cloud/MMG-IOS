@@ -1,5 +1,5 @@
-import { kairosState } from "./state.js";
-import { getRuntimeStore, advanceExecutionWork, clearExecutionPipeline, queueExecutionWork, setExecutionWorkStatus } from "./runtime-store.js";
+import { getRuntimeStore, advanceExecutionWork, clearExecutionPipeline } from "./runtime-store.js";
+import { seedAllOperations, seedKairosPriorities, seedShopifyOperations, seedWebsiteOperations } from "./operations-seeder.js";
 import { pushNotification } from "./notifications.js";
 
 let isRendering = false;
@@ -10,18 +10,6 @@ function badgeClass(status) {
   if (["ready", "completed"].includes(normalized)) return "badge good";
   if (["in progress", "queued"].includes(normalized)) return "badge warning";
   return "badge";
-}
-
-function seedCurrentPriorities() {
-  const store = getRuntimeStore();
-  const existingTitles = new Set((store.executionPipeline || []).map(item => item.title));
-  kairosState.priorities
-    .filter(priority => !existingTitles.has(priority.title))
-    .forEach(priority => {
-      const work = queueExecutionWork(priority.title, priority.lane, `Priority ${priority.priority}`);
-      setExecutionWorkStatus(work.id, priority.status === "Active" ? "In Progress" : "Queued");
-    });
-  pushNotification("Priorities seeded", "Current Kairos priorities were added to the execution pipeline.", "Success");
 }
 
 function renderPipeline() {
@@ -51,7 +39,7 @@ function renderPipeline() {
       </div>
     </div>`).join("") : `
     <div class="list-item">
-      <div><strong>No execution work queued</strong><p class="muted">Dashboard commands will appear here and move from Queued to In Progress, Ready, and Completed.</p></div>
+      <div><strong>No execution work queued</strong><p class="muted">Seed the queue or trigger dashboard commands to move work from Queued to In Progress, Ready, and Completed.</p></div>
       <span class="badge">Standby</span>
     </div>`;
 
@@ -65,7 +53,10 @@ function renderPipeline() {
     </div>
     <div class="list">${rows}</div>
     <div class="action-row">
-      <button class="action-button" data-seed-execution-pipeline="true">Seed Current Priorities</button>
+      <button class="action-button" data-seed-all-operations="true">Seed All Ops</button>
+      <button class="action-button" data-seed-kairos-priorities="true">Seed Kairos</button>
+      <button class="action-button" data-seed-website-ops="true">Seed Website</button>
+      <button class="action-button" data-seed-shopify-ops="true">Seed Shopify</button>
       <button class="action-button" data-clear-execution-pipeline="true">Clear Pipeline</button>
     </div>`;
 
@@ -77,8 +68,23 @@ function renderPipeline() {
     });
   });
 
-  card.querySelector("[data-seed-execution-pipeline]")?.addEventListener("click", () => {
-    seedCurrentPriorities();
+  card.querySelector("[data-seed-all-operations]")?.addEventListener("click", () => {
+    seedAllOperations();
+    renderPipeline();
+  });
+
+  card.querySelector("[data-seed-kairos-priorities]")?.addEventListener("click", () => {
+    seedKairosPriorities();
+    renderPipeline();
+  });
+
+  card.querySelector("[data-seed-website-ops]")?.addEventListener("click", () => {
+    seedWebsiteOperations();
+    renderPipeline();
+  });
+
+  card.querySelector("[data-seed-shopify-ops]")?.addEventListener("click", () => {
+    seedShopifyOperations();
     renderPipeline();
   });
 
