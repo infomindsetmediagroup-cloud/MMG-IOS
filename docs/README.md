@@ -24,3 +24,12 @@ workflows/      Repeatable production workflows and execution procedures.
 - `architecture/executive-attention-doctrine.md` — Establishes that Kairos optimizes for executive attention rather than information volume.
 - `architecture/kairos-department-reporting-standard.md` — Standardizes how all Kairos departments report upward into summaries, health status, decisions, risks, recommendations, and drill-down detail.
 - `architecture/kairos-executive-decision-engine.md` — Defines the decision compression layer that turns department activity into concise executive decision packages for check-ins, wrap-ups, approvals, and health summaries.
+- `architecture/kairos-system-health-framework.md` — Defines the Overall Health Check domains and executive scorecard model.
+- `architecture/kairos-overnight-orchestration-engine.md` — Defines the controlled overnight work cycle between Evening Wrap-Up and Morning Check-In.
+- `architecture/kairos-work-queue-lifecycle.md` — Defines canonical lifecycle states for tasks, projects, assets, approvals, and workflows.
+- `architecture/kairos-executive-daily-briefing-standard.md` — Standardizes Morning Check-In and Evening Wrap-Up briefing order.
+- `architecture/kairos-department-contract-standard.md` — Defines the minimum interface every Kairos department must implement.
+
+## Active Standards Records
+
+- `standards/kairos-production-session-standard.md` — Defines the standard operating process for MMG/Kairos production sessions, including repository context loading, coherent commits, indexing, exact reporting, and continuous process improvement.
