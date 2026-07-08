@@ -4,7 +4,7 @@ const seedTasks = [
   { id: "TASK-001", title: "Promote Website Audit to executable workflow", lane: "Website", status: "Next", priority: "P1" },
   { id: "TASK-002", title: "Connect Judge.me review widget checklist", lane: "Shopify", status: "Next", priority: "P1" },
   { id: "TASK-003", title: "Build Free Vault lead capture package", lane: "Revenue", status: "Next", priority: "P1" },
-  { id: "TASK-004", title: "Create persistent database migration plan", lane: "System", status: "Queued", priority: "P1" },
+  { id: "TASK-004", title: "Wire Customer Portal Value Discovery recommendations", lane: "Customer Portal", status: "Queued", priority: "P1" },
   { id: "TASK-005", title: "Prepare Shopify bundle product schema", lane: "Bundles", status: "Queued", priority: "P2" },
   { id: "TASK-006", title: "Draft Knowledge Bank taxonomy", lane: "Knowledge", status: "Queued", priority: "P2" }
 ];
