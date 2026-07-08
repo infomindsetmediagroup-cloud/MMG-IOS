@@ -18,4 +18,5 @@ workflows/      Repeatable production workflows and execution procedures.
 
 ## Active Architecture Records
 
-- `architecture/kairos-command-center-intro-orchestration-layer.md` — Defines the Kairos login/command-center intro layer: dimmed dashboard overlay, pulsing Kairos emblem, typing/thinking indicator, narrated time-based greeting, daily rundown, priority to-dos, five-avenue routing, and fade transition into the main control panel.
+- `architecture/kairos-command-center-intro-orchestration-layer.md` — Defines the Kairos login/command-center intro layer: dimmed dashboard overlay, pulsing Kairos emblem, typing/thinking indicator, narrated time-based greeting, daily rundown, two-checkpoint check-in/wrap-up modes, six-button routing, and fade transition into the main control panel.
+- `architecture/kairos-two-checkpoint-executive-operating-cycle.md` — Defines the morning check-in and evening wrap-up/overnight approval cycle, including compressed executive decisions, daily queue formation, prior approval maturation, business health summaries, export/runtime summaries, and the six-button entry model.
