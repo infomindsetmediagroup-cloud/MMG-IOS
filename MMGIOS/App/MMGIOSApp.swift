@@ -11,7 +11,10 @@ struct MMGIOSApp: App {
             PersistedCustomerRequestRecord.self,
             PersistedValueDiscoveryProfile.self,
             PersistedDesignStudioProject.self,
-            PersistedDesignStudioAsset.self
+            PersistedDesignStudioAsset.self,
+            PersistedDesignStudioVersionRecord.self,
+            PersistedDesignStudioExportJob.self,
+            PersistedDesignStudioPermissionRecord.self
         ])
     }
 }
