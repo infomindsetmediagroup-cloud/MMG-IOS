@@ -51,5 +51,12 @@ The backend returns:
 }
 ```
 
+## Current Implementation
+The first iOS runtime scaffold adds:
+- `KairosRuntimeRequest` and `KairosRuntimeResponse` models.
+- `KairosRuntimeErrorResponse` for safe client error decoding.
+- `KairosRuntimeConfiguration` for endpoint lookup.
+- `KairosRuntimeClient` for POST requests to the Kairos backend.
+
 ## Guardrail
 The iOS client adapter exists only as a frontend bridge. It is not a direct model-provider client and must not become one.
