@@ -9,7 +9,7 @@ export interface KairosTrustedSession {
 }
 
 export interface KairosSessionResolver {
-  resolve(headers: Headers): Promise<KairosTrustedSession> | KairosTrustedSession;
+  resolve(headers: Headers): KairosTrustedSession;
 }
 
 const anonymousSession: KairosTrustedSession = {
@@ -38,6 +38,7 @@ export function createKairosSessionResolver(): KairosSessionResolver {
 function resolveTrustedAuthSession(_headers: Headers): KairosTrustedSession | null {
   // Production authentication is intentionally not implemented in the foundation scaffold.
   // This seam is where the selected auth provider must validate a signed session or token.
+  // Keep this synchronous until an async auth provider is selected and route handlers are updated together.
   return null;
 }
 
