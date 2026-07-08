@@ -1,0 +1,80 @@
+{
+  "registry": "customer-value-surfaces",
+  "status": "active",
+  "version": "1.0.0",
+  "promise": "Your Knowledge Has Value.",
+  "supportingStatement": "Helping you discover it, build it, and share it with the world.",
+  "surfaces": [
+    {
+      "id": "homepage-hero",
+      "surface": "MMG Website Homepage Hero",
+      "priority": "P1",
+      "objective": "Lead with the core promise before products, services, or platform features.",
+      "requiredMessage": "Your Knowledge Has Value.",
+      "supportingMessage": "Helping you discover it, build it, and share it with the world.",
+      "status": "queued"
+    },
+    {
+      "id": "kairos-dashboard",
+      "surface": "Kairos Dashboard Runtime",
+      "priority": "P1",
+      "objective": "Present Kairos as the steady guide and operating system for preserving context and recommending next actions.",
+      "requiredMessage": "Knowledge stewardship and next-best-action guidance.",
+      "supportingMessage": "Treat user work as a connected body of work rather than isolated content.",
+      "status": "active"
+    },
+    {
+      "id": "customer-onboarding",
+      "surface": "Customer Onboarding",
+      "priority": "P1",
+      "objective": "Capture customer knowledge, skills, goals, interests, and desired income paths without hype or shortcut language.",
+      "requiredMessage": "Start with what you already know.",
+      "supportingMessage": "Kairos helps organize it into projects, assets, and next actions.",
+      "status": "planned"
+    },
+    {
+      "id": "knowledge-library",
+      "surface": "Knowledge Library",
+      "priority": "P1",
+      "objective": "Position the library as practical education that helps users build capability and durable assets.",
+      "requiredMessage": "Learn, create, grow, and preserve what you build.",
+      "supportingMessage": "Every resource should move the user closer to useful execution.",
+      "status": "queued"
+    },
+    {
+      "id": "shopify-products",
+      "surface": "Shopify Product Pages",
+      "priority": "P2",
+      "objective": "Frame books and digital products as tools inside the larger value-building system.",
+      "requiredMessage": "This product helps package knowledge into practical action.",
+      "supportingMessage": "Avoid presenting products as isolated one-off purchases.",
+      "status": "queued"
+    },
+    {
+      "id": "service-pages",
+      "surface": "Service Pages",
+      "priority": "P2",
+      "objective": "Present services as guided execution support for people building around their unique value.",
+      "requiredMessage": "Guided support for turning your knowledge into assets.",
+      "supportingMessage": "Preserve integrity, clarity, and long-term value over hype.",
+      "status": "planned"
+    }
+  ],
+  "voiceGuardrails": {
+    "approved": [
+      "guidance",
+      "education",
+      "stewardship",
+      "practical execution",
+      "long-term value",
+      "customer capability"
+    ],
+    "avoid": [
+      "get rich quick",
+      "easy money",
+      "passive income guarantees",
+      "hype-first positioning",
+      "manipulative scarcity"
+    ]
+  }
+}
