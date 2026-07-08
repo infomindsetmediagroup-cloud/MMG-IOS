@@ -28,7 +28,15 @@ jobs:
         run: npm install
 
       - name: Type-check
-        run: npm run typecheck
+        run: npm run typecheck 2>&1 | tee typecheck.log
+
+      - name: Upload typecheck log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmg-web-typecheck-log
+          path: apps/mmg-web/typecheck.log
+          if-no-files-found: ignore
 
       - name: Lint
         run: npm run lint
