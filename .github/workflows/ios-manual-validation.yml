@@ -7,10 +7,10 @@ on:
         description: Branch, tag, or SHA to validate
         required: false
         default: main
-      simulator_name:
-        description: iOS simulator device name
+      simulator_destination:
+        description: xcodebuild destination for simulator build
         required: false
-        default: iPhone 16
+        default: generic/platform=iOS Simulator
 
 concurrency:
   group: manual-ios-validation-${{ github.ref }}
@@ -39,8 +39,10 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
-      - name: List schemes
-        run: xcodebuild -list -project MMGIOS.xcodeproj
+      - name: List schemes and simulator destinations
+        run: |
+          xcodebuild -list -project MMGIOS.xcodeproj
+          xcodebuild -showdestinations -project MMGIOS.xcodeproj -scheme MMGIOS || true
 
       - name: Resolve packages
         run: xcodebuild -resolvePackageDependencies -project MMGIOS.xcodeproj -scheme MMGIOS
@@ -48,11 +50,10 @@ jobs:
       - name: Build for iOS simulator
         run: |
           set -o pipefail
-          DESTINATION="platform=iOS Simulator,name=${{ inputs.simulator_name }}"
           xcodebuild \
             -project MMGIOS.xcodeproj \
             -scheme MMGIOS \
-            -destination "$DESTINATION" \
+            -destination "${{ inputs.simulator_destination }}" \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
             build
