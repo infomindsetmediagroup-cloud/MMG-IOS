@@ -80,19 +80,19 @@ function filledProfileScore(profile) {
 
 function splitSignals(value) {
   return String(value || "")
-    .split(/[,.\n]/)
+    .split(/[,\.\n]/)
     .map(item => item.trim())
     .filter(Boolean)
     .slice(0, 4);
 }
 
-export function buildKairosRecommendations(profile = getCustomerValueProfile()) {
+export function deriveKairosRecommendations(profile = getCustomerValueProfile()) {
   const expertise = splitSignals(profile.knowledgeExpertise);
   const skills = splitSignals(profile.skills);
   const interests = splitSignals(profile.interests);
   const outcomes = splitSignals(profile.desiredOutcomes);
 
-  const recommendations = [
+  return [
     {
       title: "Create a Value Positioning Brief",
       lane: "Identity",
@@ -114,7 +114,10 @@ export function buildKairosRecommendations(profile = getCustomerValueProfile()) 
       detail: `Move toward ${outcomes[0] || "the desired outcome"} with one draft, one review, and one publishable asset.`
     }
   ];
+}
 
+export function buildKairosRecommendations(profile = getCustomerValueProfile()) {
+  const recommendations = deriveKairosRecommendations(profile);
   writeJson(recommendationKey, recommendations);
   return recommendations;
 }
