@@ -9,6 +9,12 @@ type Message = {
   content: string;
 };
 
+type KairosChatPayload = {
+  reply?: string;
+  message?: string;
+  conversationId?: string;
+};
+
 const welcomeMessage: Message = {
   role: 'kairos',
   content:
@@ -20,6 +26,7 @@ export function KairosAssistantBadge() {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([welcomeMessage]);
   const [isLoading, setIsLoading] = useState(false);
+  const [conversationId, setConversationId] = useState<string | undefined>();
 
   const handleTranscript = useCallback((transcript: string) => {
     setInput(transcript);
@@ -51,11 +58,16 @@ export function KairosAssistantBadge() {
           mode: 'public',
           surface: 'website',
           message,
+          conversationId,
           context: { department: 'kairos-core' }
         })
       });
 
-      const payload = (await response.json()) as { reply?: string; message?: string };
+      const payload = (await response.json()) as KairosChatPayload;
+      if (payload.conversationId) {
+        setConversationId(payload.conversationId);
+      }
+
       setMessages((current) => [
         ...current,
         {
