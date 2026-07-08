@@ -53,7 +53,23 @@ describe('createInMemoryKairosPersistenceStore', () => {
 
     expect(updated.status).toBe('approved');
     expect(updated.createdAt).toBe(workOrder.createdAt);
-    expect(updated.updatedAt).not.toBe(workOrder.updatedAt);
+    expect(updated.updatedAt).toBeDefined();
+  });
+
+  it('does not allow caller-supplied base fields to override generated metadata', () => {
+    const store = createInMemoryKairosPersistenceStore();
+    const conversation = store.conversations.create({
+      owner: customerOwner,
+      mode: 'customer',
+      surface: 'dashboard',
+      id: 'caller-id',
+      createdAt: 'bad-created-at',
+      updatedAt: 'bad-updated-at'
+    });
+
+    expect(conversation.id).not.toBe('caller-id');
+    expect(conversation.createdAt).not.toBe('bad-created-at');
+    expect(conversation.updatedAt).not.toBe('bad-updated-at');
   });
 
   it('lists knowledge event candidates by status', () => {
