@@ -21,19 +21,30 @@ struct CustomerPortalView: View {
         requests.filter { $0.statusRawValue != CustomerRequestStatus.complete.rawValue }
     }
 
-    private var valueProfile: PersistedValueDiscoveryProfile? {
-        valueProfiles.first
-    }
+    private var valueProfile: PersistedValueDiscoveryProfile? { valueProfiles.first }
 
-    private var displayedRecommendations: [ValueDiscoveryRecommendation] {
-        valueProfile?.recommendations ?? PersistedValueDiscoveryProfile(
+    private var draftProfile: PersistedValueDiscoveryProfile {
+        PersistedValueDiscoveryProfile(
             knowledgeExpertise: knowledgeExpertise,
             skills: skills,
             professionalExperience: professionalExperience,
             lifeExperience: lifeExperience,
             interests: interests,
             desiredOutcomes: desiredOutcomes
-        ).recommendations
+        )
+    }
+
+    private var hasDraftProfileInput: Bool {
+        [knowledgeExpertise, skills, professionalExperience, lifeExperience, interests, desiredOutcomes]
+            .contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
+
+    private var displayedCompletionScore: Int {
+        hasDraftProfileInput ? draftProfile.completionScore : (valueProfile?.completionScore ?? 0)
+    }
+
+    private var displayedRecommendations: [ValueDiscoveryRecommendation] {
+        valueProfile?.recommendations ?? draftProfile.recommendations
     }
 
     var body: some View {
@@ -41,22 +52,27 @@ struct CustomerPortalView: View {
             List {
                 headerSection
                 portalStatusSection
-                valueDiscoverySection
+                ValueDiscoveryProfileSection(
+                    knowledgeExpertise: $knowledgeExpertise,
+                    skills: $skills,
+                    professionalExperience: $professionalExperience,
+                    lifeExperience: $lifeExperience,
+                    interests: $interests,
+                    desiredOutcomes: $desiredOutcomes,
+                    saveMessage: saveMessage,
+                    onSave: saveValueDiscoveryProfile
+                )
                 recommendationsSection
                 requestsSection
             }
             .navigationTitle("Customer")
             .toolbar { toolbarContent }
-            .sheet(isPresented: $showingNewRequest) {
-                CustomerRequestEditorView(sessionStore: sessionStore)
-            }
+            .sheet(isPresented: $showingNewRequest) { CustomerRequestEditorView(sessionStore: sessionStore) }
             .task {
                 seedRequestsIfNeeded()
                 loadValueDiscoveryProfile()
             }
-            .onChange(of: valueProfiles.count) { _, _ in
-                loadValueDiscoveryProfile()
-            }
+            .onChange(of: valueProfiles.count) { _, _ in loadValueDiscoveryProfile() }
         }
     }
 
@@ -76,35 +92,8 @@ struct CustomerPortalView: View {
         Section("Portal Status") {
             LabeledContent("Signed in as", value: sessionStore.session.user.name)
             LabeledContent("Open requests", value: "\(openRequests.count)")
-            LabeledContent("Value Discovery", value: "\(valueProfile?.completionScore ?? 0)%")
+            LabeledContent("Value Discovery", value: "\(displayedCompletionScore)%")
             Label("Canonical service onboarding enabled", systemImage: "checkmark.seal")
-        }
-    }
-
-    private var valueDiscoverySection: some View {
-        Section("Value Discovery") {
-            Text("Capture the customer profile Kairos uses to recommend positioning, assets, audience paths, and next execution steps.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            TextField("Knowledge and expertise", text: $knowledgeExpertise, axis: .vertical)
-            TextField("Skills", text: $skills, axis: .vertical)
-            TextField("Professional experience", text: $professionalExperience, axis: .vertical)
-            TextField("Life experience", text: $lifeExperience, axis: .vertical)
-            TextField("Interests", text: $interests, axis: .vertical)
-            TextField("Desired outcomes", text: $desiredOutcomes, axis: .vertical)
-
-            Button {
-                saveValueDiscoveryProfile()
-            } label: {
-                Label("Save Value Discovery", systemImage: "square.and.arrow.down")
-            }
-
-            if !saveMessage.isEmpty {
-                Text(saveMessage)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
         }
     }
 
@@ -113,8 +102,7 @@ struct CustomerPortalView: View {
             if valueProfile != nil || hasDraftProfileInput {
                 ForEach(displayedRecommendations) { recommendation in
                     VStack(alignment: .leading, spacing: 5) {
-                        Text(recommendation.title)
-                            .font(.headline)
+                        Text(recommendation.title).font(.headline)
                         Text("\(recommendation.lane) • \(recommendation.detail)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -130,8 +118,7 @@ struct CustomerPortalView: View {
     private var requestsSection: some View {
         Section("Requests") {
             if requests.isEmpty {
-                Text("No customer requests yet.")
-                    .foregroundStyle(.secondary)
+                Text("No customer requests yet.").foregroundStyle(.secondary)
             } else {
                 ForEach(requests) { request in
                     NavigationLink {
@@ -147,17 +134,10 @@ struct CustomerPortalView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
-            Button {
-                showingNewRequest = true
-            } label: {
+            Button { showingNewRequest = true } label: {
                 Label("New Request", systemImage: "plus")
             }
         }
-    }
-
-    private var hasDraftProfileInput: Bool {
-        [knowledgeExpertise, skills, professionalExperience, lifeExperience, interests, desiredOutcomes]
-            .contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
 
     private func seedRequestsIfNeeded() {
@@ -187,9 +167,7 @@ struct CustomerPortalView: View {
         profile.desiredOutcomes = desiredOutcomes
         profile.updatedAt = .now
 
-        if valueProfile == nil {
-            modelContext.insert(profile)
-        }
+        if valueProfile == nil { modelContext.insert(profile) }
 
         do {
             try modelContext.save()
@@ -205,8 +183,7 @@ private struct CustomerRequestRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(request.subject)
-                .font(.headline)
+            Text(request.subject).font(.headline)
             Text("\(request.requestTypeRawValue) • \(request.statusRawValue)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
