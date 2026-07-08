@@ -10,17 +10,15 @@ Kairos is the flagship operating platform for MMG. The long-term architecture tr
 
 ## Repository Structure
 
-```text
-MMGIOS.xcodeproj/      Native iOS project file.
-MMGIOS/                SwiftUI application source.
-shopify/               Shopify site source, page code, product code, snippets, templates, and deployment notes.
-kairos/                Kairos platform architecture, command centers, modules, data models, and operating logic.
-assets/                Brand assets, image references, prompts, logos, covers, and visual systems.
-docs/                  Doctrine, standards, architecture notes, and technical decisions.
-registry/              Page, product, campaign, release, asset, and editorial registries.
-backlog/               Production backlog, blockers, implementation queues, and execution sequencing.
-releases/              Release packages, QA records, changelogs, and deployment summaries.
-```
+- MMGIOS.xcodeproj: Native iOS project file.
+- MMGIOS: SwiftUI application source.
+- shopify: Shopify site source, page code, product code, snippets, templates, and deployment notes.
+- kairos: Kairos platform architecture, command centers, modules, data models, and operating logic.
+- assets: Brand assets, image references, prompts, logos, covers, and visual systems.
+- docs: Doctrine, standards, architecture notes, and technical decisions.
+- registry: Page, product, campaign, release, asset, and editorial registries.
+- backlog: Production backlog, blockers, implementation queues, and execution sequencing.
+- releases: Release packages, QA records, changelogs, and deployment summaries.
 
 ## Native iOS Build Scope
 
@@ -43,31 +41,21 @@ The current native app scaffold establishes:
 
 ## Local Development
 
-Install XcodeGen and generate the Xcode project:
-
-```bash
-make bootstrap
-make generate
-make open
-```
-
-Or manually:
-
-```bash
-brew install xcodegen
-xcodegen generate
-open MMGIOS.xcodeproj
-```
-
-Run the MMGIOS scheme on an iPhone simulator.
+Use the project make targets to bootstrap, generate, and open the native project. Run the MMGIOS scheme on an iPhone simulator.
 
 Minimum target: iOS 17.0.
 
 ## Build Validation
 
-GitHub Actions contains an iOS build validation workflow at `.github/workflows/ios-build.yml`.
+GitHub Actions contains an iOS build validation workflow at .github/workflows/ios-build.yml.
 
 The workflow checks out the repository, installs XcodeGen, regenerates the Xcode project, and runs an Xcode clean build against the MMGIOS scheme on an iOS simulator.
+
+## Execution Mode
+
+Kairos implementation work should run in coherent production batches. Each batch should inspect the relevant source, make only the necessary changes, validate where the environment permits, commit the completed unit of work, and then proceed to the next batch by executive direction.
+
+During rapid development, commits should preserve GitHub Actions minutes until final validation is explicitly approved.
 
 ## Operating Rule
 
