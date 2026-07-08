@@ -1,4 +1,4 @@
-import { createRuntimeSnapshot, queueApproval } from "./runtime-store.js";
+import { createRuntimeSnapshot, queueApproval, queueExecutionWork, advanceExecutionWork } from "./runtime-store.js";
 import { pushNotification } from "./notifications.js";
 
 const storageKey = "kairos.action.log.v1";
@@ -11,17 +11,30 @@ export function getActionLog() {
   }
 }
 
+function inferExecutionStatus(action) {
+  const normalized = action.toLowerCase();
+  if (normalized.includes("approve") || normalized.includes("prepare") || normalized.includes("stage")) return "Ready";
+  if (normalized.includes("run") || normalized.includes("build") || normalized.includes("create") || normalized.includes("generate")) return "In Progress";
+  if (normalized.includes("complete") || normalized.includes("release")) return "Completed";
+  return "Queued";
+}
+
 export function recordAction(action, detail = "Queued from dashboard") {
   const event = {
     id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
     action,
     detail,
-    status: "Queued",
+    status: inferExecutionStatus(action),
     createdAt: new Date().toLocaleString()
   };
   const next = [event, ...getActionLog()].slice(0, 20);
   localStorage.setItem(storageKey, JSON.stringify(next));
   pushNotification(action, detail, "Info");
+
+  const work = queueExecutionWork(action, "Dashboard Command", detail);
+  if (event.status !== "Queued") {
+    advanceExecutionWork(work.id);
+  }
 
   if (action.toLowerCase().includes("approve")) {
     queueApproval(action, "Dashboard Command");
