@@ -1,0 +1,19 @@
+{
+  "name": "kairos-backend-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc --noEmit",
+    "start": "tsx src/server.ts"
+  },
+  "dependencies": {
+    "@types/node": "latest",
+    "express": "latest",
+    "openai": "latest",
+    "tsx": "latest",
+    "typescript": "latest"
+  },
+  "devDependencies": {}
+}
