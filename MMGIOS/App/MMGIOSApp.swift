@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 @main
@@ -6,5 +7,9 @@ struct MMGIOSApp: App {
         WindowGroup {
             AppRootView()
         }
+        .modelContainer(for: [
+            PersistedCustomerRequestRecord.self,
+            PersistedValueDiscoveryProfile.self
+        ])
     }
 }
