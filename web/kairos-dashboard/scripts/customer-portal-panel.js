@@ -4,7 +4,8 @@ import {
   getValueDiscoveryFields,
   getCustomerValueProfile,
   saveCustomerValueProfile,
-  getKairosRecommendations
+  getKairosRecommendations,
+  deriveKairosRecommendations
 } from "./customer-portal-runner.js";
 
 function badgeClass(value) {
@@ -26,7 +27,7 @@ function renderFields(profile) {
 
 function renderRecommendations(items) {
   return items.map(item => `
-    <div class="list-item">
+    <div class="list-item" data-value-recommendation>
       <div>
         <strong>${item.title}</strong>
         <p class="muted">${item.lane} - ${item.detail}</p>
@@ -34,6 +35,21 @@ function renderRecommendations(items) {
       <span class="badge good">Kairos</span>
     </div>
   `).join("");
+}
+
+function readDraftProfile(card) {
+  const input = {};
+  card.querySelectorAll("[data-field]").forEach(field => {
+    input[field.dataset.field] = field.value;
+  });
+  return input;
+}
+
+function refreshDraftRecommendations(card) {
+  const list = card.querySelector("[data-value-recommendations]");
+  if (!list) return;
+  const recommendations = deriveKairosRecommendations(readDraftProfile(card));
+  list.innerHTML = renderRecommendations(recommendations);
 }
 
 function renderCustomerPortalPanel() {
@@ -62,7 +78,7 @@ function renderCustomerPortalPanel() {
     <div class="value-discovery-grid" style="margin-top:16px;">${renderFields(profile)}</div>
     <div class="list" style="margin-top:16px;">
       <div class="list-item"><div><strong>Value Discovery Profile</strong><p class="muted">Completion: ${profile.completionScore || 0}%</p></div><span class="badge good">Profile</span></div>
-      ${renderRecommendations(recommendations)}
+      <div data-value-recommendations>${renderRecommendations(recommendations)}</div>
       ${latest ? latest.items.map(item => `
         <div class="list-item">
           <div>
@@ -76,6 +92,10 @@ function renderCustomerPortalPanel() {
   `;
   view.prepend(card);
 
+  card.querySelectorAll("[data-field]").forEach(field => {
+    field.addEventListener("input", () => refreshDraftRecommendations(card));
+  });
+
   card.querySelector("[data-run-customer-portal]").addEventListener("click", () => {
     runCustomerPortalBuild();
     card.remove();
@@ -83,11 +103,7 @@ function renderCustomerPortalPanel() {
   });
 
   card.querySelector("[data-save-value-discovery]").addEventListener("click", () => {
-    const input = {};
-    card.querySelectorAll("[data-field]").forEach(field => {
-      input[field.dataset.field] = field.value;
-    });
-    saveCustomerValueProfile(input);
+    saveCustomerValueProfile(readDraftProfile(card));
     card.remove();
     renderCustomerPortalPanel();
   });
