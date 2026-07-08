@@ -14,8 +14,8 @@ afterEach(() => {
 });
 
 describe('Kairos auth guard', () => {
-  it('resolves public sessions by default', () => {
-    expect(resolveKairosSession(new Headers())).toEqual({ role: 'public' });
+  it('resolves anonymous public sessions by default', () => {
+    expect(resolveKairosSession(new Headers())).toEqual({ role: 'public', source: 'anonymous' });
   });
 
   it('does not trust role headers unless dev override is explicitly enabled', () => {
@@ -24,7 +24,7 @@ describe('Kairos auth guard', () => {
       'x-kairos-subject': 'local-admin'
     });
 
-    expect(resolveKairosSession(headers)).toEqual({ role: 'public' });
+    expect(resolveKairosSession(headers)).toEqual({ role: 'public', source: 'anonymous' });
   });
 
   it('allows role headers only when the dev override flag is enabled outside production', () => {
@@ -36,7 +36,7 @@ describe('Kairos auth guard', () => {
       'x-kairos-subject': 'local-admin'
     });
 
-    expect(resolveKairosSession(headers)).toEqual({ role: 'admin', subject: 'local-admin' });
+    expect(resolveKairosSession(headers)).toEqual({ role: 'admin', subject: 'local-admin', source: 'development-override' });
   });
 
   it('does not allow role headers in production even when override flag is present', () => {
@@ -48,22 +48,22 @@ describe('Kairos auth guard', () => {
       'x-kairos-subject': 'prod-spoof'
     });
 
-    expect(resolveKairosSession(headers)).toEqual({ role: 'public' });
+    expect(resolveKairosSession(headers)).toEqual({ role: 'public', source: 'anonymous' });
   });
 
   it('allows public mode without authenticated headers', () => {
-    expect(() => authorizeKairosRequest(baseRequest, { role: 'public' })).not.toThrow();
+    expect(() => authorizeKairosRequest(baseRequest, { role: 'public', source: 'anonymous' })).not.toThrow();
   });
 
   it('blocks customer mode for public sessions', () => {
     expect(() =>
-      authorizeKairosRequest({ ...baseRequest, mode: 'customer' }, { role: 'public' })
+      authorizeKairosRequest({ ...baseRequest, mode: 'customer' }, { role: 'public', source: 'anonymous' })
     ).toThrow('Requested Kairos mode is not authorized for this session.');
   });
 
   it('allows admin sessions to access admin mode after trusted session resolution', () => {
     expect(() =>
-      authorizeKairosRequest({ ...baseRequest, mode: 'admin' }, { role: 'admin' })
+      authorizeKairosRequest({ ...baseRequest, mode: 'admin' }, { role: 'admin', source: 'trusted-auth' })
     ).not.toThrow();
   });
 });
