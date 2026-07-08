@@ -8,9 +8,18 @@ const PORT = Number(process.env.KAIROS_LOCAL_PORT || process.env.PORT || 4100);
 const DATA_FILE = resolve(process.env.KAIROS_LOCAL_DATA_FILE || '.kairos/local-operator-state.json');
 const startedAt = new Date();
 
+const customerValueDoctrine = {
+  promise: 'Your Knowledge Has Value.',
+  support: 'Helping you discover it, build it, and share it with the world.',
+  positioning: 'Build around the value only you can provide.',
+  guidance: 'Kairos preserves context, organizes the work, recommends the next action, and helps turn customer knowledge into durable assets.',
+  sequence: ['Outcome', 'Identity', 'Agency', 'Guidance', 'System']
+};
+
 const state = loadState({
-  version: '1.8.0-alpha',
-  mode: 'emergency-local-operator',
+  version: '1.9.0-alpha',
+  mode: 'customer-value-local-operator',
+  doctrine: customerValueDoctrine,
   projects: [],
   productionJobs: [],
   commandQueue: [],
@@ -19,7 +28,7 @@ const state = loadState({
     {
       id: randomUUID(),
       type: 'SYSTEM_STARTED',
-      message: 'Kairos local operator is online.',
+      message: `Kairos local operator is online. ${customerValueDoctrine.promise}`,
       createdAt: startedAt.toISOString()
     }
   ]
@@ -28,6 +37,7 @@ const state = loadState({
 const productionStages = [
   'Intake',
   'Customer Verification',
+  'Value Discovery',
   'Asset Collection',
   'Draft Creation',
   'Internal Review',
@@ -48,6 +58,7 @@ function loadState(defaultState) {
       ...persisted,
       version: defaultState.version,
       mode: defaultState.mode,
+      doctrine: defaultState.doctrine,
       projects: Array.isArray(persisted.projects) ? persisted.projects : [],
       productionJobs: Array.isArray(persisted.productionJobs) ? persisted.productionJobs : [],
       commandQueue: Array.isArray(persisted.commandQueue) ? persisted.commandQueue : [],
@@ -64,6 +75,7 @@ function saveState() {
   writeFileSync(DATA_FILE, JSON.stringify({
     version: state.version,
     mode: state.mode,
+    doctrine: customerValueDoctrine,
     projects: state.projects,
     productionJobs: state.productionJobs,
     commandQueue: state.commandQueue,
@@ -118,6 +130,7 @@ function readBody(req) {
 
 function classifyCommand(command) {
   const text = command.toLowerCase();
+  if (/(value|knowledge|skill|experience|brand|income|asset|opportunity|positioning|discover)/.test(text)) return 'Customer Value Runtime';
   if (/(shopify|listing|product page|product listing)/.test(text)) return 'Shopify Operations';
   if (/(product|book|download|service)/.test(text)) return 'Product Operations';
   if (/(website|homepage|page|seo|image|photo|hero|navigation|link)/.test(text)) return 'Website Operations';
@@ -156,7 +169,8 @@ function createCommandWorkItem(command) {
     priority,
     status: 'Queued',
     dependencies: [],
-    executionNotes: [`Captured from dashboard command block as ${category}.`],
+    doctrineAlignment: category === 'Customer Value Runtime' ? customerValueDoctrine.promise : customerValueDoctrine.positioning,
+    executionNotes: [`Captured from dashboard command block as ${category}.`, customerValueDoctrine.guidance],
     assignedSubsystem: category,
     createdAt: now,
     updatedAt: now
@@ -192,7 +206,7 @@ function visibleProjects(search = '', status = 'All', priority = 'All') {
   const term = search.trim().toLowerCase();
   return state.projects
     .filter(project => {
-      const haystack = [project.orderName, project.customerName, project.customerEmail, project.serviceType, project.status, project.priority].join(' ').toLowerCase();
+      const haystack = [project.orderName, project.customerName, project.customerEmail, project.serviceType, project.status, project.priority, project.valueStatement, project.customerGoal].join(' ').toLowerCase();
       return (!term || haystack.includes(term)) && (status === 'All' || project.status === status) && (priority === 'All' || project.priority === priority);
     })
     .sort((a, b) => priorityWeight(a.priority) - priorityWeight(b.priority) || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -203,7 +217,7 @@ function projectRows(projects = state.projects) {
     <tr>
       <td><a href="/projects/${encodeURIComponent(project.id)}">${escapeHtml(project.orderName)}</a></td>
       <td>${escapeHtml(project.customerName)}<br><small>${escapeHtml(project.customerEmail || '')}</small></td>
-      <td>${escapeHtml(project.serviceType)}</td>
+      <td>${escapeHtml(project.serviceType)}<br><small>${escapeHtml(project.valueStatement || customerValueDoctrine.promise)}</small></td>
       <td>${escapeHtml(project.status)}</td>
       <td><span class="badge">${escapeHtml(project.priority || 'High')}</span></td>
       <td>${projectProgress(project.id)}%</td>
@@ -215,7 +229,7 @@ function projectRows(projects = state.projects) {
 function commandRows() {
   return state.commandQueue.slice(0, 12).map(command => `
     <tr>
-      <td>${escapeHtml(command.title)}<br><small>${escapeHtml(command.originalCommand)}</small></td>
+      <td>${escapeHtml(command.title)}<br><small>${escapeHtml(command.originalCommand)}</small><br><small>${escapeHtml(command.doctrineAlignment || customerValueDoctrine.promise)}</small></td>
       <td><span class="badge">${escapeHtml(command.priority)}</span></td>
       <td>${escapeHtml(command.category)}</td>
       <td>${escapeHtml(command.status)}</td>
@@ -234,17 +248,20 @@ function pageShell(inner) {
     :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     body { margin: 0; background: #020617; color: #f8fafc; }
     main { max-width: 1180px; margin: 0 auto; padding: 32px; }
-    .hero, .card, .command { border: 1px solid rgba(255,255,255,.12); background: linear-gradient(135deg, rgba(255,255,255,.09), rgba(255,255,255,.035)); border-radius: 28px; padding: 24px; box-shadow: 0 24px 80px rgba(0,0,0,.35); }
-    .hero, .command { margin-bottom: 20px; }
+    .hero, .card, .command, .doctrine { border: 1px solid rgba(255,255,255,.12); background: linear-gradient(135deg, rgba(255,255,255,.09), rgba(255,255,255,.035)); border-radius: 28px; padding: 24px; box-shadow: 0 24px 80px rgba(0,0,0,.35); }
+    .hero, .command, .doctrine { margin-bottom: 20px; }
+    .hero { border-color: rgba(56,189,248,.42); background: radial-gradient(circle at top left, rgba(56,189,248,.20), transparent 38%), linear-gradient(135deg, rgba(255,255,255,.10), rgba(255,255,255,.035)); }
     .command { border-color: rgba(56,189,248,.38); background: radial-gradient(circle at top left, rgba(56,189,248,.20), transparent 42%), linear-gradient(135deg, rgba(255,255,255,.10), rgba(255,255,255,.035)); }
+    .doctrine { border-color: rgba(125,211,252,.34); }
     .kicker { color: #38bdf8; text-transform: uppercase; letter-spacing: .28em; font-size: 12px; font-weight: 700; }
-    h1 { font-size: clamp(32px, 6vw, 64px); margin: 12px 0 8px; letter-spacing: -.04em; }
+    h1 { font-size: clamp(36px, 7vw, 76px); margin: 12px 0 8px; letter-spacing: -.055em; line-height: .95; }
     h2 { margin: 10px 0; }
     p { color: rgba(248,250,252,.68); line-height: 1.65; }
     .grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; margin: 20px 0; }
-    .metric { border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.055); border-radius: 20px; padding: 18px; }
-    .metric span { color: rgba(248,250,252,.58); font-size: 13px; }
-    .metric strong { display: block; font-size: 30px; margin-top: 8px; }
+    .metric, .doctrine-step { border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.055); border-radius: 20px; padding: 18px; }
+    .metric span, .doctrine-step span { color: rgba(248,250,252,.58); font-size: 13px; }
+    .metric strong, .doctrine-step strong { display: block; font-size: 30px; margin-top: 8px; }
+    .doctrine-grid { display:grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
     table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 18px; }
     th, td { text-align: left; padding: 13px 14px; border-bottom: 1px solid rgba(255,255,255,.08); font-size: 14px; vertical-align: top; }
     th { color: rgba(248,250,252,.56); font-size: 12px; text-transform: uppercase; letter-spacing: .16em; }
@@ -261,7 +278,7 @@ function pageShell(inner) {
     .form-grid { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
     button, a.button { border: 1px solid rgba(56,189,248,.45); background: rgba(56,189,248,.12); color: #7dd3fc; padding: 11px 14px; border-radius: 999px; text-decoration: none; font-weight: 700; cursor: pointer; }
     code { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.1); padding: 2px 6px; border-radius: 7px; }
-    @media (max-width: 820px) { .grid, .split, .form-grid { grid-template-columns: 1fr; } main { padding: 18px; } }
+    @media (max-width: 820px) { .grid, .split, .form-grid, .doctrine-grid { grid-template-columns: 1fr; } main { padding: 18px; } }
   </style></head><body><main>${inner}</main></body></html>`;
 }
 
@@ -272,35 +289,42 @@ function html(res) {
   const rows = projectRows(visibleProjects(''));
   const body = pageShell(`
     <section class="hero">
-      <div class="kicker">Kairos v${state.version}</div>
-      <h1>MMG operating console is online.</h1>
-      <p>This local operator runs with plain Node.js. It lets Kairos capture work, manage projects, and operate without Docker, pnpm, GitHub Actions, Codespaces, or CI minutes.</p>
-      <div class="actions"><button onclick="createMockOrder()">Create mock Shopify order</button><button onclick="advanceFirstJob()">Advance first ready job</button><button onclick="resetState()">Reset local state</button><a class="button" href="/api/status">Status JSON</a><a class="button" href="/api/dashboard">Dashboard JSON</a><a class="button" href="/api/export">Export state</a></div>
+      <div class="kicker">Kairos v${state.version} · Customer Value Runtime</div>
+      <h1>${customerValueDoctrine.promise}</h1>
+      <p>${customerValueDoctrine.support} ${customerValueDoctrine.guidance}</p>
+      <div class="actions"><button onclick="createMockOrder()">Create value discovery order</button><button onclick="advanceFirstJob()">Advance first ready job</button><button onclick="resetState()">Reset local state</button><a class="button" href="/api/status">Status JSON</a><a class="button" href="/api/dashboard">Dashboard JSON</a><a class="button" href="/api/export">Export state</a></div>
+    </section>
+
+    <section class="doctrine">
+      <div class="kicker">MMG Customer Promise</div>
+      <h2>${customerValueDoctrine.positioning}</h2>
+      <p>Kairos now treats each customer project as a value-discovery path: identify what the customer already knows, organize it, package it into useful assets, and guide the next action without hype or shortcut promises.</p>
+      <div class="doctrine-grid">${customerValueDoctrine.sequence.map((step, index) => `<div class="doctrine-step"><span>Layer ${index + 1}</span><strong>${escapeHtml(step)}</strong></div>`).join('')}</div>
     </section>
 
     <section class="command">
       <div class="kicker">P1 Command Block</div>
-      <h2>Tell Kairos what to do next</h2>
-      <p>Enter operational work here: add a product, update the website, replace an image, create a listing, queue Shopify work, build content, or assign a dashboard change.</p>
-      <textarea id="commandInput" placeholder="Tell Kairos what to do next: add a product, update the website, replace an image..."></textarea>
+      <h2>Tell Kairos what to build from the value already present</h2>
+      <p>Enter operational work here: uncover customer knowledge, build a product, update the website, replace an image, create a listing, queue Shopify work, or turn content into a durable asset.</p>
+      <textarea id="commandInput" placeholder="Example: Help this customer turn their HVAC experience into a guide, content series, and service offer..."></textarea>
       <div class="actions"><button onclick="submitCommand()">Queue command</button><button onclick="clearCommand()">Clear</button><a class="button" href="/api/commands">Command queue JSON</a></div>
       <h2>Recent command queue</h2>
       <table><thead><tr><th>Command</th><th>Priority</th><th>Category</th><th>Status</th><th>Created</th><th>Update</th></tr></thead><tbody id="commandRows">${commandRows() || '<tr><td colspan="6">No commands queued yet.</td></tr>'}</tbody></table>
     </section>
 
-    <section class="grid"><div class="metric"><span>Mode</span><strong>Local</strong></div><div class="metric"><span>Commands</span><strong>${queuedCommands}</strong></div><div class="metric"><span>Projects</span><strong>${state.projects.length}</strong></div><div class="metric"><span>Production Jobs</span><strong>${activeJobs}</strong></div><div class="metric"><span>Revenue Signal</span><strong>$${revenueToday.toFixed(2)}</strong></div></section>
+    <section class="grid"><div class="metric"><span>Mode</span><strong>Value</strong></div><div class="metric"><span>Commands</span><strong>${queuedCommands}</strong></div><div class="metric"><span>Projects</span><strong>${state.projects.length}</strong></div><div class="metric"><span>Production Jobs</span><strong>${activeJobs}</strong></div><div class="metric"><span>Revenue Signal</span><strong>$${revenueToday.toFixed(2)}</strong></div></section>
 
-    <section class="card"><div class="kicker">Manual Intake</div><h2>Create a real operating project</h2><p>Use this when MMG needs to track work before Shopify webhooks are connected. It creates the same Kairos project and production workflow as a Shopify order.</p><div class="form-grid"><input id="manualCustomerName" placeholder="Customer name" /><input id="manualCustomerEmail" placeholder="Customer email" /><select id="manualServiceType"><option>Publishing Service</option><option>Book Production</option><option>Product Page Build</option><option>Knowledge Library Article</option><option>Marketing Campaign</option><option>Custom Kairos Project</option></select><input id="manualOrderTotal" placeholder="Order total, e.g. 49.00" /></div><div class="actions"><button onclick="createManualProject()">Create Kairos project</button></div></section>
+    <section class="card"><div class="kicker">Value Discovery Intake</div><h2>Create a real operating project</h2><p>Capture what the customer knows, what they want to build, and how Kairos should organize it into assets, content, products, or service work.</p><div class="form-grid"><input id="manualCustomerName" placeholder="Customer name" /><input id="manualCustomerEmail" placeholder="Customer email" /><input id="manualValueStatement" placeholder="What knowledge, skill, or experience has value?" /><input id="manualCustomerGoal" placeholder="Goal: extra income, audience, product, service..." /><select id="manualServiceType"><option>Value Discovery</option><option>Publishing Service</option><option>Book Production</option><option>Product Page Build</option><option>Knowledge Library Article</option><option>Marketing Campaign</option><option>Custom Kairos Project</option></select><input id="manualOrderTotal" placeholder="Order total, e.g. 49.00" /></div><div class="actions"><button onclick="createManualProject()">Create Kairos project</button></div></section>
 
-    <section class="split"><div class="card"><div class="kicker">Customer Intake Engine</div><h2>Projects created from Shopify orders</h2><div class="actions"><input id="projectSearch" placeholder="Search customer, email, order, service..." oninput="filterProjects()" /><select id="statusFilter" onchange="filterProjects()"><option>All</option><option>Intake</option><option>Customer Verification</option><option>Asset Collection</option><option>Draft Creation</option><option>Internal Review</option><option>Quality Assurance</option><option>Customer Review</option><option>Revision</option><option>Final Approval</option><option>Delivery</option><option>Delivered</option></select><select id="priorityFilter" onchange="filterProjects()"><option>All</option><option>Critical</option><option>High</option><option>Medium</option><option>Low</option></select></div><table><thead><tr><th>Order</th><th>Customer</th><th>Service</th><th>Status</th><th>Priority</th><th>Progress</th><th>Total</th></tr></thead><tbody id="projectRows">${rows || '<tr><td colspan="7">No projects yet. Click Create mock Shopify order to test the operating loop.</td></tr>'}</tbody></table><p>Real endpoint: <code>POST /api/intake/shopify-order</code>. Command endpoint: <code>POST /api/commands</code>.</p></div><div class="card"><div class="kicker">Operating Feed</div><h2>Latest events</h2><ul class="feed">${state.events.slice(0,8).map(event => `<li><span class="badge">${escapeHtml(event.type)}</span><br><strong>${escapeHtml(new Date(event.createdAt).toLocaleString())}</strong><br>${escapeHtml(event.message)}</li>`).join('')}</ul></div></section>
+    <section class="split"><div class="card"><div class="kicker">Customer Intake Engine</div><h2>Projects created from Shopify orders</h2><div class="actions"><input id="projectSearch" placeholder="Search customer, email, order, service, goal, value..." oninput="filterProjects()" /><select id="statusFilter" onchange="filterProjects()"><option>All</option><option>Intake</option><option>Customer Verification</option><option>Value Discovery</option><option>Asset Collection</option><option>Draft Creation</option><option>Internal Review</option><option>Quality Assurance</option><option>Customer Review</option><option>Revision</option><option>Final Approval</option><option>Delivery</option><option>Delivered</option></select><select id="priorityFilter" onchange="filterProjects()"><option>All</option><option>Critical</option><option>High</option><option>Medium</option><option>Low</option></select></div><table><thead><tr><th>Order</th><th>Customer</th><th>Service / Value</th><th>Status</th><th>Priority</th><th>Progress</th><th>Total</th></tr></thead><tbody id="projectRows">${rows || '<tr><td colspan="7">No projects yet. Create a value discovery order to test the operating loop.</td></tr>'}</tbody></table><p>Real endpoint: <code>POST /api/intake/shopify-order</code>. Command endpoint: <code>POST /api/commands</code>.</p></div><div class="card"><div class="kicker">Operating Feed</div><h2>Latest events</h2><ul class="feed">${state.events.slice(0,8).map(event => `<li><span class="badge">${escapeHtml(event.type)}</span><br><strong>${escapeHtml(new Date(event.createdAt).toLocaleString())}</strong><br>${escapeHtml(event.message)}</li>`).join('')}</ul></div></section>
 
     <script>
       async function submitCommand() { const input = document.getElementById('commandInput'); const command = input.value.trim(); if (!command) return; await fetch('/api/commands', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ command }) }); location.reload(); }
       function clearCommand() { document.getElementById('commandInput').value = ''; }
       async function updateCommandStatus(id, status) { await fetch('/api/commands/' + id + '/status', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ status }) }); location.reload(); }
       async function filterProjects() { const search = encodeURIComponent(document.getElementById('projectSearch').value || ''); const status = encodeURIComponent(document.getElementById('statusFilter').value || 'All'); const priority = encodeURIComponent(document.getElementById('priorityFilter').value || 'All'); const result = await (await fetch('/api/projects/table?search=' + search + '&status=' + status + '&priority=' + priority)).json(); document.getElementById('projectRows').innerHTML = result.html || '<tr><td colspan="7">No matching projects.</td></tr>'; }
-      async function createMockOrder() { const id = Date.now(); await fetch('/api/intake/shopify-order', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: 'gid://shopify/Order/' + id, name: '#' + String(id).slice(-6), email: 'customer@example.com', totalPrice: '49.00', customer: { id: 'gid://shopify/Customer/501', displayName: 'Example Customer', email: 'customer@example.com' }, lineItems: [{ shopifyLineItemId: 'line_' + id, title: 'Publishing Service Intake', quantity: 1, productType: 'Publishing Service', requiresProduction: true }] }) }); location.reload(); }
-      async function createManualProject() { const payload = { customerName: document.getElementById('manualCustomerName').value.trim() || 'Manual Customer', customerEmail: document.getElementById('manualCustomerEmail').value.trim() || 'manual@example.com', serviceType: document.getElementById('manualServiceType').value, orderTotal: document.getElementById('manualOrderTotal').value.trim() || '0' }; await fetch('/api/intake/manual-project', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }); location.reload(); }
+      async function createMockOrder() { const id = Date.now(); await fetch('/api/intake/shopify-order', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: 'gid://shopify/Order/' + id, name: '#' + String(id).slice(-6), email: 'customer@example.com', totalPrice: '49.00', valueStatement: 'Customer has practical knowledge that can become a guide, content series, and offer.', customerGoal: 'Build an extra income path from existing experience.', customer: { id: 'gid://shopify/Customer/501', displayName: 'Example Customer', email: 'customer@example.com' }, lineItems: [{ shopifyLineItemId: 'line_' + id, title: 'Value Discovery Intake', quantity: 1, productType: 'Value Discovery', requiresProduction: true }] }) }); location.reload(); }
+      async function createManualProject() { const payload = { customerName: document.getElementById('manualCustomerName').value.trim() || 'Manual Customer', customerEmail: document.getElementById('manualCustomerEmail').value.trim() || 'manual@example.com', valueStatement: document.getElementById('manualValueStatement').value.trim() || 'Customer knowledge has value.', customerGoal: document.getElementById('manualCustomerGoal').value.trim() || 'Discover, build, and share value.', serviceType: document.getElementById('manualServiceType').value, orderTotal: document.getElementById('manualOrderTotal').value.trim() || '0' }; await fetch('/api/intake/manual-project', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }); location.reload(); }
       async function advanceFirstJob() { const jobs = await (await fetch('/api/production/jobs')).json(); const job = jobs.find(j => j.status !== 'Complete'); if (!job) return alert('No open production jobs.'); await fetch('/api/production/jobs/' + job.id + '/advance', { method: 'POST' }); location.reload(); }
       async function resetState() { if (!confirm('Reset local Kairos state?')) return; await fetch('/api/reset', { method: 'POST' }); location.reload(); }
     </script>
@@ -314,7 +338,7 @@ function projectDetailHtml(res, projectId) {
   if (!project) return json(res, 404, { error: 'Project not found.' });
   const jobs = state.productionJobs.filter(job => job.projectId === projectId).sort((a, b) => a.sequence - b.sequence);
   const jobRows = jobs.map(job => `<tr><td>${job.sequence}</td><td>${escapeHtml(job.stage)}</td><td><span class="badge">${escapeHtml(job.status)}</span></td><td>${job.completedAt ? escapeHtml(new Date(job.completedAt).toLocaleString()) : '—'}</td><td>${job.status === 'Ready' ? `<button onclick="advanceJob('${job.id}')">Complete stage</button>` : ''}</td></tr>`).join('');
-  const body = pageShell(`<section class="hero"><div class="kicker">Project Detail</div><h1>${escapeHtml(project.orderName)} · ${escapeHtml(project.customerName)}</h1><p>Service: <strong>${escapeHtml(project.serviceType)}</strong> · Status: <strong>${escapeHtml(project.status)}</strong> · Progress: <strong>${projectProgress(project.id)}%</strong></p><div class="actions"><a class="button" href="/">Back to console</a><a class="button" href="/api/projects/${encodeURIComponent(project.id)}">Project JSON</a></div></section><section class="card"><div class="kicker">Production Workflow</div><h2>Stage controls</h2><table><thead><tr><th>#</th><th>Stage</th><th>Status</th><th>Completed</th><th>Action</th></tr></thead><tbody>${jobRows}</tbody></table></section><section class="card" style="margin-top:18px"><div class="kicker">Operator Notes</div><h2>Project notes</h2><div class="actions"><input id="noteText" placeholder="Add customer, production, or delivery note..." /><button onclick="addNote()">Add note</button></div><ul class="feed">${state.notes.filter(note => note.projectId === project.id).slice(0,12).map(note => `<li><span class="badge">${escapeHtml(note.type || 'NOTE')}</span><br><strong>${escapeHtml(new Date(note.createdAt).toLocaleString())}</strong><br>${escapeHtml(note.text)}</li>`).join('') || '<li>No notes yet.</li>'}</ul></section><script>async function advanceJob(id){await fetch('/api/production/jobs/'+id+'/advance',{method:'POST'});location.reload();} async function addNote(){const input=document.getElementById('noteText');const text=input.value.trim();if(!text)return;await fetch('/api/projects/${encodeURIComponent(project.id)}/notes',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text,type:'OPERATOR_NOTE'})});location.reload();}</script>`);
+  const body = pageShell(`<section class="hero"><div class="kicker">Project Detail · Value Stewardship</div><h1>${escapeHtml(project.orderName)} · ${escapeHtml(project.customerName)}</h1><p>${escapeHtml(project.valueStatement || customerValueDoctrine.promise)}</p><p>Goal: <strong>${escapeHtml(project.customerGoal || customerValueDoctrine.support)}</strong></p><p>Service: <strong>${escapeHtml(project.serviceType)}</strong> · Status: <strong>${escapeHtml(project.status)}</strong> · Progress: <strong>${projectProgress(project.id)}%</strong></p><div class="actions"><a class="button" href="/">Back to console</a><a class="button" href="/api/projects/${encodeURIComponent(project.id)}">Project JSON</a></div></section><section class="card"><div class="kicker">Production Workflow</div><h2>Stage controls</h2><table><thead><tr><th>#</th><th>Stage</th><th>Status</th><th>Completed</th><th>Action</th></tr></thead><tbody>${jobRows}</tbody></table></section><section class="card" style="margin-top:18px"><div class="kicker">Operator Notes</div><h2>Project notes</h2><div class="actions"><input id="noteText" placeholder="Add customer value, production, or delivery note..." /><button onclick="addNote()">Add note</button></div><ul class="feed">${state.notes.filter(note => note.projectId === project.id).slice(0,12).map(note => `<li><span class="badge">${escapeHtml(note.type || 'NOTE')}</span><br><strong>${escapeHtml(new Date(note.createdAt).toLocaleString())}</strong><br>${escapeHtml(note.text)}</li>`).join('') || '<li>No notes yet.</li>'}</ul></section><script>async function advanceJob(id){await fetch('/api/production/jobs/'+id+'/advance',{method:'POST'});location.reload();} async function addNote(){const input=document.getElementById('noteText');const text=input.value.trim();if(!text)return;await fetch('/api/projects/${encodeURIComponent(project.id)}/notes',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text,type:'VALUE_STEWARDSHIP_NOTE'})});location.reload();}</script>`);
   res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
   res.end(body);
 }
@@ -322,9 +346,11 @@ function projectDetailHtml(res, projectId) {
 function dashboard() {
   const revenueToday = state.projects.reduce((sum, project) => sum + Number(project.orderTotal || 0), 0);
   return {
+    doctrine: customerValueDoctrine,
     revenueToday,
     ordersToday: state.projects.length,
     activeProjects: state.projects.filter(project => project.status !== 'Archived').length,
+    valueDiscoveryProjects: state.projects.filter(project => project.status === 'Value Discovery' || project.serviceType === 'Value Discovery').length,
     productionQueue: state.productionJobs.filter(job => job.status !== 'Complete').length,
     commandQueue: state.commandQueue.filter(command => !['Completed', 'Cancelled'].includes(command.status)).length,
     p1Commands: state.commandQueue.filter(command => command.priority === 'P1' && !['Completed', 'Cancelled'].includes(command.status)).length,
@@ -336,7 +362,7 @@ function dashboard() {
     automationRunning: 0,
     shopifySyncHealthy: false,
     systemStatus: 'Healthy',
-    source: 'emergency-local-operator',
+    source: 'customer-value-local-operator',
     dataFile: DATA_FILE
   };
 }
@@ -348,10 +374,10 @@ async function intake(req, res) {
   if (existing) return json(res, 200, { duplicate: true, project: existing });
   const lineItem = Array.isArray(order.lineItems) ? order.lineItems[0] : undefined;
   const projectId = randomUUID();
-  const project = { id: projectId, shopifyOrderId: order.id, orderName: order.name, customerId: order.customer?.id ?? order.email ?? 'unknown-customer', customerName: order.customer?.displayName ?? order.email ?? 'Unknown Customer', customerEmail: order.customer?.email ?? order.email ?? null, serviceType: lineItem?.productType ?? lineItem?.title ?? 'Shopify Service Order', status: 'Intake', priority: 'High', orderTotal: Number(order.totalPrice ?? order.currentTotalPrice ?? 0), createdAt: new Date().toISOString() };
+  const project = { id: projectId, shopifyOrderId: order.id, orderName: order.name, customerId: order.customer?.id ?? order.email ?? 'unknown-customer', customerName: order.customer?.displayName ?? order.email ?? 'Unknown Customer', customerEmail: order.customer?.email ?? order.email ?? null, serviceType: lineItem?.productType ?? lineItem?.title ?? 'Shopify Service Order', valueStatement: order.valueStatement ?? lineItem?.valueStatement ?? customerValueDoctrine.promise, customerGoal: order.customerGoal ?? customerValueDoctrine.support, doctrineAlignment: customerValueDoctrine.positioning, status: 'Intake', priority: 'High', orderTotal: Number(order.totalPrice ?? order.currentTotalPrice ?? 0), createdAt: new Date().toISOString() };
   state.projects.push(project);
   for (const [index, stage] of productionStages.entries()) state.productionJobs.push({ id: randomUUID(), projectId, stage, sequence: index + 1, status: index === 0 ? 'Ready' : 'Queued', createdAt: new Date().toISOString() });
-  recordEvent('PROJECT_CREATED', `${project.orderName} created ${productionStages.length} Kairos production jobs.`, { projectId });
+  recordEvent('PROJECT_CREATED', `${project.orderName} created ${productionStages.length} Kairos production jobs around customer value.`, { projectId });
   return json(res, 201, { project, productionJobs: state.productionJobs.filter(job => job.projectId === projectId) });
 }
 
@@ -381,19 +407,19 @@ async function addProjectNote(req, res, projectId) {
   const body = await readBody(req);
   const text = String(body.text || '').trim();
   if (!text) return json(res, 400, { error: 'Note text is required.' });
-  const note = { id: randomUUID(), projectId, type: body.type || 'OPERATOR_NOTE', text, createdAt: new Date().toISOString() };
+  const note = { id: randomUUID(), projectId, type: body.type || 'VALUE_STEWARDSHIP_NOTE', text, createdAt: new Date().toISOString() };
   state.notes.unshift(note);
-  recordEvent('NOTE_ADDED', `Note added to ${project.orderName}.`, { projectId, noteId: note.id });
+  recordEvent('NOTE_ADDED', `Value stewardship note added to ${project.orderName}.`, { projectId, noteId: note.id });
   return json(res, 201, { note });
 }
 
 async function manualProject(req, res) {
   const body = await readBody(req);
   const id = Date.now();
-  return intake({ ...req, on(event, handler) { if (event === 'data') handler(Buffer.from(JSON.stringify({ id: body.shopifyOrderId || `manual-${id}`, name: body.orderName || `MANUAL-${String(id).slice(-6)}`, email: body.customerEmail || 'manual@example.com', totalPrice: body.orderTotal || '0', customer: { displayName: body.customerName || 'Manual Customer', email: body.customerEmail || 'manual@example.com' }, lineItems: [{ title: body.serviceType || 'Manual Kairos Project', productType: body.serviceType || 'Manual Project', requiresProduction: true }] }))); if (event === 'end') handler(); } }, res);
+  return intake({ ...req, on(event, handler) { if (event === 'data') handler(Buffer.from(JSON.stringify({ id: body.shopifyOrderId || `manual-${id}`, name: body.orderName || `MANUAL-${String(id).slice(-6)}`, email: body.customerEmail || 'manual@example.com', totalPrice: body.orderTotal || '0', valueStatement: body.valueStatement || customerValueDoctrine.promise, customerGoal: body.customerGoal || customerValueDoctrine.support, customer: { displayName: body.customerName || 'Manual Customer', email: body.customerEmail || 'manual@example.com' }, lineItems: [{ title: body.serviceType || 'Value Discovery', productType: body.serviceType || 'Value Discovery', valueStatement: body.valueStatement || customerValueDoctrine.promise, requiresProduction: true }] }))); if (event === 'end') handler(); } }, res);
 }
 
-function exportState() { return { exportedAt: new Date().toISOString(), version: state.version, mode: state.mode, dashboard: dashboard(), commandQueue: state.commandQueue, projects: state.projects, productionJobs: state.productionJobs, notes: state.notes, events: state.events }; }
+function exportState() { return { exportedAt: new Date().toISOString(), version: state.version, mode: state.mode, doctrine: customerValueDoctrine, dashboard: dashboard(), commandQueue: state.commandQueue, projects: state.projects, productionJobs: state.productionJobs, notes: state.notes, events: state.events }; }
 function resetLocalState() { state.projects = []; state.productionJobs = []; state.commandQueue = []; state.notes = []; state.events = []; recordEvent('STATE_RESET', 'Kairos local operator state was reset.'); }
 
 const server = http.createServer(async (req, res) => {
@@ -401,7 +427,7 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
     if (req.method === 'OPTIONS') return json(res, 204, {});
     if (req.method === 'GET' && url.pathname === '/') return html(res);
-    if (req.method === 'GET' && url.pathname === '/api/status') return json(res, 200, { ok: true, service: 'kairos-emergency-local-operator', version: state.version, mode: state.mode, startedAt: startedAt.toISOString(), uptimeSeconds: Math.round(process.uptime()), githubActions: 'manual-only; not used by this operator', dataFile: DATA_FILE });
+    if (req.method === 'GET' && url.pathname === '/api/status') return json(res, 200, { ok: true, service: 'kairos-customer-value-local-operator', version: state.version, mode: state.mode, doctrine: customerValueDoctrine, startedAt: startedAt.toISOString(), uptimeSeconds: Math.round(process.uptime()), githubActions: 'manual-only; not used by this operator', dataFile: DATA_FILE });
     if (req.method === 'GET' && url.pathname === '/api/dashboard') return json(res, 200, dashboard());
     if (req.method === 'GET' && url.pathname === '/api/export') return json(res, 200, exportState());
     if (req.method === 'GET' && url.pathname === '/api/commands') return json(res, 200, state.commandQueue);
@@ -430,6 +456,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Kairos local operator online: http://localhost:${PORT}`);
-  console.log('No Docker, pnpm, GitHub Actions, Codespaces, or CI minutes required.');
+  console.log(`Kairos customer value operator online: http://localhost:${PORT}`);
+  console.log('Customer promise active: Your Knowledge Has Value.');
 });
