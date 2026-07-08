@@ -23,6 +23,10 @@ This release package records the customer-value runtime work added to the MMG-IO
 - Expanded the dashboard runtime with income, asset, audience, and execution pathways.
 - Seeded customer-value pathways, stronger guidance rules, and expanded tone guardrails into dashboard state.
 - Bound dashboard doctrine rendering directly to `kairosState.brandDoctrine` and `kairosState.stewardshipDoctrine`.
+- Added a Shopify homepage customer-value hero markup package.
+- Added Shopify homepage hero styling and installation notes.
+- Added a reusable Shopify product-page customer-value block.
+- Added Shopify product-page value-block styling and installation notes.
 
 ## Canonical Brand Language
 
@@ -51,6 +55,14 @@ The dashboard runtime should now frame customer-facing work through four practic
 
 These pathways must support practical opportunity without income guarantees, get-rich framing, shortcut claims, or hype-first language.
 
+## Shopify Customer-Facing Surfaces
+
+The Shopify homepage package leads with the canonical customer promise and frames MMG / Kairos as a system for discovering, building, and sharing customer knowledge.
+
+The Shopify product-page block positions products as tools inside the broader value-building system instead of isolated purchases.
+
+Both surfaces reinforce practical guidance, education, stewardship, execution, and long-term value while avoiding shortcut or guaranteed-outcome claims.
+
 ## Implementation Surfaces Updated
 
 - `kairos-web-admin/scripts/kairos-operate-local.mjs`
@@ -59,6 +71,12 @@ These pathways must support practical opportunity without income guarantees, get
 - `web/kairos-dashboard/scripts/dashboard.js`
 - `web/kairos-dashboard/scripts/command-center-brief-engine.js`
 - `web/kairos-dashboard/scripts/command-center-brief-panel.js`
+- `shopify/homepage/customer-value-hero.html`
+- `shopify/homepage/customer-value-hero.css`
+- `shopify/homepage/customer-value-hero-install.md`
+- `shopify/products/customer-value-product-block.html`
+- `shopify/products/customer-value-product-block.css`
+- `shopify/products/customer-value-product-block-install.md`
 - `MMGIOS/Shared/Components/MetricCard.swift`
 - `MMGIOS/Features/CustomerValue/CustomerValueOverviewView.swift`
 - `MMGIOS/App/AppRootView.swift`
@@ -71,4 +89,4 @@ Changes were committed through the connected GitHub app and marked to avoid unne
 
 ## Next Recommended Batch
 
-The next implementation batch should inspect the public website and Shopify-facing page source and wire the customer-value promise into the actual customer-facing hero, product, service, onboarding, or commerce surfaces.
+The next implementation batch should create service-page and onboarding customer-value surfaces so services and intake flows match the same customer-facing promise and guardrails.
