@@ -1,0 +1,81 @@
+name: Manual iOS Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref_name:
+        description: Branch, tag, or SHA to validate
+        required: false
+        default: main
+      simulator_name:
+        description: iOS simulator device name
+        required: false
+        default: iPhone 16
+
+concurrency:
+  group: manual-ios-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-ios:
+    name: Build MMGIOS on cloud macOS
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout requested ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref_name }}
+
+      - name: Show Xcode version
+        run: |
+          xcodebuild -version
+          xcode-select -p
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: List schemes
+        run: xcodebuild -list -project MMGIOS.xcodeproj
+
+      - name: Resolve packages
+        run: xcodebuild -resolvePackageDependencies -project MMGIOS.xcodeproj -scheme MMGIOS
+
+      - name: Build for iOS simulator
+        run: |
+          set -o pipefail
+          DESTINATION="platform=iOS Simulator,name=${{ inputs.simulator_name }}"
+          xcodebuild \
+            -project MMGIOS.xcodeproj \
+            -scheme MMGIOS \
+            -destination "$DESTINATION" \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Validate required Value Discovery source files
+        run: |
+          test -f MMGIOS/Features/CustomerPortal/PersistedValueDiscoveryProfile.swift
+          test -f MMGIOS/Features/CustomerPortal/ValueDiscoveryDraftProfile.swift
+          test -f MMGIOS/Features/CustomerPortal/ValueDiscoveryProfileSection.swift
+          test -f MMGIOS/Features/CustomerPortal/CustomerPortalView.swift
+          test -f MMGIOS/App/AppRootView.swift
+          grep -q "PersistedValueDiscoveryProfile" MMGIOS/App/MMGIOSApp.swift
+          grep -q "CustomerPortalView" MMGIOS/App/AppRootView.swift
+          grep -q "ValueDiscoveryProfileSection" MMGIOS/Features/CustomerPortal/CustomerPortalView.swift
+
+      - name: Validate web and Shopify surfaces
+        run: |
+          test -f web/kairos-dashboard/index.html
+          test -f web/kairos-dashboard/scripts/customer-portal-runner.js
+          test -f web/kairos-dashboard/scripts/customer-portal-panel.js
+          test -f web/kairos-dashboard/styles/value-discovery.css
+          test -f shopify/homepage/customer-value-hero.html
+          test -f shopify/products/customer-value-product-block.html
+          grep -q "value-discovery.css" web/kairos-dashboard/index.html
+          grep -q "Your Knowledge Has Value" shopify/homepage/customer-value-hero.html
+          grep -q "Your Knowledge Has Value" shopify/products/customer-value-product-block.html
