@@ -7,30 +7,32 @@ import type {
   KairosWorkOrderRecord
 } from './models';
 
+export type KairosCreateRecord<T extends { id: string; createdAt: string; updatedAt: string }> = Omit<T, 'id' | 'createdAt' | 'updatedAt'>;
+
 export interface KairosConversationRepository {
-  create(record: Omit<KairosConversationRecord, 'id' | 'createdAt' | 'updatedAt'>): KairosConversationRecord;
+  create(record: KairosCreateRecord<KairosConversationRecord>): KairosConversationRecord;
   findById(id: string): KairosConversationRecord | null;
   listByOwner(owner: KairosRecordOwner): KairosConversationRecord[];
 }
 
 export interface KairosMessageRepository {
-  append(record: Omit<KairosMessageRecord, 'id' | 'createdAt' | 'updatedAt'>): KairosMessageRecord;
+  append(record: KairosCreateRecord<KairosMessageRecord>): KairosMessageRecord;
   listByConversation(conversationId: string): KairosMessageRecord[];
 }
 
 export interface KairosAuditRepository {
-  record(record: Omit<KairosAuditRecord, 'id' | 'createdAt' | 'updatedAt'>): KairosAuditRecord;
+  record(record: KairosCreateRecord<KairosAuditRecord>): KairosAuditRecord;
   list(limit?: number): KairosAuditRecord[];
 }
 
 export interface KairosWorkOrderRepository {
-  create(record: Omit<KairosWorkOrderRecord, 'id' | 'createdAt' | 'updatedAt'>): KairosWorkOrderRecord;
+  create(record: KairosCreateRecord<KairosWorkOrderRecord>): KairosWorkOrderRecord;
   findById(id: string): KairosWorkOrderRecord | null;
-  update(id: string, patch: Partial<Omit<KairosWorkOrderRecord, 'id' | 'createdAt'>>): KairosWorkOrderRecord;
+  update(id: string, patch: Partial<KairosCreateRecord<KairosWorkOrderRecord>>): KairosWorkOrderRecord;
 }
 
 export interface KairosKnowledgeEventRepository {
-  create(record: Omit<KairosKnowledgeEventRecord, 'id' | 'createdAt' | 'updatedAt'>): KairosKnowledgeEventRecord;
+  create(record: KairosCreateRecord<KairosKnowledgeEventRecord>): KairosKnowledgeEventRecord;
   listByStatus(status: KairosKnowledgeEventRecord['status']): KairosKnowledgeEventRecord[];
 }
 
