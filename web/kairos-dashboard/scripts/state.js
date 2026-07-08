@@ -1,9 +1,9 @@
 export const kairosState = {
   operator: "Mike",
-  mode: "Build",
-  health: 96,
-  readiness: 48,
-  activeBatch: "Bundle Packaging Engine",
+  mode: "Operation",
+  health: 97,
+  readiness: 64,
+  activeBatch: "Kairos Operation Mode",
   modules: [
     { id: "dashboard", label: "Dashboard", icon: "⌘" },
     { id: "website", label: "Website Ops", icon: "◎" },
@@ -17,36 +17,36 @@ export const kairosState = {
     { id: "system", label: "System", icon: "⚙" }
   ],
   kpis: [
-    { label: "System Health", value: "96%", trend: "+2%", tone: "good" },
-    { label: "Readiness", value: "48%", trend: "+6%", tone: "warn" },
-    { label: "Open Tasks", value: "31", trend: "Active", tone: "info" },
-    { label: "Bundles", value: "4", trend: "Packaging", tone: "good" }
+    { label: "System Health", value: "97%", trend: "+1%", tone: "good" },
+    { label: "Readiness", value: "64%", trend: "+16%", tone: "good" },
+    { label: "Open Tasks", value: "27", trend: "Active", tone: "info" },
+    { label: "Operation Mode", value: "Live", trend: "Locked", tone: "good" }
   ],
   priorities: [
-    { title: "Package Creator Launch Bundle", lane: "Bundles", status: "Active", priority: "P1" },
-    { title: "Build Entrepreneur Operating System package", lane: "Bundles", status: "Queued", priority: "P1" },
-    { title: "Map Judge.me product widgets", lane: "Shopify", status: "Queued", priority: "P1" },
-    { title: "Create Free Vault entry flow", lane: "Knowledge", status: "Queued", priority: "P2" },
-    { title: "Configure Welcome Popup offer", lane: "Revenue", status: "Queued", priority: "P2" }
+    { title: "Finish Kairos dashboard runtime", lane: "Dashboard", status: "Active", priority: "P1" },
+    { title: "Wire official Kairos button asset", lane: "System", status: "Active", priority: "P1" },
+    { title: "Batch implementation commits with skip-CI", lane: "GitHub", status: "Active", priority: "P1" },
+    { title: "Prepare website system work queue", lane: "Website", status: "Queued", priority: "P1" },
+    { title: "Prepare Shopify operations queue", lane: "Shopify", status: "Queued", priority: "P2" }
   ],
   approvals: [
-    { title: "Approve Creator Launch Bundle pricing", risk: "Medium" },
-    { title: "Activate 10% first-order offer", risk: "Medium" },
-    { title: "Release Free Vault lead magnet", risk: "Low" }
+    { title: "Approve final validation run", risk: "Medium" },
+    { title: "Release dashboard to operational use", risk: "Low" },
+    { title: "Begin website system implementation after dashboard completion", risk: "Medium" }
   ],
   systems: [
-    { title: "Shopify", status: "Needs widget validation", health: 82 },
-    { title: "Judge.me", status: "Installed / mapping required", health: 66 },
-    { title: "Bundle Engine", status: "Package queue active", health: 78 },
-    { title: "Knowledge Library", status: "Route audit required", health: 58 },
-    { title: "System Vault", status: "Architecture ready", health: 74 },
-    { title: "Revenue Engine", status: "Popup + bundle build queued", health: 73 }
+    { title: "Kairos Dashboard", status: "Active", health: 86 },
+    { title: "Official Kairos Asset", status: "Ready", health: 100 },
+    { title: "GitHub Workflow", status: "Skip-CI batching active", health: 90 },
+    { title: "Website System", status: "Queued", health: 68 },
+    { title: "Shopify Operations", status: "Queued", health: 64 },
+    { title: "System Vault", status: "Architecture ready", health: 78 }
   ],
   pipelines: [
-    { label: "Bundle Packaging", complete: 58 },
-    { label: "Website Audit", complete: 64 },
-    { label: "Shopify Prep", complete: 52 },
-    { label: "Revenue Engine", complete: 35 }
+    { label: "Dashboard Completion", complete: 72 },
+    { label: "Asset Integration", complete: 82 },
+    { label: "Website System Queue", complete: 54 },
+    { label: "Shopify Prep", complete: 52 }
   ],
   commandCenters: {
     website: ["Run homepage audit", "Validate navigation", "Create production backlog", "Fix SEO and internal links", "Review mobile layout"],
@@ -60,10 +60,10 @@ export const kairosState = {
     system: ["Integrations", "Runtime health", "Backups", "Golden Master", "Deployment status"]
   },
   activity: [
-    "Bundle Packaging Engine added to Kairos dashboard.",
-    "Creator Launch Bundle entered active package queue.",
-    "Entrepreneur OS and AI Business OS moved into bundle queue.",
-    "Commercial rights package added to approval workflow.",
-    "Kairos dashboard updated live through GitHub Pages."
+    "Kairos moved from architecture writing into execution mode.",
+    "Operation Mode panel added to the dashboard.",
+    "Official Kairos button asset wired into the runtime.",
+    "Dashboard state switched from Build to Operation.",
+    "GitHub commit strategy locked to skip-CI batching until final validation."
   ]
 };
