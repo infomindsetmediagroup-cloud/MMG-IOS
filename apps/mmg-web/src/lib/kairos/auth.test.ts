@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { authorizeKairosRequest, resolveKairosSession } from './auth';
 import type { KairosRuntimeRequest } from './contracts';
 
@@ -10,8 +10,32 @@ const baseRequest: KairosRuntimeRequest = {
 };
 
 describe('Kairos auth guard', () => {
+  afterEach(() => {
+    delete process.env.KAIROS_ENABLE_DEV_ROLE_HEADERS;
+  });
+
   it('resolves public sessions by default', () => {
     expect(resolveKairosSession(new Headers())).toEqual({ role: 'public' });
+  });
+
+  it('does not trust role headers unless dev override is explicitly enabled', () => {
+    const headers = new Headers({
+      'x-kairos-role': 'admin',
+      'x-kairos-subject': 'local-admin'
+    });
+
+    expect(resolveKairosSession(headers)).toEqual({ role: 'public' });
+  });
+
+  it('allows role headers only when the dev override flag is enabled outside production', () => {
+    process.env.KAIROS_ENABLE_DEV_ROLE_HEADERS = 'true';
+
+    const headers = new Headers({
+      'x-kairos-role': 'admin',
+      'x-kairos-subject': 'local-admin'
+    });
+
+    expect(resolveKairosSession(headers)).toEqual({ role: 'admin', subject: 'local-admin' });
   });
 
   it('allows public mode without authenticated headers', () => {
