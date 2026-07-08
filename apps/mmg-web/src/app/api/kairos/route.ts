@@ -5,6 +5,7 @@ import { toSafeErrorResponse } from '@/lib/kairos/errors';
 import { logKairosRuntimeEvent } from '@/lib/kairos/logging';
 import { runKairosCore } from '@/lib/kairos/provider';
 import { enforceKairosRateLimit, resolveRateLimitKey } from '@/lib/kairos/rateLimit';
+import { withKairosTimeout } from '@/lib/kairos/timeout';
 import { parseKairosRuntimeRequest, runtimeError } from '@/lib/kairos/validation';
 
 export const runtime = 'nodejs';
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     surface = runtimeRequest.surface;
     department = resolveKairosDepartment(runtimeRequest);
 
-    const runtimeResponse = await runKairosCore(runtimeRequest);
+    const runtimeResponse = await withKairosTimeout(runKairosCore(runtimeRequest));
 
     logKairosRuntimeEvent({ requestId, mode, surface, department, status: 'ok', durationMs: Date.now() - startedAt });
 
