@@ -5,8 +5,8 @@ struct WorkflowRuntimeService {
         customer: String,
         projectID: String,
         projectTitle: String,
-        type: WorkflowType,
-        priority: WorkflowPriority = .normal,
+        type: RuntimeWorkflowType,
+        priority: RuntimeWorkflowPriority = .normal,
         owner: String = "Kairos",
         summary: String
     ) -> WorkflowRecord {
@@ -25,13 +25,13 @@ struct WorkflowRuntimeService {
 
     func transition(
         workflow: WorkflowRecord,
-        to nextStage: WorkflowStage,
+        to nextStage: RuntimeWorkflowStage,
         actor: String,
         trigger: String,
         notes: String = ""
     ) -> WorkflowTransitionRecord? {
-        guard let currentStage = WorkflowStage(rawValue: workflow.stage),
-              let currentStatus = WorkflowStatus(rawValue: workflow.status),
+        guard let currentStage = RuntimeWorkflowStage(rawValue: workflow.stage),
+              let currentStatus = RuntimeWorkflowStatus(rawValue: workflow.status),
               WorkflowStagePolicy.allows(nextStage, from: currentStage)
         else { return nil }
 
@@ -54,7 +54,7 @@ struct WorkflowRuntimeService {
         return transition
     }
 
-    func status(for stage: WorkflowStage) -> WorkflowStatus {
+    func status(for stage: RuntimeWorkflowStage) -> RuntimeWorkflowStatus {
         if stage == .approval { return .waitingForApproval }
         if stage == .delivery { return .completed }
         if stage == .archived { return .archived }
