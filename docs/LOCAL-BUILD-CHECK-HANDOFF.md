@@ -4,11 +4,20 @@
 
 Validate the current runtime foundation locally before enabling GitHub Actions or building the next production layer.
 
-## Do not run yet
+## Execution environment result
 
-Do not trigger GitHub Actions until the local Xcode build has been checked.
+The available execution container is Linux and does not include Xcode or `xcodebuild`, so a true local iOS compile could not be executed here.
 
-## Manual Xcode check
+A static build-readiness validation was performed through the GitHub connector instead.
+
+## Static validation completed
+
+- Confirmed `MMGIOS.xcodeproj/project.pbxproj` exists.
+- Confirmed the project originally registered only the legacy app source files.
+- Fixed the Xcode project source registration so the new runtime files are included in the app target.
+- Confirmed the updated project file now references the runtime source files in PBXBuildFile, PBXFileReference, group children, and PBXSourcesBuildPhase sections.
+
+## Manual Xcode check still required
 
 1. Pull latest `main`.
 2. Open the iOS project in Xcode.
@@ -44,10 +53,11 @@ If the project does not compile, inspect:
 - Type name collisions with existing app models.
 - Tab count and SwiftUI view references.
 - Any missing import for SwiftData or SwiftUI.
+- New source file membership in `MMGIOS.xcodeproj/project.pbxproj`.
 
 ## Release discipline
 
-After local validation passes:
+After local Xcode validation passes:
 
 - Keep `[skip ci]` for development commits.
 - Run GitHub Actions only at a controlled validation checkpoint.
