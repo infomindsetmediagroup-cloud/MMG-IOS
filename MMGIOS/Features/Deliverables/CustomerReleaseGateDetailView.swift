@@ -4,9 +4,14 @@ struct CustomerReleaseGateDetailView: View {
     let release: CustomerReleaseRecord
 
     private let releaseGatePolicy = CustomerReleaseGatePolicy()
+    private let actionAdvisor = CustomerReleaseGateActionAdvisor()
 
     private var report: CustomerReleaseGateReport {
         releaseGatePolicy.evaluate(release)
+    }
+
+    private var advisedActions: [CustomerReleaseGateAction] {
+        actionAdvisor.actions(for: report)
     }
 
     private var statusLabel: String {
@@ -33,6 +38,24 @@ struct CustomerReleaseGateDetailView: View {
                     Text(release.gateSummary)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                }
+            }
+
+            Section("Recommended Next Actions") {
+                ForEach(advisedActions) { action in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(action.title)
+                                .font(.subheadline.bold())
+                            Spacer()
+                            Text(action.priority)
+                                .font(.caption.bold())
+                                .foregroundStyle(.secondary)
+                        }
+                        Text(action.detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
