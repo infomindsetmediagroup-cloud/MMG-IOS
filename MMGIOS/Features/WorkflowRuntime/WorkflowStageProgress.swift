@@ -1,7 +1,7 @@
 import Foundation
 
 struct WorkflowStageProgress {
-    static func percent(for stage: WorkflowStage) -> Int {
+    static func percent(for stage: RuntimeWorkflowStage) -> Int {
         if stage == .intake { return 5 }
         if stage == .planning { return 15 }
         if stage == .production { return 35 }
