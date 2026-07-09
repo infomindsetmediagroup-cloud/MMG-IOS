@@ -73,6 +73,15 @@ struct DesignStudioProjectEditorView: View {
         )
 
         modelContext.insert(project)
+        modelContext.insert(
+            PersistedDesignStudioAuditEvent(
+                projectRelationshipID: project.relationshipID,
+                eventType: .projectCreated,
+                actor: "MMG Portal",
+                summary: "Project created: \(project.title)",
+                detail: "Type: \(project.projectTypeRawValue) • Status: \(project.statusRawValue)"
+            )
+        )
         try? modelContext.save()
         dismiss()
     }
@@ -180,6 +189,16 @@ struct DesignStudioAssetEditorView: View {
                 changeSummary: "Asset record created in the Customer Portal Design Studio.",
                 changedBy: "MMG Portal",
                 kairosAssisted: false
+            )
+        )
+        modelContext.insert(
+            PersistedDesignStudioAuditEvent(
+                projectRelationshipID: asset.projectRelationshipID,
+                assetRelationshipID: asset.relationshipID,
+                eventType: .assetCreated,
+                actor: "MMG Portal",
+                summary: "Asset created: \(asset.title)",
+                detail: "Type: \(asset.assetTypeRawValue) • Status: \(asset.statusRawValue) • Version: \(asset.versionLabel)"
             )
         )
         try? modelContext.save()
