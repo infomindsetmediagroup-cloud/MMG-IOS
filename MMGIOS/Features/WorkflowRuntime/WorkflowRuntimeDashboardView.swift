@@ -5,8 +5,10 @@ struct WorkflowRuntimeDashboardView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \WorkflowRecord.updatedAt, order: .reverse) private var workflows: [WorkflowRecord]
     @Query(sort: \WorkflowTransitionRecord.createdAt, order: .reverse) private var transitions: [WorkflowTransitionRecord]
+    @Query(sort: \TaskRecord.updatedAt, order: .reverse) private var tasks: [TaskRecord]
 
     private let runtime = WorkflowRuntimeService()
+    private let taskRuntime = TaskRuntimeService()
 
     private var activeWorkflows: [WorkflowRecord] {
         workflows.filter { $0.status == WorkflowStatus.active.rawValue || $0.status == WorkflowStatus.draft.rawValue }
@@ -14,6 +16,10 @@ struct WorkflowRuntimeDashboardView: View {
 
     private var waitingForApproval: [WorkflowRecord] {
         workflows.filter { $0.status == WorkflowStatus.waitingForApproval.rawValue }
+    }
+
+    private var openTasks: [TaskRecord] {
+        tasks.filter { $0.status != ProductionTaskStatus.completed.rawValue && $0.status != ProductionTaskStatus.cancelled.rawValue }
     }
 
     var body: some View {
@@ -24,6 +30,7 @@ struct WorkflowRuntimeDashboardView: View {
                     LabeledContent("Active", value: "\(activeWorkflows.count)")
                     LabeledContent("Waiting approval", value: "\(waitingForApproval.count)")
                     LabeledContent("Transitions", value: "\(transitions.count)")
+                    LabeledContent("Open tasks", value: "\(openTasks.count)")
                 }
 
                 Section("Workflows") {
@@ -41,6 +48,30 @@ struct WorkflowRuntimeDashboardView: View {
                                 Text("Owner: \(workflow.owner) • Priority: \(workflow.priority)")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+
+                Section("Task Queue") {
+                    if tasks.isEmpty {
+                        Text("No tasks yet. Seeded workflows generate an initial production task.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(tasks) { task in
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(task.title).font(.headline)
+                                Text("\(task.department) • \(task.status) • \(task.priority)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text(task.detail)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                if !task.blocker.isEmpty {
+                                    Text("Blocked: \(task.blocker)")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
                     }
@@ -73,6 +104,7 @@ struct WorkflowRuntimeDashboardView: View {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button("Seed") { seedWorkflowIfNeeded() }
                     Button("Advance") { advanceFirstWorkflow() }
+                    Button("Complete Task") { completeFirstOpenTask() }
                 }
             }
             .task { seedWorkflowIfNeeded() }
@@ -90,7 +122,9 @@ struct WorkflowRuntimeDashboardView: View {
             owner: "Kairos",
             summary: "Runtime validation workflow attached to the Design Studio production path."
         )
+        let task = taskRuntime.createInitialTask(for: workflow)
         modelContext.insert(workflow)
+        modelContext.insert(task)
         try? modelContext.save()
     }
 
@@ -110,12 +144,20 @@ struct WorkflowRuntimeDashboardView: View {
         modelContext.insert(transition)
         try? modelContext.save()
     }
+
+    private func completeFirstOpenTask() {
+        guard let task = openTasks.first else { return }
+        taskRuntime.complete(task)
+        try? modelContext.save()
+    }
 }
 
 #Preview {
     WorkflowRuntimeDashboardView()
         .modelContainer(for: [
             WorkflowRecord.self,
-            WorkflowTransitionRecord.self
+            WorkflowTransitionRecord.self,
+            TaskRecord.self,
+            TaskDependencyRecord.self
         ], inMemory: true)
 }
