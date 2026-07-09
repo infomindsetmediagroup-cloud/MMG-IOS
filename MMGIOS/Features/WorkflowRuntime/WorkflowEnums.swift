@@ -1,6 +1,6 @@
 import Foundation
 
-enum WorkflowType: String, CaseIterable, Identifiable {
+enum RuntimeWorkflowType: String, CaseIterable, Identifiable {
     case publishing = "Publishing"
     case designStudio = "Design Studio"
     case marketing = "Marketing"
@@ -11,7 +11,7 @@ enum WorkflowType: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-enum WorkflowStage: String, CaseIterable, Identifiable {
+enum RuntimeWorkflowStage: String, CaseIterable, Identifiable {
     case intake = "Intake"
     case planning = "Planning"
     case production = "Production"
@@ -26,7 +26,7 @@ enum WorkflowStage: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-enum WorkflowStatus: String, CaseIterable, Identifiable {
+enum RuntimeWorkflowStatus: String, CaseIterable, Identifiable {
     case draft = "Draft"
     case active = "Active"
     case blocked = "Blocked"
@@ -38,7 +38,7 @@ enum WorkflowStatus: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-enum WorkflowPriority: String, CaseIterable, Identifiable {
+enum RuntimeWorkflowPriority: String, CaseIterable, Identifiable {
     case low = "Low"
     case normal = "Normal"
     case high = "High"
