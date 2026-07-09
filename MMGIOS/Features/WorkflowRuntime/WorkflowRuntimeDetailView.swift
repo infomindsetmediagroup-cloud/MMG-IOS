@@ -12,9 +12,19 @@ struct WorkflowRuntimeDetailView: View {
 
     private let runtime = WorkflowRuntimeService()
     private let commandPolicy = WorkflowCommandPolicy()
+    private let healthBuilder = WorkflowHealthSummaryBuilder()
 
     private var commandState: WorkflowCommandState {
         commandPolicy.evaluate(workflow)
+    }
+
+    private var healthSummary: WorkflowHealthSummary {
+        healthBuilder.summarize(
+            workflow: workflow,
+            tasks: tasks,
+            queueItems: queueItems,
+            transitions: transitions
+        )
     }
 
     private var workflowTransitions: [WorkflowTransitionRecord] {
@@ -58,6 +68,18 @@ struct WorkflowRuntimeDetailView: View {
                 LabeledContent("Owner", value: workflow.owner)
                 ProgressView(value: Double(workflow.progress), total: 100)
                 Text("\(workflow.progress)% complete")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Workflow Health") {
+                Label(healthSummary.label, systemImage: healthSummary.isAttentionRequired ? "exclamationmark.triangle" : "heart.text.square")
+                    .foregroundColor(healthSummary.isAttentionRequired ? .orange : .secondary)
+                ProgressView(value: Double(healthSummary.score), total: 100)
+                Text("\(healthSummary.score)% health score")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(healthSummary.detail)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
