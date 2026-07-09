@@ -14,6 +14,7 @@ struct MMGIOSApp: App {
             TaskDependencyRecord.self,
             ProductionQueueRecord.self,
             DesignStudioProjectRecord.self,
+            ProductionAssetRecord.self,
             KnowledgeVaultRecord.self
         ])
     }
