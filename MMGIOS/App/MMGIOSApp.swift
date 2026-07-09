@@ -9,7 +9,9 @@ struct MMGIOSApp: App {
         }
         .modelContainer(for: [
             PersistedCustomerRequestRecord.self,
-            PersistedValueDiscoveryProfile.self
+            PersistedValueDiscoveryProfile.self,
+            WorkflowRecord.self,
+            WorkflowTransitionRecord.self
         ])
     }
 }
