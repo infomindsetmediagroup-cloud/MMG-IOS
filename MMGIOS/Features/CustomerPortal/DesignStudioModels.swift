@@ -49,6 +49,7 @@ enum DesignStudioAssetStatus: String, CaseIterable, Identifiable {
 
 @Model
 final class PersistedDesignStudioProject {
+    var relationshipID: String
     var title: String
     var customerName: String
     var projectTypeRawValue: String
@@ -60,6 +61,7 @@ final class PersistedDesignStudioProject {
     var updatedAt: Date
 
     init(
+        relationshipID: String = UUID().uuidString,
         title: String,
         customerName: String,
         projectType: DesignStudioProjectType,
@@ -70,6 +72,7 @@ final class PersistedDesignStudioProject {
         createdAt: Date = .now,
         updatedAt: Date = .now
     ) {
+        self.relationshipID = relationshipID
         self.title = title
         self.customerName = customerName
         self.projectTypeRawValue = projectType.rawValue
@@ -92,6 +95,8 @@ final class PersistedDesignStudioProject {
 
 @Model
 final class PersistedDesignStudioAsset {
+    var relationshipID: String
+    var projectRelationshipID: String
     var title: String
     var projectTitle: String
     var assetTypeRawValue: String
@@ -105,6 +110,8 @@ final class PersistedDesignStudioAsset {
     var updatedAt: Date
 
     init(
+        relationshipID: String = UUID().uuidString,
+        projectRelationshipID: String = "",
         title: String,
         projectTitle: String,
         assetType: DesignStudioAssetType,
@@ -117,6 +124,8 @@ final class PersistedDesignStudioAsset {
         createdAt: Date = .now,
         updatedAt: Date = .now
     ) {
+        self.relationshipID = relationshipID
+        self.projectRelationshipID = projectRelationshipID
         self.title = title
         self.projectTitle = projectTitle
         self.assetTypeRawValue = assetType.rawValue
