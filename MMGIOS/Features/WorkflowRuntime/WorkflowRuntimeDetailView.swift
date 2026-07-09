@@ -11,6 +11,11 @@ struct WorkflowRuntimeDetailView: View {
     @Query(sort: \ProductionQueueRecord.updatedAt, order: .reverse) private var queueItems: [ProductionQueueRecord]
 
     private let runtime = WorkflowRuntimeService()
+    private let commandPolicy = WorkflowCommandPolicy()
+
+    private var commandState: WorkflowCommandState {
+        commandPolicy.evaluate(workflow)
+    }
 
     private var workflowTransitions: [WorkflowTransitionRecord] {
         transitions.filter { $0.workflowID == workflow.id }
@@ -58,19 +63,25 @@ struct WorkflowRuntimeDetailView: View {
             }
 
             Section("Command Actions") {
+                Text(commandState.reason)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Button("Advance Stage") { advanceWorkflow() }
+                    .disabled(!commandState.canAdvance)
                 Button("Request Approval") { record(runtime.requestApproval(workflow: workflow, actor: "Kairos Runtime")) }
+                    .disabled(!commandState.canRequestApproval)
                 Button("Approve") { record(runtime.approve(workflow: workflow, actor: "Kairos Runtime")) }
+                    .disabled(!commandState.canApprove)
                 Button("Reject") { record(runtime.reject(workflow: workflow, actor: "Kairos Runtime")) }
-                Button(isBlocked ? "Resume Workflow" : "Block Workflow") {
-                    if isBlocked {
-                        record(runtime.resume(workflow: workflow, actor: "Kairos Runtime"))
-                    } else {
-                        record(runtime.block(workflow: workflow, actor: "Kairos Runtime"))
-                    }
-                }
+                    .disabled(!commandState.canReject)
+                Button("Block Workflow") { record(runtime.block(workflow: workflow, actor: "Kairos Runtime")) }
+                    .disabled(!commandState.canBlock)
+                Button("Resume Workflow") { record(runtime.resume(workflow: workflow, actor: "Kairos Runtime")) }
+                    .disabled(!commandState.canResume)
                 Button("Complete") { record(runtime.complete(workflow: workflow, actor: "Kairos Runtime")) }
+                    .disabled(!commandState.canComplete)
                 Button("Archive") { record(runtime.archive(workflow: workflow, actor: "Kairos Runtime")) }
+                    .disabled(!commandState.canArchive)
             }
 
             Section("Recommended Next Action") {
@@ -164,7 +175,8 @@ struct WorkflowRuntimeDetailView: View {
     }
 
     private func advanceWorkflow() {
-        guard let currentStage = RuntimeWorkflowStage(rawValue: workflow.stage),
+        guard commandState.canAdvance,
+              let currentStage = RuntimeWorkflowStage(rawValue: workflow.stage),
               let nextStage = WorkflowStagePolicy.nextStages(from: currentStage).first
         else { return }
 
