@@ -51,17 +51,21 @@ struct DesignStudioWorkspaceView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(projects) { project in
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(project.title).font(.headline)
-                            Text("\(project.projectTypeRawValue) • \(project.statusRawValue)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text(project.summary)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text("Vault: \(project.knowledgeVaultKey.isEmpty ? "Not linked" : project.knowledgeVaultKey)")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
+                        NavigationLink {
+                            DesignStudioProjectDetailView(project: project)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(project.title).font(.headline)
+                                Text("\(project.projectTypeRawValue) • \(project.statusRawValue)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text(project.summary)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text("Vault: \(project.knowledgeVaultKey.isEmpty ? "Not linked" : project.knowledgeVaultKey)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
                 }
@@ -73,18 +77,22 @@ struct DesignStudioWorkspaceView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(assets) { asset in
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(asset.title).font(.headline)
-                            Text("\(asset.assetTypeRawValue) • \(asset.statusRawValue) • \(asset.versionLabel)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text(asset.storagePath)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            if !asset.kairosHistorySummary.isEmpty {
-                                Text("Kairos: \(asset.kairosHistorySummary)")
+                        NavigationLink {
+                            DesignStudioAssetDetailView(asset: asset)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(asset.title).font(.headline)
+                                Text("\(asset.assetTypeRawValue) • \(asset.statusRawValue) • \(asset.versionLabel)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text(asset.storagePath)
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
+                                if !asset.kairosHistorySummary.isEmpty {
+                                    Text("Kairos: \(asset.kairosHistorySummary)")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
                     }
