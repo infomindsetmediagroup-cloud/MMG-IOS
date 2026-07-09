@@ -48,8 +48,20 @@ struct ExecutiveDashboardView: View {
         knowledgeRecords.filter { $0.projectContext.lowercased().contains("routed") }
     }
 
+    private var openActionRecords: [KnowledgeVaultRecord] {
+        routedActionRecords.filter { actionStatus(for: $0) != .completed }
+    }
+
+    private var inProgressActionRecords: [KnowledgeVaultRecord] {
+        routedActionRecords.filter { actionStatus(for: $0) == .inProgress }
+    }
+
+    private var completedActionRecords: [KnowledgeVaultRecord] {
+        routedActionRecords.filter { actionStatus(for: $0) == .completed }
+    }
+
     private var highPriorityActionRecords: [KnowledgeVaultRecord] {
-        routedActionRecords.filter { record in
+        openActionRecords.filter { record in
             let searchable = "\(record.projectContext) \(record.decisionHistory)".lowercased()
             return searchable.contains("approval") || searchable.contains("blocked") || searchable.contains("gate")
         }
@@ -62,6 +74,10 @@ struct ExecutiveDashboardView: View {
 
         if !highPriorityActionRecords.isEmpty {
             return "Review high-priority routed actions. Kairos detected approval, blocker, or gate-related work requiring executive attention."
+        }
+
+        if !inProgressActionRecords.isEmpty {
+            return "Continue in-progress routed actions before opening additional execution lanes."
         }
 
         if !approvalWorkflows.isEmpty {
@@ -80,11 +96,11 @@ struct ExecutiveDashboardView: View {
             return "Publish ready customer releases through the controlled release gate."
         }
 
-        if activeWorkflows.isEmpty && openTasks.isEmpty && routedActionRecords.isEmpty {
+        if activeWorkflows.isEmpty && openTasks.isEmpty && openActionRecords.isEmpty {
             return "No critical operating blockers detected. Create or activate the next execution slice."
         }
 
-        if !routedActionRecords.isEmpty {
+        if !openActionRecords.isEmpty {
             return "Continue clearing routed executive actions so chat decisions become completed operating movement."
         }
 
@@ -100,6 +116,10 @@ struct ExecutiveDashboardView: View {
 
         if !highPriorityActionRecords.isEmpty {
             items.append(.init(title: "High-priority actions", detail: "\(highPriorityActionRecords.count) routed action needs executive attention.", systemImage: "tray.full"))
+        }
+
+        if !inProgressActionRecords.isEmpty {
+            items.append(.init(title: "Actions in progress", detail: "\(inProgressActionRecords.count) routed action is actively moving.", systemImage: "play.circle"))
         }
 
         if !approvalWorkflows.isEmpty {
@@ -118,8 +138,8 @@ struct ExecutiveDashboardView: View {
             items.append(.init(title: "Ready to publish", detail: "\(publishReadyReleases.count) customer release can move to portal publication.", systemImage: "paperplane"))
         }
 
-        if items.isEmpty && !routedActionRecords.isEmpty {
-            items.append(.init(title: "Routed actions open", detail: "\(routedActionRecords.count) Kairos-routed action is waiting in the Actions tab.", systemImage: "arrow.triangle.branch"))
+        if items.isEmpty && !openActionRecords.isEmpty {
+            items.append(.init(title: "Routed actions open", detail: "\(openActionRecords.count) Kairos-routed action is waiting in the Actions tab.", systemImage: "arrow.triangle.branch"))
         }
 
         if items.isEmpty {
@@ -148,19 +168,21 @@ struct ExecutiveDashboardView: View {
                     metricRow(title: "Active workflows", value: activeWorkflows.count, systemImage: "play.circle")
                     metricRow(title: "Open tasks", value: openTasks.count, systemImage: "checklist")
                     metricRow(title: "Queue items", value: queueItems.count, systemImage: "tray.full")
-                    metricRow(title: "Routed actions", value: routedActionRecords.count, systemImage: "arrow.triangle.branch")
+                    metricRow(title: "Open routed actions", value: openActionRecords.count, systemImage: "arrow.triangle.branch")
+                    metricRow(title: "In-progress actions", value: inProgressActionRecords.count, systemImage: "play.circle")
+                    metricRow(title: "Completed actions", value: completedActionRecords.count, systemImage: "checkmark.circle")
                     metricRow(title: "High-priority actions", value: highPriorityActionRecords.count, systemImage: "exclamationmark.triangle")
                     metricRow(title: "Production assets", value: assets.count, systemImage: "shippingbox")
                     metricRow(title: "Deliverables", value: deliverables.count, systemImage: "doc.badge.gearshape")
                     metricRow(title: "Knowledge records", value: knowledgeRecords.count, systemImage: "books.vertical")
                 }
 
-                Section("Recent Routed Actions") {
-                    if routedActionRecords.isEmpty {
-                        Text("No routed actions yet. Send a Kairos Chat command to create the first action record.")
+                Section("Recent Open Actions") {
+                    if openActionRecords.isEmpty {
+                        Text("No open routed actions. Send a Kairos Chat command to create the next operating item.")
                             .foregroundStyle(.secondary)
                     } else {
-                        ForEach(routedActionRecords.prefix(4)) { record in
+                        ForEach(openActionRecords.prefix(4)) { record in
                             routedActionRow(record)
                         }
                     }
@@ -247,9 +269,19 @@ struct ExecutiveDashboardView: View {
 
     private func routedActionRow(_ record: KnowledgeVaultRecord) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(record.projectContext.isEmpty ? "Routed action" : record.projectContext)
-                .font(.headline)
-                .lineLimit(2)
+            HStack(alignment: .firstTextBaseline) {
+                Text(record.projectContext.isEmpty ? "Routed action" : record.projectContext)
+                    .font(.headline)
+                    .lineLimit(2)
+                Spacer()
+                Text(actionStatus(for: record).label)
+                    .font(.caption2.weight(.semibold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(actionStatus(for: record).tint.opacity(0.12))
+                    .foregroundStyle(actionStatus(for: record).tint)
+                    .clipShape(Capsule())
+            }
             if let department = extractValue(prefix: "Department:", from: record.decisionHistory) {
                 Text(department)
                     .font(.caption.weight(.semibold))
@@ -285,6 +317,10 @@ struct ExecutiveDashboardView: View {
             .replacingOccurrences(of: prefix, with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
+
+    private func actionStatus(for record: KnowledgeVaultRecord) -> DashboardActionStatus {
+        DashboardActionStatus.from(record: record)
+    }
 }
 
 private struct ExecutivePriorityItem: Identifiable {
@@ -292,6 +328,76 @@ private struct ExecutivePriorityItem: Identifiable {
     let title: String
     let detail: String
     let systemImage: String
+}
+
+private enum DashboardActionStatus: Equatable {
+    case needsReview
+    case ready
+    case inProgress
+    case monitor
+    case completed
+
+    var label: String {
+        switch self {
+        case .needsReview:
+            return "Needs Review"
+        case .ready:
+            return "Ready"
+        case .inProgress:
+            return "In Progress"
+        case .monitor:
+            return "Monitor"
+        case .completed:
+            return "Complete"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .needsReview:
+            return .orange
+        case .ready, .inProgress:
+            return .mmgBlue
+        case .monitor:
+            return .secondary
+        case .completed:
+            return .green
+        }
+    }
+
+    static func from(record: KnowledgeVaultRecord) -> DashboardActionStatus {
+        if let persisted = latestPersistedStatus(from: record.decisionHistory) {
+            return persisted
+        }
+
+        let searchable = "\(record.projectContext) \(record.decisionHistory)".lowercased()
+
+        if searchable.contains("approval") || searchable.contains("blocked") || searchable.contains("gate") || searchable.contains("decision") {
+            return .needsReview
+        }
+
+        if searchable.contains("execute") || searchable.contains("production") || searchable.contains("build") || searchable.contains("workflow") || searchable.contains("release") {
+            return .ready
+        }
+
+        return .monitor
+    }
+
+    private static func latestPersistedStatus(from history: String) -> DashboardActionStatus? {
+        history
+            .components(separatedBy: .newlines)
+            .reversed()
+            .compactMap { line -> DashboardActionStatus? in
+                guard line.hasPrefix("Action Status:") else { return nil }
+                if line.contains("Complete") { return .completed }
+                if line.contains("In Progress") { return .inProgress }
+                if line.contains("Ready") { return .ready }
+                if line.contains("Monitor") { return .monitor }
+                if line.contains("Needs Review") { return .needsReview }
+                return nil
+            }
+            .first
+    }
 }
 
 #Preview {
