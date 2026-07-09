@@ -7,6 +7,7 @@ This directory contains operational standards for MMG IOS / Kairos repository ex
 - `SOURCE_GRAPH_AUDIT.md` — current runtime source graph, SwiftData model registration, root surface wiring, and validation contract.
 - `PR_CHECKLIST.md` — pull request scope, validation, documentation, and release-readiness checklist.
 - `IMPLEMENTATION_SEQUENCE.md` — default production-slice execution order, batching discipline, validation ownership, merge readiness, and failure response.
+- `RELEASE_GATE_STANDARD.md` — manual release-gate timing, pre-gate checklist, expected gate behavior, failure classification, ready-for-review rules, and merge rules.
 
 ## Manual Validation
 
@@ -41,6 +42,7 @@ Recommended sequence for future production slices:
 8. Run the manual validation gate only when a branch needs a final readiness signal.
 
 For the canonical production-slice order, use `IMPLEMENTATION_SEQUENCE.md`.
+For release-gate timing and merge-readiness rules, use `RELEASE_GATE_STANDARD.md`.
 
 ## Operational Prep Standard
 
