@@ -14,7 +14,8 @@ struct MMGIOSApp: App {
             PersistedDesignStudioAsset.self,
             PersistedDesignStudioVersionRecord.self,
             PersistedDesignStudioExportJob.self,
-            PersistedDesignStudioPermissionRecord.self
+            PersistedDesignStudioPermissionRecord.self,
+            PersistedDesignStudioAuditEvent.self
         ])
     }
 }
