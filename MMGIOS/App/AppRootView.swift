@@ -7,6 +7,11 @@ struct AppRootView: View {
 
     var body: some View {
         TabView {
+            ExecutiveDashboardView()
+                .tabItem {
+                    Label("Executive", systemImage: "sparkles.rectangle.stack")
+                }
+
             CommandCenterRuntimeSummaryView()
                 .tabItem {
                     Label("Command", systemImage: "square.grid.2x2")
