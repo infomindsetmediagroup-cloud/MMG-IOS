@@ -4,6 +4,8 @@ struct ExecutiveChatView: View {
     @State private var draftMessage = ""
     @State private var messages: [ExecutiveChatMessage] = ExecutiveChatMessage.seedMessages
 
+    private let router = KairosDepartmentRouter()
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -46,7 +48,7 @@ struct ExecutiveChatView: View {
                 .font(.headline)
                 .foregroundStyle(.mmgBlue)
 
-            Text("Use this surface to direct Kairos in plain language. The first implementation stores local session messages and prepares the interface for backend routing, department orchestration, and approval-aware execution.")
+            Text("Use this surface to direct Kairos in plain language. Commands now pass through the local department router before future backend orchestration is attached.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
 
@@ -130,29 +132,7 @@ struct ExecutiveChatView: View {
         messages.append(.init(role: .user, body: trimmed))
         draftMessage = ""
 
-        messages.append(.init(role: .kairos, body: localKairosResponse(for: trimmed)))
-    }
-
-    private func localKairosResponse(for command: String) -> String {
-        let lowercased = command.lowercased()
-
-        if lowercased.contains("approval") {
-            return "I would route this to the approval queue, summarize blocked dependencies, and surface the oldest executive decision first. Backend execution wiring comes in the next runtime slice."
-        }
-
-        if lowercased.contains("department") || lowercased.contains("route") {
-            return "I would classify the request, select the responsible Kairos department, preserve the decision path, and return a traceable execution plan."
-        }
-
-        if lowercased.contains("release") || lowercased.contains("publish") {
-            return "I would inspect release gates, approved deliverables, asset readiness, and customer portal eligibility before recommending publication."
-        }
-
-        if lowercased.contains("slice") || lowercased.contains("build") {
-            return "I would convert that direction into a scoped implementation slice with files, acceptance criteria, validation steps, and a draft PR plan."
-        }
-
-        return "Command received. This local chat foundation is ready for backend routing, department orchestration, memory capture, and approval-aware execution in the next slice."
+        messages.append(.init(role: .kairos, body: router.route(trimmed).formattedResponse))
     }
 }
 
