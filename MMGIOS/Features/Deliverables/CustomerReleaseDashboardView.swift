@@ -24,11 +24,16 @@ struct CustomerReleaseDashboardView: View {
         releases.filter { $0.status == CustomerReleaseStatus.published.rawValue }
     }
 
+    private var blockedDeliverables: [DeliverableRecord] {
+        deliverables.filter { !releaseService.canCreateRelease(from: $0) }
+    }
+
     var body: some View {
         NavigationStack {
             List {
                 Section("Customer Release Runtime") {
                     LabeledContent("Eligible deliverables", value: "\(eligibleDeliverables.count)")
+                    LabeledContent("Blocked deliverables", value: "\(blockedDeliverables.count)")
                     LabeledContent("In review", value: "\(reviewReleases.count)")
                     LabeledContent("Approved", value: "\(approvedReleases.count)")
                     LabeledContent("Published", value: "\(publishedReleases.count)")
@@ -51,11 +56,30 @@ struct CustomerReleaseDashboardView: View {
                                 Text(release.gateSummary)
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
+                                Text(release.releaseLocation)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
                                 if !release.approvedBy.isEmpty {
                                     Text("Approved by \(release.approvedBy)")
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
                                 }
+                            }
+                        }
+                    }
+                }
+
+                Section("Blocked From Release") {
+                    if blockedDeliverables.isEmpty {
+                        Text("No blocked deliverables.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(blockedDeliverables) { deliverable in
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(deliverable.title).font(.subheadline)
+                                Text("\(deliverable.status) • \(deliverable.releaseScope) • approval: \(deliverable.approvedBy.isEmpty ? "missing" : deliverable.approvedBy)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
                             }
                         }
                     }
