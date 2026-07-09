@@ -5,6 +5,7 @@ This directory contains operational standards for MMG IOS / Kairos repository ex
 ## Core Documents
 
 - `SOURCE_GRAPH_AUDIT.md` — current runtime source graph, SwiftData model registration, root surface wiring, and validation contract.
+- `PR_CHECKLIST.md` — pull request scope, validation, documentation, and release-readiness checklist.
 
 ## Manual Validation
 
