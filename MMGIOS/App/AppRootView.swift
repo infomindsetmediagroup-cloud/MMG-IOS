@@ -17,6 +17,11 @@ struct AppRootView: View {
                     Label("Chat", systemImage: "message.badge.waveform")
                 }
 
+            ExecutiveActionQueueView()
+                .tabItem {
+                    Label("Actions", systemImage: "tray.full")
+                }
+
             KnowledgeVaultReviewView()
                 .tabItem {
                     Label("Knowledge", systemImage: "books.vertical")
