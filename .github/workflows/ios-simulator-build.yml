@@ -1,0 +1,40 @@
+name: iOS Simulator Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'MMGIOS/**'
+      - 'MMGIOS.xcodeproj/**'
+      - '.github/workflows/ios-simulator-build.yml'
+
+jobs:
+  build:
+    name: Build MMG iOS Simulator
+    runs-on: macos-15
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.4.app || sudo xcode-select -s /Applications/Xcode.app
+          xcodebuild -version
+
+      - name: List schemes
+        run: |
+          xcodebuild -list -project MMGIOS.xcodeproj
+
+      - name: Build simulator
+        run: |
+          xcodebuild \
+            -project MMGIOS.xcodeproj \
+            -scheme MMGIOS \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+            CODE_SIGNING_ALLOWED=NO \
+            clean build
