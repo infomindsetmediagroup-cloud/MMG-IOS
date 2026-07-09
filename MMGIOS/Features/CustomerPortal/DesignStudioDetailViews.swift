@@ -9,6 +9,7 @@ struct DesignStudioProjectDetailView: View {
     @Query(sort: \PersistedDesignStudioVersionRecord.createdAt, order: .reverse) private var allVersions: [PersistedDesignStudioVersionRecord]
     @Query(sort: \PersistedDesignStudioExportJob.updatedAt, order: .reverse) private var allExportJobs: [PersistedDesignStudioExportJob]
     @Query(sort: \PersistedDesignStudioPermissionRecord.updatedAt, order: .reverse) private var allPermissions: [PersistedDesignStudioPermissionRecord]
+    @Query(sort: \PersistedDesignStudioAuditEvent.createdAt, order: .reverse) private var allAuditEvents: [PersistedDesignStudioAuditEvent]
 
     private var projectAssets: [PersistedDesignStudioAsset] {
         allAssets.filter { $0.projectRelationshipID == project.relationshipID || ($0.projectRelationshipID.isEmpty && $0.projectTitle == project.title) }
@@ -24,6 +25,10 @@ struct DesignStudioProjectDetailView: View {
 
     private var projectPermissions: [PersistedDesignStudioPermissionRecord] {
         allPermissions.filter { $0.projectRelationshipID == project.relationshipID || ($0.projectRelationshipID.isEmpty && $0.projectTitle == project.title) }
+    }
+
+    private var projectAuditEvents: [PersistedDesignStudioAuditEvent] {
+        allAuditEvents.filter { $0.projectRelationshipID == project.relationshipID }
     }
 
     var body: some View {
@@ -44,6 +49,7 @@ struct DesignStudioProjectDetailView: View {
                 LabeledContent("Versions", value: "\(projectVersions.count)")
                 LabeledContent("Export jobs", value: "\(projectExportJobs.count)")
                 LabeledContent("Permissions", value: "\(projectPermissions.count)")
+                LabeledContent("Audit events", value: "\(projectAuditEvents.count)")
             }
 
             Section("Assets") {
@@ -92,8 +98,36 @@ struct DesignStudioProjectDetailView: View {
                     }
                 }
             }
+
+            Section("Audit Timeline") {
+                if projectAuditEvents.isEmpty {
+                    Text("No audit events linked to this project yet.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(projectAuditEvents) { event in
+                        auditEventRow(event)
+                    }
+                }
+            }
         }
         .navigationTitle(project.title)
+    }
+
+    private func auditEventRow(_ event: PersistedDesignStudioAuditEvent) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(event.eventTypeRawValue).font(.headline)
+            Text(event.summary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text("Actor: \(event.actor)")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            if !event.detail.isEmpty {
+                Text(event.detail)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 
     private func exportJobRow(_ job: PersistedDesignStudioExportJob) -> some View {
@@ -134,6 +168,17 @@ struct DesignStudioProjectDetailView: View {
                 kairosAssisted: false
             )
         )
+        modelContext.insert(
+            PersistedDesignStudioAuditEvent(
+                projectRelationshipID: job.projectRelationshipID,
+                assetRelationshipID: job.assetRelationshipID,
+                exportJobRelationshipID: job.relationshipID,
+                eventType: .exportApproved,
+                actor: "MMG Approval Gate",
+                summary: "Export approved: \(job.assetTitle)",
+                detail: job.destinationPath
+            )
+        )
         try? modelContext.save()
     }
 
@@ -153,6 +198,17 @@ struct DesignStudioProjectDetailView: View {
                 kairosAssisted: false
             )
         )
+        modelContext.insert(
+            PersistedDesignStudioAuditEvent(
+                projectRelationshipID: job.projectRelationshipID,
+                assetRelationshipID: job.assetRelationshipID,
+                exportJobRelationshipID: job.relationshipID,
+                eventType: .exportRejected,
+                actor: "MMG Approval Gate",
+                summary: "Export rejected: \(job.assetTitle)",
+                detail: job.destinationPath
+            )
+        )
         try? modelContext.save()
     }
 }
@@ -163,6 +219,7 @@ struct DesignStudioAssetDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \PersistedDesignStudioVersionRecord.createdAt, order: .reverse) private var allVersions: [PersistedDesignStudioVersionRecord]
     @Query(sort: \PersistedDesignStudioExportJob.updatedAt, order: .reverse) private var allExportJobs: [PersistedDesignStudioExportJob]
+    @Query(sort: \PersistedDesignStudioAuditEvent.createdAt, order: .reverse) private var allAuditEvents: [PersistedDesignStudioAuditEvent]
 
     private var assetVersions: [PersistedDesignStudioVersionRecord] {
         allVersions.filter { $0.assetRelationshipID == asset.relationshipID || ($0.assetRelationshipID.isEmpty && $0.assetTitle == asset.title && $0.projectTitle == asset.projectTitle) }
@@ -170,6 +227,10 @@ struct DesignStudioAssetDetailView: View {
 
     private var assetExportJobs: [PersistedDesignStudioExportJob] {
         allExportJobs.filter { $0.assetRelationshipID == asset.relationshipID || ($0.assetRelationshipID.isEmpty && $0.assetTitle == asset.title && $0.projectTitle == asset.projectTitle) }
+    }
+
+    private var assetAuditEvents: [PersistedDesignStudioAuditEvent] {
+        allAuditEvents.filter { $0.assetRelationshipID == asset.relationshipID }
     }
 
     var body: some View {
@@ -226,8 +287,36 @@ struct DesignStudioAssetDetailView: View {
                     }
                 }
             }
+
+            Section("Audit Timeline") {
+                if assetAuditEvents.isEmpty {
+                    Text("No audit events linked to this asset yet.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(assetAuditEvents) { event in
+                        auditEventRow(event)
+                    }
+                }
+            }
         }
         .navigationTitle(asset.title)
+    }
+
+    private func auditEventRow(_ event: PersistedDesignStudioAuditEvent) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(event.eventTypeRawValue).font(.headline)
+            Text(event.summary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text("Actor: \(event.actor)")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            if !event.detail.isEmpty {
+                Text(event.detail)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 
     private func exportJobRow(_ job: PersistedDesignStudioExportJob) -> some View {
@@ -269,6 +358,17 @@ struct DesignStudioAssetDetailView: View {
                 kairosAssisted: false
             )
         )
+        modelContext.insert(
+            PersistedDesignStudioAuditEvent(
+                projectRelationshipID: job.projectRelationshipID,
+                assetRelationshipID: job.assetRelationshipID,
+                exportJobRelationshipID: job.relationshipID,
+                eventType: .exportApproved,
+                actor: "MMG Approval Gate",
+                summary: "Asset export approved: \(job.assetTitle)",
+                detail: job.destinationPath
+            )
+        )
         try? modelContext.save()
     }
 
@@ -286,6 +386,17 @@ struct DesignStudioAssetDetailView: View {
                 changeSummary: "Asset export failed or was rejected before customer release.",
                 changedBy: "MMG Approval Gate",
                 kairosAssisted: false
+            )
+        )
+        modelContext.insert(
+            PersistedDesignStudioAuditEvent(
+                projectRelationshipID: job.projectRelationshipID,
+                assetRelationshipID: job.assetRelationshipID,
+                exportJobRelationshipID: job.relationshipID,
+                eventType: .exportRejected,
+                actor: "MMG Approval Gate",
+                summary: "Asset export rejected: \(job.assetTitle)",
+                detail: job.destinationPath
             )
         )
         try? modelContext.save()
