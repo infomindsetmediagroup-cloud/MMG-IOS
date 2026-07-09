@@ -11,19 +11,19 @@ struct DesignStudioProjectDetailView: View {
     @Query(sort: \PersistedDesignStudioPermissionRecord.updatedAt, order: .reverse) private var allPermissions: [PersistedDesignStudioPermissionRecord]
 
     private var projectAssets: [PersistedDesignStudioAsset] {
-        allAssets.filter { $0.projectTitle == project.title }
+        allAssets.filter { $0.projectRelationshipID == project.relationshipID || ($0.projectRelationshipID.isEmpty && $0.projectTitle == project.title) }
     }
 
     private var projectVersions: [PersistedDesignStudioVersionRecord] {
-        allVersions.filter { $0.projectTitle == project.title }
+        allVersions.filter { $0.projectRelationshipID == project.relationshipID || ($0.projectRelationshipID.isEmpty && $0.projectTitle == project.title) }
     }
 
     private var projectExportJobs: [PersistedDesignStudioExportJob] {
-        allExportJobs.filter { $0.projectTitle == project.title }
+        allExportJobs.filter { $0.projectRelationshipID == project.relationshipID || ($0.projectRelationshipID.isEmpty && $0.projectTitle == project.title) }
     }
 
     private var projectPermissions: [PersistedDesignStudioPermissionRecord] {
-        allPermissions.filter { $0.projectTitle == project.title }
+        allPermissions.filter { $0.projectRelationshipID == project.relationshipID || ($0.projectRelationshipID.isEmpty && $0.projectTitle == project.title) }
     }
 
     var body: some View {
@@ -32,6 +32,7 @@ struct DesignStudioProjectDetailView: View {
                 LabeledContent("Customer", value: project.customerName)
                 LabeledContent("Type", value: project.projectTypeRawValue)
                 LabeledContent("Status", value: project.statusRawValue)
+                LabeledContent("Project ID", value: project.relationshipID)
                 LabeledContent("Brand kit", value: project.brandKitKey.isEmpty ? "Not linked" : project.brandKitKey)
                 LabeledContent("Knowledge Vault", value: project.knowledgeVaultKey.isEmpty ? "Not linked" : project.knowledgeVaultKey)
                 Text(project.summary)
@@ -123,6 +124,8 @@ struct DesignStudioProjectDetailView: View {
         job.releaseNotes = job.releaseNotes.isEmpty ? "Approved and released as a customer deliverable." : job.releaseNotes + "\nApproved and released as a customer deliverable."
         modelContext.insert(
             PersistedDesignStudioVersionRecord(
+                projectRelationshipID: job.projectRelationshipID,
+                assetRelationshipID: job.assetRelationshipID,
                 assetTitle: job.assetTitle,
                 projectTitle: job.projectTitle,
                 versionLabel: "release",
@@ -140,6 +143,8 @@ struct DesignStudioProjectDetailView: View {
         job.releaseNotes = job.releaseNotes.isEmpty ? "Export failed or was rejected before customer release." : job.releaseNotes + "\nExport failed or was rejected before customer release."
         modelContext.insert(
             PersistedDesignStudioVersionRecord(
+                projectRelationshipID: job.projectRelationshipID,
+                assetRelationshipID: job.assetRelationshipID,
                 assetTitle: job.assetTitle,
                 projectTitle: job.projectTitle,
                 versionLabel: "rejected",
@@ -160,17 +165,19 @@ struct DesignStudioAssetDetailView: View {
     @Query(sort: \PersistedDesignStudioExportJob.updatedAt, order: .reverse) private var allExportJobs: [PersistedDesignStudioExportJob]
 
     private var assetVersions: [PersistedDesignStudioVersionRecord] {
-        allVersions.filter { $0.assetTitle == asset.title && $0.projectTitle == asset.projectTitle }
+        allVersions.filter { $0.assetRelationshipID == asset.relationshipID || ($0.assetRelationshipID.isEmpty && $0.assetTitle == asset.title && $0.projectTitle == asset.projectTitle) }
     }
 
     private var assetExportJobs: [PersistedDesignStudioExportJob] {
-        allExportJobs.filter { $0.assetTitle == asset.title && $0.projectTitle == asset.projectTitle }
+        allExportJobs.filter { $0.assetRelationshipID == asset.relationshipID || ($0.assetRelationshipID.isEmpty && $0.assetTitle == asset.title && $0.projectTitle == asset.projectTitle) }
     }
 
     var body: some View {
         List {
             Section("Asset") {
                 LabeledContent("Project", value: asset.projectTitle)
+                LabeledContent("Asset ID", value: asset.relationshipID)
+                LabeledContent("Project ID", value: asset.projectRelationshipID.isEmpty ? "fallback title link" : asset.projectRelationshipID)
                 LabeledContent("Type", value: asset.assetTypeRawValue)
                 LabeledContent("Status", value: asset.statusRawValue)
                 LabeledContent("Version", value: asset.versionLabel)
@@ -252,6 +259,8 @@ struct DesignStudioAssetDetailView: View {
         asset.updatedAt = .now
         modelContext.insert(
             PersistedDesignStudioVersionRecord(
+                projectRelationshipID: job.projectRelationshipID,
+                assetRelationshipID: job.assetRelationshipID,
                 assetTitle: job.assetTitle,
                 projectTitle: job.projectTitle,
                 versionLabel: "release",
@@ -269,6 +278,8 @@ struct DesignStudioAssetDetailView: View {
         job.releaseNotes = job.releaseNotes.isEmpty ? "Export failed or was rejected before customer release." : job.releaseNotes + "\nExport failed or was rejected before customer release."
         modelContext.insert(
             PersistedDesignStudioVersionRecord(
+                projectRelationshipID: job.projectRelationshipID,
+                assetRelationshipID: job.assetRelationshipID,
                 assetTitle: job.assetTitle,
                 projectTitle: job.projectTitle,
                 versionLabel: "rejected",
