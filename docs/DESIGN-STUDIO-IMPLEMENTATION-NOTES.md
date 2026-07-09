@@ -17,6 +17,9 @@ Implemented code-level foundation:
 - Permission record model
 - Customer Portal navigation entry
 - Design Studio workspace screen
+- Project detail view
+- Asset detail view
+- Navigable project and asset rows
 - Seeded demo projects, assets, version records, export jobs, and permissions
 - SwiftData model container registration
 - Preview model container registration
@@ -43,19 +46,20 @@ This is represented through:
 - Permission records separating approved deliverable export from intermediate asset access
 - Kairos history summaries on assets
 - Version history records for auditability
+- Project-level and asset-level production detail views
 
 ## Next Implementation Pass
 
 Recommended next pass:
 
-1. Add asset detail views.
-2. Add project detail views.
-3. Add create/edit forms for projects and assets.
-4. Add export job approval action.
-5. Add relationship IDs instead of title-based linkage.
-6. Connect Design Studio records to the broader Asset Library once that module is implemented.
-7. Connect Customer Knowledge Vault references to real customer knowledge records.
-8. Add Kairos generation/refinement action stubs for document, image, and brand workflows.
+1. Add create/edit forms for projects and assets.
+2. Add export job approval action.
+3. Add relationship IDs instead of title-based linkage.
+4. Connect Design Studio records to the broader Asset Library once that module is implemented.
+5. Connect Customer Knowledge Vault references to real customer knowledge records.
+6. Add Kairos generation/refinement action stubs for document, image, and brand workflows.
+7. Add production audit/activity timeline.
+8. Add basic filtering by project type, status, and approval queue.
 
 ## Validation Note
 
