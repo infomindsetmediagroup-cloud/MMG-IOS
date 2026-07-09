@@ -56,6 +56,8 @@ struct AppRootView: View {
     AppRootView()
         .modelContainer(for: [
             PersistedCustomerRequestRecord.self,
-            PersistedValueDiscoveryProfile.self
+            PersistedValueDiscoveryProfile.self,
+            WorkflowRecord.self,
+            WorkflowTransitionRecord.self
         ], inMemory: true)
 }
