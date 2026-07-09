@@ -28,6 +28,11 @@ struct AppRootView: View {
                 .tabItem {
                     Label("Deliver", systemImage: "checkmark.seal")
                 }
+
+            CustomerReleaseDashboardView()
+                .tabItem {
+                    Label("Release", systemImage: "paperplane")
+                }
         }
         .tint(.mmgBlue)
     }
@@ -44,6 +49,7 @@ struct AppRootView: View {
             DesignStudioProjectRecord.self,
             ProductionAssetRecord.self,
             DeliverableRecord.self,
+            CustomerReleaseRecord.self,
             KnowledgeVaultRecord.self
         ], inMemory: true)
 }
