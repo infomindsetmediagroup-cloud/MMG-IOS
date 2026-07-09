@@ -28,6 +28,11 @@ struct AppRootView: View {
                     Label("Command", systemImage: "square.grid.2x2")
                 }
 
+            WorkflowRuntimeDashboardView()
+                .tabItem {
+                    Label("Workflow", systemImage: "point.3.connected.trianglepath.dotted")
+                }
+
             AdminOperationsView()
                 .tabItem {
                     Label("Admin", systemImage: "building.2")
