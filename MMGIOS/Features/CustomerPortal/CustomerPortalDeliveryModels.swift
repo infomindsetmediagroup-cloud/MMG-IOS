@@ -112,7 +112,7 @@ struct CustomerDeliverablesLibraryBuilder {
 
     func projectGroups(from releases: [CustomerReleaseRecord]) -> [CustomerDeliverableProjectGroup] {
         let visible = visiblePublishedReleases(from: releases)
-        return Dictionary(grouping: visible, by: \CustomerReleaseRecord.projectID)
+        return Dictionary(grouping: visible, by: \.projectID)
             .map { CustomerDeliverableProjectGroup(projectID: $0.key, releases: $0.value.sorted { $0.version > $1.version }) }
             .sorted { ($0.latestRelease?.updatedAt ?? .distantPast) > ($1.latestRelease?.updatedAt ?? .distantPast) }
     }
