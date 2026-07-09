@@ -85,7 +85,7 @@ private struct RequestStatusRow: View {
 
 #Preview {
     let request = PersistedCustomerRequestRecord(request: SampleData.customerRequests[0])
-    return NavigationStack {
+    NavigationStack {
         CustomerRequestDetailView(request: request)
     }
     .modelContainer(for: PersistedCustomerRequestRecord.self, inMemory: true)
