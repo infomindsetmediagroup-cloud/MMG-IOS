@@ -1,10 +1,10 @@
 # Workflow Runtime Foundation
 
-Status: Foundation slice implemented and visible in-app.
+Status: Workflow and Task Runtime foundations implemented and visible in-app.
 
 ## Scope
 
-This runtime creates the shared workflow layer used by the Customer Portal, Design Studio, Command Center, and Kairos orchestration.
+This runtime creates the shared workflow and task layer used by the Customer Portal, Design Studio, Command Center, and Kairos orchestration.
 
 ## Implemented
 
@@ -14,10 +14,15 @@ This runtime creates the shared workflow layer used by the Customer Portal, Desi
 - Persistent workflow record.
 - Persistent workflow transition record.
 - Workflow runtime service for create and transition actions.
+- Task enums for status, priority, and department.
+- Persistent task record.
+- Persistent task dependency record.
+- Task runtime service for create, start, block, complete, and dependency validation.
 - SwiftData app model registration.
 - SwiftData preview model registration.
-- Runtime validation checklist.
+- Runtime validation checklists.
 - Workflow Runtime dashboard view.
+- Workflow and task queue visibility in-app.
 - Runtime tab exposed in the app shell.
 
 ## Runtime behavior
@@ -26,14 +31,15 @@ This runtime creates the shared workflow layer used by the Customer Portal, Desi
 - Stage transitions are validated through WorkflowStagePolicy.
 - Workflow progress updates when a transition succeeds.
 - A WorkflowTransitionRecord is created for successful transitions.
-- The dashboard can seed and manually advance the first workflow for internal validation.
+- Seeded workflows create an initial production task.
+- The dashboard can seed workflows, advance workflow stage, and complete the first open task.
 
 ## Next code files
 
+- Production Queue foundation.
+- Department queue grouping.
 - Design Studio project workflow attachment.
 - Command Center workflow summary cards.
-- Task Engine foundation.
-- Production Queue foundation.
 
 ## Acceptance criteria
 
@@ -41,4 +47,5 @@ This runtime creates the shared workflow layer used by the Customer Portal, Desi
 - Workflows can be created for customer production projects.
 - Workflow stages can transition only through approved lifecycle paths.
 - Transitions are recorded for auditability.
+- Tasks are linked to workflow records.
 - Runtime state is visible inside the app.
