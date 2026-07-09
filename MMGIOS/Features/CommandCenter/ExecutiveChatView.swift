@@ -1,6 +1,8 @@
+import SwiftData
 import SwiftUI
 
 struct ExecutiveChatView: View {
+    @Environment(\.modelContext) private var modelContext
     @State private var draftMessage = ""
     @State private var messages: [ExecutiveChatMessage] = ExecutiveChatMessage.seedMessages
 
@@ -48,7 +50,7 @@ struct ExecutiveChatView: View {
                 .font(.headline)
                 .foregroundStyle(.mmgBlue)
 
-            Text("Use this surface to direct Kairos in plain language. Commands now pass through the local department router before future backend orchestration is attached.")
+            Text("Use this surface to direct Kairos in plain language. Commands now pass through the local department router and create a Knowledge Vault record for institutional continuity.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
 
@@ -129,10 +131,39 @@ struct ExecutiveChatView: View {
         let trimmed = draftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
+        let decision = router.route(trimmed)
+
         messages.append(.init(role: .user, body: trimmed))
         draftMessage = ""
+        messages.append(.init(role: .kairos, body: decision.formattedResponse))
+        captureKnowledgeRecord(command: trimmed, decision: decision)
+    }
 
-        messages.append(.init(role: .kairos, body: router.route(trimmed).formattedResponse))
+    private func captureKnowledgeRecord(command: String, decision: KairosRouteDecision) {
+        let confidencePercent = Int((decision.confidence * 100).rounded())
+        let plan = decision.executionPlan.enumerated().map { index, step in
+            "\(index + 1). \(step)"
+        }.joined(separator: "\n")
+
+        let history = [
+            "Source: Kairos Chat",
+            "Input: \(command)",
+            "Department: \(decision.department.displayName)",
+            "Confidence: \(confidencePercent)%",
+            "Summary: \(decision.summary)",
+            "Plan:",
+            plan,
+            "Governance: \(decision.governanceNote)"
+        ].joined(separator: "\n")
+
+        let record = KnowledgeVaultRecord(
+            customerName: "MMG Executive",
+            brandProfile: "Mindset Media Group and Kairos operating system",
+            projectContext: "Kairos Chat routed to \(decision.department.displayName)",
+            decisionHistory: history
+        )
+
+        modelContext.insert(record)
     }
 }
 
@@ -164,4 +195,7 @@ private enum ExecutiveChatRole: Equatable {
 
 #Preview {
     ExecutiveChatView()
+        .modelContainer(for: [
+            KnowledgeVaultRecord.self
+        ], inMemory: true)
 }
