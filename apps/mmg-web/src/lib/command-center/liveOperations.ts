@@ -56,6 +56,10 @@ export type CommandCenterTelemetry = {
   parents: CommandParent[];
 };
 
+export type CommandCenterTelemetryProvider = {
+  getTelemetry(): Promise<CommandCenterTelemetry> | CommandCenterTelemetry;
+};
+
 export const commandStateLabels: Record<CommandProcessingState, string> = {
   queued: "Queued",
   initializing: "Initializing",
@@ -303,4 +307,12 @@ export function getDevelopmentCommandCenterTelemetry(): CommandCenterTelemetry {
       }
     ]
   };
+}
+
+export const developmentCommandCenterTelemetryProvider: CommandCenterTelemetryProvider = {
+  getTelemetry: getDevelopmentCommandCenterTelemetry
+};
+
+export function getCommandCenterTelemetryProvider(): CommandCenterTelemetryProvider {
+  return developmentCommandCenterTelemetryProvider;
 }
