@@ -8,8 +8,6 @@ struct MMGIOSApp: App {
             AppRootView()
         }
         .modelContainer(for: [
-            PersistedCustomerRequestRecord.self,
-            PersistedValueDiscoveryProfile.self,
             WorkflowRecord.self,
             WorkflowTransitionRecord.self,
             TaskRecord.self,
