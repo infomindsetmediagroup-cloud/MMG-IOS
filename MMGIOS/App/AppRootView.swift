@@ -41,6 +41,11 @@ struct AppRootView: View {
                 .tabItem {
                     Label("Release", systemImage: "paperplane")
                 }
+
+            IntegrationConnectorDashboardView()
+                .tabItem {
+                    Label("Integrations", systemImage: "link.circle")
+                }
         }
         .tint(.mmgBlue)
     }
@@ -58,6 +63,7 @@ struct AppRootView: View {
             ProductionAssetRecord.self,
             DeliverableRecord.self,
             CustomerReleaseRecord.self,
+            IntegrationConnectorRecord.self,
             PersistedCustomerRequestRecord.self,
             PersistedValueDiscoveryProfile.self,
             KnowledgeVaultRecord.self
