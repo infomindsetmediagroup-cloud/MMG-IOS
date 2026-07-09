@@ -2,6 +2,9 @@ import SwiftData
 import SwiftUI
 
 struct AppRootView: View {
+    private let sessionStore = LocalSessionStore()
+    private let customerStore = LocalCustomerPortalStore()
+
     var body: some View {
         TabView {
             CommandCenterRuntimeSummaryView()
@@ -12,6 +15,11 @@ struct AppRootView: View {
             WorkflowRuntimeDashboardView()
                 .tabItem {
                     Label("Workflow", systemImage: "point.3.connected.trianglepath.dotted")
+                }
+
+            CustomerPortalView(sessionStore: sessionStore, customerStore: customerStore)
+                .tabItem {
+                    Label("Customer", systemImage: "person.crop.circle")
                 }
 
             DesignStudioWorkflowView()
@@ -50,6 +58,8 @@ struct AppRootView: View {
             ProductionAssetRecord.self,
             DeliverableRecord.self,
             CustomerReleaseRecord.self,
+            PersistedCustomerRequestRecord.self,
+            PersistedValueDiscoveryProfile.self,
             KnowledgeVaultRecord.self
         ], inMemory: true)
 }
