@@ -19,19 +19,51 @@ struct ExecutiveActionQueueView: View {
 
                 Section("Queue Metrics") {
                     metricRow(title: "Open actions", value: actionItems.count, systemImage: "tray.full")
+                    metricRow(title: "Needs review", value: needsReviewCount, systemImage: "eye")
+                    metricRow(title: "Ready to execute", value: readyToExecuteCount, systemImage: "play.circle")
                     metricRow(title: "High priority", value: highPriorityCount, systemImage: "exclamationmark.triangle")
                     metricRow(title: "Approval related", value: approvalRelatedCount, systemImage: "checkmark.seal")
                 }
 
-                Section("Next Actions") {
-                    if actionItems.isEmpty {
-                        ContentUnavailableView(
-                            "No executive actions yet",
-                            systemImage: "tray",
-                            description: Text("Send a Kairos Chat command to route work into the operating queue.")
-                        )
+                Section("Needs Review") {
+                    let reviewItems = actionItems.filter { $0.status == .needsReview }
+                    if reviewItems.isEmpty {
+                        Text("No routed actions currently require review.")
+                            .foregroundStyle(.secondary)
                     } else {
-                        ForEach(actionItems) { item in
+                        ForEach(reviewItems) { item in
+                            NavigationLink {
+                                ExecutiveActionDetailView(item: item)
+                            } label: {
+                                actionRow(item)
+                            }
+                        }
+                    }
+                }
+
+                Section("Ready to Execute") {
+                    let readyItems = actionItems.filter { $0.status == .readyToExecute }
+                    if readyItems.isEmpty {
+                        Text("No routed actions are ready to execute yet.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(readyItems) { item in
+                            NavigationLink {
+                                ExecutiveActionDetailView(item: item)
+                            } label: {
+                                actionRow(item)
+                            }
+                        }
+                    }
+                }
+
+                Section("Monitor") {
+                    let monitorItems = actionItems.filter { $0.status == .monitor }
+                    if monitorItems.isEmpty {
+                        Text("No routed actions are in monitor status.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(monitorItems) { item in
                             NavigationLink {
                                 ExecutiveActionDetailView(item: item)
                             } label: {
@@ -55,13 +87,21 @@ struct ExecutiveActionQueueView: View {
         actionItems.filter { $0.department == "Executive Office" || $0.summary.lowercased().contains("approval") }.count
     }
 
+    private var needsReviewCount: Int {
+        actionItems.filter { $0.status == .needsReview }.count
+    }
+
+    private var readyToExecuteCount: Int {
+        actionItems.filter { $0.status == .readyToExecute }.count
+    }
+
     private var queueHeader: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Executive Action Queue")
                 .font(.largeTitle.bold())
                 .foregroundStyle(.mmgInk)
 
-            Text("Review routed Kairos commands as actionable operating items before deeper workflow automation is attached.")
+            Text("Review routed Kairos commands as actionable operating items. Status is currently derived from routing context until persisted execution state is introduced.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
@@ -93,13 +133,22 @@ struct ExecutiveActionQueueView: View {
                     .font(.headline)
                     .lineLimit(2)
                 Spacer()
-                Text(item.priority.label)
-                    .font(.caption2.weight(.bold))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(item.priority.tint.opacity(0.12))
-                    .foregroundStyle(item.priority.tint)
-                    .clipShape(Capsule())
+                VStack(alignment: .trailing, spacing: 5) {
+                    Text(item.priority.label)
+                        .font(.caption2.weight(.bold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(item.priority.tint.opacity(0.12))
+                        .foregroundStyle(item.priority.tint)
+                        .clipShape(Capsule())
+                    Text(item.status.label)
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(item.status.tint.opacity(0.12))
+                        .foregroundStyle(item.status.tint)
+                        .clipShape(Capsule())
+                }
             }
 
             Text(item.department)
@@ -127,7 +176,13 @@ private struct ExecutiveActionDetailView: View {
             Section("Action") {
                 LabeledContent("Department", value: item.department)
                 LabeledContent("Priority", value: item.priority.label)
+                LabeledContent("Status", value: item.status.label)
                 LabeledContent("Updated", value: item.updatedAt.formatted(date: .abbreviated, time: .shortened))
+            }
+
+            Section("Next Step") {
+                Text(item.status.nextStep)
+                    .textSelection(.enabled)
             }
 
             Section("Summary") {
@@ -152,6 +207,7 @@ private struct ExecutiveActionItem: Identifiable {
     let summary: String
     let source: String
     let priority: ExecutiveActionPriority
+    let status: ExecutiveActionStatus
     let updatedAt: Date
 
     init(record: KnowledgeVaultRecord) {
@@ -161,6 +217,7 @@ private struct ExecutiveActionItem: Identifiable {
         self.summary = ExecutiveActionItem.extractValue(prefix: "Summary:", from: record.decisionHistory) ?? record.decisionHistory
         self.source = record.decisionHistory
         self.priority = ExecutiveActionPriority.from(record: record)
+        self.status = ExecutiveActionStatus.from(record: record)
         self.updatedAt = record.updatedAt
     }
 
@@ -201,6 +258,59 @@ private enum ExecutiveActionPriority: Equatable {
             return .high
         }
         return .normal
+    }
+}
+
+private enum ExecutiveActionStatus: Equatable {
+    case needsReview
+    case readyToExecute
+    case monitor
+
+    var label: String {
+        switch self {
+        case .needsReview:
+            return "Needs Review"
+        case .readyToExecute:
+            return "Ready"
+        case .monitor:
+            return "Monitor"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .needsReview:
+            return .orange
+        case .readyToExecute:
+            return .mmgBlue
+        case .monitor:
+            return .secondary
+        }
+    }
+
+    var nextStep: String {
+        switch self {
+        case .needsReview:
+            return "Review the routed action, confirm the governing decision, then approve or redirect before execution."
+        case .readyToExecute:
+            return "Convert the routed action into a production task, workflow update, release step, or implementation slice."
+        case .monitor:
+            return "Track this item for context. No immediate execution step is required unless conditions change."
+        }
+    }
+
+    static func from(record: KnowledgeVaultRecord) -> ExecutiveActionStatus {
+        let searchable = "\(record.projectContext) \(record.decisionHistory)".lowercased()
+
+        if searchable.contains("approval") || searchable.contains("blocked") || searchable.contains("gate") || searchable.contains("decision") {
+            return .needsReview
+        }
+
+        if searchable.contains("execute") || searchable.contains("production") || searchable.contains("build") || searchable.contains("workflow") || searchable.contains("release") {
+            return .readyToExecute
+        }
+
+        return .monitor
     }
 }
 
