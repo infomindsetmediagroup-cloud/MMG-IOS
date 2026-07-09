@@ -21,6 +21,8 @@ function ProgressBar({ value }: { value: number }) {
 }
 
 function ParentCard({ parent, selected, onSelect }: { parent: CommandParent; selected: boolean; onSelect: () => void }) {
+  const releaseGateCount = parent.releaseGateSignals?.filter((signal) => signal.status !== "ready").length ?? 0;
+
   return (
     <button className={`command-parent-card ${selected ? "command-parent-card--selected" : ""}`} onClick={onSelect} type="button">
       <span className="command-card-topline">
@@ -35,8 +37,36 @@ function ParentCard({ parent, selected, onSelect }: { parent: CommandParent; sel
         <div><dt>Queue</dt><dd>{parent.queueDepth}</dd></div>
         <div><dt>Alerts</dt><dd>{parent.alerts}</dd></div>
       </dl>
+      {parent.releaseGateSignals ? (
+        <span className="command-release-flag">{releaseGateCount} release gate{releaseGateCount === 1 ? "" : "s"} pending</span>
+      ) : null}
       <ProgressBar value={parent.progress} />
     </button>
+  );
+}
+
+function ReleaseGateSignalPanel({ parent }: { parent: CommandParent }) {
+  if (!parent.releaseGateSignals?.length) return null;
+
+  return (
+    <section className="command-release-panel" aria-label={`${parent.title} release gate signals`}>
+      <div className="command-section-heading">
+        <div>
+          <p className="mmg-kicker">Release Gates</p>
+          <p className="mmg-muted">Customer-facing deliverables cannot publish until every production-only gate passes.</p>
+        </div>
+      </div>
+      <div className="command-release-grid">
+        {parent.releaseGateSignals.map((signal) => (
+          <article className="command-release-card" key={signal.id}>
+            <span className={`command-release-status command-release-status--${signal.status}`}>{signal.status}</span>
+            <h3>{signal.title}</h3>
+            <p className="mmg-muted">{signal.requiredAction}</p>
+            <strong>{signal.blockedChecks} blocked check{signal.blockedChecks === 1 ? "" : "s"}</strong>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -53,6 +83,8 @@ function FocusView({ parent, telemetrySource, onReturn }: { parent: CommandParen
           {parent.health}%
         </div>
       </div>
+
+      <ReleaseGateSignalPanel parent={parent} />
 
       <div className="command-focus-grid">
         {parent.modules.map((module) => (
@@ -126,6 +158,7 @@ export function CommandCenter({ telemetry }: { telemetry: CommandCenterTelemetry
                 </span>
                 <h2>{parent.title}</h2>
                 <p className="mmg-muted">{parent.summary}</p>
+                {parent.releaseGateSignals ? <ReleaseGateSignalPanel parent={parent} /> : null}
                 <ProgressBar value={parent.progress} />
               </article>
             ))}
