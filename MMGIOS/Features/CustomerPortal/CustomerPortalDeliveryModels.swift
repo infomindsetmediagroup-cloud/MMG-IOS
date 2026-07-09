@@ -78,15 +78,17 @@ struct CustomerDeliveryPackage: Identifiable {
     let releaseNotes: String
     let approvalSummary: String
     let controlledAccessLocation: String
+    let gateSummary: String
     let publishedAt: Date?
 }
 
 struct SecureAssetAccessPolicy {
+    private let gatePolicy = CustomerReleaseGatePolicy()
+
     func isCustomerVisible(_ release: CustomerReleaseRecord) -> Bool {
         release.status == CustomerReleaseStatus.published.rawValue
-            && release.releaseLocation.hasPrefix("portal-secure://")
-            && !release.approvedBy.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && release.publishedAt != nil
+            && gatePolicy.canPublish(release)
     }
 
     func customerFacingLocation(for release: CustomerReleaseRecord) -> String {
@@ -95,6 +97,12 @@ struct SecureAssetAccessPolicy {
         }
 
         return "portal-secure://projects/\(release.projectID)/deliverables/\(release.deliverableID)/v\(release.version)"
+    }
+
+    func gateSummary(for release: CustomerReleaseRecord) -> String {
+        let report = gatePolicy.evaluate(release)
+        if report.passed { return report.summary }
+        return "\(report.summary): \(report.blockingDetails.joined(separator: " "))"
     }
 }
 
@@ -182,6 +190,7 @@ struct CustomerDeliverablesLibraryBuilder {
             releaseNotes: release.summary,
             approvalSummary: release.approvedBy.isEmpty ? "Approval metadata pending." : "Approved by \(release.approvedBy). \(release.approvalNotes)",
             controlledAccessLocation: accessPolicy.customerFacingLocation(for: release),
+            gateSummary: accessPolicy.gateSummary(for: release),
             publishedAt: release.publishedAt
         )
     }
