@@ -85,6 +85,8 @@ struct SecureAssetAccessPolicy {
     func isCustomerVisible(_ release: CustomerReleaseRecord) -> Bool {
         release.status == CustomerReleaseStatus.published.rawValue
             && release.releaseLocation.hasPrefix("portal-secure://")
+            && !release.approvedBy.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && release.publishedAt != nil
     }
 
     func customerFacingLocation(for release: CustomerReleaseRecord) -> String {
@@ -101,7 +103,7 @@ struct CustomerDeliverablesLibraryBuilder {
 
     func visiblePublishedReleases(from releases: [CustomerReleaseRecord]) -> [CustomerReleaseRecord] {
         releases
-            .filter { $0.status == CustomerReleaseStatus.published.rawValue }
+            .filter { accessPolicy.isCustomerVisible($0) }
             .sorted { lhs, rhs in
                 if lhs.projectID == rhs.projectID { return lhs.version > rhs.version }
                 return lhs.updatedAt > rhs.updatedAt
@@ -206,5 +208,10 @@ struct CustomerDeliverablesLibraryBuilder {
             status: .unread,
             createdAt: release.publishedAt ?? .now
         )
+    }
+
+    func markRead(_ notification: CustomerPortalNotificationRecord) {
+        notification.status = CustomerPortalNotificationStatus.read.rawValue
+        notification.readAt = .now
     }
 }
