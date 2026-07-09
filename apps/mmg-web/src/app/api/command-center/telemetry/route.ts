@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getDevelopmentCommandCenterTelemetry } from '@/lib/command-center/liveOperations';
+import { getCommandCenterTelemetryProvider } from '@/lib/command-center/liveOperations';
 
 export async function GET() {
-  const telemetry = getDevelopmentCommandCenterTelemetry();
+  const telemetryProvider = getCommandCenterTelemetryProvider();
+  const telemetry = await telemetryProvider.getTelemetry();
 
   return NextResponse.json({
     ok: true,
