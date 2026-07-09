@@ -23,6 +23,9 @@ enum DesignStudioPermissionLevel: String, CaseIterable, Identifiable {
 
 @Model
 final class PersistedDesignStudioVersionRecord {
+    var relationshipID: String
+    var projectRelationshipID: String
+    var assetRelationshipID: String
     var assetTitle: String
     var projectTitle: String
     var versionLabel: String
@@ -32,6 +35,9 @@ final class PersistedDesignStudioVersionRecord {
     var createdAt: Date
 
     init(
+        relationshipID: String = UUID().uuidString,
+        projectRelationshipID: String = "",
+        assetRelationshipID: String = "",
         assetTitle: String,
         projectTitle: String,
         versionLabel: String,
@@ -40,6 +46,9 @@ final class PersistedDesignStudioVersionRecord {
         kairosAssisted: Bool = false,
         createdAt: Date = .now
     ) {
+        self.relationshipID = relationshipID
+        self.projectRelationshipID = projectRelationshipID
+        self.assetRelationshipID = assetRelationshipID
         self.assetTitle = assetTitle
         self.projectTitle = projectTitle
         self.versionLabel = versionLabel
@@ -52,6 +61,9 @@ final class PersistedDesignStudioVersionRecord {
 
 @Model
 final class PersistedDesignStudioExportJob {
+    var relationshipID: String
+    var projectRelationshipID: String
+    var assetRelationshipID: String
     var assetTitle: String
     var projectTitle: String
     var requestedFormat: String
@@ -64,6 +76,9 @@ final class PersistedDesignStudioExportJob {
     var updatedAt: Date
 
     init(
+        relationshipID: String = UUID().uuidString,
+        projectRelationshipID: String = "",
+        assetRelationshipID: String = "",
         assetTitle: String,
         projectTitle: String,
         requestedFormat: String,
@@ -75,6 +90,9 @@ final class PersistedDesignStudioExportJob {
         createdAt: Date = .now,
         updatedAt: Date = .now
     ) {
+        self.relationshipID = relationshipID
+        self.projectRelationshipID = projectRelationshipID
+        self.assetRelationshipID = assetRelationshipID
         self.assetTitle = assetTitle
         self.projectTitle = projectTitle
         self.requestedFormat = requestedFormat
@@ -94,6 +112,8 @@ final class PersistedDesignStudioExportJob {
 
 @Model
 final class PersistedDesignStudioPermissionRecord {
+    var relationshipID: String
+    var projectRelationshipID: String
     var customerName: String
     var projectTitle: String
     var principalName: String
@@ -104,6 +124,8 @@ final class PersistedDesignStudioPermissionRecord {
     var updatedAt: Date
 
     init(
+        relationshipID: String = UUID().uuidString,
+        projectRelationshipID: String = "",
         customerName: String,
         projectTitle: String,
         principalName: String,
@@ -113,6 +135,8 @@ final class PersistedDesignStudioPermissionRecord {
         createdAt: Date = .now,
         updatedAt: Date = .now
     ) {
+        self.relationshipID = relationshipID
+        self.projectRelationshipID = projectRelationshipID
         self.customerName = customerName
         self.projectTitle = projectTitle
         self.principalName = principalName
