@@ -13,7 +13,8 @@ struct MMGIOSApp: App {
             WorkflowRecord.self,
             WorkflowTransitionRecord.self,
             TaskRecord.self,
-            TaskDependencyRecord.self
+            TaskDependencyRecord.self,
+            ProductionQueueRecord.self
         ])
     }
 }
