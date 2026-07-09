@@ -1,10 +1,12 @@
 import Foundation
 
 struct ReleaseApprovalService {
+    private let accessPolicy = SecureAssetAccessPolicy()
+
     func createDraftRelease(from deliverable: DeliverableRecord) -> CustomerReleaseRecord? {
         guard canCreateRelease(from: deliverable) else { return nil }
 
-        return CustomerReleaseRecord(
+        let draftRelease = CustomerReleaseRecord(
             deliverableID: deliverable.id,
             projectID: deliverable.projectID,
             workflowID: deliverable.workflowID,
@@ -15,9 +17,12 @@ struct ReleaseApprovalService {
             status: .internalReview,
             channel: .customerPortal,
             version: deliverable.version,
-            releaseLocation: "workspace://customer-releases/deliverables/\(deliverable.id)/v\(deliverable.version)",
+            releaseLocation: "portal-secure://projects/\(deliverable.projectID)/deliverables/\(deliverable.id)/v\(deliverable.version)",
             gateSummary: releaseGateSummary(for: deliverable)
         )
+
+        draftRelease.releaseLocation = accessPolicy.customerFacingLocation(for: draftRelease)
+        return draftRelease
     }
 
     func approve(_ release: CustomerReleaseRecord, approver: String, notes: String) {
@@ -25,12 +30,14 @@ struct ReleaseApprovalService {
         release.approvedBy = approver
         release.approvalNotes = notes
         release.approvedAt = .now
+        release.releaseLocation = accessPolicy.customerFacingLocation(for: release)
         release.updatedAt = .now
     }
 
     func publish(_ release: CustomerReleaseRecord) {
         guard release.status == CustomerReleaseStatus.approved.rawValue else { return }
         release.status = CustomerReleaseStatus.published.rawValue
+        release.releaseLocation = accessPolicy.customerFacingLocation(for: release)
         release.publishedAt = .now
         release.updatedAt = .now
     }
