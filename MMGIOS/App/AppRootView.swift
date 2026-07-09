@@ -12,6 +12,11 @@ struct AppRootView: View {
                     Label("Executive", systemImage: "sparkles.rectangle.stack")
                 }
 
+            ExecutiveChatView()
+                .tabItem {
+                    Label("Chat", systemImage: "message.badge.waveform")
+                }
+
             CommandCenterRuntimeSummaryView()
                 .tabItem {
                     Label("Command", systemImage: "square.grid.2x2")
