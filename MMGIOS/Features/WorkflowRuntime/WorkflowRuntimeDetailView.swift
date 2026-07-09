@@ -2,11 +2,15 @@ import SwiftData
 import SwiftUI
 
 struct WorkflowRuntimeDetailView: View {
+    @Environment(\.modelContext) private var modelContext
+
     let workflow: WorkflowRecord
 
     @Query(sort: \WorkflowTransitionRecord.createdAt, order: .reverse) private var transitions: [WorkflowTransitionRecord]
     @Query(sort: \TaskRecord.updatedAt, order: .reverse) private var tasks: [TaskRecord]
     @Query(sort: \ProductionQueueRecord.updatedAt, order: .reverse) private var queueItems: [ProductionQueueRecord]
+
+    private let runtime = WorkflowRuntimeService()
 
     private var workflowTransitions: [WorkflowTransitionRecord] {
         transitions.filter { $0.workflowID == workflow.id }
@@ -51,6 +55,22 @@ struct WorkflowRuntimeDetailView: View {
                 Text("\(workflow.progress)% complete")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            Section("Command Actions") {
+                Button("Advance Stage") { advanceWorkflow() }
+                Button("Request Approval") { record(runtime.requestApproval(workflow: workflow, actor: "Kairos Runtime")) }
+                Button("Approve") { record(runtime.approve(workflow: workflow, actor: "Kairos Runtime")) }
+                Button("Reject") { record(runtime.reject(workflow: workflow, actor: "Kairos Runtime")) }
+                Button(isBlocked ? "Resume Workflow" : "Block Workflow") {
+                    if isBlocked {
+                        record(runtime.resume(workflow: workflow, actor: "Kairos Runtime"))
+                    } else {
+                        record(runtime.block(workflow: workflow, actor: "Kairos Runtime"))
+                    }
+                }
+                Button("Complete") { record(runtime.complete(workflow: workflow, actor: "Kairos Runtime")) }
+                Button("Archive") { record(runtime.archive(workflow: workflow, actor: "Kairos Runtime")) }
             }
 
             Section("Recommended Next Action") {
@@ -141,6 +161,26 @@ struct WorkflowRuntimeDetailView: View {
         }
         .navigationTitle("Workflow Detail")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func advanceWorkflow() {
+        guard let currentStage = RuntimeWorkflowStage(rawValue: workflow.stage),
+              let nextStage = WorkflowStagePolicy.nextStages(from: currentStage).first
+        else { return }
+
+        record(runtime.transition(
+            workflow: workflow,
+            to: nextStage,
+            actor: "Kairos Runtime",
+            trigger: "Detail command advance",
+            notes: "Advanced from workflow detail command layer."
+        ))
+    }
+
+    private func record(_ transition: WorkflowTransitionRecord?) {
+        guard let transition else { return }
+        modelContext.insert(transition)
+        try? modelContext.save()
     }
 }
 
