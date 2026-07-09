@@ -15,9 +15,10 @@ Implemented code-level foundation:
 - Version history model
 - Export job model
 - Permission record model
+- Audit event model
 - Stable project relationship IDs
 - Stable asset relationship IDs
-- Stable IDs on version, export, and permission records
+- Stable IDs on version, export, permission, and audit records
 - Customer Portal navigation entry
 - Design Studio workspace screen
 - Project detail view
@@ -29,8 +30,10 @@ Implemented code-level foundation:
 - Export approval action
 - Export rejection/failure action
 - Approval/rejection version records
+- Approval/rejection audit events
+- Project, asset, and workspace audit timelines
 - Asset status update on approved export release
-- Seeded demo projects, assets, version records, export jobs, and permissions
+- Seeded demo projects, assets, version records, export jobs, permissions, and audit events
 - SwiftData model container registration
 - Preview model container registration
 
@@ -60,6 +63,7 @@ This is represented through:
 - Manual create flows for live project and asset testing
 - Executable approval/rejection controls on export jobs
 - Stable relationship IDs with title-based fallback for early records
+- Audit timeline across creation, export queueing, approvals, rejections, and release decisions
 
 ## Next Implementation Pass
 
@@ -68,11 +72,11 @@ Recommended next pass:
 1. Connect Design Studio records to the broader Asset Library once that module is implemented.
 2. Connect Customer Knowledge Vault references to real customer knowledge records.
 3. Add Kairos generation/refinement action stubs for document, image, and brand workflows.
-4. Add production audit/activity timeline.
-5. Add basic filtering by project type, status, and approval queue.
-6. Add edit/update flows for existing projects and assets.
-7. Add dedicated export job creation form.
-8. Add migration/backfill support for any title-linked records created before stable IDs.
+4. Add basic filtering by project type, status, and approval queue.
+5. Add edit/update flows for existing projects and assets.
+6. Add dedicated export job creation form.
+7. Add migration/backfill support for any title-linked records created before stable IDs.
+8. Add audit filters by event type, project, asset, and approval status.
 
 ## Validation Note
 
