@@ -11,7 +11,9 @@ struct MMGIOSApp: App {
             PersistedCustomerRequestRecord.self,
             PersistedValueDiscoveryProfile.self,
             WorkflowRecord.self,
-            WorkflowTransitionRecord.self
+            WorkflowTransitionRecord.self,
+            TaskRecord.self,
+            TaskDependencyRecord.self
         ])
     }
 }
