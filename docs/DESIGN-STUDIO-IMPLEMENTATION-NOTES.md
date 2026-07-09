@@ -15,6 +15,9 @@ Implemented code-level foundation:
 - Version history model
 - Export job model
 - Permission record model
+- Stable project relationship IDs
+- Stable asset relationship IDs
+- Stable IDs on version, export, and permission records
 - Customer Portal navigation entry
 - Design Studio workspace screen
 - Project detail view
@@ -56,19 +59,20 @@ This is represented through:
 - Project-level and asset-level production detail views
 - Manual create flows for live project and asset testing
 - Executable approval/rejection controls on export jobs
+- Stable relationship IDs with title-based fallback for early records
 
 ## Next Implementation Pass
 
 Recommended next pass:
 
-1. Add relationship IDs instead of title-based linkage.
-2. Connect Design Studio records to the broader Asset Library once that module is implemented.
-3. Connect Customer Knowledge Vault references to real customer knowledge records.
-4. Add Kairos generation/refinement action stubs for document, image, and brand workflows.
-5. Add production audit/activity timeline.
-6. Add basic filtering by project type, status, and approval queue.
-7. Add edit/update flows for existing projects and assets.
-8. Add dedicated export job creation form.
+1. Connect Design Studio records to the broader Asset Library once that module is implemented.
+2. Connect Customer Knowledge Vault references to real customer knowledge records.
+3. Add Kairos generation/refinement action stubs for document, image, and brand workflows.
+4. Add production audit/activity timeline.
+5. Add basic filtering by project type, status, and approval queue.
+6. Add edit/update flows for existing projects and assets.
+7. Add dedicated export job creation form.
+8. Add migration/backfill support for any title-linked records created before stable IDs.
 
 ## Validation Note
 
