@@ -8,6 +8,7 @@ struct CustomerReleaseDashboardView: View {
 
     private let releaseService = ReleaseApprovalService()
     private let releaseGatePolicy = CustomerReleaseGatePolicy()
+    private let seedFactory = CustomerReleaseSeedFactory()
 
     private var eligibleDeliverables: [DeliverableRecord] {
         deliverables.filter { releaseService.canCreateRelease(from: $0) }
@@ -43,6 +44,13 @@ struct CustomerReleaseDashboardView: View {
                     LabeledContent("Approved", value: "\(approvedReleases.count)")
                     LabeledContent("Published", value: "\(publishedReleases.count)")
                     LabeledContent("Blocked by gates", value: "\(blockedReleases.count)")
+                }
+
+                Section("Operator Controls") {
+                    Button("Seed Sample Release Data") { seedSampleReleaseData() }
+                    Text("Sample data creates blocked, approved, and published release states so the gate detail screen can be inspected without waiting for live customer records.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 Section("Release Queue") {
@@ -142,6 +150,22 @@ struct CustomerReleaseDashboardView: View {
     private func publishFirstApprovedRelease() {
         guard let release = approvedReleases.first else { return }
         releaseService.publish(release)
+        try? modelContext.save()
+    }
+
+    private func seedSampleReleaseData() {
+        seedFactory.makeSampleDeliverables().forEach { deliverable in
+            if deliverables.contains(where: { $0.id == deliverable.id }) == false {
+                modelContext.insert(deliverable)
+            }
+        }
+
+        seedFactory.makeSampleReleases().forEach { release in
+            if releases.contains(where: { $0.id == release.id }) == false {
+                modelContext.insert(release)
+            }
+        }
+
         try? modelContext.save()
     }
 }
