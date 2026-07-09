@@ -65,6 +65,9 @@ struct DesignStudioWorkspaceView: View {
                                 Text(project.summary)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+                                Text("ID: \(project.relationshipID)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
                                 Text("Vault: \(project.knowledgeVaultKey.isEmpty ? "Not linked" : project.knowledgeVaultKey)")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
@@ -89,6 +92,9 @@ struct DesignStudioWorkspaceView: View {
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                 Text(asset.storagePath)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                Text("Project ID: \(asset.projectRelationshipID.isEmpty ? "fallback title link" : asset.projectRelationshipID)")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                                 if !asset.kairosHistorySummary.isEmpty {
@@ -183,7 +189,10 @@ struct DesignStudioWorkspaceView: View {
             DesignStudioProjectEditorView()
         }
         .sheet(isPresented: $showingAssetEditor) {
-            DesignStudioAssetEditorView(defaultProjectTitle: projects.first?.title ?? "")
+            DesignStudioAssetEditorView(
+                defaultProjectTitle: projects.first?.title ?? "",
+                defaultProjectRelationshipID: projects.first?.relationshipID ?? ""
+            )
         }
         .task { seedDesignStudioIfNeeded() }
     }
@@ -215,6 +224,7 @@ struct DesignStudioWorkspaceView: View {
         modelContext.insert(imageProject)
 
         let manuscriptAsset = PersistedDesignStudioAsset(
+            projectRelationshipID: bookProject.relationshipID,
             title: "Starter Guide Draft Manuscript",
             projectTitle: bookProject.title,
             assetType: .manuscript,
@@ -227,6 +237,7 @@ struct DesignStudioWorkspaceView: View {
         )
 
         let thumbnailAsset = PersistedDesignStudioAsset(
+            projectRelationshipID: imageProject.relationshipID,
             title: "Launch Thumbnail Concept",
             projectTitle: imageProject.title,
             assetType: .socialGraphic,
@@ -241,14 +252,14 @@ struct DesignStudioWorkspaceView: View {
         modelContext.insert(manuscriptAsset)
         modelContext.insert(thumbnailAsset)
 
-        modelContext.insert(PersistedDesignStudioVersionRecord(assetTitle: manuscriptAsset.title, projectTitle: bookProject.title, versionLabel: "v1", changeSummary: "Initial uploaded manuscript captured for editing, formatting, and export preparation.", changedBy: "MMG Demo Customer"))
-        modelContext.insert(PersistedDesignStudioVersionRecord(assetTitle: thumbnailAsset.title, projectTitle: imageProject.title, versionLabel: "v1", changeSummary: "First Kairos-assisted thumbnail concept generated from customer brand kit and launch objective.", changedBy: "Kairos", kairosAssisted: true))
+        modelContext.insert(PersistedDesignStudioVersionRecord(projectRelationshipID: bookProject.relationshipID, assetRelationshipID: manuscriptAsset.relationshipID, assetTitle: manuscriptAsset.title, projectTitle: bookProject.title, versionLabel: "v1", changeSummary: "Initial uploaded manuscript captured for editing, formatting, and export preparation.", changedBy: "MMG Demo Customer"))
+        modelContext.insert(PersistedDesignStudioVersionRecord(projectRelationshipID: imageProject.relationshipID, assetRelationshipID: thumbnailAsset.relationshipID, assetTitle: thumbnailAsset.title, projectTitle: imageProject.title, versionLabel: "v1", changeSummary: "First Kairos-assisted thumbnail concept generated from customer brand kit and launch objective.", changedBy: "Kairos", kairosAssisted: true))
 
-        modelContext.insert(PersistedDesignStudioExportJob(assetTitle: manuscriptAsset.title, projectTitle: bookProject.title, requestedFormat: "PDF", destinationPath: "/customers/demo/exports/creator-education-starter-guide-v1.pdf", status: .readyForReview, requestedBy: "Kairos", approvalRequired: true, releaseNotes: "Export requires approval before becoming a customer deliverable."))
-        modelContext.insert(PersistedDesignStudioExportJob(assetTitle: thumbnailAsset.title, projectTitle: imageProject.title, requestedFormat: "PNG 9:16", destinationPath: "/customers/demo/exports/launch-thumbnail-v1.png", status: .queued, requestedBy: "MMG Internal", approvalRequired: true, releaseNotes: "Generated intermediate asset remains in-house until approved."))
+        modelContext.insert(PersistedDesignStudioExportJob(projectRelationshipID: bookProject.relationshipID, assetRelationshipID: manuscriptAsset.relationshipID, assetTitle: manuscriptAsset.title, projectTitle: bookProject.title, requestedFormat: "PDF", destinationPath: "/customers/demo/exports/creator-education-starter-guide-v1.pdf", status: .readyForReview, requestedBy: "Kairos", approvalRequired: true, releaseNotes: "Export requires approval before becoming a customer deliverable."))
+        modelContext.insert(PersistedDesignStudioExportJob(projectRelationshipID: imageProject.relationshipID, assetRelationshipID: thumbnailAsset.relationshipID, assetTitle: thumbnailAsset.title, projectTitle: imageProject.title, requestedFormat: "PNG 9:16", destinationPath: "/customers/demo/exports/launch-thumbnail-v1.png", status: .queued, requestedBy: "MMG Internal", approvalRequired: true, releaseNotes: "Generated intermediate asset remains in-house until approved."))
 
-        modelContext.insert(PersistedDesignStudioPermissionRecord(customerName: "MMG Demo Customer", projectTitle: bookProject.title, principalName: "MMG Demo Customer", permissionLevel: .reviewer, canExportApprovedDeliverables: true, canAccessIntermediateAssets: false))
-        modelContext.insert(PersistedDesignStudioPermissionRecord(customerName: "MMG Demo Customer", projectTitle: imageProject.title, principalName: "MMG Production", permissionLevel: .productionOnly, canExportApprovedDeliverables: true, canAccessIntermediateAssets: true))
+        modelContext.insert(PersistedDesignStudioPermissionRecord(projectRelationshipID: bookProject.relationshipID, customerName: "MMG Demo Customer", projectTitle: bookProject.title, principalName: "MMG Demo Customer", permissionLevel: .reviewer, canExportApprovedDeliverables: true, canAccessIntermediateAssets: false))
+        modelContext.insert(PersistedDesignStudioPermissionRecord(projectRelationshipID: imageProject.relationshipID, customerName: "MMG Demo Customer", projectTitle: imageProject.title, principalName: "MMG Production", permissionLevel: .productionOnly, canExportApprovedDeliverables: true, canAccessIntermediateAssets: true))
 
         try? modelContext.save()
     }
