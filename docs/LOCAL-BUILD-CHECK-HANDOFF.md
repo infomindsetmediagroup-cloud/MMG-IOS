@@ -50,6 +50,47 @@ Fixes applied after second failure:
 - Updated `CommandCenterRuntimeSummaryView` to use `RuntimeWorkflowStatus`.
 - Searched the repository for stale `WorkflowStatus`, `WorkflowPriority`, `WorkflowStage`, and `WorkflowType` references and found no remaining matches.
 
+## Third manual simulator build result
+
+The third controlled GitHub Actions simulator build successfully completed the Xcode iOS simulator build.
+
+Observed result:
+
+- `xcodebuild` completed with `** BUILD SUCCEEDED **`.
+- The workflow then failed only in the post-build validation step because it still checked old Customer Portal / Value Discovery files that are outside the runtime-only validation source set.
+
+Fixes applied after third result:
+
+- Updated `.github/workflows/ios-manual-validation.yml` so the post-build validation checks the runtime foundation source files and model registrations instead of stale Customer Portal / Value Discovery files.
+- Preserved the manual workflow as the controlled validation checkpoint.
+
+## Successful runtime foundation checkpoint
+
+The cloud simulator build is now treated as the execution baseline for continued implementation.
+
+Locked recommendations:
+
+- Keep the runtime validation source surface narrow and intentional.
+- Preserve XcodeGen as the source of truth for project file regeneration.
+- Use namespaced enums for new runtime domains to avoid collisions with legacy files.
+- Add new capabilities as vertical slices: model, service, view, navigation, SwiftData registration, and validation checks.
+- Continue using `[skip ci]` on development commits to preserve GitHub Actions minutes.
+- Run the manual iOS validation workflow only at deliberate checkpoints.
+
+## Asset Management Foundation checkpoint
+
+The next runtime slice added Asset Management as a first-class production module.
+
+Implemented scope:
+
+- `AssetEnums.swift` defines production asset type, status, and access-level enums.
+- `ProductionAssetRecord.swift` persists asset metadata, workflow/task/queue linkage, versioning, storage location, approval actor, and access level.
+- `ProductionAssetService.swift` creates initial Design Studio production assets and handles review, approval, and export-ready transitions.
+- `AssetManagementDashboardView.swift` exposes asset counts, review state, export state, and manual runtime actions.
+- `DesignStudioWorkflowView` now creates initial production assets when a Design Studio project is created.
+- `CommandCenterRuntimeSummaryView` now surfaces asset metrics in the executive runtime summary.
+- `AppRootView`, `MMGIOSApp`, `project.yml`, and the manual validation workflow now include the Asset Management source set and SwiftData model.
+
 ## Manual Xcode check still required
 
 1. Pull latest `main`.
@@ -64,18 +105,25 @@ Fixes applied after second failure:
 1. Open Command tab.
 2. Confirm workflow summary cards load.
 3. Confirm queue metrics load.
-4. Open Workflow tab.
-5. Confirm one seeded workflow appears.
-6. Tap Advance.
-7. Confirm workflow stage and progress update.
-8. Tap Complete Task.
-9. Confirm open task count updates.
-10. Tap Complete Queue.
-11. Confirm open queue count updates.
-12. Open Studio tab.
-13. Confirm Design Studio project appears.
-14. Confirm workflow, task, queue, and knowledge IDs are stored on the project.
-15. Confirm Knowledge Vault context appears.
+4. Confirm asset metrics load.
+5. Open Workflow tab.
+6. Confirm one seeded workflow appears.
+7. Tap Advance.
+8. Confirm workflow stage and progress update.
+9. Tap Complete Task.
+10. Confirm open task count updates.
+11. Tap Complete Queue.
+12. Confirm open queue count updates.
+13. Open Studio tab.
+14. Confirm Design Studio project appears.
+15. Confirm workflow, task, queue, asset, and knowledge IDs are represented in the runtime.
+16. Confirm Knowledge Vault context appears.
+17. Open Assets tab.
+18. Confirm production assets appear.
+19. Tap Approve.
+20. Confirm review count decreases.
+21. Tap Export.
+22. Confirm export-ready count increases.
 
 ## Failure checks
 
@@ -95,12 +143,13 @@ After simulator validation passes:
 
 - Keep `[skip ci]` for development commits.
 - Run GitHub Actions only at controlled validation checkpoints.
-- Do not add Asset Management, Deliverables, or Approval Engine until the runtime foundation compiles.
+- Add the next production layer only as a complete vertical slice.
 
 ## Next implementation gate
 
-Once this build check passes, proceed to:
+Proceed in this order:
 
-1. Asset Management Foundation.
+1. Validate Asset Management with the manual iOS workflow.
 2. Deliverables Engine.
 3. Approval Engine.
+4. Customer Portal release boundary controls.

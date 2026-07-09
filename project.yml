@@ -15,7 +15,10 @@ targets:
     sources:
       - path: MMGIOS/App
       - path: MMGIOS/Config
+      - path: MMGIOS/Features/AssetManagement
       - path: MMGIOS/Features/CommandCenter
+      - path: MMGIOS/Features/CustomerPortal
+      - path: MMGIOS/Features/Deliverables
       - path: MMGIOS/Features/DesignStudio
       - path: MMGIOS/Features/KnowledgeVault
       - path: MMGIOS/Features/ProductionQueue

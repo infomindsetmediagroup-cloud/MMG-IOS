@@ -4,12 +4,14 @@ import SwiftUI
 struct DesignStudioWorkflowView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \DesignStudioProjectRecord.updatedAt, order: .reverse) private var projects: [DesignStudioProjectRecord]
+    @Query(sort: \ProductionAssetRecord.updatedAt, order: .reverse) private var assets: [ProductionAssetRecord]
     @Query(sort: \KnowledgeVaultRecord.updatedAt, order: .reverse) private var knowledgeRecords: [KnowledgeVaultRecord]
     @Query(sort: \WorkflowRecord.updatedAt, order: .reverse) private var workflows: [WorkflowRecord]
     @Query(sort: \TaskRecord.updatedAt, order: .reverse) private var tasks: [TaskRecord]
     @Query(sort: \ProductionQueueRecord.updatedAt, order: .reverse) private var queueItems: [ProductionQueueRecord]
 
     private let factory = DesignStudioProjectFactory()
+    private let assetService = ProductionAssetService()
 
     var body: some View {
         NavigationStack {
@@ -19,12 +21,13 @@ struct DesignStudioWorkflowView: View {
                     LabeledContent("Workflow records", value: "\(workflows.count)")
                     LabeledContent("Tasks", value: "\(tasks.count)")
                     LabeledContent("Queue items", value: "\(queueItems.count)")
+                    LabeledContent("Assets", value: "\(assets.count)")
                     LabeledContent("Knowledge records", value: "\(knowledgeRecords.count)")
                 }
 
                 Section("Projects") {
                     if projects.isEmpty {
-                        Text("No Design Studio projects yet. Create a production project to validate automatic workflow, task, queue, and Knowledge Vault generation.")
+                        Text("No Design Studio projects yet. Create a production project to validate automatic workflow, task, queue, asset, and Knowledge Vault generation.")
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(projects) { project in
@@ -35,6 +38,22 @@ struct DesignStudioWorkflowView: View {
                                     .foregroundStyle(.secondary)
                                 Text("Workflow: \(project.workflowID)")
                                     .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+
+                Section("Production Assets") {
+                    if assets.isEmpty {
+                        Text("No assets generated yet.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(assets.prefix(6)) { asset in
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(asset.title).font(.headline)
+                                Text("\(asset.assetType) • \(asset.status) • \(asset.accessLevel)")
+                                    .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -90,6 +109,7 @@ struct DesignStudioWorkflowView: View {
         modelContext.insert(package.task)
         modelContext.insert(package.queueItem)
         modelContext.insert(package.project)
+        assetService.createInitialAssets(for: package.project).forEach { modelContext.insert($0) }
         try? modelContext.save()
     }
 }
@@ -98,6 +118,7 @@ struct DesignStudioWorkflowView: View {
     DesignStudioWorkflowView()
         .modelContainer(for: [
             DesignStudioProjectRecord.self,
+            ProductionAssetRecord.self,
             KnowledgeVaultRecord.self,
             WorkflowRecord.self,
             TaskRecord.self,

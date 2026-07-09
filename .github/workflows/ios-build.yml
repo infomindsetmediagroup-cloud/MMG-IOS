@@ -13,26 +13,51 @@ concurrency:
 jobs:
   xcode-build:
     name: Xcode Build Verification
-    runs-on: macos-latest
+    runs-on: macos-15-arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Show Xcode version
-        run: xcodebuild -version
+        run: |
+          xcodebuild -version
+          xcode-select -p
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Inspect generated project
+        run: |
+          xcodebuild -list -project MMGIOS.xcodeproj
+          xcodebuild -showdestinations -project MMGIOS.xcodeproj -scheme MMGIOS || true
 
       - name: Resolve package dependencies
         run: |
           xcodebuild \
             -project MMGIOS.xcodeproj \
+            -scheme MMGIOS \
             -resolvePackageDependencies
 
       - name: Build Debug for iOS Simulator
         run: |
+          set -o pipefail
           xcodebuild \
             -project MMGIOS.xcodeproj \
             -scheme MMGIOS \
+            -destination "generic/platform=iOS Simulator" \
             -configuration Debug \
-            -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO \
             build
+
+      - name: Verify deliverables runtime wiring
+        run: |
+          test -f MMGIOS/Features/Deliverables/DeliverableEnums.swift
+          test -f MMGIOS/Features/Deliverables/DeliverableRecord.swift
+          test -f MMGIOS/Features/Deliverables/DeliverableService.swift
+          test -f MMGIOS/Features/Deliverables/DeliverablesDashboardView.swift
+          grep -q "DeliverableRecord" MMGIOS/App/MMGIOSApp.swift
+          grep -q "DeliverablesDashboardView" MMGIOS/App/AppRootView.swift
+          grep -q "MMGIOS/Features/Deliverables" project.yml

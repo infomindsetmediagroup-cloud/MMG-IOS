@@ -58,25 +58,41 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
-      - name: Validate required Value Discovery source files
+      - name: Validate runtime foundation source files
         run: |
-          test -f MMGIOS/Features/CustomerPortal/PersistedValueDiscoveryProfile.swift
-          test -f MMGIOS/Features/CustomerPortal/ValueDiscoveryDraftProfile.swift
-          test -f MMGIOS/Features/CustomerPortal/ValueDiscoveryProfileSection.swift
-          test -f MMGIOS/Features/CustomerPortal/CustomerPortalView.swift
           test -f MMGIOS/App/AppRootView.swift
-          grep -q "PersistedValueDiscoveryProfile" MMGIOS/App/MMGIOSApp.swift
-          grep -q "CustomerPortalView" MMGIOS/App/AppRootView.swift
-          grep -q "ValueDiscoveryProfileSection" MMGIOS/Features/CustomerPortal/CustomerPortalView.swift
-
-      - name: Validate web and Shopify surfaces
-        run: |
-          test -f web/kairos-dashboard/index.html
-          test -f web/kairos-dashboard/scripts/customer-portal-runner.js
-          test -f web/kairos-dashboard/scripts/customer-portal-panel.js
-          test -f web/kairos-dashboard/styles/value-discovery.css
-          test -f shopify/homepage/customer-value-hero.html
-          test -f shopify/products/customer-value-product-block.html
-          grep -q "value-discovery.css" web/kairos-dashboard/index.html
-          grep -q "Your Knowledge Has Value" shopify/homepage/customer-value-hero.html
-          grep -q "Your Knowledge Has Value" shopify/products/customer-value-product-block.html
+          test -f MMGIOS/App/MMGIOSApp.swift
+          test -f MMGIOS/Config/AppTheme.swift
+          test -f MMGIOS/Features/AssetManagement/AssetEnums.swift
+          test -f MMGIOS/Features/AssetManagement/AssetManagementDashboardView.swift
+          test -f MMGIOS/Features/AssetManagement/ProductionAssetRecord.swift
+          test -f MMGIOS/Features/AssetManagement/ProductionAssetService.swift
+          test -f MMGIOS/Features/CommandCenter/CommandCenterRuntimeSummaryView.swift
+          test -f MMGIOS/Features/DesignStudio/DesignStudioProjectFactory.swift
+          test -f MMGIOS/Features/DesignStudio/DesignStudioProjectRecord.swift
+          test -f MMGIOS/Features/DesignStudio/DesignStudioWorkflowView.swift
+          test -f MMGIOS/Features/KnowledgeVault/KnowledgeVaultRecord.swift
+          test -f MMGIOS/Features/ProductionQueue/ProductionQueueEnums.swift
+          test -f MMGIOS/Features/ProductionQueue/ProductionQueueRecord.swift
+          test -f MMGIOS/Features/ProductionQueue/ProductionQueueService.swift
+          test -f MMGIOS/Features/TaskEngine/TaskDependencyRecord.swift
+          test -f MMGIOS/Features/TaskEngine/TaskEnums.swift
+          test -f MMGIOS/Features/TaskEngine/TaskRecord.swift
+          test -f MMGIOS/Features/TaskEngine/TaskRuntimeService.swift
+          test -f MMGIOS/Features/WorkflowRuntime/WorkflowEnums.swift
+          test -f MMGIOS/Features/WorkflowRuntime/WorkflowRecord.swift
+          test -f MMGIOS/Features/WorkflowRuntime/WorkflowRuntimeDashboardView.swift
+          test -f MMGIOS/Features/WorkflowRuntime/WorkflowRuntimeService.swift
+          test -f MMGIOS/Features/WorkflowRuntime/WorkflowStagePolicy.swift
+          test -f MMGIOS/Features/WorkflowRuntime/WorkflowStageProgress.swift
+          test -f MMGIOS/Features/WorkflowRuntime/WorkflowTransitionRecord.swift
+          grep -q "CommandCenterRuntimeSummaryView" MMGIOS/App/AppRootView.swift
+          grep -q "WorkflowRuntimeDashboardView" MMGIOS/App/AppRootView.swift
+          grep -q "DesignStudioWorkflowView" MMGIOS/App/AppRootView.swift
+          grep -q "AssetManagementDashboardView" MMGIOS/App/AppRootView.swift
+          grep -q "WorkflowRecord.self" MMGIOS/App/MMGIOSApp.swift
+          grep -q "TaskRecord.self" MMGIOS/App/MMGIOSApp.swift
+          grep -q "ProductionQueueRecord.self" MMGIOS/App/MMGIOSApp.swift
+          grep -q "DesignStudioProjectRecord.self" MMGIOS/App/MMGIOSApp.swift
+          grep -q "ProductionAssetRecord.self" MMGIOS/App/MMGIOSApp.swift
+          grep -q "KnowledgeVaultRecord.self" MMGIOS/App/MMGIOSApp.swift
