@@ -7,11 +7,11 @@ struct CommandCenterRuntimeSummaryView: View {
     @Query(sort: \ProductionQueueRecord.updatedAt, order: .reverse) private var queueItems: [ProductionQueueRecord]
 
     private var activeWorkflows: [WorkflowRecord] {
-        workflows.filter { $0.status == WorkflowStatus.active.rawValue || $0.status == WorkflowStatus.draft.rawValue }
+        workflows.filter { $0.status == RuntimeWorkflowStatus.active.rawValue || $0.status == RuntimeWorkflowStatus.draft.rawValue }
     }
 
     private var approvalWorkflows: [WorkflowRecord] {
-        workflows.filter { $0.status == WorkflowStatus.waitingForApproval.rawValue }
+        workflows.filter { $0.status == RuntimeWorkflowStatus.waitingForApproval.rawValue }
     }
 
     private var openTasks: [TaskRecord] {
