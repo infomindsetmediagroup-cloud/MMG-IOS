@@ -61,6 +61,7 @@ struct AppRootView: View {
             PersistedDesignStudioAsset.self,
             PersistedDesignStudioVersionRecord.self,
             PersistedDesignStudioExportJob.self,
-            PersistedDesignStudioPermissionRecord.self
+            PersistedDesignStudioPermissionRecord.self,
+            PersistedDesignStudioAuditEvent.self
         ], inMemory: true)
 }
