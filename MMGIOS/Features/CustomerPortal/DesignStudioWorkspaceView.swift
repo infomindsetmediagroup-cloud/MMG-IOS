@@ -9,6 +9,9 @@ struct DesignStudioWorkspaceView: View {
     @Query(sort: \PersistedDesignStudioExportJob.updatedAt, order: .reverse) private var exportJobs: [PersistedDesignStudioExportJob]
     @Query(sort: \PersistedDesignStudioPermissionRecord.updatedAt, order: .reverse) private var permissions: [PersistedDesignStudioPermissionRecord]
 
+    @State private var showingProjectEditor = false
+    @State private var showingAssetEditor = false
+
     private var activeProjects: [PersistedDesignStudioProject] {
         projects.filter { $0.statusRawValue != DesignStudioProjectStatus.archived.rawValue }
     }
@@ -164,9 +167,23 @@ struct DesignStudioWorkspaceView: View {
         }
         .navigationTitle("Design Studio")
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button { showingProjectEditor = true } label: {
+                    Label("New Project", systemImage: "folder.badge.plus")
+                }
+
+                Button { showingAssetEditor = true } label: {
+                    Label("New Asset", systemImage: "doc.badge.plus")
+                }
+
                 Button("Seed") { seedDesignStudioIfNeeded() }
             }
+        }
+        .sheet(isPresented: $showingProjectEditor) {
+            DesignStudioProjectEditorView()
+        }
+        .sheet(isPresented: $showingAssetEditor) {
+            DesignStudioAssetEditorView(defaultProjectTitle: projects.first?.title ?? "")
         }
         .task { seedDesignStudioIfNeeded() }
     }
