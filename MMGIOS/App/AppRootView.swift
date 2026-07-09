@@ -18,6 +18,11 @@ struct AppRootView: View {
                 .tabItem {
                     Label("Studio", systemImage: "paintbrush.pointed")
                 }
+
+            AssetManagementDashboardView()
+                .tabItem {
+                    Label("Assets", systemImage: "shippingbox")
+                }
         }
         .tint(.mmgBlue)
     }
@@ -32,6 +37,7 @@ struct AppRootView: View {
             TaskDependencyRecord.self,
             ProductionQueueRecord.self,
             DesignStudioProjectRecord.self,
+            ProductionAssetRecord.self,
             KnowledgeVaultRecord.self
         ], inMemory: true)
 }
