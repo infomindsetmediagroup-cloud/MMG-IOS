@@ -1,9 +1,42 @@
 export const kairosState = {
   operator: "Mike",
-  mode: "Operation",
-  health: 98,
-  readiness: 69,
-  activeBatch: "Kairos Customer Value Runtime",
+  mode: "Execution Mode",
+  health: 99,
+  readiness: 76,
+  activeBatch: "Post-Green Operational Buildout",
+  lastUpdated: "2026-07-09 10:32 PT",
+  currentStatus: {
+    headline: "Main is green. Native runtime is compiling. Dashboard visibility is now being synced.",
+    summary: "Kairos has moved past repository recovery into production hardening. The native iOS foundation is green on main, Command Center release-gate visibility has been merged, and the next work is batched to avoid burning GitHub Actions minutes after every small slice.",
+    mainBranch: "Green",
+    validationGate: "Manual iOS Validation passed on main after the Command Center release gate fix.",
+    activePr: "PR #16 — Customer release gate detail view is open as the next unvalidated batch item.",
+    actionsPolicy: "Skip-CI batching active. Run GitHub Actions only after meaningful batches are ready.",
+    visibleDashboard: "Updated now so the browser view reflects current operational progress."
+  },
+  operationalReadiness: [
+    { label: "Native iOS Foundation", value: "Green", complete: 78, status: "Live", detail: "SwiftUI shell, SwiftData model graph, Command Center runtime, Customer Portal, Design Studio, Workflow Runtime, Task Engine, Production Queue, Asset Management, Deliverables, and Release Runtime are compiling on main." },
+    { label: "Command Center", value: "Release Gates Live", complete: 82, status: "Active", detail: "Executive runtime summary now separates draft/internal-review, blocked, publish-ready, and published customer releases." },
+    { label: "Customer Portal", value: "Runtime Foundation", complete: 72, status: "Build", detail: "Value Discovery, request editing/detail surfaces, portal delivery models, and session support are staged in the native runtime." },
+    { label: "Release Runtime", value: "Gate Policy Active", complete: 74, status: "Active", detail: "CustomerReleaseGatePolicy and approval service protect customer publication behind final-deliverable approval metadata." },
+    { label: "Web Dashboard", value: "Visibility Sync", complete: 69, status: "Active", detail: "Static GitHub Pages dashboard now reflects real build state instead of stale dashboard state." },
+    { label: "Production Hardening", value: "Batching", complete: 65, status: "Queued", detail: "Next slices should be grouped, committed with skip-CI, and validated once per batch to conserve Actions minutes." }
+  ],
+  liveMilestones: [
+    "Main branch returned to green after fixing SwiftUI foreground style mismatch.",
+    "PR #15 merged: Command Center release gate operations.",
+    "Post-green operational prep documentation created.",
+    "PR #16 opened: Customer release gate detail drill-down.",
+    "Dashboard status updated for browser visibility.",
+    "Actions-minute policy shifted to batch validation only."
+  ],
+  nextBatch: [
+    { title: "Customer Release Gate Detail", lane: "Release Runtime", status: "Open PR", priority: "P1" },
+    { title: "Seed preview/sample release records", lane: "Runtime Data", status: "Queued", priority: "P1" },
+    { title: "Command Center navigation to release detail", lane: "Command Center", status: "Queued", priority: "P1" },
+    { title: "Dashboard auto-status JSON source", lane: "Web Dashboard", status: "Queued", priority: "P2" },
+    { title: "One batch validation run", lane: "GitHub", status: "Hold", priority: "P1" }
+  ],
   modules: [
     { id: "command", label: "Command", icon: "⌘" },
     { id: "commerce", label: "Commerce", icon: "◇" },
@@ -15,17 +48,17 @@ export const kairosState = {
     {
       id: "command",
       label: "Command",
-      metric: "98%",
-      status: "Live",
-      summary: "Executive decisions, daily operations, approvals, blockers, next-best-action flow, and customer value doctrine governance.",
-      nodes: ["Decision Queue", "Execution Pipeline", "Approval Gate", "Blockers", "Next Action"]
+      metric: "82%",
+      status: "Active",
+      summary: "Executive decisions, runtime health, approvals, blockers, release gates, operational visibility, and next-best-action flow.",
+      nodes: ["Decision Queue", "Execution Pipeline", "Release Gates", "Blockers", "Next Action"]
     },
     {
       id: "commerce",
       label: "Commerce",
       metric: "68%",
       status: "Build",
-      summary: "Shopify, products, bundles, checkout offers, revenue capture, and value-to-income conversion paths.",
+      summary: "Shopify, products, bundles, checkout offers, revenue capture, and value-to-income conversion paths remain queued behind runtime stabilization.",
       nodes: ["Shopify", "Products", "Bundles", "Revenue", "Offers"]
     },
     {
@@ -47,9 +80,9 @@ export const kairosState = {
     {
       id: "system",
       label: "System",
-      metric: "92%",
+      metric: "94%",
       status: "Protected",
-      summary: "Runtime health, integrations, security, repository workflow, deployment, rollback, and constitutional guardrails.",
+      summary: "Runtime health, integrations, security, repository workflow, deployment discipline, rollback, and constitutional guardrails.",
       nodes: ["Runtime", "Integrations", "Security", "GitHub", "Deployment"]
     }
   ],
@@ -87,44 +120,47 @@ export const kairosState = {
     customerGuidanceRule: "Every recommendation should connect the customer's existing knowledge to one stronger asset, one clearer message, or one more executable next step."
   },
   kpis: [
-    { label: "System Health", value: "98%", trend: "+1%", tone: "good" },
-    { label: "Readiness", value: "69%", trend: "+5%", tone: "good" },
-    { label: "Doctrine Lock", value: "Live", trend: "Customer Value", tone: "good" },
-    { label: "Operation Mode", value: "Live", trend: "Skip-CI", tone: "good" },
-    { label: "Value Pathways", value: "4", trend: "Income / Asset / Audience / Execution", tone: "good" }
+    { label: "System Health", value: "99%", trend: "main green", tone: "good" },
+    { label: "Readiness", value: "76%", trend: "+7%", tone: "good" },
+    { label: "Native Build", value: "Green", trend: "Manual iOS", tone: "good" },
+    { label: "Actions Policy", value: "Batch", trend: "skip-CI", tone: "good" },
+    { label: "Open Runtime PR", value: "#16", trend: "unvalidated", tone: "warning" }
   ],
   priorities: [
-    { title: "Carry customer value doctrine into dashboard runtime", lane: "Dashboard", status: "Completed", priority: "P1" },
-    { title: "Wire customer value pathways into runtime state", lane: "Dashboard", status: "Completed", priority: "P1" },
-    { title: "Wire official Kairos button asset", lane: "System", status: "Active", priority: "P1" },
-    { title: "Batch implementation commits with skip-CI", lane: "GitHub", status: "Active", priority: "P1" },
-    { title: "Prepare website system work queue", lane: "Website", status: "Queued", priority: "P1" },
-    { title: "Prepare Shopify operations queue", lane: "Shopify", status: "Queued", priority: "P2" }
+    { title: "Keep main green after Command Center release gate merge", lane: "GitHub", status: "Completed", priority: "P1" },
+    { title: "Surface live operational progress on GitHub Pages dashboard", lane: "Dashboard", status: "Completed", priority: "P1" },
+    { title: "Hold PR #16 validation until more batch work is ready", lane: "GitHub", status: "Active", priority: "P1" },
+    { title: "Build customer release gate drill-down", lane: "Release Runtime", status: "Open PR", priority: "P1" },
+    { title: "Prepare sample data for browser/native progress demos", lane: "Runtime Data", status: "Queued", priority: "P1" },
+    { title: "Continue web dashboard sync so browser reflects real repo status", lane: "Web", status: "Active", priority: "P2" }
   ],
   approvals: [
-    { title: "Approve final validation run", risk: "Medium" },
-    { title: "Release dashboard to operational use", risk: "Low" },
-    { title: "Begin website system implementation after dashboard completion", risk: "Medium" }
+    { title: "Approve next batch validation run only after several slices are ready", risk: "Low" },
+    { title: "Merge PR #16 only after batch validation or further review", risk: "Medium" },
+    { title: "Continue using dashboard as executive visibility surface", risk: "Low" }
   ],
   systems: [
-    { title: "Kairos Dashboard", status: "Customer Value Runtime", health: 92 },
-    { title: "Official Kairos Asset", status: "Ready", health: 100 },
-    { title: "GitHub Workflow", status: "Skip-CI batching active", health: 92 },
-    { title: "Website System", status: "Queued", health: 70 },
-    { title: "Shopify Operations", status: "Queued", health: 68 }
+    { title: "Kairos Dashboard", status: "Visibility Sync Active", health: 90 },
+    { title: "Native iOS Runtime", status: "Main Green", health: 78 },
+    { title: "GitHub Workflow", status: "Manual Batch Validation", health: 94 },
+    { title: "Command Center", status: "Release Gates Active", health: 82 },
+    { title: "Customer Portal", status: "Runtime Foundation", health: 72 },
+    { title: "Release Runtime", status: "Gate Detail Queued", health: 74 }
   ],
   pipelines: [
-    { label: "Dashboard Completion", complete: 84 },
-    { label: "Asset Integration", complete: 84 },
-    { label: "Website System Queue", complete: 58 },
-    { label: "Shopify Prep", complete: 60 }
+    { label: "Native Runtime Foundation", complete: 78 },
+    { label: "Command Center Operations", complete: 82 },
+    { label: "Customer Portal Runtime", complete: 72 },
+    { label: "Release Runtime", complete: 74 },
+    { label: "Web Dashboard Visibility", complete: 69 },
+    { label: "Production Hardening", complete: 65 }
   ],
   activity: [
-    "Customer value doctrine locked into dashboard runtime.",
-    "Brand promise set to Your Knowledge Has Value.",
-    "Guidance and knowledge stewardship state seeded.",
-    "Value pathways seeded into dashboard state.",
-    "Dashboard state switched into Customer Value Runtime.",
-    "GitHub commit strategy locked to skip-CI batching until final validation."
+    "Main branch green after Command Center foreground style fix.",
+    "Command Center release gate operations merged into main.",
+    "Customer release gate detail view opened as PR #16.",
+    "GitHub Actions strategy shifted to batch validation only.",
+    "Dashboard updated to show real operational status.",
+    "Next target: batch visible status, sample data, and release detail work before next workflow run."
   ]
 };
