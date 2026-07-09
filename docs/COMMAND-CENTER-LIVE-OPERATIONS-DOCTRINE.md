@@ -48,6 +48,26 @@ Every focused view must end with a clear return action, such as `Return to Main 
 
 The navigation model is: Main Control Panel to Parent Focus View to Main Control Panel.
 
+## Customer Release Gate Signals
+
+The Command Center must surface customer-facing release gate signals wherever they affect executive action, publishing operations, customer access, or operational readiness.
+
+Release gate signals exist to enforce the MMG/Kairos production-only asset doctrine:
+
+- Intermediate assets, drafts, reusable components, AI generations, editable source files, and internal production materials remain inside the MMG/Kairos workspace by default.
+- Only explicitly approved final deliverables may leave the production workspace.
+- Release readiness must be represented as operational state, not as a visual decoration.
+
+A release gate signal should include:
+
+- Release or deliverable title.
+- Current release state: ready, blocked, or reviewing.
+- Number of blocked checks.
+- Required action to unblock the release.
+- Owning parent collection where the signal is operationally relevant.
+
+The same release signal may appear in multiple parent collections when it affects multiple operating domains. For example, a blocked customer deliverable may be relevant to Executive, Publishing, Customers, and Operations simultaneously.
+
 ## Real Telemetry Requirement
 
 The Command Center must be driven by telemetry from actual MMG/Kairos systems, including as the platform matures:
@@ -65,6 +85,7 @@ The Command Center must be driven by telemetry from actual MMG/Kairos systems, i
 - Authentication events.
 - AI inference requests.
 - Approval gates.
+- Customer release gates.
 - Document processing.
 - Production deployment and health events.
 
@@ -81,7 +102,7 @@ Canonical flow:
 - The Command Center consumes a clean data contract.
 - Live UI components render the resulting state.
 
-Every subsystem should be able to publish structured operational events such as workflow queued, workflow started, workflow completed, workflow failed, approval requested, document uploaded, document parsed, knowledge indexed, customer created, search executed, payment received, subscription updated, runtime health changed, and department heartbeat.
+Every subsystem should be able to publish structured operational events such as workflow queued, workflow started, workflow completed, workflow failed, approval requested, document uploaded, document parsed, knowledge indexed, customer created, search executed, payment received, subscription updated, runtime health changed, department heartbeat, release blocked, release approved, release published, and release gate failed.
 
 ## Processing Lifecycle Semantics
 
@@ -116,6 +137,7 @@ The implementation should define reusable live-status components for:
 - Runtime timers.
 - Throughput meters.
 - Approval-gate cards.
+- Customer release-gate cards.
 - Error or attention cards.
 
 These components should be reused across Command Center parent views and department-specific workspaces.
@@ -135,6 +157,8 @@ It should reflect:
 - Infrastructure health.
 - Financial and subscription activity where authorized.
 - Operational risk and attention states.
+- Customer release readiness.
+- Production-only asset boundary health.
 
 The Command Center should allow the executive user to understand, in seconds:
 
@@ -147,6 +171,7 @@ The Command Center should allow the executive user to understand, in seconds:
 - What failed.
 - Which departments are healthy.
 - Which departments require attention.
+- Which customer deliverables are blocked from release.
 
 ## Visual Language Boundary
 
@@ -170,6 +195,8 @@ Disallowed pattern:
 ## Operational Status Gate
 
 Kairos should not be considered operational if the Command Center depends on fake activity indicators. Before operational status, live Command Center indicators must either be connected to real telemetry or explicitly marked as non-production placeholders behind replaceable interfaces.
+
+Customer release indicators must never imply customer access is approved unless the underlying release gate has passed the production-only asset check, approval metadata check, final deliverable scope check, and customer publication check.
 
 ## Refreeze Statement
 
