@@ -52,12 +52,66 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
-      - name: Verify deliverables runtime wiring
+      - name: Verify runtime source graph
+        run: |
+          test -f MMGIOS/App/MMGIOSApp.swift
+          test -f MMGIOS/App/AppRootView.swift
+          test -f project.yml
+
+          grep -q "MMGIOS/Features/AssetManagement" project.yml
+          grep -q "MMGIOS/Features/CommandCenter" project.yml
+          grep -q "MMGIOS/Features/CustomerPortal" project.yml
+          grep -q "MMGIOS/Features/Deliverables" project.yml
+          grep -q "MMGIOS/Features/DesignStudio" project.yml
+          grep -q "MMGIOS/Features/KnowledgeVault" project.yml
+          grep -q "MMGIOS/Features/ProductionQueue" project.yml
+          grep -q "MMGIOS/Features/TaskEngine" project.yml
+          grep -q "MMGIOS/Features/WorkflowRuntime" project.yml
+
+      - name: Verify SwiftData model registration
+        run: |
+          grep -q "WorkflowRecord.self" MMGIOS/App/MMGIOSApp.swift
+          grep -q "WorkflowTransitionRecord.self" MMGIOS/App/MMGIOSApp.swift
+          grep -q "TaskRecord.self" MMGIOS/App/MMGIOSApp.swift
+          grep -q "TaskDependencyRecord.self" MMGIOS/App/MMGIOSApp.swift
+          grep -q "ProductionQueueRecord.self" MMGIOS/App/MMGIOSApp.swift
+          grep -q "DesignStudioProjectRecord.self" MMGIOS/App/MMGIOSApp.swift
+          grep -q "ProductionAssetRecord.self" MMGIOS/App/MMGIOSApp.swift
+          grep -q "DeliverableRecord.self" MMGIOS/App/MMGIOSApp.swift
+          grep -q "CustomerReleaseRecord.self" MMGIOS/App/MMGIOSApp.swift
+          grep -q "CustomerPortalNotificationRecord.self" MMGIOS/App/MMGIOSApp.swift
+          grep -q "PersistedCustomerRequestRecord.self" MMGIOS/App/MMGIOSApp.swift
+          grep -q "PersistedValueDiscoveryProfile.self" MMGIOS/App/MMGIOSApp.swift
+          grep -q "KnowledgeVaultRecord.self" MMGIOS/App/MMGIOSApp.swift
+
+      - name: Verify runtime surface wiring
+        run: |
+          grep -q "CommandCenterRuntimeSummaryView" MMGIOS/App/AppRootView.swift
+          grep -q "WorkflowRuntimeDashboardView" MMGIOS/App/AppRootView.swift
+          grep -q "CustomerPortalView" MMGIOS/App/AppRootView.swift
+          grep -q "DesignStudioWorkflowView" MMGIOS/App/AppRootView.swift
+          grep -q "AssetManagementDashboardView" MMGIOS/App/AppRootView.swift
+          grep -q "DeliverablesDashboardView" MMGIOS/App/AppRootView.swift
+          grep -q "CustomerReleaseDashboardView" MMGIOS/App/AppRootView.swift
+
+      - name: Verify customer portal value-discovery slice
+        run: |
+          test -f MMGIOS/Features/CustomerPortal/PersistedValueDiscoveryProfile.swift
+          test -f MMGIOS/Features/CustomerPortal/ValueDiscoveryDraftProfile.swift
+          test -f MMGIOS/Features/CustomerPortal/ValueDiscoveryProfileSection.swift
+          test -f MMGIOS/Features/CustomerPortal/CustomerPortalView.swift
+          grep -q "ValueDiscoveryProfileSection" MMGIOS/Features/CustomerPortal/CustomerPortalView.swift
+          grep -q "PersistedValueDiscoveryProfile" MMGIOS/App/MMGIOSApp.swift
+
+      - name: Verify deliverables and release slices
         run: |
           test -f MMGIOS/Features/Deliverables/DeliverableEnums.swift
           test -f MMGIOS/Features/Deliverables/DeliverableRecord.swift
           test -f MMGIOS/Features/Deliverables/DeliverableService.swift
           test -f MMGIOS/Features/Deliverables/DeliverablesDashboardView.swift
+          test -f MMGIOS/Features/Deliverables/CustomerReleaseRecord.swift
+          test -f MMGIOS/Features/Deliverables/CustomerReleaseDashboardView.swift
           grep -q "DeliverableRecord" MMGIOS/App/MMGIOSApp.swift
+          grep -q "CustomerReleaseRecord" MMGIOS/App/MMGIOSApp.swift
           grep -q "DeliverablesDashboardView" MMGIOS/App/AppRootView.swift
-          grep -q "MMGIOS/Features/Deliverables" project.yml
+          grep -q "CustomerReleaseDashboardView" MMGIOS/App/AppRootView.swift
