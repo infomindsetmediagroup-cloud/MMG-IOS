@@ -8,6 +8,7 @@ struct DesignStudioWorkspaceView: View {
     @Query(sort: \PersistedDesignStudioVersionRecord.createdAt, order: .reverse) private var versions: [PersistedDesignStudioVersionRecord]
     @Query(sort: \PersistedDesignStudioExportJob.updatedAt, order: .reverse) private var exportJobs: [PersistedDesignStudioExportJob]
     @Query(sort: \PersistedDesignStudioPermissionRecord.updatedAt, order: .reverse) private var permissions: [PersistedDesignStudioPermissionRecord]
+    @Query(sort: \PersistedDesignStudioAuditEvent.createdAt, order: .reverse) private var auditEvents: [PersistedDesignStudioAuditEvent]
 
     @State private var showingProjectEditor = false
     @State private var showingAssetEditor = false
@@ -38,6 +39,7 @@ struct DesignStudioWorkspaceView: View {
                 LabeledContent("Version records", value: "\(versions.count)")
                 LabeledContent("Export jobs", value: "\(exportJobs.count)")
                 LabeledContent("Permission records", value: "\(permissions.count)")
+                LabeledContent("Audit events", value: "\(auditEvents.count)")
                 LabeledContent("Approval gates", value: "\(approvalRequiredJobs.count)")
                 Label("Kairos-assisted production routing enabled", systemImage: "sparkles")
             }
@@ -170,6 +172,30 @@ struct DesignStudioWorkspaceView: View {
                     }
                 }
             }
+
+            Section("Audit Timeline") {
+                if auditEvents.isEmpty {
+                    Text("No audit events yet.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(auditEvents.prefix(20)) { event in
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(event.eventTypeRawValue).font(.headline)
+                            Text(event.summary)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("Actor: \(event.actor)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            if !event.detail.isEmpty {
+                                Text(event.detail)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
         }
         .navigationTitle("Design Studio")
         .toolbar {
@@ -255,11 +281,20 @@ struct DesignStudioWorkspaceView: View {
         modelContext.insert(PersistedDesignStudioVersionRecord(projectRelationshipID: bookProject.relationshipID, assetRelationshipID: manuscriptAsset.relationshipID, assetTitle: manuscriptAsset.title, projectTitle: bookProject.title, versionLabel: "v1", changeSummary: "Initial uploaded manuscript captured for editing, formatting, and export preparation.", changedBy: "MMG Demo Customer"))
         modelContext.insert(PersistedDesignStudioVersionRecord(projectRelationshipID: imageProject.relationshipID, assetRelationshipID: thumbnailAsset.relationshipID, assetTitle: thumbnailAsset.title, projectTitle: imageProject.title, versionLabel: "v1", changeSummary: "First Kairos-assisted thumbnail concept generated from customer brand kit and launch objective.", changedBy: "Kairos", kairosAssisted: true))
 
-        modelContext.insert(PersistedDesignStudioExportJob(projectRelationshipID: bookProject.relationshipID, assetRelationshipID: manuscriptAsset.relationshipID, assetTitle: manuscriptAsset.title, projectTitle: bookProject.title, requestedFormat: "PDF", destinationPath: "/customers/demo/exports/creator-education-starter-guide-v1.pdf", status: .readyForReview, requestedBy: "Kairos", approvalRequired: true, releaseNotes: "Export requires approval before becoming a customer deliverable."))
-        modelContext.insert(PersistedDesignStudioExportJob(projectRelationshipID: imageProject.relationshipID, assetRelationshipID: thumbnailAsset.relationshipID, assetTitle: thumbnailAsset.title, projectTitle: imageProject.title, requestedFormat: "PNG 9:16", destinationPath: "/customers/demo/exports/launch-thumbnail-v1.png", status: .queued, requestedBy: "MMG Internal", approvalRequired: true, releaseNotes: "Generated intermediate asset remains in-house until approved."))
+        let manuscriptExportJob = PersistedDesignStudioExportJob(projectRelationshipID: bookProject.relationshipID, assetRelationshipID: manuscriptAsset.relationshipID, assetTitle: manuscriptAsset.title, projectTitle: bookProject.title, requestedFormat: "PDF", destinationPath: "/customers/demo/exports/creator-education-starter-guide-v1.pdf", status: .readyForReview, requestedBy: "Kairos", approvalRequired: true, releaseNotes: "Export requires approval before becoming a customer deliverable.")
+        let thumbnailExportJob = PersistedDesignStudioExportJob(projectRelationshipID: imageProject.relationshipID, assetRelationshipID: thumbnailAsset.relationshipID, assetTitle: thumbnailAsset.title, projectTitle: imageProject.title, requestedFormat: "PNG 9:16", destinationPath: "/customers/demo/exports/launch-thumbnail-v1.png", status: .queued, requestedBy: "MMG Internal", approvalRequired: true, releaseNotes: "Generated intermediate asset remains in-house until approved.")
+        modelContext.insert(manuscriptExportJob)
+        modelContext.insert(thumbnailExportJob)
 
         modelContext.insert(PersistedDesignStudioPermissionRecord(projectRelationshipID: bookProject.relationshipID, customerName: "MMG Demo Customer", projectTitle: bookProject.title, principalName: "MMG Demo Customer", permissionLevel: .reviewer, canExportApprovedDeliverables: true, canAccessIntermediateAssets: false))
         modelContext.insert(PersistedDesignStudioPermissionRecord(projectRelationshipID: imageProject.relationshipID, customerName: "MMG Demo Customer", projectTitle: imageProject.title, principalName: "MMG Production", permissionLevel: .productionOnly, canExportApprovedDeliverables: true, canAccessIntermediateAssets: true))
+
+        modelContext.insert(PersistedDesignStudioAuditEvent(projectRelationshipID: bookProject.relationshipID, eventType: .projectCreated, actor: "MMG Seed", summary: "Seeded project: \(bookProject.title)", detail: "Document/book project seeded for live Design Studio testing."))
+        modelContext.insert(PersistedDesignStudioAuditEvent(projectRelationshipID: imageProject.relationshipID, eventType: .projectCreated, actor: "MMG Seed", summary: "Seeded project: \(imageProject.title)", detail: "Image/social asset project seeded for live Design Studio testing."))
+        modelContext.insert(PersistedDesignStudioAuditEvent(projectRelationshipID: bookProject.relationshipID, assetRelationshipID: manuscriptAsset.relationshipID, eventType: .assetCreated, actor: "MMG Seed", summary: "Seeded asset: \(manuscriptAsset.title)", detail: manuscriptAsset.storagePath))
+        modelContext.insert(PersistedDesignStudioAuditEvent(projectRelationshipID: imageProject.relationshipID, assetRelationshipID: thumbnailAsset.relationshipID, eventType: .assetCreated, actor: "MMG Seed", summary: "Seeded asset: \(thumbnailAsset.title)", detail: thumbnailAsset.storagePath))
+        modelContext.insert(PersistedDesignStudioAuditEvent(projectRelationshipID: bookProject.relationshipID, assetRelationshipID: manuscriptAsset.relationshipID, exportJobRelationshipID: manuscriptExportJob.relationshipID, eventType: .exportQueued, actor: "Kairos", summary: "Seeded export job for review: \(manuscriptAsset.title)", detail: manuscriptExportJob.destinationPath))
+        modelContext.insert(PersistedDesignStudioAuditEvent(projectRelationshipID: imageProject.relationshipID, assetRelationshipID: thumbnailAsset.relationshipID, exportJobRelationshipID: thumbnailExportJob.relationshipID, eventType: .exportQueued, actor: "MMG Internal", summary: "Seeded export job: \(thumbnailAsset.title)", detail: thumbnailExportJob.destinationPath))
 
         try? modelContext.save()
     }
@@ -285,6 +320,7 @@ struct DesignStudioWorkspaceView: View {
         PersistedDesignStudioAsset.self,
         PersistedDesignStudioVersionRecord.self,
         PersistedDesignStudioExportJob.self,
-        PersistedDesignStudioPermissionRecord.self
+        PersistedDesignStudioPermissionRecord.self,
+        PersistedDesignStudioAuditEvent.self
     ], inMemory: true)
 }
