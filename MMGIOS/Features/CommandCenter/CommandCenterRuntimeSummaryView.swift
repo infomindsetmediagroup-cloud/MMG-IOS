@@ -189,7 +189,7 @@ struct CommandCenterRuntimeSummaryView: View {
                 .font(.subheadline.bold())
             Text("\(release.status) • \(release.channel) • v\(release.version) • \(report.summary)")
                 .font(.caption)
-                .foregroundStyle(report.passed ? .secondary : .orange)
+                .foregroundColor(report.passed ? .secondary : .orange)
             if let firstBlocker = blockedDetails.first {
                 Text(firstBlocker)
                     .font(.caption2)
