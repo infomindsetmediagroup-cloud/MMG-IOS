@@ -2,13 +2,6 @@ name: iOS Simulator Build
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - 'MMGIOS/**'
-      - 'MMGIOS.xcodeproj/**'
-      - '.github/workflows/ios-simulator-build.yml'
 
 jobs:
   build:
