@@ -15,6 +15,7 @@ targets:
     sources:
       - path: MMGIOS/App
       - path: MMGIOS/Config
+      - path: MMGIOS/Features/AssetManagement
       - path: MMGIOS/Features/CommandCenter
       - path: MMGIOS/Features/DesignStudio
       - path: MMGIOS/Features/KnowledgeVault
