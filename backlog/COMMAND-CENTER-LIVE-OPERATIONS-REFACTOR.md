@@ -45,6 +45,20 @@ Accepted labels:
 - Return to Main Control Panel
 - Return to Command Center Home
 
+### Customer Release Gate Signal Surface
+
+Expose customer release gate signals in Command Center telemetry and UI when a customer-facing deliverable is blocked, reviewing, or ready.
+
+The release gate signal surface must support:
+
+- Cross-parent visibility for Executive, Publishing, Customers, and Operations when the same blocked deliverable affects more than one domain.
+- A clear status label: ready, blocked, or reviewing.
+- Blocked check count.
+- Required action text.
+- A reusable release-gate card treatment that can be replaced with production telemetry without UI redesign.
+
+This surface implements the production-only asset doctrine by preventing the Command Center from implying that draft assets, intermediate work, or internal production materials are ready for customer access.
+
 ### Live State Contracts
 
 Define stable data contracts for:
@@ -55,6 +69,7 @@ Define stable data contracts for:
 - Queue metrics
 - Activity stream items
 - Approval requests
+- Customer release gate signals
 - Runtime health
 - Knowledge processing
 - Publishing processing
@@ -91,6 +106,7 @@ Create reusable components for:
 - Runtime timer
 - Throughput meter
 - Approval card
+- Customer release-gate card
 - Attention card
 
 ### Development Data Adapter
@@ -111,6 +127,8 @@ Rules:
 - Dynamic visuals use a state contract or isolated development adapter.
 - Shared states are represented consistently.
 - Status components are reusable.
+- Release-gate signals render where blocked customer deliverables affect executive, publishing, customer, or operations state.
+- Release-gate telemetry exposes status, blocked check count, and required action.
 - No visual activity is treated as production truth unless backed by real state.
 
 ## Implementation Order
@@ -123,4 +141,6 @@ Rules:
 6. Add selected-parent focus mode.
 7. Add return control.
 8. Add reusable status components.
-9. Replace static placeholders with state-backed views.
+9. Add customer release-gate telemetry signals.
+10. Add reusable release-gate cards.
+11. Replace static placeholders with state-backed views.
