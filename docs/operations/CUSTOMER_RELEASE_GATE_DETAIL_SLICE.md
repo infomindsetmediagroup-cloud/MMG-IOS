@@ -8,6 +8,7 @@ Add a focused drill-down view for customer release gate state so operators can i
 
 - Adds `CustomerReleaseGateDetailView`.
 - Routes release queue rows in `CustomerReleaseDashboardView` into the gate detail screen.
+- Routes Command Center release rows into the same gate detail screen.
 - Shows each `CustomerReleaseGatePolicy` result with a pass/fail marker and detail text.
 - Adds blocked-release count to the Customer Release runtime summary.
 - Adds `CustomerReleaseSeedFactory` for local blocked, approved, and published release samples.
