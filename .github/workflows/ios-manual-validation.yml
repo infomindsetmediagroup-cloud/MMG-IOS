@@ -63,6 +63,10 @@ jobs:
           test -f MMGIOS/App/AppRootView.swift
           test -f MMGIOS/App/MMGIOSApp.swift
           test -f MMGIOS/Config/AppTheme.swift
+          test -f MMGIOS/Features/AssetManagement/AssetEnums.swift
+          test -f MMGIOS/Features/AssetManagement/AssetManagementDashboardView.swift
+          test -f MMGIOS/Features/AssetManagement/ProductionAssetRecord.swift
+          test -f MMGIOS/Features/AssetManagement/ProductionAssetService.swift
           test -f MMGIOS/Features/CommandCenter/CommandCenterRuntimeSummaryView.swift
           test -f MMGIOS/Features/DesignStudio/DesignStudioProjectFactory.swift
           test -f MMGIOS/Features/DesignStudio/DesignStudioProjectRecord.swift
@@ -85,8 +89,10 @@ jobs:
           grep -q "CommandCenterRuntimeSummaryView" MMGIOS/App/AppRootView.swift
           grep -q "WorkflowRuntimeDashboardView" MMGIOS/App/AppRootView.swift
           grep -q "DesignStudioWorkflowView" MMGIOS/App/AppRootView.swift
+          grep -q "AssetManagementDashboardView" MMGIOS/App/AppRootView.swift
           grep -q "WorkflowRecord.self" MMGIOS/App/MMGIOSApp.swift
           grep -q "TaskRecord.self" MMGIOS/App/MMGIOSApp.swift
           grep -q "ProductionQueueRecord.self" MMGIOS/App/MMGIOSApp.swift
           grep -q "DesignStudioProjectRecord.self" MMGIOS/App/MMGIOSApp.swift
+          grep -q "ProductionAssetRecord.self" MMGIOS/App/MMGIOSApp.swift
           grep -q "KnowledgeVaultRecord.self" MMGIOS/App/MMGIOSApp.swift
