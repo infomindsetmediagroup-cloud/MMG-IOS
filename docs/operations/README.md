@@ -8,6 +8,7 @@ This directory contains operational standards for MMG IOS / Kairos repository ex
 - `PR_CHECKLIST.md` — pull request scope, validation, documentation, and release-readiness checklist.
 - `IMPLEMENTATION_SEQUENCE.md` — default production-slice execution order, batching discipline, validation ownership, merge readiness, and failure response.
 - `RELEASE_GATE_STANDARD.md` — manual release-gate timing, pre-gate checklist, expected gate behavior, failure classification, ready-for-review rules, and merge rules.
+- `BRANCH_RECONCILIATION_STANDARD.md` — branch reconciliation order, efficiency rules, accuracy rules, ready-for-review gate, and merge preparation.
 
 ## Manual Validation
 
@@ -39,10 +40,12 @@ Recommended sequence for future production slices:
 5. Extend `.github/workflows/ios-build.yml` validation assertions.
 6. Update the corresponding document in `docs/operations/`.
 7. Keep the PR draft while batching related implementation work.
-8. Run the manual validation gate only when a branch needs a final readiness signal.
+8. Reconcile the branch for scope, accuracy, structure, and PR-body alignment.
+9. Run the manual validation gate only when a branch needs a final readiness signal.
 
 For the canonical production-slice order, use `IMPLEMENTATION_SEQUENCE.md`.
 For release-gate timing and merge-readiness rules, use `RELEASE_GATE_STANDARD.md`.
+For branch reconciliation before ready-for-review or merge, use `BRANCH_RECONCILIATION_STANDARD.md`.
 
 ## Operational Prep Standard
 
