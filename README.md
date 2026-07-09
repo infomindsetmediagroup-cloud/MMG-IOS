@@ -47,9 +47,11 @@ Minimum target: iOS 17.0.
 
 ## Build Validation
 
-GitHub Actions contains an iOS build validation workflow at .github/workflows/ios-build.yml.
+GitHub Actions contains the canonical native iOS validation workflow at `.github/workflows/ios-manual-validation.yml`.
 
-The workflow checks out the repository, installs XcodeGen, regenerates the Xcode project, and runs an Xcode clean build against the MMGIOS scheme on an iOS simulator.
+The workflow is manual-only. It checks out the requested ref, installs XcodeGen, regenerates the Xcode project, resolves package dependencies, runs a Debug iOS Simulator build with code signing disabled, and verifies the permanent runtime foundation source files.
+
+Use branch `main` for post-merge validation. Use a specific branch, tag, or SHA only when validating a pull request head or focused recovery branch.
 
 ## Execution Mode
 
