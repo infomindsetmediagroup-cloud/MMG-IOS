@@ -6,9 +6,11 @@ struct WorkflowRuntimeDashboardView: View {
     @Query(sort: \WorkflowRecord.updatedAt, order: .reverse) private var workflows: [WorkflowRecord]
     @Query(sort: \WorkflowTransitionRecord.createdAt, order: .reverse) private var transitions: [WorkflowTransitionRecord]
     @Query(sort: \TaskRecord.updatedAt, order: .reverse) private var tasks: [TaskRecord]
+    @Query(sort: \ProductionQueueRecord.updatedAt, order: .reverse) private var queueItems: [ProductionQueueRecord]
 
     private let runtime = WorkflowRuntimeService()
     private let taskRuntime = TaskRuntimeService()
+    private let queueRuntime = ProductionQueueService()
 
     private var activeWorkflows: [WorkflowRecord] {
         workflows.filter { $0.status == WorkflowStatus.active.rawValue || $0.status == WorkflowStatus.draft.rawValue }
@@ -22,6 +24,10 @@ struct WorkflowRuntimeDashboardView: View {
         tasks.filter { $0.status != ProductionTaskStatus.completed.rawValue && $0.status != ProductionTaskStatus.cancelled.rawValue }
     }
 
+    private var openQueueItems: [ProductionQueueRecord] {
+        queueItems.filter { $0.status != ProductionQueueStatus.completed.rawValue }
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -31,6 +37,7 @@ struct WorkflowRuntimeDashboardView: View {
                     LabeledContent("Waiting approval", value: "\(waitingForApproval.count)")
                     LabeledContent("Transitions", value: "\(transitions.count)")
                     LabeledContent("Open tasks", value: "\(openTasks.count)")
+                    LabeledContent("Open queue", value: "\(openQueueItems.count)")
                 }
 
                 Section("Workflows") {
@@ -77,6 +84,30 @@ struct WorkflowRuntimeDashboardView: View {
                     }
                 }
 
+                Section("Production Queue") {
+                    if queueItems.isEmpty {
+                        Text("No queue items yet. Seeded workflows create queue entries from generated tasks.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(queueItems) { item in
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(item.summary).font(.headline)
+                                Text("\(item.lane) • \(item.status) • \(item.priority)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text("Position: \(item.position)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                if !item.blocker.isEmpty {
+                                    Text("Blocked: \(item.blocker)")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Section("Transition History") {
                     if transitions.isEmpty {
                         Text("No workflow transitions recorded yet.")
@@ -105,6 +136,7 @@ struct WorkflowRuntimeDashboardView: View {
                     Button("Seed") { seedWorkflowIfNeeded() }
                     Button("Advance") { advanceFirstWorkflow() }
                     Button("Complete Task") { completeFirstOpenTask() }
+                    Button("Complete Queue") { completeFirstOpenQueueItem() }
                 }
             }
             .task { seedWorkflowIfNeeded() }
@@ -123,8 +155,10 @@ struct WorkflowRuntimeDashboardView: View {
             summary: "Runtime validation workflow attached to the Design Studio production path."
         )
         let task = taskRuntime.createInitialTask(for: workflow)
+        let queueItem = queueRuntime.createQueueItem(for: task, workflow: workflow)
         modelContext.insert(workflow)
         modelContext.insert(task)
+        modelContext.insert(queueItem)
         try? modelContext.save()
     }
 
@@ -150,6 +184,12 @@ struct WorkflowRuntimeDashboardView: View {
         taskRuntime.complete(task)
         try? modelContext.save()
     }
+
+    private func completeFirstOpenQueueItem() {
+        guard let item = openQueueItems.first else { return }
+        queueRuntime.complete(item)
+        try? modelContext.save()
+    }
 }
 
 #Preview {
@@ -158,6 +198,7 @@ struct WorkflowRuntimeDashboardView: View {
             WorkflowRecord.self,
             WorkflowTransitionRecord.self,
             TaskRecord.self,
-            TaskDependencyRecord.self
+            TaskDependencyRecord.self,
+            ProductionQueueRecord.self
         ], inMemory: true)
 }
