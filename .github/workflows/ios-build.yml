@@ -10,6 +10,14 @@ concurrency:
   group: mmg-ios-build-verification-${{ github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: bash
+
+env:
+  HOMEBREW_NO_AUTO_UPDATE: "1"
+  HOMEBREW_NO_INSTALL_CLEANUP: "1"
+
 jobs:
   xcode-build:
     name: Xcode Build Verification
@@ -24,7 +32,11 @@ jobs:
           xcode-select -p
 
       - name: Install XcodeGen
-        run: brew install xcodegen
+        run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+          xcodegen --version
 
       - name: Generate Xcode project
         run: xcodegen generate
