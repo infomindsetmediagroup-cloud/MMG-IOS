@@ -22,12 +22,19 @@ This checklist verifies that the current runtime foundation is structurally orga
 - Runtime dashboards are read-only except for explicit internal validation actions.
 - Development commits continue using `[skip ci]` until manual validation is ready.
 
+## Second preflight hardening pass
+
+- Removed unresolved Customer Portal and Customer Value symbols from the active app shell.
+- Removed unverified customer/value SwiftData models from `MMGIOSApp` registration.
+- Limited the app shell validation surface to verified runtime views: Command, Workflow, and Studio.
+- Confirmed runtime source files are registered in `MMGIOS.xcodeproj/project.pbxproj`.
+- Converted the iOS simulator workflow to manual-only so normal development commits do not spend Actions minutes.
+- Updated the simulator build workflow to use a generic iOS Simulator destination instead of a specific device name.
+
 ## Build-readiness checks before running GitHub Actions
 
-- Open the app target in Xcode.
-- Confirm `MMGIOSApp` model container compiles with all registered SwiftData models.
-- Confirm `AppRootView` preview compiles with all runtime models.
-- Launch the app locally.
+- Confirm `MMGIOSApp` model container compiles with verified runtime SwiftData models.
+- Confirm `AppRootView` compiles with Command, Workflow, and Studio tabs only.
 - Confirm Command tab loads Command Runtime summary.
 - Confirm Workflow tab seeds and advances runtime records.
 - Confirm Studio tab creates project, workflow, task, queue, and knowledge records.
@@ -44,4 +51,4 @@ This checklist verifies that the current runtime foundation is structurally orga
 
 ## Gate before next layer
 
-Do not add Asset Management, Deliverables, or Approval Engine until this baseline passes a local build check or manual Xcode validation.
+Do not add Asset Management, Deliverables, or Approval Engine until this baseline passes a manual simulator build check.
