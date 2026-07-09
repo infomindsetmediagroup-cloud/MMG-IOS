@@ -135,16 +135,20 @@ struct CustomerPortalView: View {
                 Text("No unread delivery notifications.")
                     .foregroundStyle(.secondary)
             } else {
+                Button("Mark all delivery updates read") { markAllNotificationsRead() }
                 ForEach(unreadNotifications) { notification in
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(notification.title).font(.headline)
-                        Text(notification.message)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text("\(notification.kind) • \(notification.createdAt.formatted(date: .abbreviated, time: .shortened))")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                    Button { markNotificationRead(notification) } label: {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(notification.title).font(.headline)
+                            Text(notification.message)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("\(notification.kind) • \(notification.createdAt.formatted(date: .abbreviated, time: .shortened))")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
                     }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -265,6 +269,18 @@ struct CustomerPortalView: View {
         }
 
         if insertedNotification { try? modelContext.save() }
+    }
+
+    private func markNotificationRead(_ notification: CustomerPortalNotificationRecord) {
+        deliveryBuilder.markRead(notification)
+        try? modelContext.save()
+    }
+
+    private func markAllNotificationsRead() {
+        for notification in unreadNotifications {
+            deliveryBuilder.markRead(notification)
+        }
+        try? modelContext.save()
     }
 
     private func loadValueDiscoveryProfile() {
