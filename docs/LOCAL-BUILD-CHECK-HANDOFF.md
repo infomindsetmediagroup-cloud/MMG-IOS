@@ -50,6 +50,20 @@ Fixes applied after second failure:
 - Updated `CommandCenterRuntimeSummaryView` to use `RuntimeWorkflowStatus`.
 - Searched the repository for stale `WorkflowStatus`, `WorkflowPriority`, `WorkflowStage`, and `WorkflowType` references and found no remaining matches.
 
+## Third manual simulator build result
+
+The third controlled GitHub Actions simulator build successfully completed the Xcode iOS simulator build.
+
+Observed result:
+
+- `xcodebuild` completed with `** BUILD SUCCEEDED **`.
+- The workflow then failed only in the post-build validation step because it still checked old Customer Portal / Value Discovery files that are outside the runtime-only validation source set.
+
+Fixes applied after third result:
+
+- Updated `.github/workflows/ios-manual-validation.yml` so the post-build validation checks the runtime foundation source files and model registrations instead of stale Customer Portal / Value Discovery files.
+- Preserved the manual workflow as the controlled validation checkpoint.
+
 ## Manual Xcode check still required
 
 1. Pull latest `main`.
