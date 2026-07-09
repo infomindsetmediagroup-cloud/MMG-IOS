@@ -65,6 +65,7 @@ struct AppRootView: View {
             WorkflowRecord.self,
             WorkflowTransitionRecord.self,
             TaskRecord.self,
-            TaskDependencyRecord.self
+            TaskDependencyRecord.self,
+            ProductionQueueRecord.self
         ], inMemory: true)
 }
