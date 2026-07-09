@@ -1,7 +1,7 @@
 import Foundation
 
 struct WorkflowStagePolicy {
-    static func nextStages(from stage: WorkflowStage) -> [WorkflowStage] {
+    static func nextStages(from stage: RuntimeWorkflowStage) -> [RuntimeWorkflowStage] {
         if stage == .intake { return [.planning] }
         if stage == .planning { return [.production, .aiGeneration] }
         if stage == .production { return [.humanReview, .customerReview] }
@@ -14,7 +14,7 @@ struct WorkflowStagePolicy {
         return []
     }
 
-    static func allows(_ nextStage: WorkflowStage, from currentStage: WorkflowStage) -> Bool {
+    static func allows(_ nextStage: RuntimeWorkflowStage, from currentStage: RuntimeWorkflowStage) -> Bool {
         nextStages(from: currentStage).contains(nextStage)
     }
 }
