@@ -48,7 +48,7 @@ struct CommandCenterRuntimeSummaryView: View {
     }
 
     private var publishReadyReleases: [CustomerReleaseRecord] {
-        customerReleases.filter { releaseGatePolicy.canPublish($0) }
+        customerReleases.filter { releaseGatePolicy.canPublish($0) && $0.status != CustomerReleaseStatus.published.rawValue }
     }
 
     private var publishedReleases: [CustomerReleaseRecord] {
@@ -57,6 +57,26 @@ struct CommandCenterRuntimeSummaryView: View {
 
     private var blockedReleases: [CustomerReleaseRecord] {
         customerReleases.filter { !releaseGatePolicy.canPublish($0) && $0.status != CustomerReleaseStatus.published.rawValue && $0.status != CustomerReleaseStatus.archived.rawValue }
+    }
+
+    private var releaseReadinessSummary: String {
+        if customerReleases.isEmpty {
+            return "No customer releases staged yet."
+        }
+
+        if !blockedReleases.isEmpty {
+            return "Release gates require attention before customer publication."
+        }
+
+        if !publishReadyReleases.isEmpty {
+            return "Approved final deliverables are ready for controlled Customer Portal publication."
+        }
+
+        if !draftReleases.isEmpty {
+            return "Draft and internal-review releases are staged for approval."
+        }
+
+        return "Published releases are current; no immediate release blockers detected."
     }
 
     var body: some View {
@@ -91,6 +111,26 @@ struct CommandCenterRuntimeSummaryView: View {
                     metricRow(title: "Publish ready", value: publishReadyReleases.count, systemImage: "paperplane")
                     metricRow(title: "Published to portal", value: publishedReleases.count, systemImage: "person.crop.rectangle.stack")
                     metricRow(title: "Blocked by gates", value: blockedReleases.count, systemImage: "shield.slash")
+                }
+
+                Section("Release Gate Operations") {
+                    Text(releaseReadinessSummary)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+
+                    if !blockedReleases.isEmpty {
+                        ForEach(blockedReleases.prefix(4)) { release in
+                            releaseGateRow(release)
+                        }
+                    } else if !publishReadyReleases.isEmpty {
+                        ForEach(publishReadyReleases.prefix(4)) { release in
+                            releaseGateRow(release)
+                        }
+                    } else if !draftReleases.isEmpty {
+                        ForEach(draftReleases.prefix(4)) { release in
+                            releaseGateRow(release)
+                        }
+                    }
                 }
 
                 Section("Recent Customer Releases") {
@@ -137,6 +177,28 @@ struct CommandCenterRuntimeSummaryView: View {
             LabeledContent(title, value: "\(value)")
         } icon: {
             Image(systemName: systemImage)
+        }
+    }
+
+    private func releaseGateRow(_ release: CustomerReleaseRecord) -> some View {
+        let report = releaseGatePolicy.evaluate(release)
+        let blockedDetails = report.blockingDetails
+
+        return VStack(alignment: .leading, spacing: 6) {
+            Text(release.title)
+                .font(.subheadline.bold())
+            Text("\(release.status) • \(release.channel) • v\(release.version) • \(report.summary)")
+                .font(.caption)
+                .foregroundStyle(report.passed ? .secondary : .orange)
+            if let firstBlocker = blockedDetails.first {
+                Text(firstBlocker)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Controlled customer publication gate is clear.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 }
