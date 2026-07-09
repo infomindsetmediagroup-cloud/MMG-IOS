@@ -3,6 +3,7 @@ import SwiftUI
 
 struct CommandCenterRuntimeSummaryView: View {
     @Query(sort: \WorkflowRecord.updatedAt, order: .reverse) private var workflows: [WorkflowRecord]
+    @Query(sort: \WorkflowTransitionRecord.createdAt, order: .reverse) private var transitions: [WorkflowTransitionRecord]
     @Query(sort: \TaskRecord.updatedAt, order: .reverse) private var tasks: [TaskRecord]
     @Query(sort: \ProductionQueueRecord.updatedAt, order: .reverse) private var queueItems: [ProductionQueueRecord]
     @Query(sort: \ProductionAssetRecord.updatedAt, order: .reverse) private var assets: [ProductionAssetRecord]
@@ -10,6 +11,16 @@ struct CommandCenterRuntimeSummaryView: View {
     @Query(sort: \CustomerReleaseRecord.updatedAt, order: .reverse) private var customerReleases: [CustomerReleaseRecord]
 
     private let releaseGatePolicy = CustomerReleaseGatePolicy()
+    private let workflowHealthBuilder = CommandCenterWorkflowHealthSummaryBuilder()
+
+    private var workflowHealthSummary: CommandCenterWorkflowHealthSummary {
+        workflowHealthBuilder.summarize(
+            workflows: workflows,
+            tasks: tasks,
+            queueItems: queueItems,
+            transitions: transitions
+        )
+    }
 
     private var activeWorkflows: [WorkflowRecord] {
         workflows.filter { $0.status == RuntimeWorkflowStatus.active.rawValue || $0.status == RuntimeWorkflowStatus.draft.rawValue }
@@ -87,6 +98,18 @@ struct CommandCenterRuntimeSummaryView: View {
                     metricRow(title: "Active workflows", value: activeWorkflows.count, systemImage: "play.circle")
                     metricRow(title: "Waiting approval", value: approvalWorkflows.count, systemImage: "checkmark.seal")
                     metricRow(title: "Open tasks", value: openTasks.count, systemImage: "checklist")
+                }
+
+                Section("Workflow Health") {
+                    Text(workflowHealthSummary.executiveSummary)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    metricRow(title: "Average health", value: workflowHealthSummary.averageScore, systemImage: "heart.text.square")
+                    metricRow(title: "Healthy", value: workflowHealthSummary.healthyCount, systemImage: "checkmark.circle")
+                    metricRow(title: "Blocked", value: workflowHealthSummary.blockedCount, systemImage: "exclamationmark.triangle")
+                    metricRow(title: "Waiting approval", value: workflowHealthSummary.approvalCount, systemImage: "checkmark.seal")
+                    metricRow(title: "Near handoff", value: workflowHealthSummary.nearHandoffCount, systemImage: "paperplane")
+                    metricRow(title: "Closed", value: workflowHealthSummary.closedCount, systemImage: "archivebox")
                 }
 
                 Section("Queue Metrics") {
@@ -223,6 +246,7 @@ struct CommandCenterRuntimeSummaryView: View {
     CommandCenterRuntimeSummaryView()
         .modelContainer(for: [
             WorkflowRecord.self,
+            WorkflowTransitionRecord.self,
             TaskRecord.self,
             ProductionQueueRecord.self,
             ProductionAssetRecord.self,
