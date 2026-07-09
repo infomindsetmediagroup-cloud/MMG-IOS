@@ -4,6 +4,7 @@ import SwiftUI
 struct DesignStudioProjectDetailView: View {
     let project: PersistedDesignStudioProject
 
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \PersistedDesignStudioAsset.updatedAt, order: .reverse) private var allAssets: [PersistedDesignStudioAsset]
     @Query(sort: \PersistedDesignStudioVersionRecord.createdAt, order: .reverse) private var allVersions: [PersistedDesignStudioVersionRecord]
     @Query(sort: \PersistedDesignStudioExportJob.updatedAt, order: .reverse) private var allExportJobs: [PersistedDesignStudioExportJob]
@@ -70,17 +71,7 @@ struct DesignStudioProjectDetailView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(projectExportJobs) { job in
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(job.assetTitle).font(.headline)
-                            Text("\(job.requestedFormat) • \(job.statusRawValue)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            if job.approvalRequired {
-                                Label("Approval required", systemImage: "checkmark.seal")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
+                        exportJobRow(job)
                     }
                 }
             }
@@ -103,11 +94,68 @@ struct DesignStudioProjectDetailView: View {
         }
         .navigationTitle(project.title)
     }
+
+    private func exportJobRow(_ job: PersistedDesignStudioExportJob) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(job.assetTitle).font(.headline)
+            Text("\(job.requestedFormat) • \(job.statusRawValue)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if job.approvalRequired {
+                Label("Approval required", systemImage: "checkmark.seal")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            HStack {
+                Button("Approve") { approve(job) }
+                    .disabled(job.statusRawValue == DesignStudioExportStatus.released.rawValue)
+                Button("Fail") { fail(job) }
+                    .disabled(job.statusRawValue == DesignStudioExportStatus.released.rawValue)
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
+    private func approve(_ job: PersistedDesignStudioExportJob) {
+        job.statusRawValue = DesignStudioExportStatus.released.rawValue
+        job.approvalRequired = false
+        job.updatedAt = .now
+        job.releaseNotes = job.releaseNotes.isEmpty ? "Approved and released as a customer deliverable." : job.releaseNotes + "\nApproved and released as a customer deliverable."
+        modelContext.insert(
+            PersistedDesignStudioVersionRecord(
+                assetTitle: job.assetTitle,
+                projectTitle: job.projectTitle,
+                versionLabel: "release",
+                changeSummary: "Export job approved and released to approved-deliverable state.",
+                changedBy: "MMG Approval Gate",
+                kairosAssisted: false
+            )
+        )
+        try? modelContext.save()
+    }
+
+    private func fail(_ job: PersistedDesignStudioExportJob) {
+        job.statusRawValue = DesignStudioExportStatus.failed.rawValue
+        job.updatedAt = .now
+        job.releaseNotes = job.releaseNotes.isEmpty ? "Export failed or was rejected before customer release." : job.releaseNotes + "\nExport failed or was rejected before customer release."
+        modelContext.insert(
+            PersistedDesignStudioVersionRecord(
+                assetTitle: job.assetTitle,
+                projectTitle: job.projectTitle,
+                versionLabel: "rejected",
+                changeSummary: "Export job failed or was rejected before customer release.",
+                changedBy: "MMG Approval Gate",
+                kairosAssisted: false
+            )
+        )
+        try? modelContext.save()
+    }
 }
 
 struct DesignStudioAssetDetailView: View {
     let asset: PersistedDesignStudioAsset
 
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \PersistedDesignStudioVersionRecord.createdAt, order: .reverse) private var allVersions: [PersistedDesignStudioVersionRecord]
     @Query(sort: \PersistedDesignStudioExportJob.updatedAt, order: .reverse) private var allExportJobs: [PersistedDesignStudioExportJob]
 
@@ -167,20 +215,68 @@ struct DesignStudioAssetDetailView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(assetExportJobs) { job in
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text("\(job.requestedFormat) • \(job.statusRawValue)")
-                                .font(.headline)
-                            Text(job.destinationPath)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text(job.releaseNotes.isEmpty ? "No release notes." : job.releaseNotes)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
+                        exportJobRow(job)
                     }
                 }
             }
         }
         .navigationTitle(asset.title)
+    }
+
+    private func exportJobRow(_ job: PersistedDesignStudioExportJob) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("\(job.requestedFormat) • \(job.statusRawValue)")
+                .font(.headline)
+            Text(job.destinationPath)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(job.releaseNotes.isEmpty ? "No release notes." : job.releaseNotes)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            HStack {
+                Button("Approve") { approve(job) }
+                    .disabled(job.statusRawValue == DesignStudioExportStatus.released.rawValue)
+                Button("Fail") { fail(job) }
+                    .disabled(job.statusRawValue == DesignStudioExportStatus.released.rawValue)
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
+    private func approve(_ job: PersistedDesignStudioExportJob) {
+        job.statusRawValue = DesignStudioExportStatus.released.rawValue
+        job.approvalRequired = false
+        job.updatedAt = .now
+        job.releaseNotes = job.releaseNotes.isEmpty ? "Approved and released as a customer deliverable." : job.releaseNotes + "\nApproved and released as a customer deliverable."
+        asset.statusRawValue = DesignStudioAssetStatus.approved.rawValue
+        asset.updatedAt = .now
+        modelContext.insert(
+            PersistedDesignStudioVersionRecord(
+                assetTitle: job.assetTitle,
+                projectTitle: job.projectTitle,
+                versionLabel: "release",
+                changeSummary: "Asset export approved and released to approved-deliverable state.",
+                changedBy: "MMG Approval Gate",
+                kairosAssisted: false
+            )
+        )
+        try? modelContext.save()
+    }
+
+    private func fail(_ job: PersistedDesignStudioExportJob) {
+        job.statusRawValue = DesignStudioExportStatus.failed.rawValue
+        job.updatedAt = .now
+        job.releaseNotes = job.releaseNotes.isEmpty ? "Export failed or was rejected before customer release." : job.releaseNotes + "\nExport failed or was rejected before customer release."
+        modelContext.insert(
+            PersistedDesignStudioVersionRecord(
+                assetTitle: job.assetTitle,
+                projectTitle: job.projectTitle,
+                versionLabel: "rejected",
+                changeSummary: "Asset export failed or was rejected before customer release.",
+                changedBy: "MMG Approval Gate",
+                kairosAssisted: false
+            )
+        )
+        try? modelContext.save()
     }
 }
