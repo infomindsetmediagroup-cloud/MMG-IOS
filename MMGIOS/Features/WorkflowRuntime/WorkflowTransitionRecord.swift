@@ -17,10 +17,10 @@ final class WorkflowTransitionRecord {
     init(
         id: String = UUID().uuidString,
         workflowID: String,
-        fromStage: WorkflowStage,
-        toStage: WorkflowStage,
-        fromStatus: WorkflowStatus,
-        toStatus: WorkflowStatus,
+        fromStage: RuntimeWorkflowStage,
+        toStage: RuntimeWorkflowStage,
+        fromStatus: RuntimeWorkflowStatus,
+        toStatus: RuntimeWorkflowStatus,
         actor: String,
         trigger: String,
         notes: String = ""
