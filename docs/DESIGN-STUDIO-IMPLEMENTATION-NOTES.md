@@ -20,6 +20,9 @@ Implemented code-level foundation:
 - Project detail view
 - Asset detail view
 - Navigable project and asset rows
+- New project editor form
+- New asset editor form
+- Workspace toolbar actions for seed, new project, and new asset
 - Seeded demo projects, assets, version records, export jobs, and permissions
 - SwiftData model container registration
 - Preview model container registration
@@ -47,19 +50,20 @@ This is represented through:
 - Kairos history summaries on assets
 - Version history records for auditability
 - Project-level and asset-level production detail views
+- Manual create flows for live project and asset testing
 
 ## Next Implementation Pass
 
 Recommended next pass:
 
-1. Add create/edit forms for projects and assets.
-2. Add export job approval action.
-3. Add relationship IDs instead of title-based linkage.
-4. Connect Design Studio records to the broader Asset Library once that module is implemented.
-5. Connect Customer Knowledge Vault references to real customer knowledge records.
-6. Add Kairos generation/refinement action stubs for document, image, and brand workflows.
-7. Add production audit/activity timeline.
-8. Add basic filtering by project type, status, and approval queue.
+1. Add export job approval action.
+2. Add relationship IDs instead of title-based linkage.
+3. Connect Design Studio records to the broader Asset Library once that module is implemented.
+4. Connect Customer Knowledge Vault references to real customer knowledge records.
+5. Add Kairos generation/refinement action stubs for document, image, and brand workflows.
+6. Add production audit/activity timeline.
+7. Add basic filtering by project type, status, and approval queue.
+8. Add edit/update flows for existing projects and assets.
 
 ## Validation Note
 
