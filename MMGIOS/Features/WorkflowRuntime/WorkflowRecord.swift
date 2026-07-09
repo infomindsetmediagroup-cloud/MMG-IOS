@@ -22,10 +22,10 @@ final class WorkflowRecord {
         customer: String,
         projectID: String,
         projectTitle: String,
-        type: WorkflowType,
-        stage: WorkflowStage = .intake,
-        status: WorkflowStatus = .draft,
-        priority: WorkflowPriority = .normal,
+        type: RuntimeWorkflowType,
+        stage: RuntimeWorkflowStage = .intake,
+        status: RuntimeWorkflowStatus = .draft,
+        priority: RuntimeWorkflowPriority = .normal,
         owner: String = "Kairos",
         summary: String
     ) {
