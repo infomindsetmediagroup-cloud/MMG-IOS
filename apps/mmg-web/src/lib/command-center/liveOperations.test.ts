@@ -47,4 +47,21 @@ describe('command center live operations telemetry', () => {
       expect(parent.progress).toBeLessThanOrEqual(100);
     }
   });
+
+  it('surfaces release gate signals to executive, publishing, customer, and operations collections', () => {
+    const telemetry = getDevelopmentCommandCenterTelemetry();
+    const parentsWithReleaseSignals = telemetry.parents.filter((parent) => parent.releaseGateSignals?.length);
+
+    expect(parentsWithReleaseSignals.map((parent) => parent.id)).toEqual([
+      'executive',
+      'publishing',
+      'customers',
+      'operations'
+    ]);
+
+    for (const parent of parentsWithReleaseSignals) {
+      expect(parent.releaseGateSignals?.some((signal) => signal.status !== 'ready')).toBe(true);
+      expect(parent.releaseGateSignals?.every((signal) => signal.requiredAction.length > 0)).toBe(true);
+    }
+  });
 });
