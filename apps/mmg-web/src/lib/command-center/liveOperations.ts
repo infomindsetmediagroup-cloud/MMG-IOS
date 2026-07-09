@@ -25,6 +25,14 @@ export type CommandModule = {
   progress: number;
 };
 
+export type CommandReleaseGateSignal = {
+  id: string;
+  title: string;
+  status: "ready" | "blocked" | "reviewing";
+  blockedChecks: number;
+  requiredAction: string;
+};
+
 export type CommandParent = {
   id: string;
   title: string;
@@ -39,6 +47,7 @@ export type CommandParent = {
   progress: number;
   modules: CommandModule[];
   events: CommandEvent[];
+  releaseGateSignals?: CommandReleaseGateSignal[];
 };
 
 export type CommandCenterTelemetry = {
@@ -54,12 +63,29 @@ export const commandStateLabels: Record<CommandProcessingState, string> = {
   processing: "Processing",
   waiting: "Waiting",
   reviewing: "Reviewing",
-  finalizing: "Finalizing",
   completed: "Completed",
+  finalizing: "Finalizing",
   failed: "Needs attention",
   paused: "Paused",
   cancelled: "Cancelled"
 };
+
+const releaseGateSignals: CommandReleaseGateSignal[] = [
+  {
+    id: "creator-bible-cover-release",
+    title: "Creator's Bible cover package",
+    status: "blocked",
+    blockedChecks: 2,
+    requiredAction: "Approve final deliverable metadata before customer download access."
+  },
+  {
+    id: "ai-prompting-preview-release",
+    title: "AI Prompting preview asset",
+    status: "reviewing",
+    blockedChecks: 1,
+    requiredAction: "Confirm production asset is approvedDeliverable, not workspaceDraft."
+  }
+];
 
 export function getDevelopmentCommandCenterTelemetry(): CommandCenterTelemetry {
   return {
@@ -105,7 +131,8 @@ export function getDevelopmentCommandCenterTelemetry(): CommandCenterTelemetry {
           { time: "Now", label: "Command Center Live Operations elevated to P0", state: "running" },
           { time: "3 min", label: "Blueprint refreeze note recorded", state: "completed" },
           { time: "8 min", label: "Approval queue refreshed", state: "reviewing" }
-        ]
+        ],
+        releaseGateSignals
       },
       {
         id: "knowledge",
@@ -187,7 +214,8 @@ export function getDevelopmentCommandCenterTelemetry(): CommandCenterTelemetry {
           { time: "1 min", label: "Publishing pipeline heartbeat received", state: "running" },
           { time: "6 min", label: "Asset queue recalculated", state: "queued" },
           { time: "10 min", label: "Review checkpoint prepared", state: "reviewing" }
-        ]
+        ],
+        releaseGateSignals
       },
       {
         id: "customers",
@@ -228,7 +256,8 @@ export function getDevelopmentCommandCenterTelemetry(): CommandCenterTelemetry {
           { time: "5 min", label: "Customer activity adapter refreshed", state: "waiting" },
           { time: "7 min", label: "Subscription contract initialized", state: "initializing" },
           { time: "13 min", label: "Context isolation check completed", state: "completed" }
-        ]
+        ],
+        releaseGateSignals
       },
       {
         id: "operations",
@@ -259,17 +288,18 @@ export function getDevelopmentCommandCenterTelemetry(): CommandCenterTelemetry {
           },
           {
             title: "Release Gate",
-            metric: "Draft",
-            detail: "Production status is blocked until final readiness checks pass.",
+            metric: "2 blocked",
+            detail: "Customer deliverables remain blocked until production-only release checks pass.",
             state: "reviewing",
             progress: 52
           }
         ],
         events: [
           { time: "15 sec", label: "Runtime health heartbeat received", state: "running" },
-          { time: "2 min", label: "Work loop state refreshed", state: "running" },
+          { time: "2 min", label: "Customer release gate signals refreshed", state: "reviewing" },
           { time: "9 min", label: "Release gate remains in review", state: "reviewing" }
-        ]
+        ],
+        releaseGateSignals
       }
     ]
   };
