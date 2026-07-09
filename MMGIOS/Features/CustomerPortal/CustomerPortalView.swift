@@ -8,6 +8,10 @@ struct CustomerPortalView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \PersistedCustomerRequestRecord.updatedAt, order: .reverse) private var requests: [PersistedCustomerRequestRecord]
     @Query(sort: \PersistedValueDiscoveryProfile.updatedAt, order: .reverse) private var valueProfiles: [PersistedValueDiscoveryProfile]
+    @Query(sort: \CustomerReleaseRecord.updatedAt, order: .reverse) private var customerReleases: [CustomerReleaseRecord]
+    @Query(sort: \DeliverableRecord.updatedAt, order: .reverse) private var deliverables: [DeliverableRecord]
+    @Query(sort: \ProductionAssetRecord.updatedAt, order: .reverse) private var productionAssets: [ProductionAssetRecord]
+
     @State private var showingNewRequest = false
     @State private var knowledgeExpertise = ""
     @State private var skills = ""
@@ -17,11 +21,27 @@ struct CustomerPortalView: View {
     @State private var desiredOutcomes = ""
     @State private var saveMessage = ""
 
+    private let releaseGatePolicy = CustomerReleaseGatePolicy()
+
     private var openRequests: [PersistedCustomerRequestRecord] {
         requests.filter { $0.statusRawValue != CustomerRequestStatus.complete.rawValue }
     }
 
     private var valueProfile: PersistedValueDiscoveryProfile? { valueProfiles.first }
+
+    private var releaseGateReports: [CustomerReleaseGateReport] {
+        customerReleases.map {
+            releaseGatePolicy.evaluate(
+                release: $0,
+                deliverables: deliverables,
+                productionAssets: productionAssets
+            )
+        }
+    }
+
+    private var blockedReleaseCount: Int {
+        releaseGateReports.filter { !$0.isPassed }.count
+    }
 
     private var draftProfile: ValueDiscoveryDraftProfile {
         ValueDiscoveryDraftProfile(
@@ -63,6 +83,7 @@ struct CustomerPortalView: View {
                     onSave: saveValueDiscoveryProfile
                 )
                 recommendationsSection
+                releaseReadinessSection
                 requestsSection
             }
             .navigationTitle("Customer")
@@ -81,7 +102,7 @@ struct CustomerPortalView: View {
             SectionHeader(
                 eyebrow: "Your Knowledge Has Value",
                 title: "Customer Portal",
-                bodyText: "Customer-facing intake, Value Discovery, service onboarding, file-submission routing, support requests, and project handoff tracking."
+                bodyText: "Customer-facing intake, Value Discovery, service onboarding, file-submission routing, support requests, release readiness, and project handoff tracking."
             )
             .listRowInsets(EdgeInsets())
             .listRowBackground(Color.clear)
@@ -93,6 +114,7 @@ struct CustomerPortalView: View {
             LabeledContent("Signed in as", value: sessionStore.session.user.name)
             LabeledContent("Open requests", value: "\(openRequests.count)")
             LabeledContent("Value Discovery", value: "\(displayedCompletionScore)%")
+            LabeledContent("Release gates", value: customerReleases.isEmpty ? "No releases" : "\(blockedReleaseCount) blocked")
             Label("Canonical service onboarding enabled", systemImage: "checkmark.seal")
         }
     }
@@ -111,6 +133,19 @@ struct CustomerPortalView: View {
             } else {
                 Text("Save the Value Discovery profile to generate recommendations.")
                     .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var releaseReadinessSection: some View {
+        Section("Release Readiness") {
+            if releaseGateReports.isEmpty {
+                Text("No customer releases are queued yet.")
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(releaseGateReports) { report in
+                    CustomerReleaseGateReportRow(report: report)
+                }
             }
         }
     }
@@ -178,6 +213,40 @@ struct CustomerPortalView: View {
     }
 }
 
+private struct CustomerReleaseGateReportRow: View {
+    let report: CustomerReleaseGateReport
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(report.releaseTitle).font(.headline)
+                Spacer()
+                Label(report.isPassed ? "Ready" : "Blocked", systemImage: report.isPassed ? "checkmark.seal" : "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(report.isPassed ? .green : .orange)
+            }
+
+            Text(report.summary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            ForEach(report.checks) { check in
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: check.isPassed ? "checkmark.circle.fill" : "xmark.octagon.fill")
+                        .foregroundStyle(check.isPassed ? .green : .red)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(check.gate.rawValue).font(.caption.weight(.semibold))
+                        Text(check.message)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
 private struct CustomerRequestRow: View {
     let request: PersistedCustomerRequestRecord
 
@@ -195,6 +264,9 @@ private struct CustomerRequestRow: View {
     CustomerPortalView(sessionStore: LocalSessionStore(), customerStore: LocalCustomerPortalStore())
         .modelContainer(for: [
             PersistedCustomerRequestRecord.self,
-            PersistedValueDiscoveryProfile.self
+            PersistedValueDiscoveryProfile.self,
+            CustomerReleaseRecord.self,
+            DeliverableRecord.self,
+            ProductionAssetRecord.self
         ], inMemory: true)
 }
