@@ -17,6 +17,8 @@ Current validation posture:
 - XcodeGen project regeneration
 - Xcode build against the `MMGIOS` scheme
 - Post-build assertions for source graph, model registration, runtime surfaces, customer portal value discovery, deliverables, and release wiring
+- Workflow-level concurrency cancels stale in-progress runs for the same ref
+- Homebrew auto-update and cleanup are disabled inside the workflow to reduce avoidable validation overhead
 
 ## Execution Rule
 
@@ -34,6 +36,18 @@ Recommended sequence for future production slices:
 4. Wire user-facing or operator-facing surfaces through `MMGIOS/App/AppRootView.swift`.
 5. Extend `.github/workflows/ios-build.yml` validation assertions.
 6. Update the corresponding document in `docs/operations/`.
+7. Keep the PR draft while batching related implementation work.
+8. Run the manual validation gate only when a branch needs a final readiness signal.
+
+## Operational Prep Standard
+
+Before moving a PR to ready-for-review, verify that it satisfies these repository prep rules:
+
+- One PR equals one operational purpose.
+- Source graph, model registration, surface wiring, and validation assertions agree with each other.
+- Documentation explains how to triage future failures, not only what changed.
+- The PR body states build posture, minutes-preservation posture, and remaining gate requirements.
+- Draft PRs should remain open and unmerged while the implementation batch is still evolving.
 
 ## Failure Classification
 
