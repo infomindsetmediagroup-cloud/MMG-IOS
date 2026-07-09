@@ -17,6 +17,7 @@ struct MMGIOSApp: App {
             ProductionAssetRecord.self,
             DeliverableRecord.self,
             CustomerReleaseRecord.self,
+            CustomerPortalNotificationRecord.self,
             PersistedCustomerRequestRecord.self,
             PersistedValueDiscoveryProfile.self,
             KnowledgeVaultRecord.self
