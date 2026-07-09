@@ -62,7 +62,7 @@ struct AppRootView: View {
     }
 }
 
-#Preview {
+#Preview("Runtime Shell") {
     AppRootView()
         .modelContainer(for: [
             PersistedCustomerRequestRecord.self,
