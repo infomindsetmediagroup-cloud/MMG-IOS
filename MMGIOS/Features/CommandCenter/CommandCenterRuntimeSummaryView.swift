@@ -120,15 +120,27 @@ struct CommandCenterRuntimeSummaryView: View {
 
                     if !blockedReleases.isEmpty {
                         ForEach(blockedReleases.prefix(4)) { release in
-                            releaseGateRow(release)
+                            NavigationLink {
+                                CustomerReleaseGateDetailView(release: release)
+                            } label: {
+                                releaseGateRow(release)
+                            }
                         }
                     } else if !publishReadyReleases.isEmpty {
                         ForEach(publishReadyReleases.prefix(4)) { release in
-                            releaseGateRow(release)
+                            NavigationLink {
+                                CustomerReleaseGateDetailView(release: release)
+                            } label: {
+                                releaseGateRow(release)
+                            }
                         }
                     } else if !draftReleases.isEmpty {
                         ForEach(draftReleases.prefix(4)) { release in
-                            releaseGateRow(release)
+                            NavigationLink {
+                                CustomerReleaseGateDetailView(release: release)
+                            } label: {
+                                releaseGateRow(release)
+                            }
                         }
                     }
                 }
@@ -139,14 +151,18 @@ struct CommandCenterRuntimeSummaryView: View {
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(customerReleases.prefix(6)) { release in
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text(release.title).font(.headline)
-                                Text("\(release.status) • \(release.channel) • v\(release.version)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Text(release.gateSummary.isEmpty ? releaseGatePolicy.evaluate(release).summary : release.gateSummary)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
+                            NavigationLink {
+                                CustomerReleaseGateDetailView(release: release)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text(release.title).font(.headline)
+                                    Text("\(release.status) • \(release.channel) • v\(release.version)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    Text(release.gateSummary.isEmpty ? releaseGatePolicy.evaluate(release).summary : release.gateSummary)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
                     }
