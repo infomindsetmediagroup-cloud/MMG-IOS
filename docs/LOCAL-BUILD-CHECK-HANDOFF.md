@@ -8,7 +8,7 @@ Validate the current runtime foundation locally before enabling GitHub Actions o
 
 The available execution container is Linux and does not include Xcode or `xcodebuild`, so a true local iOS compile could not be executed here.
 
-A static build-readiness validation was performed through the GitHub connector instead, followed by one controlled manual GitHub Actions simulator build.
+A static build-readiness validation was performed through the GitHub connector instead, followed by controlled manual GitHub Actions simulator builds.
 
 ## Static validation completed
 
@@ -36,6 +36,19 @@ Fixes applied after first failure:
 - Constrained `project.yml` to the runtime validation source set only.
 - Namespaced runtime workflow enums as `RuntimeWorkflowType`, `RuntimeWorkflowStage`, `RuntimeWorkflowStatus`, and `RuntimeWorkflowPriority`.
 - Updated runtime records, services, policies, and dashboards to use the namespaced workflow enums.
+
+## Second manual simulator build result
+
+The second controlled GitHub Actions simulator build confirmed that `project.yml` now limits compilation to the intended runtime validation surface.
+
+Primary remaining compiler failure:
+
+- `CommandCenterRuntimeSummaryView` still referenced the old `WorkflowStatus` symbol after runtime workflow status was namespaced.
+
+Fixes applied after second failure:
+
+- Updated `CommandCenterRuntimeSummaryView` to use `RuntimeWorkflowStatus`.
+- Searched the repository for stale `WorkflowStatus`, `WorkflowPriority`, `WorkflowStage`, and `WorkflowType` references and found no remaining matches.
 
 ## Manual Xcode check still required
 
