@@ -31,6 +31,8 @@ Use this checklist before moving an MMG IOS / Kairos pull request from draft to 
 - Build failures are classified as compiler/project failures or post-build validation failures.
 - The PR body explains operational impact, not only code changes.
 - The PR body states whether a final manual build gate is still required.
+- `IMPLEMENTATION_SEQUENCE.md` is updated when the standard production-slice order changes.
+- `RELEASE_GATE_STANDARD.md` is updated when release-gate timing, readiness, or merge rules change.
 
 ## Release Readiness
 
@@ -38,3 +40,4 @@ Use this checklist before moving an MMG IOS / Kairos pull request from draft to 
 - Ready PRs should be mergeable, scoped, and aligned with the current validation contract.
 - Merge commits or squash commits should preserve `[skip ci]` when avoiding unnecessary Actions minutes is the priority.
 - Final release-gate runs should be intentional, manual, and attached to the branch that will be merged.
+- A PR should not leave draft unless the branch has a passing release gate or an explicit decision that no new gate is required.
