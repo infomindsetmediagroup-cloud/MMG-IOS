@@ -7,6 +7,7 @@ struct CustomerReleaseDashboardView: View {
     @Query(sort: \CustomerReleaseRecord.updatedAt, order: .reverse) private var releases: [CustomerReleaseRecord]
 
     private let releaseService = ReleaseApprovalService()
+    private let releaseGatePolicy = CustomerReleaseGatePolicy()
 
     private var eligibleDeliverables: [DeliverableRecord] {
         deliverables.filter { releaseService.canCreateRelease(from: $0) }
@@ -24,6 +25,10 @@ struct CustomerReleaseDashboardView: View {
         releases.filter { $0.status == CustomerReleaseStatus.published.rawValue }
     }
 
+    private var blockedReleases: [CustomerReleaseRecord] {
+        releases.filter { !releaseGatePolicy.canPublish($0) && $0.status != CustomerReleaseStatus.published.rawValue && $0.status != CustomerReleaseStatus.archived.rawValue }
+    }
+
     private var blockedDeliverables: [DeliverableRecord] {
         deliverables.filter { !releaseService.canCreateRelease(from: $0) }
     }
@@ -37,6 +42,7 @@ struct CustomerReleaseDashboardView: View {
                     LabeledContent("In review", value: "\(reviewReleases.count)")
                     LabeledContent("Approved", value: "\(approvedReleases.count)")
                     LabeledContent("Published", value: "\(publishedReleases.count)")
+                    LabeledContent("Blocked by gates", value: "\(blockedReleases.count)")
                 }
 
                 Section("Release Queue") {
@@ -45,25 +51,10 @@ struct CustomerReleaseDashboardView: View {
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(releases) { release in
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(release.title).font(.headline)
-                                Text("\(release.status) • \(release.channel) • v\(release.version)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Text(release.summary)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                Text(release.gateSummary)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                Text(release.releaseLocation)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                if !release.approvedBy.isEmpty {
-                                    Text("Approved by \(release.approvedBy)")
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                }
+                            NavigationLink {
+                                CustomerReleaseGateDetailView(release: release)
+                            } label: {
+                                releaseQueueRow(release)
                             }
                         }
                     }
@@ -92,6 +83,38 @@ struct CustomerReleaseDashboardView: View {
                     Button("Approve") { approveFirstReviewRelease() }
                     Button("Publish") { publishFirstApprovedRelease() }
                 }
+            }
+        }
+    }
+
+    private func releaseQueueRow(_ release: CustomerReleaseRecord) -> some View {
+        let report = releaseGatePolicy.evaluate(release)
+
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(release.title)
+                    .font(.headline)
+                Spacer()
+                Text(report.passed ? "Ready" : "Blocked")
+                    .font(.caption.bold())
+                    .foregroundColor(report.passed ? .secondary : .orange)
+            }
+            Text("\(release.status) • \(release.channel) • v\(release.version)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(release.summary)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(report.summary)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(release.releaseLocation)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            if !release.approvedBy.isEmpty {
+                Text("Approved by \(release.approvedBy)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
         }
     }
