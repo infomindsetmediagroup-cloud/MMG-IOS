@@ -83,6 +83,7 @@ struct DesignStudioAssetEditorView: View {
     @Environment(\.modelContext) private var modelContext
 
     let defaultProjectTitle: String
+    let defaultProjectRelationshipID: String
 
     @State private var title = ""
     @State private var projectTitle: String
@@ -94,8 +95,9 @@ struct DesignStudioAssetEditorView: View {
     @State private var versionLabel = "v1"
     @State private var kairosHistorySummary = ""
 
-    init(defaultProjectTitle: String = "") {
+    init(defaultProjectTitle: String = "", defaultProjectRelationshipID: String = "") {
         self.defaultProjectTitle = defaultProjectTitle
+        self.defaultProjectRelationshipID = defaultProjectRelationshipID
         _projectTitle = State(initialValue: defaultProjectTitle)
     }
 
@@ -155,6 +157,7 @@ struct DesignStudioAssetEditorView: View {
 
     private func saveAsset() {
         let asset = PersistedDesignStudioAsset(
+            projectRelationshipID: defaultProjectRelationshipID,
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             projectTitle: projectTitle.trimmingCharacters(in: .whitespacesAndNewlines),
             assetType: assetType,
@@ -169,6 +172,8 @@ struct DesignStudioAssetEditorView: View {
         modelContext.insert(asset)
         modelContext.insert(
             PersistedDesignStudioVersionRecord(
+                projectRelationshipID: asset.projectRelationshipID,
+                assetRelationshipID: asset.relationshipID,
                 assetTitle: asset.title,
                 projectTitle: asset.projectTitle,
                 versionLabel: asset.versionLabel,
