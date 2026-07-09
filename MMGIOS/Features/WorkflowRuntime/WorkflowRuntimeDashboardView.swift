@@ -13,11 +13,11 @@ struct WorkflowRuntimeDashboardView: View {
     private let queueRuntime = ProductionQueueService()
 
     private var activeWorkflows: [WorkflowRecord] {
-        workflows.filter { $0.status == WorkflowStatus.active.rawValue || $0.status == WorkflowStatus.draft.rawValue }
+        workflows.filter { $0.status == RuntimeWorkflowStatus.active.rawValue || $0.status == RuntimeWorkflowStatus.draft.rawValue }
     }
 
     private var waitingForApproval: [WorkflowRecord] {
-        workflows.filter { $0.status == WorkflowStatus.waitingForApproval.rawValue }
+        workflows.filter { $0.status == RuntimeWorkflowStatus.waitingForApproval.rawValue }
     }
 
     private var openTasks: [TaskRecord] {
@@ -164,7 +164,7 @@ struct WorkflowRuntimeDashboardView: View {
 
     private func advanceFirstWorkflow() {
         guard let workflow = workflows.first,
-              let currentStage = WorkflowStage(rawValue: workflow.stage),
+              let currentStage = RuntimeWorkflowStage(rawValue: workflow.stage),
               let nextStage = WorkflowStagePolicy.nextStages(from: currentStage).first,
               let transition = runtime.transition(
                 workflow: workflow,
