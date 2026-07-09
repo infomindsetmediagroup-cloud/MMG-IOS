@@ -5,6 +5,7 @@ struct CommandCenterRuntimeSummaryView: View {
     @Query(sort: \WorkflowRecord.updatedAt, order: .reverse) private var workflows: [WorkflowRecord]
     @Query(sort: \TaskRecord.updatedAt, order: .reverse) private var tasks: [TaskRecord]
     @Query(sort: \ProductionQueueRecord.updatedAt, order: .reverse) private var queueItems: [ProductionQueueRecord]
+    @Query(sort: \ProductionAssetRecord.updatedAt, order: .reverse) private var assets: [ProductionAssetRecord]
 
     private var activeWorkflows: [WorkflowRecord] {
         workflows.filter { $0.status == RuntimeWorkflowStatus.active.rawValue || $0.status == RuntimeWorkflowStatus.draft.rawValue }
@@ -26,6 +27,14 @@ struct CommandCenterRuntimeSummaryView: View {
         queueItems.filter { $0.status == ProductionQueueStatus.blocked.rawValue }
     }
 
+    private var reviewAssets: [ProductionAssetRecord] {
+        assets.filter { $0.status == ProductionAssetStatus.needsReview.rawValue }
+    }
+
+    private var exportReadyAssets: [ProductionAssetRecord] {
+        assets.filter { $0.status == ProductionAssetStatus.exportReady.rawValue }
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -43,6 +52,12 @@ struct CommandCenterRuntimeSummaryView: View {
                         let count = queueItems.filter { $0.lane == lane.rawValue && $0.status != ProductionQueueStatus.completed.rawValue }.count
                         metricRow(title: lane.rawValue, value: count, systemImage: "rectangle.stack")
                     }
+                }
+
+                Section("Asset Metrics") {
+                    metricRow(title: "Production assets", value: assets.count, systemImage: "shippingbox")
+                    metricRow(title: "Needs review", value: reviewAssets.count, systemImage: "eye")
+                    metricRow(title: "Export ready", value: exportReadyAssets.count, systemImage: "square.and.arrow.up")
                 }
 
                 Section("Recent Queue") {
@@ -79,6 +94,7 @@ struct CommandCenterRuntimeSummaryView: View {
         .modelContainer(for: [
             WorkflowRecord.self,
             TaskRecord.self,
-            ProductionQueueRecord.self
+            ProductionQueueRecord.self,
+            ProductionAssetRecord.self
         ], inMemory: true)
 }
