@@ -18,6 +18,25 @@
 		A10000000000000000000009 /* GrowthMarketingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* GrowthMarketingView.swift */; };
 		A1000000000000000000000A /* SystemSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000A /* SystemSettingsView.swift */; };
 		A1000000000000000000000B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000B /* Assets.xcassets */; };
+		A1000000000000000000000C /* CommandCenterRuntimeSummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000D /* CommandCenterRuntimeSummaryView.swift */; };
+		A1000000000000000000000D /* DesignStudioProjectFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000E /* DesignStudioProjectFactory.swift */; };
+		A1000000000000000000000E /* DesignStudioProjectRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000F /* DesignStudioProjectRecord.swift */; };
+		A1000000000000000000000F /* DesignStudioWorkflowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* DesignStudioWorkflowView.swift */; };
+		A10000000000000000000010 /* KnowledgeVaultRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* KnowledgeVaultRecord.swift */; };
+		A10000000000000000000011 /* ProductionQueueEnums.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000012 /* ProductionQueueEnums.swift */; };
+		A10000000000000000000012 /* ProductionQueueRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000013 /* ProductionQueueRecord.swift */; };
+		A10000000000000000000013 /* ProductionQueueService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000014 /* ProductionQueueService.swift */; };
+		A10000000000000000000014 /* TaskDependencyRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000015 /* TaskDependencyRecord.swift */; };
+		A10000000000000000000015 /* TaskEnums.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000016 /* TaskEnums.swift */; };
+		A10000000000000000000016 /* TaskRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000017 /* TaskRecord.swift */; };
+		A10000000000000000000017 /* TaskRuntimeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000018 /* TaskRuntimeService.swift */; };
+		A10000000000000000000018 /* WorkflowEnums.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000019 /* WorkflowEnums.swift */; };
+		A10000000000000000000019 /* WorkflowRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001A /* WorkflowRecord.swift */; };
+		A1000000000000000000001A /* WorkflowRuntimeDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001B /* WorkflowRuntimeDashboardView.swift */; };
+		A1000000000000000000001B /* WorkflowRuntimeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001C /* WorkflowRuntimeService.swift */; };
+		A1000000000000000000001C /* WorkflowStagePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001D /* WorkflowStagePolicy.swift */; };
+		A1000000000000000000001D /* WorkflowStageProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001E /* WorkflowStageProgress.swift */; };
+		A1000000000000000000001E /* WorkflowTransitionRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001F /* WorkflowTransitionRecord.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -34,6 +53,25 @@
 		A2000000000000000000000A /* SystemSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Settings/SystemSettingsView.swift; sourceTree = "<group>"; };
 		A2000000000000000000000B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Resources/Assets.xcassets; sourceTree = "<group>"; };
 		A2000000000000000000000C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Resources/Info.plist; sourceTree = "<group>"; };
+		A2000000000000000000000D /* CommandCenterRuntimeSummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/CommandCenter/CommandCenterRuntimeSummaryView.swift; sourceTree = "<group>"; };
+		A2000000000000000000000E /* DesignStudioProjectFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/DesignStudio/DesignStudioProjectFactory.swift; sourceTree = "<group>"; };
+		A2000000000000000000000F /* DesignStudioProjectRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/DesignStudio/DesignStudioProjectRecord.swift; sourceTree = "<group>"; };
+		A20000000000000000000010 /* DesignStudioWorkflowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/DesignStudio/DesignStudioWorkflowView.swift; sourceTree = "<group>"; };
+		A20000000000000000000011 /* KnowledgeVaultRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/KnowledgeVault/KnowledgeVaultRecord.swift; sourceTree = "<group>"; };
+		A20000000000000000000012 /* ProductionQueueEnums.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/ProductionQueue/ProductionQueueEnums.swift; sourceTree = "<group>"; };
+		A20000000000000000000013 /* ProductionQueueRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/ProductionQueue/ProductionQueueRecord.swift; sourceTree = "<group>"; };
+		A20000000000000000000014 /* ProductionQueueService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/ProductionQueue/ProductionQueueService.swift; sourceTree = "<group>"; };
+		A20000000000000000000015 /* TaskDependencyRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/TaskEngine/TaskDependencyRecord.swift; sourceTree = "<group>"; };
+		A20000000000000000000016 /* TaskEnums.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/TaskEngine/TaskEnums.swift; sourceTree = "<group>"; };
+		A20000000000000000000017 /* TaskRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/TaskEngine/TaskRecord.swift; sourceTree = "<group>"; };
+		A20000000000000000000018 /* TaskRuntimeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/TaskEngine/TaskRuntimeService.swift; sourceTree = "<group>"; };
+		A20000000000000000000019 /* WorkflowEnums.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/WorkflowRuntime/WorkflowEnums.swift; sourceTree = "<group>"; };
+		A2000000000000000000001A /* WorkflowRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/WorkflowRuntime/WorkflowRecord.swift; sourceTree = "<group>"; };
+		A2000000000000000000001B /* WorkflowRuntimeDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/WorkflowRuntime/WorkflowRuntimeDashboardView.swift; sourceTree = "<group>"; };
+		A2000000000000000000001C /* WorkflowRuntimeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/WorkflowRuntime/WorkflowRuntimeService.swift; sourceTree = "<group>"; };
+		A2000000000000000000001D /* WorkflowStagePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/WorkflowRuntime/WorkflowStagePolicy.swift; sourceTree = "<group>"; };
+		A2000000000000000000001E /* WorkflowStageProgress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/WorkflowRuntime/WorkflowStageProgress.swift; sourceTree = "<group>"; };
+		A2000000000000000000001F /* WorkflowTransitionRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/WorkflowRuntime/WorkflowTransitionRecord.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -68,6 +106,25 @@
 				A20000000000000000000008 /* ProductionCommandCenterView.swift */,
 				A20000000000000000000009 /* GrowthMarketingView.swift */,
 				A2000000000000000000000A /* SystemSettingsView.swift */,
+				A2000000000000000000000D /* CommandCenterRuntimeSummaryView.swift */,
+				A2000000000000000000000E /* DesignStudioProjectFactory.swift */,
+				A2000000000000000000000F /* DesignStudioProjectRecord.swift */,
+				A20000000000000000000010 /* DesignStudioWorkflowView.swift */,
+				A20000000000000000000011 /* KnowledgeVaultRecord.swift */,
+				A20000000000000000000012 /* ProductionQueueEnums.swift */,
+				A20000000000000000000013 /* ProductionQueueRecord.swift */,
+				A20000000000000000000014 /* ProductionQueueService.swift */,
+				A20000000000000000000015 /* TaskDependencyRecord.swift */,
+				A20000000000000000000016 /* TaskEnums.swift */,
+				A20000000000000000000017 /* TaskRecord.swift */,
+				A20000000000000000000018 /* TaskRuntimeService.swift */,
+				A20000000000000000000019 /* WorkflowEnums.swift */,
+				A2000000000000000000001A /* WorkflowRecord.swift */,
+				A2000000000000000000001B /* WorkflowRuntimeDashboardView.swift */,
+				A2000000000000000000001C /* WorkflowRuntimeService.swift */,
+				A2000000000000000000001D /* WorkflowStagePolicy.swift */,
+				A2000000000000000000001E /* WorkflowStageProgress.swift */,
+				A2000000000000000000001F /* WorkflowTransitionRecord.swift */,
 				A2000000000000000000000B /* Assets.xcassets */,
 				A2000000000000000000000C /* Info.plist */,
 			);
@@ -161,6 +218,25 @@
 				A10000000000000000000008 /* ProductionCommandCenterView.swift in Sources */,
 				A10000000000000000000009 /* GrowthMarketingView.swift in Sources */,
 				A1000000000000000000000A /* SystemSettingsView.swift in Sources */,
+				A1000000000000000000000C /* CommandCenterRuntimeSummaryView.swift in Sources */,
+				A1000000000000000000000D /* DesignStudioProjectFactory.swift in Sources */,
+				A1000000000000000000000E /* DesignStudioProjectRecord.swift in Sources */,
+				A1000000000000000000000F /* DesignStudioWorkflowView.swift in Sources */,
+				A10000000000000000000010 /* KnowledgeVaultRecord.swift in Sources */,
+				A10000000000000000000011 /* ProductionQueueEnums.swift in Sources */,
+				A10000000000000000000012 /* ProductionQueueRecord.swift in Sources */,
+				A10000000000000000000013 /* ProductionQueueService.swift in Sources */,
+				A10000000000000000000014 /* TaskDependencyRecord.swift in Sources */,
+				A10000000000000000000015 /* TaskEnums.swift in Sources */,
+				A10000000000000000000016 /* TaskRecord.swift in Sources */,
+				A10000000000000000000017 /* TaskRuntimeService.swift in Sources */,
+				A10000000000000000000018 /* WorkflowEnums.swift in Sources */,
+				A10000000000000000000019 /* WorkflowRecord.swift in Sources */,
+				A1000000000000000000001A /* WorkflowRuntimeDashboardView.swift in Sources */,
+				A1000000000000000000001B /* WorkflowRuntimeService.swift in Sources */,
+				A1000000000000000000001C /* WorkflowStagePolicy.swift in Sources */,
+				A1000000000000000000001D /* WorkflowStageProgress.swift in Sources */,
+				A1000000000000000000001E /* WorkflowTransitionRecord.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
