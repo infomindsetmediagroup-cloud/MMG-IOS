@@ -8,6 +8,7 @@ struct CustomerPortalView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \PersistedCustomerRequestRecord.updatedAt, order: .reverse) private var requests: [PersistedCustomerRequestRecord]
     @Query(sort: \PersistedValueDiscoveryProfile.updatedAt, order: .reverse) private var valueProfiles: [PersistedValueDiscoveryProfile]
+    @Query(sort: \CustomerReleaseRecord.updatedAt, order: .reverse) private var customerReleases: [CustomerReleaseRecord]
     @State private var showingNewRequest = false
     @State private var knowledgeExpertise = ""
     @State private var skills = ""
@@ -19,6 +20,14 @@ struct CustomerPortalView: View {
 
     private var openRequests: [PersistedCustomerRequestRecord] {
         requests.filter { $0.statusRawValue != CustomerRequestStatus.complete.rawValue }
+    }
+
+    private var publishedReleases: [CustomerReleaseRecord] {
+        customerReleases.filter { $0.status == CustomerReleaseStatus.published.rawValue }
+    }
+
+    private var approvedPendingReleases: [CustomerReleaseRecord] {
+        customerReleases.filter { $0.status == CustomerReleaseStatus.approved.rawValue }
     }
 
     private var valueProfile: PersistedValueDiscoveryProfile? { valueProfiles.first }
@@ -52,6 +61,7 @@ struct CustomerPortalView: View {
             List {
                 headerSection
                 portalStatusSection
+                deliveredWorkSection
                 ValueDiscoveryProfileSection(
                     knowledgeExpertise: $knowledgeExpertise,
                     skills: $skills,
@@ -81,7 +91,7 @@ struct CustomerPortalView: View {
             SectionHeader(
                 eyebrow: "Your Knowledge Has Value",
                 title: "Customer Portal",
-                bodyText: "Customer-facing intake, Value Discovery, service onboarding, file-submission routing, support requests, and project handoff tracking."
+                bodyText: "Customer-facing intake, Value Discovery, service onboarding, file-submission routing, support requests, and controlled final deliverable access."
             )
             .listRowInsets(EdgeInsets())
             .listRowBackground(Color.clear)
@@ -93,7 +103,33 @@ struct CustomerPortalView: View {
             LabeledContent("Signed in as", value: sessionStore.session.user.name)
             LabeledContent("Open requests", value: "\(openRequests.count)")
             LabeledContent("Value Discovery", value: "\(displayedCompletionScore)%")
+            LabeledContent("Published releases", value: "\(publishedReleases.count)")
+            LabeledContent("Approved pending release", value: "\(approvedPendingReleases.count)")
             Label("Canonical service onboarding enabled", systemImage: "checkmark.seal")
+        }
+    }
+
+    private var deliveredWorkSection: some View {
+        Section("Delivered Work") {
+            if publishedReleases.isEmpty {
+                Text("No final deliverables have been published to the customer portal yet.")
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(publishedReleases) { release in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(release.title).font(.headline)
+                        Text("\(release.channel) • v\(release.version)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(release.summary)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text("Controlled access: \(release.releaseLocation)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
         }
     }
 
@@ -195,6 +231,7 @@ private struct CustomerRequestRow: View {
     CustomerPortalView(sessionStore: LocalSessionStore(), customerStore: LocalCustomerPortalStore())
         .modelContainer(for: [
             PersistedCustomerRequestRecord.self,
-            PersistedValueDiscoveryProfile.self
+            PersistedValueDiscoveryProfile.self,
+            CustomerReleaseRecord.self
         ], inMemory: true)
 }
