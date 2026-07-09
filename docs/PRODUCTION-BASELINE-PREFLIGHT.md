@@ -31,6 +31,14 @@ This checklist verifies that the current runtime foundation is structurally orga
 - Converted the iOS simulator workflow to manual-only so normal development commits do not spend Actions minutes.
 - Updated the simulator build workflow to use a generic iOS Simulator destination instead of a specific device name.
 
+## Third preflight hardening pass
+
+- Narrowed the Xcode `PBXSourcesBuildPhase` to the runtime validation surface only.
+- Removed legacy dashboard/admin/production/growth/settings source files from the active compile phase for this validation gate.
+- Kept file references in the project so older files remain available for later reintegration.
+- Preserved app shell, runtime models, runtime services, Command Runtime, Workflow Runtime, Design Studio Runtime, Task Engine, Production Queue, and Knowledge Vault in the compile phase.
+- Reduced the expected manual simulator run to the smallest meaningful build target.
+
 ## Build-readiness checks before running GitHub Actions
 
 - Confirm `MMGIOSApp` model container compiles with verified runtime SwiftData models.
