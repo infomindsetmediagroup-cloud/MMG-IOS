@@ -46,15 +46,10 @@ struct WorkflowRuntimeDashboardView: View {
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(workflows) { workflow in
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text(workflow.projectTitle).font(.headline)
-                                Text("\(workflow.type) • \(workflow.stage) • \(workflow.status)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                ProgressView(value: Double(workflow.progress), total: 100)
-                                Text("Owner: \(workflow.owner) • Priority: \(workflow.priority)")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
+                            NavigationLink {
+                                WorkflowRuntimeDetailView(workflow: workflow)
+                            } label: {
+                                workflowRow(workflow)
                             }
                         }
                     }
@@ -143,6 +138,19 @@ struct WorkflowRuntimeDashboardView: View {
         }
     }
 
+    private func workflowRow(_ workflow: WorkflowRecord) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(workflow.projectTitle).font(.headline)
+            Text("\(workflow.type) • \(workflow.stage) • \(workflow.status)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            ProgressView(value: Double(workflow.progress), total: 100)
+            Text("Owner: \(workflow.owner) • Priority: \(workflow.priority)")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+
     private func seedWorkflowIfNeeded() {
         guard workflows.isEmpty else { return }
         let workflow = runtime.createWorkflow(
@@ -198,7 +206,6 @@ struct WorkflowRuntimeDashboardView: View {
             WorkflowRecord.self,
             WorkflowTransitionRecord.self,
             TaskRecord.self,
-            TaskDependencyRecord.self,
             ProductionQueueRecord.self
         ], inMemory: true)
 }
