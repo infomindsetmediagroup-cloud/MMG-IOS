@@ -9,6 +9,7 @@ settings:
     MARKETING_VERSION: 1.0
     CURRENT_PROJECT_VERSION: 1
     KAIROS_RUNTIME_URL: ""
+    KAIROS_RUNTIME_TOKEN: ""
 targets:
   MMGIOS:
     type: application
