@@ -6,7 +6,7 @@ struct TaskRuntimeService {
             workflowID: workflow.id,
             title: "Start production workflow",
             detail: "Initial task generated for \(workflow.projectTitle).",
-            department: .kairos,
+            department: department(for: workflow),
             assignee: workflow.owner,
             status: .ready,
             priority: priority(from: workflow.priority)
@@ -36,6 +36,25 @@ struct TaskRuntimeService {
             tasks.contains { candidate in
                 candidate.id == dependency.dependsOnTaskID && candidate.status == ProductionTaskStatus.completed.rawValue
             }
+        }
+    }
+
+    func department(for workflow: WorkflowRecord) -> ProductionDepartment {
+        guard let type = RuntimeWorkflowType(rawValue: workflow.type) else {
+            return .kairos
+        }
+
+        switch type {
+        case .publishing:
+            return .publishing
+        case .designStudio:
+            return .design
+        case .marketing:
+            return .marketing
+        case .customerSuccess:
+            return .customerSuccess
+        case .website, .kairosOrchestration:
+            return .kairos
         }
     }
 

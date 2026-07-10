@@ -7,6 +7,36 @@ struct AppRootView: View {
 
     var body: some View {
         TabView {
+            ExecutiveDashboardView()
+                .tabItem {
+                    Label("Executive", systemImage: "sparkles.rectangle.stack")
+                }
+
+            ExecutiveChatView()
+                .tabItem {
+                    Label("Chat", systemImage: "message.badge.waveform")
+                }
+
+            ExecutiveActionQueueView()
+                .tabItem {
+                    Label("Actions", systemImage: "tray.full")
+                }
+
+            DepartmentInboxView()
+                .tabItem {
+                    Label("Departments", systemImage: "building.2")
+                }
+
+            ExecutionIntegrityDashboardView()
+                .tabItem {
+                    Label("Integrity", systemImage: "checkmark.shield")
+                }
+
+            KnowledgeVaultReviewView()
+                .tabItem {
+                    Label("Knowledge", systemImage: "books.vertical")
+                }
+
             CommandCenterRuntimeSummaryView()
                 .tabItem {
                     Label("Command", systemImage: "square.grid.2x2")

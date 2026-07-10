@@ -34,3 +34,15 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mindsetmediagroup.mmgios
         TARGETED_DEVICE_FAMILY: "1,2"
+
+  MMGIOSTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: MMGIOSTests
+    dependencies:
+      - target: MMGIOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mindsetmediagroup.mmgios.tests
+        GENERATE_INFOPLIST_FILE: YES
