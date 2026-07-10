@@ -58,10 +58,40 @@ final class KairosRuntimeModelsTests: XCTestCase {
         XCTAssertEqual(response.displayMessage, "Kairos is handling too many requests.")
     }
 
+    func testConfigurationAcceptsHTTPS() throws {
+        let configuration = try KairosRuntimeConfiguration(
+            endpointURL: XCTUnwrap(URL(string: "https://api.mindsetmediagroup.com/api/kairos"))
+        )
+
+        XCTAssertEqual(configuration.endpointURL.scheme, "https")
+    }
+
+    func testConfigurationAcceptsLocalHTTPForDevelopment() throws {
+        let configuration = try KairosRuntimeConfiguration(
+            endpointURL: XCTUnwrap(URL(string: "http://localhost:3000/api/kairos"))
+        )
+
+        XCTAssertEqual(configuration.endpointURL.host, "localhost")
+    }
+
+    func testConfigurationRejectsRemoteHTTP() throws {
+        XCTAssertThrowsError(
+            try KairosRuntimeConfiguration(
+                endpointURL: XCTUnwrap(URL(string: "http://api.mindsetmediagroup.com/api/kairos"))
+            )
+        ) { error in
+            XCTAssertEqual(error as? KairosRuntimeError, .insecureConfiguration)
+        }
+    }
+
     func testRuntimeErrorProvidesSafeUserFacingDescriptions() {
         XCTAssertEqual(
             KairosRuntimeError.missingConfiguration.errorDescription,
             "Kairos runtime is not configured."
+        )
+        XCTAssertEqual(
+            KairosRuntimeError.insecureConfiguration.errorDescription,
+            "Kairos runtime must use HTTPS."
         )
         XCTAssertEqual(
             KairosRuntimeError.decoding.errorDescription,
