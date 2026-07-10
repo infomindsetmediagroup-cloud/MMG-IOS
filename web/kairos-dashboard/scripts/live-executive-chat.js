@@ -1,5 +1,4 @@
 const DEFAULT_RUNTIME_BASE_URL = "https://mmg-ios.vercel.app";
-const TOKEN_SESSION_KEY = "mmg.kairos.runtime-token";
 
 const runtimeBaseURL = window.location.hostname.endsWith("vercel.app")
   ? window.location.origin
@@ -9,6 +8,8 @@ const state = {
   open: false,
   sending: false,
   ready: false,
+  authenticated: false,
+  session: null,
 };
 
 const shell = document.createElement("section");
@@ -22,7 +23,7 @@ shell.innerHTML = `
   <div id="live-chat-panel" class="live-chat-panel" hidden>
     <header class="live-chat-header">
       <div>
-        <p class="eyebrow">Checkpoint 006</p>
+        <p class="eyebrow">Checkpoint 007</p>
         <h3>Executive Chat</h3>
       </div>
       <button class="live-chat-close" type="button" aria-label="Close live chat">×</button>
@@ -35,18 +36,18 @@ shell.innerHTML = `
       </div>
     </div>
     <div class="live-chat-auth" data-auth-panel>
-      <label for="kairos-runtime-token">Internal runtime token</label>
-      <input id="kairos-runtime-token" type="password" autocomplete="off" placeholder="Paste the internal gateway token">
-      <p class="muted">Stored only in this browser tab. It is never written to the repository or page source.</p>
+      <label for="kairos-runtime-token">Internal bootstrap token</label>
+      <input id="kairos-runtime-token" type="password" autocomplete="off" placeholder="Exchange token for a secure session">
+      <p class="muted">The token is sent once to establish an HttpOnly session and is not stored in browser storage.</p>
       <div class="live-chat-auth-actions">
-        <button type="button" class="action-button" data-save-token>Use token</button>
-        <button type="button" class="action-button" data-clear-token>Clear</button>
+        <button type="button" class="action-button" data-save-token>Start secure session</button>
+        <button type="button" class="action-button" data-clear-token>End session</button>
       </div>
     </div>
     <div class="live-chat-messages" data-messages aria-live="polite">
       <article class="live-chat-message kairos">
         <span>Kairos</span>
-        <p>Production runtime connected. Enter the internal gateway token once, then direct Kairos in plain language.</p>
+        <p>Production runtime connected. Establish a secure application session, then direct Kairos in plain language.</p>
       </article>
     </div>
     <form class="live-chat-composer" data-chat-form>
@@ -54,7 +55,7 @@ shell.innerHTML = `
       <button type="submit" class="live-chat-send">Send</button>
     </form>
     <footer class="live-chat-footer">
-      Controlled internal operation · request and audit identifiers preserved
+      Controlled internal operation · secure session · request and audit identifiers preserved
     </footer>
   </div>
 `;
@@ -77,8 +78,8 @@ const sendButton = shell.querySelector(".live-chat-send");
 
 launcher.addEventListener("click", () => setOpen(!state.open));
 closeButton.addEventListener("click", () => setOpen(false));
-saveTokenButton.addEventListener("click", saveToken);
-clearTokenButton.addEventListener("click", clearToken);
+saveTokenButton.addEventListener("click", establishSession);
+clearTokenButton.addEventListener("click", endSession);
 form.addEventListener("submit", sendObjective);
 
 function setOpen(open) {
@@ -86,10 +87,15 @@ function setOpen(open) {
   panel.hidden = !open;
   launcher.setAttribute("aria-expanded", String(open));
   if (open) {
-    tokenInput.value = sessionStorage.getItem(TOKEN_SESSION_KEY) || "";
-    checkHealth();
-    window.setTimeout(() => objectiveInput.focus(), 50);
+    tokenInput.value = "";
+    refreshRuntimeAndSession();
   }
+}
+
+async function refreshRuntimeAndSession() {
+  await checkHealth();
+  if (state.ready) await checkSession();
+  updateComposerState();
 }
 
 async function checkHealth() {
@@ -98,58 +104,114 @@ async function checkHealth() {
     const response = await fetch(`${runtimeBaseURL}/api/health`, {
       headers: { Accept: "application/json" },
       cache: "no-store",
+      credentials: "include",
     });
     const body = await readJSON(response);
     state.ready = response.ok && body.status === "ready";
     if (state.ready) {
-      setRuntimeState("ready", "Production runtime ready", `${runtimeBaseURL} · provider, model, and gateway configured`);
+      setRuntimeState("ready", "Production runtime ready", `${runtimeBaseURL} · provider and session gateway configured`);
     } else {
       setRuntimeState("degraded", "Runtime requires attention", `${runtimeBaseURL} · ${body.status || response.status}`);
     }
   } catch (error) {
     state.ready = false;
+    state.authenticated = false;
     setRuntimeState("degraded", "Runtime unreachable", error instanceof Error ? error.message : "Network failure");
   }
-  updateComposerState();
 }
 
-function saveToken() {
+async function checkSession() {
+  try {
+    const response = await fetch(`${runtimeBaseURL}/api/session`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+      credentials: "include",
+    });
+    const body = await readJSON(response);
+    state.authenticated = response.ok && body.status === "authenticated";
+    state.session = state.authenticated ? body.session : null;
+    if (state.authenticated) {
+      tokenInput.value = "";
+      setRuntimeState("ready", "Secure session active", formatSessionDetail(state.session));
+    }
+  } catch {
+    state.authenticated = false;
+    state.session = null;
+  }
+}
+
+async function establishSession() {
   const token = tokenInput.value.trim();
   if (!token) {
-    appendMessage("system", "Enter the internal runtime token before sending a request.");
+    appendMessage("system", "Enter the internal bootstrap token to establish a secure session.");
     return;
   }
-  sessionStorage.setItem(TOKEN_SESSION_KEY, token);
-  tokenInput.value = token;
-  appendMessage("system", "Runtime token loaded for this browser tab only.");
-  updateComposerState();
-  objectiveInput.focus();
+
+  saveTokenButton.disabled = true;
+  try {
+    const response = await fetch(`${runtimeBaseURL}/api/session/exchange`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+      credentials: "include",
+    });
+    const body = await readJSON(response);
+    tokenInput.value = "";
+
+    if (!response.ok) {
+      state.authenticated = false;
+      state.session = null;
+      appendMessage("system", body?.message || "Secure session could not be established.");
+      return;
+    }
+
+    state.authenticated = true;
+    state.session = body.session;
+    appendMessage("system", "Secure application session established. The bootstrap token was discarded.");
+    setRuntimeState("ready", "Secure session active", formatSessionDetail(state.session));
+    objectiveInput.focus();
+  } catch (error) {
+    tokenInput.value = "";
+    appendMessage("system", error instanceof Error ? error.message : "Session exchange failed.");
+  } finally {
+    saveTokenButton.disabled = false;
+    updateComposerState();
+  }
 }
 
-function clearToken() {
-  sessionStorage.removeItem(TOKEN_SESSION_KEY);
-  tokenInput.value = "";
-  appendMessage("system", "Runtime token cleared from this browser tab.");
-  updateComposerState();
+async function endSession() {
+  try {
+    await fetch(`${runtimeBaseURL}/api/session`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+  } finally {
+    state.authenticated = false;
+    state.session = null;
+    tokenInput.value = "";
+    appendMessage("system", "Secure application session ended.");
+    setRuntimeState("ready", "Production runtime ready", `${runtimeBaseURL} · authentication required`);
+    updateComposerState();
+  }
 }
 
 async function sendObjective(event) {
   event.preventDefault();
   const objective = objectiveInput.value.trim();
-  const token = sessionStorage.getItem(TOKEN_SESSION_KEY) || tokenInput.value.trim();
 
   if (!objective || state.sending) return;
   if (!state.ready) {
     appendMessage("system", "Kairos runtime is not ready. Recheck the production deployment before retrying.");
     return;
   }
-  if (!token) {
-    appendMessage("system", "Load the internal runtime token first.");
+  if (!state.authenticated) {
+    appendMessage("system", "Establish a secure application session first.");
     tokenInput.focus();
     return;
   }
 
-  sessionStorage.setItem(TOKEN_SESSION_KEY, token);
   appendMessage("executive", objective);
   objectiveInput.value = "";
   state.sending = true;
@@ -160,10 +222,10 @@ async function sendObjective(event) {
     const response = await fetch(`${runtimeBaseURL}/api/kairos`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
         Accept: "application/json",
       },
+      credentials: "include",
       body: JSON.stringify({
         objective,
         department: "Executive Office",
@@ -180,11 +242,11 @@ async function sendObjective(event) {
     progressMessage.remove();
 
     if (!response.ok) {
-      const message = body?.error?.message || body?.message || `Kairos returned ${response.status}.`;
-      appendMessage("system", message);
+      appendMessage("system", body?.error?.message || body?.message || `Kairos returned ${response.status}.`);
       if (response.status === 401) {
-        sessionStorage.removeItem(TOKEN_SESSION_KEY);
-        tokenInput.value = "";
+        state.authenticated = false;
+        state.session = null;
+        setRuntimeState("ready", "Session required", `${runtimeBaseURL} · establish a new secure session`);
       }
       return;
     }
@@ -193,6 +255,7 @@ async function sendObjective(event) {
       department: body.department,
       requestId: body.requestId,
       auditId: body.auditId,
+      sessionId: body.executionContext?.sessionId,
     });
   } catch (error) {
     progressMessage.remove();
@@ -214,6 +277,7 @@ function appendMessage(role, text, metadata) {
       metadata.department && `department=${metadata.department}`,
       metadata.requestId && `request=${metadata.requestId}`,
       metadata.auditId && `audit=${metadata.auditId}`,
+      metadata.sessionId && `session=${metadata.sessionId}`,
     ].filter(Boolean).join(" · ");
     if (details) {
       const meta = document.createElement("small");
@@ -227,9 +291,8 @@ function appendMessage(role, text, metadata) {
 }
 
 function updateComposerState() {
-  const hasToken = Boolean(sessionStorage.getItem(TOKEN_SESSION_KEY) || tokenInput.value.trim());
   objectiveInput.disabled = state.sending || !state.ready;
-  sendButton.disabled = state.sending || !state.ready || !hasToken;
+  sendButton.disabled = state.sending || !state.ready || !state.authenticated;
   sendButton.textContent = state.sending ? "Working…" : "Send";
 }
 
@@ -237,6 +300,11 @@ function setRuntimeState(kind, label, detail) {
   statusDot.dataset.state = kind;
   statusLabel.textContent = label;
   statusDetail.textContent = detail;
+}
+
+function formatSessionDetail(session) {
+  if (!session) return `${runtimeBaseURL} · authenticated`;
+  return `${session.tenantId} · ${session.role} · expires ${new Date(session.expiresAt * 1000).toLocaleTimeString()}`;
 }
 
 async function readJSON(response) {
