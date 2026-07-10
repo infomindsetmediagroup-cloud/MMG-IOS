@@ -4,7 +4,6 @@ import XCTest
 final class KairosRuntimeFoundationTests: XCTestCase {
     func testPublishingCommandRoutesToPublishing() {
         let decision = KairosDepartmentRouter().route("Prepare this manuscript for KDP publishing")
-
         XCTAssertEqual(decision.department, .publishing)
         XCTAssertGreaterThanOrEqual(decision.confidence, 0.70)
         XCTAssertFalse(decision.executionPlan.isEmpty)
@@ -12,21 +11,18 @@ final class KairosRuntimeFoundationTests: XCTestCase {
 
     func testDesignCommandRoutesToDesignStudio() {
         let decision = KairosDepartmentRouter().route("Create a book cover and resize the asset")
-
         XCTAssertEqual(decision.department, .designStudio)
         XCTAssertTrue(decision.governanceNote.contains("MMG/Kairos"))
     }
 
     func testEngineeringCommandRoutesToEngineering() {
         let decision = KairosDepartmentRouter().route("Wire the OpenAI backend API into the repository")
-
         XCTAssertEqual(decision.department, .engineering)
         XCTAssertTrue(decision.formattedResponse.contains("Engineering"))
     }
 
     func testPublishingTemplateRequiresApproval() {
         let template = KairosDepartmentTemplate.template(for: "Publishing")
-
         XCTAssertEqual(template.departmentName, "Publishing")
         XCTAssertTrue(template.approvalRequired)
         XCTAssertTrue(template.stages.contains("Editorial Review"))
@@ -35,7 +31,6 @@ final class KairosRuntimeFoundationTests: XCTestCase {
 
     func testGrowthTemplateDoesNotRequireApproval() {
         let template = KairosDepartmentTemplate.template(for: "Growth")
-
         XCTAssertEqual(template.departmentName, "Growth")
         XCTAssertFalse(template.approvalRequired)
         XCTAssertTrue(template.stages.contains("Measurement"))
@@ -44,7 +39,6 @@ final class KairosRuntimeFoundationTests: XCTestCase {
     func testRequiredApprovalBlocksExecutionUntilApproved() {
         let record = makeRecord(department: "Publishing", historySuffix: "")
         let policy = KairosApprovalPolicy()
-
         XCTAssertTrue(policy.requirement(for: record).isRequired)
         XCTAssertFalse(policy.canCreateExecutionPackage(for: record))
     }
@@ -55,7 +49,6 @@ final class KairosRuntimeFoundationTests: XCTestCase {
             historySuffix: "Approval Decision: Approved | Category: Executive | Actor: MMG Executive | Time: Jul 9, 2026"
         )
         let policy = KairosApprovalPolicy()
-
         XCTAssertTrue(policy.requirement(for: record).isApproved)
         XCTAssertTrue(policy.canCreateExecutionPackage(for: record))
     }
@@ -66,7 +59,6 @@ final class KairosRuntimeFoundationTests: XCTestCase {
             historySuffix: "Approval Decision: Rejected | Category: Executive | Actor: MMG Executive | Time: Jul 9, 2026"
         )
         let policy = KairosApprovalPolicy()
-
         XCTAssertTrue(policy.requirement(for: record).isRejected)
         XCTAssertFalse(policy.canCreateExecutionPackage(for: record))
     }
@@ -76,7 +68,6 @@ final class KairosRuntimeFoundationTests: XCTestCase {
             department: "Engineering",
             historySuffix: "Action Status: Ready @ Jul 9, 2026\n\nAction Status: In Progress @ Jul 9, 2026"
         )
-
         XCTAssertEqual(ExecutiveActionState.from(record: record), .inProgress)
     }
 
@@ -94,6 +85,37 @@ final class KairosRuntimeFoundationTests: XCTestCase {
 
     func testWorkflowTypeMappingUsesCustomerSuccessForReleaseOperations() {
         XCTAssertEqual(ExecutiveWorkflowFactory().workflowType(for: "Release Operations"), .customerSuccess)
+    }
+
+    func testPublishingWorkflowCreatesPublishingTask() {
+        let workflow = makeWorkflow(type: .publishing)
+        XCTAssertEqual(TaskRuntimeService().department(for: workflow), .publishing)
+    }
+
+    func testDesignWorkflowCreatesDesignTask() {
+        let workflow = makeWorkflow(type: .designStudio)
+        XCTAssertEqual(TaskRuntimeService().department(for: workflow), .design)
+    }
+
+    func testMarketingWorkflowCreatesMarketingTask() {
+        let workflow = makeWorkflow(type: .marketing)
+        XCTAssertEqual(TaskRuntimeService().department(for: workflow), .marketing)
+    }
+
+    func testCustomerSuccessWorkflowCreatesCustomerSuccessTask() {
+        let workflow = makeWorkflow(type: .customerSuccess)
+        XCTAssertEqual(TaskRuntimeService().department(for: workflow), .customerSuccess)
+    }
+
+    private func makeWorkflow(type: RuntimeWorkflowType) -> WorkflowRecord {
+        WorkflowRecord(
+            customer: "MMG Executive",
+            projectID: UUID().uuidString,
+            projectTitle: "Test Workflow",
+            type: type,
+            owner: "Kairos",
+            summary: "Test workflow"
+        )
     }
 
     private func makeRecord(department: String, historySuffix: String) -> KnowledgeVaultRecord {
