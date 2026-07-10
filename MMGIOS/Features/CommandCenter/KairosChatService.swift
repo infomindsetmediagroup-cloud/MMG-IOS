@@ -55,15 +55,61 @@ struct UnavailableKairosRuntime: KairosRuntimeServing {
     }
 }
 
+enum KairosRuntimeAvailability: Equatable {
+    case configured(host: String)
+    case unavailable(message: String)
+
+    var isReady: Bool {
+        switch self {
+        case .configured:
+            return true
+        case .unavailable:
+            return false
+        }
+    }
+
+    var title: String {
+        isReady ? "Secure runtime configured" : "Runtime configuration required"
+    }
+
+    var detail: String {
+        switch self {
+        case let .configured(host):
+            return "Requests will be sent through \(host)."
+        case let .unavailable(message):
+            return message
+        }
+    }
+}
+
+struct KairosRuntimeEnvironment {
+    let service: any KairosRuntimeServing
+    let availability: KairosRuntimeAvailability
+}
+
 enum KairosRuntimeFactory {
     static func makeDefault(bundle: Bundle = .main) -> any KairosRuntimeServing {
+        makeDefaultEnvironment(bundle: bundle).service
+    }
+
+    static func makeDefaultEnvironment(bundle: Bundle = .main) -> KairosRuntimeEnvironment {
         do {
             let configuration = try KairosRuntimeConfiguration.from(bundle: bundle)
-            return KairosRuntimeClient(configuration: configuration)
+            let host = configuration.endpointURL.host ?? "the configured Kairos backend"
+            return KairosRuntimeEnvironment(
+                service: KairosRuntimeClient(configuration: configuration),
+                availability: .configured(host: host)
+            )
         } catch let error as KairosRuntimeError {
-            return UnavailableKairosRuntime(error: error)
+            return KairosRuntimeEnvironment(
+                service: UnavailableKairosRuntime(error: error),
+                availability: .unavailable(message: error.errorDescription ?? "Kairos runtime is unavailable.")
+            )
         } catch {
-            return UnavailableKairosRuntime(error: .missingConfiguration)
+            return KairosRuntimeEnvironment(
+                service: UnavailableKairosRuntime(error: .missingConfiguration),
+                availability: .unavailable(message: "Kairos runtime is not configured.")
+            )
         }
     }
 }
