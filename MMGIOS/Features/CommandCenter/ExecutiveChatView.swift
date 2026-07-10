@@ -120,7 +120,11 @@ struct ExecutiveChatView: View {
             Button(action: sendMessage) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 32))
-                    .foregroundStyle(draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .secondary : .mmgBlue)
+                    .foregroundStyle(
+                        draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            ? Color.secondary
+                            : Color.mmgBlue
+                    )
             }
             .disabled(draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             .accessibilityLabel("Send message to Kairos")
