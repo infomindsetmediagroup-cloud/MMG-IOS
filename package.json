@@ -3,9 +3,13 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check": "npm run typecheck && npm test"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
