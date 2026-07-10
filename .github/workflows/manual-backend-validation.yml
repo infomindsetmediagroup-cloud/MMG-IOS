@@ -1,0 +1,40 @@
+name: Manual Kairos Backend Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag, or SHA to validate
+        required: true
+        default: main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manual-kairos-backend-${{ inputs.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate-backend:
+    name: Typecheck and test Kairos backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out requested ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck and test
+        run: npm run check
