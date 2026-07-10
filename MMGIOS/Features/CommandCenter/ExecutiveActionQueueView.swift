@@ -26,63 +26,23 @@ struct ExecutiveActionQueueView: View {
                 }
 
                 Section("Needs Review") {
-                    let reviewItems = actionItems.filter { $0.status == .needsReview }
-                    if reviewItems.isEmpty {
-                        Text("No routed actions currently require review.")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(reviewItems) { item in
-                            actionNavigationLink(item)
-                        }
-                    }
+                    actionSectionItems(actionItems.filter { $0.status == .needsReview }, emptyText: "No routed actions currently require review.")
                 }
 
                 Section("In Progress") {
-                    let progressItems = actionItems.filter { $0.status == .inProgress }
-                    if progressItems.isEmpty {
-                        Text("No routed actions are in progress.")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(progressItems) { item in
-                            actionNavigationLink(item)
-                        }
-                    }
+                    actionSectionItems(actionItems.filter { $0.status == .inProgress }, emptyText: "No routed actions are in progress.")
                 }
 
                 Section("Ready to Execute") {
-                    let readyItems = actionItems.filter { $0.status == .readyToExecute }
-                    if readyItems.isEmpty {
-                        Text("No routed actions are ready to execute yet.")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(readyItems) { item in
-                            actionNavigationLink(item)
-                        }
-                    }
+                    actionSectionItems(actionItems.filter { $0.status == .readyToExecute }, emptyText: "No routed actions are ready to execute yet.")
                 }
 
                 Section("Monitor") {
-                    let monitorItems = actionItems.filter { $0.status == .monitor }
-                    if monitorItems.isEmpty {
-                        Text("No routed actions are in monitor status.")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(monitorItems) { item in
-                            actionNavigationLink(item)
-                        }
-                    }
+                    actionSectionItems(actionItems.filter { $0.status == .monitor }, emptyText: "No routed actions are in monitor status.")
                 }
 
                 Section("Completed") {
-                    let completedItems = actionItems.filter { $0.status == .completed }
-                    if completedItems.isEmpty {
-                        Text("No routed actions have been completed.")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(completedItems) { item in
-                            actionNavigationLink(item)
-                        }
-                    }
+                    actionSectionItems(actionItems.filter { $0.status == .completed }, emptyText: "No routed actions have been completed.")
                 }
             }
             .navigationTitle("Actions")
@@ -139,6 +99,18 @@ struct ExecutiveActionQueueView: View {
         } icon: {
             Image(systemName: systemImage)
                 .foregroundStyle(.mmgBlue)
+        }
+    }
+
+    @ViewBuilder
+    private func actionSectionItems(_ items: [ExecutiveActionItem], emptyText: String) -> some View {
+        if items.isEmpty {
+            Text(emptyText)
+                .foregroundStyle(.secondary)
+        } else {
+            ForEach(items) { item in
+                actionNavigationLink(item)
+            }
         }
     }
 
@@ -250,7 +222,7 @@ private struct ExecutiveActionDetailView: View {
         .navigationTitle("Action Detail")
     }
 
-    private func appendState(_ status: ExecutiveActionStatus) {
+    private func appendState(_ status: ExecutiveActionState) {
         let timestamp = Date().formatted(date: .abbreviated, time: .shortened)
         let note = "Action Status: \(status.label) @ \(timestamp)"
 
@@ -273,7 +245,7 @@ private struct ExecutiveActionItem: Identifiable {
     let summary: String
     let source: String
     let priority: ExecutiveActionPriority
-    let status: ExecutiveActionStatus
+    let status: ExecutiveActionState
     let updatedAt: Date
 
     init(record: KnowledgeVaultRecord) {
@@ -284,7 +256,7 @@ private struct ExecutiveActionItem: Identifiable {
         self.summary = ExecutiveActionItem.extractValue(prefix: "Summary:", from: record.decisionHistory) ?? record.decisionHistory
         self.source = record.decisionHistory
         self.priority = ExecutiveActionPriority.from(record: record)
-        self.status = ExecutiveActionStatus.from(record: record)
+        self.status = ExecutiveActionState.from(record: record)
         self.updatedAt = record.updatedAt
     }
 
@@ -294,122 +266,6 @@ private struct ExecutiveActionItem: Identifiable {
             .first { $0.hasPrefix(prefix) }?
             .replacingOccurrences(of: prefix, with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-}
-
-private enum ExecutiveActionPriority: Equatable {
-    case high
-    case normal
-
-    var label: String {
-        switch self {
-        case .high:
-            return "High"
-        case .normal:
-            return "Normal"
-        }
-    }
-
-    var tint: Color {
-        switch self {
-        case .high:
-            return .orange
-        case .normal:
-            return .mmgBlue
-        }
-    }
-
-    static func from(record: KnowledgeVaultRecord) -> ExecutiveActionPriority {
-        let searchable = "\(record.projectContext) \(record.decisionHistory)".lowercased()
-        if searchable.contains("approval") || searchable.contains("blocked") || searchable.contains("gate") {
-            return .high
-        }
-        return .normal
-    }
-}
-
-private enum ExecutiveActionStatus: Equatable {
-    case needsReview
-    case readyToExecute
-    case inProgress
-    case monitor
-    case completed
-
-    var label: String {
-        switch self {
-        case .needsReview:
-            return "Needs Review"
-        case .readyToExecute:
-            return "Ready"
-        case .inProgress:
-            return "In Progress"
-        case .monitor:
-            return "Monitor"
-        case .completed:
-            return "Complete"
-        }
-    }
-
-    var tint: Color {
-        switch self {
-        case .needsReview:
-            return .orange
-        case .readyToExecute, .inProgress:
-            return .mmgBlue
-        case .monitor:
-            return .secondary
-        case .completed:
-            return .green
-        }
-    }
-
-    var nextStep: String {
-        switch self {
-        case .needsReview:
-            return "Review the routed action, confirm the governing decision, then approve or redirect before execution."
-        case .readyToExecute:
-            return "Convert the routed action into a production task, workflow update, release step, or implementation slice."
-        case .inProgress:
-            return "Continue execution and update the record again when the action is completed or moved to monitoring."
-        case .monitor:
-            return "Track this item for context. No immediate execution step is required unless conditions change."
-        case .completed:
-            return "No further execution is required. Keep the record for audit history and institutional memory."
-        }
-    }
-
-    static func from(record: KnowledgeVaultRecord) -> ExecutiveActionStatus {
-        if let persisted = latestPersistedStatus(from: record.decisionHistory) {
-            return persisted
-        }
-
-        let searchable = "\(record.projectContext) \(record.decisionHistory)".lowercased()
-
-        if searchable.contains("approval") || searchable.contains("blocked") || searchable.contains("gate") || searchable.contains("decision") {
-            return .needsReview
-        }
-
-        if searchable.contains("execute") || searchable.contains("production") || searchable.contains("build") || searchable.contains("workflow") || searchable.contains("release") {
-            return .readyToExecute
-        }
-
-        return .monitor
-    }
-
-    private static func latestPersistedStatus(from history: String) -> ExecutiveActionStatus? {
-        history
-            .components(separatedBy: .newlines)
-            .reversed()
-            .compactMap { line -> ExecutiveActionStatus? in
-                guard line.hasPrefix("Action Status:") else { return nil }
-                if line.contains("Complete") { return .completed }
-                if line.contains("In Progress") { return .inProgress }
-                if line.contains("Ready") { return .readyToExecute }
-                if line.contains("Monitor") { return .monitor }
-                if line.contains("Needs Review") { return .needsReview }
-                return nil
-            }
-            .first
     }
 }
 
