@@ -59,7 +59,7 @@ struct DepartmentInboxView: View {
                 .font(.largeTitle.bold())
                 .foregroundStyle(.mmgInk)
 
-            Text("See where Kairos has routed work, which departments are active, and where workflows, tasks, or production queue items are accumulating.")
+            Text("See department ownership, execution-package health, active load, blockers, and completed operating movement.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
@@ -91,10 +91,17 @@ struct DepartmentInboxView: View {
             }
 
             HStack(spacing: 14) {
-                metricLabel("Workflows", value: department.activeWorkflowCount)
-                metricLabel("Tasks", value: department.openTaskCount)
-                metricLabel("Queue", value: department.openQueueCount)
-                metricLabel("Blocked", value: department.blockedCount)
+                metricLabel("Ready", value: department.readyPackageCount)
+                metricLabel("Active", value: department.activePackageCount)
+                metricLabel("Blocked", value: department.blockedPackageCount)
+                metricLabel("Complete", value: department.completedPackageCount)
+            }
+
+            if let blocker = department.primaryBlocker {
+                Text("Blocked: \(blocker)")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .lineLimit(2)
             }
         }
         .padding(.vertical, 5)
@@ -125,27 +132,44 @@ private struct DepartmentInboxDetailView: View {
         List {
             Section("Department") {
                 LabeledContent("Name", value: department.departmentName)
-                LabeledContent("Active workflows", value: "\(department.activeWorkflowCount)")
+                LabeledContent("Ready packages", value: "\(department.readyPackageCount)")
+                LabeledContent("Active packages", value: "\(department.activePackageCount)")
+                LabeledContent("Blocked packages", value: "\(department.blockedPackageCount)")
+                LabeledContent("Completed packages", value: "\(department.completedPackageCount)")
                 LabeledContent("Open tasks", value: "\(department.openTaskCount)")
                 LabeledContent("Open queue items", value: "\(department.openQueueCount)")
-                LabeledContent("Blocked", value: "\(department.blockedCount)")
             }
 
-            Section("Workflows") {
-                if department.workflows.isEmpty {
-                    Text("No workflows are currently assigned to this department.")
+            Section("Execution Packages") {
+                if department.packages.isEmpty {
+                    Text("No complete workflow/task/queue packages are assigned to this department.")
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(department.workflows) { workflow in
+                    ForEach(department.packages) { package in
+                        packageRow(package)
+                    }
+                }
+            }
+
+            Section("Unpackaged Workflows") {
+                let unpackaged = department.workflows.filter { workflow in
+                    !department.packages.contains { $0.workflow.id == workflow.id }
+                }
+
+                if unpackaged.isEmpty {
+                    Text("Every assigned workflow has a linked task and queue item.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(unpackaged) { workflow in
                         VStack(alignment: .leading, spacing: 5) {
                             Text(workflow.projectTitle)
                                 .font(.headline)
                             Text("\(workflow.stage) • \(workflow.status)")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                            Text(workflow.updatedAt.formatted(date: .abbreviated, time: .shortened))
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
+                            Label("Execution package incomplete", systemImage: "exclamationmark.triangle")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
                         }
                         .padding(.vertical, 4)
                     }
@@ -153,6 +177,46 @@ private struct DepartmentInboxDetailView: View {
             }
         }
         .navigationTitle(department.departmentName)
+    }
+
+    private func packageRow(_ package: DepartmentExecutionPackage) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(package.workflow.projectTitle)
+                    .font(.headline)
+                    .lineLimit(2)
+                Spacer()
+                Text(package.state.label)
+                    .font(.caption2.weight(.semibold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(package.state.tint.opacity(0.12))
+                    .foregroundStyle(package.state.tint)
+                    .clipShape(Capsule())
+            }
+
+            Text("Workflow: \(package.workflow.stage) • \(package.workflow.status)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text("Task: \(package.task.status) • \(package.task.assignee)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text("Queue: \(package.queueItem.status) • \(package.queueItem.lane) • Position \(package.queueItem.position)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if let blocker = package.blocker {
+                Text("Blocked: \(blocker)")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .lineLimit(3)
+            }
+
+            Text(package.workflow.updatedAt.formatted(date: .abbreviated, time: .shortened))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.vertical, 4)
     }
 }
 
@@ -163,6 +227,16 @@ private struct DepartmentInboxSummary: Identifiable {
     let allQueueItems: [ProductionQueueRecord]
 
     var id: String { departmentName }
+
+    var packages: [DepartmentExecutionPackage] {
+        workflows.compactMap { workflow in
+            guard let task = allTasks.first(where: { $0.workflowID == workflow.id }),
+                  let queueItem = allQueueItems.first(where: { $0.taskID == task.id })
+            else { return nil }
+
+            return DepartmentExecutionPackage(workflow: workflow, task: task, queueItem: queueItem)
+        }
+    }
 
     private var workflowIDs: Set<String> {
         Set(workflows.map(\.id))
@@ -180,11 +254,20 @@ private struct DepartmentInboxSummary: Identifiable {
         allQueueItems.filter { taskIDs.contains($0.taskID) }
     }
 
-    var activeWorkflowCount: Int {
-        workflows.filter {
-            $0.status != RuntimeWorkflowStatus.completed.rawValue &&
-            $0.status != RuntimeWorkflowStatus.cancelled.rawValue
-        }.count
+    var readyPackageCount: Int {
+        packages.filter { $0.state == .ready }.count
+    }
+
+    var activePackageCount: Int {
+        packages.filter { $0.state == .active }.count
+    }
+
+    var blockedPackageCount: Int {
+        packages.filter { $0.state == .blocked }.count
+    }
+
+    var completedPackageCount: Int {
+        packages.filter { $0.state == .completed }.count
     }
 
     var openTaskCount: Int {
@@ -198,20 +281,78 @@ private struct DepartmentInboxSummary: Identifiable {
         linkedQueueItems.filter { $0.status != ProductionQueueStatus.completed.rawValue }.count
     }
 
-    var blockedCount: Int {
-        linkedQueueItems.filter { $0.status == ProductionQueueStatus.blocked.rawValue }.count
+    var primaryBlocker: String? {
+        packages.first(where: { $0.state == .blocked })?.blocker
     }
 
     var healthLabel: String {
-        if blockedCount > 0 { return "Blocked" }
-        if activeWorkflowCount > 0 || openTaskCount > 0 || openQueueCount > 0 { return "Active" }
+        if blockedPackageCount > 0 { return "Blocked" }
+        if activePackageCount > 0 { return "Active" }
+        if readyPackageCount > 0 { return "Ready" }
+        if completedPackageCount > 0 { return "Complete" }
         return "Clear"
     }
 
     var healthTint: Color {
-        if blockedCount > 0 { return .orange }
-        if activeWorkflowCount > 0 || openTaskCount > 0 || openQueueCount > 0 { return .mmgBlue }
+        if blockedPackageCount > 0 { return .orange }
+        if activePackageCount > 0 || readyPackageCount > 0 { return .mmgBlue }
+        if completedPackageCount > 0 { return .green }
         return .secondary
+    }
+}
+
+private struct DepartmentExecutionPackage: Identifiable {
+    let workflow: WorkflowRecord
+    let task: TaskRecord
+    let queueItem: ProductionQueueRecord
+
+    var id: String { workflow.id }
+
+    var state: DepartmentPackageState {
+        if task.status == ProductionTaskStatus.completed.rawValue &&
+            queueItem.status == ProductionQueueStatus.completed.rawValue {
+            return .completed
+        }
+        if workflow.status == RuntimeWorkflowStatus.blocked.rawValue ||
+            task.status == ProductionTaskStatus.blocked.rawValue ||
+            queueItem.status == ProductionQueueStatus.blocked.rawValue {
+            return .blocked
+        }
+        if task.status == ProductionTaskStatus.inProgress.rawValue ||
+            queueItem.status == ProductionQueueStatus.active.rawValue {
+            return .active
+        }
+        return .ready
+    }
+
+    var blocker: String? {
+        if !task.blocker.isEmpty { return task.blocker }
+        if !queueItem.blocker.isEmpty { return queueItem.blocker }
+        return nil
+    }
+}
+
+private enum DepartmentPackageState: Equatable {
+    case ready
+    case active
+    case blocked
+    case completed
+
+    var label: String {
+        switch self {
+        case .ready: return "Ready"
+        case .active: return "Active"
+        case .blocked: return "Blocked"
+        case .completed: return "Complete"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .ready, .active: return .mmgBlue
+        case .blocked: return .orange
+        case .completed: return .green
+        }
     }
 }
 
