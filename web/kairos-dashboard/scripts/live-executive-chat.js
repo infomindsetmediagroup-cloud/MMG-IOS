@@ -10,6 +10,7 @@ const state = {
   ready: false,
   authenticated: false,
   session: null,
+  gatewayToken: "",
 };
 
 const shell = document.createElement("section");
@@ -38,7 +39,7 @@ shell.innerHTML = `
     <div class="live-chat-auth" data-auth-panel>
       <label for="kairos-runtime-token">Internal bootstrap token</label>
       <input id="kairos-runtime-token" type="password" autocomplete="off" placeholder="Exchange token for a secure session">
-      <p class="muted">The token is sent once to establish an HttpOnly session and is not stored in browser storage.</p>
+      <p class="muted">The token is exchanged for an HttpOnly session. During rollback only, it may remain in memory for this tab and is never written to browser storage.</p>
       <div class="live-chat-auth-actions">
         <button type="button" class="action-button" data-save-token>Start secure session</button>
         <button type="button" class="action-button" data-clear-token>End session</button>
@@ -69,8 +70,8 @@ const statusDot = shell.querySelector("[data-runtime-status]");
 const statusLabel = shell.querySelector("[data-runtime-label]");
 const statusDetail = shell.querySelector("[data-runtime-detail]");
 const tokenInput = shell.querySelector("#kairos-runtime-token");
-const saveTokenButton = shell.querySelector("[data-save-token]");
-const clearTokenButton = shell.querySelector("[data-clear-token]");
+const startSessionButton = shell.querySelector("[data-save-token]");
+const endSessionButton = shell.querySelector("[data-clear-token]");
 const messages = shell.querySelector("[data-messages]");
 const form = shell.querySelector("[data-chat-form]");
 const objectiveInput = form.elements.objective;
@@ -78,8 +79,8 @@ const sendButton = shell.querySelector(".live-chat-send");
 
 launcher.addEventListener("click", () => setOpen(!state.open));
 closeButton.addEventListener("click", () => setOpen(false));
-saveTokenButton.addEventListener("click", establishSession);
-clearTokenButton.addEventListener("click", endSession);
+startSessionButton.addEventListener("click", establishSession);
+endSessionButton.addEventListener("click", endSession);
 form.addEventListener("submit", sendObjective);
 
 function setOpen(open) {
@@ -108,14 +109,16 @@ async function checkHealth() {
     });
     const body = await readJSON(response);
     state.ready = response.ok && body.status === "ready";
-    if (state.ready) {
-      setRuntimeState("ready", "Production runtime ready", `${runtimeBaseURL} · provider and session gateway configured`);
-    } else {
-      setRuntimeState("degraded", "Runtime requires attention", `${runtimeBaseURL} · ${body.status || response.status}`);
-    }
+    setRuntimeState(
+      state.ready ? "ready" : "degraded",
+      state.ready ? "Production runtime ready" : "Runtime requires attention",
+      state.ready
+        ? `${runtimeBaseURL} · provider and session gateway configured`
+        : `${runtimeBaseURL} · ${body.status || response.status}`,
+    );
   } catch (error) {
     state.ready = false;
-    state.authenticated = false;
+    resetAuthorization();
     setRuntimeState("degraded", "Runtime unreachable", error instanceof Error ? error.message : "Network failure");
   }
 }
@@ -128,15 +131,18 @@ async function checkSession() {
       credentials: "include",
     });
     const body = await readJSON(response);
-    state.authenticated = response.ok && body.status === "authenticated";
-    state.session = state.authenticated ? body.session : null;
-    if (state.authenticated) {
+    if (response.ok && body.status === "authenticated") {
+      state.authenticated = true;
+      state.session = body.session;
+      state.gatewayToken = "";
       tokenInput.value = "";
       setRuntimeState("ready", "Secure session active", formatSessionDetail(state.session));
+    } else if (!state.gatewayToken) {
+      state.authenticated = false;
+      state.session = null;
     }
   } catch {
-    state.authenticated = false;
-    state.session = null;
+    if (!state.gatewayToken) resetAuthorization();
   }
 }
 
@@ -147,7 +153,7 @@ async function establishSession() {
     return;
   }
 
-  saveTokenButton.disabled = true;
+  startSessionButton.disabled = true;
   try {
     const response = await fetch(`${runtimeBaseURL}/api/session/exchange`, {
       method: "POST",
@@ -160,23 +166,34 @@ async function establishSession() {
     const body = await readJSON(response);
     tokenInput.value = "";
 
-    if (!response.ok) {
-      state.authenticated = false;
-      state.session = null;
-      appendMessage("system", body?.message || "Secure session could not be established.");
+    if (response.ok) {
+      state.authenticated = true;
+      state.session = body.session;
+      state.gatewayToken = "";
+      appendMessage("system", "Secure application session established. The bootstrap token was discarded.");
+      setRuntimeState("ready", "Secure session active", formatSessionDetail(state.session));
+      objectiveInput.focus();
       return;
     }
 
-    state.authenticated = true;
-    state.session = body.session;
-    appendMessage("system", "Secure application session established. The bootstrap token was discarded.");
-    setRuntimeState("ready", "Secure session active", formatSessionDetail(state.session));
-    objectiveInput.focus();
+    if (response.status === 503) {
+      state.authenticated = true;
+      state.session = null;
+      state.gatewayToken = token;
+      appendMessage("system", "Session service is not configured. Controlled Checkpoint 006 fallback is active in memory for this tab only.");
+      setRuntimeState("ready", "Gateway fallback active", `${runtimeBaseURL} · temporary rollback mode`);
+      objectiveInput.focus();
+      return;
+    }
+
+    resetAuthorization();
+    appendMessage("system", body?.message || "Secure session could not be established.");
   } catch (error) {
     tokenInput.value = "";
+    resetAuthorization();
     appendMessage("system", error instanceof Error ? error.message : "Session exchange failed.");
   } finally {
-    saveTokenButton.disabled = false;
+    startSessionButton.disabled = false;
     updateComposerState();
   }
 }
@@ -188,10 +205,9 @@ async function endSession() {
       credentials: "include",
     });
   } finally {
-    state.authenticated = false;
-    state.session = null;
+    resetAuthorization();
     tokenInput.value = "";
-    appendMessage("system", "Secure application session ended.");
+    appendMessage("system", "Kairos authorization ended and temporary credentials were cleared.");
     setRuntimeState("ready", "Production runtime ready", `${runtimeBaseURL} · authentication required`);
     updateComposerState();
   }
@@ -200,7 +216,6 @@ async function endSession() {
 async function sendObjective(event) {
   event.preventDefault();
   const objective = objectiveInput.value.trim();
-
   if (!objective || state.sending) return;
   if (!state.ready) {
     appendMessage("system", "Kairos runtime is not ready. Recheck the production deployment before retrying.");
@@ -219,12 +234,15 @@ async function sendObjective(event) {
   const progressMessage = appendMessage("progress", "Kairos is routing and preparing a governed response…");
 
   try {
+    const headers = {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    };
+    if (state.gatewayToken) headers.Authorization = `Bearer ${state.gatewayToken}`;
+
     const response = await fetch(`${runtimeBaseURL}/api/kairos`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
+      headers,
       credentials: "include",
       body: JSON.stringify({
         objective,
@@ -244,8 +262,7 @@ async function sendObjective(event) {
     if (!response.ok) {
       appendMessage("system", body?.error?.message || body?.message || `Kairos returned ${response.status}.`);
       if (response.status === 401) {
-        state.authenticated = false;
-        state.session = null;
+        resetAuthorization();
         setRuntimeState("ready", "Session required", `${runtimeBaseURL} · establish a new secure session`);
       }
       return;
@@ -256,6 +273,7 @@ async function sendObjective(event) {
       requestId: body.requestId,
       auditId: body.auditId,
       sessionId: body.executionContext?.sessionId,
+      authorizationMode: body.executionContext?.authorizationMode,
     });
   } catch (error) {
     progressMessage.remove();
@@ -265,6 +283,12 @@ async function sendObjective(event) {
     updateComposerState();
     objectiveInput.focus();
   }
+}
+
+function resetAuthorization() {
+  state.authenticated = false;
+  state.session = null;
+  state.gatewayToken = "";
 }
 
 function appendMessage(role, text, metadata) {
@@ -278,6 +302,7 @@ function appendMessage(role, text, metadata) {
       metadata.requestId && `request=${metadata.requestId}`,
       metadata.auditId && `audit=${metadata.auditId}`,
       metadata.sessionId && `session=${metadata.sessionId}`,
+      metadata.authorizationMode && `auth=${metadata.authorizationMode}`,
     ].filter(Boolean).join(" · ");
     if (details) {
       const meta = document.createElement("small");
