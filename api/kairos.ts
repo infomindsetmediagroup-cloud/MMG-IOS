@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { randomUUID } from "node:crypto";
+import { applyDashboardCors } from "./cors.js";
 import {
   KairosHttpError,
   authorizeRequest,
@@ -17,8 +18,10 @@ export default async function handler(request: VercelRequest, response: VercelRe
   response.setHeader("Cache-Control", "no-store");
   response.setHeader("Content-Type", "application/json; charset=utf-8");
 
+  if (applyDashboardCors(request, response)) return;
+
   if (request.method !== "POST") {
-    response.setHeader("Allow", "POST");
+    response.setHeader("Allow", "POST, OPTIONS");
     const error = new KairosHttpError(405, "method_not_allowed", "Use POST for the Kairos runtime.");
     response.status(error.statusCode).json(errorEnvelope(error));
     return;
