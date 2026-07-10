@@ -7,6 +7,11 @@ export interface KairosRuntimeLogEvent {
   department: string;
   status: 'ok' | 'error';
   errorCode?: string;
+  authorizationMode?: 'session' | 'gateway-fallback';
+  subject?: string;
+  tenantId?: string;
+  role?: string;
+  sessionId?: string;
 }
 
 export function logKairosRuntimeEvent(event: Omit<KairosRuntimeLogEvent, 'timestamp'>): void {

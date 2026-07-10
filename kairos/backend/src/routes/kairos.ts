@@ -3,13 +3,17 @@ import { toSafeErrorResponse } from '../runtime/errors.js';
 import { logKairosRuntimeEvent } from '../runtime/logging.js';
 import { runKairosCore } from '../runtime/openaiClient.js';
 import { parseKairosRuntimeRequest } from '../runtime/validation.js';
+import { authorizeKairosRequest, type KairosAuthorizationContext } from '../security/authorization.js';
 
 export async function handleKairosRequest(req: Request, res: Response): Promise<void> {
   let mode = 'public' as const;
   let surface = 'website' as const;
   const department = 'kairos-core';
+  let authorization: KairosAuthorizationContext | undefined;
 
   try {
+    authorization = authorizeKairosRequest(req);
+
     if (!req.is('application/json')) {
       throw Object.assign(new Error('Content-Type must be application/json.'), {
         code: 'invalid_content_type',
@@ -27,10 +31,24 @@ export async function handleKairosRequest(req: Request, res: Response): Promise<
       mode,
       surface,
       department,
-      status: 'ok'
+      status: 'ok',
+      authorizationMode: authorization.mode,
+      subject: authorization.session.sub,
+      tenantId: authorization.session.tenantId,
+      role: authorization.session.role,
+      sessionId: authorization.session.sessionId
     });
 
-    res.status(200).json(runtimeResponse);
+    res.status(200).json({
+      ...runtimeResponse,
+      executionContext: {
+        authorizationMode: authorization.mode,
+        subject: authorization.session.sub,
+        tenantId: authorization.session.tenantId,
+        role: authorization.session.role,
+        sessionId: authorization.session.sessionId
+      }
+    });
   } catch (error) {
     const safeError = toSafeErrorResponse(error);
 
@@ -39,7 +57,12 @@ export async function handleKairosRequest(req: Request, res: Response): Promise<
       surface,
       department,
       status: 'error',
-      errorCode: safeError.body.code
+      errorCode: safeError.body.code,
+      authorizationMode: authorization?.mode,
+      subject: authorization?.session.sub,
+      tenantId: authorization?.session.tenantId,
+      role: authorization?.session.role,
+      sessionId: authorization?.session.sessionId
     });
 
     res.status(safeError.statusCode).json(safeError.body);
