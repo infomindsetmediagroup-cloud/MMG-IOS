@@ -11,11 +11,13 @@
     "start": "tsx src/server.ts"
   },
   "dependencies": {
-    "@types/node": "latest",
     "express": "latest",
     "openai": "latest",
     "tsx": "latest",
     "typescript": "latest"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@types/express": "latest",
+    "@types/node": "latest"
+  }
 }
