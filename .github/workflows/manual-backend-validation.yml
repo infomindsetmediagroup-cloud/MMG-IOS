@@ -22,18 +22,29 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - name: Check out requested ref
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref }}
+      - name: Check out requested ref without external actions
+        env:
+          VALIDATION_REF: ${{ inputs.ref }}
+        run: |
+          set -euo pipefail
+          git init repository
+          cd repository
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin "${VALIDATION_REF}"
+          git checkout --detach FETCH_HEAD
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
+      - name: Verify runner toolchain
+        working-directory: repository
+        run: |
+          set -euo pipefail
+          node --version
+          npm --version
+          node -e 'const major = Number(process.versions.node.split(".")[0]); if (major < 22) { console.error(`Node 22+ required; found ${process.versions.node}`); process.exit(1); }'
 
       - name: Install dependencies
+        working-directory: repository
         run: npm install --no-audit --no-fund
 
       - name: Typecheck and test
+        working-directory: repository
         run: npm run check
