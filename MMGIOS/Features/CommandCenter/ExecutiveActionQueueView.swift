@@ -63,7 +63,7 @@ struct ExecutiveActionQueueView: View {
                 .font(.largeTitle.bold())
                 .foregroundStyle(.mmgInk)
 
-            Text("Review routed Kairos commands, record required approvals, and convert approved actions into workflows, tasks, and production queue entries.")
+            Text("Review routed Kairos commands, record required approvals, and inspect each generated workflow, task, and production queue entry.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
@@ -131,6 +131,8 @@ struct ExecutiveActionQueueView: View {
 private struct ExecutiveActionDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \WorkflowRecord.updatedAt, order: .reverse) private var workflows: [WorkflowRecord]
+    @Query(sort: \TaskRecord.updatedAt, order: .reverse) private var tasks: [TaskRecord]
+    @Query(sort: \ProductionQueueRecord.updatedAt, order: .reverse) private var queueItems: [ProductionQueueRecord]
     @Bindable var record: KnowledgeVaultRecord
 
     private let workflowFactory = ExecutiveWorkflowFactory()
@@ -140,6 +142,14 @@ private struct ExecutiveActionDetailView: View {
 
     private var item: ExecutiveActionItem { ExecutiveActionItem(record: record) }
     private var linkedWorkflow: WorkflowRecord? { workflows.first { $0.projectID == record.id } }
+    private var linkedTask: TaskRecord? {
+        guard let workflowID = linkedWorkflow?.id else { return nil }
+        return tasks.first { $0.workflowID == workflowID }
+    }
+    private var linkedQueueItem: ProductionQueueRecord? {
+        guard let taskID = linkedTask?.id else { return nil }
+        return queueItems.first { $0.taskID == taskID }
+    }
     private var approvalRequirement: KairosApprovalRequirement { approvalPolicy.requirement(for: record) }
 
     var body: some View {
@@ -157,32 +167,19 @@ private struct ExecutiveActionDetailView: View {
                 LabeledContent("Decision", value: approvalRequirement.statusLabel)
 
                 if approvalRequirement.isRequired && !approvalRequirement.isApproved {
-                    Button("Approve") {
-                        recordApproval(.approved)
-                    }
-                    .disabled(item.status == .completed)
-
-                    Button("Reject", role: .destructive) {
-                        recordApproval(.rejected)
-                    }
-                    .disabled(item.status == .completed)
+                    Button("Approve") { recordApproval(.approved) }
+                        .disabled(item.status == .completed)
+                    Button("Reject", role: .destructive) { recordApproval(.rejected) }
+                        .disabled(item.status == .completed)
                 }
             }
 
             Section("Execution Package") {
                 if let linkedWorkflow {
-                    LabeledContent("Workflow", value: linkedWorkflow.projectTitle)
-                    LabeledContent("Stage", value: linkedWorkflow.stage)
-                    LabeledContent("Status", value: linkedWorkflow.status)
-                    LabeledContent("Owner", value: linkedWorkflow.owner)
-                    Text("The initial task and production queue entry were generated with this workflow.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    executionPackageSummary(workflow: linkedWorkflow)
                 } else {
-                    Button("Create Execution Package") {
-                        createExecutionPackage()
-                    }
-                    .disabled(!approvalPolicy.canCreateExecutionPackage(for: record) || item.status == .completed)
+                    Button("Create Execution Package") { createExecutionPackage() }
+                        .disabled(!approvalPolicy.canCreateExecutionPackage(for: record) || item.status == .completed)
 
                     Text(executionGateMessage)
                         .font(.caption)
@@ -210,6 +207,46 @@ private struct ExecutiveActionDetailView: View {
             }
         }
         .navigationTitle("Action Detail")
+    }
+
+    @ViewBuilder
+    private func executionPackageSummary(workflow: WorkflowRecord) -> some View {
+        LabeledContent("Workflow", value: workflow.projectTitle)
+        LabeledContent("Workflow ID", value: workflow.id)
+        LabeledContent("Workflow type", value: workflow.type)
+        LabeledContent("Stage", value: workflow.stage)
+        LabeledContent("Workflow status", value: workflow.status)
+        LabeledContent("Owner", value: workflow.owner)
+
+        if let linkedTask {
+            Divider()
+            LabeledContent("Task", value: linkedTask.title)
+            LabeledContent("Task ID", value: linkedTask.id)
+            LabeledContent("Department", value: linkedTask.department)
+            LabeledContent("Assignee", value: linkedTask.assignee)
+            LabeledContent("Task status", value: linkedTask.status)
+            if !linkedTask.blocker.isEmpty {
+                LabeledContent("Task blocker", value: linkedTask.blocker)
+            }
+        } else {
+            Label("Task record missing", systemImage: "exclamationmark.triangle")
+                .foregroundStyle(.orange)
+        }
+
+        if let linkedQueueItem {
+            Divider()
+            LabeledContent("Queue item", value: linkedQueueItem.summary)
+            LabeledContent("Queue ID", value: linkedQueueItem.id)
+            LabeledContent("Lane", value: linkedQueueItem.lane)
+            LabeledContent("Queue status", value: linkedQueueItem.status)
+            LabeledContent("Position", value: "\(linkedQueueItem.position)")
+            if !linkedQueueItem.blocker.isEmpty {
+                LabeledContent("Queue blocker", value: linkedQueueItem.blocker)
+            }
+        } else {
+            Label("Queue record missing", systemImage: "exclamationmark.triangle")
+                .foregroundStyle(.orange)
+        }
     }
 
     private var executionGateMessage: String {
