@@ -54,26 +54,42 @@ struct KairosRuntimeConfiguration: Equatable {
     let endpointURL: URL
     let timeout: TimeInterval
 
-    init(endpointURL: URL, timeout: TimeInterval = 30) {
+    init(endpointURL: URL, timeout: TimeInterval = 30) throws {
+        guard Self.isAllowed(endpointURL) else {
+            throw KairosRuntimeError.insecureConfiguration
+        }
+
         self.endpointURL = endpointURL
         self.timeout = timeout
     }
 
     static func from(bundle: Bundle = .main) throws -> KairosRuntimeConfiguration {
         guard let value = bundle.object(forInfoDictionaryKey: endpointInfoKey) as? String,
-              let endpointURL = URL(string: value),
-              let scheme = endpointURL.scheme?.lowercased(),
-              scheme == "https" || scheme == "http"
+              !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let endpointURL = URL(string: value)
         else {
             throw KairosRuntimeError.missingConfiguration
         }
 
-        return KairosRuntimeConfiguration(endpointURL: endpointURL)
+        return try KairosRuntimeConfiguration(endpointURL: endpointURL)
+    }
+
+    private static func isAllowed(_ url: URL) -> Bool {
+        guard let scheme = url.scheme?.lowercased(), let host = url.host?.lowercased() else {
+            return false
+        }
+
+        if scheme == "https" {
+            return true
+        }
+
+        return scheme == "http" && ["localhost", "127.0.0.1", "::1"].contains(host)
     }
 }
 
 enum KairosRuntimeError: Error, Equatable, LocalizedError {
     case missingConfiguration
+    case insecureConfiguration
     case invalidResponse
     case server(statusCode: Int, message: String)
     case transport(message: String)
@@ -83,6 +99,8 @@ enum KairosRuntimeError: Error, Equatable, LocalizedError {
         switch self {
         case .missingConfiguration:
             return "Kairos runtime is not configured."
+        case .insecureConfiguration:
+            return "Kairos runtime must use HTTPS."
         case .invalidResponse:
             return "Kairos returned an invalid response."
         case let .server(_, message):
