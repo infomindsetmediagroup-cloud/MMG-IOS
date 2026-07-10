@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc --noEmit",
+    "test": "tsx --test test/**/*.test.ts",
+    "certify": "npm run build && npm test",
     "start": "tsx src/server.ts"
   },
   "dependencies": {
