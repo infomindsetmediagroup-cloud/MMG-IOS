@@ -5,8 +5,20 @@ struct ExecutiveChatView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var draftMessage = ""
     @State private var messages: [ExecutiveChatMessage] = ExecutiveChatMessage.seedMessages
+    @State private var isSending = false
+    @State private var lastFailedObjective: String?
+    @State private var runtimeErrorMessage: String?
+    @State private var requestTask: Task<Void, Never>?
 
-    private let router = KairosDepartmentRouter()
+    private let chatService: KairosChatService
+
+    init(runtime: (any KairosRuntimeServing)? = nil) {
+        if let runtime {
+            chatService = KairosChatService(runtime: runtime)
+        } else {
+            chatService = KairosChatService(runtime: KairosRuntimeFactory.makeDefault())
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -20,17 +32,27 @@ struct ExecutiveChatView: View {
                                 executiveMessageBubble(message)
                                     .id(message.id)
                             }
+
+                            if isSending {
+                                runtimeProgressCard
+                            }
+
+                            if let runtimeErrorMessage {
+                                runtimeErrorCard(message: runtimeErrorMessage)
+                            }
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 18)
                     }
                     .background(Color.mmgBackground)
                     .onChange(of: messages.count) { _, _ in
-                        if let lastID = messages.last?.id {
-                            withAnimation(.snappy) {
-                                proxy.scrollTo(lastID, anchor: .bottom)
-                            }
-                        }
+                        scrollToLatest(using: proxy)
+                    }
+                    .onChange(of: isSending) { _, _ in
+                        scrollToLatest(using: proxy)
+                    }
+                    .onChange(of: runtimeErrorMessage) { _, _ in
+                        scrollToLatest(using: proxy)
                     }
                 }
 
@@ -41,6 +63,9 @@ struct ExecutiveChatView: View {
                     .background(.regularMaterial)
             }
             .navigationTitle("Kairos Chat")
+            .onDisappear {
+                requestTask?.cancel()
+            }
         }
     }
 
@@ -50,7 +75,7 @@ struct ExecutiveChatView: View {
                 .font(.headline)
                 .foregroundStyle(.mmgBlue)
 
-            Text("Use this surface to direct Kairos in plain language. Commands now pass through the local department router and create a Knowledge Vault record for institutional continuity.")
+            Text("Direct Kairos in plain language. Objectives are routed locally for governance context, sent to the secure Kairos backend, and recorded for institutional continuity.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
 
@@ -76,6 +101,58 @@ struct ExecutiveChatView: View {
         )
     }
 
+    private var runtimeProgressCard: some View {
+        HStack(spacing: 12) {
+            ProgressView()
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Kairos is working")
+                    .font(.callout.weight(.semibold))
+                Text("Routing, reasoning, and preparing a governed response.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("Cancel") {
+                requestTask?.cancel()
+            }
+            .font(.caption.weight(.semibold))
+        }
+        .padding(14)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    private func runtimeErrorCard(message: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Kairos request incomplete", systemImage: "exclamationmark.triangle")
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(.orange)
+
+            Text(message)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            HStack {
+                if lastFailedObjective != nil {
+                    Button("Retry") {
+                        retryLastObjective()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.mmgBlue)
+                }
+
+                Button("Dismiss") {
+                    runtimeErrorMessage = nil
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.orange.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
     private func executiveMessageBubble(_ message: ExecutiveChatMessage) -> some View {
         HStack(alignment: .bottom) {
             if message.role == .user {
@@ -91,6 +168,13 @@ struct ExecutiveChatView: View {
                     .font(.callout)
                     .foregroundStyle(message.role == .user ? .white : .primary)
                     .textSelection(.enabled)
+
+                if let metadata = message.metadata {
+                    Text(metadata)
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(message.role == .user ? .white.opacity(0.68) : .secondary)
+                        .textSelection(.enabled)
+                }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
@@ -116,58 +200,131 @@ struct ExecutiveChatView: View {
                 .padding(.vertical, 11)
                 .background(Color.mmgSurface)
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .disabled(isSending)
 
             Button(action: sendMessage) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 32))
-                    .foregroundStyle(
-                        draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                            ? Color.secondary
-                            : Color.mmgBlue
-                    )
+                    .foregroundStyle(canSend ? Color.mmgBlue : Color.secondary)
             }
-            .disabled(draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .disabled(!canSend)
             .accessibilityLabel("Send message to Kairos")
         }
+    }
+
+    private var canSend: Bool {
+        !isSending && !draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func sendMessage() {
         let trimmed = draftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        let decision = router.route(trimmed)
-
         messages.append(.init(role: .user, body: trimmed))
         draftMessage = ""
-        messages.append(.init(role: .kairos, body: decision.formattedResponse))
-        captureKnowledgeRecord(command: trimmed, decision: decision)
+        execute(trimmed)
     }
 
-    private func captureKnowledgeRecord(command: String, decision: KairosRouteDecision) {
+    private func retryLastObjective() {
+        guard let objective = lastFailedObjective else { return }
+        execute(objective)
+    }
+
+    private func execute(_ objective: String) {
+        requestTask?.cancel()
+        isSending = true
+        runtimeErrorMessage = nil
+        lastFailedObjective = nil
+
+        requestTask = Task {
+            do {
+                let result = try await chatService.execute(objective)
+                guard !Task.isCancelled else { return }
+
+                await MainActor.run {
+                    let response = result.runtimeResponse
+                    let metadata = responseMetadata(for: response, decision: result.routeDecision)
+                    messages.append(.init(role: .kairos, body: response.message, metadata: metadata))
+                    captureKnowledgeRecord(result: result)
+                    isSending = false
+                    requestTask = nil
+                }
+            } catch {
+                guard !Task.isCancelled else {
+                    await MainActor.run {
+                        isSending = false
+                        requestTask = nil
+                    }
+                    return
+                }
+
+                await MainActor.run {
+                    lastFailedObjective = objective
+                    runtimeErrorMessage = (error as? LocalizedError)?.errorDescription ?? "Kairos could not complete the request."
+                    isSending = false
+                    requestTask = nil
+                }
+            }
+        }
+    }
+
+    private func responseMetadata(
+        for response: KairosRuntimeResponse,
+        decision: KairosRouteDecision
+    ) -> String {
+        var values = ["department=\(response.department ?? decision.department.rawValue)"]
+        if let requestID = response.requestID {
+            values.append("request=\(requestID)")
+        }
+        if let auditID = response.auditID {
+            values.append("audit=\(auditID)")
+        }
+        return values.joined(separator: " • ")
+    }
+
+    private func captureKnowledgeRecord(result: KairosChatResult) {
+        let decision = result.routeDecision
+        let response = result.runtimeResponse
         let confidencePercent = Int((decision.confidence * 100).rounded())
         let plan = decision.executionPlan.enumerated().map { index, step in
             "\(index + 1). \(step)"
         }.joined(separator: "\n")
 
-        let history = [
+        var history = [
             "Source: Kairos Chat",
-            "Input: \(command)",
-            "Department: \(decision.department.displayName)",
-            "Confidence: \(confidencePercent)%",
-            "Summary: \(decision.summary)",
+            "Input: \(result.objective)",
+            "Local department: \(decision.department.displayName)",
+            "Routing confidence: \(confidencePercent)%",
+            "Runtime department: \(response.department ?? "not returned")",
+            "Runtime response: \(response.message)",
             "Plan:",
             plan,
             "Governance: \(decision.governanceNote)"
-        ].joined(separator: "\n")
+        ]
+
+        if let requestID = response.requestID {
+            history.append("Request ID: \(requestID)")
+        }
+        if let auditID = response.auditID {
+            history.append("Audit ID: \(auditID)")
+        }
 
         let record = KnowledgeVaultRecord(
             customerName: "MMG Executive",
             brandProfile: "Mindset Media Group and Kairos operating system",
-            projectContext: "Kairos Chat routed to \(decision.department.displayName)",
-            decisionHistory: history
+            projectContext: "Kairos runtime routed to \(decision.department.displayName)",
+            decisionHistory: history.joined(separator: "\n")
         )
 
         modelContext.insert(record)
+        try? modelContext.save()
+    }
+
+    private func scrollToLatest(using proxy: ScrollViewProxy) {
+        guard let lastID = messages.last?.id else { return }
+        withAnimation(.snappy) {
+            proxy.scrollTo(lastID, anchor: .bottom)
+        }
     }
 }
 
@@ -175,11 +332,18 @@ private struct ExecutiveChatMessage: Identifiable, Equatable {
     let id = UUID()
     let role: ExecutiveChatRole
     let body: String
+    let metadata: String?
+
+    init(role: ExecutiveChatRole, body: String, metadata: String? = nil) {
+        self.role = role
+        self.body = body
+        self.metadata = metadata
+    }
 
     static let seedMessages: [ExecutiveChatMessage] = [
         .init(role: .kairos, body: "Executive channel online. Tell me what to build, review, route, publish, or organize next."),
         .init(role: .user, body: "Show me what deserves attention today."),
-        .init(role: .kairos, body: "I will prioritize blockers, approvals, customer release gates, review assets, and open execution queues before recommending the next action.")
+        .init(role: .kairos, body: "Kairos runtime wiring is active. Production responses require a configured secure backend endpoint.")
     ]
 }
 
@@ -198,7 +362,7 @@ private enum ExecutiveChatRole: Equatable {
 }
 
 #Preview {
-    ExecutiveChatView()
+    ExecutiveChatView(runtime: UnavailableKairosRuntime(error: .missingConfiguration))
         .modelContainer(for: [
             KnowledgeVaultRecord.self
         ], inMemory: true)
