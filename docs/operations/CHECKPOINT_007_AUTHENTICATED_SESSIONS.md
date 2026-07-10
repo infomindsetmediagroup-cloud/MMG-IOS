@@ -84,6 +84,10 @@ Before this checkpoint may be merged or frozen:
 8. Confirm Checkpoint 006 rollback instructions.
 9. Record both workflow-run URLs and deployed preview evidence before merge.
 
+## Pre-validation readiness
+
+Repository-level review confirms that the canonical workflow can check out the feature branch explicitly, run the backend TypeScript build, and invoke the branch-owned validation harness. The workflow validates its ref and script inputs and remains manual-only.
+
 ## Current validation constraint
 
 This execution environment cannot configure Vercel environment variables or perform browser inspection against the protected preview. No claim of build or runtime validation is made. The branch remains draft until evidence is recorded.
