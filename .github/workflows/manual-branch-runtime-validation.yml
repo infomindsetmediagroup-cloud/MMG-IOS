@@ -32,6 +32,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
+      TARGET_REF: ${{ inputs.target_ref }}
+      VALIDATION_SCRIPT: ${{ inputs.validation_script }}
       KAIROS_RUNTIME_BASE_URL: ${{ inputs.runtime_base_url }}
       KAIROS_RUNTIME_TOKEN: ${{ secrets.KAIROS_RUNTIME_TOKEN }}
       KAIROS_EXPECT_SESSION_ENFORCEMENT: ${{ inputs.expect_session_enforcement }}
@@ -45,7 +47,11 @@ jobs:
             echo "Repository secret KAIROS_RUNTIME_TOKEN is not configured."
             exit 1
           fi
-          if [[ "${{ inputs.validation_script }}" == /* || "${{ inputs.validation_script }}" == *".."* ]]; then
+          if [[ -z "${TARGET_REF:-}" || "${TARGET_REF}" == -* || "${TARGET_REF}" == *$'\n'* ]]; then
+            echo "target_ref is invalid."
+            exit 1
+          fi
+          if [[ -z "${VALIDATION_SCRIPT:-}" || "${VALIDATION_SCRIPT}" == /* || "${VALIDATION_SCRIPT}" == *".."* || "${VALIDATION_SCRIPT}" == *$'\n'* ]]; then
             echo "validation_script must be a safe repository-relative path."
             exit 1
           fi
@@ -57,7 +63,7 @@ jobs:
           git init repository
           cd repository
           git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          git fetch --depth=1 origin "${{ inputs.target_ref }}"
+          git fetch --depth=1 origin -- "${TARGET_REF}"
           git checkout --detach FETCH_HEAD
           echo "Validated ref: $(git rev-parse HEAD)"
 
@@ -72,4 +78,4 @@ jobs:
       - name: Run selected live validation harness
         working-directory: repository
         shell: bash
-        run: node "${{ inputs.validation_script }}"
+        run: node "${VALIDATION_SCRIPT}"
