@@ -18,7 +18,9 @@ export type ManuscriptStatus =
   | 'approved_for_design'
   | 'locked_for_production';
 
-export interface PublishingProject extends PlatformRecordMetadata {
+type PublishingRecordMetadata = Omit<PlatformRecordMetadata, 'status'>;
+
+export interface PublishingProject extends PublishingRecordMetadata {
   objectiveId: string;
   title: string;
   authorSubject: string;
@@ -29,7 +31,7 @@ export interface PublishingProject extends PlatformRecordMetadata {
   releasedAt?: string;
 }
 
-export interface ManuscriptRecord extends PlatformRecordMetadata {
+export interface ManuscriptRecord extends PublishingRecordMetadata {
   publishingProjectId: string;
   title: string;
   status: ManuscriptStatus;
