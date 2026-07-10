@@ -63,7 +63,7 @@ struct ExecutiveActionQueueView: View {
                 .font(.largeTitle.bold())
                 .foregroundStyle(.mmgInk)
 
-            Text("Review routed Kairos commands, record required approvals, and inspect each generated workflow, task, and production queue entry.")
+            Text("Review routed Kairos commands, record approvals, and control each generated workflow, task, and production queue entry.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
@@ -134,11 +134,13 @@ private struct ExecutiveActionDetailView: View {
     @Query(sort: \TaskRecord.updatedAt, order: .reverse) private var tasks: [TaskRecord]
     @Query(sort: \ProductionQueueRecord.updatedAt, order: .reverse) private var queueItems: [ProductionQueueRecord]
     @Bindable var record: KnowledgeVaultRecord
+    @State private var blockReason = ""
 
     private let workflowFactory = ExecutiveWorkflowFactory()
     private let taskRuntime = TaskRuntimeService()
     private let queueRuntime = ProductionQueueService()
     private let approvalPolicy = KairosApprovalPolicy()
+    private let packageRuntime = ExecutionPackageRuntimeService()
 
     private var item: ExecutiveActionItem { ExecutiveActionItem(record: record) }
     private var linkedWorkflow: WorkflowRecord? { workflows.first { $0.projectID == record.id } }
@@ -151,6 +153,15 @@ private struct ExecutiveActionDetailView: View {
         return queueItems.first { $0.taskID == taskID }
     }
     private var approvalRequirement: KairosApprovalRequirement { approvalPolicy.requirement(for: record) }
+    private var hasCompletePackage: Bool { linkedWorkflow != nil && linkedTask != nil && linkedQueueItem != nil }
+    private var isPackageBlocked: Bool {
+        linkedTask?.status == ProductionTaskStatus.blocked.rawValue ||
+        linkedQueueItem?.status == ProductionQueueStatus.blocked.rawValue
+    }
+    private var isPackageCompleted: Bool {
+        linkedTask?.status == ProductionTaskStatus.completed.rawValue &&
+        linkedQueueItem?.status == ProductionQueueStatus.completed.rawValue
+    }
 
     var body: some View {
         List {
@@ -187,11 +198,30 @@ private struct ExecutiveActionDetailView: View {
                 }
             }
 
-            Section("Controls") {
+            if hasCompletePackage {
+                Section("Runtime Controls") {
+                    Button("Start Package") { startPackage() }
+                        .disabled(isPackageCompleted || isPackageBlocked)
+
+                    TextField("Block reason", text: $blockReason, axis: .vertical)
+                        .lineLimit(1...3)
+
+                    Button("Block Package", role: .destructive) { blockPackage() }
+                        .disabled(isPackageCompleted || blockReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                    Button("Retry Package") { retryPackage() }
+                        .disabled(!isPackageBlocked || isPackageCompleted)
+
+                    Button("Complete Package") { completePackage() }
+                        .disabled(isPackageCompleted)
+                }
+            }
+
+            Section("Action Controls") {
                 Button("Move to Monitor") { appendState(.monitor) }
                     .disabled(item.status == .completed)
-                Button("Mark Complete") { appendState(.completed) }
-                    .disabled(item.status == .completed)
+                Button("Mark Action Complete") { appendState(.completed) }
+                    .disabled(item.status == .completed || (hasCompletePackage && !isPackageCompleted))
             }
 
             Section("Next Step") {
@@ -284,14 +314,67 @@ private struct ExecutiveActionDetailView: View {
         appendHistory("Task Created: \(task.title)")
         appendHistory("Queue Item ID: \(queueItem.id)")
         appendHistory("Queue Item Created: \(queueItem.summary)")
+        appendState(.readyToExecute)
+        try? modelContext.save()
+    }
+
+    private func startPackage() {
+        guard let workflow = linkedWorkflow,
+              let task = linkedTask,
+              let queueItem = linkedQueueItem
+        else { return }
+
+        let transitions = packageRuntime.start(workflow: workflow, task: task, queueItem: queueItem)
+        transitions.forEach(modelContext.insert)
+        appendHistory("Execution Package Started: \(transitions.count) workflow transitions recorded")
         appendState(.inProgress)
+        try? modelContext.save()
+    }
+
+    private func blockPackage() {
+        guard let workflow = linkedWorkflow,
+              let task = linkedTask,
+              let queueItem = linkedQueueItem
+        else { return }
+
+        let reason = blockReason.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !reason.isEmpty else { return }
+
+        packageRuntime.block(workflow: workflow, task: task, queueItem: queueItem, reason: reason)
+        appendHistory("Execution Package Blocked: \(reason)")
+        appendState(.needsReview)
+        blockReason = ""
+        try? modelContext.save()
+    }
+
+    private func retryPackage() {
+        guard let workflow = linkedWorkflow,
+              let task = linkedTask,
+              let queueItem = linkedQueueItem
+        else { return }
+
+        packageRuntime.retry(workflow: workflow, task: task, queueItem: queueItem)
+        appendHistory("Execution Package Retried")
+        appendState(.readyToExecute)
+        try? modelContext.save()
+    }
+
+    private func completePackage() {
+        guard let workflow = linkedWorkflow,
+              let task = linkedTask,
+              let queueItem = linkedQueueItem
+        else { return }
+
+        let transitions = packageRuntime.complete(workflow: workflow, task: task, queueItem: queueItem)
+        transitions.forEach(modelContext.insert)
+        appendHistory("Execution Package Completed: \(transitions.count) workflow transitions recorded")
+        appendState(.completed)
         try? modelContext.save()
     }
 
     private func appendState(_ status: ExecutiveActionState) {
         let timestamp = Date().formatted(date: .abbreviated, time: .shortened)
         appendHistory("Action Status: \(status.label) @ \(timestamp)")
-        try? modelContext.save()
     }
 
     private func appendHistory(_ note: String) {
@@ -336,6 +419,7 @@ private struct ExecutiveActionItem: Identifiable {
         .modelContainer(for: [
             KnowledgeVaultRecord.self,
             WorkflowRecord.self,
+            WorkflowTransitionRecord.self,
             TaskRecord.self,
             ProductionQueueRecord.self
         ], inMemory: true)
