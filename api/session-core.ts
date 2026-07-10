@@ -25,20 +25,31 @@ interface SessionPayload {
   jti: string;
 }
 
-export function verifyOperatorPassword(supplied: string, encodedHash: string): boolean {
-  const [prefix, saltHex, expectedHex, extra] = encodedHash.trim().split("$");
-  if (prefix !== PASSWORD_HASH_PREFIX || !saltHex || !expectedHex || extra) return false;
-  if (!/^[a-f0-9]+$/i.test(saltHex) || !/^[a-f0-9]+$/i.test(expectedHex)) return false;
+export function verifyOperatorPassword(
+  supplied: string,
+  encodedHash: string | undefined,
+  encryptedPassword: string | undefined,
+): boolean {
+  if (encodedHash) {
+    const [prefix, saltHex, expectedHex, extra] = encodedHash.trim().split("$");
+    if (prefix !== PASSWORD_HASH_PREFIX || !saltHex || !expectedHex || extra) return false;
+    if (!/^[a-f0-9]+$/i.test(saltHex) || !/^[a-f0-9]+$/i.test(expectedHex)) return false;
 
-  try {
-    const salt = Buffer.from(saltHex, "hex");
-    const expected = Buffer.from(expectedHex, "hex");
-    if (salt.length < 16 || expected.length !== PASSWORD_KEY_LENGTH) return false;
-    const derived = scryptSync(supplied, salt, PASSWORD_KEY_LENGTH);
-    return timingSafeEqual(derived, expected);
-  } catch {
-    return false;
+    try {
+      const salt = Buffer.from(saltHex, "hex");
+      const expected = Buffer.from(expectedHex, "hex");
+      if (salt.length < 16 || expected.length !== PASSWORD_KEY_LENGTH) return false;
+      const derived = scryptSync(supplied, salt, PASSWORD_KEY_LENGTH);
+      return timingSafeEqual(derived, expected);
+    } catch {
+      return false;
+    }
   }
+
+  if (!encryptedPassword) return false;
+  const suppliedBytes = Buffer.from(supplied, "utf8");
+  const expectedBytes = Buffer.from(encryptedPassword, "utf8");
+  return suppliedBytes.length === expectedBytes.length && timingSafeEqual(suppliedBytes, expectedBytes);
 }
 
 export function issueOperatorSession(operatorInput: string, runtimeToken: string): { token: string; session: OperatorSession } {
@@ -57,10 +68,7 @@ export function issueOperatorSession(operatorInput: string, runtimeToken: string
   };
   const encodedPayload = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
   const signature = sign(encodedPayload, runtimeToken);
-  return {
-    token: `${encodedPayload}.${signature}`,
-    session: toSession(payload),
-  };
+  return { token: `${encodedPayload}.${signature}`, session: toSession(payload) };
 }
 
 export function verifyOperatorSession(token: string | undefined, runtimeToken: string): OperatorSession | null {
