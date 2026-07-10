@@ -1,0 +1,75 @@
+name: Manual Branch Runtime Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_ref:
+        description: "Branch, tag, or commit SHA to build and validate"
+        required: true
+        default: "checkpoint-007-authenticated-sessions"
+        type: string
+      runtime_base_url:
+        description: "Deployed runtime base URL without a trailing slash"
+        required: true
+        type: string
+      validation_script:
+        description: "Repository-relative Node validation script"
+        required: true
+        default: "scripts/validate-checkpoint-007.mjs"
+        type: string
+      expect_session_enforcement:
+        description: "Expect gateway-only requests to be rejected"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  validate-target-ref:
+    name: Build and validate selected ref
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      KAIROS_RUNTIME_BASE_URL: ${{ inputs.runtime_base_url }}
+      KAIROS_RUNTIME_TOKEN: ${{ secrets.KAIROS_RUNTIME_TOKEN }}
+      KAIROS_EXPECT_SESSION_ENFORCEMENT: ${{ inputs.expect_session_enforcement }}
+
+    steps:
+      - name: Validate inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${KAIROS_RUNTIME_TOKEN:-}" ]]; then
+            echo "Repository secret KAIROS_RUNTIME_TOKEN is not configured."
+            exit 1
+          fi
+          if [[ "${{ inputs.validation_script }}" == /* || "${{ inputs.validation_script }}" == *".."* ]]; then
+            echo "validation_script must be a safe repository-relative path."
+            exit 1
+          fi
+
+      - name: Check out selected ref with native git
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init repository
+          cd repository
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin "${{ inputs.target_ref }}"
+          git checkout --detach FETCH_HEAD
+          echo "Validated ref: $(git rev-parse HEAD)"
+
+      - name: Build Kairos backend
+        working-directory: repository/kairos/backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --ignore-scripts
+          npm run build
+
+      - name: Run selected live validation harness
+        working-directory: repository
+        shell: bash
+        run: node "${{ inputs.validation_script }}"
