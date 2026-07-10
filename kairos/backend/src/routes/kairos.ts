@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import type { KairosMode, KairosSurface } from '../runtime/contracts.js';
 import { toSafeErrorResponse } from '../runtime/errors.js';
 import { logKairosRuntimeEvent } from '../runtime/logging.js';
 import { runKairosCore } from '../runtime/openaiClient.js';
@@ -6,8 +7,8 @@ import { parseKairosRuntimeRequest } from '../runtime/validation.js';
 import { authorizeKairosRequest, type KairosAuthorizationContext } from '../security/authorization.js';
 
 export async function handleKairosRequest(req: Request, res: Response): Promise<void> {
-  let mode = 'public' as const;
-  let surface = 'website' as const;
+  let mode: KairosMode = 'public';
+  let surface: KairosSurface = 'website';
   const department = 'kairos-core';
   let authorization: KairosAuthorizationContext | undefined;
 
