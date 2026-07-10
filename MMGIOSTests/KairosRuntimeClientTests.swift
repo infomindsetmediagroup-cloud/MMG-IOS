@@ -7,9 +7,9 @@ final class KairosRuntimeClientTests: XCTestCase {
         super.tearDown()
     }
 
-    func testSendBuildsPostRequestAndDecodesResponse() async throws {
+    func testSendBuildsAuthorizedPostRequestAndDecodesResponse() async throws {
         let endpoint = try XCTUnwrap(URL(string: "https://example.com/api/kairos"))
-        let configuration = try KairosRuntimeConfiguration(endpointURL: endpoint, timeout: 12)
+        let configuration = try KairosRuntimeConfiguration(endpointURL: endpoint, accessToken: "gateway-token", timeout: 12)
         let session = makeSession()
         let client = KairosRuntimeClient(configuration: configuration, session: session)
         let request = makeRuntimeRequest()
@@ -20,58 +20,35 @@ final class KairosRuntimeClientTests: XCTestCase {
             XCTAssertEqual(urlRequest.timeoutInterval, 12)
             XCTAssertEqual(urlRequest.value(forHTTPHeaderField: "Content-Type"), "application/json")
             XCTAssertEqual(urlRequest.value(forHTTPHeaderField: "Accept"), "application/json")
+            XCTAssertEqual(urlRequest.value(forHTTPHeaderField: "Authorization"), "Bearer gateway-token")
 
             let body = try XCTUnwrap(urlRequest.httpBody)
             let decoded = try JSONDecoder().decode(KairosRuntimeRequest.self, from: body)
             XCTAssertEqual(decoded, request)
 
-            let response = HTTPURLResponse(
-                url: endpoint,
-                statusCode: 200,
-                httpVersion: nil,
-                headerFields: ["Content-Type": "application/json"]
-            )!
-            let data = Data(
-                """
-                {
-                  "message": "Kairos runtime online.",
-                  "department": "engineering",
-                  "requestId": "req-1",
-                  "auditId": "audit-1"
-                }
-                """.utf8
-            )
+            let response = HTTPURLResponse(url: endpoint, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let data = Data("""
+            {"message":"Kairos runtime online.","department":"engineering","requestId":"req-1","auditId":"audit-1"}
+            """.utf8)
             return (response, data)
         }
 
         let response = try await client.send(request)
-
         XCTAssertEqual(response.message, "Kairos runtime online.")
         XCTAssertEqual(response.requestID, "req-1")
         XCTAssertEqual(response.auditID, "audit-1")
     }
 
-    func testSendMapsBackendErrorPayload() async throws {
+    func testSendMapsNestedBackendErrorPayload() async throws {
         let endpoint = try XCTUnwrap(URL(string: "https://example.com/api/kairos"))
-        let configuration = try KairosRuntimeConfiguration(endpointURL: endpoint)
+        let configuration = try KairosRuntimeConfiguration(endpointURL: endpoint, accessToken: "gateway-token")
         let client = KairosRuntimeClient(configuration: configuration, session: makeSession())
 
         URLProtocolStub.requestHandler = { _ in
-            let response = HTTPURLResponse(
-                url: endpoint,
-                statusCode: 429,
-                httpVersion: nil,
-                headerFields: ["Content-Type": "application/json"]
-            )!
-            let data = Data(
-                """
-                {
-                  "error": "rate_limited",
-                  "message": "Kairos is handling too many requests.",
-                  "requestId": "req-429"
-                }
-                """.utf8
-            )
+            let response = HTTPURLResponse(url: endpoint, statusCode: 429, httpVersion: nil, headerFields: nil)!
+            let data = Data("""
+            {"error":{"code":"rate_limited","message":"Kairos is handling too many requests.","requestID":"req-429"}}
+            """.utf8)
             return (response, data)
         }
 
@@ -79,25 +56,17 @@ final class KairosRuntimeClientTests: XCTestCase {
             _ = try await client.send(makeRuntimeRequest())
             XCTFail("Expected server error")
         } catch let error as KairosRuntimeError {
-            XCTAssertEqual(
-                error,
-                .server(statusCode: 429, message: "Kairos is handling too many requests.")
-            )
+            XCTAssertEqual(error, .server(statusCode: 429, message: "Kairos is handling too many requests."))
         }
     }
 
     func testSendRejectsUnreadableSuccessPayload() async throws {
         let endpoint = try XCTUnwrap(URL(string: "https://example.com/api/kairos"))
-        let configuration = try KairosRuntimeConfiguration(endpointURL: endpoint)
+        let configuration = try KairosRuntimeConfiguration(endpointURL: endpoint, accessToken: "gateway-token")
         let client = KairosRuntimeClient(configuration: configuration, session: makeSession())
 
         URLProtocolStub.requestHandler = { _ in
-            let response = HTTPURLResponse(
-                url: endpoint,
-                statusCode: 200,
-                httpVersion: nil,
-                headerFields: nil
-            )!
+            let response = HTTPURLResponse(url: endpoint, statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, Data("not-json".utf8))
         }
 
@@ -130,20 +99,14 @@ final class KairosRuntimeClientTests: XCTestCase {
 private final class URLProtocolStub: URLProtocol {
     static var requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
 
-    override class func canInit(with request: URLRequest) -> Bool {
-        true
-    }
-
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
-        request
-    }
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
         guard let handler = Self.requestHandler else {
             client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
             return
         }
-
         do {
             let (response, data) = try handler(request)
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
