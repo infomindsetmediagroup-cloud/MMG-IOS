@@ -3,6 +3,7 @@ const DEFAULT_RUNTIME_BASE_URL = "https://mmg-ios.vercel.app";
 const runtimeBaseURL = window.location.hostname.endsWith("vercel.app")
   ? window.location.origin
   : DEFAULT_RUNTIME_BASE_URL;
+const sameOriginRuntime = new URL(runtimeBaseURL).origin === window.location.origin;
 
 const state = {
   open: false,
@@ -18,46 +19,36 @@ shell.className = "live-chat-shell";
 shell.setAttribute("aria-label", "Kairos live executive chat");
 shell.innerHTML = `
   <button class="live-chat-launcher" type="button" aria-expanded="false" aria-controls="live-chat-panel">
-    <span aria-hidden="true">✦</span>
-    <span>Live Kairos</span>
+    <span aria-hidden="true">✦</span><span>Live Kairos</span>
   </button>
   <div id="live-chat-panel" class="live-chat-panel" hidden>
     <header class="live-chat-header">
-      <div>
-        <p class="eyebrow">Checkpoint 007</p>
-        <h3>Executive Chat</h3>
-      </div>
+      <div><p class="eyebrow">Production Recovery</p><h3>Executive Chat</h3></div>
       <button class="live-chat-close" type="button" aria-label="Close live chat">×</button>
     </header>
     <div class="live-chat-runtime">
       <span class="live-chat-status-dot" data-runtime-status></span>
-      <div>
-        <strong data-runtime-label>Checking runtime…</strong>
-        <p class="muted" data-runtime-detail>${runtimeBaseURL}</p>
-      </div>
+      <div><strong data-runtime-label>Checking runtime…</strong><p class="muted" data-runtime-detail>${runtimeBaseURL}</p></div>
     </div>
     <div class="live-chat-auth" data-auth-panel>
-      <label for="kairos-runtime-token">Internal bootstrap token</label>
-      <input id="kairos-runtime-token" type="password" autocomplete="off" placeholder="Exchange token for a secure session">
-      <p class="muted">The token is exchanged for an HttpOnly session. During rollback only, it may remain in memory for this tab and is never written to browser storage.</p>
+      <label for="kairos-runtime-token">Internal runtime token</label>
+      <input id="kairos-runtime-token" type="password" autocomplete="off" placeholder="Enter the internal gateway token">
+      <p class="muted" data-auth-help>${sameOriginRuntime
+        ? "The token is exchanged for an HttpOnly application session."
+        : "GitHub Pages recovery mode keeps the token only in memory for this tab. It is never written to browser storage."}</p>
       <div class="live-chat-auth-actions">
-        <button type="button" class="action-button" data-save-token>Start secure session</button>
-        <button type="button" class="action-button" data-clear-token>End session</button>
+        <button type="button" class="action-button" data-start-session>${sameOriginRuntime ? "Start secure session" : "Use token"}</button>
+        <button type="button" class="action-button" data-end-session>Clear authorization</button>
       </div>
     </div>
     <div class="live-chat-messages" data-messages aria-live="polite">
-      <article class="live-chat-message kairos">
-        <span>Kairos</span>
-        <p>Production runtime connected. Establish a secure application session, then direct Kairos in plain language.</p>
-      </article>
+      <article class="live-chat-message kairos"><span>Kairos</span><p>Connect to the production runtime, authorize this tab, then direct Kairos in plain language.</p></article>
     </div>
     <form class="live-chat-composer" data-chat-form>
       <textarea name="objective" rows="2" maxlength="8000" placeholder="Direct Kairos…" required></textarea>
       <button type="submit" class="live-chat-send">Send</button>
     </form>
-    <footer class="live-chat-footer">
-      Controlled internal operation · secure session · request and audit identifiers preserved
-    </footer>
+    <footer class="live-chat-footer">Controlled internal operation · request and audit identifiers preserved</footer>
   </div>
 `;
 
@@ -70,8 +61,8 @@ const statusDot = shell.querySelector("[data-runtime-status]");
 const statusLabel = shell.querySelector("[data-runtime-label]");
 const statusDetail = shell.querySelector("[data-runtime-detail]");
 const tokenInput = shell.querySelector("#kairos-runtime-token");
-const startSessionButton = shell.querySelector("[data-save-token]");
-const endSessionButton = shell.querySelector("[data-clear-token]");
+const startSessionButton = shell.querySelector("[data-start-session]");
+const endSessionButton = shell.querySelector("[data-end-session]");
 const messages = shell.querySelector("[data-messages]");
 const form = shell.querySelector("[data-chat-form]");
 const objectiveInput = form.elements.objective;
@@ -79,8 +70,8 @@ const sendButton = shell.querySelector(".live-chat-send");
 
 launcher.addEventListener("click", () => setOpen(!state.open));
 closeButton.addEventListener("click", () => setOpen(false));
-startSessionButton.addEventListener("click", establishSession);
-endSessionButton.addEventListener("click", endSession);
+startSessionButton.addEventListener("click", authorizeTab);
+endSessionButton.addEventListener("click", endAuthorization);
 form.addEventListener("submit", sendObjective);
 
 function setOpen(open) {
@@ -89,13 +80,13 @@ function setOpen(open) {
   launcher.setAttribute("aria-expanded", String(open));
   if (open) {
     tokenInput.value = "";
-    refreshRuntimeAndSession();
+    refreshRuntimeAndAuthorization();
   }
 }
 
-async function refreshRuntimeAndSession() {
+async function refreshRuntimeAndAuthorization() {
   await checkHealth();
-  if (state.ready) await checkSession();
+  if (state.ready && sameOriginRuntime) await checkSession();
   updateComposerState();
 }
 
@@ -105,16 +96,14 @@ async function checkHealth() {
     const response = await fetch(`${runtimeBaseURL}/api/health`, {
       headers: { Accept: "application/json" },
       cache: "no-store",
-      credentials: "include",
+      ...(sameOriginRuntime ? { credentials: "include" } : {}),
     });
     const body = await readJSON(response);
-    state.ready = response.ok && body.status === "ready";
+    state.ready = response.ok && (body.status === "ready" || body.status === "ok");
     setRuntimeState(
       state.ready ? "ready" : "degraded",
       state.ready ? "Production runtime ready" : "Runtime requires attention",
-      state.ready
-        ? `${runtimeBaseURL} · provider and session gateway configured`
-        : `${runtimeBaseURL} · ${body.status || response.status}`,
+      state.ready ? `${runtimeBaseURL} · connected` : `${runtimeBaseURL} · ${body.status || response.status}`,
     );
   } catch (error) {
     state.ready = false;
@@ -135,32 +124,36 @@ async function checkSession() {
       state.authenticated = true;
       state.session = body.session;
       state.gatewayToken = "";
-      tokenInput.value = "";
       setRuntimeState("ready", "Secure session active", formatSessionDetail(state.session));
-    } else if (!state.gatewayToken) {
-      state.authenticated = false;
-      state.session = null;
     }
   } catch {
-    if (!state.gatewayToken) resetAuthorization();
+    resetAuthorization();
   }
 }
 
-async function establishSession() {
+async function authorizeTab() {
   const token = tokenInput.value.trim();
   if (!token) {
-    appendMessage("system", "Enter the internal bootstrap token to establish a secure session.");
+    appendMessage("system", "Enter the internal runtime token first.");
     return;
   }
 
   startSessionButton.disabled = true;
   try {
+    if (!sameOriginRuntime) {
+      state.gatewayToken = token;
+      state.authenticated = true;
+      state.session = null;
+      tokenInput.value = "";
+      appendMessage("system", "Recovery authorization loaded in memory for this tab only.");
+      setRuntimeState("ready", "Gateway recovery mode active", `${runtimeBaseURL} · in-memory authorization`);
+      objectiveInput.focus();
+      return;
+    }
+
     const response = await fetch(`${runtimeBaseURL}/api/session/exchange`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-      },
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
       credentials: "include",
     });
     const body = await readJSON(response);
@@ -177,40 +170,39 @@ async function establishSession() {
     }
 
     if (response.status === 503) {
-      state.authenticated = true;
-      state.session = null;
       state.gatewayToken = token;
-      appendMessage("system", "Session service is not configured. Controlled Checkpoint 006 fallback is active in memory for this tab only.");
-      setRuntimeState("ready", "Gateway fallback active", `${runtimeBaseURL} · temporary rollback mode`);
+      state.authenticated = true;
+      appendMessage("system", "Session service unavailable. Controlled in-memory gateway fallback is active.");
+      setRuntimeState("ready", "Gateway fallback active", `${runtimeBaseURL} · temporary recovery mode`);
       objectiveInput.focus();
       return;
     }
 
     resetAuthorization();
-    appendMessage("system", body?.message || "Secure session could not be established.");
+    appendMessage("system", body?.message || "Authorization failed.");
   } catch (error) {
-    tokenInput.value = "";
     resetAuthorization();
-    appendMessage("system", error instanceof Error ? error.message : "Session exchange failed.");
+    appendMessage("system", error instanceof Error ? error.message : "Authorization failed.");
   } finally {
+    tokenInput.value = "";
     startSessionButton.disabled = false;
     updateComposerState();
   }
 }
 
-async function endSession() {
-  try {
-    await fetch(`${runtimeBaseURL}/api/session`, {
-      method: "DELETE",
-      credentials: "include",
-    });
-  } finally {
-    resetAuthorization();
-    tokenInput.value = "";
-    appendMessage("system", "Kairos authorization ended and temporary credentials were cleared.");
-    setRuntimeState("ready", "Production runtime ready", `${runtimeBaseURL} · authentication required`);
-    updateComposerState();
+async function endAuthorization() {
+  if (sameOriginRuntime) {
+    try {
+      await fetch(`${runtimeBaseURL}/api/session`, { method: "DELETE", credentials: "include" });
+    } catch {
+      // Local authorization is still cleared below.
+    }
   }
+  resetAuthorization();
+  tokenInput.value = "";
+  appendMessage("system", "Kairos authorization ended and temporary credentials were cleared.");
+  setRuntimeState(state.ready ? "ready" : "degraded", state.ready ? "Production runtime ready" : "Runtime unavailable", runtimeBaseURL);
+  updateComposerState();
 }
 
 async function sendObjective(event) {
@@ -222,7 +214,7 @@ async function sendObjective(event) {
     return;
   }
   if (!state.authenticated) {
-    appendMessage("system", "Establish a secure application session first.");
+    appendMessage("system", "Authorize this tab first.");
     tokenInput.focus();
     return;
   }
@@ -234,16 +226,13 @@ async function sendObjective(event) {
   const progressMessage = appendMessage("progress", "Kairos is routing and preparing a governed response…");
 
   try {
-    const headers = {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    };
+    const headers = { "Content-Type": "application/json", Accept: "application/json" };
     if (state.gatewayToken) headers.Authorization = `Bearer ${state.gatewayToken}`;
 
     const response = await fetch(`${runtimeBaseURL}/api/kairos`, {
       method: "POST",
       headers,
-      credentials: "include",
+      ...(sameOriginRuntime ? { credentials: "include" } : {}),
       body: JSON.stringify({
         objective,
         department: "Executive Office",
@@ -253,7 +242,7 @@ async function sendObjective(event) {
           "Return the clearest governed next action.",
           "Preserve request and audit traceability.",
         ],
-        governanceNote: "Controlled internal browser session. Do not claim external actions were completed without evidence.",
+        governanceNote: "Controlled internal browser operation. Do not claim external actions without evidence.",
       }),
     });
     const body = await readJSON(response);
@@ -261,14 +250,11 @@ async function sendObjective(event) {
 
     if (!response.ok) {
       appendMessage("system", body?.error?.message || body?.message || `Kairos returned ${response.status}.`);
-      if (response.status === 401) {
-        resetAuthorization();
-        setRuntimeState("ready", "Session required", `${runtimeBaseURL} · establish a new secure session`);
-      }
+      if (response.status === 401) resetAuthorization();
       return;
     }
 
-    appendMessage("kairos", body.message, {
+    appendMessage("kairos", body.message || body.reply || "Kairos completed the request.", {
       department: body.department,
       requestId: body.requestId,
       auditId: body.auditId,
@@ -335,20 +321,12 @@ function formatSessionDetail(session) {
 async function readJSON(response) {
   const text = await response.text();
   if (!text) return {};
-  try {
-    return JSON.parse(text);
-  } catch {
-    return { message: text };
-  }
+  try { return JSON.parse(text); } catch { return { message: text }; }
 }
 
 function escapeHTML(value) {
   return String(value).replace(/[&<>'"]/g, character => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    "'": "&#39;",
-    '"': "&quot;",
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;",
   })[character]);
 }
 
