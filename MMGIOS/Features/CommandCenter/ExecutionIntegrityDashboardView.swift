@@ -2,12 +2,23 @@ import SwiftData
 import SwiftUI
 
 struct ExecutionIntegrityDashboardView: View {
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \WorkflowRecord.updatedAt, order: .reverse) private var workflows: [WorkflowRecord]
     @Query(sort: \TaskRecord.updatedAt, order: .reverse) private var tasks: [TaskRecord]
     @Query(sort: \ProductionQueueRecord.updatedAt, order: .reverse) private var queueItems: [ProductionQueueRecord]
 
+    private let repairService = ExecutionPackageRepairService()
+
     private var report: ExecutionPackageIntegrityReport {
         ExecutionPackageIntegrityPolicy.report(
+            workflows: workflows,
+            tasks: tasks,
+            queueItems: queueItems
+        )
+    }
+
+    private var repairableIssueCount: Int {
+        repairService.repairableIssueCount(
             workflows: workflows,
             tasks: tasks,
             queueItems: queueItems
@@ -26,10 +37,32 @@ struct ExecutionIntegrityDashboardView: View {
                 Section("Integrity Snapshot") {
                     metricRow(title: "Complete packages", value: report.completePackageCount, systemImage: "checkmark.seal")
                     metricRow(title: "Integrity issues", value: report.issueCount, systemImage: "exclamationmark.triangle")
+                    metricRow(title: "Safely repairable", value: repairableIssueCount, systemImage: "wrench.and.screwdriver")
                     metricRow(title: "Workflows missing tasks", value: report.workflowsMissingTasks.count, systemImage: "point.3.connected.trianglepath.dotted")
                     metricRow(title: "Tasks missing workflows", value: report.tasksMissingWorkflows.count, systemImage: "checklist")
                     metricRow(title: "Tasks missing queue items", value: report.tasksMissingQueueItems.count, systemImage: "tray")
                     metricRow(title: "Queue items missing tasks", value: report.queueItemsMissingTasks.count, systemImage: "tray.full")
+                }
+
+                Section("Safe Repairs") {
+                    Button("Create Missing Tasks") {
+                        repairMissingTasks()
+                    }
+                    .disabled(report.workflowsMissingTasks.isEmpty)
+
+                    Button("Create Missing Queue Items") {
+                        repairMissingQueueItems()
+                    }
+                    .disabled(report.tasksMissingQueueItems.isEmpty)
+
+                    Button("Repair All Safe Links") {
+                        repairAllSafeLinks()
+                    }
+                    .disabled(repairableIssueCount == 0)
+
+                    Text("Kairos only creates missing downstream records. Orphaned tasks and queue items are never deleted automatically because removal requires an explicit governance decision.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 integritySection(
@@ -108,16 +141,49 @@ struct ExecutionIntegrityDashboardView: View {
         if report.isHealthy {
             return "All execution package links are intact. Continue monitoring package creation and runtime transitions."
         }
-        if !report.workflowsMissingTasks.isEmpty {
-            return "Repair workflows missing tasks first. A workflow without an executable task cannot enter production."
-        }
-        if !report.tasksMissingQueueItems.isEmpty {
-            return "Create missing queue entries so existing tasks can be scheduled and monitored."
+        if repairableIssueCount > 0 {
+            return "Run the safe repair controls to recreate missing tasks and queue items before investigating orphaned records."
         }
         if !report.tasksMissingWorkflows.isEmpty {
-            return "Resolve orphaned tasks by restoring their workflow link or archiving invalid records."
+            return "Resolve orphaned tasks by restoring their workflow link or archiving invalid records through an approved governance action."
         }
-        return "Resolve orphaned queue records by restoring their task link or removing invalid queue entries."
+        return "Resolve orphaned queue records by restoring their task link or removing invalid records through an approved governance action."
+    }
+
+    private func repairMissingTasks() {
+        let newTasks = repairService.repairMissingTasks(
+            workflows: workflows,
+            tasks: tasks
+        )
+        newTasks.forEach(modelContext.insert)
+        try? modelContext.save()
+    }
+
+    private func repairMissingQueueItems() {
+        let newQueueItems = repairService.repairMissingQueueItems(
+            workflows: workflows,
+            tasks: tasks,
+            queueItems: queueItems
+        )
+        newQueueItems.forEach(modelContext.insert)
+        try? modelContext.save()
+    }
+
+    private func repairAllSafeLinks() {
+        let newTasks = repairService.repairMissingTasks(
+            workflows: workflows,
+            tasks: tasks
+        )
+        newTasks.forEach(modelContext.insert)
+
+        let combinedTasks = tasks + newTasks
+        let newQueueItems = repairService.repairMissingQueueItems(
+            workflows: workflows,
+            tasks: combinedTasks,
+            queueItems: queueItems
+        )
+        newQueueItems.forEach(modelContext.insert)
+        try? modelContext.save()
     }
 
     private func metricRow(title: String, value: Int, systemImage: String) -> some View {
