@@ -77,7 +77,7 @@ struct ExecutiveActionQueueView: View {
                 .font(.largeTitle.bold())
                 .foregroundStyle(.mmgInk)
 
-            Text("Review routed Kairos commands, approve them, and convert approved actions into canonical Workflow Runtime records.")
+            Text("Review routed Kairos commands, approve them, and convert approved actions into workflows, tasks, and production queue entries.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
@@ -170,6 +170,8 @@ private struct ExecutiveActionDetailView: View {
     @Bindable var record: KnowledgeVaultRecord
 
     private let workflowFactory = ExecutiveWorkflowFactory()
+    private let taskRuntime = TaskRuntimeService()
+    private let queueRuntime = ProductionQueueService()
 
     private var item: ExecutiveActionItem {
         ExecutiveActionItem(record: record)
@@ -188,19 +190,22 @@ private struct ExecutiveActionDetailView: View {
                 LabeledContent("Updated", value: item.updatedAt.formatted(date: .abbreviated, time: .shortened))
             }
 
-            Section("Workflow") {
+            Section("Execution Package") {
                 if let linkedWorkflow {
                     LabeledContent("Workflow", value: linkedWorkflow.projectTitle)
                     LabeledContent("Stage", value: linkedWorkflow.stage)
                     LabeledContent("Status", value: linkedWorkflow.status)
                     LabeledContent("Owner", value: linkedWorkflow.owner)
+                    Text("The initial task and production queue entry were generated with this workflow.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 } else {
-                    Button("Create Workflow") {
-                        createWorkflow()
+                    Button("Create Execution Package") {
+                        createExecutionPackage()
                     }
                     .disabled(item.status == .needsReview || item.status == .completed)
 
-                    Text("Approve the action before creating a workflow. One workflow is allowed per routed action.")
+                    Text("Approve the action first. Kairos will create one workflow, its initial task, and a production queue entry.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -247,13 +252,23 @@ private struct ExecutiveActionDetailView: View {
         .navigationTitle("Action Detail")
     }
 
-    private func createWorkflow() {
+    private func createExecutionPackage() {
         guard linkedWorkflow == nil else { return }
 
         let workflow = workflowFactory.createWorkflow(from: record)
+        let task = taskRuntime.createInitialTask(for: workflow)
+        let queueItem = queueRuntime.createQueueItem(for: task, workflow: workflow)
+
         modelContext.insert(workflow)
+        modelContext.insert(task)
+        modelContext.insert(queueItem)
+
         appendHistory("Workflow ID: \(workflow.id)")
         appendHistory("Workflow Created: \(workflow.projectTitle)")
+        appendHistory("Task ID: \(task.id)")
+        appendHistory("Task Created: \(task.title)")
+        appendHistory("Queue Item ID: \(queueItem.id)")
+        appendHistory("Queue Item Created: \(queueItem.summary)")
         appendState(.inProgress)
         try? modelContext.save()
     }
@@ -310,6 +325,8 @@ private struct ExecutiveActionItem: Identifiable {
     ExecutiveActionQueueView()
         .modelContainer(for: [
             KnowledgeVaultRecord.self,
-            WorkflowRecord.self
+            WorkflowRecord.self,
+            TaskRecord.self,
+            ProductionQueueRecord.self
         ], inMemory: true)
 }
