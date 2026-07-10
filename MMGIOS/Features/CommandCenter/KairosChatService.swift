@@ -18,10 +18,18 @@ struct KairosChatService {
         self.runtime = runtime
     }
 
+    var readiness: KairosRuntimeReadiness {
+        runtime.readiness
+    }
+
     func execute(_ objective: String) async throws -> KairosChatResult {
         let trimmed = objective.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             throw KairosChatServiceError.emptyObjective
+        }
+
+        guard runtime.readiness.isReady else {
+            throw KairosChatServiceError.runtimeUnavailable(message: runtime.readiness.statusMessage)
         }
 
         let decision = router.route(trimmed)
@@ -38,11 +46,14 @@ struct KairosChatService {
 
 enum KairosChatServiceError: Error, Equatable, LocalizedError {
     case emptyObjective
+    case runtimeUnavailable(message: String)
 
     var errorDescription: String? {
         switch self {
         case .emptyObjective:
             return "Enter an objective for Kairos."
+        case let .runtimeUnavailable(message):
+            return message
         }
     }
 }
@@ -50,66 +61,24 @@ enum KairosChatServiceError: Error, Equatable, LocalizedError {
 struct UnavailableKairosRuntime: KairosRuntimeServing {
     let error: KairosRuntimeError
 
+    var readiness: KairosRuntimeReadiness {
+        .unavailable(message: error.errorDescription ?? "Kairos runtime is unavailable.")
+    }
+
     func send(_ request: KairosRuntimeRequest) async throws -> KairosRuntimeResponse {
         throw error
     }
 }
 
-enum KairosRuntimeAvailability: Equatable {
-    case configured(host: String)
-    case unavailable(message: String)
-
-    var isReady: Bool {
-        switch self {
-        case .configured:
-            return true
-        case .unavailable:
-            return false
-        }
-    }
-
-    var title: String {
-        isReady ? "Secure runtime configured" : "Runtime configuration required"
-    }
-
-    var detail: String {
-        switch self {
-        case let .configured(host):
-            return "Requests will be sent through \(host)."
-        case let .unavailable(message):
-            return message
-        }
-    }
-}
-
-struct KairosRuntimeEnvironment {
-    let service: any KairosRuntimeServing
-    let availability: KairosRuntimeAvailability
-}
-
 enum KairosRuntimeFactory {
     static func makeDefault(bundle: Bundle = .main) -> any KairosRuntimeServing {
-        makeDefaultEnvironment(bundle: bundle).service
-    }
-
-    static func makeDefaultEnvironment(bundle: Bundle = .main) -> KairosRuntimeEnvironment {
         do {
             let configuration = try KairosRuntimeConfiguration.from(bundle: bundle)
-            let host = configuration.endpointURL.host ?? "the configured Kairos backend"
-            return KairosRuntimeEnvironment(
-                service: KairosRuntimeClient(configuration: configuration),
-                availability: .configured(host: host)
-            )
+            return KairosRuntimeClient(configuration: configuration)
         } catch let error as KairosRuntimeError {
-            return KairosRuntimeEnvironment(
-                service: UnavailableKairosRuntime(error: error),
-                availability: .unavailable(message: error.errorDescription ?? "Kairos runtime is unavailable.")
-            )
+            return UnavailableKairosRuntime(error: error)
         } catch {
-            return KairosRuntimeEnvironment(
-                service: UnavailableKairosRuntime(error: .missingConfiguration),
-                availability: .unavailable(message: "Kairos runtime is not configured.")
-            )
+            return UnavailableKairosRuntime(error: .missingConfiguration)
         }
     }
 }
