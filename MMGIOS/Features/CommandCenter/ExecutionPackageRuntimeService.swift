@@ -9,17 +9,18 @@ struct ExecutionPackageRuntimeService {
         workflow: WorkflowRecord,
         task: TaskRecord,
         queueItem: ProductionQueueRecord
-    ) -> WorkflowTransitionRecord? {
-        let transition = workflowRuntime.transition(
+    ) -> [WorkflowTransitionRecord] {
+        var transitions: [WorkflowTransitionRecord] = []
+
+        transitions.append(contentsOf: advance(
             workflow: workflow,
-            to: .production,
-            actor: "Kairos",
+            through: [.planning, .production],
             trigger: "Execution package started"
-        )
+        ))
 
         taskRuntime.start(task)
         queueRuntime.activate(queueItem)
-        return transition
+        return transitions
     }
 
     func block(
@@ -53,15 +54,57 @@ struct ExecutionPackageRuntimeService {
         workflow: WorkflowRecord,
         task: TaskRecord,
         queueItem: ProductionQueueRecord
-    ) -> WorkflowTransitionRecord? {
+    ) -> [WorkflowTransitionRecord] {
         taskRuntime.complete(task)
         queueRuntime.complete(queueItem)
 
-        return workflowRuntime.transition(
+        let remainingStages = completionPath(from: workflow.stage)
+        return advance(
             workflow: workflow,
-            to: .delivery,
-            actor: "Kairos",
+            through: remainingStages,
             trigger: "Execution package completed"
         )
+    }
+
+    private func advance(
+        workflow: WorkflowRecord,
+        through stages: [RuntimeWorkflowStage],
+        trigger: String
+    ) -> [WorkflowTransitionRecord] {
+        stages.compactMap { stage in
+            workflowRuntime.transition(
+                workflow: workflow,
+                to: stage,
+                actor: "Kairos",
+                trigger: trigger
+            )
+        }
+    }
+
+    private func completionPath(from rawStage: String) -> [RuntimeWorkflowStage] {
+        guard let stage = RuntimeWorkflowStage(rawValue: rawStage) else {
+            return []
+        }
+
+        switch stage {
+        case .intake:
+            return [.planning, .production, .humanReview, .approval, .export, .delivery]
+        case .planning:
+            return [.production, .humanReview, .approval, .export, .delivery]
+        case .production:
+            return [.humanReview, .approval, .export, .delivery]
+        case .aiGeneration:
+            return [.humanReview, .approval, .export, .delivery]
+        case .humanReview:
+            return [.approval, .export, .delivery]
+        case .customerReview:
+            return [.approval, .export, .delivery]
+        case .approval:
+            return [.export, .delivery]
+        case .export:
+            return [.delivery]
+        case .delivery, .archived:
+            return []
+        }
     }
 }
