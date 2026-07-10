@@ -11,13 +11,12 @@ struct ExecutiveChatView: View {
     @State private var requestTask: Task<Void, Never>?
 
     private let chatService: KairosChatService
+    private let runtimeReadiness: KairosRuntimeReadiness
 
     init(runtime: (any KairosRuntimeServing)? = nil) {
-        if let runtime {
-            chatService = KairosChatService(runtime: runtime)
-        } else {
-            chatService = KairosChatService(runtime: KairosRuntimeFactory.makeDefault())
-        }
+        let resolvedRuntime = runtime ?? KairosRuntimeFactory.makeDefault()
+        chatService = KairosChatService(runtime: resolvedRuntime)
+        runtimeReadiness = resolvedRuntime.readiness
     }
 
     var body: some View {
@@ -27,6 +26,7 @@ struct ExecutiveChatView: View {
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 14) {
                             commandBriefingCard
+                            runtimeReadinessCard
 
                             ForEach(messages) { message in
                                 executiveMessageBubble(message)
@@ -99,6 +99,30 @@ struct ExecutiveChatView: View {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .stroke(Color.mmgBlue.opacity(0.14), lineWidth: 1)
         )
+    }
+
+    private var runtimeReadinessCard: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: runtimeReadiness.isReady ? "checkmark.shield.fill" : "exclamationmark.shield.fill")
+                .font(.title3)
+                .foregroundStyle(runtimeReadiness.isReady ? Color.green : Color.orange)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(runtimeReadiness.isReady ? "Kairos runtime ready" : "Kairos runtime unavailable")
+                    .font(.callout.weight(.semibold))
+
+                Text(runtimeReadiness.statusMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(runtimeReadiness.isReady ? Color.green.opacity(0.08) : Color.orange.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .accessibilityElement(children: .combine)
     }
 
     private var runtimeProgressCard: some View {
@@ -193,14 +217,14 @@ struct ExecutiveChatView: View {
 
     private var composer: some View {
         HStack(alignment: .bottom, spacing: 10) {
-            TextField("Direct Kairos...", text: $draftMessage, axis: .vertical)
+            TextField(runtimeReadiness.isReady ? "Direct Kairos..." : "Configure Kairos runtime to continue", text: $draftMessage, axis: .vertical)
                 .textFieldStyle(.plain)
                 .lineLimit(1...5)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 11)
                 .background(Color.mmgSurface)
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .disabled(isSending)
+                .disabled(isSending || !runtimeReadiness.isReady)
 
             Button(action: sendMessage) {
                 Image(systemName: "arrow.up.circle.fill")
@@ -213,12 +237,12 @@ struct ExecutiveChatView: View {
     }
 
     private var canSend: Bool {
-        !isSending && !draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        runtimeReadiness.isReady && !isSending && !draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func sendMessage() {
         let trimmed = draftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty, runtimeReadiness.isReady else { return }
 
         messages.append(.init(role: .user, body: trimmed))
         draftMessage = ""
@@ -226,7 +250,7 @@ struct ExecutiveChatView: View {
     }
 
     private func retryLastObjective() {
-        guard let objective = lastFailedObjective else { return }
+        guard let objective = lastFailedObjective, runtimeReadiness.isReady else { return }
         execute(objective)
     }
 
