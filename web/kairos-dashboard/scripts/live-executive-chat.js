@@ -1,37 +1,40 @@
 const CANONICAL_RUNTIME_URL = "https://mmg-ios.vercel.app";
 const sameOriginRuntime = window.location.hostname.endsWith("vercel.app");
 const recoveryRequested = new URLSearchParams(window.location.search).get("recovery") === "1";
+const recoveryMode = !sameOriginRuntime && recoveryRequested;
 const runtimeBaseURL = sameOriginRuntime ? window.location.origin : CANONICAL_RUNTIME_URL;
+const UI_BUILD = "20260710-checkpoint-013-final";
 
 const state = { open: false, sending: false, ready: false, authenticated: false, session: null, gatewayToken: "" };
 
 const shell = document.createElement("section");
 shell.className = "live-chat-shell";
+shell.dataset.build = UI_BUILD;
 shell.setAttribute("aria-label", "Kairos live executive chat");
 shell.innerHTML = `
   <button class="live-chat-launcher" type="button" aria-expanded="false" aria-controls="live-chat-panel"><span aria-hidden="true">✦</span><span>Live Kairos</span></button>
   <div id="live-chat-panel" class="live-chat-panel" hidden>
     <header class="live-chat-header">
-      <div><p class="eyebrow">${sameOriginRuntime ? "Authenticated Runtime" : "Production Recovery"}</p><h3>Executive Chat</h3></div>
+      <div><p class="eyebrow">${recoveryMode ? "Emergency Recovery" : "Authenticated Runtime"}</p><h3>Executive Chat</h3></div>
       <button class="live-chat-close" type="button" aria-label="Close live chat">×</button>
     </header>
     <div class="live-chat-runtime"><span class="live-chat-status-dot" data-runtime-status></span><div><strong data-runtime-label>Checking runtime…</strong><p class="muted" data-runtime-detail>${runtimeBaseURL}</p></div></div>
-    ${sameOriginRuntime ? `
-      <div class="live-chat-auth" data-session-panel>
-        <p class="muted">Live Kairos uses the signed operator session established at login.</p>
-        <div class="live-chat-auth-actions"><button type="button" class="action-button" data-end-session>End session</button></div>
-      </div>
-    ` : `
+    ${recoveryMode ? `
       <div class="live-chat-auth" data-recovery-panel>
         <label for="kairos-runtime-token">Internal runtime token</label>
         <input id="kairos-runtime-token" type="password" autocomplete="off" placeholder="Enter the internal gateway token">
         <p class="muted">Emergency recovery mode keeps the token only in memory for this tab. It is never written to browser storage.</p>
         <div class="live-chat-auth-actions"><button type="button" class="action-button" data-use-token>Use token</button><button type="button" class="action-button" data-clear-token>Clear authorization</button></div>
       </div>
+    ` : `
+      <div class="live-chat-auth" data-session-panel>
+        <p class="muted">Live Kairos uses the signed operator session established at login.</p>
+        <div class="live-chat-auth-actions"><button type="button" class="action-button" data-end-session>End session</button></div>
+      </div>
     `}
-    <div class="live-chat-messages" data-messages aria-live="polite"><article class="live-chat-message kairos"><span>Kairos</span><p>${sameOriginRuntime ? "Your authenticated operator session is used automatically." : "Authorize this emergency recovery tab, then direct Kairos in plain language."}</p></article></div>
+    <div class="live-chat-messages" data-messages aria-live="polite"><article class="live-chat-message kairos"><span>Kairos</span><p>${recoveryMode ? "Authorize this emergency recovery tab, then direct Kairos in plain language." : "Your authenticated operator session is used automatically."}</p></article></div>
     <form class="live-chat-composer" data-chat-form><textarea name="objective" rows="2" maxlength="8000" placeholder="Direct Kairos…" required></textarea><button type="submit" class="live-chat-send">Send</button></form>
-    <footer class="live-chat-footer">Controlled internal operation · request and audit identifiers preserved</footer>
+    <footer class="live-chat-footer">Controlled internal operation · request and audit identifiers preserved · ${UI_BUILD}</footer>
   </div>
 `;
 document.body.append(shell);
@@ -52,7 +55,7 @@ const objectiveInput = form.elements.objective;
 const sendButton = shell.querySelector(".live-chat-send");
 
 launcher.addEventListener("click", () => {
-  if (!sameOriginRuntime && !recoveryRequested) {
+  if (!sameOriginRuntime && !recoveryMode) {
     window.location.assign(`${CANONICAL_RUNTIME_URL}/web/kairos-dashboard/`);
     return;
   }
@@ -64,7 +67,7 @@ useTokenButton?.addEventListener("click", authorizeRecoveryTab);
 clearTokenButton?.addEventListener("click", clearRecoveryAuthorization);
 endSessionButton?.addEventListener("click", endSession);
 window.addEventListener("kairos:auth", event => {
-  if (!sameOriginRuntime) return;
+  if (!sameOriginRuntime || recoveryMode) return;
   state.authenticated = true;
   state.session = event.detail?.session || null;
   updateComposerState();
@@ -84,7 +87,7 @@ function setOpen(open) {
 
 async function refreshRuntimeAndAuthorization() {
   await checkHealth();
-  if (state.ready && sameOriginRuntime) await checkSession();
+  if (state.ready && sameOriginRuntime && !recoveryMode) await checkSession();
   updateComposerState();
 }
 
@@ -126,6 +129,7 @@ async function checkSession() {
 }
 
 function authorizeRecoveryTab() {
+  if (!recoveryMode) return;
   const token = tokenInput?.value.trim() || "";
   if (!token) return appendMessage("system", "Enter the internal runtime token first.");
   state.gatewayToken = token;
@@ -138,6 +142,7 @@ function authorizeRecoveryTab() {
 }
 
 function clearRecoveryAuthorization() {
+  if (!recoveryMode) return;
   resetAuthorization();
   if (tokenInput) tokenInput.value = "";
   appendMessage("system", "Recovery authorization cleared.");
@@ -156,7 +161,7 @@ async function sendObjective(event) {
   const objective = objectiveInput.value.trim();
   if (!objective || state.sending) return;
   if (!state.ready) return appendMessage("system", "Kairos runtime is not ready.");
-  if (!state.authenticated) return appendMessage("system", sameOriginRuntime ? "Sign in again to continue." : "Authorize this recovery tab first.");
+  if (!state.authenticated) return appendMessage("system", recoveryMode ? "Authorize this recovery tab first." : "Sign in again to continue.");
 
   appendMessage("executive", objective);
   objectiveInput.value = "";
@@ -166,7 +171,7 @@ async function sendObjective(event) {
 
   try {
     const headers = { "Content-Type": "application/json", Accept: "application/json" };
-    if (state.gatewayToken) headers.Authorization = `Bearer ${state.gatewayToken}`;
+    if (recoveryMode && state.gatewayToken) headers.Authorization = `Bearer ${state.gatewayToken}`;
     const response = await fetch(`${runtimeBaseURL}/api/kairos`, {
       method: "POST",
       headers,
