@@ -26,7 +26,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
   try {
     const environment = requireRuntimeEnvironment(process.env);
-    authorizeRequest(request.headers.authorization, environment.KAIROS_RUNTIME_TOKEN);
+    authorizeRequest(firstHeaderValue(request.headers.authorization), environment.KAIROS_RUNTIME_TOKEN);
     const runtimeRequest = parseRuntimeRequest(request.body);
     const requestID = randomUUID();
     const auditID = randomUUID();
@@ -76,6 +76,10 @@ export default async function handler(request: VercelRequest, response: VercelRe
     }
     response.status(error.statusCode).json(errorEnvelope(error));
   }
+}
+
+function firstHeaderValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
 }
 
 async function readJSON(response: Response): Promise<unknown> {
