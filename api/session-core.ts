@@ -1,7 +1,9 @@
-import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 
 export const SESSION_COOKIE_NAME = "mmg_kairos_session";
 const SESSION_TTL_SECONDS = 30 * 60;
+const PASSWORD_HASH_PREFIX = "scrypt-v1";
+const PASSWORD_KEY_LENGTH = 64;
 
 export interface OperatorSession {
   sub: string;
@@ -23,10 +25,20 @@ interface SessionPayload {
   jti: string;
 }
 
-export function verifyOperatorCredential(supplied: string, expected: string): boolean {
-  const left = Buffer.from(supplied, "utf8");
-  const right = Buffer.from(expected, "utf8");
-  return left.length === right.length && timingSafeEqual(left, right);
+export function verifyOperatorPassword(supplied: string, encodedHash: string): boolean {
+  const [prefix, saltHex, expectedHex, extra] = encodedHash.trim().split("$");
+  if (prefix !== PASSWORD_HASH_PREFIX || !saltHex || !expectedHex || extra) return false;
+  if (!/^[a-f0-9]+$/i.test(saltHex) || !/^[a-f0-9]+$/i.test(expectedHex)) return false;
+
+  try {
+    const salt = Buffer.from(saltHex, "hex");
+    const expected = Buffer.from(expectedHex, "hex");
+    if (salt.length < 16 || expected.length !== PASSWORD_KEY_LENGTH) return false;
+    const derived = scryptSync(supplied, salt, PASSWORD_KEY_LENGTH);
+    return timingSafeEqual(derived, expected);
+  } catch {
+    return false;
+  }
 }
 
 export function issueOperatorSession(operatorInput: string, runtimeToken: string): { token: string; session: OperatorSession } {
