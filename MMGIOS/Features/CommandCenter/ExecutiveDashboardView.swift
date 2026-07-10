@@ -24,33 +24,27 @@ struct ExecutiveDashboardView: View {
         tasks.filter { $0.status != ProductionTaskStatus.completed.rawValue && $0.status != ProductionTaskStatus.cancelled.rawValue }
     }
 
-    private var blockedQueueItems: [ProductionQueueRecord] {
-        queueItems.filter { $0.status == ProductionQueueStatus.blocked.rawValue }
+    private var executionPackages: [ExecutionPackageHealth] {
+        ExecutionPackageHealthPolicy.packages(
+            workflows: workflows,
+            tasks: tasks,
+            queueItems: queueItems
+        )
     }
 
-    private var executionPackages: [ExecutivePackageHealth] {
-        workflows.compactMap { workflow in
-            guard let task = tasks.first(where: { $0.workflowID == workflow.id }),
-                  let queueItem = queueItems.first(where: { $0.taskID == task.id })
-            else { return nil }
-
-            return ExecutivePackageHealth(workflow: workflow, task: task, queueItem: queueItem)
-        }
-    }
-
-    private var blockedPackages: [ExecutivePackageHealth] {
+    private var blockedPackages: [ExecutionPackageHealth] {
         executionPackages.filter { $0.state == .blocked }
     }
 
-    private var activePackages: [ExecutivePackageHealth] {
+    private var activePackages: [ExecutionPackageHealth] {
         executionPackages.filter { $0.state == .active }
     }
 
-    private var readyPackages: [ExecutivePackageHealth] {
+    private var readyPackages: [ExecutionPackageHealth] {
         executionPackages.filter { $0.state == .ready }
     }
 
-    private var completedPackages: [ExecutivePackageHealth] {
+    private var completedPackages: [ExecutionPackageHealth] {
         executionPackages.filter { $0.state == .completed }
     }
 
@@ -287,7 +281,7 @@ struct ExecutiveDashboardView: View {
         }
     }
 
-    private func packageHealthRow(_ package: ExecutivePackageHealth) -> some View {
+    private func packageHealthRow(_ package: ExecutionPackageHealth) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
                 Text(package.workflow.projectTitle)
@@ -376,61 +370,6 @@ private struct ExecutivePriorityItem: Identifiable {
     let title: String
     let detail: String
     let systemImage: String
-}
-
-private struct ExecutivePackageHealth: Identifiable {
-    let workflow: WorkflowRecord
-    let task: TaskRecord
-    let queueItem: ProductionQueueRecord
-
-    var id: String { workflow.id }
-
-    var state: ExecutivePackageState {
-        if task.status == ProductionTaskStatus.completed.rawValue &&
-            queueItem.status == ProductionQueueStatus.completed.rawValue {
-            return .completed
-        }
-        if task.status == ProductionTaskStatus.blocked.rawValue ||
-            queueItem.status == ProductionQueueStatus.blocked.rawValue ||
-            workflow.status == RuntimeWorkflowStatus.blocked.rawValue {
-            return .blocked
-        }
-        if task.status == ProductionTaskStatus.inProgress.rawValue ||
-            queueItem.status == ProductionQueueStatus.active.rawValue {
-            return .active
-        }
-        return .ready
-    }
-
-    var blocker: String? {
-        if !task.blocker.isEmpty { return task.blocker }
-        if !queueItem.blocker.isEmpty { return queueItem.blocker }
-        return nil
-    }
-}
-
-private enum ExecutivePackageState {
-    case ready
-    case active
-    case blocked
-    case completed
-
-    var label: String {
-        switch self {
-        case .ready: return "Ready"
-        case .active: return "Active"
-        case .blocked: return "Blocked"
-        case .completed: return "Complete"
-        }
-    }
-
-    var tint: Color {
-        switch self {
-        case .ready, .active: return .mmgBlue
-        case .blocked: return .orange
-        case .completed: return .green
-        }
-    }
 }
 
 #Preview {
