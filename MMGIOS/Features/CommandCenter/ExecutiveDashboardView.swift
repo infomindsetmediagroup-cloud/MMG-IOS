@@ -61,10 +61,7 @@ struct ExecutiveDashboardView: View {
     }
 
     private var highPriorityActionRecords: [KnowledgeVaultRecord] {
-        openActionRecords.filter { record in
-            let searchable = "\(record.projectContext) \(record.decisionHistory)".lowercased()
-            return searchable.contains("approval") || searchable.contains("blocked") || searchable.contains("gate")
-        }
+        openActionRecords.filter { ExecutiveActionPriority.from(record: $0) == .high }
     }
 
     private var executiveRecommendation: String {
@@ -268,18 +265,20 @@ struct ExecutiveDashboardView: View {
     }
 
     private func routedActionRow(_ record: KnowledgeVaultRecord) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        let status = actionStatus(for: record)
+
+        return VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
                 Text(record.projectContext.isEmpty ? "Routed action" : record.projectContext)
                     .font(.headline)
                     .lineLimit(2)
                 Spacer()
-                Text(actionStatus(for: record).label)
+                Text(status.label)
                     .font(.caption2.weight(.semibold))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(actionStatus(for: record).tint.opacity(0.12))
-                    .foregroundStyle(actionStatus(for: record).tint)
+                    .background(status.tint.opacity(0.12))
+                    .foregroundStyle(status.tint)
                     .clipShape(Capsule())
             }
             if let department = extractValue(prefix: "Department:", from: record.decisionHistory) {
@@ -318,8 +317,8 @@ struct ExecutiveDashboardView: View {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func actionStatus(for record: KnowledgeVaultRecord) -> DashboardActionStatus {
-        DashboardActionStatus.from(record: record)
+    private func actionStatus(for record: KnowledgeVaultRecord) -> ExecutiveActionState {
+        ExecutiveActionState.from(record: record)
     }
 }
 
@@ -328,76 +327,6 @@ private struct ExecutivePriorityItem: Identifiable {
     let title: String
     let detail: String
     let systemImage: String
-}
-
-private enum DashboardActionStatus: Equatable {
-    case needsReview
-    case ready
-    case inProgress
-    case monitor
-    case completed
-
-    var label: String {
-        switch self {
-        case .needsReview:
-            return "Needs Review"
-        case .ready:
-            return "Ready"
-        case .inProgress:
-            return "In Progress"
-        case .monitor:
-            return "Monitor"
-        case .completed:
-            return "Complete"
-        }
-    }
-
-    var tint: Color {
-        switch self {
-        case .needsReview:
-            return .orange
-        case .ready, .inProgress:
-            return .mmgBlue
-        case .monitor:
-            return .secondary
-        case .completed:
-            return .green
-        }
-    }
-
-    static func from(record: KnowledgeVaultRecord) -> DashboardActionStatus {
-        if let persisted = latestPersistedStatus(from: record.decisionHistory) {
-            return persisted
-        }
-
-        let searchable = "\(record.projectContext) \(record.decisionHistory)".lowercased()
-
-        if searchable.contains("approval") || searchable.contains("blocked") || searchable.contains("gate") || searchable.contains("decision") {
-            return .needsReview
-        }
-
-        if searchable.contains("execute") || searchable.contains("production") || searchable.contains("build") || searchable.contains("workflow") || searchable.contains("release") {
-            return .ready
-        }
-
-        return .monitor
-    }
-
-    private static func latestPersistedStatus(from history: String) -> DashboardActionStatus? {
-        history
-            .components(separatedBy: .newlines)
-            .reversed()
-            .compactMap { line -> DashboardActionStatus? in
-                guard line.hasPrefix("Action Status:") else { return nil }
-                if line.contains("Complete") { return .completed }
-                if line.contains("In Progress") { return .inProgress }
-                if line.contains("Ready") { return .ready }
-                if line.contains("Monitor") { return .monitor }
-                if line.contains("Needs Review") { return .needsReview }
-                return nil
-            }
-            .first
-    }
 }
 
 #Preview {
