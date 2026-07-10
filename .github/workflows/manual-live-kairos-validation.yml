@@ -1,0 +1,48 @@
+name: Manual Live Kairos Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      runtime_base_url:
+        description: "Deployed Kairos base URL, without a trailing slash"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate-live-runtime:
+    name: Validate deployed Kairos runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      KAIROS_RUNTIME_BASE_URL: ${{ inputs.runtime_base_url }}
+      KAIROS_RUNTIME_TOKEN: ${{ secrets.KAIROS_RUNTIME_TOKEN }}
+
+    steps:
+      - name: Check out main with native git
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init repository
+          cd repository
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin main
+          git checkout --detach FETCH_HEAD
+
+      - name: Verify runner and secret configuration
+        working-directory: repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --version
+          if [[ -z "${KAIROS_RUNTIME_TOKEN:-}" ]]; then
+            echo "Repository secret KAIROS_RUNTIME_TOKEN is not configured."
+            exit 1
+          fi
+
+      - name: Run live health and authorized request smoke test
+        working-directory: repository
+        shell: bash
+        run: node scripts/validate-live-kairos.mjs
