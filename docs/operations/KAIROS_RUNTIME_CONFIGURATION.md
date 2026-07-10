@@ -30,3 +30,12 @@ http://localhost:3000/api/kairos
 ## XcodeGen
 
 `project.yml` defines an empty default value so the application builds without embedding an environment-specific endpoint. Supply the real value through the deployment or local build environment before end-to-end runtime testing.
+
+## Validation sequence
+
+1. Run the standard iOS build and unit-test gate with the default empty endpoint.
+2. Configure a trusted Kairos backend URL in the target environment.
+3. Verify `/api/health` independently.
+4. Send a controlled Executive Chat request.
+5. Confirm the response includes request and audit identifiers.
+6. Confirm the command and response metadata are preserved in the Knowledge Vault.
