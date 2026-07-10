@@ -22,6 +22,11 @@ struct AppRootView: View {
                     Label("Actions", systemImage: "tray.full")
                 }
 
+            DepartmentInboxView()
+                .tabItem {
+                    Label("Departments", systemImage: "building.2")
+                }
+
             KnowledgeVaultReviewView()
                 .tabItem {
                     Label("Knowledge", systemImage: "books.vertical")
