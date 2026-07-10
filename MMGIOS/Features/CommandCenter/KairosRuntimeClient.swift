@@ -1,7 +1,33 @@
 import Foundation
 
+enum KairosRuntimeReadiness: Equatable {
+    case ready
+    case unavailable(message: String)
+
+    var isReady: Bool {
+        if case .ready = self {
+            return true
+        }
+        return false
+    }
+
+    var statusMessage: String {
+        switch self {
+        case .ready:
+            return "Secure Kairos backend configured."
+        case let .unavailable(message):
+            return message
+        }
+    }
+}
+
 protocol KairosRuntimeServing {
+    var readiness: KairosRuntimeReadiness { get }
     func send(_ request: KairosRuntimeRequest) async throws -> KairosRuntimeResponse
+}
+
+extension KairosRuntimeServing {
+    var readiness: KairosRuntimeReadiness { .ready }
 }
 
 struct KairosRuntimeClient: KairosRuntimeServing {
@@ -9,6 +35,8 @@ struct KairosRuntimeClient: KairosRuntimeServing {
     private let session: URLSession
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+
+    let readiness: KairosRuntimeReadiness = .ready
 
     init(
         configuration: KairosRuntimeConfiguration,
