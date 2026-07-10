@@ -39,3 +39,7 @@ http://localhost:3000/api/kairos
 4. Send a controlled Executive Chat request.
 5. Confirm the response includes request and audit identifiers.
 6. Confirm the command and response metadata are preserved in the Knowledge Vault.
+
+## Deployment boundary
+
+The endpoint value is configuration, not a credential. OpenAI keys, service credentials, authorization policy, model selection, and provider calls remain exclusively in the Kairos backend environment.
