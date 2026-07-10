@@ -77,7 +77,7 @@ struct ExecutiveActionQueueView: View {
                 .font(.largeTitle.bold())
                 .foregroundStyle(.mmgInk)
 
-            Text("Review routed Kairos commands as actionable operating items. Status controls append traceable state notes to the Knowledge Vault record.")
+            Text("Review routed Kairos commands, approve them, and convert approved actions into canonical Workflow Runtime records.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
@@ -166,10 +166,17 @@ struct ExecutiveActionQueueView: View {
 
 private struct ExecutiveActionDetailView: View {
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: \WorkflowRecord.updatedAt, order: .reverse) private var workflows: [WorkflowRecord]
     @Bindable var record: KnowledgeVaultRecord
+
+    private let workflowFactory = ExecutiveWorkflowFactory()
 
     private var item: ExecutiveActionItem {
         ExecutiveActionItem(record: record)
+    }
+
+    private var linkedWorkflow: WorkflowRecord? {
+        workflows.first { $0.projectID == record.id }
     }
 
     var body: some View {
@@ -179,6 +186,24 @@ private struct ExecutiveActionDetailView: View {
                 LabeledContent("Priority", value: item.priority.label)
                 LabeledContent("Status", value: item.status.label)
                 LabeledContent("Updated", value: item.updatedAt.formatted(date: .abbreviated, time: .shortened))
+            }
+
+            Section("Workflow") {
+                if let linkedWorkflow {
+                    LabeledContent("Workflow", value: linkedWorkflow.projectTitle)
+                    LabeledContent("Stage", value: linkedWorkflow.stage)
+                    LabeledContent("Status", value: linkedWorkflow.status)
+                    LabeledContent("Owner", value: linkedWorkflow.owner)
+                } else {
+                    Button("Create Workflow") {
+                        createWorkflow()
+                    }
+                    .disabled(item.status == .needsReview || item.status == .completed)
+
+                    Text("Approve the action before creating a workflow. One workflow is allowed per routed action.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("Controls") {
@@ -222,18 +247,30 @@ private struct ExecutiveActionDetailView: View {
         .navigationTitle("Action Detail")
     }
 
+    private func createWorkflow() {
+        guard linkedWorkflow == nil else { return }
+
+        let workflow = workflowFactory.createWorkflow(from: record)
+        modelContext.insert(workflow)
+        appendHistory("Workflow ID: \(workflow.id)")
+        appendHistory("Workflow Created: \(workflow.projectTitle)")
+        appendState(.inProgress)
+        try? modelContext.save()
+    }
+
     private func appendState(_ status: ExecutiveActionState) {
         let timestamp = Date().formatted(date: .abbreviated, time: .shortened)
-        let note = "Action Status: \(status.label) @ \(timestamp)"
+        appendHistory("Action Status: \(status.label) @ \(timestamp)")
+        try? modelContext.save()
+    }
 
+    private func appendHistory(_ note: String) {
         if record.decisionHistory.isEmpty {
             record.decisionHistory = note
         } else {
             record.decisionHistory += "\n\n\(note)"
         }
-
         record.updatedAt = .now
-        try? modelContext.save()
     }
 }
 
@@ -272,6 +309,7 @@ private struct ExecutiveActionItem: Identifiable {
 #Preview {
     ExecutiveActionQueueView()
         .modelContainer(for: [
-            KnowledgeVaultRecord.self
+            KnowledgeVaultRecord.self,
+            WorkflowRecord.self
         ], inMemory: true)
 }
