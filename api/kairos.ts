@@ -10,6 +10,7 @@ import {
   parseRuntimeRequest,
   requireRuntimeEnvironment,
 } from "./kairos-core.js";
+import { readCookie, SESSION_COOKIE_NAME, verifyOperatorSession } from "./session-core.js";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const PROVIDER_TIMEOUT_MS = 45_000;
@@ -29,7 +30,11 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
   try {
     const environment = requireRuntimeEnvironment(process.env);
-    authorizeRequest(firstHeaderValue(request.headers.authorization), environment.KAIROS_RUNTIME_TOKEN);
+    const cookieToken = readCookie(firstHeaderValue(request.headers.cookie), SESSION_COOKIE_NAME);
+    const session = verifyOperatorSession(cookieToken, environment.KAIROS_RUNTIME_TOKEN);
+    const authorizationMode = session ? "session" : "gateway-recovery";
+    if (!session) authorizeRequest(firstHeaderValue(request.headers.authorization), environment.KAIROS_RUNTIME_TOKEN);
+
     const runtimeRequest = parseRuntimeRequest(request.body);
     const requestID = randomUUID();
     const auditID = randomUUID();
@@ -48,10 +53,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
     const providerBody: unknown = await readJSON(providerResponse);
     if (!providerResponse.ok) {
-      console.error("Kairos provider request failed", {
-        requestID,
-        statusCode: providerResponse.status,
-      });
+      console.error("Kairos provider request failed", { requestID, statusCode: providerResponse.status });
       throw new KairosHttpError(
         providerResponse.status === 429 ? 429 : 502,
         providerResponse.status === 429 ? "rate_limited" : "provider_error",
@@ -68,14 +70,19 @@ export default async function handler(request: VercelRequest, response: VercelRe
       department: runtimeRequest.department,
       requestId: requestID,
       auditId: auditID,
+      executionContext: {
+        authorizationMode,
+        subject: session?.sub ?? "internal-recovery",
+        tenantId: session?.tenantId ?? "mmg-internal",
+        role: session?.role ?? "executive",
+        operator: session?.operator,
+        sessionId: session?.sessionId ?? "gateway-recovery",
+      },
     });
   } catch (caught) {
     const error = normalizeError(caught);
     if (error.statusCode >= 500) {
-      console.error("Kairos runtime failure", {
-        requestID: error.requestID,
-        code: error.code,
-      });
+      console.error("Kairos runtime failure", { requestID: error.requestID, code: error.code });
     }
     response.status(error.statusCode).json(errorEnvelope(error));
   }
@@ -88,23 +95,16 @@ function firstHeaderValue(value: string | string[] | undefined): string | undefi
 async function readJSON(response: Response): Promise<unknown> {
   const text = await response.text();
   if (!text) return {};
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return {};
-  }
+  try { return JSON.parse(text) as unknown; } catch { return {}; }
 }
 
 function normalizeError(caught: unknown): KairosHttpError {
   if (caught instanceof KairosHttpError) return caught;
-
   if (caught instanceof DOMException && caught.name === "TimeoutError") {
     return new KairosHttpError(504, "provider_timeout", "Kairos took too long to respond.");
   }
-
   if (caught instanceof Error && caught.name === "TimeoutError") {
     return new KairosHttpError(504, "provider_timeout", "Kairos took too long to respond.");
   }
-
   return new KairosHttpError(500, "internal_error", "Kairos encountered an internal error.");
 }
