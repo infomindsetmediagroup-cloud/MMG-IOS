@@ -1,0 +1,20 @@
+{
+  "name": "mmg-kairos-runtime",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@vercel/node": "^5.3.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
+  }
+}

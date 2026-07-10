@@ -33,7 +33,19 @@ struct KairosRuntimeResponse: Codable, Equatable {
 }
 
 struct KairosRuntimeErrorResponse: Codable, Equatable {
-    let error: String?
+    struct Detail: Codable, Equatable {
+        let code: String?
+        let message: String?
+        let requestID: String?
+
+        enum CodingKeys: String, CodingKey {
+            case code
+            case message
+            case requestID = "requestID"
+        }
+    }
+
+    let error: Detail?
     let message: String?
     let requestID: String?
 
@@ -44,34 +56,44 @@ struct KairosRuntimeErrorResponse: Codable, Equatable {
     }
 
     var displayMessage: String {
-        message ?? error ?? "Kairos could not complete the request."
+        error?.message ?? message ?? "Kairos could not complete the request."
     }
 }
 
 struct KairosRuntimeConfiguration: Equatable {
     static let endpointInfoKey = "KAIROS_RUNTIME_URL"
+    static let tokenInfoKey = "KAIROS_RUNTIME_TOKEN"
 
     let endpointURL: URL
+    let accessToken: String
     let timeout: TimeInterval
 
-    init(endpointURL: URL, timeout: TimeInterval = 30) throws {
+    init(endpointURL: URL, accessToken: String, timeout: TimeInterval = 30) throws {
         guard Self.isAllowed(endpointURL) else {
             throw KairosRuntimeError.insecureConfiguration
         }
 
+        let token = accessToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty else {
+            throw KairosRuntimeError.missingConfiguration
+        }
+
         self.endpointURL = endpointURL
+        self.accessToken = token
         self.timeout = timeout
     }
 
     static func from(bundle: Bundle = .main) throws -> KairosRuntimeConfiguration {
         guard let value = bundle.object(forInfoDictionaryKey: endpointInfoKey) as? String,
               !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              let endpointURL = URL(string: value)
+              let endpointURL = URL(string: value),
+              let token = bundle.object(forInfoDictionaryKey: tokenInfoKey) as? String,
+              !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else {
             throw KairosRuntimeError.missingConfiguration
         }
 
-        return try KairosRuntimeConfiguration(endpointURL: endpointURL)
+        return try KairosRuntimeConfiguration(endpointURL: endpointURL, accessToken: token)
     }
 
     private static func isAllowed(_ url: URL) -> Bool {

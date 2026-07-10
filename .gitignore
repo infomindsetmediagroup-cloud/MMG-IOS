@@ -11,12 +11,25 @@ build/
 .build/
 Package.resolved
 
+# Node and backend tooling
+node_modules/
+coverage/
+.vitest/
+.vercel/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
 # macOS
 .DS_Store
 
-# Credentials
+# Credentials and local environment
 *.env
 .env
+.env.*
+!.env.example
 *.xcconfig
 !.example.xcconfig
 

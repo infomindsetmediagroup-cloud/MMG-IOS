@@ -20,6 +20,8 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>KAIROS_RUNTIME_URL</key>
 	<string>$(KAIROS_RUNTIME_URL)</string>
+	<key>KAIROS_RUNTIME_TOKEN</key>
+	<string>$(KAIROS_RUNTIME_TOKEN)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

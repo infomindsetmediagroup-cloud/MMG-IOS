@@ -56,6 +56,7 @@ struct KairosRuntimeClient: KairosRuntimeServing {
         urlRequest.timeoutInterval = configuration.timeout
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         urlRequest.setValue("application/json", forHTTPHeaderField: "Accept")
+        urlRequest.setValue("Bearer \(configuration.accessToken)", forHTTPHeaderField: "Authorization")
         urlRequest.httpBody = try encoder.encode(request)
 
         let data: Data
