@@ -15,7 +15,8 @@ export default function handler(request: VercelRequest, response: VercelResponse
 
   const runtimeToken = process.env.KAIROS_RUNTIME_TOKEN?.trim();
   const passwordHash = process.env.KAIROS_OPERATOR_PASSWORD_HASH?.trim();
-  if (!runtimeToken || !passwordHash) {
+  const encryptedPassword = process.env.KAIROS_OPERATOR_PASSWORD?.trim();
+  if (!runtimeToken || (!passwordHash && !encryptedPassword)) {
     response.status(503).json({
       status: "error",
       code: "session_unavailable",
@@ -39,7 +40,7 @@ export default function handler(request: VercelRequest, response: VercelResponse
     const body = isRecord(request.body) ? request.body : {};
     const operator = typeof body.operator === "string" ? body.operator : "";
     const password = typeof body.accessKey === "string" ? body.accessKey : "";
-    if (!verifyOperatorPassword(password, passwordHash)) {
+    if (!verifyOperatorPassword(password, passwordHash, encryptedPassword)) {
       response.status(401).json({
         status: "unauthenticated",
         code: "invalid_credentials",
