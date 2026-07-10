@@ -27,6 +27,11 @@ struct AppRootView: View {
                     Label("Departments", systemImage: "building.2")
                 }
 
+            ExecutionIntegrityDashboardView()
+                .tabItem {
+                    Label("Integrity", systemImage: "checkmark.shield")
+                }
+
             KnowledgeVaultReviewView()
                 .tabItem {
                     Label("Knowledge", systemImage: "books.vertical")
