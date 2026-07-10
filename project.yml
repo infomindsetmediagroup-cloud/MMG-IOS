@@ -19,13 +19,15 @@ targets:
       - path: MMGIOS/Features/CommandCenter
       - path: MMGIOS/Features/CustomerPortal
       - path: MMGIOS/Features/Deliverables
+        excludes:
+          - "*.md"
       - path: MMGIOS/Features/DesignStudio
       - path: MMGIOS/Features/KnowledgeVault
       - path: MMGIOS/Features/ProductionQueue
       - path: MMGIOS/Features/TaskEngine
       - path: MMGIOS/Features/WorkflowRuntime
         excludes:
-          - WorkflowRuntimeSpec.md
+          - "*.md"
     resources:
       - path: MMGIOS/Resources/Assets.xcassets
     info:
