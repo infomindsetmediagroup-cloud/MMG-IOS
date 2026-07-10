@@ -24,6 +24,8 @@ Replace routine browser use of the long-lived internal gateway token with a shor
 - immediate bootstrap-token discard after successful exchange
 - explicit rollback compatibility using the Checkpoint 006 gateway path
 - in-memory-only browser fallback when the session service returns `503`
+- reusable manual branch-validation workflow installed on `main`
+- live validation harness stored at `scripts/validate-checkpoint-007.mjs`
 
 ## Required environment variables
 
@@ -47,6 +49,27 @@ On successful exchange, the input is cleared and the token is discarded immediat
 
 If session signing is unavailable and the exchange endpoint returns `503`, the browser may retain the bootstrap token only in JavaScript memory for the current page lifetime and send it through the controlled Checkpoint 006 fallback. Refresh, logout, authorization failure, or page closure clears it. This compatibility mode exists only to preserve rollback and is not the target operating state.
 
+## Canonical manual validation gate
+
+The dispatch entry point is the manual-only workflow on `main`:
+
+```text
+.github/workflows/manual-branch-runtime-validation.yml
+```
+
+Run it against `target_ref=checkpoint-007-authenticated-sessions` with:
+
+```text
+validation_script=scripts/validate-checkpoint-007.mjs
+```
+
+Perform two deliberate runs against the deployed preview URL:
+
+1. `KAIROS_REQUIRE_SESSION=false` and `expect_session_enforcement=false`
+2. `KAIROS_REQUIRE_SESSION=true` and `expect_session_enforcement=true`
+
+The workflow is not triggered by pushes or pull requests. It consumes GitHub Actions minutes only when intentionally dispatched.
+
 ## Validation gate still required
 
 Before this checkpoint may be merged or frozen:
@@ -59,11 +82,11 @@ Before this checkpoint may be merged or frozen:
 6. Verify the in-memory gateway fallback works only while `KAIROS_REQUIRE_SESSION` is disabled.
 7. Enable `KAIROS_REQUIRE_SESSION=true` in preview and verify gateway-only requests are rejected.
 8. Confirm Checkpoint 006 rollback instructions.
-9. Record validation evidence before merge.
+9. Record both workflow-run URLs and deployed preview evidence before merge.
 
 ## Current validation constraint
 
-This execution environment cannot reach GitHub or Vercel through its local shell, so local dependency installation and preview endpoint testing could not be completed here. No claim of build or runtime validation is made. The branch remains draft until evidence is recorded.
+This execution environment cannot configure Vercel environment variables or perform browser inspection against the protected preview. No claim of build or runtime validation is made. The branch remains draft until evidence is recorded.
 
 ## Security limitations
 
