@@ -1,0 +1,37 @@
+name: Manual Consolidated Certification
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_ref:
+        description: "Branch, tag, or commit SHA to certify"
+        required: true
+        default: "checkpoint-012-consolidated-certification"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out selected ref with native git
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init repository
+          cd repository
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin "${{ inputs.target_ref }}"
+          git checkout --detach FETCH_HEAD
+          echo "Certification ref: $(git rev-parse HEAD)"
+
+      - name: Install backend dependencies
+        working-directory: repository/kairos/backend
+        run: npm install --ignore-scripts
+
+      - name: Build and run certification tests
+        working-directory: repository/kairos/backend
+        run: npm run certify
