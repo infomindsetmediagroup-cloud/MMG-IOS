@@ -80,6 +80,22 @@ final class KairosRuntimeFoundationTests: XCTestCase {
         XCTAssertEqual(ExecutiveActionState.from(record: record), .inProgress)
     }
 
+    func testWorkflowTypeMappingUsesPublishingForPublishingDepartment() {
+        XCTAssertEqual(ExecutiveWorkflowFactory().workflowType(for: "Publishing"), .publishing)
+    }
+
+    func testWorkflowTypeMappingUsesMarketingForGrowthDepartment() {
+        XCTAssertEqual(ExecutiveWorkflowFactory().workflowType(for: "Growth"), .marketing)
+    }
+
+    func testWorkflowTypeMappingUsesKairosOrchestrationForEngineering() {
+        XCTAssertEqual(ExecutiveWorkflowFactory().workflowType(for: "Engineering"), .kairosOrchestration)
+    }
+
+    func testWorkflowTypeMappingUsesCustomerSuccessForReleaseOperations() {
+        XCTAssertEqual(ExecutiveWorkflowFactory().workflowType(for: "Release Operations"), .customerSuccess)
+    }
+
     private func makeRecord(department: String, historySuffix: String) -> KnowledgeVaultRecord {
         let baseHistory = [
             "Source: Kairos Chat",
