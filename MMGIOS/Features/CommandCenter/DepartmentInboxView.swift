@@ -179,7 +179,7 @@ private struct DepartmentInboxDetailView: View {
         .navigationTitle(department.departmentName)
     }
 
-    private func packageRow(_ package: DepartmentExecutionPackage) -> some View {
+    private func packageRow(_ package: ExecutionPackageHealth) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .firstTextBaseline) {
                 Text(package.workflow.projectTitle)
@@ -228,14 +228,12 @@ private struct DepartmentInboxSummary: Identifiable {
 
     var id: String { departmentName }
 
-    var packages: [DepartmentExecutionPackage] {
-        workflows.compactMap { workflow in
-            guard let task = allTasks.first(where: { $0.workflowID == workflow.id }),
-                  let queueItem = allQueueItems.first(where: { $0.taskID == task.id })
-            else { return nil }
-
-            return DepartmentExecutionPackage(workflow: workflow, task: task, queueItem: queueItem)
-        }
+    var packages: [ExecutionPackageHealth] {
+        ExecutionPackageHealthPolicy.packages(
+            workflows: workflows,
+            tasks: allTasks,
+            queueItems: allQueueItems
+        )
     }
 
     private var workflowIDs: Set<String> {
@@ -298,61 +296,6 @@ private struct DepartmentInboxSummary: Identifiable {
         if activePackageCount > 0 || readyPackageCount > 0 { return .mmgBlue }
         if completedPackageCount > 0 { return .green }
         return .secondary
-    }
-}
-
-private struct DepartmentExecutionPackage: Identifiable {
-    let workflow: WorkflowRecord
-    let task: TaskRecord
-    let queueItem: ProductionQueueRecord
-
-    var id: String { workflow.id }
-
-    var state: DepartmentPackageState {
-        if task.status == ProductionTaskStatus.completed.rawValue &&
-            queueItem.status == ProductionQueueStatus.completed.rawValue {
-            return .completed
-        }
-        if workflow.status == RuntimeWorkflowStatus.blocked.rawValue ||
-            task.status == ProductionTaskStatus.blocked.rawValue ||
-            queueItem.status == ProductionQueueStatus.blocked.rawValue {
-            return .blocked
-        }
-        if task.status == ProductionTaskStatus.inProgress.rawValue ||
-            queueItem.status == ProductionQueueStatus.active.rawValue {
-            return .active
-        }
-        return .ready
-    }
-
-    var blocker: String? {
-        if !task.blocker.isEmpty { return task.blocker }
-        if !queueItem.blocker.isEmpty { return queueItem.blocker }
-        return nil
-    }
-}
-
-private enum DepartmentPackageState: Equatable {
-    case ready
-    case active
-    case blocked
-    case completed
-
-    var label: String {
-        switch self {
-        case .ready: return "Ready"
-        case .active: return "Active"
-        case .blocked: return "Blocked"
-        case .completed: return "Complete"
-        }
-    }
-
-    var tint: Color {
-        switch self {
-        case .ready, .active: return .mmgBlue
-        case .blocked: return .orange
-        case .completed: return .green
-        }
     }
 }
 
