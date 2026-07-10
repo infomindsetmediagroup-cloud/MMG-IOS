@@ -5,7 +5,7 @@ import {
   readCookie,
   SESSION_COOKIE_NAME,
   sessionCookie,
-  verifyOperatorCredential,
+  verifyOperatorPassword,
   verifyOperatorSession,
 } from "./session-core.js";
 
@@ -14,8 +14,13 @@ export default function handler(request: VercelRequest, response: VercelResponse
   response.setHeader("Content-Type", "application/json; charset=utf-8");
 
   const runtimeToken = process.env.KAIROS_RUNTIME_TOKEN?.trim();
-  if (!runtimeToken) {
-    response.status(503).json({ status: "error", code: "session_unavailable", message: "Kairos session service is not configured." });
+  const passwordHash = process.env.KAIROS_OPERATOR_PASSWORD_HASH?.trim();
+  if (!runtimeToken || !passwordHash) {
+    response.status(503).json({
+      status: "error",
+      code: "session_unavailable",
+      message: "Kairos operator authentication is not configured.",
+    });
     return;
   }
 
@@ -33,9 +38,13 @@ export default function handler(request: VercelRequest, response: VercelResponse
   if (request.method === "POST") {
     const body = isRecord(request.body) ? request.body : {};
     const operator = typeof body.operator === "string" ? body.operator : "";
-    const accessKey = typeof body.accessKey === "string" ? body.accessKey : "";
-    if (!verifyOperatorCredential(accessKey, runtimeToken)) {
-      response.status(401).json({ status: "unauthenticated", code: "invalid_credentials", message: "Operator access was denied." });
+    const password = typeof body.accessKey === "string" ? body.accessKey : "";
+    if (!verifyOperatorPassword(password, passwordHash)) {
+      response.status(401).json({
+        status: "unauthenticated",
+        code: "invalid_credentials",
+        message: "Operator access was denied.",
+      });
       return;
     }
 
@@ -44,7 +53,11 @@ export default function handler(request: VercelRequest, response: VercelResponse
       response.setHeader("Set-Cookie", sessionCookie(issued.token, issued.session.expiresAt));
       response.status(201).json({ status: "authenticated", session: issued.session });
     } catch (error) {
-      response.status(400).json({ status: "error", code: "invalid_operator", message: error instanceof Error ? error.message : "Operator name is invalid." });
+      response.status(400).json({
+        status: "error",
+        code: "invalid_operator",
+        message: error instanceof Error ? error.message : "Operator name is invalid.",
+      });
     }
     return;
   }
