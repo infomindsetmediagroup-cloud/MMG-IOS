@@ -50,6 +50,25 @@ final class KairosChatServiceTests: XCTestCase {
         }
     }
 
+    func testExecuteRejectsUnavailableRuntimeWithoutDispatching() async {
+        let runtime = RuntimeStub(
+            readiness: .unavailable(message: "Kairos runtime is not configured."),
+            result: .failure(KairosRuntimeError.missingConfiguration)
+        )
+        let service = KairosChatService(runtime: runtime)
+
+        do {
+            _ = try await service.execute("Create the next slice")
+            XCTFail("Expected runtime-unavailable error")
+        } catch {
+            XCTAssertEqual(
+                error as? KairosChatServiceError,
+                .runtimeUnavailable(message: "Kairos runtime is not configured.")
+            )
+            XCTAssertNil(runtime.lastRequest)
+        }
+    }
+
     func testExecutePropagatesRuntimeFailure() async {
         let expected = KairosRuntimeError.transport(message: "Offline")
         let runtime = RuntimeStub(result: .failure(expected))
@@ -67,8 +86,13 @@ final class KairosChatServiceTests: XCTestCase {
 private final class RuntimeStub: KairosRuntimeServing {
     private(set) var lastRequest: KairosRuntimeRequest?
     private let result: Result<KairosRuntimeResponse, Error>
+    let readiness: KairosRuntimeReadiness
 
-    init(result: Result<KairosRuntimeResponse, Error>) {
+    init(
+        readiness: KairosRuntimeReadiness = .ready,
+        result: Result<KairosRuntimeResponse, Error>
+    ) {
+        self.readiness = readiness
         self.result = result
     }
 
