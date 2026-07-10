@@ -1,6 +1,7 @@
-const DEFAULT_RUNTIME_BASE_URL = "https://mmg-ios.vercel.app";
-const runtimeBaseURL = window.location.hostname.endsWith("vercel.app") ? window.location.origin : DEFAULT_RUNTIME_BASE_URL;
-const sameOriginRuntime = new URL(runtimeBaseURL).origin === window.location.origin;
+const CANONICAL_RUNTIME_URL = "https://mmg-ios.vercel.app";
+const sameOriginRuntime = window.location.hostname.endsWith("vercel.app");
+const recoveryRequested = new URLSearchParams(window.location.search).get("recovery") === "1";
+const runtimeBaseURL = sameOriginRuntime ? window.location.origin : CANONICAL_RUNTIME_URL;
 
 const state = { open: false, sending: false, ready: false, authenticated: false, session: null, gatewayToken: "" };
 
@@ -24,11 +25,11 @@ shell.innerHTML = `
       <div class="live-chat-auth" data-recovery-panel>
         <label for="kairos-runtime-token">Internal runtime token</label>
         <input id="kairos-runtime-token" type="password" autocomplete="off" placeholder="Enter the internal gateway token">
-        <p class="muted">GitHub Pages recovery mode keeps the token only in memory for this tab. It is never written to browser storage.</p>
+        <p class="muted">Emergency recovery mode keeps the token only in memory for this tab. It is never written to browser storage.</p>
         <div class="live-chat-auth-actions"><button type="button" class="action-button" data-use-token>Use token</button><button type="button" class="action-button" data-clear-token>Clear authorization</button></div>
       </div>
     `}
-    <div class="live-chat-messages" data-messages aria-live="polite"><article class="live-chat-message kairos"><span>Kairos</span><p>${sameOriginRuntime ? "Your authenticated operator session is used automatically." : "Authorize this recovery tab, then direct Kairos in plain language."}</p></article></div>
+    <div class="live-chat-messages" data-messages aria-live="polite"><article class="live-chat-message kairos"><span>Kairos</span><p>${sameOriginRuntime ? "Your authenticated operator session is used automatically." : "Authorize this emergency recovery tab, then direct Kairos in plain language."}</p></article></div>
     <form class="live-chat-composer" data-chat-form><textarea name="objective" rows="2" maxlength="8000" placeholder="Direct Kairos…" required></textarea><button type="submit" class="live-chat-send">Send</button></form>
     <footer class="live-chat-footer">Controlled internal operation · request and audit identifiers preserved</footer>
   </div>
@@ -50,7 +51,13 @@ const form = shell.querySelector("[data-chat-form]");
 const objectiveInput = form.elements.objective;
 const sendButton = shell.querySelector(".live-chat-send");
 
-launcher.addEventListener("click", () => setOpen(!state.open));
+launcher.addEventListener("click", () => {
+  if (!sameOriginRuntime && !recoveryRequested) {
+    window.location.assign(`${CANONICAL_RUNTIME_URL}/web/kairos-dashboard/`);
+    return;
+  }
+  setOpen(!state.open);
+});
 closeButton.addEventListener("click", () => setOpen(false));
 form.addEventListener("submit", sendObjective);
 useTokenButton?.addEventListener("click", authorizeRecoveryTab);
@@ -67,7 +74,12 @@ function setOpen(open) {
   state.open = open;
   panel.hidden = !open;
   launcher.setAttribute("aria-expanded", String(open));
-  if (open) refreshRuntimeAndAuthorization();
+  document.documentElement.classList.toggle("live-chat-open", open);
+  document.body.classList.toggle("live-chat-open", open);
+  if (open) {
+    refreshRuntimeAndAuthorization();
+    requestAnimationFrame(() => { messages.scrollTop = messages.scrollHeight; });
+  }
 }
 
 async function refreshRuntimeAndAuthorization() {
