@@ -1,132 +1,89 @@
 import app from "./entry.js";
 
 const TOKEN_TIMEOUT_MS = 12000;
-const LEGACY_SHOP_DOMAIN = "07ka8e-qw.myshopify.com";
+const GRAPHQL_TIMEOUT_MS = 12000;
+const FALLBACK_API_VERSIONS = ["2026-07", "2026-04", "2026-01", "2025-10"];
 
 export default {
   async fetch(request, env, ctx) {
-    try {
-      const normalized = await normalizeShopifyEnvironment(env);
-      return app.fetch(request, normalized, ctx);
-    } catch (error) {
-      const url = new URL(request.url);
-      if (["/api/theme-plan", "/api/actions"].includes(url.pathname)) {
-        return jsonError(error);
-      }
-      return app.fetch(request, env, ctx);
-    }
+    const normalized = await normalizeShopifyEnvironment(env);
+    return app.fetch(request, normalized, ctx);
   },
 };
 
 async function normalizeShopifyEnvironment(env) {
-  const configuredDomain = normalizeShopDomain(env.SHOPIFY_STORE_DOMAIN);
+  const configuredDomain = String(env.SHOPIFY_STORE_DOMAIN || "").trim().toLowerCase();
   const clientId = String(env.SHOPIFY_CLIENT_ID || "").trim();
   const clientSecret = String(env.SHOPIFY_CLIENT_SECRET || "").trim();
+  if (!configuredDomain || !clientId || !clientSecret) return env;
 
-  if (!clientId || !clientSecret) return env;
-
-  const candidates = [...new Set([configuredDomain, LEGACY_SHOP_DOMAIN].filter(Boolean))];
+  const candidates = [...new Set([configuredDomain, "07ka8e-qw.myshopify.com"])];
   const failures = [];
 
   for (const storeDomain of candidates) {
     try {
       const token = await requestClientCredentialsToken(storeDomain, clientId, clientSecret);
+      const apiVersion = await resolveGraphQLVersion(storeDomain, token.accessToken, env.SHOPIFY_API_VERSION);
+      if (!apiVersion) {
+        failures.push(`${storeDomain}: GraphQL Admin API returned 404 for every supported version attempted`);
+        continue;
+      }
       return {
         ...env,
         SHOPIFY_STORE_DOMAIN: storeDomain,
         SHOPIFY_ADMIN_ACCESS_TOKEN: token.accessToken,
+        SHOPIFY_API_VERSION: apiVersion,
         SHOPIFY_CLIENT_ID: "",
         SHOPIFY_CLIENT_SECRET: "",
-        SHOPIFY_AUTH_SOURCE: "client_credentials",
-        SHOPIFY_GRANTED_SCOPES: token.scope,
       };
     } catch (error) {
-      failures.push(`${storeDomain}: ${error instanceof Error ? error.message : "token request failed"}`);
+      failures.push(`${storeDomain}: ${error instanceof Error ? error.message : "authentication failed"}`);
     }
   }
 
-  throw shopifyError(
-    "shopify_installation_domain_unresolved",
-    `Kairos could not obtain a Shopify access token from any known installation domain. ${failures.join(" | ")}`,
-    401,
-  );
+  return {
+    ...env,
+    SHOPIFY_ADMIN_ACCESS_TOKEN: "",
+    SHOPIFY_CLIENT_ID: "",
+    SHOPIFY_CLIENT_SECRET: "",
+    SHOPIFY_CONNECTION_ERROR: failures.join(" | ").slice(0, 1800),
+  };
 }
 
 async function requestClientCredentialsToken(storeDomain, clientId, clientSecret) {
-  let response;
-  try {
-    response = await fetch(`https://${storeDomain}/admin/oauth/access_token`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        Accept: "application/json",
-      },
-      body: new URLSearchParams({
-        grant_type: "client_credentials",
-        client_id: clientId,
-        client_secret: clientSecret,
-      }),
-      signal: AbortSignal.timeout(TOKEN_TIMEOUT_MS),
-    });
-  } catch (error) {
-    const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
-    throw shopifyError(
-      timedOut ? "shopify_token_timeout" : "shopify_token_connection_failed",
-      timedOut ? "Shopify did not answer the token request before timeout." : "Cloudflare could not reach Shopify's token endpoint.",
-      timedOut ? 504 : 502,
-    );
-  }
-
-  const text = await response.text();
-  let body = {};
-  try { body = text ? JSON.parse(text) : {}; } catch { body = {}; }
-
-  if (!response.ok) {
-    const description = typeof body?.error_description === "string"
-      ? body.error_description
-      : typeof body?.error === "string"
-        ? body.error
-        : `Shopify token endpoint returned HTTP ${response.status}.`;
-    throw shopifyError("shopify_token_request_failed", description, response.status === 429 ? 429 : 401);
-  }
-
-  const accessToken = typeof body?.access_token === "string" ? body.access_token.trim() : "";
-  const scope = typeof body?.scope === "string" ? body.scope : "";
-  if (!accessToken) throw shopifyError("shopify_token_response_invalid", "Shopify returned no access token.", 502);
-
-  return { accessToken, scope };
-}
-
-function normalizeShopDomain(value) {
-  if (typeof value !== "string" || !value.trim()) return "";
-  let hostname = value.trim().toLowerCase();
-  try { hostname = new URL(hostname.includes("://") ? hostname : `https://${hostname}`).hostname; }
-  catch { return ""; }
-  return /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(hostname) ? hostname : "";
-}
-
-function shopifyError(code, message, status) {
-  const error = new Error(message);
-  error.code = code;
-  error.status = status;
-  return error;
-}
-
-function jsonError(error) {
-  return new Response(JSON.stringify({
-    error: {
-      code: typeof error?.code === "string" ? error.code : "shopify_authentication_failed",
-      message: error instanceof Error ? error.message : "Kairos could not authenticate with Shopify.",
-      requestID: crypto.randomUUID(),
-    },
-  }), {
-    status: Number.isInteger(error?.status) ? error.status : 502,
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "no-store",
-      "X-Content-Type-Options": "nosniff",
-      "X-MMG-Runtime": "cloudflare-native",
-      "X-MMG-Shopify-Auth": "client-credentials-domain-resolution",
-    },
+  const response = await fetch(`https://${storeDomain}/admin/oauth/access_token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+    body: new URLSearchParams({ grant_type: "client_credentials", client_id: clientId, client_secret: clientSecret }),
+    signal: AbortSignal.timeout(TOKEN_TIMEOUT_MS),
   });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok || typeof body?.access_token !== "string" || !body.access_token.trim()) {
+    const detail = body?.error_description || body?.error || `token endpoint returned HTTP ${response.status}`;
+    throw new Error(String(detail));
+  }
+  return { accessToken: body.access_token.trim(), scope: String(body?.scope || "") };
+}
+
+async function resolveGraphQLVersion(storeDomain, accessToken, configuredVersion) {
+  const versions = [...new Set([String(configuredVersion || "").trim(), ...FALLBACK_API_VERSIONS].filter(Boolean))];
+  for (const version of versions) {
+    const response = await fetch(`https://${storeDomain}/admin/api/${version}/graphql.json`, {
+      method: "POST",
+      headers: { "X-Shopify-Access-Token": accessToken, "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ query: "query KairosConnectionProbe { shop { id name myshopifyDomain } }" }),
+      signal: AbortSignal.timeout(GRAPHQL_TIMEOUT_MS),
+    });
+    if (response.status === 404) continue;
+    if (response.status === 401 || response.status === 403) {
+      const body = await response.json().catch(() => ({}));
+      const detail = body?.errors?.[0]?.message || `GraphQL authorization failed with HTTP ${response.status}`;
+      throw new Error(String(detail));
+    }
+    if (response.ok) return version;
+    const body = await response.json().catch(() => ({}));
+    const detail = body?.errors?.[0]?.message || `GraphQL probe failed with HTTP ${response.status}`;
+    throw new Error(String(detail));
+  }
+  return "";
 }
