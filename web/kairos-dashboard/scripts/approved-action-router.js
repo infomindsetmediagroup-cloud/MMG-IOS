@@ -1,10 +1,11 @@
-const BUILD = "command-center-governed-approval-20260711-6";
+const BUILD = "command-center-governed-approval-20260711-7";
 
 const actionRoutes = {
   "executive.priority.review": {
     department: "Executive Office",
     confidence: 0.97,
     objectiveSuffix: "Review the current Command Center operating graph, identify the highest-value next actions, surface dependencies and blockers, and return a concise ordered executive priority brief. Do not claim external execution.",
+    executionSuffix: "Execute the approved internal executive-priority decision by finalizing the ordered operating brief, recording the approved priorities, and returning completion evidence. Do not claim external mutations.",
     executionPlan: [
       "Review active, queued, blocked, and completed Command Center work.",
       "Rank the next actions by value, urgency, dependency, and readiness.",
@@ -17,6 +18,7 @@ const actionRoutes = {
     department: "Website Operations",
     confidence: 0.97,
     objectiveSuffix: "Use the completed storefront audit evidence already preserved in the Command Center and the approved MMG guided-experience doctrine to prepare a cohesive, implementation-ready homepage change package. Separate verified findings, recommended changes, affected pages and assets, expected benefits, risk controls, acceptance criteria, rollback plan, and required approvals. Do not publish changes.",
+    executionSuffix: "Execute the approved internal handoff for this website change package: finalize the approved implementation specification, lock the accepted scope, produce verification and rollback instructions, and route the package into production. Do not claim that storefront code was published unless a mutation adapter returns direct evidence.",
     executionPlan: [
       "Translate verified storefront findings into prioritized homepage changes.",
       "Define exact implementation scope, affected assets, acceptance criteria, and dependencies.",
@@ -31,6 +33,7 @@ const actionRoutes = {
     department: "Production Operations",
     confidence: 0.96,
     objectiveSuffix: "Create the canonical internal production pipeline map for approved MMG work. Define governed stages, required evidence, approval boundaries, completion criteria, rollback controls, and knowledge-preservation handoff. Do not claim external delivery or publishing.",
+    executionSuffix: "Execute the approved internal production-pipeline decision by finalizing the canonical stages, controls, evidence requirements, ownership boundaries, and completion handoff. Return a production-ready operating record and do not claim external delivery.",
     executionPlan: [
       "Define intake, approval, production, verification, delivery, and preservation stages.",
       "Specify evidence, ownership, controls, and exit criteria at each stage.",
@@ -52,10 +55,10 @@ window.addEventListener("kairos:execute-approved-action", event => {
     return;
   }
   const route = actionRoutes[action.actionType];
-  if (route && action.phase !== "execute") {
-    event.stopImmediatePropagation();
-    executeKairosWorkflow(action, route);
-  }
+  if (!route) return;
+  event.stopImmediatePropagation();
+  if (action.phase === "execute") executeApprovedWorkflow(action, route);
+  else executeKairosWorkflow(action, route);
 }, true);
 
 async function executeStorefrontInspection(action) {
@@ -127,6 +130,38 @@ async function executeKairosWorkflow(action, route) {
     complete(action.id, body, result, result.actionID, action.phase || "execute");
   } catch (error) {
     fail(action.id, error, `${route.department} workflow failed.`, action.phase || "prepare");
+  }
+}
+
+async function executeApprovedWorkflow(action, route) {
+  if (!action.id || !action.objective) return;
+  dispatchStatus(action.id, "Working", 55, "", null, "execute");
+  try {
+    const proposal = action.proposal ? `\n\nApproved proposal evidence:\n${JSON.stringify(action.proposal)}` : "";
+    const body = await callKairos({
+      objective: `${action.objective}\n\n${route.executionSuffix}${proposal}`,
+      department: route.department,
+      routingConfidence: Math.max(route.confidence, 0.98),
+      executionPlan: [
+        "Validate the recorded executive approval and approved proposal scope.",
+        "Execute the approved internal workflow and create an authoritative operating record.",
+        "Return explicit completion, verification, and rollback evidence.",
+        "Do not claim any external mutation that is not directly evidenced by a connected adapter.",
+      ],
+      governanceNote: `Executive approval recorded for ${action.id}. Execute only the approved internal scope; preserve audit traceability and distinguish completed internal routing from external publication.`,
+    });
+    complete(action.id, body, {
+      summary: body.message,
+      scope: route.scope,
+      center: action.center,
+      approval: action.approval || null,
+      approvedProposal: action.proposal || null,
+      executionType: "governed-internal-execution",
+      externalMutation: false,
+      verification: body.verification || body.message,
+    }, body.auditId || crypto.randomUUID(), "execute");
+  } catch (error) {
+    fail(action.id, error, `${route.department} approved execution failed.`, "execute");
   }
 }
 
