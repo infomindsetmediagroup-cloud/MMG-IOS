@@ -3,6 +3,7 @@ main = "src/entry.js"
 compatibility_date = "2026-07-11"
 compatibility_flags = ["nodejs_compat"]
 workers_dev = true
+keep_vars = true
 
 [vars]
 SHOPIFY_API_VERSION = "2026-07"
