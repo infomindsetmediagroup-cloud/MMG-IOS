@@ -41,8 +41,13 @@ export async function inspectShopifyThemeSource(env: ShopifyEnvironment): Promis
   const shop = normalizeShopDomain(env.SHOPIFY_SHOP_DOMAIN);
   const clientId = env.SHOPIFY_CLIENT_ID?.trim();
   const clientSecret = env.SHOPIFY_CLIENT_SECRET?.trim();
-  if (!shop || !clientId || !clientSecret) {
-    throw new Error("Shopify theme inspection is not configured.");
+  const missing = [
+    ...(!shop ? ["SHOPIFY_SHOP_DOMAIN"] : []),
+    ...(!clientId ? ["SHOPIFY_CLIENT_ID"] : []),
+    ...(!clientSecret ? ["SHOPIFY_CLIENT_SECRET"] : []),
+  ];
+  if (missing.length) {
+    throw new Error(`Missing Vercel Preview environment variables: ${missing.join(", ")}.`);
   }
 
   const accessToken = await requestAccessToken(shop, clientId, clientSecret);
@@ -81,7 +86,14 @@ export async function inspectShopifyThemeSource(env: ShopifyEnvironment): Promis
   if (!response.ok) throw new Error(`Shopify GraphQL returned HTTP ${response.status}.`);
   if (!isRecord(payload)) throw new Error("Shopify GraphQL returned an invalid response.");
   if (Array.isArray(payload.errors) && payload.errors.length) {
-    throw new Error("Shopify GraphQL rejected the theme-source query.");
+    const messages = payload.errors
+      .filter(isRecord)
+      .map((error) => typeof error.message === "string" ? error.message : "")
+      .filter(Boolean)
+      .slice(0, 3);
+    throw new Error(messages.length
+      ? `Shopify GraphQL rejected the theme-source query: ${messages.join(" | ")}`
+      : "Shopify GraphQL rejected the theme-source query.");
   }
 
   const themes = nestedArray(payload, ["data", "themes", "nodes"]);
