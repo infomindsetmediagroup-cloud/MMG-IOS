@@ -6,7 +6,7 @@ Give the authenticated Kairos executive session a real, read-only inspection cap
 
 ## Implemented
 
-- authenticated `POST /api/storefront-inspection` endpoint
+- storefront inspection executed inside the authenticated `/api/kairos` runtime
 - hard allowlist for `https://themindsetmediagroup.com`
 - Shopify sitemap and nested-sitemap discovery
 - bounded crawl depth, page count, concurrency, response size, and request timeout
@@ -21,7 +21,8 @@ Give the authenticated Kairos executive session a real, read-only inspection cap
 - read-only GET inspection
 - no arbitrary-host fetching
 - no browser-supplied Shopify credential
-- signed operator session required for the direct inspection endpoint
+- no additional serverless route, preserving the Vercel function limit
+- existing signed operator session required through `/api/kairos`
 - no mutation, theme publishing, product editing, or storefront deployment
 - public storefront evidence is distinguished from unavailable Shopify Admin evidence
 
