@@ -11,7 +11,7 @@ const MAX_FILES = 10;
 const MAX_FILE_BYTES = 500_000;
 const MAX_TOTAL_BYTES = 1_500_000;
 const ALLOWED_THEME_KEY = /^(assets|config|layout|locales|sections|snippets|templates)\/[A-Za-z0-9_./-]+\.(css|js|json|liquid|svg|txt)$/;
-const THEME_SOURCE_KEYS = ["templates/index.json", "layout/theme.liquid", "config/settings_data.json"];
+const THEME_SOURCE_PATTERNS = ["templates/index.json", "layout/theme.liquid", "config/settings_data.json", "assets/base.css", "assets/theme.css", "assets/styles.css", "assets/application.css", "assets/*.css"];
 
 export default {
   async fetch(request, env) {
@@ -39,23 +39,19 @@ async function routeAPI(request, env, url) {
 }
 
 function healthResponse(env) {
+  const shopifyAuth = Boolean(env.SHOPIFY_STORE_DOMAIN && (env.SHOPIFY_ADMIN_ACCESS_TOKEN || (env.SHOPIFY_CLIENT_ID && env.SHOPIFY_CLIENT_SECRET)));
   const capabilities = {
     cloudflareNative: true,
     openai: Boolean(env.OPENAI_API_KEY && env.OPENAI_MODEL),
     session: Boolean(env.KAIROS_RUNTIME_TOKEN && (env.KAIROS_OPERATOR_PASSWORD || env.KAIROS_OPERATOR_PASSWORD_HASH)),
-    shopify: Boolean(env.SHOPIFY_STORE_DOMAIN && env.SHOPIFY_ADMIN_ACCESS_TOKEN),
-    themePlan: Boolean(env.OPENAI_API_KEY && env.OPENAI_MODEL && env.SHOPIFY_STORE_DOMAIN && env.SHOPIFY_ADMIN_ACCESS_TOKEN),
-    themeMutation: Boolean(env.SHOPIFY_STORE_DOMAIN && env.SHOPIFY_ADMIN_ACCESS_TOKEN),
+    shopify: shopifyAuth,
+    themePlan: Boolean(env.OPENAI_API_KEY && env.OPENAI_MODEL && shopifyAuth),
+    themeMutation: shopifyAuth,
+    shopifyGraphQL: true,
     vercelDependency: false,
   };
   const ready = capabilities.openai && capabilities.session;
-  return json({
-    status: ready ? "ready" : "degraded",
-    runtime: "cloudflare-workers",
-    build: "cloudflare-native-runtime-20260711-9",
-    capabilities,
-    checkedAt: new Date().toISOString(),
-  }, ready ? 200 : 503);
+  return json({ status: ready ? "ready" : "degraded", runtime: "cloudflare-workers", build: "cloudflare-shopify-graphql-20260711-18", capabilities, checkedAt: new Date().toISOString() }, ready ? 200 : 503);
 }
 
 async function handleSession(request, env) {
@@ -69,9 +65,7 @@ async function handleSession(request, env) {
     const body = await readBody(request);
     const operator = typeof body.operator === "string" ? body.operator : "";
     const accessKey = typeof body.accessKey === "string" ? body.accessKey : "";
-    if (!verifyOperatorPassword(accessKey, env.KAIROS_OPERATOR_PASSWORD_HASH, env.KAIROS_OPERATOR_PASSWORD)) {
-      return json({ status: "unauthenticated", code: "invalid_credentials", message: "Operator access was denied." }, 401);
-    }
+    if (!verifyOperatorPassword(accessKey, env.KAIROS_OPERATOR_PASSWORD_HASH, env.KAIROS_OPERATOR_PASSWORD)) return json({ status: "unauthenticated", code: "invalid_credentials", message: "Operator access was denied." }, 401);
     const issued = issueSession(operator, env.KAIROS_RUNTIME_TOKEN);
     const headers = apiHeaders();
     headers.set("Set-Cookie", sessionCookie(issued.token, issued.session.expiresAt));
@@ -93,24 +87,14 @@ async function handleKairos(request, env) {
   const objective = boundedText(body.objective, "objective", 8000);
   const department = typeof body.department === "string" && body.department.trim() ? body.department.trim().slice(0, 160) : "Executive Office";
   const inspection = isStorefrontAuditObjective(objective) ? await inspectStorefront(env) : undefined;
-  const governanceNote = [
-    typeof body.governanceNote === "string" ? body.governanceNote : "",
-    inspection ? `VERIFIED LIVE STOREFRONT EVIDENCE:\n${JSON.stringify(inspection)}` : "",
-  ].filter(Boolean).join("\n\n").slice(0, 12000);
+  const governanceNote = [typeof body.governanceNote === "string" ? body.governanceNote : "", inspection ? `VERIFIED LIVE STOREFRONT EVIDENCE:\n${JSON.stringify(inspection)}` : ""].filter(Boolean).join("\n\n").slice(0, 12000);
   const requestId = randomUUID();
   const providerBody = await callOpenAI(env, {
     model: env.OPENAI_MODEL,
     instructions: "You are Kairos, the governed MMG operating system. Return concise, evidence-grounded operational work. Never claim an external action unless direct adapter evidence is supplied.",
     input: [{ role: "user", content: [{ type: "input_text", text: JSON.stringify({ objective, department, executionPlan: body.executionPlan || [], governanceNote }) }] }],
   }, requestId);
-  return json({
-    message: extractResponseText(providerBody),
-    department,
-    requestId,
-    auditId: randomUUID(),
-    inspection: inspection ? { ...inspection, source: "live-storefront" } : undefined,
-    executionContext: executionContext(session),
-  });
+  return json({ message: extractResponseText(providerBody), department, requestId, auditId: randomUUID(), inspection: inspection ? { ...inspection, source: "live-storefront" } : undefined, executionContext: executionContext(session) });
 }
 
 async function handleThemePlan(request, env) {
@@ -126,26 +110,13 @@ async function handleThemePlan(request, env) {
   const requestId = randomUUID();
   const providerBody = await callOpenAI(env, {
     model: env.OPENAI_MODEL,
-    instructions: [
-      "You are Kairos Website Operations compiling an exact Shopify production mutation proposal.",
-      "Use only supplied current published-theme source files. Return complete replacement content, never partial patches, placeholders, or ellipses.",
-      "Change the fewest files necessary. Preserve valid Liquid and JSON. Do not invent assets, snippets, settings, routes, products, or app blocks.",
-      "If the objective cannot be safely represented in supplied files, return an empty files array and explain the blocker.",
-    ].join(" "),
+    instructions: ["You are Kairos Website Operations compiling an exact Shopify production mutation proposal.", "Use only supplied current published-theme source files. Return complete replacement content, never partial patches, placeholders, or ellipses.", "Change the fewest files necessary. Preserve valid Liquid and JSON. Do not invent assets, snippets, settings, routes, products, or app blocks.", "If the objective cannot be safely represented in supplied files, return an empty files array and explain the blocker."].join(" "),
     input: [{ role: "user", content: [{ type: "input_text", text: JSON.stringify({ objective, theme, sources }) }] }],
     text: { format: { type: "json_schema", name: "shopify_theme_mutation_plan", strict: true, schema: mutationPlanSchema() } },
   }, requestId);
   const plan = parseJSONText(extractResponseText(providerBody), "invalid_plan_response", "Kairos returned an invalid structured mutation plan.");
   validateMutationPlan(plan, theme.id, sources);
-  return json({
-    ...plan,
-    actionID: randomUUID(),
-    completedAt: new Date().toISOString(),
-    requestId,
-    auditId: randomUUID(),
-    sourceEvidence: { themeId: theme.id, themeName: theme.name, role: theme.role, files: sources.map(({ key, sha256, value }) => ({ key, sha256, bytes: Buffer.byteLength(value, "utf8") })) },
-    executionContext: executionContext(session),
-  });
+  return json({ ...plan, actionID: randomUUID(), completedAt: new Date().toISOString(), requestId, auditId: randomUUID(), sourceEvidence: { themeId: theme.id, themeName: theme.name, role: theme.role, adapter: "graphql-admin", files: sources.map(({ key, sha256, value }) => ({ key, sha256, bytes: Buffer.byteLength(value, "utf8") })) }, executionContext: executionContext(session) });
 }
 
 async function handleActions(request, env) {
@@ -163,12 +134,7 @@ async function executeHomepageAudit(body, env, session) {
   const shopify = requireShopify(env);
   const theme = await readMainTheme(shopify);
   const sources = await readThemeSources(shopify, theme.id);
-  return json({
-    actionID: randomUUID(), actionType: "shopify.homepage.audit", status: "completed",
-    startedAt: new Date().toISOString(), completedAt: new Date().toISOString(),
-    evidence: { themeID: theme.id, name: theme.name, role: theme.role, homepageFiles: sources.map(source => source.key) },
-    executionContext: executionContext(session),
-  });
+  return json({ actionID: randomUUID(), actionType: "shopify.homepage.audit", status: "completed", startedAt: new Date().toISOString(), completedAt: new Date().toISOString(), evidence: { themeID: theme.id, name: theme.name, role: theme.role, adapter: "graphql-admin", homepageFiles: sources.map(source => source.key) }, executionContext: executionContext(session) });
 }
 
 async function executeThemeMutation(body, env, session) {
@@ -197,21 +163,7 @@ async function executeThemeMutation(body, env, session) {
     if (rollbackErrors.length) throw httpError(500, "mutation_failed_rollback_incomplete", `Theme mutation failed and rollback was incomplete: ${rollbackErrors.join("; ")}`);
     throw error;
   }
-  return json({
-    actionID: randomUUID(), actionType: "shopify.theme.files.upsert", status: "completed",
-    startedAt: startedAt.toISOString(), completedAt: new Date().toISOString(), objective,
-    evidence: {
-      themeId: mutation.themeId,
-      files: completed,
-      backup: backups.map(({ key, existed, sha256 }) => ({ key, existed, sha256 })),
-      rollbackAvailable: true,
-      rollbackPerformed: false,
-      approval,
-      publishedThemeVerified: true,
-      runtime: "cloudflare-workers",
-    },
-    executionContext: executionContext(session),
-  });
+  return json({ actionID: randomUUID(), actionType: "shopify.theme.files.upsert", status: "completed", startedAt: startedAt.toISOString(), completedAt: new Date().toISOString(), objective, evidence: { themeId: mutation.themeId, files: completed, backup: backups.map(({ key, existed, sha256 }) => ({ key, existed, sha256 })), rollbackAvailable: true, rollbackPerformed: false, approval, publishedThemeVerified: true, adapter: "graphql-admin", runtime: "cloudflare-workers" }, executionContext: executionContext(session) });
 }
 
 async function inspectStorefront(env) {
@@ -224,9 +176,7 @@ async function inspectStorefront(env) {
       const response = await fetch(`${origin}${path}`, { headers: { Accept: path.endsWith(".xml") ? "application/xml,text/xml" : "text/html" }, redirect: "follow", signal: AbortSignal.timeout(15000) });
       const text = await response.text();
       pages.push({ url: `${origin}${path}`, finalUrl: response.url, status: response.status, contentType: response.headers.get("content-type"), title: path === "/" ? extractTag(text, "title") : undefined, h1: path === "/" ? extractTag(text, "h1") : undefined, bytes: text.length });
-    } catch (error) {
-      errors.push({ url: `${origin}${path}`, message: error instanceof Error ? error.message : "Inspection failed" });
-    }
+    } catch (error) { errors.push({ url: `${origin}${path}`, message: error instanceof Error ? error.message : "Inspection failed" }); }
   }
   return { auditId: randomUUID(), source: "live-storefront", storefront: origin, startedAt, completedAt: new Date().toISOString(), inspectedCount: pages.length, discoveredCount: pages.length, pages, errors };
 }
@@ -242,13 +192,8 @@ function requireAuthorizedSession(request, env) {
   throw httpError(401, "unauthorized", "Kairos runtime authorization failed.");
 }
 
-function requireOpenAI(env) {
-  if (!env.OPENAI_API_KEY || !env.OPENAI_MODEL) throw httpError(503, "runtime_not_configured", "OpenAI is not configured in Cloudflare Worker secrets.");
-}
-
-function requireSessionConfiguration(env) {
-  if (!env.KAIROS_RUNTIME_TOKEN || (!env.KAIROS_OPERATOR_PASSWORD && !env.KAIROS_OPERATOR_PASSWORD_HASH)) throw httpError(503, "session_unavailable", "Kairos operator authentication is not configured in Cloudflare.");
-}
+function requireOpenAI(env) { if (!env.OPENAI_API_KEY || !env.OPENAI_MODEL) throw httpError(503, "runtime_not_configured", "OpenAI is not configured in Cloudflare Worker secrets."); }
+function requireSessionConfiguration(env) { if (!env.KAIROS_RUNTIME_TOKEN || (!env.KAIROS_OPERATOR_PASSWORD && !env.KAIROS_OPERATOR_PASSWORD_HASH)) throw httpError(503, "session_unavailable", "Kairos operator authentication is not configured in Cloudflare."); }
 
 function requireShopify(env) {
   const storeDomain = String(env.SHOPIFY_STORE_DOMAIN || "").trim().toLowerCase();
@@ -260,83 +205,125 @@ function requireShopify(env) {
   return { storeDomain, accessToken, apiVersion };
 }
 
+function themeGid(themeId) {
+  const value = String(themeId || "").trim();
+  if (/^gid:\/\/shopify\/OnlineStoreTheme\/\d+$/.test(value)) return value;
+  if (/^\d+$/.test(value)) return `gid://shopify/OnlineStoreTheme/${value}`;
+  throw httpError(400, "invalid_theme_id", "Shopify theme ID is invalid.");
+}
+
+function numericThemeId(gid) {
+  const match = String(gid || "").match(/^gid:\/\/shopify\/OnlineStoreTheme\/(\d+)$/);
+  if (!match) throw httpError(502, "invalid_shopify_theme_id", "Shopify returned an invalid published theme ID.");
+  return match[1];
+}
+
 async function readMainTheme(shopify) {
-  const response = await shopifyFetch(shopify, "/themes.json?role=main", { method: "GET" });
-  const body = await safeJSON(response);
-  const themes = body && Array.isArray(body.themes) ? body.themes : [];
-  const theme = themes.find(entry => entry && entry.role === "main");
-  if (!response.ok || !theme) throw httpError(502, "main_theme_unavailable", "Shopify did not return the published theme.");
-  return { id: String(theme.id), name: typeof theme.name === "string" ? theme.name : "Published theme", role: "main" };
+  const data = await shopifyGraphQL(shopify, `query KairosMainTheme { themes(first: 1, roles: [MAIN]) { nodes { id name role processing processingFailed } } }`);
+  const theme = data?.themes?.nodes?.[0];
+  if (!theme || theme.role !== "MAIN") throw httpError(502, "main_theme_unavailable", "Shopify did not return the published theme through the GraphQL Admin API.");
+  if (theme.processing || theme.processingFailed) throw httpError(409, "main_theme_processing", "The published Shopify theme is still processing or failed processing.");
+  return { id: numericThemeId(theme.id), gid: theme.id, name: typeof theme.name === "string" ? theme.name : "Published theme", role: "main" };
 }
 
 async function readThemeSources(shopify, themeId) {
-  const listingResponse = await shopifyFetch(shopify, `/themes/${themeId}/assets.json?fields=key`, { method: "GET" });
-  const listing = await safeJSON(listingResponse);
-  const assets = listing && Array.isArray(listing.assets) ? listing.assets : [];
-  const keys = assets.map(asset => asset && typeof asset.key === "string" ? asset.key : "").filter(Boolean);
-  const cssKey = keys.find(key => /^assets\/(base|theme|styles?|application).*\.css$/i.test(key));
-  const selected = [...THEME_SOURCE_KEYS, ...(cssKey ? [cssKey] : [])].filter(key => keys.includes(key));
+  const files = await queryThemeFiles(shopify, themeId, THEME_SOURCE_PATTERNS, 50);
+  const css = files.find(file => /^assets\/(base|theme|styles?|application).*\.css$/i.test(file.filename));
+  const selectedKeys = [...new Set(["templates/index.json", "layout/theme.liquid", "config/settings_data.json", css?.filename].filter(Boolean))];
+  const byKey = new Map(files.map(file => [file.filename, file]));
   const sources = [];
   let total = 0;
-  for (const key of selected) {
-    const asset = await readThemeAsset(shopify, themeId, key);
-    if (!asset.existed || typeof asset.value !== "string") continue;
-    const bytes = Buffer.byteLength(asset.value, "utf8");
+  for (const key of selectedKeys) {
+    const file = byKey.get(key);
+    if (!file || typeof file.value !== "string") continue;
+    const bytes = Buffer.byteLength(file.value, "utf8");
     if (total + bytes > MAX_SOURCE_BYTES) continue;
     total += bytes;
-    sources.push({ key, value: asset.value, sha256: asset.sha256 });
+    sources.push({ key, value: file.value, sha256: sha256(file.value) });
   }
   return sources;
 }
 
 async function readThemeAsset(shopify, themeId, key) {
-  const response = await shopifyFetch(shopify, `/themes/${themeId}/assets.json?asset[key]=${encodeURIComponent(key)}`, { method: "GET" });
-  if (response.status === 404) return { key, existed: false };
-  const body = await safeJSON(response);
-  if (!response.ok) throw httpError(502, "theme_asset_read_failed", `Shopify could not read ${key}.`);
-  const value = body?.asset?.value;
-  if (typeof value !== "string") throw httpError(409, "binary_asset_unsupported", `Only text theme assets can be mutated safely: ${key}`);
-  return { key, existed: true, value, sha256: sha256(value) };
+  const files = await queryThemeFiles(shopify, themeId, [key], 1);
+  const file = files.find(entry => entry.filename === key);
+  if (!file) return { key, existed: false };
+  if (typeof file.value !== "string") throw httpError(409, "binary_asset_unsupported", `Only text theme assets can be mutated safely: ${key}`);
+  return { key, existed: true, value: file.value, sha256: sha256(file.value) };
+}
+
+async function queryThemeFiles(shopify, themeId, filenames, first) {
+  const data = await shopifyGraphQL(shopify, `query KairosThemeFiles($themeId: ID!, $filenames: [String!], $first: Int!) { theme(id: $themeId) { files(first: $first, filenames: $filenames) { nodes { filename contentType body { ... on OnlineStoreThemeFileBodyText { content } ... on OnlineStoreThemeFileBodyBase64 { contentBase64 } ... on OnlineStoreThemeFileBodyUrl { url } } } userErrors { code filename } } } }`, { themeId: themeGid(themeId), filenames, first });
+  if (!data?.theme) throw httpError(404, "theme_not_found", "Shopify could not find the requested theme.");
+  const connection = data.theme.files;
+  const readErrors = Array.isArray(connection?.userErrors) ? connection.userErrors.filter(error => error?.code && error.code !== "NOT_FOUND") : [];
+  if (readErrors.length) throw httpError(502, "theme_file_read_failed", `Shopify could not read theme files: ${readErrors.map(error => `${error.filename || "file"} (${error.code})`).join(", ")}.`);
+  const output = [];
+  for (const node of Array.isArray(connection?.nodes) ? connection.nodes : []) output.push({ filename: node?.filename, value: await themeFileBodyToText(node?.body), contentType: node?.contentType });
+  return output.filter(file => typeof file.filename === "string");
+}
+
+async function themeFileBodyToText(body) {
+  if (typeof body?.content === "string") return body.content;
+  if (typeof body?.contentBase64 === "string") return Buffer.from(body.contentBase64, "base64").toString("utf8");
+  if (typeof body?.url === "string") {
+    const response = await fetch(body.url, { signal: AbortSignal.timeout(SHOPIFY_TIMEOUT_MS) });
+    if (!response.ok) throw httpError(502, "theme_file_url_failed", "Shopify returned a theme file URL that could not be downloaded.");
+    return response.text();
+  }
+  return undefined;
 }
 
 async function writeThemeAsset(shopify, themeId, key, value) {
-  const response = await shopifyFetch(shopify, `/themes/${themeId}/assets.json`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ asset: { key, value } }) });
-  if (!response.ok) throw httpError(response.status === 429 ? 429 : 502, "theme_asset_write_failed", `Shopify could not update ${key}.`);
+  const data = await shopifyGraphQL(shopify, `mutation KairosThemeFileUpsert($themeId: ID!, $files: [OnlineStoreThemeFilesUpsertFileInput!]!) { themeFilesUpsert(themeId: $themeId, files: $files) { upsertedThemeFiles { filename } userErrors { field message } } }`, { themeId: themeGid(themeId), files: [{ filename: key, body: { type: "TEXT", value } }] });
+  const payload = data?.themeFilesUpsert;
+  const errors = Array.isArray(payload?.userErrors) ? payload.userErrors : [];
+  if (errors.length) throw httpError(502, "theme_asset_write_failed", `Shopify could not update ${key}: ${errors.map(error => error.message).join("; ")}`);
+  if (!payload?.upsertedThemeFiles?.some(file => file?.filename === key)) throw httpError(502, "theme_asset_write_failed", `Shopify did not confirm the update for ${key}.`);
 }
 
 async function deleteThemeAsset(shopify, themeId, key) {
-  const response = await shopifyFetch(shopify, `/themes/${themeId}/assets.json?asset[key]=${encodeURIComponent(key)}`, { method: "DELETE" });
-  if (!response.ok && response.status !== 404) throw httpError(502, "theme_asset_delete_failed", `Shopify could not remove ${key} during rollback.`);
+  const data = await shopifyGraphQL(shopify, `mutation KairosThemeFileDelete($themeId: ID!, $files: [String!]!) { themeFilesDelete(themeId: $themeId, files: $files) { deletedThemeFiles { filename } userErrors { code field filename message } } }`, { themeId: themeGid(themeId), files: [key] });
+  const payload = data?.themeFilesDelete;
+  const errors = Array.isArray(payload?.userErrors) ? payload.userErrors.filter(error => error?.code !== "NOT_FOUND") : [];
+  if (errors.length) throw httpError(502, "theme_asset_delete_failed", `Shopify could not remove ${key}: ${errors.map(error => error.message).join("; ")}`);
 }
 
 async function rollbackTheme(shopify, themeId, backups) {
   const errors = [];
   for (const backup of [...backups].reverse()) {
-    try {
-      if (backup.existed && typeof backup.value === "string") await writeThemeAsset(shopify, themeId, backup.key, backup.value);
-      else await deleteThemeAsset(shopify, themeId, backup.key);
-    } catch (error) {
-      errors.push(`${backup.key}: ${error instanceof Error ? error.message : "rollback failed"}`);
-    }
+    try { if (backup.existed && typeof backup.value === "string") await writeThemeAsset(shopify, themeId, backup.key, backup.value); else await deleteThemeAsset(shopify, themeId, backup.key); }
+    catch (error) { errors.push(`${backup.key}: ${error instanceof Error ? error.message : "rollback failed"}`); }
   }
   return errors;
 }
 
-function shopifyFetch(shopify, path, init) {
-  return fetch(`https://${shopify.storeDomain}/admin/api/${shopify.apiVersion}${path}`, {
-    ...init,
-    headers: { "X-Shopify-Access-Token": shopify.accessToken, Accept: "application/json", ...(init.headers || {}) },
-    signal: init.signal || AbortSignal.timeout(SHOPIFY_TIMEOUT_MS),
-  });
+async function shopifyGraphQL(shopify, query, variables = {}) {
+  let response;
+  try {
+    response = await fetch(`https://${shopify.storeDomain}/admin/api/${shopify.apiVersion}/graphql.json`, { method: "POST", headers: { "X-Shopify-Access-Token": shopify.accessToken, "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ query, variables }), signal: AbortSignal.timeout(SHOPIFY_TIMEOUT_MS) });
+  } catch (error) {
+    const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
+    throw httpError(timedOut ? 504 : 502, timedOut ? "shopify_timeout" : "shopify_connection_failed", timedOut ? "Shopify did not answer before the timeout." : "Cloudflare could not connect to Shopify's GraphQL Admin API.");
+  }
+  const body = await safeJSON(response);
+  if (!response.ok) {
+    const status = response.status;
+    const code = status === 401 ? "shopify_token_invalid" : status === 403 ? "shopify_theme_scope_missing" : status === 429 ? "shopify_rate_limited" : "shopify_graphql_http_error";
+    const message = status === 401 ? "Shopify rejected the Kairos access token." : status === 403 ? "The installed Kairos app lacks the required theme access." : status === 429 ? "Shopify rate-limited the request. Retry shortly." : `Shopify GraphQL returned HTTP ${status}.`;
+    throw httpError(status === 429 ? 429 : status === 401 || status === 403 ? status : 502, code, message);
+  }
+  if (Array.isArray(body?.errors) && body.errors.length) {
+    const message = body.errors.map(error => error?.message).filter(Boolean).join("; ") || "Shopify GraphQL returned an error.";
+    const forbidden = /access denied|permission|scope|not authorized/i.test(message);
+    throw httpError(forbidden ? 403 : 502, forbidden ? "shopify_theme_scope_missing" : "shopify_graphql_error", message);
+  }
+  if (!body?.data) throw httpError(502, "shopify_graphql_invalid_response", "Shopify GraphQL returned no data.");
+  return body.data;
 }
 
 async function callOpenAI(env, payload, requestId) {
-  const response = await fetch(OPENAI_RESPONSES_URL, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json", Accept: "application/json", "X-Client-Request-Id": requestId },
-    body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
-  });
+  const response = await fetch(OPENAI_RESPONSES_URL, { method: "POST", headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json", Accept: "application/json", "X-Client-Request-Id": requestId }, body: JSON.stringify(payload), signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS) });
   const body = await safeJSON(response);
   if (!response.ok) throw httpError(response.status === 429 ? 429 : 502, response.status === 429 ? "rate_limited" : "provider_error", response.status === 429 ? "Kairos is handling too many requests. Try again shortly." : "Kairos could not complete the OpenAI request.");
   return body;
@@ -345,33 +332,13 @@ async function callOpenAI(env, payload, requestId) {
 function extractResponseText(body) {
   if (typeof body?.output_text === "string" && body.output_text.trim()) return body.output_text.trim();
   const parts = [];
-  for (const item of Array.isArray(body?.output) ? body.output : []) {
-    for (const content of Array.isArray(item?.content) ? item.content : []) {
-      if (typeof content?.text === "string") parts.push(content.text);
-    }
-  }
+  for (const item of Array.isArray(body?.output) ? body.output : []) for (const content of Array.isArray(item?.content) ? item.content : []) if (typeof content?.text === "string") parts.push(content.text);
   if (!parts.length) throw httpError(502, "empty_provider_response", "Kairos returned no usable response text.");
   return parts.join("\n").trim();
 }
 
 function mutationPlanSchema() {
-  return {
-    type: "object", additionalProperties: false,
-    required: ["summary", "recommendedChanges", "affectedAssets", "expectedBenefits", "risks", "rollbackPlan", "acceptanceCriteria", "mutationPlan"],
-    properties: {
-      summary: { type: "string" },
-      recommendedChanges: { type: "array", items: { type: "string" } },
-      affectedAssets: { type: "array", items: { type: "string" } },
-      expectedBenefits: { type: "array", items: { type: "string" } },
-      risks: { type: "array", items: { type: "string" } },
-      rollbackPlan: { type: "array", items: { type: "string" } },
-      acceptanceCriteria: { type: "array", items: { type: "string" } },
-      mutationPlan: { type: "object", additionalProperties: false, required: ["themeId", "files"], properties: {
-        themeId: { type: "string" },
-        files: { type: "array", maxItems: 3, items: { type: "object", additionalProperties: false, required: ["key", "value", "expectedSha256"], properties: { key: { type: "string" }, value: { type: "string" }, expectedSha256: { type: "string" } } } },
-      } },
-    },
-  };
+  return { type: "object", additionalProperties: false, required: ["summary", "recommendedChanges", "affectedAssets", "expectedBenefits", "risks", "rollbackPlan", "acceptanceCriteria", "mutationPlan"], properties: { summary: { type: "string" }, recommendedChanges: { type: "array", items: { type: "string" } }, affectedAssets: { type: "array", items: { type: "string" } }, expectedBenefits: { type: "array", items: { type: "string" } }, risks: { type: "array", items: { type: "string" } }, rollbackPlan: { type: "array", items: { type: "string" } }, acceptanceCriteria: { type: "array", items: { type: "string" } }, mutationPlan: { type: "object", additionalProperties: false, required: ["themeId", "files"], properties: { themeId: { type: "string" }, files: { type: "array", maxItems: 3, items: { type: "object", additionalProperties: false, required: ["key", "value", "expectedSha256"], properties: { key: { type: "string" }, value: { type: "string" }, expectedSha256: { type: "string" } } } } } } } };
 }
 
 function validateMutationPlan(plan, themeId, sources) {
@@ -429,31 +396,19 @@ function verifySession(token, runtimeToken) {
   if (!token) return null;
   const [payloadPart, signaturePart, extra] = token.split(".");
   if (!payloadPart || !signaturePart || extra || !safeEqual(signaturePart, signSession(payloadPart, runtimeToken))) return null;
-  try {
-    const payload = JSON.parse(Buffer.from(payloadPart, "base64url").toString("utf8"));
-    if (payload.tenantId !== "mmg-internal" || payload.role !== "executive" || payload.exp <= Math.floor(Date.now() / 1000)) return null;
-    return toSession(payload);
-  } catch { return null; }
+  try { const payload = JSON.parse(Buffer.from(payloadPart, "base64url").toString("utf8")); if (payload.tenantId !== "mmg-internal" || payload.role !== "executive" || payload.exp <= Math.floor(Date.now() / 1000)) return null; return toSession(payload); } catch { return null; }
 }
 
 function verifyOperatorPassword(supplied, encodedHash, password) {
   if (encodedHash) {
     const [prefix, saltHex, expectedHex, extra] = String(encodedHash).trim().split("$");
     if (prefix !== "scrypt-v1" || !saltHex || !expectedHex || extra) return false;
-    try {
-      const salt = Buffer.from(saltHex, "hex");
-      const expected = Buffer.from(expectedHex, "hex");
-      return salt.length >= 16 && expected.length === 64 && timingSafeEqual(scryptSync(supplied, salt, 64), expected);
-    } catch { return false; }
+    try { const salt = Buffer.from(saltHex, "hex"); const expected = Buffer.from(expectedHex, "hex"); return salt.length >= 16 && expected.length === 64 && timingSafeEqual(scryptSync(supplied, salt, 64), expected); } catch { return false; }
   }
   return typeof password === "string" && safeEqual(String(supplied), password);
 }
 
-function signSession(payload, runtimeToken) {
-  const key = createHash("sha256").update(`mmg-kairos-session-v1:${runtimeToken}`).digest();
-  return createHmac("sha256", key).update(payload).digest("base64url");
-}
-
+function signSession(payload, runtimeToken) { const key = createHash("sha256").update(`mmg-kairos-session-v1:${runtimeToken}`).digest(); return createHmac("sha256", key).update(payload).digest("base64url"); }
 function toSession(payload) { return { sub: payload.sub, tenantId: payload.tenantId, role: payload.role, operator: payload.operator, issuedAt: payload.iat, expiresAt: payload.exp, sessionId: payload.jti }; }
 function sessionCookie(token, expiresAt) { return `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${Math.max(0, expiresAt - Math.floor(Date.now() / 1000))}`; }
 function readCookie(header, name) { if (!header) return undefined; for (const part of header.split(";")) { const [rawName, ...rawValue] = part.trim().split("="); if (rawName === name) return decodeURIComponent(rawValue.join("=")); } return undefined; }
@@ -479,10 +434,7 @@ async function serveCommandCenterAsset(request, incomingURL) {
   else if (pathname.startsWith("/web/kairos-dashboard/")) pathname = pathname.slice("/web/kairos-dashboard".length);
   if (pathname.includes("..")) return new Response("Invalid path", { status: 400 });
   const upstream = await fetch(`${RAW_REPOSITORY_ORIGIN}${pathname}${incomingURL.search}`, { method: request.method, headers: { Accept: request.headers.get("Accept") || "*/*" }, cf: { cacheEverything: true, cacheTtl: pathname.endsWith(".html") ? 0 : 300 } });
-  if (!upstream.ok) {
-    if (pathname !== "/index.html" && !hasFileExtension(pathname)) return serveCommandCenterAsset(new Request(`${incomingURL.origin}/index.html`, request), new URL(`${incomingURL.origin}/index.html`));
-    return new Response("Command Center asset not found", { status: upstream.status });
-  }
+  if (!upstream.ok) { if (pathname !== "/index.html" && !hasFileExtension(pathname)) return serveCommandCenterAsset(new Request(`${incomingURL.origin}/index.html`, request), new URL(`${incomingURL.origin}/index.html`)); return new Response("Command Center asset not found", { status: upstream.status }); }
   const headers = new Headers(upstream.headers);
   headers.set("Content-Type", contentTypeFor(pathname));
   headers.set("X-Content-Type-Options", "nosniff");
