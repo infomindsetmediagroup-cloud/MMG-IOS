@@ -133,7 +133,7 @@ function groupCard(group) {
     <p class="muted">${group.summary}</p>
     ${progress(group.metric)}
     <div class="list core-node-list">${group.nodes.slice(0, 5).map(node => `<div class="list-item"><strong>${node}</strong><span class="badge">Node</span></div>`).join("")}</div>
-    <div class="action-row">${actionButton("Open", `Open ${group.label}`, `${group.label} parent group opened.`)}${actionButton("Queue Work", `Queue ${group.label} Work`, `${group.label} work item queued.`)}</div>
+    <div class="action-row">${actionButton(`Open ${group.label}`, `Open ${group.label}`, `${group.label} parent group opened.`)}${actionButton(`Queue ${group.label} Work`, `Queue ${group.label} Work`, `${group.label} work item queued.`)}</div>
   </article>`;
 }
 
