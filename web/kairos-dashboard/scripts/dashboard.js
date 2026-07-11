@@ -8,7 +8,8 @@ import {
   updateWorkItem,
 } from "./executive-command-center-store.js";
 
-const runtimeBaseURL = "https://mmg-ios.vercel.app";
+const DEFAULT_RUNTIME_BASE_URL = "https://mmg-ios.vercel.app";
+const runtimeBaseURL = window.location.hostname.endsWith("github.io") ? DEFAULT_RUNTIME_BASE_URL : window.location.origin;
 const nav = document.querySelector("#module-nav");
 const view = document.querySelector("#dashboard-view");
 const title = document.querySelector("#page-title");
@@ -16,6 +17,7 @@ const mode = document.querySelector("#runtime-mode");
 
 let activeCenter = "home";
 let diagnosticsOpen = false;
+let expandedProposalId = null;
 let runtimeHealth = { ready: false, storefront: false, checkedAt: "Not checked" };
 
 mode.textContent = "Execution Mode";
@@ -28,13 +30,23 @@ function escapeHTML(value) {
 
 function statusClass(status) {
   if (["Completed", "Ready"].includes(status)) return "badge good";
-  if (["Needs Attention", "Failed"].includes(status)) return "badge danger";
-  if (["Ready for Approval", "Queued", "Paused"].includes(status)) return "badge warning";
+  if (["Needs Attention", "Failed", "Rejected"].includes(status)) return "badge danger";
+  if (["Ready for Approval", "Proposal Ready", "Queued", "Paused", "Revision Requested"].includes(status)) return "badge warning";
   return "badge";
 }
 
 function progressFor(item) {
-  const defaults = { "Ready for Approval": 0, Queued: 0, Starting: 10, Working: 50, Finalizing: 90, Completed: 100, "Needs Attention": item.progress || 0 };
+  const defaults = {
+    "Ready for Approval": 0,
+    "Proposal Ready": 100,
+    "Revision Requested": 0,
+    Queued: 0,
+    Starting: 10,
+    Working: 50,
+    Finalizing: 90,
+    Completed: 100,
+    "Needs Attention": item.progress || 0,
+  };
   return Number.isFinite(Number(item.progress)) ? Number(item.progress) : defaults[item.status] || 0;
 }
 
@@ -56,10 +68,10 @@ function renderNav() {
 
 function pipelineCounts(items) {
   return {
-    approval: items.filter(item => item.status === "Ready for Approval").length,
+    approval: items.filter(item => ["Ready for Approval", "Proposal Ready", "Revision Requested"].includes(item.status)).length,
     queued: items.filter(item => item.status === "Queued").length,
     working: items.filter(item => ["Starting", "Working", "Finalizing"].includes(item.status)).length,
-    attention: items.filter(item => ["Needs Attention", "Failed", "Paused"].includes(item.status)).length,
+    attention: items.filter(item => ["Needs Attention", "Failed", "Paused", "Rejected"].includes(item.status)).length,
     completed: items.filter(item => item.status === "Completed").length,
   };
 }
@@ -77,7 +89,11 @@ function movementStrip(items) {
 
 function livingHeader(items) {
   const counts = pipelineCounts(items);
-  const headline = counts.working ? `Kairos is working on ${counts.working} approved action${counts.working === 1 ? "" : "s"}.` : "Kairos is ready for your next objective.";
+  const headline = counts.working
+    ? `Kairos is working on ${counts.working} approved action${counts.working === 1 ? "" : "s"}.`
+    : counts.approval
+      ? `${counts.approval} governed decision${counts.approval === 1 ? " is" : "s are"} ready for executive review.`
+      : "Kairos is ready for your next objective.";
   return `<article class="card living-header full">
     <div class="living-orb ${runtimeHealth.ready ? "ready" : "attention"}" aria-hidden="true"><span></span></div>
     <div><p class="eyebrow">Live Operating Status</p><h3>${headline}</h3><p class="muted">${runtimeHealth.ready ? "Production runtime connected." : "Production runtime requires attention."} Live storefront inspection ${runtimeHealth.storefront ? "is connected" : "requires attention"}.</p></div>
@@ -97,7 +113,7 @@ function parentCard(center, store) {
     <span class="parent-status">${status}</span>
     <div class="action-row">
       <button class="action-button" data-open-center="${center.id}">Open Center</button>
-      ${runnable ? `<button class="action-button primary" data-run-center="${center.id}">Run Next</button>` : ""}
+      ${runnable ? `<button class="action-button primary" data-run-center="${center.id}">${runnable.status === "Proposal Ready" ? "Review Proposal" : "Run Next"}</button>` : ""}
     </div>
   </article>`;
 }
@@ -108,22 +124,77 @@ function renderHome(store) {
 }
 
 function actionControls(item) {
-  if (item.status === "Ready for Approval") return `<button class="action-button primary" data-approve-execute="${item.id}">Approve & Execute</button>`;
+  if (item.status === "Proposal Ready") return `<button class="action-button primary" data-review-proposal="${item.id}">Review Proposal</button>`;
+  if (item.status === "Ready for Approval") {
+    const label = item.requiresReview ? "Prepare Proposal" : "Approve & Execute";
+    return `<button class="action-button primary" data-prepare-action="${item.id}">${label}</button>`;
+  }
+  if (item.status === "Revision Requested") return `<button class="action-button primary" data-prepare-action="${item.id}">Regenerate Proposal</button>`;
   if (["Needs Attention", "Failed", "Paused"].includes(item.status) && item.actionType) return `<button class="action-button" data-retry-action="${item.id}">Retry</button>`;
-  if (item.status === "Queued" && item.actionType && !item.dependency) return `<button class="action-button primary" data-activate-action="${item.id}">Activate & Execute</button>`;
+  if (item.status === "Queued" && item.actionType && !item.dependency) return `<button class="action-button primary" data-prepare-action="${item.id}">${item.requiresReview ? "Prepare Proposal" : "Activate & Execute"}</button>`;
   return "";
+}
+
+function proposalValue(proposal, keys, fallback) {
+  for (const key of keys) {
+    const value = proposal?.[key] ?? proposal?.evidence?.[key] ?? proposal?.result?.[key];
+    if (value !== undefined && value !== null && value !== "") return value;
+  }
+  return fallback;
+}
+
+function normalizeList(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value === "string") return value.split(/\n|•/).map(item => item.trim()).filter(Boolean);
+  if (value && typeof value === "object") return Object.entries(value).map(([key, entry]) => `${key}: ${typeof entry === "string" ? entry : JSON.stringify(entry)}`);
+  return [];
+}
+
+function proposalSection(titleText, value) {
+  const items = normalizeList(value);
+  if (!items.length) return "";
+  return `<section class="proposal-section"><h5>${escapeHTML(titleText)}</h5><ul>${items.map(item => `<li>${escapeHTML(item)}</li>`).join("")}</ul></section>`;
+}
+
+function proposalPresentation(item) {
+  const proposal = item.proposal || item.evidence || {};
+  const summary = proposalValue(proposal, ["summary", "message", "executiveSummary", "recommendation"], "Kairos prepared an implementation package for executive review.");
+  const changes = proposalValue(proposal, ["changes", "recommendedChanges", "recommendations", "actions"], []);
+  const affected = proposalValue(proposal, ["affectedAssets", "affectedFiles", "pages", "scope"], []);
+  const benefits = proposalValue(proposal, ["benefits", "expectedBenefits", "expectedOutcome", "impact"], []);
+  const risks = proposalValue(proposal, ["risks", "risk", "riskLevel"], ["Review the exact production diff before publishing."]);
+  const rollback = proposalValue(proposal, ["rollback", "rollbackPlan"], ["Preserve the current production state and restore it if verification fails."]);
+  return `<div class="proposal-presentation" data-proposal-panel="${item.id}">
+    <header><div><p class="eyebrow">Executive Approval Package</p><h4>${escapeHTML(item.title)}</h4></div><span class="badge warning">Awaiting Executive Approval</span></header>
+    <p class="proposal-summary">${escapeHTML(summary)}</p>
+    <div class="proposal-grid">
+      ${proposalSection("Recommended changes", changes)}
+      ${proposalSection("Pages and assets affected", affected)}
+      ${proposalSection("Expected benefit", benefits)}
+      ${proposalSection("Risk and safeguards", risks)}
+      ${proposalSection("Rollback plan", rollback)}
+    </div>
+    <details class="proposal-evidence"><summary>View complete Kairos evidence</summary><pre>${escapeHTML(JSON.stringify(proposal, null, 2))}</pre></details>
+    <div class="approval-actions">
+      <button class="action-button primary" data-approve-proposal="${item.id}">Approve & Execute Changes</button>
+      <button class="action-button" data-request-revision="${item.id}">Request Revision</button>
+      <button class="action-button danger-button" data-reject-proposal="${item.id}">Reject</button>
+    </div>
+  </div>`;
 }
 
 function workRow(item) {
   const progress = progressFor(item);
   const dependencyText = item.dependency && item.status === "Queued" ? `<p class="dependency">Waiting on ${escapeHTML(item.dependency)}</p>` : "";
-  return `<article class="pipeline-item" data-work-id="${item.id}">
+  const presentation = item.status === "Proposal Ready" && expandedProposalId === item.id ? proposalPresentation(item) : "";
+  return `<article class="pipeline-item ${presentation ? "proposal-open" : ""}" data-work-id="${item.id}">
     <div class="pipeline-item-header"><div><span class="work-id">${escapeHTML(item.id)}</span><h4>${escapeHTML(item.title)}</h4></div><span class="${statusClass(item.status)}">${escapeHTML(item.status)}</span></div>
     <p class="muted">${escapeHTML(item.objective)}</p>
     ${dependencyText}
     ${progress > 0 ? `<div class="progress-shell"><div class="progress-bar ${["Starting", "Working", "Finalizing"].includes(item.status) ? "live-progress" : ""}" style="width:${progress}%"></div></div><small>${progress}% • ${escapeHTML(item.updatedAt)}</small>` : `<small>${escapeHTML(item.updatedAt)}</small>`}
     ${item.error ? `<p class="execution-error">${escapeHTML(item.error)}</p>` : ""}
     <div class="action-row">${actionControls(item)}</div>
+    ${presentation}
   </article>`;
 }
 
@@ -138,7 +209,7 @@ function knowledgeSection(store) {
 
 function centerHeader(center, items) {
   const runnable = nextRunnableWork(center.id);
-  return `<article class="card center-header full"><div><p class="eyebrow">Parent Command Center</p><h3>${center.title}</h3><p class="muted">${center.detail}</p><div class="action-row">${runnable ? `<button class="action-button primary" data-run-center="${center.id}">Run Next Center Action</button>` : ""}<button class="action-button" data-return-home>Return to Main Control Panel</button></div></div>${movementStrip(items)}</article>`;
+  return `<article class="card center-header full"><div><p class="eyebrow">Parent Command Center</p><h3>${center.title}</h3><p class="muted">${center.detail}</p><div class="action-row">${runnable ? `<button class="action-button primary" data-run-center="${center.id}">${runnable.status === "Proposal Ready" ? "Review Next Proposal" : "Run Next Center Action"}</button>` : ""}<button class="action-button" data-return-home>Return to Main Control Panel</button></div></div>${movementStrip(items)}</article>`;
 }
 
 function renderCenter(store, center) {
@@ -148,19 +219,36 @@ function renderCenter(store, center) {
     return;
   }
   const items = store.work.filter(item => item.center === center.id);
-  view.innerHTML = `${centerHeader(center, items)}${pipelineSection("Ready for Approval", items.filter(item => item.status === "Ready for Approval"), "Nothing is waiting for your approval.")}${pipelineSection("Queued", items.filter(item => item.status === "Queued"), "No approved work is waiting to start.")}${pipelineSection("Working", items.filter(item => ["Starting", "Working", "Finalizing"].includes(item.status)), "Kairos has no active work in this center.")}${pipelineSection("Needs Attention", items.filter(item => ["Needs Attention", "Failed", "Paused"].includes(item.status)), "No blockers require your attention.")}${pipelineSection("Completed", items.filter(item => item.status === "Completed"), "Completed work will appear here with evidence and finish time.")}${diagnosticsOpen ? diagnosticsCard(store) : ""}`;
+  const approvals = items.filter(item => ["Ready for Approval", "Proposal Ready", "Revision Requested"].includes(item.status));
+  view.innerHTML = `${centerHeader(center, items)}${pipelineSection("Executive Approval", approvals, "Nothing is waiting for executive review.")}${pipelineSection("Queued", items.filter(item => item.status === "Queued"), "No approved work is waiting to start.")}${pipelineSection("Working", items.filter(item => ["Starting", "Working", "Finalizing"].includes(item.status)), "Kairos has no active work in this center.")}${pipelineSection("Needs Attention", items.filter(item => ["Needs Attention", "Failed", "Paused", "Rejected"].includes(item.status)), "No blockers require your attention.")}${pipelineSection("Completed", items.filter(item => item.status === "Completed"), "Completed work will appear here with evidence and finish time.")}${diagnosticsOpen ? diagnosticsCard(store) : ""}`;
 }
 
 function diagnosticsCard(store) {
-  return `<details class="card diagnostics-card full" open><summary>Technical diagnostics</summary><div class="diagnostics-grid"><div><span>Runtime</span><strong>${runtimeHealth.ready ? "Ready" : "Unavailable"}</strong></div><div><span>Storefront inspection</span><strong>${runtimeHealth.storefront ? "Connected" : "Unavailable"}</strong></div><div><span>Last check</span><strong>${escapeHTML(runtimeHealth.checkedAt)}</strong></div><div><span>Operating graph</span><strong>${store.work.length} work items · ${store.knowledge.length} records</strong></div></div><button class="action-button danger-button" data-reset-command-center>Reset local dashboard state</button></details>`;
+  return `<details class="card diagnostics-card full" open><summary>Technical diagnostics</summary><div class="diagnostics-grid"><div><span>Runtime</span><strong>${runtimeHealth.ready ? "Ready" : "Unavailable"}</strong></div><div><span>Storefront inspection</span><strong>${runtimeHealth.storefront ? "Connected" : "Unavailable"}</strong></div><div><span>Runtime origin</span><strong>${escapeHTML(runtimeBaseURL)}</strong></div><div><span>Last check</span><strong>${escapeHTML(runtimeHealth.checkedAt)}</strong></div><div><span>Operating graph</span><strong>${store.work.length} work items · ${store.knowledge.length} records</strong></div></div><button class="action-button danger-button" data-reset-command-center>Reset local dashboard state</button></details>`;
 }
 
-function executeWork(id) {
+function executeWork(id, phase = "prepare") {
   const store = getCommandCenterStore();
   const item = store.work.find(entry => entry.id === id);
   if (!item?.actionType) return;
-  updateWorkItem(id, { status: "Starting", progress: 10, error: "", updatedAt: "Approval recorded; routing through Kairos" });
-  window.dispatchEvent(new CustomEvent("kairos:execute-approved-action", { detail: { id, center: item.center, actionType: item.actionType, objective: item.objective } }));
+  const executing = phase === "execute";
+  updateWorkItem(id, {
+    status: "Starting",
+    progress: 10,
+    error: "",
+    updatedAt: executing ? "Executive approval recorded; executing governed changes" : "Routing through Kairos to prepare governed work",
+  });
+  window.dispatchEvent(new CustomEvent("kairos:execute-approved-action", {
+    detail: {
+      id,
+      center: item.center,
+      actionType: executing ? (item.executionActionType || item.actionType) : item.actionType,
+      objective: item.objective,
+      phase,
+      requiresReview: Boolean(item.requiresReview),
+      proposal: item.proposal || null,
+    },
+  }));
 }
 
 function runCenter(centerId) {
@@ -171,17 +259,40 @@ function runCenter(centerId) {
     return;
   }
   activeCenter = centerId;
-  executeWork(item.id);
+  if (item.status === "Proposal Ready") {
+    expandedProposalId = item.id;
+    render();
+    return;
+  }
+  executeWork(item.id, item.requiresReview ? "prepare" : "execute");
 }
 
 function bindActions() {
   view.querySelectorAll("[data-open-center]").forEach(button => button.addEventListener("click", () => { activeCenter = button.dataset.openCenter; render(); }));
   view.querySelectorAll("[data-run-center]").forEach(button => button.addEventListener("click", () => runCenter(button.dataset.runCenter)));
   view.querySelector("[data-return-home]")?.addEventListener("click", () => { activeCenter = "home"; render(); });
-  view.querySelectorAll("[data-approve-execute]").forEach(button => button.addEventListener("click", () => executeWork(button.dataset.approveExecute)));
-  view.querySelectorAll("[data-retry-action]").forEach(button => button.addEventListener("click", () => executeWork(button.dataset.retryAction)));
-  view.querySelectorAll("[data-activate-action]").forEach(button => button.addEventListener("click", () => executeWork(button.dataset.activateAction)));
-  view.querySelector("[data-reset-command-center]")?.addEventListener("click", () => { resetCommandCenterStore(); activeCenter = "home"; render(); });
+  view.querySelectorAll("[data-prepare-action]").forEach(button => button.addEventListener("click", () => {
+    const item = getCommandCenterStore().work.find(entry => entry.id === button.dataset.prepareAction);
+    executeWork(button.dataset.prepareAction, item?.requiresReview ? "prepare" : "execute");
+  }));
+  view.querySelectorAll("[data-review-proposal]").forEach(button => button.addEventListener("click", () => { expandedProposalId = button.dataset.reviewProposal; render(); }));
+  view.querySelectorAll("[data-approve-proposal]").forEach(button => button.addEventListener("click", () => { expandedProposalId = null; executeWork(button.dataset.approveProposal, "execute"); }));
+  view.querySelectorAll("[data-request-revision]").forEach(button => button.addEventListener("click", () => {
+    const id = button.dataset.requestRevision;
+    const note = window.prompt("What should Kairos revise in this proposal?");
+    if (note === null) return;
+    updateWorkItem(id, { status: "Revision Requested", progress: 0, revisionNote: note.trim(), updatedAt: note.trim() ? `Revision requested: ${note.trim()}` : "Revision requested" });
+    expandedProposalId = null;
+  }));
+  view.querySelectorAll("[data-reject-proposal]").forEach(button => button.addEventListener("click", () => {
+    updateWorkItem(button.dataset.rejectProposal, { status: "Rejected", progress: 100, updatedAt: "Rejected by executive decision" });
+    expandedProposalId = null;
+  }));
+  view.querySelectorAll("[data-retry-action]").forEach(button => button.addEventListener("click", () => {
+    const item = getCommandCenterStore().work.find(entry => entry.id === button.dataset.retryAction);
+    executeWork(button.dataset.retryAction, item?.requiresReview ? "prepare" : "execute");
+  }));
+  view.querySelector("[data-reset-command-center]")?.addEventListener("click", () => { resetCommandCenterStore(); activeCenter = "home"; expandedProposalId = null; render(); });
 }
 
 function render() {
@@ -194,7 +305,7 @@ function render() {
 
 async function refreshHealth() {
   try {
-    const response = await fetch(`${runtimeBaseURL}/api/health`, { headers: { Accept: "application/json" }, cache: "no-store" });
+    const response = await fetch(`${runtimeBaseURL}/api/health`, { headers: { Accept: "application/json" }, cache: "no-store", credentials: "include" });
     const body = await response.json();
     const ready = response.ok && (body.status === "ready" || body.status === "ok");
     runtimeHealth = { ready, storefront: ready, checkedAt: new Date().toLocaleTimeString() };
@@ -208,11 +319,18 @@ async function refreshHealth() {
 
 window.addEventListener("kairos:command-center-updated", render);
 window.addEventListener("kairos:approved-action-status", event => {
-  const { id, status, progress, error, result } = event.detail || {};
+  const { id, status, progress, error, result, phase } = event.detail || {};
   if (!id) return;
   const store = getCommandCenterStore();
   const work = store.work.find(item => item.id === id);
   if (!work) return;
+  const proposalReady = status === "Proposal Ready" || (phase === "prepare" && status === "Completed" && work.requiresReview);
+  if (proposalReady) {
+    updateWorkItem(id, { status: "Proposal Ready", progress: 100, error: error || "", proposal: result || {}, updatedAt: "Proposal prepared; executive approval required" });
+    expandedProposalId = id;
+    activeCenter = work.center;
+    return;
+  }
   updateWorkItem(id, { status, progress, error: error || "", evidence: result || null, updatedAt: new Date().toLocaleString() });
   if (status === "Completed" && result) {
     recordCompletedKnowledge(work, result);
