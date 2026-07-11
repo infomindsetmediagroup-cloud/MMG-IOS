@@ -51,12 +51,18 @@ export async function inspectStorefront(limit = DEFAULT_LIMIT): Promise<Storefro
 
   const urls = [...discovered].slice(0, safeLimit);
   const pages: PageInspection[] = [];
-  for (const url of urls) {
-    try {
-      pages.push(await inspectPage(url));
-    } catch (error) {
-      errors.push({ url, message: error instanceof Error ? error.message : "Inspection failed." });
-    }
+  const concurrency = 5;
+  for (let index = 0; index < urls.length; index += concurrency) {
+    const batch = urls.slice(index, index + concurrency);
+    const results = await Promise.all(batch.map(async (url) => {
+      try {
+        return await inspectPage(url);
+      } catch (error) {
+        errors.push({ url, message: error instanceof Error ? error.message : "Inspection failed." });
+        return null;
+      }
+    }));
+    pages.push(...results.filter((page): page is PageInspection => page !== null));
   }
 
   return {
