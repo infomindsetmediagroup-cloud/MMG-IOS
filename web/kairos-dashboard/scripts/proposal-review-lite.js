@@ -1,4 +1,5 @@
 import { getCommandCenterStore, nextRunnableWork, updateWorkItem } from "./executive-command-center-store.js";
+import { fullProposalFor } from "./proposal-store-guard.js";
 
 const overlayId = "kairos-lightweight-proposal-review";
 
@@ -27,9 +28,11 @@ function openReview(id) {
   if (!item?.proposal) return;
   closeReview();
 
-  const proposal = item.proposal;
-  const mutation = proposal.mutationPlan || null;
+  const persistedProposal = item.proposal;
+  const proposal = fullProposalFor(id, persistedProposal);
+  const mutation = proposal?.mutationPlan || null;
   const files = Array.isArray(mutation?.files) ? mutation.files : [];
+  const hasExecutablePayload = !mutation?.compact && (!mutation || files.every(file => typeof file?.value === "string"));
   const summary = text(proposal.summary || proposal.executiveSummary || proposal.message || "Kairos prepared this governed proposal for executive review.", 900);
   const changes = list(proposal.recommendedChanges || proposal.changes || files.map(file => `Update ${file.key}`), 6);
   const risks = list(proposal.risks || proposal.risk || ["Execution remains bounded by the approved scope and rollback controls."], 4);
@@ -47,9 +50,10 @@ function openReview(id) {
       ${section("Recommended changes", changes)}
       ${section("Files and assets affected", affected)}
       ${section("Risk and safeguards", risks)}
-      <p class="kairos-lite-note">Full source-file contents are intentionally excluded from this screen to keep mobile review responsive. Source hashes and the approved mutation remain preserved for execution and rollback.</p>
+      <p class="kairos-lite-note">Full source-file contents are intentionally excluded from this screen to keep mobile review responsive. Source hashes and rollback controls remain preserved.</p>
+      ${hasExecutablePayload ? "" : '<p class="kairos-lite-warning">This proposal was recovered from an older oversized browser record. Regenerate it once before approval so Kairos can restore the executable mutation payload.</p>'}
       <div class="kairos-lite-actions">
-        <button data-lite-approve>Approve & Execute Changes</button>
+        ${hasExecutablePayload ? '<button data-lite-approve>Approve & Execute Changes</button>' : '<button data-lite-regenerate>Regenerate Proposal</button>'}
         <button data-lite-close>Close Review</button>
       </div>
     </div>`;
@@ -57,21 +61,20 @@ function openReview(id) {
   const card = overlay.querySelector(".kairos-lite-card");
   card.style.cssText = "max-width:760px;margin:24px auto;background:#10151d;border:1px solid #24566c;border-radius:28px;padding:24px;color:#eef4fa;font-family:system-ui";
   overlay.querySelectorAll("button").forEach(button => button.style.cssText = "width:100%;margin-top:12px;padding:16px;border-radius:999px;border:1px solid #2d718e;background:#15394a;color:#fff;font-size:16px;font-weight:800");
-  overlay.querySelector("[data-lite-approve]").style.background = "#20aee8";
-  overlay.querySelector("[data-lite-approve]").style.color = "#031018";
+  const primary = overlay.querySelector("[data-lite-approve],[data-lite-regenerate]");
+  if (primary) {
+    primary.style.background = "#20aee8";
+    primary.style.color = "#031018";
+  }
   overlay.querySelector("[data-lite-close]").addEventListener("click", closeReview);
-  overlay.querySelector("[data-lite-approve]").addEventListener("click", () => approve(item, overlay.querySelector("[data-lite-approve]")));
+  overlay.querySelector("[data-lite-approve]")?.addEventListener("click", () => approve(item, proposal, overlay.querySelector("[data-lite-approve]")));
+  overlay.querySelector("[data-lite-regenerate]")?.addEventListener("click", () => regenerate(item));
   document.body.appendChild(overlay);
 }
 
-function approve(item, button) {
+function approve(item, proposal, button) {
   button.disabled = true;
   button.textContent = "Executing…";
-  const proposal = item.proposal || {};
-  const lightweightProposal = proposal.mutationPlan
-    ? { mutationPlan: proposal.mutationPlan, summary: text(proposal.summary || proposal.executiveSummary || "Approved Shopify mutation", 600) }
-    : { summary: text(proposal.summary || proposal.executiveSummary || proposal.message || "Approved proposal", 1200), recommendedChanges: list(proposal.recommendedChanges || proposal.changes, 6) };
-
   updateWorkItem(item.id, {
     status: "Starting",
     progress: 10,
@@ -87,10 +90,21 @@ function approve(item, button) {
       objective: item.objective,
       phase: "execute",
       requiresReview: Boolean(item.requiresReview),
-      proposal: lightweightProposal,
+      proposal,
       approval: { approved: true, actor: "Executive", approvedAt: new Date().toISOString() },
     },
   }));
+}
+
+function regenerate(item) {
+  updateWorkItem(item.id, {
+    status: "Revision Requested",
+    progress: 0,
+    proposal: null,
+    error: "",
+    updatedAt: "Legacy oversized proposal cleared; regenerate the governed package",
+  });
+  closeReview();
 }
 
 function closeReview() {
