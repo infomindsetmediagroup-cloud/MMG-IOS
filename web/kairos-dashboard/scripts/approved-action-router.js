@@ -1,4 +1,4 @@
-const BUILD = "command-center-governed-approval-20260711-7";
+const BUILD = "command-center-shopify-mutation-20260711-8";
 
 const actionRoutes = {
   "executive.priority.review": {
@@ -18,16 +18,16 @@ const actionRoutes = {
     department: "Website Operations",
     confidence: 0.97,
     objectiveSuffix: "Use the completed storefront audit evidence already preserved in the Command Center and the approved MMG guided-experience doctrine to prepare a cohesive, implementation-ready homepage change package. Separate verified findings, recommended changes, affected pages and assets, expected benefits, risk controls, acceptance criteria, rollback plan, and required approvals. Do not publish changes.",
-    executionSuffix: "Execute the approved internal handoff for this website change package: finalize the approved implementation specification, lock the accepted scope, produce verification and rollback instructions, and route the package into production. Do not claim that storefront code was published unless a mutation adapter returns direct evidence.",
     executionPlan: [
-      "Translate verified storefront findings into prioritized homepage changes.",
-      "Define exact implementation scope, affected assets, acceptance criteria, and dependencies.",
-      "Describe expected benefits, risks, safeguards, verification, and rollback.",
-      "Return the package for executive approval without publishing anything.",
+      "Read the current published Shopify theme sources.",
+      "Compile complete replacement content for the minimum required files.",
+      "Bind every file to its current source hash.",
+      "Return the exact mutation plan for executive approval without publishing anything.",
     ],
     governanceNote: "Proposal preparation only. No theme mutation or publishing is authorized until a separate executive approval event is recorded.",
     scope: "website-change-package",
     requiresReview: true,
+    sourceGroundedMutationPlan: true,
   },
   "production.pipeline.map": {
     department: "Production Operations",
@@ -96,6 +96,12 @@ async function executeKairosWorkflow(action, route) {
   if (!action.id || !action.objective) return;
   dispatchStatus(action.id, "Working", 40, "", null, action.phase || "prepare");
   try {
+    if (route.sourceGroundedMutationPlan) {
+      const body = await callThemePlan(`${action.objective}\n\n${route.objectiveSuffix}`);
+      dispatchStatus(action.id, "Proposal Ready", 100, "", body, action.phase || "prepare");
+      return;
+    }
+
     const body = await callKairos({
       objective: `${action.objective}\n\n${route.objectiveSuffix}`,
       department: route.department,
@@ -163,6 +169,18 @@ async function executeApprovedWorkflow(action, route) {
   } catch (error) {
     fail(action.id, error, `${route.department} approved execution failed.`, "execute");
   }
+}
+
+async function callThemePlan(objective) {
+  const response = await fetch("/api/theme-plan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json", "X-MMG-Client-Build": BUILD },
+    credentials: "include",
+    body: JSON.stringify({ objective }),
+  });
+  const body = await readJSON(response);
+  if (!response.ok) throw new Error(body?.error?.message || body?.message || `Theme plan returned ${response.status}.`);
+  return body;
 }
 
 async function callKairos(payload) {
