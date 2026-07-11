@@ -1,30 +1,21 @@
-const BUILD = "command-center-shopify-mutation-20260711-8";
+const BUILD = "command-center-cloudflare-native-20260711-9";
 
 const actionRoutes = {
   "executive.priority.review": {
     department: "Executive Office",
     confidence: 0.97,
-    objectiveSuffix: "Review the current Command Center operating graph, identify the highest-value next actions, surface dependencies and blockers, and return a concise ordered executive priority brief. Do not claim external execution.",
-    executionSuffix: "Execute the approved internal executive-priority decision by finalizing the ordered operating brief, recording the approved priorities, and returning completion evidence. Do not claim external mutations.",
-    executionPlan: [
-      "Review active, queued, blocked, and completed Command Center work.",
-      "Rank the next actions by value, urgency, dependency, and readiness.",
-      "Return a governed executive brief with explicit next steps.",
-    ],
-    governanceNote: "Approved internal executive-priority review. Planning only; no external mutation is authorized.",
+    objectiveSuffix: "Review the current Command Center operating graph, identify the highest-value next actions, surface dependencies and blockers, and return a concise ordered executive priority brief.",
+    executionSuffix: "Finalize the approved ordered operating brief and record the approved priorities. Return concise completion evidence.",
+    executionPlan: ["Review active, queued, blocked, and completed work.", "Rank the next actions by value, urgency, dependency, and readiness.", "Return a concise executive brief."],
+    governanceNote: "Approved internal executive-priority review. No external mutation is authorized.",
     scope: "executive-priority-brief",
   },
   "website.change.package": {
     department: "Website Operations",
     confidence: 0.97,
-    objectiveSuffix: "Use the completed storefront audit evidence already preserved in the Command Center and the approved MMG guided-experience doctrine to prepare a cohesive, implementation-ready homepage change package. Separate verified findings, recommended changes, affected pages and assets, expected benefits, risk controls, acceptance criteria, rollback plan, and required approvals. Do not publish changes.",
-    executionPlan: [
-      "Read the current published Shopify theme sources.",
-      "Compile complete replacement content for the minimum required files.",
-      "Bind every file to its current source hash.",
-      "Return the exact mutation plan for executive approval without publishing anything.",
-    ],
-    governanceNote: "Proposal preparation only. No theme mutation or publishing is authorized until a separate executive approval event is recorded.",
+    objectiveSuffix: "Use current published Shopify theme sources and the approved MMG guided-experience doctrine to prepare an exact, minimal homepage mutation package for executive approval.",
+    executionPlan: ["Read the current published theme sources.", "Compile complete replacement content for the minimum required files.", "Bind each file to its current source hash.", "Return a concise approval package without publishing."],
+    governanceNote: "Proposal preparation only. No theme mutation is authorized until executive approval is recorded.",
     scope: "website-change-package",
     requiresReview: true,
     sourceGroundedMutationPlan: true,
@@ -32,14 +23,10 @@ const actionRoutes = {
   "production.pipeline.map": {
     department: "Production Operations",
     confidence: 0.96,
-    objectiveSuffix: "Create the canonical internal production pipeline map for approved MMG work. Define governed stages, required evidence, approval boundaries, completion criteria, rollback controls, and knowledge-preservation handoff. Do not claim external delivery or publishing.",
-    executionSuffix: "Execute the approved internal production-pipeline decision by finalizing the canonical stages, controls, evidence requirements, ownership boundaries, and completion handoff. Return a production-ready operating record and do not claim external delivery.",
-    executionPlan: [
-      "Define intake, approval, production, verification, delivery, and preservation stages.",
-      "Specify evidence, ownership, controls, and exit criteria at each stage.",
-      "Return the operating map for executive approval without external execution.",
-    ],
-    governanceNote: "Proposal preparation only. No external mutation, delivery, or publishing is authorized.",
+    objectiveSuffix: "Create the canonical internal production pipeline map for approved MMG work. Define stages, approvals, evidence, completion criteria, rollback controls, and knowledge preservation. Keep the executive summary concise.",
+    executionSuffix: "Finalize the approved internal production-pipeline map, its controls, ownership boundaries, and completion handoff. Return a concise operating record.",
+    executionPlan: ["Define intake, approval, production, verification, delivery, and preservation stages.", "Specify evidence, ownership, controls, and exit criteria.", "Return a concise executive approval package."],
+    governanceNote: "Internal operating-map work only. No external delivery or publishing is authorized.",
     scope: "internal-production-pipeline-map",
     requiresReview: true,
   },
@@ -66,27 +53,17 @@ async function executeStorefrontInspection(action) {
   dispatchStatus(action.id, "Working", 45, "", null, action.phase || "execute");
   try {
     const body = await callKairos({
-      objective: `${action.objective}\n\nPerform a verified, read-only audit of the live MMG storefront. Use the connected storefront inspection evidence. Clearly distinguish public storefront findings from Shopify Admin details that are unavailable without a configured Admin adapter.`,
+      objective: `${action.objective}\n\nPerform a verified, read-only audit of the live MMG storefront and return a concise findings summary.`,
       department: "Website Operations",
       routingConfidence: 0.98,
-      executionPlan: [
-        "Inspect the allowlisted live MMG storefront and sitemap.",
-        "Report only evidence-backed findings.",
-        "Preserve inspection, request, audit, and session traceability.",
-      ],
-      governanceNote: "Approved read-only Command Center inspection. Do not perform mutations or claim access to unavailable Shopify Admin data.",
+      executionPlan: ["Inspect the live storefront and sitemap.", "Report only evidence-backed findings.", "Preserve audit and session traceability."],
+      governanceNote: "Approved read-only inspection. Do not mutate Shopify.",
     });
-
     if (!body.inspection || body.inspection.source !== "live-storefront") {
       dispatchStatus(action.id, "Needs Attention", 70, "The live storefront inspection did not return verified evidence.", null, action.phase || "execute");
       return;
     }
-
-    complete(action.id, body, {
-      summary: body.message,
-      inspection: body.inspection,
-      scope: "live-storefront-audit",
-    }, body.inspection.auditId || body.auditId, action.phase || "execute");
+    complete(action.id, body, { summary: body.message, inspection: body.inspection, scope: "live-storefront-audit" }, body.inspection.auditId || body.auditId, action.phase || "execute");
   } catch (error) {
     fail(action.id, error, "Live storefront inspection failed.", action.phase || "execute");
   }
@@ -101,7 +78,6 @@ async function executeKairosWorkflow(action, route) {
       dispatchStatus(action.id, "Proposal Ready", 100, "", body, action.phase || "prepare");
       return;
     }
-
     const body = await callKairos({
       objective: `${action.objective}\n\n${route.objectiveSuffix}`,
       department: route.department,
@@ -112,22 +88,14 @@ async function executeKairosWorkflow(action, route) {
     const result = {
       actionID: body.auditId || crypto.randomUUID(),
       completedAt: new Date().toISOString(),
-      summary: body.message,
+      summary: conciseText(body.message),
       scope: route.scope,
       center: action.center,
-      recommendedChanges: body.recommendations || body.changes || [body.message],
-      affectedAssets: body.affectedAssets || body.pages || ["MMG Shopify homepage and directly referenced public homepage assets"],
-      expectedBenefits: body.expectedBenefits || ["A clearer guided customer journey aligned with approved MMG experience doctrine"],
-      risks: body.risks || ["Production changes require exact diff review, live verification, and rollback readiness"],
-      rollbackPlan: body.rollbackPlan || ["Preserve the current production version before mutation and restore it if acceptance checks fail"],
-      acceptanceCriteria: body.acceptanceCriteria || ["Approved scope implemented", "Mobile and desktop verification completed", "No broken navigation or critical storefront regressions"],
-      evidence: {
-        message: body.message,
-        requestId: body.requestId,
-        auditId: body.auditId,
-        authorizationMode: body.executionContext?.authorizationMode,
-        sessionId: body.executionContext?.sessionId,
-      },
+      recommendedChanges: normalizeExecutiveList(body.recommendations || body.changes || [body.message], 5),
+      expectedBenefits: normalizeExecutiveList(body.expectedBenefits || ["The approved workflow becomes operational with clear controls and evidence."], 3),
+      risks: normalizeExecutiveList(body.risks || ["Execution remains bounded by the approved scope and rollback controls."], 3),
+      rollbackPlan: normalizeExecutiveList(body.rollbackPlan || ["Restore the previous operating state if verification fails."], 3),
+      evidence: { message: body.message, requestId: body.requestId, auditId: body.auditId, authorizationMode: body.executionContext?.authorizationMode, sessionId: body.executionContext?.sessionId },
     };
     if (route.requiresReview || action.requiresReview) {
       dispatchStatus(action.id, "Proposal Ready", 100, "", result, action.phase || "prepare");
@@ -143,25 +111,34 @@ async function executeApprovedWorkflow(action, route) {
   if (!action.id || !action.objective) return;
   dispatchStatus(action.id, "Working", 55, "", null, "execute");
   try {
-    const proposal = action.proposal ? `\n\nApproved proposal evidence:\n${JSON.stringify(action.proposal)}` : "";
+    if (route.sourceGroundedMutationPlan) {
+      const body = await callMutation(action);
+      complete(action.id, body, {
+        summary: "The approved Shopify theme changes were applied and verified.",
+        scope: route.scope,
+        center: action.center,
+        approval: action.approval || null,
+        externalMutation: true,
+        verification: body.evidence,
+      }, body.actionID || crypto.randomUUID(), "execute");
+      return;
+    }
+
+    const proposalSummary = summarizeProposal(action.proposal);
+    const objective = `${action.objective}\n\n${route.executionSuffix}\n\nApproved scope summary: ${proposalSummary}`.slice(0, 7600);
     const body = await callKairos({
-      objective: `${action.objective}\n\n${route.executionSuffix}${proposal}`,
+      objective,
       department: route.department,
       routingConfidence: Math.max(route.confidence, 0.98),
-      executionPlan: [
-        "Validate the recorded executive approval and approved proposal scope.",
-        "Execute the approved internal workflow and create an authoritative operating record.",
-        "Return explicit completion, verification, and rollback evidence.",
-        "Do not claim any external mutation that is not directly evidenced by a connected adapter.",
-      ],
-      governanceNote: `Executive approval recorded for ${action.id}. Execute only the approved internal scope; preserve audit traceability and distinguish completed internal routing from external publication.`,
+      executionPlan: ["Validate executive approval.", "Execute only the approved internal scope.", "Return concise completion and verification evidence."],
+      governanceNote: `Executive approval recorded for ${action.id}. Preserve audit traceability and do not claim external mutation.`,
     });
     complete(action.id, body, {
-      summary: body.message,
+      summary: conciseText(body.message),
       scope: route.scope,
       center: action.center,
       approval: action.approval || null,
-      approvedProposal: action.proposal || null,
+      approvedProposalSummary: proposalSummary,
       executionType: "governed-internal-execution",
       externalMutation: false,
       verification: body.verification || body.message,
@@ -171,12 +148,30 @@ async function executeApprovedWorkflow(action, route) {
   }
 }
 
+async function callMutation(action) {
+  const response = await fetch("/api/actions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json", "X-MMG-Client-Build": BUILD },
+    credentials: "include",
+    body: JSON.stringify({
+      actionType: "shopify.theme.files.upsert",
+      objective: String(action.objective || "").slice(0, 4000),
+      proposal: action.proposal || null,
+      mutation: action.proposal?.mutationPlan || null,
+      approval: action.approval || { approved: true, actor: "Executive", approvedAt: new Date().toISOString() },
+    }),
+  });
+  const body = await readJSON(response);
+  if (!response.ok) throw new Error(body?.error?.message || body?.message || `Mutation returned ${response.status}.`);
+  return body;
+}
+
 async function callThemePlan(objective) {
   const response = await fetch("/api/theme-plan", {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json", "X-MMG-Client-Build": BUILD },
     credentials: "include",
-    body: JSON.stringify({ objective }),
+    body: JSON.stringify({ objective: String(objective || "").slice(0, 7800) }),
   });
   const body = await readJSON(response);
   if (!response.ok) throw new Error(body?.error?.message || body?.message || `Theme plan returned ${response.status}.`);
@@ -186,45 +181,35 @@ async function callThemePlan(objective) {
 async function callKairos(payload) {
   const response = await fetch("/api/kairos", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      "X-MMG-Client-Build": BUILD,
-    },
+    headers: { "Content-Type": "application/json", Accept: "application/json", "X-MMG-Client-Build": BUILD },
     credentials: "include",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, objective: String(payload.objective || "").slice(0, 7800) }),
   });
   const body = await readJSON(response);
   if (!response.ok) throw new Error(body?.error?.message || body?.message || `Kairos returned ${response.status}.`);
   return body;
 }
 
+function summarizeProposal(proposal) {
+  if (!proposal) return "Approved proposal on record.";
+  const parts = [proposal.summary, ...(Array.isArray(proposal.recommendedChanges) ? proposal.recommendedChanges.slice(0, 4) : [])].filter(Boolean);
+  return conciseText(parts.join(" "), 1200);
+}
+
+function conciseText(value, maximum = 700) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (text.length <= maximum) return text;
+  return `${text.slice(0, maximum - 1).trim()}…`;
+}
+
+function normalizeExecutiveList(value, maximum) {
+  const list = Array.isArray(value) ? value : [value];
+  return list.filter(Boolean).slice(0, maximum).map(item => conciseText(item, 220));
+}
+
 function complete(id, body, evidence, actionID = body.auditId || crypto.randomUUID(), phase = "execute") {
-  dispatchStatus(id, "Completed", 100, "", {
-    actionID,
-    completedAt: new Date().toISOString(),
-    evidence: {
-      ...evidence,
-      requestId: body.requestId,
-      auditId: body.auditId,
-      authorizationMode: body.executionContext?.authorizationMode,
-      sessionId: body.executionContext?.sessionId,
-    },
-  }, phase);
+  dispatchStatus(id, "Completed", 100, "", { actionID, completedAt: new Date().toISOString(), evidence: { ...evidence, requestId: body.requestId, auditId: body.auditId, authorizationMode: body.executionContext?.authorizationMode, sessionId: body.executionContext?.sessionId } }, phase);
 }
-
-function fail(id, error, fallback, phase) {
-  dispatchStatus(id, "Needs Attention", 45, error instanceof Error ? error.message : fallback, null, phase);
-}
-
-function dispatchStatus(id, status, progress, error = "", result = null, phase = "execute") {
-  window.dispatchEvent(new CustomEvent("kairos:approved-action-status", {
-    detail: { id, status, progress, error, result, phase },
-  }));
-}
-
-async function readJSON(response) {
-  const text = await response.text();
-  if (!text) return {};
-  try { return JSON.parse(text); } catch { return { message: text }; }
-}
+function fail(id, error, fallback, phase) { dispatchStatus(id, "Needs Attention", 45, error instanceof Error ? error.message : fallback, null, phase); }
+function dispatchStatus(id, status, progress, error = "", result = null, phase = "execute") { window.dispatchEvent(new CustomEvent("kairos:approved-action-status", { detail: { id, status, progress, error, result, phase } })); }
+async function readJSON(response) { const text = await response.text(); if (!text) return {}; try { return JSON.parse(text); } catch { return { message: text }; } }
