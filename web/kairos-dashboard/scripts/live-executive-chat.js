@@ -120,7 +120,7 @@ async function sendObjective(event) {
   try {
     const response = await fetch(`${runtimeBaseURL}/api/kairos`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json", "X-MMG-Client-Build": "command-center-ecosystem-20260711-4" },
+      headers: { "Content-Type": "application/json", Accept: "application/json", "X-MMG-Client-Build": "command-center-governed-approval-20260711-6" },
       credentials: "include",
       body: JSON.stringify({
         objective,
@@ -159,37 +159,57 @@ async function executeApprovedAction(event) {
   if (!action.id || !action.actionType || !action.objective) return;
   if (!state.ready || !state.authenticated) {
     setOpen(true);
-    appendMessage("system", "An authenticated production session is required for approved actions.");
-    dispatchActionStatus(action.id, "Needs Attention", 10, "Production authorization is required.");
+    appendMessage("system", "An authenticated production session is required for governed actions.");
+    dispatchActionStatus(action.id, "Needs Attention", 10, "Production authorization is required.", null, action.phase);
     return;
   }
 
-  dispatchActionStatus(action.id, "Working", 45);
+  const preparing = action.phase === "prepare";
+  dispatchActionStatus(action.id, "Working", 45, "", null, action.phase);
   try {
     const response = await fetch(`${runtimeBaseURL}/api/actions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      headers: { "Content-Type": "application/json", Accept: "application/json", "X-MMG-Client-Build": "command-center-governed-approval-20260711-6" },
       credentials: "include",
-      body: JSON.stringify({ actionType: action.actionType, objective: action.objective, approval: { approved: true, actor: state.session?.operator || "Mike", approvedAt: new Date().toISOString() } }),
+      body: JSON.stringify({
+        actionType: action.actionType,
+        objective: action.objective,
+        phase: action.phase || "execute",
+        proposal: action.proposal || null,
+        governance: {
+          requiresReview: Boolean(action.requiresReview),
+          doNotPublishWithoutApproval: preparing,
+        },
+        approval: {
+          approved: !preparing,
+          actor: state.session?.operator || "Mike",
+          approvedAt: preparing ? null : new Date().toISOString(),
+        },
+      }),
     });
     const body = await readJSON(response);
     if (!response.ok) {
       const message = body?.error?.message || body?.message || `Action returned ${response.status}.`;
-      dispatchActionStatus(action.id, "Needs Attention", 45, message);
+      dispatchActionStatus(action.id, "Needs Attention", 45, message, null, action.phase);
       appendMessage("system", message);
       return;
     }
-    dispatchActionStatus(action.id, "Completed", 100, "", body);
-    appendMessage("kairos", "Approved action completed and evidence was preserved.");
+    if (preparing && action.requiresReview) {
+      dispatchActionStatus(action.id, "Proposal Ready", 100, "", body, action.phase);
+      appendMessage("kairos", "Proposal prepared. Executive approval is required before any production change executes.");
+      return;
+    }
+    dispatchActionStatus(action.id, "Completed", 100, "", body, action.phase);
+    appendMessage("kairos", "Approved action completed, verified, and preserved as evidence.");
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Approved action failed.";
-    dispatchActionStatus(action.id, "Needs Attention", 45, message);
+    const message = error instanceof Error ? error.message : "Governed action failed.";
+    dispatchActionStatus(action.id, "Needs Attention", 45, message, null, action.phase);
     appendMessage("system", message);
   }
 }
 
-function dispatchActionStatus(id, status, progress, error = "", result = null) {
-  window.dispatchEvent(new CustomEvent("kairos:approved-action-status", { detail: { id, status, progress, error, result } }));
+function dispatchActionStatus(id, status, progress, error = "", result = null, phase = "execute") {
+  window.dispatchEvent(new CustomEvent("kairos:approved-action-status", { detail: { id, status, progress, error, result, phase } }));
 }
 
 function setRuntimeState(status, label, detail) {
