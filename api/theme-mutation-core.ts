@@ -99,7 +99,7 @@ export async function executeThemeMutation(request: ThemeMutationRequest, config
       completed.push({ key: file.key, beforeSha256: before.sha256, afterSha256, verified: true });
     }
   } catch (error) {
-    const rollbackErrors = await rollback(configuration, request.mutation.themeId, backups, signal);
+    const rollbackErrors = await rollback(configuration, request.mutation.themeId, backups, AbortSignal.timeout(15_000));
     if (rollbackErrors.length) throw new KairosHttpError(500, "mutation_failed_rollback_incomplete", `Theme mutation failed and rollback was incomplete: ${rollbackErrors.join("; ")}`);
     if (error instanceof KairosHttpError) throw error;
     throw new KairosHttpError(500, "theme_mutation_failed", "The approved Shopify mutation failed and the previous theme state was restored.");
@@ -121,7 +121,7 @@ export async function executeThemeMutation(request: ThemeMutationRequest, config
 }
 
 async function assertMainTheme(configuration: ShopifyConfiguration, themeId: string, signal?: AbortSignal): Promise<void> {
-  const response = await shopifyFetch(configuration, `/themes.json?role=main`, { method: "GET", signal });
+  const response = await shopifyFetch(configuration, "/themes.json?role=main", { method: "GET", signal });
   const body = await readJSON(response);
   const themes = isRecord(body) && Array.isArray(body.themes) ? body.themes : [];
   const main = themes.find(theme => isRecord(theme) && String(theme.id) === themeId && theme.role === "main");
@@ -168,10 +168,10 @@ async function rollback(configuration: ShopifyConfiguration, themeId: string, ba
 }
 
 function shopifyFetch(configuration: ShopifyConfiguration, path: string, init: RequestInit): Promise<Response> {
-  return fetch(`https://${configuration.storeDomain}/admin/api/${configuration.apiVersion}${path}`, {
-    ...init,
-    headers: { "X-Shopify-Access-Token": configuration.accessToken, Accept: "application/json", ...(init.headers || {}) },
-  });
+  const headers = new Headers(init.headers);
+  headers.set("X-Shopify-Access-Token", configuration.accessToken);
+  headers.set("Accept", "application/json");
+  return fetch(`https://${configuration.storeDomain}/admin/api/${configuration.apiVersion}${path}`, { ...init, headers });
 }
 
 function shopifyError(status: number, code: string, message: string): KairosHttpError {
