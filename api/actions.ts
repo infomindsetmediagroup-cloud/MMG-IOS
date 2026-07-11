@@ -9,6 +9,11 @@ import {
   shopifyGraphQLEndpoint,
 } from "./actions-core.js";
 import {
+  executeThemeMutation,
+  parseThemeMutationRequest,
+  SHOPIFY_THEME_FILES_UPSERT,
+} from "./theme-mutation-core.js";
+import {
   KairosHttpError,
   authorizeRequest,
   errorEnvelope,
@@ -17,6 +22,7 @@ import {
 import { readCookie, SESSION_COOKIE_NAME, verifyOperatorSession } from "./session-core.js";
 
 const SHOPIFY_TIMEOUT_MS = 20_000;
+const THEME_MUTATION_TIMEOUT_MS = 25_000;
 
 export default async function handler(request: VercelRequest, response: VercelResponse): Promise<void> {
   response.setHeader("Cache-Control", "no-store");
@@ -36,10 +42,25 @@ export default async function handler(request: VercelRequest, response: VercelRe
     const session = verifyOperatorSession(cookieToken, runtime.KAIROS_RUNTIME_TOKEN);
     if (!session) authorizeRequest(firstHeaderValue(request.headers.authorization), runtime.KAIROS_RUNTIME_TOKEN);
 
-    parseApprovedActionRequest(request.body);
     const shopify = requireShopifyConfiguration(process.env);
-    const startedAt = new Date();
+    const actionType = isRecord(request.body) ? request.body.actionType : undefined;
+    if (actionType === SHOPIFY_THEME_FILES_UPSERT) {
+      const mutation = parseThemeMutationRequest(request.body);
+      const result = await executeThemeMutation(mutation, shopify, AbortSignal.timeout(THEME_MUTATION_TIMEOUT_MS));
+      response.status(200).json({
+        ...result,
+        executionContext: {
+          authorizationMode: session ? "session" : "gateway-recovery",
+          operator: session?.operator,
+          sessionId: session?.sessionId ?? "gateway-recovery",
+          mutationAdapter: "shopify-theme-assets",
+        },
+      });
+      return;
+    }
 
+    parseApprovedActionRequest(request.body);
+    const startedAt = new Date();
     const shopifyResponse = await fetch(shopifyGraphQLEndpoint(shopify), {
       method: "POST",
       headers: {
@@ -52,9 +73,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
     });
 
     const body = await readJSON(shopifyResponse);
-    if (!shopifyResponse.ok) {
-      throw new KairosHttpError(502, "shopify_request_failed", "Shopify could not complete the homepage audit.");
-    }
+    if (!shopifyResponse.ok) throw new KairosHttpError(502, "shopify_request_failed", "Shopify could not complete the homepage audit.");
 
     const evidence = parseHomepageAuditEvidence(body);
     response.status(200).json({
@@ -83,8 +102,12 @@ async function readJSON(response: Response): Promise<unknown> {
 
 function normalizeError(caught: unknown): KairosHttpError {
   if (caught instanceof KairosHttpError) return caught;
-  if (caught instanceof Error && caught.name === "TimeoutError") {
-    return new KairosHttpError(504, "shopify_timeout", "Shopify took too long to respond.");
+  if (caught instanceof Error && (caught.name === "TimeoutError" || caught.name === "AbortError")) {
+    return new KairosHttpError(504, "shopify_timeout", "Shopify took too long to respond. No successful mutation was reported.");
   }
   return new KairosHttpError(500, "action_execution_failed", "Kairos could not execute the approved action.");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
