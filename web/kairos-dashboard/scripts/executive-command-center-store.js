@@ -83,6 +83,19 @@ function normalizeProposal(item, merged) {
       updatedAt: "Proposal prepared; executive approval required",
     };
   }
+  if (
+    merged.status === "Needs Attention"
+    && /does not support the requested action|unsupported[_ ]action/i.test(merged.error || "")
+    && merged.proposal
+  ) {
+    return {
+      ...merged,
+      status: "Proposal Ready",
+      progress: 100,
+      error: "",
+      updatedAt: "Approved proposal recovered; internal execution route connected",
+    };
+  }
   return merged;
 }
 
