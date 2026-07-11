@@ -1,4 +1,15 @@
-const BUILD = "command-center-cloudflare-native-20260711-9";
+const BUILD = "command-center-execution-route-20260711-22";
+
+const websiteChangeRoute = {
+  department: "Website Operations",
+  confidence: 0.97,
+  objectiveSuffix: "Use current published Shopify theme sources and the approved MMG guided-experience doctrine to prepare an exact, minimal homepage mutation package for executive approval.",
+  executionPlan: ["Read the current published theme sources.", "Compile complete replacement content for the minimum required files.", "Bind each file to its current source hash.", "Return a concise approval package without publishing."],
+  governanceNote: "Proposal preparation only. No theme mutation is authorized until executive approval is recorded.",
+  scope: "website-change-package",
+  requiresReview: true,
+  sourceGroundedMutationPlan: true,
+};
 
 const actionRoutes = {
   "executive.priority.review": {
@@ -10,16 +21,8 @@ const actionRoutes = {
     governanceNote: "Approved internal executive-priority review. No external mutation is authorized.",
     scope: "executive-priority-brief",
   },
-  "website.change.package": {
-    department: "Website Operations",
-    confidence: 0.97,
-    objectiveSuffix: "Use current published Shopify theme sources and the approved MMG guided-experience doctrine to prepare an exact, minimal homepage mutation package for executive approval.",
-    executionPlan: ["Read the current published theme sources.", "Compile complete replacement content for the minimum required files.", "Bind each file to its current source hash.", "Return a concise approval package without publishing."],
-    governanceNote: "Proposal preparation only. No theme mutation is authorized until executive approval is recorded.",
-    scope: "website-change-package",
-    requiresReview: true,
-    sourceGroundedMutationPlan: true,
-  },
+  "website.change.package": websiteChangeRoute,
+  "shopify.theme.files.upsert": websiteChangeRoute,
   "production.pipeline.map": {
     department: "Production Operations",
     confidence: 0.96,
@@ -42,7 +45,10 @@ window.addEventListener("kairos:execute-approved-action", event => {
     return;
   }
   const route = actionRoutes[action.actionType];
-  if (!route) return;
+  if (!route) {
+    if (action.id) dispatchStatus(action.id, "Needs Attention", 45, `No governed execution route exists for ${action.actionType || "this action"}.`, null, action.phase || "execute");
+    return;
+  }
   event.stopImmediatePropagation();
   if (action.phase === "execute") executeApprovedWorkflow(action, route);
   else executeKairosWorkflow(action, route);
@@ -149,6 +155,8 @@ async function executeApprovedWorkflow(action, route) {
 }
 
 async function callMutation(action) {
+  const mutation = action.proposal?.mutationPlan || null;
+  if (!mutation || !Array.isArray(mutation.files) || !mutation.files.length) throw new Error("The approved proposal does not contain an executable Shopify mutation payload. Regenerate the proposal once.");
   const response = await fetch("/api/actions", {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json", "X-MMG-Client-Build": BUILD },
@@ -157,7 +165,7 @@ async function callMutation(action) {
       actionType: "shopify.theme.files.upsert",
       objective: String(action.objective || "").slice(0, 4000),
       proposal: action.proposal || null,
-      mutation: action.proposal?.mutationPlan || null,
+      mutation,
       approval: action.approval || { approved: true, actor: "Executive", approvedAt: new Date().toISOString() },
     }),
   });
