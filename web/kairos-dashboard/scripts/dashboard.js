@@ -1,172 +1,212 @@
-import { kairosState } from "./state.js";
-import { getActionLog, recordAction } from "./runtime-actions.js";
+import {
+  commandCenters,
+  getCommandCenterStore,
+  recordCompletedKnowledge,
+  resetCommandCenterStore,
+  updateWorkItem,
+} from "./executive-command-center-store.js";
 
+const runtimeBaseURL = "https://mmg-ios.vercel.app";
 const nav = document.querySelector("#module-nav");
 const view = document.querySelector("#dashboard-view");
 const title = document.querySelector("#page-title");
 const mode = document.querySelector("#runtime-mode");
-const brandDoctrine = kairosState.brandDoctrine;
-const stewardshipDoctrine = kairosState.stewardshipDoctrine;
 
-mode.textContent = kairosState.mode;
+let activeCenter = "home";
+let diagnosticsOpen = false;
+let runtimeHealth = { ready: false, shopify: false, checkedAt: "Not checked" };
 
-function badgeClass(value) {
-  const normalized = String(value || "").toLowerCase();
-  if (["active", "ready", "live", "low", "protected", "completed", "green"].includes(normalized)) return "badge good";
-  if (["medium", "queued", "build", "open", "seeding", "planned", "hold", "open pr", "batch"].includes(normalized)) return "badge warning";
-  if (["critical", "blocked", "failed", "danger", "red"].includes(normalized)) return "badge danger";
+mode.textContent = "Execution Mode";
+
+function escapeHTML(value) {
+  return String(value ?? "").replace(/[&<>'"]/g, character => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;",
+  })[character]);
+}
+
+function statusClass(status) {
+  if (["Completed", "Ready"].includes(status)) return "badge good";
+  if (["Needs Attention", "Failed"].includes(status)) return "badge danger";
+  if (["Ready for Approval", "Queued", "Paused"].includes(status)) return "badge warning";
   return "badge";
 }
 
-function progress(value) {
-  const numeric = Number(String(value).replace("%", "")) || 0;
-  return `<div class="progress-shell"><div class="progress-bar" style="width:${numeric}%"></div></div>`;
+function progressFor(item) {
+  const defaults = { "Ready for Approval": 0, Queued: 0, Starting: 10, Working: 50, Finalizing: 90, Completed: 100, "Needs Attention": item.progress || 0 };
+  return Number.isFinite(Number(item.progress)) ? Number(item.progress) : defaults[item.status] || 0;
 }
 
-function actionButton(label, action, detail = "Queued from dashboard") {
-  return `<button class="action-button" data-action="${action}" data-detail="${detail}">${label}</button>`;
-}
-
-function bindActions() {
-  view.querySelectorAll("[data-action]").forEach(button => {
-    button.addEventListener("click", () => {
-      recordAction(button.dataset.action, button.dataset.detail);
-      renderModule(document.querySelector(".nav-button.active")?.dataset.module || "command");
-    });
+function renderNav() {
+  nav.innerHTML = `
+    <button class="nav-button ${activeCenter === "home" ? "active" : ""}" data-center="home"><span class="nav-icon">⌂</span>Command Center</button>
+    ${commandCenters.map(center => `<button class="nav-button ${activeCenter === center.id ? "active" : ""}" data-center="${center.id}"><span class="nav-icon">${center.icon}</span>${center.title}</button>`).join("")}
+    <button class="nav-button diagnostics-nav ${diagnosticsOpen ? "active" : ""}" data-diagnostics><span class="nav-icon">⋯</span>Diagnostics</button>`;
+  nav.querySelectorAll("[data-center]").forEach(button => button.addEventListener("click", () => {
+    activeCenter = button.dataset.center;
+    diagnosticsOpen = false;
+    render();
+  }));
+  nav.querySelector("[data-diagnostics]")?.addEventListener("click", () => {
+    diagnosticsOpen = !diagnosticsOpen;
+    render();
   });
 }
 
-function renderNav(active = "command") {
-  nav.innerHTML = kairosState.modules.map(module => `
-    <button class="nav-button ${module.id === active ? "active" : ""}" data-module="${module.id}"><span class="nav-icon">${module.icon}</span>${module.label}</button>
-  `).join("");
-  nav.querySelectorAll("button").forEach(button => button.addEventListener("click", () => renderModule(button.dataset.module)));
+function pipelineCounts(items) {
+  return {
+    approval: items.filter(item => item.status === "Ready for Approval").length,
+    queued: items.filter(item => item.status === "Queued").length,
+    working: items.filter(item => ["Starting", "Working", "Finalizing"].includes(item.status)).length,
+    attention: items.filter(item => ["Needs Attention", "Failed", "Paused"].includes(item.status)).length,
+    completed: items.filter(item => item.status === "Completed").length,
+  };
 }
 
-function actionLogCard() {
-  const log = getActionLog();
-  return `<article class="card full"><div class="card-header"><h3>Command Log</h3><span class="badge good">${log.length}</span></div><div class="list">${(log.length ? log : [{ action: "Awaiting command", detail: "Select a parent system and queue the next operational action.", status: "Standby", createdAt: "Kairos" }]).slice(0, 5).map(item => `<div class="list-item"><div><strong>${item.action}</strong><p class="muted">${item.detail} • ${item.createdAt}</p></div><span class="${badgeClass(item.status)}">${item.status}</span></div>`).join("")}</div></article>`;
+function movementStrip(items) {
+  const counts = pipelineCounts(items);
+  return `<div class="movement-strip full">
+    <div><strong>${counts.approval}</strong><span>Approval</span></div>
+    <div><strong>${counts.queued}</strong><span>Queued</span></div>
+    <div><strong class="working-value">${counts.working}</strong><span>Working</span></div>
+    <div><strong class="attention-value">${counts.attention}</strong><span>Attention</span></div>
+    <div><strong class="complete-value">${counts.completed}</strong><span>Completed</span></div>
+  </div>`;
 }
 
-function currentStatusCard() {
-  const status = kairosState.currentStatus;
-  return `<article class="card hero-panel full" data-priority-card="decision">
-    <div class="card-header"><div><p class="eyebrow">Current Operational Status</p><h3>${status.headline}</h3></div><span class="badge good">Main Green</span></div>
-    <p class="metric">${kairosState.readiness}%</p>
-    <p class="muted">${status.summary}</p>
-    <div class="list core-node-list">
-      <div class="list-item"><div><strong>Main Branch</strong><p class="muted">${status.validationGate}</p></div><span class="${badgeClass(status.mainBranch)}">${status.mainBranch}</span></div>
-      <div class="list-item"><div><strong>Active PR</strong><p class="muted">${status.activePr}</p></div><span class="badge warning">Hold</span></div>
-      <div class="list-item"><div><strong>Actions Policy</strong><p class="muted">${status.actionsPolicy}</p></div><span class="badge good">Batch</span></div>
-      <div class="list-item"><div><strong>Dashboard Visibility</strong><p class="muted">${status.visibleDashboard}</p></div><span class="badge good">Updated</span></div>
-    </div>
-    <div class="action-row">${actionButton("Record Status Check", "Record Status Check", "Dashboard current status reviewed by operator.")}${actionButton("Queue Next Batch", "Queue Next Batch", "Next batch queued without running GitHub Actions yet.")}</div>
+function livingHeader(items) {
+  const counts = pipelineCounts(items);
+  const headline = counts.working ? `Kairos is working on ${counts.working} approved action${counts.working === 1 ? "" : "s"}.` : "Kairos is ready for your next objective.";
+  return `<article class="card living-header full">
+    <div class="living-orb ${runtimeHealth.ready ? "ready" : "attention"}" aria-hidden="true"><span></span></div>
+    <div><p class="eyebrow">Live Operating Status</p><h3>${headline}</h3><p class="muted">${runtimeHealth.ready ? "Production runtime connected." : "Production runtime requires attention."} Shopify audit ${runtimeHealth.shopify ? "is connected" : "awaits server configuration"}.</p></div>
+    <span class="${runtimeHealth.ready ? "badge good" : "badge danger"}">${runtimeHealth.ready ? "Runtime Ready" : "Check Runtime"}</span>
   </article>`;
 }
 
-function readinessCard(item) {
-  return `<article class="card core-card" data-priority-card="active">
-    <div class="card-header"><div><p class="eyebrow">${item.label}</p><h3>${item.value}</h3></div><span class="${badgeClass(item.status)}">${item.status}</span></div>
-    <p class="metric">${item.complete}%</p>
-    <p class="muted">${item.detail}</p>
-    ${progress(item.complete)}
+function parentCard(center, store) {
+  const items = center.id === "knowledge" ? [] : store.work.filter(item => item.center === center.id);
+  const counts = pipelineCounts(items);
+  const status = center.id === "knowledge" ? `${store.knowledge.length} preserved` : counts.working ? `${counts.working} working` : counts.approval ? `${counts.approval} approval` : counts.attention ? `${counts.attention} attention` : "Ready";
+  return `<button class="parent-card" data-open-center="${center.id}">
+    <span class="parent-icon">${center.icon}</span>
+    <strong>${center.title}</strong>
+    <p>${center.detail}</p>
+    <span class="parent-status">${status}<b>→</b></span>
+  </button>`;
+}
+
+function renderHome(store) {
+  title.textContent = "Command Center";
+  view.innerHTML = `${livingHeader(store.work)}${movementStrip(store.work)}<section class="parent-grid full" aria-label="Command Centers">${commandCenters.map(center => parentCard(center, store)).join("")}</section>${diagnosticsOpen ? diagnosticsCard(store) : ""}`;
+  view.querySelectorAll("[data-open-center]").forEach(button => button.addEventListener("click", () => {
+    activeCenter = button.dataset.openCenter;
+    render();
+  }));
+}
+
+function actionControls(item) {
+  if (item.status === "Ready for Approval") return `<button class="action-button primary" data-approve-execute="${item.id}">Approve & Execute</button>`;
+  if (item.status === "Needs Attention" && item.actionType) return `<button class="action-button" data-retry-action="${item.id}">Retry</button>`;
+  return "";
+}
+
+function workRow(item) {
+  const progress = progressFor(item);
+  return `<article class="pipeline-item" data-work-id="${item.id}">
+    <div class="pipeline-item-header"><div><span class="work-id">${escapeHTML(item.id)}</span><h4>${escapeHTML(item.title)}</h4></div><span class="${statusClass(item.status)}">${escapeHTML(item.status)}</span></div>
+    <p class="muted">${escapeHTML(item.objective)}</p>
+    ${item.dependency ? `<p class="dependency">Waiting on ${escapeHTML(item.dependency)}</p>` : ""}
+    ${progress > 0 ? `<div class="progress-shell"><div class="progress-bar ${["Starting", "Working", "Finalizing"].includes(item.status) ? "live-progress" : ""}" style="width:${progress}%"></div></div><small>${progress}% • ${escapeHTML(item.updatedAt)}</small>` : `<small>${escapeHTML(item.updatedAt)}</small>`}
+    ${item.error ? `<p class="execution-error">${escapeHTML(item.error)}</p>` : ""}
+    <div class="action-row">${actionControls(item)}</div>
   </article>`;
 }
 
-function milestoneCard() {
-  return `<article class="card full" data-priority-card="ready">
-    <div class="card-header"><div><p class="eyebrow">Live Milestones</p><h3>What changed in the repo right now</h3></div><span class="badge good">Synced</span></div>
-    <div class="list core-node-list">${kairosState.liveMilestones.map(item => `<div class="list-item"><strong>${item}</strong><span class="badge good">Done</span></div>`).join("")}</div>
-  </article>`;
+function pipelineSection(label, items, emptyText) {
+  return `<section class="pipeline-section full"><header><h3>${label}</h3><span class="badge">${items.length}</span></header>${items.length ? `<div class="pipeline-list">${items.map(workRow).join("")}</div>` : `<p class="empty-state">${emptyText}</p>`}</section>`;
 }
 
-function nextBatchCard() {
-  return `<article class="card full" data-priority-card="critical">
-    <div class="card-header"><div><p class="eyebrow">Next Batch</p><h3>Do not burn Actions minutes until this batch is worth validating.</h3></div><span class="badge warning">Hold CI</span></div>
-    <div class="list core-node-list">${kairosState.nextBatch.map(item => `<div class="list-item"><div><strong>${item.title}</strong><p class="muted">${item.lane}</p></div><span class="${badgeClass(item.status)}">${item.status}</span></div>`).join("")}</div>
-  </article>`;
+function knowledgeSection(store) {
+  const records = store.knowledge;
+  return `<section class="pipeline-section full"><header><div><p class="eyebrow">Institutional Memory</p><h3>Knowledge Vault</h3></div><span class="badge good">${records.length} preserved</span></header>${records.length ? `<div class="pipeline-list">${records.map(record => `<article class="pipeline-item"><div class="pipeline-item-header"><h4>${escapeHTML(record.title)}</h4><span class="badge good">Preserved</span></div><p class="muted">Completed ${new Date(record.completedAt).toLocaleString()}</p><details><summary>Completion evidence</summary><pre>${escapeHTML(JSON.stringify(record.evidence, null, 2))}</pre></details></article>`).join("")}</div>` : `<p class="empty-state">Completed work and verified evidence will appear here automatically.</p>`}</section>`;
 }
 
-function brandDoctrineCard() {
-  return `<article class="card full" data-priority-card="decision">
-    <div class="card-header"><div><p class="eyebrow">Customer Value Doctrine</p><h3>${brandDoctrine.promise}</h3></div><span class="badge good">Locked</span></div>
-    <p class="metric">Discover. Build. Share.</p>
-    <p class="muted">${brandDoctrine.support}</p>
-    <p class="muted">${brandDoctrine.positioning}</p>
-    <div class="list core-node-list">${brandDoctrine.messageSequence.map(step => `<div class="list-item"><strong>${step}</strong><span class="badge">Message Layer</span></div>`).join("")}</div>
-    <div class="action-row">${actionButton("Queue Brand Work", "Queue Brand Work", "Customer value doctrine queued for website and product surfaces.")}${actionButton("Preserve Doctrine", "Preserve Doctrine", "Brand philosophy preserved as a Kairos operating standard.")}</div>
-  </article>`;
+function renderCenter(store, center) {
+  title.textContent = center.title;
+  if (center.id === "knowledge") {
+    view.innerHTML = `${centerHeader(center, [])}${knowledgeSection(store)}${returnButton()}${diagnosticsOpen ? diagnosticsCard(store) : ""}`;
+  } else {
+    const items = store.work.filter(item => item.center === center.id);
+    view.innerHTML = `${centerHeader(center, items)}${pipelineSection("Ready for Approval", items.filter(item => item.status === "Ready for Approval"), "Nothing is waiting for your approval.")}${pipelineSection("Queued", items.filter(item => item.status === "Queued"), "No approved work is waiting to start.")}${pipelineSection("Working", items.filter(item => ["Starting", "Working", "Finalizing"].includes(item.status)), "Kairos has no active work in this center.")}${pipelineSection("Needs Attention", items.filter(item => ["Needs Attention", "Failed", "Paused"].includes(item.status)), "No blockers require your attention.")}${pipelineSection("Completed", items.filter(item => item.status === "Completed"), "Completed work will appear here with evidence and finish time.")}${returnButton()}${diagnosticsOpen ? diagnosticsCard(store) : ""}`;
+  }
 }
 
-function valuePathwaysCard() {
-  return `<article class="card full" data-priority-card="ready">
-    <div class="card-header"><div><p class="eyebrow">Value Pathways</p><h3>Package knowledge into practical opportunities.</h3></div><span class="badge good">Active</span></div>
-    <p class="muted">${brandDoctrine.customerOutcome}</p>
-    <div class="list core-node-list">${brandDoctrine.valuePathways.map(path => `<div class="list-item"><div><strong>${path.title}</strong><p class="muted">${path.detail}</p></div><span class="badge good">Path</span></div>`).join("")}</div>
-  </article>`;
+function centerHeader(center, items) {
+  return `<article class="card center-header full"><div><p class="eyebrow">Parent Command Center</p><h3>${center.title}</h3><p class="muted">${center.detail}</p></div>${movementStrip(items)}</article>`;
 }
 
-function guardrailsCard() {
-  return `<article class="card full" data-priority-card="protected">
-    <div class="card-header"><div><p class="eyebrow">Messaging Guardrails</p><h3>Guidance over hype.</h3></div><span class="badge good">Protected</span></div>
-    <div class="list core-node-list">${brandDoctrine.forbiddenTone.map(rule => `<div class="list-item"><strong>${rule}</strong><span class="badge warning">Avoid</span></div>`).join("")}</div>
-    <div class="list core-node-list">${brandDoctrine.approvedTone.map(rule => `<div class="list-item"><strong>${rule}</strong><span class="badge good">Use</span></div>`).join("")}</div>
-  </article>`;
+function returnButton() {
+  return `<div class="full return-row"><button class="action-button" data-return-home>Return to Main Control Panel</button></div>`;
 }
 
-function stewardshipCard(group) {
-  return `<article class="card full" data-priority-card="ready">
-    <div class="card-header"><div><p class="eyebrow">Guidance Layer</p><h3>Knowledge Stewardship</h3></div><span class="badge good">Active</span></div>
-    <p class="muted">${stewardshipDoctrine.role}</p>
-    <div class="list core-node-list">
-      <div class="list-item"><div><strong>Preserve Context</strong><p class="muted">${stewardshipDoctrine.assetModel}</p></div><span class="badge good">Core</span></div>
-      <div class="list-item"><div><strong>Recommend Next Action</strong><p class="muted">${stewardshipDoctrine.customerGuidanceRule}</p></div><span class="badge warning">Runtime</span></div>
-      <div class="list-item"><div><strong>Compound Assets</strong><p class="muted">${stewardshipDoctrine.operatingRule}</p></div><span class="badge good">Doctrine</span></div>
-    </div>
-  </article>`;
+function diagnosticsCard(store) {
+  return `<details class="card diagnostics-card full" open><summary>Technical diagnostics</summary><div class="diagnostics-grid"><div><span>Runtime</span><strong>${runtimeHealth.ready ? "Ready" : "Unavailable"}</strong></div><div><span>Shopify audit</span><strong>${runtimeHealth.shopify ? "Connected" : "Not configured"}</strong></div><div><span>Last check</span><strong>${escapeHTML(runtimeHealth.checkedAt)}</strong></div><div><span>Local state</span><strong>${store.work.length} work items</strong></div></div><button class="action-button danger-button" data-reset-command-center>Reset local dashboard state</button></details>`;
 }
 
-function groupCard(group) {
-  return `<article class="card core-card" data-core-group="${group.id}">
-    <div class="card-header"><div><p class="eyebrow">${group.label}</p><h3>${group.label} System</h3></div><span class="${badgeClass(group.status)}">${group.status}</span></div>
-    <p class="metric">${group.metric}</p>
-    <p class="muted">${group.summary}</p>
-    ${progress(group.metric)}
-    <div class="list core-node-list">${group.nodes.slice(0, 5).map(node => `<div class="list-item"><strong>${node}</strong><span class="badge">Node</span></div>`).join("")}</div>
-    <div class="action-row">${actionButton("Open", `Open ${group.label}`, `${group.label} parent group opened.`)}${actionButton("Queue Work", `Queue ${group.label} Work`, `${group.label} work item queued.`)}</div>
-  </article>`;
+function bindCenterActions(store) {
+  view.querySelector("[data-return-home]")?.addEventListener("click", () => { activeCenter = "home"; render(); });
+  view.querySelectorAll("[data-approve-execute]").forEach(button => button.addEventListener("click", () => approveAndExecute(store, button.dataset.approveExecute)));
+  view.querySelectorAll("[data-retry-action]").forEach(button => button.addEventListener("click", () => approveAndExecute(store, button.dataset.retryAction)));
+  view.querySelector("[data-reset-command-center]")?.addEventListener("click", () => { resetCommandCenterStore(); activeCenter = "home"; render(); });
 }
 
-function renderDashboard() {
-  title.textContent = "Dashboard";
-  view.innerHTML = `
-    ${currentStatusCard()}
-    <article class="card hero-panel full"><div class="card-header"><div><p class="eyebrow">Good morning, ${kairosState.operator} • Updated ${kairosState.lastUpdated}</p><h3>${kairosState.activeBatch}</h3></div><span class="badge good">Operational Visibility</span></div><p class="metric">${kairosState.health}%</p><p class="muted">Kairos is in production hardening. The visible dashboard now tracks the same green-state progress as the native iOS repository while we batch future work to conserve GitHub Actions minutes.</p><div class="action-row">${actionButton("Start Daily Ops", "Start Daily Ops", "Daily operations run queued.")}${actionButton("Run Priority Chain", "Run Priority Chain", "Priority chain workflow queued.")}</div></article>
-    ${kairosState.operationalReadiness.map(readinessCard).join("")}
-    ${milestoneCard()}
-    ${nextBatchCard()}
-    ${brandDoctrineCard()}
-    ${valuePathwaysCard()}
-    ${kairosState.coreGroups.map(groupCard).join("")}
-    ${actionLogCard()}
-  `;
-  bindActions();
+function approveAndExecute(store, id) {
+  const item = store.work.find(entry => entry.id === id);
+  if (!item) return;
+  if (!item.actionType) {
+    updateWorkItem(id, { status: "Queued", progress: 0, updatedAt: "Approved; waiting for an execution adapter" });
+    return;
+  }
+  updateWorkItem(id, { status: "Starting", progress: 10, error: "", updatedAt: "Approval recorded; contacting adapter" });
+  window.dispatchEvent(new CustomEvent("kairos:execute-approved-action", { detail: { id, actionType: item.actionType, objective: item.objective } }));
 }
 
-function renderModule(moduleId) {
-  renderNav(moduleId);
-  const group = kairosState.coreGroups.find(item => item.id === moduleId) || kairosState.coreGroups[0];
-  title.textContent = group.label;
-  view.innerHTML = `
-    <article class="card hero-panel full"><div class="card-header"><div><p class="eyebrow">Parent Direction</p><h3>${group.label} System</h3></div><span class="${badgeClass(group.status)}">${group.status}</span></div><p class="metric">${group.metric}</p><p class="muted">${group.summary}</p>${progress(group.metric)}<div class="action-row">${actionButton(`Execute ${group.label}`, `Execute ${group.label}`, `${group.label} execution queued.`)}${actionButton(`Validate ${group.label}`, `Validate ${group.label}`, `${group.label} validation queued.`)}</div></article>
-    ${stewardshipCard(group)}
-    ${guardrailsCard()}
-    <article class="card full"><div class="card-header"><h3>${group.label} Child Nodes</h3><span class="badge">${group.nodes.length}/5</span></div><div class="list">${group.nodes.slice(0, 5).map(node => `<div class="list-item"><div><strong>${node}</strong><p class="muted">Child node under ${group.label}. Expands into specific workflows without adding new top-level panels.</p></div><span class="badge warning">Queued</span></div>`).join("")}</div></article>
-    ${nextBatchCard()}
-    ${actionLogCard()}
-  `;
-  bindActions();
+function bindGlobalActions(store) {
+  bindCenterActions(store);
 }
 
-renderNav();
-renderDashboard();
+function render() {
+  const store = getCommandCenterStore();
+  renderNav();
+  if (activeCenter === "home") renderHome(store);
+  else renderCenter(store, commandCenters.find(center => center.id === activeCenter) || commandCenters[0]);
+  bindGlobalActions(store);
+}
+
+async function refreshHealth() {
+  try {
+    const response = await fetch(`${runtimeBaseURL}/api/health`, { headers: { Accept: "application/json" }, cache: "no-store" });
+    const body = await response.json();
+    runtimeHealth = { ready: response.ok && body.status === "ready", shopify: Boolean(body.capabilities?.shopifyHomepageAudit), checkedAt: new Date().toLocaleTimeString() };
+    const systemItem = getCommandCenterStore().work.find(item => item.id === "SYS-001");
+    if (systemItem) updateWorkItem("SYS-001", runtimeHealth.ready ? { status: "Completed", progress: 100, updatedAt: `Verified ${runtimeHealth.checkedAt}` } : { status: "Needs Attention", progress: 50, updatedAt: "Runtime health check failed" });
+  } catch {
+    runtimeHealth = { ready: false, shopify: false, checkedAt: new Date().toLocaleTimeString() };
+    updateWorkItem("SYS-001", { status: "Needs Attention", progress: 50, updatedAt: "Runtime unreachable" });
+  }
+  render();
+}
+
+window.addEventListener("kairos:command-center-updated", render);
+window.addEventListener("kairos:approved-action-status", event => {
+  const { id, status, progress, error, result } = event.detail || {};
+  if (!id) return;
+  const store = getCommandCenterStore();
+  const work = store.work.find(item => item.id === id);
+  if (!work) return;
+  updateWorkItem(id, { status, progress, error: error || "", evidence: result || null, updatedAt: new Date().toLocaleString() });
+  if (status === "Completed" && result) recordCompletedKnowledge(work, result);
+});
+
+render();
+refreshHealth();

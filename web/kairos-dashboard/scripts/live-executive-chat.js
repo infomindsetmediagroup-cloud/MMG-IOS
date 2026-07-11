@@ -73,6 +73,7 @@ closeButton.addEventListener("click", () => setOpen(false));
 startSessionButton.addEventListener("click", authorizeTab);
 endSessionButton.addEventListener("click", endAuthorization);
 form.addEventListener("submit", sendObjective);
+window.addEventListener("kairos:execute-approved-action", executeApprovedAction);
 
 function setOpen(open) {
   state.open = open;
@@ -269,6 +270,63 @@ async function sendObjective(event) {
     updateComposerState();
     objectiveInput.focus();
   }
+}
+
+async function executeApprovedAction(event) {
+  const action = event.detail || {};
+  if (!action.id || !action.actionType || !action.objective) return;
+
+  if (!state.ready || !state.authenticated) {
+    setOpen(true);
+    appendMessage("system", "Authorize Live Kairos to execute this approved action.");
+    dispatchActionStatus(action.id, "Needs Attention", 10, "Production authorization is required.");
+    return;
+  }
+
+  dispatchActionStatus(action.id, "Working", 45);
+  appendMessage("progress", `Executing approved action: ${action.objective}`);
+
+  try {
+    const headers = { "Content-Type": "application/json", Accept: "application/json" };
+    if (state.gatewayToken) headers.Authorization = `Bearer ${state.gatewayToken}`;
+    const response = await fetch(`${runtimeBaseURL}/api/actions`, {
+      method: "POST",
+      headers,
+      ...(sameOriginRuntime ? { credentials: "include" } : {}),
+      body: JSON.stringify({
+        actionType: action.actionType,
+        objective: action.objective,
+        approval: {
+          approved: true,
+          actor: localStorage.getItem("kairos.operator.v1") || "Mike",
+          approvedAt: new Date().toISOString(),
+        },
+      }),
+    });
+    const body = await readJSON(response);
+
+    if (!response.ok) {
+      const message = body?.error?.message || body?.message || `Action returned ${response.status}.`;
+      appendMessage("system", message);
+      if (response.status === 401) resetAuthorization();
+      dispatchActionStatus(action.id, "Needs Attention", 45, message);
+      return;
+    }
+
+    dispatchActionStatus(action.id, "Finalizing", 90);
+    appendMessage("kairos", `Verified live theme: ${body.evidence?.name || "Shopify theme"}. Preserving completion evidence.`);
+    dispatchActionStatus(action.id, "Completed", 100, "", body);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Approved action failed.";
+    appendMessage("system", message);
+    dispatchActionStatus(action.id, "Needs Attention", 45, message);
+  }
+}
+
+function dispatchActionStatus(id, status, progress, error = "", result = null) {
+  window.dispatchEvent(new CustomEvent("kairos:approved-action-status", {
+    detail: { id, status, progress, error, result },
+  }));
 }
 
 function resetAuthorization() {
