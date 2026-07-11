@@ -51,7 +51,11 @@ export default async function handler(request: VercelRequest, response: VercelRe
         Accept: "application/json",
         "X-Client-Request-Id": requestID,
       },
-      body: JSON.stringify(buildOpenAIRequestBody(runtimeRequest, environment.OPENAI_MODEL, storefrontInspection)),
+      body: JSON.stringify(buildOpenAIRequestBody(
+        runtimeRequest,
+        environment.OPENAI_MODEL,
+        storefrontInspection ? compactInspectionEvidence(storefrontInspection) : undefined,
+      )),
       signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
     });
 
@@ -117,4 +121,29 @@ function normalizeError(caught: unknown): KairosHttpError {
     return new KairosHttpError(504, "provider_timeout", "Kairos took too long to respond.");
   }
   return new KairosHttpError(500, "internal_error", "Kairos encountered an internal error.");
+}
+
+
+function compactInspectionEvidence(inspection: Awaited<ReturnType<typeof inspectStorefront>>): Record<string, unknown> {
+  return {
+    auditId: inspection.auditId,
+    source: inspection.source,
+    storefront: inspection.storefront,
+    startedAt: inspection.startedAt,
+    completedAt: inspection.completedAt,
+    sitemapUrls: inspection.sitemapUrls,
+    inspectedCount: inspection.inspectedCount,
+    discoveredCount: inspection.discoveredCount,
+    pages: inspection.pages.map((page) => ({
+      url: page.url,
+      status: page.status,
+      finalUrl: page.finalUrl,
+      title: page.title,
+      description: page.description,
+      canonical: page.canonical,
+      h1: page.h1,
+      issues: page.issues,
+    })),
+    errors: inspection.errors,
+  };
 }
