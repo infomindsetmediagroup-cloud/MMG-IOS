@@ -1,6 +1,7 @@
 const DEFAULT_RUNTIME_BASE_URL = "https://mmg-ios.vercel.app";
 const runtimeBaseURL = window.location.hostname.endsWith("github.io") ? DEFAULT_RUNTIME_BASE_URL : window.location.origin;
 const sameOriginRuntime = new URL(runtimeBaseURL).origin === window.location.origin;
+const BUILD = "command-center-shopify-mutation-20260711-8";
 
 const state = { open: false, sending: false, ready: false, authenticated: false, session: null };
 
@@ -120,7 +121,7 @@ async function sendObjective(event) {
   try {
     const response = await fetch(`${runtimeBaseURL}/api/kairos`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json", "X-MMG-Client-Build": "command-center-governed-approval-20260711-6" },
+      headers: { "Content-Type": "application/json", Accept: "application/json", "X-MMG-Client-Build": BUILD },
       credentials: "include",
       body: JSON.stringify({
         objective,
@@ -165,17 +166,27 @@ async function executeApprovedAction(event) {
   }
 
   const preparing = action.phase === "prepare";
+  const mutation = action.proposal?.mutationPlan || action.proposal?.mutation || null;
+  if (action.actionType === "shopify.theme.files.upsert" && !mutation) {
+    const message = "The approved proposal does not yet contain an exact Shopify mutation plan with a current theme ID, file paths, complete replacement content, and optional source hashes. Regenerate the proposal before publishing.";
+    dispatchActionStatus(action.id, "Needs Attention", 50, message, null, action.phase);
+    setOpen(true);
+    appendMessage("system", message);
+    return;
+  }
+
   dispatchActionStatus(action.id, "Working", 45, "", null, action.phase);
   try {
     const response = await fetch(`${runtimeBaseURL}/api/actions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json", "X-MMG-Client-Build": "command-center-governed-approval-20260711-6" },
+      headers: { "Content-Type": "application/json", Accept: "application/json", "X-MMG-Client-Build": BUILD },
       credentials: "include",
       body: JSON.stringify({
         actionType: action.actionType,
         objective: action.objective,
         phase: action.phase || "execute",
         proposal: action.proposal || null,
+        mutation,
         governance: {
           requiresReview: Boolean(action.requiresReview),
           doNotPublishWithoutApproval: preparing,
@@ -200,7 +211,9 @@ async function executeApprovedAction(event) {
       return;
     }
     dispatchActionStatus(action.id, "Completed", 100, "", body, action.phase);
-    appendMessage("kairos", "Approved action completed, verified, and preserved as evidence.");
+    appendMessage("kairos", body.executionContext?.mutationAdapter
+      ? "Approved Shopify changes were applied, re-read from production, verified, and preserved with rollback evidence."
+      : "Approved action completed, verified, and preserved as evidence.");
   } catch (error) {
     const message = error instanceof Error ? error.message : "Governed action failed.";
     dispatchActionStatus(action.id, "Needs Attention", 45, message, null, action.phase);
