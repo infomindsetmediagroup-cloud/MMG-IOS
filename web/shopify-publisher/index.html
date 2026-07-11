@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Kairos Shopify Publisher</title>
+  <style>
+    :root{color-scheme:dark;--bg:#050914;--panel:#0d1422;--line:#1f4055;--text:#f4f7fb;--muted:#9aa7b8;--blue:#33c6ff;--green:#5ee39e;--warning:#ffbf69}*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#050914,#07101d);color:var(--text);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.shell{min-height:100dvh;padding:max(20px,env(safe-area-inset-top)) 16px max(24px,env(safe-area-inset-bottom));max-width:920px;margin:auto}.eyebrow{margin:0 0 6px;color:var(--blue);font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase}h1{margin:0;font-size:clamp(30px,7vw,54px);line-height:1.05}.intro{margin:14px 0 24px;color:var(--muted);max-width:680px}.card{border:1px solid var(--line);border-radius:22px;background:rgba(13,20,34,.94);padding:18px;margin:14px 0;box-shadow:0 18px 60px rgba(0,0,0,.28)}.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.status{display:inline-flex;align-items:center;gap:8px;color:var(--muted)}.dot{width:10px;height:10px;border-radius:50%;background:var(--warning)}.dot.ready{background:var(--green)}input,button{font:inherit}input{width:100%;margin:7px 0 12px;padding:14px;border-radius:14px;border:1px solid var(--line);background:#111a2a;color:var(--text)}button{min-height:48px;border:0;border-radius:14px;padding:0 18px;background:linear-gradient(135deg,var(--blue),#138cff);color:#02101b;font-weight:900;cursor:pointer}button.secondary{background:#13283a;color:var(--text);border:1px solid var(--line)}button:disabled{opacity:.45;cursor:not-allowed}.themes{display:grid;gap:12px}.theme{display:flex;justify-content:space-between;gap:12px;align-items:center;border:1px solid rgba(51,198,255,.18);border-radius:16px;padding:14px;background:rgba(255,255,255,.025)}.theme strong{display:block}.badge{white-space:nowrap;border:1px solid var(--line);border-radius:999px;padding:5px 9px;color:var(--muted);font-size:12px}.badge.main{color:var(--green)}.error{color:#ff8d8d;white-space:pre-wrap}.hidden{display:none!important}@media(max-width:540px){.theme{align-items:flex-start;flex-direction:column}.row>*{width:100%}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <p class="eyebrow">Mindset Media Group</p>
+    <h1>Kairos Shopify Publisher</h1>
+    <p class="intro">Secure theme access for inspecting, previewing, and later publishing approved MMG storefront changes.</p>
+
+    <section class="card" id="session-card">
+      <div class="status"><span class="dot" id="session-dot"></span><strong id="session-label">Checking Kairos session…</strong></div>
+      <form id="login-form" class="hidden">
+        <label>Operator name<input name="operator" autocomplete="name" value="Mike" required></label>
+        <label>Executive access key<input name="accessKey" type="password" autocomplete="current-password" required></label>
+        <button type="submit">Establish secure session</button>
+      </form>
+      <p id="session-error" class="error"></p>
+    </section>
+
+    <section class="card">
+      <div class="row">
+        <button id="load-themes" disabled>Load Shopify themes</button>
+        <button id="refresh" class="secondary" disabled>Refresh</button>
+      </div>
+      <p id="shop-label" class="intro">Theme data has not been loaded.</p>
+      <p id="theme-error" class="error"></p>
+      <div id="themes" class="themes"></div>
+    </section>
+  </main>
+
+  <script type="module">
+    const loginForm = document.querySelector('#login-form');
+    const sessionDot = document.querySelector('#session-dot');
+    const sessionLabel = document.querySelector('#session-label');
+    const sessionError = document.querySelector('#session-error');
+    const loadButton = document.querySelector('#load-themes');
+    const refreshButton = document.querySelector('#refresh');
+    const shopLabel = document.querySelector('#shop-label');
+    const themeError = document.querySelector('#theme-error');
+    const themes = document.querySelector('#themes');
+
+    async function checkSession(){
+      const response = await fetch('/api/session',{credentials:'include',cache:'no-store'});
+      if(response.ok){
+        const body = await response.json();
+        sessionDot.classList.add('ready');
+        sessionLabel.textContent = `Secure session active · ${body.session.operator}`;
+        loginForm.classList.add('hidden');
+        loadButton.disabled = false;
+        refreshButton.disabled = false;
+        return true;
+      }
+      sessionDot.classList.remove('ready');
+      sessionLabel.textContent = 'Kairos executive session required';
+      loginForm.classList.remove('hidden');
+      return false;
+    }
+
+    loginForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      sessionError.textContent = '';
+      const values = new FormData(loginForm);
+      const response = await fetch('/api/session',{
+        method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({operator:values.get('operator'),accessKey:values.get('accessKey')})
+      });
+      if(!response.ok){
+        const body = await response.json().catch(()=>({}));
+        sessionError.textContent = body.message || 'Operator access was denied.';
+        return;
+      }
+      loginForm.reset();
+      await checkSession();
+      await loadThemes();
+    });
+
+    async function loadThemes(){
+      loadButton.disabled = true; refreshButton.disabled = true;
+      themeError.textContent = ''; themes.innerHTML = '';
+      shopLabel.textContent = 'Connecting to Shopify…';
+      try{
+        const response = await fetch('/api/shopify/themes',{credentials:'include',cache:'no-store'});
+        const body = await response.json();
+        if(!response.ok) throw new Error(body.message || 'Shopify connection failed.');
+        shopLabel.textContent = `${body.shop} · ${body.themes.length} theme${body.themes.length===1?'':'s'}`;
+        themes.innerHTML = body.themes.map(theme => `
+          <article class="theme">
+            <div><strong>${escapeHTML(theme.name)}</strong><span>${escapeHTML(theme.id)}</span></div>
+            <span class="badge ${theme.role==='MAIN'?'main':''}">${escapeHTML(theme.role)}</span>
+          </article>`).join('');
+      }catch(error){
+        shopLabel.textContent = 'Shopify publisher requires attention.';
+        themeError.textContent = error instanceof Error ? error.message : 'Shopify connection failed.';
+      }finally{
+        loadButton.disabled = false; refreshButton.disabled = false;
+      }
+    }
+
+    loadButton.addEventListener('click',loadThemes);
+    refreshButton.addEventListener('click',loadThemes);
+    function escapeHTML(value){return String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+    checkSession().then(active=>{if(active) loadThemes();});
+  </script>
+</body>
+</html>
