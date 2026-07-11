@@ -30,42 +30,63 @@ async function serveResilientAsset(request, incomingURL) {
   if (pathname.includes("..")) return new Response("Invalid path", { status: 400 });
 
   const isHTML = pathname.endsWith(".html");
+  const targets = ASSET_ROOTS.map(root => `${root}${pathname}${incomingURL.search}`);
   const attempts = [];
-  for (const root of ASSET_ROOTS) {
-    const target = `${root}${pathname}${incomingURL.search}`;
-    try {
-      const upstream = await fetch(target, {
-        method: request.method,
-        headers: { Accept: request.headers.get("Accept") || "*/*" },
-        redirect: "follow",
-        signal: AbortSignal.timeout(4500),
-        cf: { cacheEverything: true, cacheTtl: isHTML ? 30 : 900 },
-      });
-      attempts.push({ target, status: upstream.status });
-      if (!upstream.ok) continue;
-      const headers = new Headers(upstream.headers);
-      headers.set("Content-Type", contentTypeFor(pathname));
-      headers.set("X-Content-Type-Options", "nosniff");
-      headers.set("X-MMG-Host", "cloudflare-resilient");
-      headers.set("Cache-Control", isHTML ? "no-cache, no-store, must-revalidate" : "public, max-age=900, stale-while-revalidate=86400");
-      headers.delete("content-security-policy");
-      return new Response(upstream.body, { status: upstream.status, statusText: upstream.statusText, headers });
-    } catch (error) {
-      attempts.push({ target, error: error instanceof Error ? error.message : "fetch failed" });
+
+  try {
+    const upstream = await firstSuccessfulResponse(targets, request, isHTML, attempts);
+    const headers = new Headers(upstream.headers);
+    headers.set("Content-Type", contentTypeFor(pathname));
+    headers.set("X-Content-Type-Options", "nosniff");
+    headers.set("X-MMG-Host", "cloudflare-parallel-resilient");
+    headers.set("Cache-Control", isHTML ? "no-cache, no-store, must-revalidate" : "public, max-age=900, stale-while-revalidate=86400");
+    headers.delete("content-security-policy");
+    return new Response(upstream.body, { status: upstream.status, statusText: upstream.statusText, headers });
+  } catch {
+    if (pathname !== "/index.html" && !hasFileExtension(pathname)) {
+      return serveResilientAsset(new Request(`${incomingURL.origin}/index.html`, request), new URL(`${incomingURL.origin}/index.html`));
     }
+    if (pathname === "/index.html") return recoveryPage(attempts);
+    return new Response("Command Center asset temporarily unavailable", {
+      status: 503,
+      headers: { "Cache-Control": "no-store", "Retry-After": "5" },
+    });
   }
+}
 
-  if (pathname !== "/index.html" && !hasFileExtension(pathname)) {
-    return serveResilientAsset(new Request(`${incomingURL.origin}/index.html`, request), new URL(`${incomingURL.origin}/index.html`));
+async function firstSuccessfulResponse(targets, request, isHTML, attempts) {
+  const tasks = targets.map(target => fetchAsset(target, request, isHTML, attempts));
+  try {
+    return await Promise.any(tasks);
+  } catch {
+    throw new Error("All Command Center asset origins failed.");
   }
+}
 
-  if (pathname === "/index.html") return recoveryPage(attempts);
-  return new Response("Command Center asset temporarily unavailable", { status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "5" } });
+async function fetchAsset(target, request, isHTML, attempts) {
+  try {
+    const upstream = await fetch(target, {
+      method: request.method,
+      headers: { Accept: request.headers.get("Accept") || "*/*" },
+      redirect: "follow",
+      signal: AbortSignal.timeout(2500),
+      cf: { cacheEverything: true, cacheTtl: isHTML ? 30 : 900 },
+    });
+    attempts.push({ target, status: upstream.status });
+    if (!upstream.ok) throw new Error(`Upstream returned ${upstream.status}`);
+    return upstream;
+  } catch (error) {
+    attempts.push({ target, error: error instanceof Error ? error.message : "fetch failed" });
+    throw error;
+  }
 }
 
 function recoveryPage(attempts) {
   const safe = JSON.stringify(attempts).replace(/[<>&]/g, "");
-  return new Response(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Kairos Recovery</title><style>body{margin:0;background:#05080d;color:#eef2f7;font-family:system-ui;padding:32px}main{max-width:720px;margin:12vh auto;background:#101722;border:1px solid #21465a;border-radius:24px;padding:28px}h1{font-size:2rem}p{color:#b8c1cc;line-height:1.5}button{width:100%;padding:16px;border:0;border-radius:999px;background:#24b7f2;font-weight:800;font-size:1rem}small{display:block;margin-top:18px;color:#71808f;word-break:break-all}</style></head><body><main><p>KAIROS RECOVERY MODE</p><h1>The Command Center asset service is temporarily unavailable.</h1><p>The Cloudflare runtime is still active. This page will retry automatically instead of remaining blank.</p><button onclick="location.reload()">Retry now</button><small>${safe}</small></main><script>setTimeout(()=>location.reload(),5000)</script></body></html>`, { status: 503, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Retry-After": "5" } });
+  return new Response(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Kairos Recovery</title><style>body{margin:0;background:#05080d;color:#eef2f7;font-family:system-ui;padding:32px}main{max-width:720px;margin:12vh auto;background:#101722;border:1px solid #21465a;border-radius:24px;padding:28px}h1{font-size:2rem}p{color:#b8c1cc;line-height:1.5}button{width:100%;padding:16px;border:0;border-radius:999px;background:#24b7f2;font-weight:800;font-size:1rem}small{display:block;margin-top:18px;color:#71808f;word-break:break-all}</style></head><body><main><p>KAIROS RECOVERY MODE</p><h1>The Command Center asset service is temporarily unavailable.</h1><p>The Cloudflare runtime is still active. This page will retry automatically instead of remaining blank.</p><button onclick="location.reload()">Retry now</button><small>${safe}</small></main><script>setTimeout(()=>location.reload(),5000)</script></body></html>`, {
+    status: 503,
+    headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Retry-After": "5" },
+  });
 }
 
 function hasFileExtension(pathname) {
