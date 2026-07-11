@@ -60,7 +60,7 @@ export async function inspectShopifyThemeSource(env: ShopifyEnvironment): Promis
     },
     body: JSON.stringify({
       query: `query MainThemeSource($filenames: [String!]) {
-        themes(first: 10, query: "role:MAIN") {
+        themes(first: 10) {
           nodes {
             id
             name
