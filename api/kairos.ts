@@ -11,6 +11,8 @@ import {
   requireRuntimeEnvironment,
 } from "./kairos-core.js";
 import { readCookie, SESSION_COOKIE_NAME, verifyOperatorSession } from "./session-core.js";
+import { inspectStorefront, isStorefrontAuditObjective } from "../server/storefront-inspection-core.js";
+import { inspectShopifyThemeSource, isThemeSourceObjective } from "../server/shopify-theme-inspection-core.js";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const PROVIDER_TIMEOUT_MS = 45_000;
@@ -36,6 +38,24 @@ export default async function handler(request: VercelRequest, response: VercelRe
     if (!session) authorizeRequest(firstHeaderValue(request.headers.authorization), environment.KAIROS_RUNTIME_TOKEN);
 
     const runtimeRequest = parseRuntimeRequest(request.body);
+    const storefrontInspection = isStorefrontAuditObjective(runtimeRequest.objective)
+      ? await inspectStorefront(40)
+      : undefined;
+    let themeInspection:
+      | Awaited<ReturnType<typeof inspectShopifyThemeSource>>
+      | { source: "shopify-admin-graphql"; status: "blocked"; reason: string }
+      | undefined;
+    if (isThemeSourceObjective(runtimeRequest.objective)) {
+      try {
+        themeInspection = await inspectShopifyThemeSource(process.env);
+      } catch (error) {
+        themeInspection = {
+          source: "shopify-admin-graphql",
+          status: "blocked",
+          reason: safeInspectionFailure(error),
+        };
+      }
+    }
     const requestID = randomUUID();
     const auditID = randomUUID();
 
@@ -47,7 +67,14 @@ export default async function handler(request: VercelRequest, response: VercelRe
         Accept: "application/json",
         "X-Client-Request-Id": requestID,
       },
-      body: JSON.stringify(buildOpenAIRequestBody(runtimeRequest, environment.OPENAI_MODEL)),
+      body: JSON.stringify(buildOpenAIRequestBody(
+        runtimeRequest,
+        environment.OPENAI_MODEL,
+        combineVerifiedEvidence(
+          storefrontInspection ? compactInspectionEvidence(storefrontInspection) : undefined,
+          themeInspection,
+        ),
+      )),
       signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
     });
 
@@ -70,6 +97,21 @@ export default async function handler(request: VercelRequest, response: VercelRe
       department: runtimeRequest.department,
       requestId: requestID,
       auditId: auditID,
+      inspection: storefrontInspection ? {
+        auditId: storefrontInspection.auditId,
+        source: storefrontInspection.source,
+        inspectedCount: storefrontInspection.inspectedCount,
+        discoveredCount: storefrontInspection.discoveredCount,
+      } : themeInspection && "status" in themeInspection ? {
+        source: themeInspection.source,
+        status: themeInspection.status,
+        reason: themeInspection.reason,
+      } : themeInspection ? {
+        source: themeInspection.source,
+        themeId: themeInspection.theme.id,
+        themeName: themeInspection.theme.name,
+        filesScanned: themeInspection.filesScanned,
+      } : undefined,
       executionContext: {
         authorizationMode,
         subject: session?.sub ?? "internal-recovery",
@@ -107,4 +149,53 @@ function normalizeError(caught: unknown): KairosHttpError {
     return new KairosHttpError(504, "provider_timeout", "Kairos took too long to respond.");
   }
   return new KairosHttpError(500, "internal_error", "Kairos encountered an internal error.");
+}
+
+
+function compactInspectionEvidence(inspection: Awaited<ReturnType<typeof inspectStorefront>>): Record<string, unknown> {
+  return {
+    auditId: inspection.auditId,
+    source: inspection.source,
+    storefront: inspection.storefront,
+    startedAt: inspection.startedAt,
+    completedAt: inspection.completedAt,
+    sitemapUrls: inspection.sitemapUrls,
+    inspectedCount: inspection.inspectedCount,
+    discoveredCount: inspection.discoveredCount,
+    pages: inspection.pages.map((page) => ({
+      url: page.url,
+      status: page.status,
+      finalUrl: page.finalUrl,
+      title: page.title,
+      description: page.description,
+      canonical: page.canonical,
+      h1: page.h1,
+      issues: page.issues,
+    })),
+    errors: inspection.errors,
+  };
+}
+
+
+function combineVerifiedEvidence(
+  storefront: Record<string, unknown> | undefined,
+  theme:
+    | Awaited<ReturnType<typeof inspectShopifyThemeSource>>
+    | { source: "shopify-admin-graphql"; status: "blocked"; reason: string }
+    | undefined,
+): Record<string, unknown> | undefined {
+  if (!storefront && !theme) return undefined;
+  return {
+    ...(storefront ? { storefrontInspection: storefront } : {}),
+    ...(theme ? { shopifyThemeInspection: theme } : {}),
+  };
+}
+
+
+function safeInspectionFailure(error: unknown): string {
+  const message = error instanceof Error ? error.message : "Shopify theme inspection failed.";
+  return message
+    .replace(/shpat_[a-zA-Z0-9_-]+/g, "[REDACTED]")
+    .replace(/Bearer\s+[a-zA-Z0-9._-]+/gi, "Bearer [REDACTED]")
+    .slice(0, 800);
 }
