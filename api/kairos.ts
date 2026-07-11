@@ -11,6 +11,7 @@ import {
   requireRuntimeEnvironment,
 } from "./kairos-core.js";
 import { readCookie, SESSION_COOKIE_NAME, verifyOperatorSession } from "./session-core.js";
+import { inspectStorefront, isStorefrontAuditObjective } from "./storefront-inspection-core.js";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const PROVIDER_TIMEOUT_MS = 45_000;
@@ -36,6 +37,9 @@ export default async function handler(request: VercelRequest, response: VercelRe
     if (!session) authorizeRequest(firstHeaderValue(request.headers.authorization), environment.KAIROS_RUNTIME_TOKEN);
 
     const runtimeRequest = parseRuntimeRequest(request.body);
+    const storefrontInspection = isStorefrontAuditObjective(runtimeRequest.objective)
+      ? await inspectStorefront(40)
+      : undefined;
     const requestID = randomUUID();
     const auditID = randomUUID();
 
@@ -47,7 +51,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
         Accept: "application/json",
         "X-Client-Request-Id": requestID,
       },
-      body: JSON.stringify(buildOpenAIRequestBody(runtimeRequest, environment.OPENAI_MODEL)),
+      body: JSON.stringify(buildOpenAIRequestBody(runtimeRequest, environment.OPENAI_MODEL, storefrontInspection)),
       signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
     });
 
@@ -70,6 +74,12 @@ export default async function handler(request: VercelRequest, response: VercelRe
       department: runtimeRequest.department,
       requestId: requestID,
       auditId: auditID,
+      inspection: storefrontInspection ? {
+        auditId: storefrontInspection.auditId,
+        source: storefrontInspection.source,
+        inspectedCount: storefrontInspection.inspectedCount,
+        discoveredCount: storefrontInspection.discoveredCount,
+      } : undefined,
       executionContext: {
         authorizationMode,
         subject: session?.sub ?? "internal-recovery",
