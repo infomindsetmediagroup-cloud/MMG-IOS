@@ -11,6 +11,7 @@ import {
   requireRuntimeEnvironment,
 } from "./kairos-core.js";
 import { readCookie, SESSION_COOKIE_NAME, verifyOperatorSession } from "./session-core.js";
+import { inspectStorefront, isStorefrontAuditObjective } from "../server/storefront-inspection-core.js";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const PROVIDER_TIMEOUT_MS = 45_000;
@@ -33,15 +34,26 @@ export default async function handler(request: VercelRequest, response: VercelRe
     const cookieToken = readCookie(firstHeaderValue(request.headers.cookie), SESSION_COOKIE_NAME);
     const session = verifyOperatorSession(cookieToken, environment.KAIROS_RUNTIME_TOKEN);
     const authorizationMode = session ? "session" : "gateway-recovery";
-
-    if (!session) {
-      authorizeRequest(firstHeaderValue(request.headers.authorization), environment.KAIROS_RUNTIME_TOKEN);
-    }
+    if (!session) authorizeRequest(firstHeaderValue(request.headers.authorization), environment.KAIROS_RUNTIME_TOKEN);
 
     const runtimeRequest = parseRuntimeRequest(request.body);
+    const storefrontInspection = isStorefrontAuditObjective(runtimeRequest.objective)
+      ? await inspectStorefront(40)
+      : undefined;
+    const governedRequest = storefrontInspection
+      ? {
+          ...runtimeRequest,
+          governanceNote: [
+            runtimeRequest.governanceNote,
+            "VERIFIED LIVE STOREFRONT EVIDENCE:",
+            JSON.stringify(compactInspectionEvidence(storefrontInspection)),
+            "Use only this observed evidence for confirmed findings. Identify unavailable checks explicitly.",
+          ].filter(Boolean).join("\n\n").slice(0, 4_000),
+        }
+      : runtimeRequest;
+
     const requestID = randomUUID();
     const auditID = randomUUID();
-
     const providerResponse = await fetch(OPENAI_RESPONSES_URL, {
       method: "POST",
       headers: {
@@ -50,7 +62,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
         Accept: "application/json",
         "X-Client-Request-Id": requestID,
       },
-      body: JSON.stringify(buildOpenAIRequestBody(runtimeRequest, environment.OPENAI_MODEL)),
+      body: JSON.stringify(buildOpenAIRequestBody(governedRequest, environment.OPENAI_MODEL)),
       signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
     });
 
@@ -73,6 +85,12 @@ export default async function handler(request: VercelRequest, response: VercelRe
       department: runtimeRequest.department,
       requestId: requestID,
       auditId: auditID,
+      inspection: storefrontInspection ? {
+        auditId: storefrontInspection.auditId,
+        source: storefrontInspection.source,
+        inspectedCount: storefrontInspection.inspectedCount,
+        discoveredCount: storefrontInspection.discoveredCount,
+      } : undefined,
       executionContext: {
         authorizationMode,
         subject: session?.sub ?? "internal-recovery",
@@ -84,11 +102,33 @@ export default async function handler(request: VercelRequest, response: VercelRe
     });
   } catch (caught) {
     const error = normalizeError(caught);
-    if (error.statusCode >= 500) {
-      console.error("Kairos runtime failure", { requestID: error.requestID, code: error.code });
-    }
+    if (error.statusCode >= 500) console.error("Kairos runtime failure", { requestID: error.requestID, code: error.code });
     response.status(error.statusCode).json(errorEnvelope(error));
   }
+}
+
+function compactInspectionEvidence(inspection: Awaited<ReturnType<typeof inspectStorefront>>): Record<string, unknown> {
+  return {
+    auditId: inspection.auditId,
+    source: inspection.source,
+    storefront: inspection.storefront,
+    startedAt: inspection.startedAt,
+    completedAt: inspection.completedAt,
+    sitemapUrls: inspection.sitemapUrls,
+    inspectedCount: inspection.inspectedCount,
+    discoveredCount: inspection.discoveredCount,
+    pages: inspection.pages.map((page) => ({
+      url: page.url,
+      status: page.status,
+      finalUrl: page.finalUrl,
+      title: page.title,
+      description: page.description,
+      canonical: page.canonical,
+      h1: page.h1,
+      issues: page.issues,
+    })),
+    errors: inspection.errors,
+  };
 }
 
 function firstHeaderValue(value: string | string[] | undefined): string | undefined {
@@ -103,11 +143,7 @@ async function readJSON(response: Response): Promise<unknown> {
 
 function normalizeError(caught: unknown): KairosHttpError {
   if (caught instanceof KairosHttpError) return caught;
-  if (caught instanceof DOMException && caught.name === "TimeoutError") {
-    return new KairosHttpError(504, "provider_timeout", "Kairos took too long to respond.");
-  }
-  if (caught instanceof Error && caught.name === "TimeoutError") {
-    return new KairosHttpError(504, "provider_timeout", "Kairos took too long to respond.");
-  }
+  if (caught instanceof DOMException && caught.name === "TimeoutError") return new KairosHttpError(504, "provider_timeout", "Kairos took too long to respond.");
+  if (caught instanceof Error && caught.name === "TimeoutError") return new KairosHttpError(504, "provider_timeout", "Kairos took too long to respond.");
   return new KairosHttpError(500, "internal_error", "Kairos encountered an internal error.");
 }

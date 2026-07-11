@@ -8,5 +8,5 @@
     "types": ["node"],
     "skipLibCheck": true
   },
-  "include": ["api/**/*.ts", "backend-tests/**/*.ts"]
+  "include": ["api/**/*.ts", "server/**/*.ts", "backend-tests/**/*.ts"]
 }
