@@ -1,0 +1,2 @@
+Deploy Shopify client-credentials domain resolution and prevent stale static-token fallback.
+Source commit: 423d5b3c4f672f81603c683596c98104568965a4
