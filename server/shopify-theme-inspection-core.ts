@@ -50,7 +50,7 @@ export async function inspectShopifyThemeSource(env: ShopifyEnvironment): Promis
     throw new Error(`Missing Vercel Preview environment variables: ${missing.join(", ")}.`);
   }
 
-  const accessToken = await requestAccessToken(shop, clientId, clientSecret);
+  const accessToken = await requestAccessToken(shop!, clientId!, clientSecret!);
   const response = await fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
     method: "POST",
     headers: {
