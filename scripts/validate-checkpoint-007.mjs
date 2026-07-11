@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
+import { parseRuntimeBaseURL } from './runtime-base-url.mjs';
 
-const baseUrl = process.env.KAIROS_RUNTIME_BASE_URL?.replace(/\/$/, '');
+const baseUrl = parseRuntimeBaseURL(process.env.KAIROS_RUNTIME_BASE_URL);
 const gatewayToken = process.env.KAIROS_RUNTIME_TOKEN;
 const requireSession = process.env.KAIROS_EXPECT_SESSION_ENFORCEMENT === 'true';
 
-if (!baseUrl) throw new Error('KAIROS_RUNTIME_BASE_URL is required.');
 if (!gatewayToken) throw new Error('KAIROS_RUNTIME_TOKEN is required.');
 
 let cookie = '';

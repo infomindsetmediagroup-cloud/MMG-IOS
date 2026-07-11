@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 
-const endpoint = process.env.KAIROS_RUNTIME_BASE_URL?.replace(/\/$/, "");
-const token = process.env.KAIROS_RUNTIME_TOKEN;
+import { parseRuntimeBaseURL } from "./runtime-base-url.mjs";
 
-if (!endpoint) {
-  console.error("KAIROS_RUNTIME_BASE_URL is required.");
+let endpoint;
+try {
+  endpoint = parseRuntimeBaseURL(process.env.KAIROS_RUNTIME_BASE_URL);
+} catch (error) {
+  console.error(error.message);
   process.exit(2);
 }
+const token = process.env.KAIROS_RUNTIME_TOKEN;
 
 if (!token) {
   console.error("KAIROS_RUNTIME_TOKEN is required.");

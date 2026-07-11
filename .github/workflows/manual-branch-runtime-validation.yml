@@ -11,6 +11,7 @@ on:
       runtime_base_url:
         description: "Deployed runtime base URL without a trailing slash"
         required: true
+        default: "https://mmg-ios.vercel.app"
         type: string
       validation_script:
         description: "Repository-relative Node validation script"
