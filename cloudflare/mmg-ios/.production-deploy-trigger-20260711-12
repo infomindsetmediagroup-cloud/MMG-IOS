@@ -1,0 +1,4 @@
+MMG Kairos production deployment trigger
+Target merge: c735d557256ccb605eb2d3b85728f8fc54e2ab2a
+Build: command-center-health-resilience-20260711-11
+Purpose: force Cloudflare Git integration to publish current main after PR merge deployment was skipped.
