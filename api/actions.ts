@@ -14,6 +14,7 @@ import {
   errorEnvelope,
   requireRuntimeEnvironment,
 } from "./kairos-core.js";
+import { readCookie, SESSION_COOKIE_NAME, verifyOperatorSession } from "./session-core.js";
 
 const SHOPIFY_TIMEOUT_MS = 20_000;
 
@@ -31,7 +32,10 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
   try {
     const runtime = requireRuntimeEnvironment(process.env);
-    authorizeRequest(firstHeaderValue(request.headers.authorization), runtime.KAIROS_RUNTIME_TOKEN);
+    const cookieToken = readCookie(firstHeaderValue(request.headers.cookie), SESSION_COOKIE_NAME);
+    const session = verifyOperatorSession(cookieToken, runtime.KAIROS_RUNTIME_TOKEN);
+    if (!session) authorizeRequest(firstHeaderValue(request.headers.authorization), runtime.KAIROS_RUNTIME_TOKEN);
+
     parseApprovedActionRequest(request.body);
     const shopify = requireShopifyConfiguration(process.env);
     const startedAt = new Date();
@@ -53,7 +57,14 @@ export default async function handler(request: VercelRequest, response: VercelRe
     }
 
     const evidence = parseHomepageAuditEvidence(body);
-    response.status(200).json(buildCompletedAction(evidence, startedAt));
+    response.status(200).json({
+      ...buildCompletedAction(evidence, startedAt),
+      executionContext: {
+        authorizationMode: session ? "session" : "gateway-recovery",
+        operator: session?.operator,
+        sessionId: session?.sessionId ?? "gateway-recovery",
+      },
+    });
   } catch (caught) {
     const error = normalizeError(caught);
     response.status(error.statusCode).json(errorEnvelope(error));
