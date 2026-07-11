@@ -12,6 +12,7 @@ import {
 } from "./kairos-core.js";
 import { readCookie, SESSION_COOKIE_NAME, verifyOperatorSession } from "./session-core.js";
 import { inspectStorefront, isStorefrontAuditObjective } from "./storefront-inspection-core.js";
+import { inspectShopifyThemeSource, isThemeSourceObjective } from "./shopify-theme-inspection-core.js";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const PROVIDER_TIMEOUT_MS = 45_000;
@@ -40,6 +41,9 @@ export default async function handler(request: VercelRequest, response: VercelRe
     const storefrontInspection = isStorefrontAuditObjective(runtimeRequest.objective)
       ? await inspectStorefront(40)
       : undefined;
+    const themeInspection = isThemeSourceObjective(runtimeRequest.objective)
+      ? await inspectShopifyThemeSource(process.env)
+      : undefined;
     const requestID = randomUUID();
     const auditID = randomUUID();
 
@@ -54,7 +58,10 @@ export default async function handler(request: VercelRequest, response: VercelRe
       body: JSON.stringify(buildOpenAIRequestBody(
         runtimeRequest,
         environment.OPENAI_MODEL,
-        storefrontInspection ? compactInspectionEvidence(storefrontInspection) : undefined,
+        combineVerifiedEvidence(
+          storefrontInspection ? compactInspectionEvidence(storefrontInspection) : undefined,
+          themeInspection,
+        ),
       )),
       signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
     });
@@ -83,6 +90,11 @@ export default async function handler(request: VercelRequest, response: VercelRe
         source: storefrontInspection.source,
         inspectedCount: storefrontInspection.inspectedCount,
         discoveredCount: storefrontInspection.discoveredCount,
+      } : themeInspection ? {
+        source: themeInspection.source,
+        themeId: themeInspection.theme.id,
+        themeName: themeInspection.theme.name,
+        filesScanned: themeInspection.filesScanned,
       } : undefined,
       executionContext: {
         authorizationMode,
@@ -145,5 +157,17 @@ function compactInspectionEvidence(inspection: Awaited<ReturnType<typeof inspect
       issues: page.issues,
     })),
     errors: inspection.errors,
+  };
+}
+
+
+function combineVerifiedEvidence(
+  storefront: Record<string, unknown> | undefined,
+  theme: Awaited<ReturnType<typeof inspectShopifyThemeSource>> | undefined,
+): Record<string, unknown> | undefined {
+  if (!storefront && !theme) return undefined;
+  return {
+    ...(storefront ? { storefrontInspection: storefront } : {}),
+    ...(theme ? { shopifyThemeInspection: theme } : {}),
   };
 }
