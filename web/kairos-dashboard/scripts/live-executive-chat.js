@@ -1,5 +1,5 @@
 const DEFAULT_RUNTIME_BASE_URL = "https://mmg-ios.vercel.app";
-const runtimeBaseURL = window.location.hostname.endsWith("vercel.app") ? window.location.origin : DEFAULT_RUNTIME_BASE_URL;
+const runtimeBaseURL = window.location.hostname.endsWith("github.io") ? DEFAULT_RUNTIME_BASE_URL : window.location.origin;
 const sameOriginRuntime = new URL(runtimeBaseURL).origin === window.location.origin;
 
 const state = { open: false, sending: false, ready: false, authenticated: false, session: null };
@@ -120,7 +120,7 @@ async function sendObjective(event) {
   try {
     const response = await fetch(`${runtimeBaseURL}/api/kairos`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json", "X-MMG-Client-Build": "command-center-recovery-20260711-2" },
+      headers: { "Content-Type": "application/json", Accept: "application/json", "X-MMG-Client-Build": "command-center-ecosystem-20260711-4" },
       credentials: "include",
       body: JSON.stringify({
         objective,
