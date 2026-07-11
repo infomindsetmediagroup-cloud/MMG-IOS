@@ -1,12 +1,13 @@
-const storeKey = "kairos.executive.command-center.v6";
+const storeKey = "kairos.executive.command-center.v7";
 const legacyStoreKeys = [
+  "kairos.executive.command-center.v6",
   "kairos.executive.command-center.v5",
   "kairos.executive.command-center.v4",
   "kairos.executive.command-center.v3",
   "kairos.executive.command-center.v2",
   "kairos.executive.command-center.v1",
 ];
-const STORE_VERSION = 6;
+const STORE_VERSION = 7;
 const MAX_KNOWLEDGE_RECORDS = 24;
 const MAX_STRING_LENGTH = 1600;
 const MAX_ARRAY_ITEMS = 12;
@@ -14,6 +15,7 @@ const MAX_OBJECT_KEYS = 24;
 
 let memoryStore = null;
 let notificationQueued = false;
+const runtimeProposals = new Map();
 
 export const commandCenters = [
   { id: "executive", title: "Executive Operations", icon: "✦", detail: "Approvals, decisions, priorities, and work requiring your attention." },
@@ -68,8 +70,16 @@ function compactWorkItem(item) {
   return next;
 }
 
+function hydrateRuntimeProposals(store) {
+  return {
+    ...store,
+    work: store.work.map(item => runtimeProposals.has(item.id) ? { ...item, proposal: runtimeProposals.get(item.id) } : item),
+  };
+}
+
 function normalizeProposal(item, merged) {
   if (!item.requiresReview) return merged;
+  if (merged.executionCompleted === true) return { ...merged, status: "Completed", progress: 100, proposal: null, error: "" };
   if (merged.status === "Completed" && merged.evidence) {
     return { ...merged, status: "Proposal Ready", progress: 100, proposal: compactValue(merged.evidence), evidence: null, updatedAt: "Proposal prepared; executive approval required" };
   }
@@ -104,15 +114,13 @@ function sanitizeStore(input) {
     ...source,
     version: STORE_VERSION,
     work: mergeWork(Array.isArray(source.work) ? source.work : []),
-    knowledge: (Array.isArray(source.knowledge) ? source.knowledge : [])
-      .slice(0, MAX_KNOWLEDGE_RECORDS)
-      .map(record => compactValue(record)),
+    knowledge: (Array.isArray(source.knowledge) ? source.knowledge : []).slice(0, MAX_KNOWLEDGE_RECORDS).map(record => compactValue(record)),
   };
 }
 
 export function getCommandCenterStore() {
   purgeLegacyStores();
-  if (memoryStore) return memoryStore;
+  if (memoryStore) return hydrateRuntimeProposals(memoryStore);
   try {
     const current = JSON.parse(localStorage.getItem(storeKey) || "null");
     memoryStore = current?.version === STORE_VERSION ? sanitizeStore(current) : defaultStore();
@@ -120,7 +128,7 @@ export function getCommandCenterStore() {
     try { localStorage.removeItem(storeKey); } catch { /* Ignore storage restrictions. */ }
     memoryStore = defaultStore();
   }
-  return memoryStore;
+  return hydrateRuntimeProposals(memoryStore);
 }
 
 function queueNotification() {
@@ -137,12 +145,17 @@ function save(next, notify = true) {
   memoryStore = value;
   try { localStorage.setItem(storeKey, JSON.stringify(value)); } catch { /* Keep live in-memory operation usable. */ }
   if (notify) queueNotification();
-  return value;
+  return hydrateRuntimeProposals(value);
 }
 
 export function updateWorkItem(id, patch) {
   const current = getCommandCenterStore();
-  const safePatch = compactWorkItem(patch || {});
+  const incoming = patch || {};
+  if (Object.prototype.hasOwnProperty.call(incoming, "proposal")) {
+    if (incoming.proposal) runtimeProposals.set(id, incoming.proposal);
+    else runtimeProposals.delete(id);
+  }
+  const safePatch = compactWorkItem(incoming);
   return save({ ...current, work: current.work.map(item => item.id === id ? compactWorkItem({ ...item, ...safePatch, updatedAt: safePatch.updatedAt || new Date().toLocaleString() }) : item) });
 }
 
@@ -159,14 +172,7 @@ export function unlockDependents(completedId) {
 
 export function recordCompletedKnowledge(workItem, evidence) {
   const current = getCommandCenterStore();
-  const record = compactValue({
-    id: evidence?.actionID || crypto.randomUUID(),
-    title: workItem.title,
-    center: workItem.center,
-    workItemId: workItem.id,
-    completedAt: evidence?.completedAt || new Date().toISOString(),
-    evidence: evidence?.evidence || evidence || {},
-  });
+  const record = compactValue({ id: evidence?.actionID || crypto.randomUUID(), title: workItem.title, center: workItem.center, workItemId: workItem.id, completedAt: evidence?.completedAt || new Date().toISOString(), evidence: evidence?.evidence || evidence || {} });
   return save({ ...current, knowledge: [record, ...current.knowledge.filter(item => item.id !== record.id)].slice(0, MAX_KNOWLEDGE_RECORDS) });
 }
 
@@ -178,6 +184,7 @@ export function nextRunnableWork(centerId) {
 
 export function resetCommandCenterStore() {
   memoryStore = null;
+  runtimeProposals.clear();
   try { localStorage.removeItem(storeKey); } catch { /* Ignore storage restrictions. */ }
   purgeLegacyStores();
   queueNotification();
