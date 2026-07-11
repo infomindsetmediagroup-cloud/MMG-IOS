@@ -35,6 +35,8 @@ struct ExecutiveWorkflowFactory {
 
     func workflowType(for department: String) -> RuntimeWorkflowType {
         switch normalized(department) {
+        case "shopifywebsite":
+            return .kairosOrchestration
         case "publishing":
             return .publishing
         case "designstudio":

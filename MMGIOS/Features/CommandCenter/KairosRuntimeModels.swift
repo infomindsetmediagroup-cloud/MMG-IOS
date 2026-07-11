@@ -32,6 +32,49 @@ struct KairosRuntimeResponse: Codable, Equatable {
     }
 }
 
+struct KairosApprovedActionRequest: Codable, Equatable {
+    let actionType: String
+    let objective: String
+    let approval: Approval
+
+    struct Approval: Codable, Equatable {
+        let approved: Bool
+        let actor: String
+        let approvedAt: String
+    }
+
+    static func shopifyHomepageAudit(objective: String, approvedAt: Date = .now) -> KairosApprovedActionRequest {
+        KairosApprovedActionRequest(
+            actionType: "shopify.homepage.audit",
+            objective: objective,
+            approval: Approval(
+                approved: true,
+                actor: "MMG Executive",
+                approvedAt: ISO8601DateFormatter().string(from: approvedAt)
+            )
+        )
+    }
+}
+
+struct KairosActionResponse: Codable, Equatable {
+    let actionID: String
+    let actionType: String
+    let status: String
+    let startedAt: String
+    let completedAt: String
+    let evidence: ShopifyThemeEvidence
+
+    struct ShopifyThemeEvidence: Codable, Equatable {
+        let themeID: String
+        let name: String
+        let role: String
+        let updatedAt: String
+        let processing: Bool
+        let processingFailed: Bool
+        let homepageFiles: [String]
+    }
+}
+
 struct KairosRuntimeErrorResponse: Codable, Equatable {
     struct Detail: Codable, Equatable {
         let code: String?
@@ -116,6 +159,7 @@ enum KairosRuntimeError: Error, Equatable, LocalizedError {
     case server(statusCode: Int, message: String)
     case transport(message: String)
     case decoding
+    case actionUnavailable
 
     var errorDescription: String? {
         switch self {
@@ -131,6 +175,8 @@ enum KairosRuntimeError: Error, Equatable, LocalizedError {
             return message
         case .decoding:
             return "Kairos returned a response the app could not read."
+        case .actionUnavailable:
+            return "No execution adapter is available for this action."
         }
     }
 }

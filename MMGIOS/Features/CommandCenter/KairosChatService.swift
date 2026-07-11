@@ -42,6 +42,10 @@ struct KairosChatService {
             runtimeResponse: response
         )
     }
+
+    func executeApprovedShopifyAudit(objective: String) async throws -> KairosActionResponse {
+        try await runtime.executeApprovedAction(.shopifyHomepageAudit(objective: objective))
+    }
 }
 
 enum KairosChatServiceError: Error, Equatable, LocalizedError {

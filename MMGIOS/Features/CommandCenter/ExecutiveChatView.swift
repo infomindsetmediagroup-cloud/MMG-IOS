@@ -10,9 +10,13 @@ struct ExecutiveChatView: View {
     @State private var runtimeErrorMessage: String?
     @State private var requestTask: Task<Void, Never>?
     @State private var pendingApprovalRecord: KnowledgeVaultRecord?
+    @State private var pendingObjective: String?
+    @State private var pendingDepartment: KairosDepartment?
     @State private var approvalErrorMessage: String?
+    @State private var actionExecutionTask: Task<Void, Never>?
 
     private let executionCoordinator = ExecutiveExecutionCoordinator()
+    private let packageRuntime = ExecutionPackageRuntimeService()
 
     private let chatService: KairosChatService
     private let runtimeReadiness: KairosRuntimeReadiness
@@ -73,6 +77,7 @@ struct ExecutiveChatView: View {
             .navigationTitle("Kairos Chat")
             .onDisappear {
                 requestTask?.cancel()
+                actionExecutionTask?.cancel()
             }
         }
     }
@@ -307,6 +312,8 @@ struct ExecutiveChatView: View {
                     let metadata = responseMetadata(for: response, decision: result.routeDecision)
                     messages.append(.init(role: .kairos, body: response.message, metadata: metadata))
                     pendingApprovalRecord = captureKnowledgeRecord(result: result)
+                    pendingObjective = result.objective
+                    pendingDepartment = result.routeDecision.department
                     isSending = false
                     requestTask = nil
                 }
@@ -389,7 +396,10 @@ struct ExecutiveChatView: View {
     }
 
     private func approvePendingAction() {
-        guard let record = pendingApprovalRecord else { return }
+        guard let record = pendingApprovalRecord,
+              let objective = pendingObjective,
+              let department = pendingDepartment
+        else { return }
         approvalErrorMessage = nil
         let package = executionCoordinator.approveAndQueue(record: record)
         modelContext.insert(package.workflow)
@@ -399,14 +409,113 @@ struct ExecutiveChatView: View {
         do {
             try modelContext.save()
             pendingApprovalRecord = nil
-            messages.append(.init(
-                role: .kairos,
-                body: "Approved. The action package is queued. Its status will change to Working only when an authorized execution adapter claims it."
-            ))
+            pendingObjective = nil
+            pendingDepartment = nil
+
+            if department == .shopifyWebsite {
+                executeShopifyAudit(objective: objective, record: record, package: package)
+            } else {
+                messages.append(.init(
+                    role: .kairos,
+                    body: "Approved. The action package is queued. Its status will change to Working only when an authorized execution adapter claims it."
+                ))
+            }
         } catch {
             modelContext.rollback()
             approvalErrorMessage = "Kairos could not queue the action. No partial execution was saved."
         }
+    }
+
+    private func executeShopifyAudit(
+        objective: String,
+        record: KnowledgeVaultRecord,
+        package: ExecutiveExecutionPackage
+    ) {
+        let startTransitions = packageRuntime.start(
+            workflow: package.workflow,
+            task: package.task,
+            queueItem: package.queueItem
+        )
+        startTransitions.forEach(modelContext.insert)
+        appendHistory("Execution Adapter Claimed: shopify.homepage.audit", to: record)
+        appendState(.inProgress, to: record)
+
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            approvalErrorMessage = "The Shopify adapter could not claim this action."
+            return
+        }
+
+        messages.append(.init(role: .kairos, body: "Approved. I’m inspecting the live Shopify homepage now."))
+        actionExecutionTask?.cancel()
+        actionExecutionTask = Task {
+            do {
+                let result = try await chatService.executeApprovedShopifyAudit(objective: objective)
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    let completionTransitions = packageRuntime.complete(
+                        workflow: package.workflow,
+                        task: package.task,
+                        queueItem: package.queueItem
+                    )
+                    completionTransitions.forEach(modelContext.insert)
+                    appendHistory(shopifyEvidenceSummary(result), to: record)
+                    appendState(.completed, to: record)
+                    do {
+                        try modelContext.save()
+                        messages.append(.init(
+                            role: .kairos,
+                            body: "Homepage inspection completed and preserved. Live theme: \(result.evidence.name). I verified \(result.evidence.homepageFiles.count) homepage-critical theme files."
+                        ))
+                    } catch {
+                        modelContext.rollback()
+                        runtimeErrorMessage = "The Shopify audit completed, but its evidence could not be preserved."
+                    }
+                    actionExecutionTask = nil
+                }
+            } catch {
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    let message = (error as? LocalizedError)?.errorDescription ?? "The Shopify homepage audit failed."
+                    packageRuntime.block(
+                        workflow: package.workflow,
+                        task: package.task,
+                        queueItem: package.queueItem,
+                        reason: message
+                    )
+                    appendHistory("Execution Adapter Blocked: \(message)", to: record)
+                    appendState(.needsReview, to: record)
+                    try? modelContext.save()
+                    messages.append(.init(role: .kairos, body: message))
+                    actionExecutionTask = nil
+                }
+            }
+        }
+    }
+
+    private func shopifyEvidenceSummary(_ result: KairosActionResponse) -> String {
+        [
+            "Execution Completed: \(result.actionType)",
+            "Action ID: \(result.actionID)",
+            "Live Theme: \(result.evidence.name)",
+            "Theme ID: \(result.evidence.themeID)",
+            "Theme Role: \(result.evidence.role)",
+            "Theme Updated: \(result.evidence.updatedAt)",
+            "Homepage Files: \(result.evidence.homepageFiles.joined(separator: ", "))",
+            "Completed At: \(result.completedAt)"
+        ].joined(separator: "\n")
+    }
+
+    private func appendState(_ status: ExecutiveActionState, to record: KnowledgeVaultRecord) {
+        let timestamp = Date().formatted(date: .abbreviated, time: .shortened)
+        appendHistory("Action Status: \(status.label) @ \(timestamp)", to: record)
+    }
+
+    private func appendHistory(_ note: String, to record: KnowledgeVaultRecord) {
+        record.decisionHistory = record.decisionHistory.isEmpty ? note : record.decisionHistory + "\n\n" + note
+        record.updatedAt = .now
     }
 
     private func scrollToLatest(using proxy: ScrollViewProxy) {

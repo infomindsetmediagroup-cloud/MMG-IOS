@@ -38,6 +38,7 @@ read_orders
 read_customers
 read_inventory
 read_discounts
+read_themes
 write_discounts
 ```
 
@@ -52,7 +53,8 @@ The first live milestone should be read-only:
 3. Fetch latest orders.
 4. Fetch latest customers.
 5. Fetch product count.
-6. Show live status in Kairos dashboard.
+6. Fetch the published theme and homepage-critical file inventory.
+7. Show live status in Kairos dashboard.
 
 No order creation, product updates, discount creation, or destructive action should be enabled until read-only validation passes.
 

@@ -60,6 +60,34 @@ final class KairosRuntimeClientTests: XCTestCase {
         }
     }
 
+    func testExecuteApprovedActionUsesSiblingActionsEndpoint() async throws {
+        let endpoint = try XCTUnwrap(URL(string: "https://example.com/api/kairos"))
+        let configuration = try KairosRuntimeConfiguration(endpointURL: endpoint, accessToken: "gateway-token")
+        let client = KairosRuntimeClient(configuration: configuration, session: makeSession())
+        let action = KairosApprovedActionRequest.shopifyHomepageAudit(
+            objective: "Audit the live homepage",
+            approvedAt: Date(timeIntervalSince1970: 0)
+        )
+
+        URLProtocolStub.requestHandler = { request in
+            XCTAssertEqual(request.url, URL(string: "https://example.com/api/actions"))
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer gateway-token")
+            let body = try XCTUnwrap(request.httpBody)
+            XCTAssertEqual(try JSONDecoder().decode(KairosApprovedActionRequest.self, from: body), action)
+
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let data = Data("""
+            {"actionID":"action-1","actionType":"shopify.homepage.audit","status":"completed","startedAt":"2026-07-11T18:00:00Z","completedAt":"2026-07-11T18:00:01Z","evidence":{"themeID":"theme-1","name":"MMG Live","role":"MAIN","updatedAt":"2026-07-11T17:00:00Z","processing":false,"processingFailed":false,"homepageFiles":["templates/index.json"]}}
+            """.utf8)
+            return (response, data)
+        }
+
+        let result = try await client.executeApprovedAction(action)
+        XCTAssertEqual(result.actionID, "action-1")
+        XCTAssertEqual(result.evidence.name, "MMG Live")
+    }
+
     func testSendRejectsUnreadableSuccessPayload() async throws {
         let endpoint = try XCTUnwrap(URL(string: "https://example.com/api/kairos"))
         let configuration = try KairosRuntimeConfiguration(endpointURL: endpoint, accessToken: "gateway-token")

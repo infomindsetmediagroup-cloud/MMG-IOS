@@ -3,6 +3,9 @@
   "functions": {
     "api/kairos.ts": {
       "maxDuration": 60
+    },
+    "api/actions.ts": {
+      "maxDuration": 30
     }
   },
   "headers": [

@@ -20,6 +20,10 @@ struct KairosDepartmentRouter {
             return .executiveOffice
         }
 
+        if containsAny(command, ["shopify", "storefront", "homepage", "home page", "website", "theme", "navigation", "product page"]) {
+            return .shopifyWebsite
+        }
+
         if containsAny(command, ["publish", "release", "deliverable", "customer portal", "portal", "ship", "launch"]) {
             return .releaseOperations
         }
@@ -72,6 +76,8 @@ struct KairosDepartmentRouter {
 
     private func summary(for department: KairosDepartment) -> String {
         switch department {
+        case .shopifyWebsite:
+            return "Shopify & Website should own this because it concerns the live storefront, theme, homepage, navigation, or commerce content."
         case .executiveOffice:
             return "Executive Office should own this because it affects prioritization, approval, governance, or final decision authority."
         case .workflowRuntime:
@@ -93,6 +99,13 @@ struct KairosDepartmentRouter {
 
     private func executionPlan(for department: KairosDepartment) -> [String] {
         switch department {
+        case .shopifyWebsite:
+            return [
+                "Inspect the live published theme and relevant storefront evidence.",
+                "Compare the current experience with the approved MMG website doctrine.",
+                "Prepare the smallest cohesive change package with verification and rollback requirements.",
+                "Execute only the approved package through an authorized Shopify adapter."
+            ]
         case .executiveOffice:
             return [
                 "Clarify the decision required.",
@@ -154,6 +167,8 @@ struct KairosDepartmentRouter {
 
     private func governanceNote(for department: KairosDepartment) -> String {
         switch department {
+        case .shopifyWebsite:
+            return "Live theme inspection is read-only. Theme writes require explicit approval, rollback material, and verified Shopify write authorization."
         case .executiveOffice:
             return "Final authority remains with the executive when governance, roadmap, or customer-facing release risk is involved."
         case .releaseOperations:
@@ -186,6 +201,7 @@ struct KairosRouteDecision: Equatable {
 }
 
 enum KairosDepartment: String, CaseIterable, Equatable {
+    case shopifyWebsite
     case executiveOffice
     case workflowRuntime
     case publishing
@@ -197,6 +213,8 @@ enum KairosDepartment: String, CaseIterable, Equatable {
 
     var displayName: String {
         switch self {
+        case .shopifyWebsite:
+            return "Shopify & Website"
         case .executiveOffice:
             return "Executive Office"
         case .workflowRuntime:
@@ -218,6 +236,8 @@ enum KairosDepartment: String, CaseIterable, Equatable {
 
     var routingKeywords: [String] {
         switch self {
+        case .shopifyWebsite:
+            return ["shopify", "storefront", "homepage", "home page", "website", "theme", "navigation", "product page"]
         case .executiveOffice:
             return ["approve", "approval", "decision", "sign off", "gate", "blocked", "blocker"]
         case .workflowRuntime:

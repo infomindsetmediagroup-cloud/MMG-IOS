@@ -24,10 +24,15 @@ enum KairosRuntimeReadiness: Equatable {
 protocol KairosRuntimeServing {
     var readiness: KairosRuntimeReadiness { get }
     func send(_ request: KairosRuntimeRequest) async throws -> KairosRuntimeResponse
+    func executeApprovedAction(_ request: KairosApprovedActionRequest) async throws -> KairosActionResponse
 }
 
 extension KairosRuntimeServing {
     var readiness: KairosRuntimeReadiness { .ready }
+
+    func executeApprovedAction(_ request: KairosApprovedActionRequest) async throws -> KairosActionResponse {
+        throw KairosRuntimeError.actionUnavailable
+    }
 }
 
 struct KairosRuntimeClient: KairosRuntimeServing {
@@ -84,6 +89,44 @@ struct KairosRuntimeClient: KairosRuntimeServing {
 
         do {
             return try decoder.decode(KairosRuntimeResponse.self, from: data)
+        } catch {
+            throw KairosRuntimeError.decoding
+        }
+    }
+
+    func executeApprovedAction(_ action: KairosApprovedActionRequest) async throws -> KairosActionResponse {
+        let actionsURL = configuration.endpointURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("actions")
+        var urlRequest = URLRequest(url: actionsURL)
+        urlRequest.httpMethod = "POST"
+        urlRequest.timeoutInterval = configuration.timeout
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Accept")
+        urlRequest.setValue("Bearer \(configuration.accessToken)", forHTTPHeaderField: "Authorization")
+        urlRequest.httpBody = try encoder.encode(action)
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: urlRequest)
+        } catch let error as URLError {
+            throw KairosRuntimeError.transport(message: transportMessage(for: error))
+        }
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw KairosRuntimeError.invalidResponse
+        }
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            let runtimeError = try? decoder.decode(KairosRuntimeErrorResponse.self, from: data)
+            throw KairosRuntimeError.server(
+                statusCode: httpResponse.statusCode,
+                message: runtimeError?.displayMessage ?? "Kairos action returned server error \(httpResponse.statusCode)."
+            )
+        }
+
+        do {
+            return try decoder.decode(KairosActionResponse.self, from: data)
         } catch {
             throw KairosRuntimeError.decoding
         }

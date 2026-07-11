@@ -2,6 +2,11 @@ import XCTest
 @testable import MMGIOS
 
 final class KairosRuntimeFoundationTests: XCTestCase {
+    func testRoutesHomepageWorkToShopifyWebsite() {
+        let decision = KairosDepartmentRouter().route("Review the live Shopify homepage")
+        XCTAssertEqual(decision.department, .shopifyWebsite)
+    }
+
     func testPublishingCommandRoutesToPublishing() {
         let decision = KairosDepartmentRouter().route("Prepare this manuscript for KDP publishing")
         XCTAssertEqual(decision.department, .publishing)
