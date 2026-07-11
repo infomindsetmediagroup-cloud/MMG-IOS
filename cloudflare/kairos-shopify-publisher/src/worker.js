@@ -87,9 +87,12 @@ export default {
               const response = await fetch("/api/themes", { headers: { "X-Kairos-Admin-Key": key } });
               const data = await response.json();
               if (!response.ok) throw new Error(data.message || "Connection failed.");
-              statusBox.textContent = `Connected to ${data.shop}. ${data.themes.length} theme(s) found.`;
+              statusBox.textContent = "Connected to " + data.shop + ". " + data.themes.length + " theme(s) found.";
               statusBox.className = "status success";
-              themesBox.innerHTML = data.themes.map((theme) => `<article class="theme"><div><strong>${escapeHtml(theme.name)}</strong><span>${escapeHtml(theme.role === "main" ? "Published" : String(theme.role))}</span></div><code>${escapeHtml(String(theme.id))}</code></article>`).join("");
+              themesBox.innerHTML = data.themes.map((theme) => {
+                const role = theme.role === "main" ? "Published" : String(theme.role);
+                return '<article class="theme"><div><strong>' + escapeHtml(theme.name) + '</strong><span>' + escapeHtml(role) + '</span></div><code>' + escapeHtml(String(theme.id)) + '</code></article>';
+              }).join("");
             } catch (error) {
               statusBox.textContent = error instanceof Error ? error.message : "Connection failed.";
               statusBox.className = "status error";
