@@ -5,6 +5,9 @@ const ASSET_ROOTS = [
   "https://cdn.jsdelivr.net/gh/infomindsetmediagroup-cloud/MMG-IOS@main/web/kairos-dashboard",
 ];
 
+const UPSTREAM_HEADER_TIMEOUT_MS = 2500;
+const UPSTREAM_BODY_TIMEOUT_MS = 4000;
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -34,14 +37,21 @@ async function serveResilientAsset(request, incomingURL) {
   const attempts = [];
 
   try {
-    const upstream = await firstSuccessfulResponse(targets, request, isHTML, attempts);
-    const headers = new Headers(upstream.headers);
+    const asset = await firstSuccessfulAsset(targets, request, pathname, isHTML, attempts);
+    const headers = new Headers(asset.headers);
     headers.set("Content-Type", contentTypeFor(pathname));
+    headers.set("Content-Length", String(asset.body.byteLength));
     headers.set("X-Content-Type-Options", "nosniff");
-    headers.set("X-MMG-Host", "cloudflare-parallel-resilient");
+    headers.set("X-MMG-Host", "cloudflare-buffered-resilient");
+    headers.set("X-MMG-Asset-Bytes", String(asset.body.byteLength));
     headers.set("Cache-Control", isHTML ? "no-cache, no-store, must-revalidate" : "public, max-age=900, stale-while-revalidate=86400");
     headers.delete("content-security-policy");
-    return new Response(upstream.body, { status: upstream.status, statusText: upstream.statusText, headers });
+    headers.delete("content-encoding");
+    headers.delete("transfer-encoding");
+    return new Response(request.method === "HEAD" ? null : asset.body, {
+      status: 200,
+      headers,
+    });
   } catch {
     if (pathname !== "/index.html" && !hasFileExtension(pathname)) {
       return serveResilientAsset(new Request(`${incomingURL.origin}/index.html`, request), new URL(`${incomingURL.origin}/index.html`));
@@ -54,8 +64,8 @@ async function serveResilientAsset(request, incomingURL) {
   }
 }
 
-async function firstSuccessfulResponse(targets, request, isHTML, attempts) {
-  const tasks = targets.map(target => fetchAsset(target, request, isHTML, attempts));
+async function firstSuccessfulAsset(targets, request, pathname, isHTML, attempts) {
+  const tasks = targets.map(target => fetchBufferedAsset(target, request, pathname, isHTML, attempts));
   try {
     return await Promise.any(tasks);
   } catch {
@@ -63,22 +73,45 @@ async function firstSuccessfulResponse(targets, request, isHTML, attempts) {
   }
 }
 
-async function fetchAsset(target, request, isHTML, attempts) {
+async function fetchBufferedAsset(target, request, pathname, isHTML, attempts) {
   try {
     const upstream = await fetch(target, {
       method: request.method,
       headers: { Accept: request.headers.get("Accept") || "*/*" },
       redirect: "follow",
-      signal: AbortSignal.timeout(2500),
+      signal: AbortSignal.timeout(UPSTREAM_HEADER_TIMEOUT_MS),
       cf: { cacheEverything: true, cacheTtl: isHTML ? 30 : 900 },
     });
-    attempts.push({ target, status: upstream.status });
     if (!upstream.ok) throw new Error(`Upstream returned ${upstream.status}`);
-    return upstream;
+
+    if (request.method === "HEAD") {
+      attempts.push({ target, status: upstream.status, bytes: 0 });
+      return { body: new ArrayBuffer(0), headers: upstream.headers };
+    }
+
+    const body = await withTimeout(upstream.arrayBuffer(), UPSTREAM_BODY_TIMEOUT_MS, "Upstream body timed out");
+    if (!body.byteLength) throw new Error("Upstream returned an empty asset body");
+
+    if (isTextAsset(pathname)) {
+      const sample = new TextDecoder().decode(body.slice(0, Math.min(body.byteLength, 512))).trim();
+      if (!sample) throw new Error("Upstream returned blank text content");
+      if (isHTML && !/<!doctype html|<html/i.test(sample)) throw new Error("Upstream did not return valid HTML");
+    }
+
+    attempts.push({ target, status: upstream.status, bytes: body.byteLength });
+    return { body, headers: upstream.headers };
   } catch (error) {
     attempts.push({ target, error: error instanceof Error ? error.message : "fetch failed" });
     throw error;
   }
+}
+
+function withTimeout(promise, milliseconds, message) {
+  let timeout;
+  const guard = new Promise((_, reject) => {
+    timeout = setTimeout(() => reject(new Error(message)), milliseconds);
+  });
+  return Promise.race([promise, guard]).finally(() => clearTimeout(timeout));
 }
 
 function recoveryPage(attempts) {
@@ -91,6 +124,10 @@ function recoveryPage(attempts) {
 
 function hasFileExtension(pathname) {
   return /\/[A-Za-z0-9._-]+\.[A-Za-z0-9]+$/.test(pathname);
+}
+
+function isTextAsset(pathname) {
+  return /\.(?:html|css|js|json|svg)$/i.test(pathname);
 }
 
 function contentTypeFor(pathname) {
