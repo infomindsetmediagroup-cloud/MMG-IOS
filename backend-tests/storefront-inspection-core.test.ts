@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isStorefrontAuditObjective } from "../api/storefront-inspection-core.js";
+import { isStorefrontAuditObjective } from "../server/storefront-inspection-core.js";
 
 describe("storefront inspection routing", () => {
   it("routes explicit MMG website audits", () => {
