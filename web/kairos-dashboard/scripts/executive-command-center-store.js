@@ -1,4 +1,6 @@
-const storeKey = "kairos.executive.command-center.v1";
+const storeKey = "kairos.executive.command-center.v2";
+const legacyStoreKey = "kairos.executive.command-center.v1";
+const STORE_VERSION = 2;
 
 export const commandCenters = [
   { id: "executive", title: "Executive Operations", icon: "✦", detail: "Approvals, decisions, priorities, and work requiring your attention." },
@@ -10,22 +12,33 @@ export const commandCenters = [
 
 const seedWork = [
   {
+    id: "EXEC-001",
+    center: "executive",
+    title: "Review the active operating priorities",
+    objective: "Review current MMG Command Center work, identify the highest-value next actions, and return an ordered executive priority brief.",
+    status: "Ready for Approval",
+    progress: 0,
+    actionType: "executive.priority.review",
+    updatedAt: "Awaiting approval",
+  },
+  {
     id: "WEB-001",
     center: "shopify",
     title: "Inspect the live Shopify homepage",
-    objective: "Audit the live Shopify homepage and identify the published theme and homepage-critical files.",
+    objective: "Audit the live Shopify homepage and identify verified storefront findings, the published experience, and homepage-critical public assets.",
     status: "Ready for Approval",
     progress: 0,
-    actionType: "shopify.homepage.audit",
+    actionType: "storefront.audit",
     updatedAt: "Awaiting approval",
   },
   {
     id: "WEB-002",
     center: "shopify",
     title: "Prepare the guided homepage change package",
-    objective: "Compare the homepage with the approved MMG guided-experience doctrine and prepare a cohesive change package.",
+    objective: "Use WEB-001 evidence and the approved MMG guided-experience doctrine to prepare a cohesive, implementation-ready homepage change package.",
     status: "Queued",
     progress: 0,
+    actionType: "website.change.package",
     dependency: "WEB-001",
     updatedAt: "Waiting for live audit evidence",
   },
@@ -33,10 +46,11 @@ const seedWork = [
     id: "PROD-001",
     center: "production",
     title: "Map approved work into the production pipeline",
-    objective: "Route approved MMG work through production, verification, delivery, and knowledge preservation.",
+    objective: "Create an operational route for approved MMG work through production, verification, delivery, and knowledge preservation.",
     status: "Queued",
     progress: 0,
-    updatedAt: "Adapter not connected",
+    actionType: "production.pipeline.map",
+    updatedAt: "Ready to activate",
   },
   {
     id: "SYS-001",
@@ -51,29 +65,69 @@ const seedWork = [
 ];
 
 function defaultStore() {
-  return { version: 1, work: seedWork, knowledge: [], updatedAt: new Date().toISOString() };
+  return { version: STORE_VERSION, work: seedWork.map(item => ({ ...item })), knowledge: [], updatedAt: new Date().toISOString() };
+}
+
+function mergeWork(storedWork = []) {
+  const storedById = new Map(storedWork.map(item => [item.id, item]));
+  return seedWork.map(seed => {
+    const stored = storedById.get(seed.id) || {};
+    const merged = { ...seed, ...stored, actionType: seed.actionType, objective: seed.objective, title: seed.title, center: seed.center };
+    if (seed.id === "WEB-001" && /adapter is not configured/i.test(merged.error || "")) {
+      merged.error = "";
+      merged.status = "Ready for Approval";
+      merged.progress = 0;
+      merged.updatedAt = "Live inspection route connected; ready to run";
+    }
+    if (seed.id === "PROD-001" && /adapter not connected/i.test(merged.updatedAt || "")) {
+      merged.updatedAt = "Ready to activate";
+    }
+    return merged;
+  });
 }
 
 export function getCommandCenterStore() {
   try {
-    const stored = JSON.parse(localStorage.getItem(storeKey) || "null");
-    if (!stored || stored.version !== 1) return defaultStore();
-    return { ...defaultStore(), ...stored, work: stored.work || seedWork, knowledge: stored.knowledge || [] };
+    const current = JSON.parse(localStorage.getItem(storeKey) || "null");
+    if (current?.version === STORE_VERSION) {
+      return { ...defaultStore(), ...current, work: mergeWork(current.work), knowledge: current.knowledge || [] };
+    }
+    const legacy = JSON.parse(localStorage.getItem(legacyStoreKey) || "null");
+    if (legacy) {
+      const migrated = { ...defaultStore(), work: mergeWork(legacy.work), knowledge: legacy.knowledge || [] };
+      save(migrated, false);
+      return migrated;
+    }
+    return defaultStore();
   } catch {
     return defaultStore();
   }
 }
 
-function save(next) {
-  const value = { ...next, version: 1, updatedAt: new Date().toISOString() };
+function save(next, notify = true) {
+  const value = { ...next, version: STORE_VERSION, updatedAt: new Date().toISOString() };
   localStorage.setItem(storeKey, JSON.stringify(value));
-  window.dispatchEvent(new CustomEvent("kairos:command-center-updated"));
+  if (notify) window.dispatchEvent(new CustomEvent("kairos:command-center-updated"));
   return value;
 }
 
 export function updateWorkItem(id, patch) {
   const current = getCommandCenterStore();
-  return save({ ...current, work: current.work.map(item => item.id === id ? { ...item, ...patch, updatedAt: patch.updatedAt || new Date().toLocaleString() } : item) });
+  return save({
+    ...current,
+    work: current.work.map(item => item.id === id ? { ...item, ...patch, updatedAt: patch.updatedAt || new Date().toLocaleString() } : item),
+  });
+}
+
+export function unlockDependents(completedId) {
+  const current = getCommandCenterStore();
+  let changed = false;
+  const work = current.work.map(item => {
+    if (item.dependency !== completedId || item.status !== "Queued") return item;
+    changed = true;
+    return { ...item, status: "Ready for Approval", progress: 0, error: "", updatedAt: `${completedId} completed; ready for approval` };
+  });
+  return changed ? save({ ...current, work }) : current;
 }
 
 export function recordCompletedKnowledge(workItem, evidence) {
@@ -82,13 +136,24 @@ export function recordCompletedKnowledge(workItem, evidence) {
     id: evidence?.actionID || crypto.randomUUID(),
     title: workItem.title,
     center: workItem.center,
+    workItemId: workItem.id,
     completedAt: evidence?.completedAt || new Date().toISOString(),
     evidence: evidence?.evidence || evidence || {},
   };
-  return save({ ...current, knowledge: [record, ...current.knowledge.filter(item => item.id !== record.id)].slice(0, 50) });
+  return save({ ...current, knowledge: [record, ...current.knowledge.filter(item => item.id !== record.id)].slice(0, 100) });
+}
+
+export function nextRunnableWork(centerId) {
+  const store = getCommandCenterStore();
+  const items = store.work.filter(item => item.center === centerId && item.actionType);
+  return items.find(item => ["Needs Attention", "Failed", "Paused"].includes(item.status))
+    || items.find(item => item.status === "Ready for Approval")
+    || items.find(item => item.status === "Queued" && !item.dependency)
+    || null;
 }
 
 export function resetCommandCenterStore() {
   localStorage.removeItem(storeKey);
+  localStorage.removeItem(legacyStoreKey);
   window.dispatchEvent(new CustomEvent("kairos:command-center-updated"));
 }
