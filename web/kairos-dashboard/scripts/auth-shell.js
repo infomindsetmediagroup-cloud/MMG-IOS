@@ -1,5 +1,6 @@
 const operatorKey = "kairos.operator.v1";
-const sameOriginRuntime = window.location.hostname.endsWith("vercel.app");
+const isGitHubRecovery = window.location.hostname.endsWith("github.io");
+const sameOriginRuntime = !isGitHubRecovery;
 
 window.addEventListener("DOMContentLoaded", initializeAuthentication);
 
@@ -97,8 +98,7 @@ function createRecoveryShell(app) {
       <div class="brand-symbol auth-symbol">K</div>
       <p class="eyebrow">Kairos Recovery Surface</p>
       <h2>GitHub Pages</h2>
-      <p class="muted">The canonical authenticated Command Center is hosted on Vercel. This page remains available only for controlled recovery.</p>
-      <a class="action-button" href="https://mmg-ios.vercel.app/web/kairos-dashboard/">Open Secure Kairos</a>
+      <p class="muted">The canonical authenticated Command Center is hosted on the MMG production origin. This page remains available only for controlled recovery.</p>
       <button class="action-button" type="button" data-open-recovery>Open Recovery Dashboard</button>
     </div>`;
   document.body.appendChild(shell);
