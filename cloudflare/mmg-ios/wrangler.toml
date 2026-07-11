@@ -4,7 +4,7 @@ compatibility_date = "2026-07-11"
 workers_dev = true
 
 [assets]
-directory = "../../web/kairos-dashboard"
+directory = "./public"
 binding = "ASSETS"
 run_worker_first = true
 not_found_handling = "single-page-application"
