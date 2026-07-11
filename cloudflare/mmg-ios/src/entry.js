@@ -8,6 +8,9 @@ const ASSET_ROOTS = [
 const UPSTREAM_HEADER_TIMEOUT_MS = 2500;
 const UPSTREAM_BODY_TIMEOUT_MS = 4000;
 const SHOPIFY_DIAGNOSTIC_TIMEOUT_MS = 12000;
+const SHOPIFY_TOKEN_REFRESH_BUFFER_MS = 60_000;
+const shopifyTokenCache = new Map();
+const shopifyTokenRequests = new Map();
 
 export default {
   async fetch(request, env, ctx) {
@@ -20,14 +23,23 @@ export default {
 };
 
 async function handleRuntimeAPI(request, env, ctx, url) {
-  const response = await runtime.fetch(request, env, ctx);
+  let runtimeEnv = env;
+  try {
+    runtimeEnv = await withShopifyAccessToken(env);
+  } catch (error) {
+    if (["/api/theme-plan", "/api/actions"].includes(url.pathname)) {
+      return shopifyAuthErrorResponse(error);
+    }
+  }
+
+  const response = await runtime.fetch(request, runtimeEnv, ctx);
   if (!["/api/theme-plan", "/api/actions"].includes(url.pathname) || response.ok) return response;
 
   let body;
   try { body = await response.clone().json(); } catch { return response; }
   if (body?.error?.code !== "main_theme_unavailable") return response;
 
-  const diagnostic = await diagnoseShopifyThemes(env);
+  const diagnostic = await diagnoseShopifyThemes(runtimeEnv);
   if (!diagnostic) return response;
 
   return jsonResponse({
@@ -39,6 +51,110 @@ async function handleRuntimeAPI(request, env, ctx, url) {
       requestID: body.error.requestID,
     },
   }, diagnostic.httpStatus || response.status);
+}
+
+async function withShopifyAccessToken(env) {
+  const staticToken = String(env.SHOPIFY_ADMIN_ACCESS_TOKEN || "").trim();
+  const storeDomain = String(env.SHOPIFY_STORE_DOMAIN || "").trim().toLowerCase();
+  const clientId = String(env.SHOPIFY_CLIENT_ID || "").trim();
+  const clientSecret = String(env.SHOPIFY_CLIENT_SECRET || "").trim();
+
+  if (!storeDomain || !clientId || !clientSecret) return env;
+
+  const accessToken = await getShopifyClientCredentialsToken({ storeDomain, clientId, clientSecret });
+  return { ...env, SHOPIFY_ADMIN_ACCESS_TOKEN: accessToken || staticToken };
+}
+
+async function getShopifyClientCredentialsToken({ storeDomain, clientId, clientSecret }) {
+  if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(storeDomain)) {
+    throw shopifyAuthError("shopify_invalid_domain", "SHOPIFY_STORE_DOMAIN must be the store's permanent .myshopify.com domain.", 503);
+  }
+
+  const cacheKey = `${storeDomain}:${clientId}`;
+  const cached = shopifyTokenCache.get(cacheKey);
+  if (cached?.accessToken && Date.now() < cached.expiresAt - SHOPIFY_TOKEN_REFRESH_BUFFER_MS) {
+    return cached.accessToken;
+  }
+
+  const pending = shopifyTokenRequests.get(cacheKey);
+  if (pending) return pending;
+
+  const request = requestShopifyClientCredentialsToken({ storeDomain, clientId, clientSecret })
+    .then(token => {
+      shopifyTokenCache.set(cacheKey, token);
+      return token.accessToken;
+    })
+    .finally(() => shopifyTokenRequests.delete(cacheKey));
+
+  shopifyTokenRequests.set(cacheKey, request);
+  return request;
+}
+
+async function requestShopifyClientCredentialsToken({ storeDomain, clientId, clientSecret }) {
+  let response;
+  try {
+    response = await fetch(`https://${storeDomain}/admin/oauth/access_token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+      body: new URLSearchParams({
+        grant_type: "client_credentials",
+        client_id: clientId,
+        client_secret: clientSecret,
+      }),
+      signal: AbortSignal.timeout(SHOPIFY_DIAGNOSTIC_TIMEOUT_MS),
+    });
+  } catch (error) {
+    const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
+    throw shopifyAuthError(
+      timedOut ? "shopify_token_timeout" : "shopify_token_connection_failed",
+      timedOut ? "Shopify did not answer the client-credentials token request before the timeout." : "Cloudflare could not connect to Shopify's token endpoint.",
+      timedOut ? 504 : 502,
+    );
+  }
+
+  const text = await response.text();
+  let body = {};
+  try { body = text ? JSON.parse(text) : {}; } catch { body = {}; }
+
+  if (!response.ok) {
+    const oauthError = typeof body?.error === "string" ? body.error : "token_request_failed";
+    const oauthDescription = typeof body?.error_description === "string" ? body.error_description : "Shopify rejected the client-credentials request.";
+    const code = oauthError === "shop_not_permitted" ? "shopify_shop_not_permitted" : response.status === 401 ? "shopify_client_credentials_invalid" : "shopify_token_request_failed";
+    const message = oauthError === "shop_not_permitted"
+      ? "Shopify rejected client-credentials access because the app and store are not in the same Dev Dashboard organization."
+      : `${oauthDescription} Verify SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET, and the installed Kairos app.`;
+    throw shopifyAuthError(code, message, response.status === 429 ? 429 : response.status >= 500 ? 502 : 401);
+  }
+
+  const accessToken = typeof body?.access_token === "string" ? body.access_token.trim() : "";
+  const expiresIn = Number(body?.expires_in);
+  if (!accessToken || !Number.isFinite(expiresIn) || expiresIn <= 0) {
+    throw shopifyAuthError("shopify_token_response_invalid", "Shopify returned an invalid client-credentials token response.", 502);
+  }
+
+  return {
+    accessToken,
+    expiresAt: Date.now() + expiresIn * 1000,
+    scope: typeof body?.scope === "string" ? body.scope : "",
+  };
+}
+
+function shopifyAuthError(code, message, status) {
+  const error = new Error(message);
+  error.code = code;
+  error.status = status;
+  return error;
+}
+
+function shopifyAuthErrorResponse(error) {
+  return jsonResponse({
+    error: {
+      code: typeof error?.code === "string" ? error.code : "shopify_authentication_failed",
+      message: error instanceof Error ? error.message : "Kairos could not authenticate with Shopify.",
+      shopifyStatus: "authentication_failed",
+      requestID: crypto.randomUUID(),
+    },
+  }, Number.isInteger(error?.status) ? error.status : 502);
 }
 
 async function diagnoseShopifyThemes(env) {
@@ -60,10 +176,10 @@ async function diagnoseShopifyThemes(env) {
     try { body = text ? JSON.parse(text) : {}; } catch { body = {}; }
 
     if (response.status === 401) {
-      return { code: "shopify_token_invalid", message: "Shopify rejected the Admin API token. Replace SHOPIFY_ADMIN_ACCESS_TOKEN with a current token from the installed custom app.", status: "unauthorized", httpStatus: 401 };
+      return { code: "shopify_token_invalid", message: "Shopify rejected the Admin API access token generated from the Kairos client credentials. Verify the Client ID and Client secret in Cloudflare.", status: "unauthorized", httpStatus: 401 };
     }
     if (response.status === 403) {
-      return { code: "shopify_theme_scope_missing", message: "The Shopify app token cannot read themes. Grant the app read_themes access, reinstall or update the app if required, then replace the Cloudflare token.", status: "forbidden", httpStatus: 403 };
+      return { code: "shopify_theme_scope_missing", message: "The installed Kairos app cannot read themes. Release a version with theme access, approve the updated scopes in Shopify Admin, then retry WEB-002.", status: "forbidden", httpStatus: 403 };
     }
     if (response.status === 404) {
       return { code: "shopify_api_version_unavailable", message: `Shopify did not recognize the configured Admin API route for version ${apiVersion}. Verify SHOPIFY_API_VERSION and the store domain.`, status: "not_found", httpStatus: 502 };
