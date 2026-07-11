@@ -12,6 +12,12 @@ export default {
           env.SHOPIFY_SHOP_DOMAIN &&
           env.KAIROS_ADMIN_KEY
         ),
+        checks: {
+          shopifyClientId: Boolean(String(env.SHOPIFY_CLIENT_ID || "").trim()),
+          shopifyClientSecret: Boolean(String(env.SHOPIFY_CLIENT_SECRET || "").trim()),
+          shopifyShopDomain: Boolean(String(env.SHOPIFY_SHOP_DOMAIN || "").trim()),
+          publisherAccessKey: Boolean(String(env.KAIROS_ADMIN_KEY || "").trim()),
+        },
       });
     }
 
@@ -29,8 +35,9 @@ export default {
     if (url.pathname === "/api/themes") {
       if (request.method !== "GET") return json({ error: "method_not_allowed" }, 405);
 
-      const suppliedKey = request.headers.get("X-Kairos-Admin-Key") || "";
-      if (!env.KAIROS_ADMIN_KEY || suppliedKey !== env.KAIROS_ADMIN_KEY) {
+      const suppliedKey = String(request.headers.get("X-Kairos-Admin-Key") || "").trim();
+      const configuredKey = String(env.KAIROS_ADMIN_KEY || "").trim();
+      if (!configuredKey || suppliedKey !== configuredKey) {
         return json({ status: "error", code: "unauthorized", message: "Publisher access key was rejected." }, 401);
       }
 
