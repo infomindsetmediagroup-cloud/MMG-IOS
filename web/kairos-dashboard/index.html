@@ -5,11 +5,30 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Kairos Operations Dashboard</title>
   <link rel="stylesheet" href="./styles/dashboard.css">
-  <link rel="stylesheet" href="./styles/auth-shell.css?v=20260710-checkpoint-013-final-6">
+  <link rel="stylesheet" href="./styles/auth-shell.css?v=20260710-checkpoint-013-chat-v1">
   <link rel="stylesheet" href="./styles/command-center.css">
   <link rel="stylesheet" href="./styles/value-discovery.css">
   <link rel="stylesheet" href="./styles/mobile-full-width-fix.css">
-  <link rel="stylesheet" href="./styles/live-executive-chat.css?v=20260710-checkpoint-013-final-6">
+  <link rel="stylesheet" href="./styles/live-executive-chat.css?v=20260710-checkpoint-013-chat-v1">
+  <style>
+    /* Shell-only compatibility override. Authentication and runtime behavior are unchanged. */
+    .live-chat-runtime,
+    .live-chat-auth[data-session-panel],
+    .live-chat-footer { display: none !important; }
+    .live-chat-header > div:first-child { min-width: 0; }
+    .live-chat-header .eyebrow { display: none; }
+    .live-chat-header h3 { margin: 0; font-size: 18px; line-height: 1.1; }
+    .live-chat-header h3::before { content: "Kairos"; font-size: 0; }
+    .live-chat-panel { grid-template-rows: auto minmax(0, 1fr) auto !important; }
+    .live-chat-messages { grid-row: 2; min-height: 0 !important; overflow-y: auto !important; }
+    .live-chat-composer { grid-row: 3; position: relative; z-index: 2; }
+    @media (max-width: 520px) {
+      .live-chat-panel { inset: 0 !important; width: 100vw !important; height: 100dvh !important; border-radius: 0 !important; }
+      .live-chat-header { min-height: calc(52px + env(safe-area-inset-top)); padding: calc(6px + env(safe-area-inset-top)) 8px 6px 14px !important; }
+      .live-chat-messages { padding-bottom: 18px !important; }
+      .live-chat-composer { padding-bottom: max(8px, env(safe-area-inset-bottom)) !important; }
+    }
+  </style>
 </head>
 <body>
   <div id="app" class="kairos-app">
@@ -19,8 +38,8 @@
     <aside class="sidebar" aria-label="Kairos navigation"><nav id="module-nav" class="module-nav"></nav></aside>
     <main class="workspace"><header class="topbar"><div><p class="eyebrow">Operations Command Center</p><h2 id="page-title">Dashboard</h2></div><div class="operator-card"><span class="status-dot"></span><div><p class="eyebrow">Mode</p><strong id="runtime-mode">Operation</strong></div></div></header><section id="dashboard-view" class="dashboard-grid" aria-live="polite"></section></main>
   </div>
-  <script type="module" src="./scripts/auth-shell.js?v=20260710-checkpoint-013-final-6"></script>
+  <script type="module" src="./scripts/auth-shell.js?v=20260710-checkpoint-013-chat-v1"></script>
   <script type="module" src="./scripts/dashboard.js"></script>
-  <script type="module" src="./scripts/live-executive-chat.js?v=20260710-checkpoint-013-final-6"></script>
+  <script type="module" src="./scripts/live-executive-chat.js?v=20260710-checkpoint-013-chat-v1"></script>
 </body>
 </html>
