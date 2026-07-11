@@ -1,0 +1,1 @@
+Verification target: tapping Review Proposal must render only bounded executive metadata, never complete mutation file contents. Approval must dispatch a lightweight proposal payload while preserving mutationPlan for governed execution.
