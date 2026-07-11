@@ -7,16 +7,14 @@ export default {
         status: "ok",
         service: "kairos-shopify-publisher",
         configured: Boolean(
-          env.SHOPIFY_CLIENT_ID &&
-          env.SHOPIFY_CLIENT_SECRET &&
-          env.SHOPIFY_SHOP_DOMAIN &&
-          env.KAIROS_ADMIN_KEY
+          String(env.SHOPIFY_CLIENT_ID || "").trim() &&
+          String(env.SHOPIFY_SHOP_DOMAIN || "mindsetmediagroup.myshopify.com").trim()
         ),
         checks: {
           shopifyClientId: Boolean(String(env.SHOPIFY_CLIENT_ID || "").trim()),
-          shopifyClientSecret: Boolean(String(env.SHOPIFY_CLIENT_SECRET || "").trim()),
-          shopifyShopDomain: Boolean(String(env.SHOPIFY_SHOP_DOMAIN || "").trim()),
-          publisherAccessKey: Boolean(String(env.KAIROS_ADMIN_KEY || "").trim()),
+          shopifyClientSecretStored: Boolean(String(env.SHOPIFY_CLIENT_SECRET || "").trim()),
+          shopifyShopDomain: true,
+          publisherAccessKeyRequired: false,
         },
       });
     }
@@ -26,7 +24,7 @@ export default {
         <main class="card">
           <span class="eyebrow">MMG / KAIROS</span>
           <h1>Shopify bridge is online.</h1>
-          <p>Return to the publisher to test the secured Shopify connection.</p>
+          <p>Return to the publisher to test the Shopify connection.</p>
           <a class="button" href="/">Open Publisher</a>
         </main>
       `);
@@ -35,14 +33,9 @@ export default {
     if (url.pathname === "/api/themes") {
       if (request.method !== "GET") return json({ error: "method_not_allowed" }, 405);
 
-      const suppliedKey = String(request.headers.get("X-Kairos-Admin-Key") || "").trim();
-      const configuredKey = String(env.KAIROS_ADMIN_KEY || "").trim();
-      if (!configuredKey || suppliedKey !== configuredKey) {
-        return json({ status: "error", code: "unauthorized", message: "Publisher access key was rejected." }, 401);
-      }
-
       try {
-        const config = getConfig(env);
+        const suppliedSecret = String(request.headers.get("X-Shopify-Client-Secret") || "").trim();
+        const config = getConfig(env, suppliedSecret);
         const accessToken = await getShopifyAccessToken(config);
         const response = await fetch(`https://${config.shop}/admin/api/2026-07/themes.json`, {
           headers: {
@@ -71,29 +64,30 @@ export default {
         <main class="card">
           <span class="eyebrow">MMG / KAIROS</span>
           <h1>Shopify Publisher</h1>
-          <p>Secure connection bridge between Kairos and the Mindset Media Group Shopify store.</p>
-          <label for="accessKey">Publisher access key</label>
-          <input id="accessKey" type="password" autocomplete="current-password" placeholder="Enter access key" />
-          <button id="connectButton" class="button" type="button">Test Shopify Connection</button>
-          <div id="status" class="status" aria-live="polite">Waiting for connection test.</div>
+          <p>The publisher is open. Paste the Shopify app's <strong>New client secret</strong> below for this session only. It is sent over HTTPS and is not stored by this page.</p>
+          <label for="clientSecret">Shopify new client secret</label>
+          <input id="clientSecret" type="password" autocomplete="off" placeholder="Paste new client secret" />
+          <button id="connectButton" class="button" type="button">Connect Shopify</button>
+          <div id="status" class="status" aria-live="polite">Ready to connect.</div>
           <div id="themes"></div>
         </main>
         <script>
           const button = document.getElementById("connectButton");
-          const input = document.getElementById("accessKey");
+          const input = document.getElementById("clientSecret");
           const statusBox = document.getElementById("status");
           const themesBox = document.getElementById("themes");
           button.addEventListener("click", async () => {
-            const key = input.value.trim();
-            if (!key) { statusBox.textContent = "Enter the publisher access key."; statusBox.className = "status error"; return; }
+            const secret = input.value.trim();
+            if (!secret) { statusBox.textContent = "Paste the Shopify New client secret."; statusBox.className = "status error"; return; }
             button.disabled = true;
             statusBox.textContent = "Connecting securely to Shopify…";
             statusBox.className = "status";
             themesBox.innerHTML = "";
             try {
-              const response = await fetch("/api/themes", { headers: { "X-Kairos-Admin-Key": key } });
+              const response = await fetch("/api/themes", { headers: { "X-Shopify-Client-Secret": secret } });
               const data = await response.json();
               if (!response.ok) throw new Error(data.message || "Connection failed.");
+              input.value = "";
               statusBox.textContent = "Connected to " + data.shop + ". " + data.themes.length + " theme(s) found.";
               statusBox.className = "status success";
               themesBox.innerHTML = data.themes.map((theme) => {
@@ -114,12 +108,12 @@ export default {
   },
 };
 
-function getConfig(env) {
+function getConfig(env, suppliedSecret) {
   const clientId = String(env.SHOPIFY_CLIENT_ID || "").trim();
-  const clientSecret = String(env.SHOPIFY_CLIENT_SECRET || "").trim();
-  const shop = String(env.SHOPIFY_SHOP_DOMAIN || "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+  const clientSecret = String(suppliedSecret || env.SHOPIFY_CLIENT_SECRET || "").trim();
+  const shop = String(env.SHOPIFY_SHOP_DOMAIN || "mindsetmediagroup.myshopify.com").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
   if (!clientId) throw new Error("SHOPIFY_CLIENT_ID is not configured.");
-  if (!clientSecret) throw new Error("SHOPIFY_CLIENT_SECRET is not configured.");
+  if (!clientSecret) throw new Error("Paste the Shopify New client secret.");
   if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shop)) throw new Error("SHOPIFY_SHOP_DOMAIN is not configured correctly.");
   return { clientId, clientSecret, shop };
 }
