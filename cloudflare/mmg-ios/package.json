@@ -4,10 +4,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "prepare-assets": "rm -rf public && mkdir -p public && cp -R ../../web/kairos-dashboard/. public/",
-    "predeploy": "npm run prepare-assets",
     "deploy": "wrangler deploy",
-    "dev": "npm run prepare-assets && wrangler dev"
+    "dev": "wrangler dev"
   },
   "devDependencies": {
     "wrangler": "^4.24.3"
