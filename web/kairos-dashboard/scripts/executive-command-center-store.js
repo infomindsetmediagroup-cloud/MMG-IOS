@@ -1,6 +1,19 @@
-const storeKey = "kairos.executive.command-center.v5";
-const legacyStoreKeys = ["kairos.executive.command-center.v4", "kairos.executive.command-center.v3", "kairos.executive.command-center.v2", "kairos.executive.command-center.v1"];
-const STORE_VERSION = 5;
+const storeKey = "kairos.executive.command-center.v6";
+const legacyStoreKeys = [
+  "kairos.executive.command-center.v5",
+  "kairos.executive.command-center.v4",
+  "kairos.executive.command-center.v3",
+  "kairos.executive.command-center.v2",
+  "kairos.executive.command-center.v1",
+];
+const STORE_VERSION = 6;
+const MAX_KNOWLEDGE_RECORDS = 24;
+const MAX_STRING_LENGTH = 1600;
+const MAX_ARRAY_ITEMS = 12;
+const MAX_OBJECT_KEYS = 24;
+
+let memoryStore = null;
+let notificationQueued = false;
 
 export const commandCenters = [
   { id: "executive", title: "Executive Operations", icon: "✦", detail: "Approvals, decisions, priorities, and work requiring your attention." },
@@ -22,10 +35,43 @@ function defaultStore() {
   return { version: STORE_VERSION, work: seedWork.map(item => ({ ...item })), knowledge: [], updatedAt: new Date().toISOString() };
 }
 
+function boundedString(value) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  return text.length > MAX_STRING_LENGTH ? `${text.slice(0, MAX_STRING_LENGTH - 1)}…` : text;
+}
+
+function compactValue(value, depth = 0) {
+  if (value == null || typeof value === "boolean" || typeof value === "number") return value;
+  if (typeof value === "string") return boundedString(value);
+  if (depth >= 3) return "[bounded]";
+  if (Array.isArray(value)) return value.slice(0, MAX_ARRAY_ITEMS).map(entry => compactValue(entry, depth + 1));
+  if (typeof value === "object") {
+    const result = {};
+    for (const [key, entry] of Object.entries(value).slice(0, MAX_OBJECT_KEYS)) {
+      if (key === "value" && typeof entry === "string" && entry.length > 2000) {
+        result.bytes = new Blob([entry]).size;
+        result.valueExcluded = true;
+        continue;
+      }
+      result[key] = compactValue(entry, depth + 1);
+    }
+    return result;
+  }
+  return boundedString(value);
+}
+
+function compactWorkItem(item) {
+  const next = { ...item };
+  if (next.proposal) next.proposal = compactValue(next.proposal);
+  if (next.evidence) next.evidence = compactValue(next.evidence);
+  if (next.error) next.error = boundedString(next.error);
+  return next;
+}
+
 function normalizeProposal(item, merged) {
   if (!item.requiresReview) return merged;
   if (merged.status === "Completed" && merged.evidence) {
-    return { ...merged, status: "Proposal Ready", progress: 100, proposal: merged.evidence, evidence: null, updatedAt: "Proposal prepared; executive approval required" };
+    return { ...merged, status: "Proposal Ready", progress: 100, proposal: compactValue(merged.evidence), evidence: null, updatedAt: "Proposal prepared; executive approval required" };
   }
   if (merged.status === "Needs Attention" && /does not support the requested action|unsupported[_ ]action/i.test(merged.error || "") && merged.proposal) {
     return { ...merged, status: "Proposal Ready", progress: 100, error: "", updatedAt: "Approved proposal recovered; internal execution route connected" };
@@ -34,7 +80,7 @@ function normalizeProposal(item, merged) {
 }
 
 function mergeWork(storedWork = []) {
-  const storedById = new Map(storedWork.map(item => [item.id, item]));
+  const storedById = new Map(storedWork.map(item => [item.id, compactWorkItem(item)]));
   return seedWork.map(seed => {
     const stored = storedById.get(seed.id) || {};
     let merged = { ...seed, ...stored, actionType: seed.actionType, executionActionType: seed.executionActionType, requiresReview: Boolean(seed.requiresReview), objective: seed.objective, title: seed.title, center: seed.center };
@@ -50,28 +96,54 @@ function purgeLegacyStores() {
   }
 }
 
+function sanitizeStore(input) {
+  const base = defaultStore();
+  const source = input && typeof input === "object" ? input : {};
+  return {
+    ...base,
+    ...source,
+    version: STORE_VERSION,
+    work: mergeWork(Array.isArray(source.work) ? source.work : []),
+    knowledge: (Array.isArray(source.knowledge) ? source.knowledge : [])
+      .slice(0, MAX_KNOWLEDGE_RECORDS)
+      .map(record => compactValue(record)),
+  };
+}
+
 export function getCommandCenterStore() {
   purgeLegacyStores();
+  if (memoryStore) return memoryStore;
   try {
     const current = JSON.parse(localStorage.getItem(storeKey) || "null");
-    if (current?.version === STORE_VERSION) return { ...defaultStore(), ...current, work: mergeWork(current.work), knowledge: current.knowledge || [] };
-    return defaultStore();
+    memoryStore = current?.version === STORE_VERSION ? sanitizeStore(current) : defaultStore();
   } catch {
     try { localStorage.removeItem(storeKey); } catch { /* Ignore storage restrictions. */ }
-    return defaultStore();
+    memoryStore = defaultStore();
   }
+  return memoryStore;
+}
+
+function queueNotification() {
+  if (notificationQueued) return;
+  notificationQueued = true;
+  requestAnimationFrame(() => {
+    notificationQueued = false;
+    window.dispatchEvent(new CustomEvent("kairos:command-center-updated"));
+  });
 }
 
 function save(next, notify = true) {
-  const value = { ...next, version: STORE_VERSION, updatedAt: new Date().toISOString() };
-  try { localStorage.setItem(storeKey, JSON.stringify(value)); } catch { /* Keep the live in-memory experience usable. */ }
-  if (notify) window.dispatchEvent(new CustomEvent("kairos:command-center-updated"));
+  const value = sanitizeStore({ ...next, version: STORE_VERSION, updatedAt: new Date().toISOString() });
+  memoryStore = value;
+  try { localStorage.setItem(storeKey, JSON.stringify(value)); } catch { /* Keep live in-memory operation usable. */ }
+  if (notify) queueNotification();
   return value;
 }
 
 export function updateWorkItem(id, patch) {
   const current = getCommandCenterStore();
-  return save({ ...current, work: current.work.map(item => item.id === id ? { ...item, ...patch, updatedAt: patch.updatedAt || new Date().toLocaleString() } : item) });
+  const safePatch = compactWorkItem(patch || {});
+  return save({ ...current, work: current.work.map(item => item.id === id ? compactWorkItem({ ...item, ...safePatch, updatedAt: safePatch.updatedAt || new Date().toLocaleString() }) : item) });
 }
 
 export function unlockDependents(completedId) {
@@ -87,8 +159,15 @@ export function unlockDependents(completedId) {
 
 export function recordCompletedKnowledge(workItem, evidence) {
   const current = getCommandCenterStore();
-  const record = { id: evidence?.actionID || crypto.randomUUID(), title: workItem.title, center: workItem.center, workItemId: workItem.id, completedAt: evidence?.completedAt || new Date().toISOString(), evidence: evidence?.evidence || evidence || {} };
-  return save({ ...current, knowledge: [record, ...current.knowledge.filter(item => item.id !== record.id)].slice(0, 100) });
+  const record = compactValue({
+    id: evidence?.actionID || crypto.randomUUID(),
+    title: workItem.title,
+    center: workItem.center,
+    workItemId: workItem.id,
+    completedAt: evidence?.completedAt || new Date().toISOString(),
+    evidence: evidence?.evidence || evidence || {},
+  });
+  return save({ ...current, knowledge: [record, ...current.knowledge.filter(item => item.id !== record.id)].slice(0, MAX_KNOWLEDGE_RECORDS) });
 }
 
 export function nextRunnableWork(centerId) {
@@ -98,7 +177,8 @@ export function nextRunnableWork(centerId) {
 }
 
 export function resetCommandCenterStore() {
+  memoryStore = null;
   try { localStorage.removeItem(storeKey); } catch { /* Ignore storage restrictions. */ }
   purgeLegacyStores();
-  window.dispatchEvent(new CustomEvent("kairos:command-center-updated"));
+  queueNotification();
 }
