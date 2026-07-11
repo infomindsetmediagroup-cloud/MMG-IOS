@@ -60,6 +60,9 @@ describe("Kairos backend core", () => {
 
     expect(body.model).toBe("configured-model");
     expect(body.input).toContain("Build the next slice");
+    expect(body.instructions).toContain("Default to action");
+    expect(body.instructions).toContain("Approve & Execute");
+    expect(body.instructions).toContain("connected execution adapters");
     expect(JSON.stringify(body)).not.toContain("provider-key");
   });
 

@@ -17,32 +17,20 @@ struct ExecutiveActionQueueView: View {
                 .listRowInsets(EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16))
                 .listRowBackground(Color.clear)
 
-                Section("Queue Metrics") {
-                    metricRow(title: "Open actions", value: openActionCount, systemImage: "tray.full")
-                    metricRow(title: "Needs review", value: needsReviewCount, systemImage: "eye")
-                    metricRow(title: "In progress", value: inProgressCount, systemImage: "play.circle")
-                    metricRow(title: "Completed", value: completedCount, systemImage: "checkmark.circle")
-                    metricRow(title: "High priority", value: highPriorityCount, systemImage: "exclamationmark.triangle")
+                Section("Ready for Approval") {
+                    actionSectionItems(actionItems.filter { $0.status == .needsReview }, emptyText: "Nothing is waiting for your approval.")
                 }
 
-                Section("Needs Review") {
-                    actionSectionItems(actionItems.filter { $0.status == .needsReview }, emptyText: "No routed actions currently require review.")
+                Section("Queued") {
+                    actionSectionItems(actionItems.filter { $0.status == .readyToExecute }, emptyText: "No approved work is waiting to start.")
                 }
 
-                Section("In Progress") {
-                    actionSectionItems(actionItems.filter { $0.status == .inProgress }, emptyText: "No routed actions are in progress.")
-                }
-
-                Section("Ready to Execute") {
-                    actionSectionItems(actionItems.filter { $0.status == .readyToExecute }, emptyText: "No routed actions are ready to execute yet.")
-                }
-
-                Section("Monitor") {
-                    actionSectionItems(actionItems.filter { $0.status == .monitor }, emptyText: "No routed actions are in monitor status.")
+                Section("Working") {
+                    actionSectionItems(actionItems.filter { $0.status == .inProgress }, emptyText: "Kairos has no active work in this center.")
                 }
 
                 Section("Completed") {
-                    actionSectionItems(actionItems.filter { $0.status == .completed }, emptyText: "No routed actions have been completed.")
+                    actionSectionItems(actionItems.filter { $0.status == .completed }, emptyText: "Completed work will appear here with its finish time.")
                 }
             }
             .navigationTitle("Actions")
@@ -51,19 +39,13 @@ struct ExecutiveActionQueueView: View {
         }
     }
 
-    private var highPriorityCount: Int { actionItems.filter { $0.priority == .high }.count }
-    private var openActionCount: Int { actionItems.filter { $0.status != .completed }.count }
-    private var needsReviewCount: Int { actionItems.filter { $0.status == .needsReview }.count }
-    private var inProgressCount: Int { actionItems.filter { $0.status == .inProgress }.count }
-    private var completedCount: Int { actionItems.filter { $0.status == .completed }.count }
-
     private var queueHeader: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Executive Action Queue")
                 .font(.largeTitle.bold())
                 .foregroundStyle(.mmgInk)
 
-            Text("Review routed Kairos commands, record approvals, and control each generated workflow, task, and production queue entry.")
+            Text("See what needs your approval, what Kairos is working on, and what has been completed and preserved.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
@@ -135,12 +117,11 @@ private struct ExecutiveActionDetailView: View {
     @Query(sort: \ProductionQueueRecord.updatedAt, order: .reverse) private var queueItems: [ProductionQueueRecord]
     @Bindable var record: KnowledgeVaultRecord
     @State private var blockReason = ""
+    @State private var executionError: String?
 
-    private let workflowFactory = ExecutiveWorkflowFactory()
-    private let taskRuntime = TaskRuntimeService()
-    private let queueRuntime = ProductionQueueService()
     private let approvalPolicy = KairosApprovalPolicy()
     private let packageRuntime = ExecutionPackageRuntimeService()
+    private let executionCoordinator = ExecutiveExecutionCoordinator()
 
     private var item: ExecutiveActionItem { ExecutiveActionItem(record: record) }
     private var linkedWorkflow: WorkflowRecord? { workflows.first { $0.projectID == record.id } }
@@ -172,37 +153,57 @@ private struct ExecutiveActionDetailView: View {
                 LabeledContent("Updated", value: item.updatedAt.formatted(date: .abbreviated, time: .shortened))
             }
 
-            Section("Approval Gate") {
-                LabeledContent("Category", value: approvalRequirement.category.rawValue)
-                LabeledContent("Required", value: approvalRequirement.isRequired ? "Yes" : "No")
-                LabeledContent("Decision", value: approvalRequirement.statusLabel)
+            Section("Decision") {
+                if item.status == .needsReview || (item.status == .readyToExecute && linkedWorkflow == nil) {
+                    Button("Approve & Execute") { approveAndExecute() }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.mmgBlue)
+                        .disabled(item.status == .completed || isPackageBlocked)
 
-                if approvalRequirement.isRequired && !approvalRequirement.isApproved {
-                    Button("Approve") { recordApproval(.approved) }
-                        .disabled(item.status == .completed)
                     Button("Reject", role: .destructive) { recordApproval(.rejected) }
                         .disabled(item.status == .completed)
-                }
-            }
 
-            Section("Execution Package") {
-                if let linkedWorkflow {
-                    executionPackageSummary(workflow: linkedWorkflow)
-                } else {
-                    Button("Create Execution Package") { createExecutionPackage() }
-                        .disabled(!approvalPolicy.canCreateExecutionPackage(for: record) || item.status == .completed)
-
-                    Text(executionGateMessage)
+                    Text("One approval authorizes Kairos to create and queue this action. A connected execution adapter will move it to Working; you will only be asked again if the scope changes or execution is blocked.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                } else if item.status == .readyToExecute {
+                    Label("Approved and queued", systemImage: "clock.badge.checkmark")
+                        .foregroundStyle(.mmgBlue)
+                    Text("Kairos will move this action to Working when an authorized execution adapter claims it.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else if item.status == .inProgress {
+                    Label("Kairos is working", systemImage: "bolt.fill")
+                        .foregroundStyle(.mmgBlue)
+                    if let linkedWorkflow {
+                        ProgressView(value: Double(linkedWorkflow.progress), total: 100)
+                            .tint(.mmgBlue)
+                        Text("\(linkedWorkflow.progress)% • \(linkedWorkflow.stage)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } else if item.status == .completed {
+                    Label("Completed and preserved", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                }
+
+                if let executionError {
+                    Text(executionError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
                 }
             }
 
-            if hasCompletePackage {
-                Section("Runtime Controls") {
-                    Button("Start Package") { startPackage() }
-                        .disabled(isPackageCompleted || isPackageBlocked)
+            Section("Summary") {
+                Text(item.summary).textSelection(.enabled)
+            }
 
+            DisclosureGroup("Technical details") {
+                if let linkedWorkflow {
+                    executionPackageSummary(workflow: linkedWorkflow)
+                }
+
+                if hasCompletePackage {
                     TextField("Block reason", text: $blockReason, axis: .vertical)
                         .lineLimit(1...3)
 
@@ -215,25 +216,12 @@ private struct ExecutiveActionDetailView: View {
                     Button("Complete Package") { completePackage() }
                         .disabled(isPackageCompleted)
                 }
-            }
 
-            Section("Action Controls") {
                 Button("Move to Monitor") { appendState(.monitor) }
                     .disabled(item.status == .completed)
                 Button("Mark Action Complete") { appendState(.completed) }
                     .disabled(item.status == .completed || (hasCompletePackage && !isPackageCompleted))
-            }
-
-            Section("Next Step") {
-                Text(item.status.nextStep).textSelection(.enabled)
-            }
-
-            Section("Summary") {
-                Text(item.summary).textSelection(.enabled)
-            }
-
-            Section("Source Record") {
-                Text(item.source).font(.callout.monospaced()).textSelection(.enabled)
+                Text(item.source).font(.caption.monospaced()).textSelection(.enabled)
             }
         }
         .navigationTitle("Action Detail")
@@ -279,56 +267,29 @@ private struct ExecutiveActionDetailView: View {
         }
     }
 
-    private var executionGateMessage: String {
-        if approvalRequirement.isRejected {
-            return "Execution is blocked because the latest approval decision is rejected."
-        }
-        if approvalRequirement.isRequired && !approvalRequirement.isApproved {
-            return "Record the required \(approvalRequirement.category.rawValue.lowercased()) approval before creating the execution package."
-        }
-        return "Kairos will create one workflow, its initial task, and a production queue entry."
-    }
-
     private func recordApproval(_ decision: KairosApprovalDecision) {
         appendHistory(approvalPolicy.approvalNote(decision: decision, category: approvalRequirement.category))
         appendState(decision == .approved ? .readyToExecute : .needsReview)
         try? modelContext.save()
     }
 
-    private func createExecutionPackage() {
-        guard linkedWorkflow == nil,
-              approvalPolicy.canCreateExecutionPackage(for: record)
-        else { return }
-
-        let workflow = workflowFactory.createWorkflow(from: record)
-        let task = taskRuntime.createInitialTask(for: workflow)
-        let queueItem = queueRuntime.createQueueItem(for: task, workflow: workflow)
-
-        modelContext.insert(workflow)
-        modelContext.insert(task)
-        modelContext.insert(queueItem)
-
-        appendHistory("Workflow ID: \(workflow.id)")
-        appendHistory("Workflow Created: \(workflow.projectTitle)")
-        appendHistory("Task ID: \(task.id)")
-        appendHistory("Task Created: \(task.title)")
-        appendHistory("Queue Item ID: \(queueItem.id)")
-        appendHistory("Queue Item Created: \(queueItem.summary)")
-        appendState(.readyToExecute)
-        try? modelContext.save()
-    }
-
-    private func startPackage() {
-        guard let workflow = linkedWorkflow,
-              let task = linkedTask,
-              let queueItem = linkedQueueItem
-        else { return }
-
-        let transitions = packageRuntime.start(workflow: workflow, task: task, queueItem: queueItem)
-        transitions.forEach(modelContext.insert)
-        appendHistory("Execution Package Started: \(transitions.count) workflow transitions recorded")
-        appendState(.inProgress)
-        try? modelContext.save()
+    private func approveAndExecute() {
+        executionError = nil
+        if linkedWorkflow == nil {
+            let package = executionCoordinator.approveAndQueue(record: record)
+            modelContext.insert(package.workflow)
+            modelContext.insert(package.task)
+            modelContext.insert(package.queueItem)
+        } else if !approvalRequirement.isApproved {
+            appendHistory(approvalPolicy.approvalNote(decision: .approved, category: approvalRequirement.category))
+            appendState(.readyToExecute)
+        }
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            executionError = "Kairos could not queue this action. No partial execution was saved."
+        }
     }
 
     private func blockPackage() {

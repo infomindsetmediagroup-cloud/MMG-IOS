@@ -26,6 +26,8 @@ targets:
       - path: MMGIOS/Features/DesignStudio
       - path: MMGIOS/Features/KnowledgeVault
       - path: MMGIOS/Features/ProductionQueue
+      - path: MMGIOS/Features/Production
+      - path: MMGIOS/Features/Shopify
       - path: MMGIOS/Features/TaskEngine
       - path: MMGIOS/Features/WorkflowRuntime
         excludes:

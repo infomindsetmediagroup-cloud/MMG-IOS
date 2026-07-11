@@ -7,9 +7,9 @@ struct AppRootView: View {
 
     var body: some View {
         TabView {
-            ExecutiveDashboardView()
+            ExecutiveCommandCenterView()
                 .tabItem {
-                    Label("Executive", systemImage: "sparkles.rectangle.stack")
+                    Label("Command", systemImage: "square.grid.2x2")
                 }
 
             ExecutiveChatView()
@@ -17,34 +17,9 @@ struct AppRootView: View {
                     Label("Chat", systemImage: "message.badge.waveform")
                 }
 
-            ExecutiveActionQueueView()
-                .tabItem {
-                    Label("Actions", systemImage: "tray.full")
-                }
-
-            DepartmentInboxView()
-                .tabItem {
-                    Label("Departments", systemImage: "building.2")
-                }
-
-            ExecutionIntegrityDashboardView()
-                .tabItem {
-                    Label("Integrity", systemImage: "checkmark.shield")
-                }
-
             KnowledgeVaultReviewView()
                 .tabItem {
                     Label("Knowledge", systemImage: "books.vertical")
-                }
-
-            CommandCenterRuntimeSummaryView()
-                .tabItem {
-                    Label("Command", systemImage: "square.grid.2x2")
-                }
-
-            WorkflowRuntimeDashboardView()
-                .tabItem {
-                    Label("Workflow", systemImage: "point.3.connected.trianglepath.dotted")
                 }
 
             CustomerPortalView(sessionStore: sessionStore, customerStore: customerStore)
@@ -52,25 +27,6 @@ struct AppRootView: View {
                     Label("Customer", systemImage: "person.crop.circle")
                 }
 
-            DesignStudioWorkflowView()
-                .tabItem {
-                    Label("Studio", systemImage: "paintbrush.pointed")
-                }
-
-            AssetManagementDashboardView()
-                .tabItem {
-                    Label("Assets", systemImage: "shippingbox")
-                }
-
-            DeliverablesDashboardView()
-                .tabItem {
-                    Label("Deliver", systemImage: "checkmark.seal")
-                }
-
-            CustomerReleaseDashboardView()
-                .tabItem {
-                    Label("Release", systemImage: "paperplane")
-                }
         }
         .tint(.mmgBlue)
     }

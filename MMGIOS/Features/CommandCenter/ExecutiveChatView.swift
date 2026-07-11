@@ -9,6 +9,10 @@ struct ExecutiveChatView: View {
     @State private var lastFailedObjective: String?
     @State private var runtimeErrorMessage: String?
     @State private var requestTask: Task<Void, Never>?
+    @State private var pendingApprovalRecord: KnowledgeVaultRecord?
+    @State private var approvalErrorMessage: String?
+
+    private let executionCoordinator = ExecutiveExecutionCoordinator()
 
     private let chatService: KairosChatService
     private let runtimeReadiness: KairosRuntimeReadiness
@@ -31,6 +35,10 @@ struct ExecutiveChatView: View {
                             ForEach(messages) { message in
                                 executiveMessageBubble(message)
                                     .id(message.id)
+                            }
+
+                            if pendingApprovalRecord != nil {
+                                approvalCard
                             }
 
                             if isSending {
@@ -144,6 +152,35 @@ struct ExecutiveChatView: View {
         .padding(14)
         .background(Color.white)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    private var approvalCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Action package ready", systemImage: "checkmark.seal")
+                .font(.headline)
+                .foregroundStyle(.mmgBlue)
+
+            Text("One decision will preserve the approval and place this objective in the execution queue.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            Button("Approve & Execute") {
+                approvePendingAction()
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.mmgBlue)
+
+            if let approvalErrorMessage {
+                Text(approvalErrorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.white)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Color.mmgBlue.opacity(0.16)))
     }
 
     private func runtimeErrorCard(message: String) -> some View {
@@ -269,7 +306,7 @@ struct ExecutiveChatView: View {
                     let response = result.runtimeResponse
                     let metadata = responseMetadata(for: response, decision: result.routeDecision)
                     messages.append(.init(role: .kairos, body: response.message, metadata: metadata))
-                    captureKnowledgeRecord(result: result)
+                    pendingApprovalRecord = captureKnowledgeRecord(result: result)
                     isSending = false
                     requestTask = nil
                 }
@@ -306,7 +343,7 @@ struct ExecutiveChatView: View {
         return values.joined(separator: " • ")
     }
 
-    private func captureKnowledgeRecord(result: KairosChatResult) {
+    private func captureKnowledgeRecord(result: KairosChatResult) -> KnowledgeVaultRecord? {
         let decision = result.routeDecision
         let response = result.runtimeResponse
         let confidencePercent = Int((decision.confidence * 100).rounded())
@@ -341,7 +378,35 @@ struct ExecutiveChatView: View {
         )
 
         modelContext.insert(record)
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+            return record
+        } catch {
+            modelContext.rollback()
+            runtimeErrorMessage = "Kairos responded, but the action package could not be preserved."
+            return nil
+        }
+    }
+
+    private func approvePendingAction() {
+        guard let record = pendingApprovalRecord else { return }
+        approvalErrorMessage = nil
+        let package = executionCoordinator.approveAndQueue(record: record)
+        modelContext.insert(package.workflow)
+        modelContext.insert(package.task)
+        modelContext.insert(package.queueItem)
+
+        do {
+            try modelContext.save()
+            pendingApprovalRecord = nil
+            messages.append(.init(
+                role: .kairos,
+                body: "Approved. The action package is queued. Its status will change to Working only when an authorized execution adapter claims it."
+            ))
+        } catch {
+            modelContext.rollback()
+            approvalErrorMessage = "Kairos could not queue the action. No partial execution was saved."
+        }
     }
 
     private func scrollToLatest(using proxy: ScrollViewProxy) {
@@ -388,6 +453,10 @@ private enum ExecutiveChatRole: Equatable {
 #Preview {
     ExecutiveChatView(runtime: UnavailableKairosRuntime(error: .missingConfiguration))
         .modelContainer(for: [
-            KnowledgeVaultRecord.self
+            KnowledgeVaultRecord.self,
+            WorkflowRecord.self,
+            WorkflowTransitionRecord.self,
+            TaskRecord.self,
+            ProductionQueueRecord.self
         ], inMemory: true)
 }
