@@ -1,6 +1,6 @@
-const storeKey = "kairos.executive.command-center.v3";
-const legacyStoreKeys = ["kairos.executive.command-center.v2", "kairos.executive.command-center.v1"];
-const STORE_VERSION = 3;
+const storeKey = "kairos.executive.command-center.v4";
+const legacyStoreKeys = ["kairos.executive.command-center.v3", "kairos.executive.command-center.v2", "kairos.executive.command-center.v1"];
+const STORE_VERSION = 4;
 
 export const commandCenters = [
   { id: "executive", title: "Executive Operations", icon: "✦", detail: "Approvals, decisions, priorities, and work requiring your attention." },
@@ -39,7 +39,7 @@ const seedWork = [
     status: "Queued",
     progress: 0,
     actionType: "website.change.package",
-    executionActionType: "website.change.execute",
+    executionActionType: "shopify.theme.files.upsert",
     requiresReview: true,
     dependency: "WEB-001",
     updatedAt: "Waiting for live audit evidence",
