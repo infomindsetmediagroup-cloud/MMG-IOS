@@ -41,9 +41,21 @@ export default async function handler(request: VercelRequest, response: VercelRe
     const storefrontInspection = isStorefrontAuditObjective(runtimeRequest.objective)
       ? await inspectStorefront(40)
       : undefined;
-    const themeInspection = isThemeSourceObjective(runtimeRequest.objective)
-      ? await inspectShopifyThemeSource(process.env)
-      : undefined;
+    let themeInspection:
+      | Awaited<ReturnType<typeof inspectShopifyThemeSource>>
+      | { source: "shopify-admin-graphql"; status: "blocked"; reason: string }
+      | undefined;
+    if (isThemeSourceObjective(runtimeRequest.objective)) {
+      try {
+        themeInspection = await inspectShopifyThemeSource(process.env);
+      } catch (error) {
+        themeInspection = {
+          source: "shopify-admin-graphql",
+          status: "blocked",
+          reason: safeInspectionFailure(error),
+        };
+      }
+    }
     const requestID = randomUUID();
     const auditID = randomUUID();
 
@@ -90,6 +102,10 @@ export default async function handler(request: VercelRequest, response: VercelRe
         source: storefrontInspection.source,
         inspectedCount: storefrontInspection.inspectedCount,
         discoveredCount: storefrontInspection.discoveredCount,
+      } : themeInspection && "status" in themeInspection ? {
+        source: themeInspection.source,
+        status: themeInspection.status,
+        reason: themeInspection.reason,
       } : themeInspection ? {
         source: themeInspection.source,
         themeId: themeInspection.theme.id,
@@ -163,11 +179,23 @@ function compactInspectionEvidence(inspection: Awaited<ReturnType<typeof inspect
 
 function combineVerifiedEvidence(
   storefront: Record<string, unknown> | undefined,
-  theme: Awaited<ReturnType<typeof inspectShopifyThemeSource>> | undefined,
+  theme:
+    | Awaited<ReturnType<typeof inspectShopifyThemeSource>>
+    | { source: "shopify-admin-graphql"; status: "blocked"; reason: string }
+    | undefined,
 ): Record<string, unknown> | undefined {
   if (!storefront && !theme) return undefined;
   return {
     ...(storefront ? { storefrontInspection: storefront } : {}),
     ...(theme ? { shopifyThemeInspection: theme } : {}),
   };
+}
+
+
+function safeInspectionFailure(error: unknown): string {
+  const message = error instanceof Error ? error.message : "Shopify theme inspection failed.";
+  return message
+    .replace(/shpat_[a-zA-Z0-9_-]+/g, "[REDACTED]")
+    .replace(/Bearer\s+[a-zA-Z0-9._-]+/gi, "Bearer [REDACTED]")
+    .slice(0, 800);
 }
