@@ -7,16 +7,109 @@ const ASSET_ROOTS = [
 
 const UPSTREAM_HEADER_TIMEOUT_MS = 2500;
 const UPSTREAM_BODY_TIMEOUT_MS = 4000;
+const SHOPIFY_DIAGNOSTIC_TIMEOUT_MS = 12000;
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname.startsWith("/api/")) {
-      return runtime.fetch(request, env, ctx);
+      return handleRuntimeAPI(request, env, ctx, url);
     }
     return serveResilientAsset(request, url);
   },
 };
+
+async function handleRuntimeAPI(request, env, ctx, url) {
+  const response = await runtime.fetch(request, env, ctx);
+  if (!["/api/theme-plan", "/api/actions"].includes(url.pathname) || response.ok) return response;
+
+  let body;
+  try { body = await response.clone().json(); } catch { return response; }
+  if (body?.error?.code !== "main_theme_unavailable") return response;
+
+  const diagnostic = await diagnoseShopifyThemes(env);
+  if (!diagnostic) return response;
+
+  return jsonResponse({
+    error: {
+      ...body.error,
+      code: diagnostic.code,
+      message: diagnostic.message,
+      shopifyStatus: diagnostic.status,
+      requestID: body.error.requestID,
+    },
+  }, diagnostic.httpStatus || response.status);
+}
+
+async function diagnoseShopifyThemes(env) {
+  const storeDomain = String(env.SHOPIFY_STORE_DOMAIN || "").trim().toLowerCase();
+  const accessToken = String(env.SHOPIFY_ADMIN_ACCESS_TOKEN || "").trim();
+  const apiVersion = String(env.SHOPIFY_API_VERSION || "2026-07").trim();
+  if (!storeDomain || !accessToken) {
+    return { code: "shopify_not_configured", message: "Shopify credentials are missing from Cloudflare.", status: "not_configured", httpStatus: 503 };
+  }
+
+  try {
+    const response = await fetch(`https://${storeDomain}/admin/api/${apiVersion}/themes.json`, {
+      method: "GET",
+      headers: { "X-Shopify-Access-Token": accessToken, Accept: "application/json" },
+      signal: AbortSignal.timeout(SHOPIFY_DIAGNOSTIC_TIMEOUT_MS),
+    });
+    const text = await response.text();
+    let body = {};
+    try { body = text ? JSON.parse(text) : {}; } catch { body = {}; }
+
+    if (response.status === 401) {
+      return { code: "shopify_token_invalid", message: "Shopify rejected the Admin API token. Replace SHOPIFY_ADMIN_ACCESS_TOKEN with a current token from the installed custom app.", status: "unauthorized", httpStatus: 401 };
+    }
+    if (response.status === 403) {
+      return { code: "shopify_theme_scope_missing", message: "The Shopify app token cannot read themes. Grant the app read_themes access, reinstall or update the app if required, then replace the Cloudflare token.", status: "forbidden", httpStatus: 403 };
+    }
+    if (response.status === 404) {
+      return { code: "shopify_api_version_unavailable", message: `Shopify did not recognize the configured Admin API route for version ${apiVersion}. Verify SHOPIFY_API_VERSION and the store domain.`, status: "not_found", httpStatus: 502 };
+    }
+    if (response.status === 429) {
+      return { code: "shopify_rate_limited", message: "Shopify temporarily rate-limited the theme request. Wait briefly, then retry WEB-002.", status: "rate_limited", httpStatus: 429 };
+    }
+    if (!response.ok) {
+      const shopifyMessage = typeof body?.errors === "string" ? body.errors : "Shopify returned an unexpected Admin API response.";
+      return { code: "shopify_theme_request_failed", message: `${shopifyMessage} Status ${response.status}.`, status: `http_${response.status}`, httpStatus: 502 };
+    }
+
+    const themes = Array.isArray(body?.themes) ? body.themes : [];
+    if (!themes.length) {
+      return { code: "shopify_no_themes", message: "Shopify accepted the token but returned no themes for this store. Verify SHOPIFY_STORE_DOMAIN points to the correct shop.", status: "empty", httpStatus: 502 };
+    }
+
+    const published = themes.find(theme => theme?.role === "main");
+    if (!published) {
+      return { code: "shopify_published_theme_missing", message: `Shopify returned ${themes.length} theme${themes.length === 1 ? "" : "s"}, but none is marked as the published main theme. Publish a theme in Shopify, then retry WEB-002.`, status: "no_main_theme", httpStatus: 409 };
+    }
+
+    return { code: "shopify_filtered_theme_lookup_failed", message: "Shopify returned a published theme during diagnostics, but the primary filtered lookup failed. Retry WEB-002 once; if it repeats, the runtime theme lookup requires another adapter correction.", status: "main_theme_confirmed", httpStatus: 502 };
+  } catch (error) {
+    const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
+    return {
+      code: timedOut ? "shopify_timeout" : "shopify_connection_failed",
+      message: timedOut ? "Shopify did not answer the theme request before the timeout. Retry shortly." : "Cloudflare could not connect to the Shopify Admin API.",
+      status: timedOut ? "timeout" : "connection_failed",
+      httpStatus: timedOut ? 504 : 502,
+    };
+  }
+}
+
+function jsonResponse(value, status = 200) {
+  return new Response(JSON.stringify(value), {
+    status,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+      "X-MMG-Runtime": "cloudflare-native",
+      "X-MMG-Shopify-Diagnostic": "true",
+    },
+  });
+}
 
 async function serveResilientAsset(request, incomingURL) {
   if (!["GET", "HEAD"].includes(request.method)) {
@@ -48,29 +141,19 @@ async function serveResilientAsset(request, incomingURL) {
     headers.delete("content-security-policy");
     headers.delete("content-encoding");
     headers.delete("transfer-encoding");
-    return new Response(request.method === "HEAD" ? null : asset.body, {
-      status: 200,
-      headers,
-    });
+    return new Response(request.method === "HEAD" ? null : asset.body, { status: 200, headers });
   } catch {
     if (pathname !== "/index.html" && !hasFileExtension(pathname)) {
       return serveResilientAsset(new Request(`${incomingURL.origin}/index.html`, request), new URL(`${incomingURL.origin}/index.html`));
     }
     if (pathname === "/index.html") return recoveryPage(attempts);
-    return new Response("Command Center asset temporarily unavailable", {
-      status: 503,
-      headers: { "Cache-Control": "no-store", "Retry-After": "5" },
-    });
+    return new Response("Command Center asset temporarily unavailable", { status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "5" } });
   }
 }
 
 async function firstSuccessfulAsset(targets, request, pathname, isHTML, attempts) {
   const tasks = targets.map(target => fetchBufferedAsset(target, request, pathname, isHTML, attempts));
-  try {
-    return await Promise.any(tasks);
-  } catch {
-    throw new Error("All Command Center asset origins failed.");
-  }
+  try { return await Promise.any(tasks); } catch { throw new Error("All Command Center asset origins failed."); }
 }
 
 async function fetchBufferedAsset(target, request, pathname, isHTML, attempts) {
@@ -108,9 +191,7 @@ async function fetchBufferedAsset(target, request, pathname, isHTML, attempts) {
 
 function withTimeout(promise, milliseconds, message) {
   let timeout;
-  const guard = new Promise((_, reject) => {
-    timeout = setTimeout(() => reject(new Error(message)), milliseconds);
-  });
+  const guard = new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error(message)), milliseconds); });
   return Promise.race([promise, guard]).finally(() => clearTimeout(timeout));
 }
 
@@ -122,14 +203,8 @@ function recoveryPage(attempts) {
   });
 }
 
-function hasFileExtension(pathname) {
-  return /\/[A-Za-z0-9._-]+\.[A-Za-z0-9]+$/.test(pathname);
-}
-
-function isTextAsset(pathname) {
-  return /\.(?:html|css|js|json|svg)$/i.test(pathname);
-}
-
+function hasFileExtension(pathname) { return /\/[A-Za-z0-9._-]+\.[A-Za-z0-9]+$/.test(pathname); }
+function isTextAsset(pathname) { return /\.(?:html|css|js|json|svg)$/i.test(pathname); }
 function contentTypeFor(pathname) {
   if (pathname.endsWith(".html")) return "text/html; charset=utf-8";
   if (pathname.endsWith(".css")) return "text/css; charset=utf-8";
