@@ -6,6 +6,7 @@ export default {
       return json({
         status: "ok",
         service: "kairos-shopify-publisher",
+        build: "publisher-v10",
         configured: Boolean(
           String(env.SHOPIFY_CLIENT_ID || "").trim() &&
           String(env.SHOPIFY_SHOP_DOMAIN || "mindsetmediagroup.myshopify.com").trim()
