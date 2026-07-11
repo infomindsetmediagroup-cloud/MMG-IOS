@@ -11,8 +11,8 @@ import {
   requireRuntimeEnvironment,
 } from "./kairos-core.js";
 import { readCookie, SESSION_COOKIE_NAME, verifyOperatorSession } from "./session-core.js";
-import { inspectStorefront, isStorefrontAuditObjective } from "./storefront-inspection-core.js";
-import { inspectShopifyThemeSource, isThemeSourceObjective } from "./shopify-theme-inspection-core.js";
+import { inspectStorefront, isStorefrontAuditObjective } from "../server/storefront-inspection-core.js";
+import { inspectShopifyThemeSource, isThemeSourceObjective } from "../server/shopify-theme-inspection-core.js";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const PROVIDER_TIMEOUT_MS = 45_000;
