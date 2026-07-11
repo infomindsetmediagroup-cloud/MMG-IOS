@@ -1,4 +1,9 @@
 name = "mmg-ios"
 main = "src/worker.js"
 compatibility_date = "2026-07-11"
+compatibility_flags = ["nodejs_compat"]
 workers_dev = true
+
+[vars]
+SHOPIFY_API_VERSION = "2026-07"
+MMG_STOREFRONT_ORIGIN = "https://themindsetmediagroup.com"
