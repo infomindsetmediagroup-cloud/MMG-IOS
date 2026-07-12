@@ -36,6 +36,9 @@ jobs:
       - name: Install dependencies
         run: npm install --no-package-lock --no-audit --no-fund
 
+      - name: Validate canonical Cloudflare Worker bundle
+        run: npx wrangler deploy --dry-run
+
       - name: Deploy canonical Cloudflare Worker
         run: npx wrangler deploy
         env:
