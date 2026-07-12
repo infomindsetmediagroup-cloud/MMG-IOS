@@ -6,7 +6,7 @@ export function buildDeterministicHomepagePackage(document, objective) {
 
   const sectionEntries = order
     .map((sectionId, index) => ({ sectionId, index, section: sections[sectionId] }))
-    .filter(item => item.section && typeof item.section === "object");
+    .filter(item => item.section && typeof item.section === "object" && item.section.disabled !== true);
 
   const hero = findSection(sectionEntries, ["hero", "banner", "slideshow", "image-banner", "image_banner"])
     || sectionEntries.find(item => hasAnyEditableText(item.section));
@@ -133,21 +133,32 @@ function findSection(entries, typeHints) {
 
 function hasAnyEditableText(section) {
   const settings = section?.settings;
-  return settings && typeof settings === "object" && Object.entries(settings).some(([key, value]) => typeof value === "string" && /heading|title|headline|subheading|subtitle|text|description|content|button.*label|button.*text/i.test(key));
+  return settings && typeof settings === "object" && findSafeTextSettingKey(settings, ["heading", "title", "headline", "subheading", "subtitle", "text", "description", "content", "button_label", "button_text"]);
+}
+
+function findSafeTextSettingKey(settings, keys) {
+  const stringKeys = Object.keys(settings).filter(key => typeof settings[key] === "string");
+  for (const candidate of keys) {
+    if (stringKeys.includes(candidate)) return candidate;
+  }
+  for (const existing of stringKeys) {
+    const normalized = existing.toLowerCase();
+    if (/(^|_)(position|alignment|color|scheme|opacity|height|behavior|image|ratio|padding|columns?|layout|style)(_|$)/.test(normalized)) continue;
+    if (keys.some(candidate => normalized.startsWith(`${candidate.toLowerCase()}_`) || normalized.endsWith(`_${candidate.toLowerCase()}`))) return existing;
+  }
+  return "";
 }
 
 function addFirstMatchingSetting(operations, sectionId, settings, keys, value) {
   if (!settings || typeof settings !== "object") return;
-  const key = keys.find(candidate => Object.prototype.hasOwnProperty.call(settings, candidate) && typeof settings[candidate] === "string")
-    || Object.keys(settings).find(existing => keys.some(candidate => existing.toLowerCase().includes(candidate.toLowerCase())) && typeof settings[existing] === "string");
+  const key = findSafeTextSettingKey(settings, keys);
   if (!key || settings[key] === value) return;
   operations.push({ scope: "section", sectionId, blockId: "", key, valueJson: JSON.stringify(value) });
 }
 
 function addFirstMatchingBlockSetting(operations, sectionId, blockId, settings, keys, value) {
   if (!settings || typeof settings !== "object") return;
-  const key = keys.find(candidate => Object.prototype.hasOwnProperty.call(settings, candidate) && typeof settings[candidate] === "string")
-    || Object.keys(settings).find(existing => keys.some(candidate => existing.toLowerCase().includes(candidate.toLowerCase())) && typeof settings[existing] === "string");
+  const key = findSafeTextSettingKey(settings, keys);
   if (!key || settings[key] === value) return;
   operations.push({ scope: "block", sectionId, blockId, key, valueJson: JSON.stringify(value) });
 }
