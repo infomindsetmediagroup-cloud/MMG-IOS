@@ -3,7 +3,6 @@ const tokenCache = new Map();
 
 export async function readShopifyDashboardAnalytics(env) {
   const config = readConfig(env);
-  const auth = await resolveToken(config, env);
   const queries = [
     { id: "sessions", label: "Online store sessions", format: "integer", ql: "FROM sessions SHOW sessions DURING today" },
     { id: "conversion_rate", label: "Conversion rate", format: "percent", ql: "FROM sessions SHOW conversion_rate DURING today" },
@@ -14,7 +13,18 @@ export async function readShopifyDashboardAnalytics(env) {
     { id: "units_sold", label: "Units sold", format: "integer", ql: "FROM sales SHOW units_sold DURING today" },
   ];
 
-  const results = await Promise.all(queries.map(item => runMetric(config, auth, item)));
+  let auth = await resolveToken(config, env);
+  let results = await Promise.all(queries.map(item => runMetric(config, auth, item)));
+
+  // Shopify client-credential tokens can remain cached after a new app version
+  // grants additional scopes. When every report query is authorization-blocked,
+  // discard the cached token, request a newly scoped token, and retry once.
+  if (auth.credentialPath === "client-credentials" && results.every(item => item.status === "authorization-required")) {
+    invalidateCachedToken(config, env);
+    auth = await resolveToken(config, env, true);
+    results = await Promise.all(queries.map(item => runMetric(config, auth, item)));
+  }
+
   const unavailable = results.filter(item => item.status !== "available");
   return {
     status: unavailable.length === results.length ? "unavailable" : unavailable.length ? "partial" : "ready",
@@ -60,13 +70,25 @@ function readConfig(env) {
   return { storeDomain, apiVersion };
 }
 
-async function resolveToken(config, env) {
+function tokenCacheKey(config, env) {
+  const clientId = String(env.SHOPIFY_CLIENT_ID || "").trim();
+  return clientId ? `${config.storeDomain}:${clientId}` : "";
+}
+
+function invalidateCachedToken(config, env) {
+  const key = tokenCacheKey(config, env);
+  if (key) tokenCache.delete(key);
+}
+
+async function resolveToken(config, env, forceRefresh = false) {
   const clientId = String(env.SHOPIFY_CLIENT_ID || "").trim();
   const clientSecret = String(env.SHOPIFY_CLIENT_SECRET || "").trim();
   if (clientId && clientSecret) {
-    const key = `${config.storeDomain}:${clientId}`;
-    const cached = tokenCache.get(key);
-    if (cached?.expiresAt > Date.now()) return { token: cached.token, credentialPath: "client-credentials" };
+    const key = tokenCacheKey(config, env);
+    if (!forceRefresh) {
+      const cached = tokenCache.get(key);
+      if (cached?.expiresAt > Date.now()) return { token: cached.token, credentialPath: "client-credentials" };
+    }
     const response = await fetch(`https://${config.storeDomain}/admin/oauth/access_token`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
