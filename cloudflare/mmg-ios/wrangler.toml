@@ -1,9 +1,15 @@
 name = "mmg-ios"
-main = "src/entry-stable.js"
+main = "src/worker.js"
 compatibility_date = "2026-07-11"
 compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 keep_vars = true
+
+[assets]
+directory = "../../web/kairos-dashboard"
+binding = "ASSETS"
+run_worker_first = true
+not_found_handling = "single-page-application"
 
 [vars]
 SHOPIFY_API_VERSION = "2026-07"

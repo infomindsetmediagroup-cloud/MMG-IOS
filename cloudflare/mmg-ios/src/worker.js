@@ -18,7 +18,7 @@ export default {
     const url = new URL(request.url);
     try {
       if (url.pathname.startsWith("/api/")) return await routeAPI(request, env, url);
-      return await serveCommandCenterAsset(request, url);
+      return await serveCommandCenterAsset(request, env, url);
     } catch (error) {
       console.error("MMG Cloudflare runtime failure", error);
       return errorResponse(error);
@@ -427,22 +427,33 @@ function methodNotAllowed(allow) { const headers = apiHeaders(); headers.set("Al
 function apiHeaders() { return new Headers({ "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "X-MMG-Runtime": "cloudflare-native" }); }
 function json(value, status = 200) { return new Response(JSON.stringify(value), { status, headers: apiHeaders() }); }
 
-async function serveCommandCenterAsset(request, incomingURL) {
+async function serveCommandCenterAsset(request, env, incomingURL) {
   if (!["GET", "HEAD"].includes(request.method)) return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD" } });
   let pathname = incomingURL.pathname;
   if (pathname === "/" || pathname === "/web/kairos-dashboard" || pathname === "/web/kairos-dashboard/") pathname = "/index.html";
   else if (pathname.startsWith("/web/kairos-dashboard/")) pathname = pathname.slice("/web/kairos-dashboard".length);
   if (pathname.includes("..")) return new Response("Invalid path", { status: 400 });
+  if (env.ASSETS && typeof env.ASSETS.fetch === "function") {
+    const assetURL = new URL(pathname + incomingURL.search, incomingURL.origin);
+    const assetRequest = new Request(assetURL, request);
+    const asset = await env.ASSETS.fetch(assetRequest);
+    if (asset.ok) return commandCenterResponse(asset, pathname, "cloudflare-assets");
+  }
   const upstream = await fetch(`${RAW_REPOSITORY_ORIGIN}${pathname}${incomingURL.search}`, { method: request.method, headers: { Accept: request.headers.get("Accept") || "*/*" }, cf: { cacheEverything: true, cacheTtl: pathname.endsWith(".html") ? 0 : 300 } });
-  if (!upstream.ok) { if (pathname !== "/index.html" && !hasFileExtension(pathname)) return serveCommandCenterAsset(new Request(`${incomingURL.origin}/index.html`, request), new URL(`${incomingURL.origin}/index.html`)); return new Response("Command Center asset not found", { status: upstream.status }); }
-  const headers = new Headers(upstream.headers);
+  if (!upstream.ok) { if (pathname !== "/index.html" && !hasFileExtension(pathname)) return serveCommandCenterAsset(new Request(`${incomingURL.origin}/index.html`, request), env, new URL(`${incomingURL.origin}/index.html`)); return new Response("Command Center asset not found", { status: upstream.status }); }
+  return commandCenterResponse(upstream, pathname, "repository-fallback");
+}
+
+function commandCenterResponse(response, pathname, host) {
+  const headers = new Headers(response.headers);
   headers.set("Content-Type", contentTypeFor(pathname));
   headers.set("X-Content-Type-Options", "nosniff");
-  headers.set("X-MMG-Host", "cloudflare");
+  headers.set("X-MMG-Host", host);
   headers.set("X-MMG-Runtime", "cloudflare-native");
+  headers.set("X-MMG-Build", "command-center-reconciled-20260711-29");
   headers.set("Cache-Control", pathname.endsWith(".html") ? "no-cache, no-store, must-revalidate" : "public, max-age=300");
   headers.delete("content-security-policy");
-  return new Response(upstream.body, { status: upstream.status, statusText: upstream.statusText, headers });
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
 function hasFileExtension(pathname) { return /\/[A-Za-z0-9._-]+\.[A-Za-z0-9]+$/.test(pathname); }
