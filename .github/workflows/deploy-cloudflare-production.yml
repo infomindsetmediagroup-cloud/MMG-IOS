@@ -21,6 +21,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    environment: production
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CLOUDFLARE_TOKEN || vars.CLOUDFLARE_API_TOKEN || vars.CLOUDFLARE_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
@@ -52,14 +53,14 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
-            echo "::error::Missing GitHub Actions credential. Add CLOUDFLARE_API_TOKEN as a repository or organization Actions secret."
+            echo "::error::Cloudflare API token is unavailable to the production environment."
             exit 1
           fi
           if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
-            echo "::error::Missing GitHub Actions credential. Add CLOUDFLARE_ACCOUNT_ID as a repository or organization Actions secret or variable."
+            echo "::error::Cloudflare account ID is unavailable to the production environment."
             exit 1
           fi
-          echo "Cloudflare deployment credentials are available."
+          echo "Cloudflare production credentials are available."
 
       - name: Verify runtime
         shell: bash
