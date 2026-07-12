@@ -1,0 +1,4 @@
+MMG Kairos production deployment trigger
+Target commit: 601c9c5e4d8d44d7f26bf7f0c7727dc2b3b4efd6
+Build: command-center-reconciled-baseline-20260711-44
+Purpose: force Cloudflare Git integration to publish the reconciled canonical startup bundle and replace the broken cached browser asset graph.
