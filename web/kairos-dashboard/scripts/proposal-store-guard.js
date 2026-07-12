@@ -1,4 +1,4 @@
-const STORE_KEY = "kairos.executive.command-center.v4";
+const STORE_KEY = "kairos.executive.command-center.v7";
 const MAX_PERSISTED_STORE_BYTES = 180000;
 
 window.__kairosFullProposals = window.__kairosFullProposals || new Map();
@@ -18,9 +18,11 @@ window.addEventListener("kairos:approved-action-status", event => {
   const proposalReady = detail.status === "Proposal Ready" || (detail.phase === "prepare" && detail.status === "Completed");
   if (!proposalReady || !detail.id || !detail.result || typeof detail.result !== "object") return;
 
+  // Preserve the complete executable proposal in memory. Do not mutate event.detail.
+  // executive-command-center-store.js already compacts the persisted localStorage copy
+  // while retaining the complete proposal in its runtime proposal map.
   window.__kairosFullProposals.set(detail.id, detail.result);
-  detail.result = compactProposal(detail.result);
-}, true);
+});
 
 export function fullProposalFor(id, fallback = null) {
   return window.__kairosFullProposals?.get(id) || fallback;
