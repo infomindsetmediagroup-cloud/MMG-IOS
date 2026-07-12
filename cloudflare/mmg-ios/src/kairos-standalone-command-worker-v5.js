@@ -1,7 +1,7 @@
 import runtime from "./kairos-standalone-command-worker-v2.js";
 import { readShopifyDashboardAnalytics } from "./shopify-live-analytics-v1.js";
 
-const BUILD = "kairos-standalone-command-20260712-13";
+const BUILD = "kairos-standalone-command-20260712-14";
 const CANONICAL_SHOPIFY_STORE = "07kd8e-qw.myshopify.com";
 
 export default {
