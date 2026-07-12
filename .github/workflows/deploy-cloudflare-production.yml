@@ -21,6 +21,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CLOUDFLARE_TOKEN || vars.CLOUDFLARE_API_TOKEN || vars.CLOUDFLARE_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
 
     steps:
       - name: Clone repository with native Git
@@ -30,6 +33,20 @@ jobs:
         run: |
           set -euo pipefail
           git clone --depth 1 --branch main "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" repository
+
+      - name: Verify deployment credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "::error::Missing GitHub Actions credential. Add CLOUDFLARE_API_TOKEN as a repository or organization Actions secret."
+            exit 1
+          fi
+          if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            echo "::error::Missing GitHub Actions credential. Add CLOUDFLARE_ACCOUNT_ID as a repository or organization Actions secret or variable."
+            exit 1
+          fi
+          echo "Cloudflare deployment credentials are available."
 
       - name: Verify runtime
         shell: bash
@@ -51,7 +68,4 @@ jobs:
       - name: Deploy canonical Cloudflare Worker
         shell: bash
         working-directory: repository/cloudflare/mmg-ios
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler deploy
