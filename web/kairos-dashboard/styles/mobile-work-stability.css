@@ -1,0 +1,42 @@
+@media (max-width: 900px) {
+  html,
+  body,
+  .kairos-app,
+  .workspace,
+  #dashboard-view,
+  .dashboard-grid,
+  .pipeline-section,
+  .pipeline-list,
+  .pipeline-item,
+  .card {
+    height: auto !important;
+    max-height: none !important;
+    contain: none !important;
+    transform: none !important;
+  }
+
+  html,
+  body,
+  .kairos-app,
+  .workspace,
+  #dashboard-view,
+  .dashboard-grid,
+  .pipeline-section,
+  .pipeline-list {
+    overflow-y: visible !important;
+  }
+
+  .pipeline-item,
+  .card {
+    overflow: visible !important;
+  }
+
+  .workspace {
+    min-height: 0 !important;
+    padding-bottom: calc(130px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .pipeline-section {
+    min-height: 0 !important;
+  }
+}

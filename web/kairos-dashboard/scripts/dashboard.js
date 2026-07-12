@@ -303,6 +303,19 @@ function render() {
   bindActions();
 }
 
+function followActiveWorkItem(id) {
+  if (!id || !window.matchMedia("(max-width: 900px)").matches) return;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const target = [...view.querySelectorAll("[data-work-id]")].find(element => element.dataset.workId === id);
+    if (target) {
+      target.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+      return;
+    }
+    const maximum = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    if (window.scrollY > maximum) window.scrollTo({ top: maximum, behavior: "auto" });
+  }));
+}
+
 async function refreshHealth() {
   try {
     const response = await fetch(`${runtimeBaseURL}/api/health`, { headers: { Accept: "application/json" }, cache: "no-store", credentials: "include" });
@@ -329,6 +342,7 @@ window.addEventListener("kairos:approved-action-status", event => {
     updateWorkItem(id, { status: "Proposal Ready", progress: 100, error: error || "", proposal: result || {}, updatedAt: "Proposal prepared; executive approval required" });
     expandedProposalId = id;
     activeCenter = work.center;
+    followActiveWorkItem(id);
     return;
   }
   updateWorkItem(id, { status, progress, error: error || "", evidence: result || null, updatedAt: new Date().toLocaleString() });
@@ -336,6 +350,7 @@ window.addEventListener("kairos:approved-action-status", event => {
     recordCompletedKnowledge(work, result);
     unlockDependents(id);
   }
+  followActiveWorkItem(id);
 });
 
 render();
