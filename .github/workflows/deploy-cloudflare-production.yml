@@ -21,27 +21,37 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: cloudflare/mmg-ios
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Clone repository with native Git
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch main "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" repository
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
+      - name: Verify runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --version
+          npm --version
 
       - name: Install dependencies
+        shell: bash
+        working-directory: repository/cloudflare/mmg-ios
         run: npm install --no-package-lock --no-audit --no-fund
 
       - name: Validate canonical Cloudflare Worker bundle
+        shell: bash
+        working-directory: repository/cloudflare/mmg-ios
         run: npx wrangler deploy --dry-run
 
       - name: Deploy canonical Cloudflare Worker
-        run: npx wrangler deploy
+        shell: bash
+        working-directory: repository/cloudflare/mmg-ios
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy
