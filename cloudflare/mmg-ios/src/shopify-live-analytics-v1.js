@@ -10,7 +10,7 @@ export async function readShopifyDashboardAnalytics(env) {
     { id: "orders", label: "Orders", format: "integer", ql: "FROM sales SHOW orders DURING today" },
     { id: "average_order_value", label: "Average order value", format: "money", ql: "FROM sales SHOW average_order_value DURING today" },
     { id: "customers", label: "Customers", format: "integer", ql: "FROM sales SHOW customers DURING today" },
-    { id: "units_sold", label: "Units sold", format: "integer", ql: "FROM sales SHOW units_sold DURING today" },
+    { id: "net_items_sold", label: "Net items sold", format: "integer", ql: "FROM sales SHOW net_items_sold DURING today" },
   ];
 
   let auth = await resolveBestToken(config, env);
