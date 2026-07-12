@@ -36,21 +36,9 @@ window.addEventListener("unhandledrejection", event => {
   showNotice("A Kairos request failed without completing. The interface has been released instead of freezing.", "error");
 });
 
-document.addEventListener("click", event => {
-  const button = event.target.closest("button");
-  if (!button || button.disabled) return;
-  if (!button.matches("[data-prepare-action],[data-retry-action],[data-approve-proposal],[data-run-center]")) return;
-  button.disabled = true;
-  button.setAttribute("aria-busy", "true");
-  const original = button.textContent;
-  button.textContent = "Working…";
-  setTimeout(() => {
-    if (!button.isConnected) return;
-    button.disabled = false;
-    button.removeAttribute("aria-busy");
-    button.textContent = original;
-  }, 1500);
-}, true);
+// Do not disable action buttons during capture. Doing so can suppress the
+// dashboard's target-phase click handlers on mobile Safari and Chrome.
+// The work-item state itself provides the visible execution feedback.
 
 function clearTimer(id) {
   const timer = timers.get(id);
