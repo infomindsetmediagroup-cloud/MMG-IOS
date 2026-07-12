@@ -95,10 +95,34 @@ export function applyCompactPatch(original, patch) {
     let value;
     try { value = JSON.parse(String(operation?.valueJson ?? "null")); }
     catch { throw new Error(`Invalid JSON value for ${sectionId}/${blockId || "section"}/${key}.`); }
+    validateSettingValue(key, settings[key], value, `${sectionId}/${blockId || "section"}/${key}`);
     settings[key] = value;
   }
   validateHomepageDocument(candidate, original);
   return candidate;
+}
+
+function validateSettingValue(key, previous, next, location) {
+  const previousType = Array.isArray(previous) ? "array" : previous === null ? "null" : typeof previous;
+  const nextType = Array.isArray(next) ? "array" : next === null ? "null" : typeof next;
+  if (previousType !== nextType) throw new Error(`Setting type changed at ${location}: ${previousType} to ${nextType}.`);
+  const normalized = String(key || "").toLowerCase();
+  if (typeof next === "string" && next.length > 100000) throw new Error(`Setting value is too large at ${location}.`);
+  if (/(^|_)desktop_content_position$/.test(normalized) && !/^(top|middle|bottom)-(left|center|right)$/.test(next)) {
+    throw new Error(`Invalid desktop content position at ${location}.`);
+  }
+  if (/(^|_)mobile_content_position$/.test(normalized) && !/^(top|middle|bottom)-(left|center|right)$/.test(next)) {
+    throw new Error(`Invalid mobile content position at ${location}.`);
+  }
+  if (/(^|_)(desktop_content_alignment|mobile_content_alignment|text_alignment|alignment)$/.test(normalized) && !/^(left|center|right)$/.test(next)) {
+    throw new Error(`Invalid alignment at ${location}.`);
+  }
+  if (/(^|_)image_height$/.test(normalized) && !/^(adapt|small|medium|large)$/.test(next)) {
+    throw new Error(`Invalid image height at ${location}.`);
+  }
+  if (/(^|_)image_behavior$/.test(normalized) && !/^(none|ambient|fixed|zoom-in)$/.test(next)) {
+    throw new Error(`Invalid image behavior at ${location}.`);
+  }
 }
 
 export async function semanticHash(value) {
