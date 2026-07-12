@@ -13,21 +13,21 @@ export async function readShopifyDashboardAnalytics(env) {
     { id: "units_sold", label: "Units sold", format: "integer", ql: "FROM sales SHOW units_sold DURING today" },
   ];
 
-  let auth = await resolveToken(config, env);
-  let scopeState = await readGrantedScopes(config, auth);
+  let auth = await resolveBestToken(config, env);
   let results = await Promise.all(queries.map(item => runMetric(config, auth, item)));
+  let tokenRefreshedOnAuthorizationFailure = false;
 
-  if (auth.credentialPath === "client-credentials" && results.every(item => item.status === "authorization-required")) {
+  if (results.every(item => item.status === "authorization-required")) {
     invalidateCachedToken(config, env);
-    auth = await resolveToken(config, env, true);
-    scopeState = await readGrantedScopes(config, auth);
+    auth = await resolveBestToken(config, env, true);
+    tokenRefreshedOnAuthorizationFailure = true;
     results = await Promise.all(queries.map(item => runMetric(config, auth, item)));
   }
 
   const unavailable = results.filter(item => item.status !== "available");
   const errors = [...new Set(unavailable.map(item => item.error).filter(Boolean))];
   const protectedCustomerDataRequired = errors.some(message => /protected customer data|level 2|customer data/i.test(message));
-  const readReportsGranted = scopeState.scopes.includes("read_reports");
+  const readReportsGranted = auth.grantedScopes.includes("read_reports");
 
   return {
     status: unavailable.length === results.length ? "unavailable" : unavailable.length ? "partial" : "ready",
@@ -37,15 +37,16 @@ export async function readShopifyDashboardAnalytics(env) {
     checkedAt: new Date().toISOString(),
     metrics: results,
     authorization: {
-      scopeInspectionStatus: scopeState.status,
-      grantedScopes: scopeState.scopes,
+      scopeInspectionStatus: auth.scopeInspectionStatus,
+      grantedScopes: auth.grantedScopes,
       readReportsGranted,
       protectedCustomerDataRequired,
-      tokenRefreshedOnAuthorizationFailure: auth.credentialPath === "client-credentials",
+      tokenRefreshedOnAuthorizationFailure,
+      credentialCandidatesChecked: auth.credentialCandidatesChecked,
       exactErrors: errors,
     },
     requirements: [
-      ...(!readReportsGranted ? ["Add and release the read_reports scope in the Shopify app version."] : []),
+      ...(!readReportsGranted ? ["No configured Shopify credential currently presents read_reports to the store installation."] : []),
       ...(protectedCustomerDataRequired ? ["Shopify is still requiring protected customer-data approval for one or more report fields."] : []),
     ],
   };
@@ -106,30 +107,72 @@ function invalidateCachedToken(config, env) {
   if (key) tokenCache.delete(key);
 }
 
-async function resolveToken(config, env, forceRefresh = false) {
+async function resolveBestToken(config, env, forceRefresh = false) {
+  const candidates = [];
   const clientId = String(env.SHOPIFY_CLIENT_ID || "").trim();
   const clientSecret = String(env.SHOPIFY_CLIENT_SECRET || "").trim();
+  const adminToken = String(env.SHOPIFY_ADMIN_ACCESS_TOKEN || "").trim();
+
   if (clientId && clientSecret) {
-    const key = tokenCacheKey(config, env);
-    if (!forceRefresh) {
-      const cached = tokenCache.get(key);
-      if (cached?.expiresAt > Date.now()) return { token: cached.token, credentialPath: "client-credentials" };
+    try {
+      candidates.push(await resolveClientCredentialsToken(config, env, forceRefresh));
+    } catch (error) {
+      candidates.push({ credentialPath: "client-credentials", token: "", resolutionError: error instanceof Error ? error.message : "Client credential token request failed." });
     }
-    const response = await fetch(`https://${config.storeDomain}/admin/oauth/access_token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
-      body: new URLSearchParams({ grant_type: "client_credentials", client_id: clientId, client_secret: clientSecret }),
-      signal: AbortSignal.timeout(SHOPIFY_TIMEOUT_MS),
-    });
-    const body = await safeJSON(response);
-    const token = typeof body?.access_token === "string" ? body.access_token.trim() : "";
-    if (!response.ok || !token) throw new Error(String(body?.error_description || body?.error || `Shopify token request returned HTTP ${response.status}.`));
-    tokenCache.set(key, { token, expiresAt: Date.now() + 55 * 60 * 1000 });
-    return { token, credentialPath: "client-credentials" };
   }
-  const token = String(env.SHOPIFY_ADMIN_ACCESS_TOKEN || "").trim();
-  if (!token) throw new Error("Shopify client credentials or an Admin access token must be configured.");
-  return { token, credentialPath: "admin-access-token" };
+
+  if (adminToken && !candidates.some(candidate => candidate.token === adminToken)) {
+    candidates.push({ token: adminToken, credentialPath: "admin-access-token" });
+  }
+
+  const usable = candidates.filter(candidate => candidate.token);
+  if (!usable.length) {
+    const detail = candidates.map(candidate => candidate.resolutionError).filter(Boolean).join("; ");
+    throw new Error(detail || "Shopify client credentials or an Admin access token must be configured.");
+  }
+
+  const inspected = await Promise.all(usable.map(async candidate => {
+    const state = await readGrantedScopes(config, candidate);
+    return {
+      ...candidate,
+      grantedScopes: state.scopes,
+      scopeInspectionStatus: state.status,
+      scopeInspectionError: state.error || "",
+    };
+  }));
+
+  const selected = inspected.find(candidate => candidate.grantedScopes.includes("read_reports")) || inspected[0];
+  return {
+    ...selected,
+    credentialCandidatesChecked: inspected.map(candidate => ({
+      credentialPath: candidate.credentialPath,
+      scopeInspectionStatus: candidate.scopeInspectionStatus,
+      grantedScopes: candidate.grantedScopes,
+    })),
+  };
+}
+
+async function resolveClientCredentialsToken(config, env, forceRefresh = false) {
+  const clientId = String(env.SHOPIFY_CLIENT_ID || "").trim();
+  const clientSecret = String(env.SHOPIFY_CLIENT_SECRET || "").trim();
+  const key = tokenCacheKey(config, env);
+
+  if (!forceRefresh) {
+    const cached = tokenCache.get(key);
+    if (cached?.expiresAt > Date.now()) return { token: cached.token, credentialPath: "client-credentials" };
+  }
+
+  const response = await fetch(`https://${config.storeDomain}/admin/oauth/access_token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+    body: new URLSearchParams({ grant_type: "client_credentials", client_id: clientId, client_secret: clientSecret }),
+    signal: AbortSignal.timeout(SHOPIFY_TIMEOUT_MS),
+  });
+  const body = await safeJSON(response);
+  const token = typeof body?.access_token === "string" ? body.access_token.trim() : "";
+  if (!response.ok || !token) throw new Error(String(body?.error_description || body?.error || `Shopify token request returned HTTP ${response.status}.`));
+  tokenCache.set(key, { token, expiresAt: Date.now() + 55 * 60 * 1000 });
+  return { token, credentialPath: "client-credentials" };
 }
 
 async function shopifyGraphQL(config, auth, query, variables) {
