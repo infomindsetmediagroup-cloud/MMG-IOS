@@ -66,6 +66,7 @@ async function main() {
   assert(healthResponse.ok && health.status === "ready", "Cloudflare runtime is not ready.", { status: healthResponse.status, health });
   assert(health.runtime === "cloudflare-workers", "Runtime is not Cloudflare Workers.", { runtime: health.runtime });
   assert(health.capabilities?.cloudflareNative === true && health.capabilities?.vercelDependency === false, "Cloudflare-native capability boundary is not satisfied.", health.capabilities);
+  assert(health.capabilities?.shopify === true && health.capabilities?.themePlan === true && health.capabilities?.themeMutation === true, "Shopify planning or mutation capability is unavailable.", health.capabilities);
   record("Confirm Cloudflare production runtime", "passed", { build: health.build, capabilities: health.capabilities });
 
   const rootResponse = await fetch(`${endpoint}/`, { headers: { Accept: "text/html" }, signal: AbortSignal.timeout(15_000) });
@@ -104,6 +105,7 @@ async function main() {
   const files = proposal?.mutationPlan?.files;
   assert(planResponse.ok && proposal?.mutationPlan?.themeId && Array.isArray(files) && files.length > 0, "Kairos did not produce an executable source-grounded Shopify proposal.", { status: planResponse.status, proposal });
   assert(proposal?.sourceEvidence?.adapter === "graphql-admin" && Array.isArray(proposal?.sourceEvidence?.files), "Proposal lacks Shopify source evidence.", proposal?.sourceEvidence);
+  assert(files.every(file => typeof file?.key === "string" && typeof file?.value === "string" && typeof file?.expectedSha256 === "string"), "Proposal file records are incomplete.", { files: files.map(file => ({ key: file?.key, hasValue: typeof file?.value === "string", expectedSha256: file?.expectedSha256 })) });
   record("Prepare and review fresh Shopify proposal", "passed", {
     themeId: proposal.mutationPlan.themeId,
     files: files.map(file => ({ key: file.key, expectedSha256: file.expectedSha256, bytes: Buffer.byteLength(file.value || "", "utf8") })),
@@ -131,6 +133,7 @@ async function main() {
     const action = await readJSON(actionResponse);
     assert(actionResponse.ok && action.status === "completed", "Governed Shopify mutation did not complete.", { status: actionResponse.status, action });
     assert(action.evidence?.publishedThemeVerified === true && action.evidence?.rollbackAvailable === true && Array.isArray(action.evidence?.files) && action.evidence.files.every(file => file.verified === true), "Mutation completion evidence is incomplete.", action.evidence);
+    assert(Array.isArray(action.evidence?.backup) && action.evidence.backup.length === action.evidence.files.length, "Backup evidence does not cover every mutated file.", action.evidence);
     record("Execute bounded governed Shopify mutation", "passed", { actionID: action.actionID, evidence: action.evidence });
   }
 
