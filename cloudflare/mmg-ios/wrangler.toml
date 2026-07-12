@@ -11,5 +11,6 @@ run_worker_first = true
 not_found_handling = "single-page-application"
 
 [vars]
+SHOPIFY_STORE_DOMAIN = "07kd8e-qw.myshopify.com"
 SHOPIFY_API_VERSION = "2026-07"
 MMG_STOREFRONT_ORIGIN = "https://themindsetmediagroup.com"
