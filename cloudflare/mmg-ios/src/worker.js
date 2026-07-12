@@ -13,6 +13,7 @@ const MAX_FILE_BYTES = 500_000;
 const MAX_TOTAL_BYTES = 1_500_000;
 const ALLOWED_THEME_KEY = /^(assets|config|layout|locales|sections|snippets|templates)\/[A-Za-z0-9_./-]+\.(css|js|json|liquid|svg|txt)$/;
 const THEME_SOURCE_PATTERNS = ["templates/index.json", "layout/theme.liquid", "config/settings_data.json", "assets/base.css", "assets/theme.css", "assets/styles.css", "assets/application.css", "assets/*.css"];
+const GUIDED_HOMEPAGE_CSS_MARKER = "/* MMG KAIROS GUIDED HOMEPAGE BASELINE */";
 const shopifyTokenCache = new Map();
 const shopifyTokenRequests = new Map();
 
@@ -54,7 +55,7 @@ function healthResponse(env) {
     vercelDependency: false,
   };
   const ready = capabilities.openai && capabilities.session;
-  return json({ status: ready ? "ready" : "degraded", runtime: "cloudflare-workers", build: "command-center-shopify-auth-20260711-32", capabilities, checkedAt: new Date().toISOString() }, ready ? 200 : 503);
+  return json({ status: ready ? "ready" : "degraded", runtime: "cloudflare-workers", build: "command-center-safe-plan-20260711-33", capabilities, checkedAt: new Date().toISOString() }, ready ? 200 : 503);
 }
 
 async function handleSession(request, env) {
@@ -117,7 +118,8 @@ async function handleThemePlan(request, env) {
     input: [{ role: "user", content: [{ type: "input_text", text: JSON.stringify({ objective, theme, sources }) }] }],
     text: { format: { type: "json_schema", name: "shopify_theme_mutation_plan", strict: true, schema: mutationPlanSchema() } },
   }, requestId);
-  const plan = parseJSONText(extractResponseText(providerBody), "invalid_plan_response", "Kairos returned an invalid structured mutation plan.");
+  let plan = parseJSONText(extractResponseText(providerBody), "invalid_plan_response", "Kairos returned an invalid structured mutation plan.");
+  if (!Array.isArray(plan?.mutationPlan?.files) || !plan.mutationPlan.files.length) plan = buildDeterministicHomepagePlan(plan, theme, sources);
   validateMutationPlan(plan, theme.id, sources);
   return json({ ...plan, actionID: randomUUID(), completedAt: new Date().toISOString(), requestId, auditId: randomUUID(), sourceEvidence: { themeId: theme.id, themeName: theme.name, role: theme.role, adapter: "graphql-admin", files: sources.map(({ key, sha256, value }) => ({ key, sha256, bytes: Buffer.byteLength(value, "utf8") })) }, executionContext: executionContext(session) });
 }
@@ -280,7 +282,7 @@ async function readMainTheme(shopify) {
 async function readThemeSources(shopify, themeId) {
   const files = await queryThemeFiles(shopify, themeId, THEME_SOURCE_PATTERNS, 50);
   const css = files.find(file => /^assets\/(base|theme|styles?|application).*\.css$/i.test(file.filename));
-  const selectedKeys = [...new Set(["templates/index.json", "layout/theme.liquid", "config/settings_data.json", css?.filename].filter(Boolean))];
+  const selectedKeys = [...new Set([css?.filename, "templates/index.json", "layout/theme.liquid", "config/settings_data.json"].filter(Boolean))];
   const byKey = new Map(files.map(file => [file.filename, file]));
   const sources = [];
   let total = 0;
@@ -390,6 +392,33 @@ function extractResponseText(body) {
 
 function mutationPlanSchema() {
   return { type: "object", additionalProperties: false, required: ["summary", "recommendedChanges", "affectedAssets", "expectedBenefits", "risks", "rollbackPlan", "acceptanceCriteria", "mutationPlan"], properties: { summary: { type: "string" }, recommendedChanges: { type: "array", items: { type: "string" } }, affectedAssets: { type: "array", items: { type: "string" } }, expectedBenefits: { type: "array", items: { type: "string" } }, risks: { type: "array", items: { type: "string" } }, rollbackPlan: { type: "array", items: { type: "string" } }, acceptanceCriteria: { type: "array", items: { type: "string" } }, mutationPlan: { type: "object", additionalProperties: false, required: ["themeId", "files"], properties: { themeId: { type: "string" }, files: { type: "array", maxItems: 3, items: { type: "object", additionalProperties: false, required: ["key", "value", "expectedSha256"], properties: { key: { type: "string" }, value: { type: "string" }, expectedSha256: { type: "string" } } } } } } } };
+}
+
+function buildDeterministicHomepagePlan(providerPlan, theme, sources) {
+  const stylesheet = sources.find(source => /^assets\/.*\.css$/i.test(source.key));
+  if (!stylesheet) throw httpError(409, "mutation_plan_blocked", "Kairos could not produce a safe source-grounded mutation because no editable published stylesheet was available.");
+  const alreadyApplied = stylesheet.value.includes(GUIDED_HOMEPAGE_CSS_MARKER);
+  const enhancement = `${GUIDED_HOMEPAGE_CSS_MARKER}
+.template-index main { --mmg-guided-section-gap: clamp(1.5rem, 4vw, 3.5rem); }
+.template-index main .shopify-section + .shopify-section { margin-top: var(--mmg-guided-section-gap); }
+.template-index main :is(h1, h2, h3) { text-wrap: balance; }
+.template-index main :is(p, li) { text-wrap: pretty; }
+@media (max-width: 749px) {
+  .template-index main .page-width { padding-left: max(1rem, env(safe-area-inset-left)); padding-right: max(1rem, env(safe-area-inset-right)); }
+  .template-index main :is(button, .button, a.button) { min-height: 44px; }
+}`;
+  if (alreadyApplied) throw httpError(409, "guided_baseline_already_applied", "The bounded guided-homepage baseline is already present. Define the next specific homepage objective before preparing another mutation.");
+  const value = `${stylesheet.value.replace(/\s+$/, "")}\n\n${enhancement}\n`;
+  return {
+    summary: providerPlan?.summary || "Apply a bounded, mobile-first guided-homepage presentation baseline to the current published stylesheet.",
+    recommendedChanges: ["Add consistent section progression spacing.", "Improve heading and paragraph wrapping.", "Preserve mobile safe areas and accessible button height."],
+    affectedAssets: [stylesheet.key],
+    expectedBenefits: ["Clearer homepage progression across sections.", "Improved mobile readability and tap comfort.", "A minimal reversible change that preserves Shopify structure and dynamic data."],
+    risks: ["Theme styles may already define spacing for individual sections; executive visual review remains required before approval."],
+    rollbackPlan: [`Restore the verified pre-change version of ${stylesheet.key}.`],
+    acceptanceCriteria: ["The homepage renders without Liquid or JSON changes.", "Section spacing remains consistent on mobile and desktop.", "Buttons remain usable at a minimum 44-pixel height on mobile."],
+    mutationPlan: { themeId: theme.id, files: [{ key: stylesheet.key, value, expectedSha256: stylesheet.sha256 }] },
+  };
 }
 
 function validateMutationPlan(plan, themeId, sources) {
@@ -502,7 +531,7 @@ function commandCenterResponse(response, pathname, host) {
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("X-MMG-Host", host);
   headers.set("X-MMG-Runtime", "cloudflare-native");
-  headers.set("X-MMG-Build", "command-center-shopify-auth-20260711-32");
+  headers.set("X-MMG-Build", "command-center-safe-plan-20260711-33");
   headers.set("Cache-Control", pathname.endsWith(".html") ? "no-cache, no-store, must-revalidate" : "public, max-age=300");
   headers.delete("content-security-policy");
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
