@@ -1,31 +1,11 @@
 import runtime from "./kairos-standalone-command-worker-v2.js";
 import { readShopifyDashboardAnalytics } from "./shopify-live-analytics-v1.js";
 
-const BUILD = "kairos-standalone-command-20260712-6";
+const BUILD = "kairos-standalone-command-20260712-7";
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-
-    if (url.pathname === "/api/shopify/reauthorize" && request.method === "GET") {
-      const clientId = String(env.SHOPIFY_CLIENT_ID || "").trim();
-      const storeDomain = String(env.SHOPIFY_STORE_DOMAIN || "").trim().toLowerCase();
-      const storeName = storeDomain.replace(/\.myshopify\.com$/i, "");
-
-      if (!clientId || !storeName) {
-        return json({
-          status: "needs-attention",
-          build: BUILD,
-          error: {
-            code: "shopify_reauthorization_config_missing",
-            message: "SHOPIFY_CLIENT_ID and SHOPIFY_STORE_DOMAIN must be configured before reauthorization.",
-          },
-        }, 500);
-      }
-
-      const installUrl = `https://admin.shopify.com/store/${encodeURIComponent(storeName)}/oauth/install?client_id=${encodeURIComponent(clientId)}`;
-      return Response.redirect(installUrl, 302);
-    }
 
     if (url.pathname === "/api/analytics/shopify" && request.method === "GET") {
       try {
@@ -60,7 +40,6 @@ export default {
         ...(body.capabilities || {}),
         shopifyDashboardAnalytics: "configured",
         shopifyQLAnalytics: "configured",
-        shopifyReauthorization: "configured",
       };
       return json(body, response.status);
     }
