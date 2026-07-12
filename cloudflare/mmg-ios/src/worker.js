@@ -434,7 +434,8 @@ async function serveCommandCenterAsset(request, env, incomingURL) {
   else if (pathname.startsWith("/web/kairos-dashboard/")) pathname = pathname.slice("/web/kairos-dashboard".length);
   if (pathname.includes("..")) return new Response("Invalid path", { status: 400 });
   if (env.ASSETS && typeof env.ASSETS.fetch === "function") {
-    const assetURL = new URL(pathname + incomingURL.search, incomingURL.origin);
+    const assetPath = pathname === "/index.html" ? "/" : pathname;
+    const assetURL = new URL(assetPath + incomingURL.search, incomingURL.origin);
     const assetRequest = new Request(assetURL, request);
     const asset = await env.ASSETS.fetch(assetRequest);
     if (asset.ok) return commandCenterResponse(asset, pathname, "cloudflare-assets");
@@ -450,7 +451,7 @@ function commandCenterResponse(response, pathname, host) {
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("X-MMG-Host", host);
   headers.set("X-MMG-Runtime", "cloudflare-native");
-  headers.set("X-MMG-Build", "command-center-reconciled-20260711-29");
+  headers.set("X-MMG-Build", "command-center-reconciled-20260711-30");
   headers.set("Cache-Control", pathname.endsWith(".html") ? "no-cache, no-store, must-revalidate" : "public, max-age=300");
   headers.delete("content-security-policy");
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
