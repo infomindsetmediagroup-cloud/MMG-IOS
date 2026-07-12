@@ -1,7 +1,7 @@
 import runtime from "./kairos-standalone-command-worker-v2.js";
 import { readShopifyDashboardAnalytics } from "./shopify-live-analytics-v1.js";
 
-const BUILD = "kairos-standalone-command-20260712-9";
+const BUILD = "kairos-standalone-command-20260712-10";
 const CANONICAL_SHOPIFY_STORE = "07kd8e-qw.myshopify.com";
 
 export default {
@@ -38,6 +38,13 @@ export default {
       body.build = BUILD;
       body.kernel = "standalone-command-v5";
       body.shopifyStore = String(env.SHOPIFY_STORE_DOMAIN || CANONICAL_SHOPIFY_STORE).trim().toLowerCase();
+      body.shopifyCredentialConfiguration = {
+        clientCredentials: Boolean(env.SHOPIFY_CLIENT_ID && env.SHOPIFY_CLIENT_SECRET),
+        apiKeyCredentials: Boolean(env.SHOPIFY_API_KEY && env.SHOPIFY_API_SECRET),
+        appClientCredentials: Boolean(env.SHOPIFY_APP_CLIENT_ID && env.SHOPIFY_APP_CLIENT_SECRET),
+        clientSecretKeyCredentials: Boolean(env.SHOPIFY_CLIENT_ID && env.SHOPIFY_CLIENT_SECRET_KEY),
+        adminAccessToken: Boolean(env.SHOPIFY_ADMIN_ACCESS_TOKEN),
+      };
       body.capabilities = {
         ...(body.capabilities || {}),
         shopifyDashboardAnalytics: "configured",
