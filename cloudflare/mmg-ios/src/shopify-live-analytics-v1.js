@@ -97,27 +97,21 @@ function readConfig(env) {
   return { storeDomain, apiVersion };
 }
 
-function tokenCacheKey(config, env) {
-  const clientId = String(env.SHOPIFY_CLIENT_ID || "").trim();
-  return clientId ? `${config.storeDomain}:${clientId}` : "";
-}
-
 function invalidateCachedToken(config, env) {
-  const key = tokenCacheKey(config, env);
-  if (key) tokenCache.delete(key);
+  for (const credential of clientCredentialCandidates(env)) {
+    tokenCache.delete(tokenCacheKey(config, credential.clientId));
+  }
 }
 
 async function resolveBestToken(config, env, forceRefresh = false) {
   const candidates = [];
-  const clientId = String(env.SHOPIFY_CLIENT_ID || "").trim();
-  const clientSecret = String(env.SHOPIFY_CLIENT_SECRET || "").trim();
   const adminToken = String(env.SHOPIFY_ADMIN_ACCESS_TOKEN || "").trim();
 
-  if (clientId && clientSecret) {
+  for (const credential of clientCredentialCandidates(env)) {
     try {
-      candidates.push(await resolveClientCredentialsToken(config, env, forceRefresh));
+      candidates.push(await resolveClientCredentialsToken(config, credential, forceRefresh));
     } catch (error) {
-      candidates.push({ credentialPath: "client-credentials", token: "", resolutionError: error instanceof Error ? error.message : "Client credential token request failed." });
+      candidates.push({ credentialPath: credential.path, token: "", resolutionError: error instanceof Error ? error.message : "Client credential token request failed." });
     }
   }
 
@@ -152,27 +146,47 @@ async function resolveBestToken(config, env, forceRefresh = false) {
   };
 }
 
-async function resolveClientCredentialsToken(config, env, forceRefresh = false) {
-  const clientId = String(env.SHOPIFY_CLIENT_ID || "").trim();
-  const clientSecret = String(env.SHOPIFY_CLIENT_SECRET || "").trim();
-  const key = tokenCacheKey(config, env);
+function clientCredentialCandidates(env) {
+  const definitions = [
+    ["client-credentials", env.SHOPIFY_CLIENT_ID, env.SHOPIFY_CLIENT_SECRET],
+    ["api-key-credentials", env.SHOPIFY_API_KEY, env.SHOPIFY_API_SECRET],
+    ["app-client-credentials", env.SHOPIFY_APP_CLIENT_ID, env.SHOPIFY_APP_CLIENT_SECRET],
+    ["client-secret-key-credentials", env.SHOPIFY_CLIENT_ID, env.SHOPIFY_CLIENT_SECRET_KEY],
+  ];
+  const seen = new Set();
+  return definitions.flatMap(([path, rawClientId, rawClientSecret]) => {
+    const clientId = String(rawClientId || "").trim();
+    const clientSecret = String(rawClientSecret || "").trim();
+    const key = `${clientId}:${clientSecret}`;
+    if (!clientId || !clientSecret || seen.has(key)) return [];
+    seen.add(key);
+    return [{ path, clientId, clientSecret }];
+  });
+}
+
+function tokenCacheKey(config, clientId) {
+  return clientId ? `${config.storeDomain}:${clientId}` : "";
+}
+
+async function resolveClientCredentialsToken(config, credential, forceRefresh = false) {
+  const key = tokenCacheKey(config, credential.clientId);
 
   if (!forceRefresh) {
     const cached = tokenCache.get(key);
-    if (cached?.expiresAt > Date.now()) return { token: cached.token, credentialPath: "client-credentials" };
+    if (cached?.expiresAt > Date.now()) return { token: cached.token, credentialPath: credential.path };
   }
 
   const response = await fetch(`https://${config.storeDomain}/admin/oauth/access_token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
-    body: new URLSearchParams({ grant_type: "client_credentials", client_id: clientId, client_secret: clientSecret }),
+    body: new URLSearchParams({ grant_type: "client_credentials", client_id: credential.clientId, client_secret: credential.clientSecret }),
     signal: AbortSignal.timeout(SHOPIFY_TIMEOUT_MS),
   });
   const body = await safeJSON(response);
   const token = typeof body?.access_token === "string" ? body.access_token.trim() : "";
   if (!response.ok || !token) throw new Error(String(body?.error_description || body?.error || `Shopify token request returned HTTP ${response.status}.`));
   tokenCache.set(key, { token, expiresAt: Date.now() + 55 * 60 * 1000 });
-  return { token, credentialPath: "client-credentials" };
+  return { token, credentialPath: credential.path };
 }
 
 async function shopifyGraphQL(config, auth, query, variables) {
