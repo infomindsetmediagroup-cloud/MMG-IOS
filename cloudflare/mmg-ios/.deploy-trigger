@@ -1,3 +1,4 @@
-Deploy trigger for Shopify client-credentials runtime wiring.
-Commit target: f0f5cc4512bf8d1b8562ff292c99516024d78e29
-Triggered: 2026-07-11
+Deploy trigger for reconciled Kairos command hub v29.
+Target repair commit: fb0ba380521c3378203da6e0b58eeeb87bcd28ce
+Triggered: 2026-07-12
+Purpose: run Wrangler dry-run validation, then deploy the repaired Cloudflare Worker from main.
