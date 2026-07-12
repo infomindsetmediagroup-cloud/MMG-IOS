@@ -14,18 +14,21 @@ export async function readShopifyDashboardAnalytics(env) {
   ];
 
   let auth = await resolveToken(config, env);
+  let scopeState = await readGrantedScopes(config, auth);
   let results = await Promise.all(queries.map(item => runMetric(config, auth, item)));
 
-  // Shopify client-credential tokens can remain cached after a new app version
-  // grants additional scopes. When every report query is authorization-blocked,
-  // discard the cached token, request a newly scoped token, and retry once.
   if (auth.credentialPath === "client-credentials" && results.every(item => item.status === "authorization-required")) {
     invalidateCachedToken(config, env);
     auth = await resolveToken(config, env, true);
+    scopeState = await readGrantedScopes(config, auth);
     results = await Promise.all(queries.map(item => runMetric(config, auth, item)));
   }
 
   const unavailable = results.filter(item => item.status !== "available");
+  const errors = [...new Set(unavailable.map(item => item.error).filter(Boolean))];
+  const protectedCustomerDataRequired = errors.some(message => /protected customer data|level 2|customer data/i.test(message));
+  const readReportsGranted = scopeState.scopes.includes("read_reports");
+
   return {
     status: unavailable.length === results.length ? "unavailable" : unavailable.length ? "partial" : "ready",
     source: "shopifyql-admin-api",
@@ -33,8 +36,31 @@ export async function readShopifyDashboardAnalytics(env) {
     period: "today",
     checkedAt: new Date().toISOString(),
     metrics: results,
-    requirements: unavailable.length ? ["Shopify app must include read_reports access and protected customer data approval where required."] : [],
+    authorization: {
+      scopeInspectionStatus: scopeState.status,
+      grantedScopes: scopeState.scopes,
+      readReportsGranted,
+      protectedCustomerDataRequired,
+      tokenRefreshedOnAuthorizationFailure: auth.credentialPath === "client-credentials",
+      exactErrors: errors,
+    },
+    requirements: [
+      ...(!readReportsGranted ? ["Add and release the read_reports scope in the Shopify app version."] : []),
+      ...(protectedCustomerDataRequired ? ["Shopify is still requiring protected customer-data approval for one or more report fields."] : []),
+    ],
   };
+}
+
+async function readGrantedScopes(config, auth) {
+  try {
+    const data = await shopifyGraphQL(config, auth, `query KairosGrantedScopes { currentAppInstallation { accessScopes { handle } } }`, {});
+    const scopes = Array.isArray(data?.currentAppInstallation?.accessScopes)
+      ? data.currentAppInstallation.accessScopes.map(item => String(item?.handle || "").trim()).filter(Boolean).sort()
+      : [];
+    return { status: "verified", scopes };
+  } catch (error) {
+    return { status: "unavailable", scopes: [], error: error instanceof Error ? error.message : "Scope inspection failed." };
+  }
 }
 
 async function runMetric(config, auth, item) {
@@ -50,7 +76,7 @@ async function runMetric(config, auth, item) {
     return { ...item, status: "available", value: raw, displayValue: formatValue(raw, item.format) };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Shopify analytics request failed.";
-    const authorization = /read_reports|access denied|permission|protected customer data/i.test(message);
+    const authorization = /read_reports|access denied|permission|protected customer data|level 2/i.test(message);
     return { ...item, status: authorization ? "authorization-required" : "unavailable", value: null, error: message.slice(0, 500) };
   }
 }
