@@ -1,4 +1,5 @@
 const storeKey = "kairos.executive.command-center.v7";
+const runtimeProposalPrefix = "kairos.executive.runtime-proposal.v1.";
 const legacyStoreKeys = [
   "kairos.executive.command-center.v6",
   "kairos.executive.command-center.v5",
@@ -37,6 +38,52 @@ function defaultStore() {
   return { version: STORE_VERSION, work: seedWork.map(item => ({ ...item })), knowledge: [], updatedAt: new Date().toISOString() };
 }
 
+function runtimeProposalKey(id) {
+  return `${runtimeProposalPrefix}${id}`;
+}
+
+function isExecutableProposal(proposal) {
+  const files = proposal?.mutationPlan?.files;
+  return Array.isArray(files) && files.length > 0 && files.every(file =>
+    typeof file?.key === "string" &&
+    typeof file?.value === "string" &&
+    /^[a-f0-9]{64}$/i.test(String(file?.expectedSha256 || ""))
+  );
+}
+
+function persistRuntimeProposal(id, proposal) {
+  runtimeProposals.set(id, proposal);
+  if (!isExecutableProposal(proposal)) return;
+  try {
+    sessionStorage.setItem(runtimeProposalKey(id), JSON.stringify(proposal));
+  } catch {
+    // In-memory execution remains available if Safari denies or exhausts session storage.
+  }
+}
+
+function restoreRuntimeProposal(id) {
+  if (runtimeProposals.has(id)) return runtimeProposals.get(id);
+  try {
+    const raw = sessionStorage.getItem(runtimeProposalKey(id));
+    if (!raw) return null;
+    const proposal = JSON.parse(raw);
+    if (!isExecutableProposal(proposal)) {
+      sessionStorage.removeItem(runtimeProposalKey(id));
+      return null;
+    }
+    runtimeProposals.set(id, proposal);
+    return proposal;
+  } catch {
+    try { sessionStorage.removeItem(runtimeProposalKey(id)); } catch { /* Ignore storage restrictions. */ }
+    return null;
+  }
+}
+
+function clearRuntimeProposal(id) {
+  runtimeProposals.delete(id);
+  try { sessionStorage.removeItem(runtimeProposalKey(id)); } catch { /* Ignore storage restrictions. */ }
+}
+
 function boundedString(value) {
   const text = String(value ?? "").replace(/\s+/g, " ").trim();
   return text.length > MAX_STRING_LENGTH ? `${text.slice(0, MAX_STRING_LENGTH - 1)}…` : text;
@@ -73,7 +120,10 @@ function compactWorkItem(item) {
 function hydrateRuntimeProposals(store) {
   return {
     ...store,
-    work: store.work.map(item => runtimeProposals.has(item.id) ? { ...item, proposal: runtimeProposals.get(item.id) } : item),
+    work: store.work.map(item => {
+      const proposal = restoreRuntimeProposal(item.id);
+      return proposal ? { ...item, proposal } : item;
+    }),
   };
 }
 
@@ -152,8 +202,8 @@ export function updateWorkItem(id, patch) {
   const current = getCommandCenterStore();
   const incoming = patch || {};
   if (Object.prototype.hasOwnProperty.call(incoming, "proposal")) {
-    if (incoming.proposal) runtimeProposals.set(id, incoming.proposal);
-    else runtimeProposals.delete(id);
+    if (incoming.proposal) persistRuntimeProposal(id, incoming.proposal);
+    else clearRuntimeProposal(id);
   }
   const safePatch = compactWorkItem(incoming);
   return save({ ...current, work: current.work.map(item => item.id === id ? compactWorkItem({ ...item, ...safePatch, updatedAt: safePatch.updatedAt || new Date().toLocaleString() }) : item) });
@@ -186,6 +236,7 @@ export function resetCommandCenterStore() {
   memoryStore = null;
   runtimeProposals.clear();
   try { localStorage.removeItem(storeKey); } catch { /* Ignore storage restrictions. */ }
+  for (const item of seedWork) clearRuntimeProposal(item.id);
   purgeLegacyStores();
   queueNotification();
 }
