@@ -70,7 +70,7 @@ async function verifiedFallback(request, env) {
     acceptanceCriteria: ["Homepage spacing is consistent.", "No mobile horizontal overflow.", "Non-homepage templates remain unchanged."],
     mutationPlan: { themeId, files: [{ key: stylesheet.key, value: replacement, expectedSha256: sha(stylesheet.value) }] },
     actionID: randomUUID(), completedAt: new Date().toISOString(), requestId: randomUUID(), auditId: randomUUID(),
-    sourceEvidence: { adapter: "graphql-admin-verified-homepage-fallback-v3", themeId, themeName: theme.name || "Published theme", role: "main", homepageSelector: ".template-index", objective, files: [{ key: layout.key, sha256: sha(layout.value) }, { key: stylesheet.key, sha256: sha(stylesheet.value) }] },
+    sourceEvidence: { adapter: "graphql-admin-verified-homepage-fallback-v4", themeId, themeName: theme.name || "Published theme", role: "main", homepageSelector: ".template-index", objective, authSource: shop.authSource, files: [{ key: layout.key, sha256: sha(layout.value) }, { key: stylesheet.key, sha256: sha(stylesheet.value) }] },
   });
 }
 
@@ -78,21 +78,37 @@ async function shopify(env) {
   const domain = String(env.SHOPIFY_STORE_DOMAIN || "").trim().toLowerCase();
   const version = String(env.SHOPIFY_API_VERSION || "2026-07").trim();
   if (!domain.endsWith(".myshopify.com")) throw problem(503, "shopify_invalid_domain", "The Shopify store domain is invalid.");
-  let token = String(env.SHOPIFY_ADMIN_ACCESS_TOKEN || "").trim();
-  if (!token && env.SHOPIFY_CLIENT_ID && env.SHOPIFY_CLIENT_SECRET) {
-    const response = await fetch(`https://${domain}/admin/oauth/access_token`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "client_credentials", client_id: env.SHOPIFY_CLIENT_ID, client_secret: env.SHOPIFY_CLIENT_SECRET }) });
+
+  const clientId = String(env.SHOPIFY_CLIENT_ID || "").trim();
+  const clientSecret = String(env.SHOPIFY_CLIENT_SECRET || "").trim();
+  let token = "";
+  let authSource = "static-admin-token";
+
+  if (clientId && clientSecret) {
+    const response = await fetch(`https://${domain}/admin/oauth/access_token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+      body: new URLSearchParams({ grant_type: "client_credentials", client_id: clientId, client_secret: clientSecret }),
+    });
     const result = await response.json().catch(() => ({}));
     token = String(result.access_token || "").trim();
-    if (!response.ok || !token) throw problem(401, "shopify_credentials_invalid", "Shopify credentials were rejected.");
+    if (!response.ok || !token) throw problem(401, "shopify_credentials_invalid", String(result.error_description || result.error || "Shopify client credentials were rejected.").slice(0, 500));
+    authSource = "client-credentials";
+  } else {
+    token = String(env.SHOPIFY_ADMIN_ACCESS_TOKEN || "").trim();
   }
+
   if (!token) throw problem(503, "shopify_not_configured", "Shopify credentials are not configured.");
-  return { domain, version, token };
+  return { domain, version, token, authSource };
 }
 
 async function gql(shop, query, variables = {}) {
   const response = await fetch(`https://${shop.domain}/admin/api/${shop.version}/graphql.json`, { method: "POST", headers: { "X-Shopify-Access-Token": shop.token, "Content-Type": "application/json" }, body: JSON.stringify({ query, variables }) });
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw problem(response.status, "shopify_graphql_http_error", `Shopify GraphQL returned HTTP ${response.status}.`);
+  if (!response.ok) {
+    const detail = body?.errors?.map?.(error => error?.message).filter(Boolean).join("; ") || body?.error_description || body?.error || `Shopify GraphQL returned HTTP ${response.status}.`;
+    throw problem(response.status, response.status === 401 ? "shopify_graphql_unauthorized" : "shopify_graphql_http_error", String(detail).slice(0, 500));
+  }
   if (body.errors?.length) throw problem(502, "shopify_graphql_error", body.errors.map(error => error.message).join("; "));
   return body.data;
 }
@@ -106,4 +122,4 @@ async function bodyText(body) {
 async function responseJSON(response) { const text = await response.text(); if (!text) return {}; try { return JSON.parse(text); } catch { return {}; } }
 function sha(value) { return createHash("sha256").update(value, "utf8").digest("hex"); }
 function problem(status, code, message) { const error = new Error(message); error.status = status; error.code = code; return error; }
-function json(value, status = 200) { return new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-MMG-Runtime": "theme-plan-recovery-v3" } }); }
+function json(value, status = 200) { return new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-MMG-Runtime": "theme-plan-recovery-v4" } }); }
