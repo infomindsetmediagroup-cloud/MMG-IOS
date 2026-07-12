@@ -1,7 +1,8 @@
 import runtime from "./kairos-standalone-command-worker-v2.js";
 import { readShopifyDashboardAnalytics } from "./shopify-live-analytics-v1.js";
 
-const BUILD = "kairos-standalone-command-20260712-7";
+const BUILD = "kairos-standalone-command-20260712-8";
+const CANONICAL_SHOPIFY_STORE = "07kd8e-qw.myshopify.com";
 
 export default {
   async fetch(request, env, ctx) {
@@ -36,6 +37,7 @@ export default {
       const body = await safeJSON(response.clone());
       body.build = BUILD;
       body.kernel = "standalone-command-v5";
+      body.shopifyStore = String(env.SHOPIFY_STORE_DOMAIN || CANONICAL_SHOPIFY_STORE).trim().toLowerCase();
       body.capabilities = {
         ...(body.capabilities || {}),
         shopifyDashboardAnalytics: "configured",
