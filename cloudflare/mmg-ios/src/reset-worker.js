@@ -1,6 +1,6 @@
 import reconciledWorker from "./reconciled-worker.js";
 
-const RESET_BUILD = "kairos-runtime-reset-20260711-4";
+const RESET_BUILD = "kairos-runtime-reset-20260711-6";
 const STOREFRONT_TIMEOUT_MS = 15_000;
 
 const CAPABILITIES = {
@@ -65,7 +65,26 @@ export default {
       }, 503);
     }
 
-    return reconciledWorker.fetch(request, env, ctx);
+    if (url.pathname.startsWith("/api/")) {
+      return json({ error: { code: "api_route_not_found", message: "The requested Kairos API route is not available in this runtime." } }, 404);
+    }
+
+    if (!env.ASSETS || typeof env.ASSETS.fetch !== "function") {
+      return json({ error: { code: "asset_binding_unavailable", message: "The frozen Kairos shell asset binding is unavailable." } }, 503);
+    }
+
+    const assetResponse = await env.ASSETS.fetch(request);
+    const headers = new Headers(assetResponse.headers);
+    headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+    headers.set("Pragma", "no-cache");
+    headers.set("Expires", "0");
+    headers.set("X-MMG-Runtime", RESET_BUILD);
+    headers.set("X-Content-Type-Options", "nosniff");
+    return new Response(assetResponse.body, {
+      status: assetResponse.status,
+      statusText: assetResponse.statusText,
+      headers,
+    });
   },
 };
 
