@@ -1,8 +1,9 @@
 import kernel from "./kairos-kernel-worker-v8.js";
 
-const BUILD = "kairos-kernel-20260712-9";
-const OPENAI_TIMEOUT_MS = 45_000;
+const BUILD = "kairos-kernel-20260712-12";
+const OPENAI_TIMEOUT_MS = 110_000;
 const MAX_SOURCE_CHARS = 50_000;
+const MAX_OBJECTIVE_CHARS = 12_000;
 
 export default {
   async fetch(request, env) {
@@ -16,12 +17,12 @@ export default {
     const response = await kernel.fetch(request, env);
     const headers = new Headers(response.headers);
     headers.set("X-MMG-Runtime", BUILD);
-    headers.set("X-Kairos-Kernel", "standalone-v9");
+    headers.set("X-Kairos-Kernel", "standalone-v12-planning");
 
     if (url.pathname === "/api/health" || url.pathname === "/api/capabilities") {
       const body = await safeJSON(response.clone());
       body.build = BUILD;
-      body.kernel = "standalone-v9";
+      body.kernel = "standalone-v12-planning";
       body.capabilities = {
         ...(body.capabilities || {}),
         shopifyStagingSourceInspection: "verified-read-only",
@@ -49,8 +50,8 @@ async function buildSourceGroundedPlan(request, env) {
     if (objective.length < 8) {
       throw httpError(400, "objective_required", "Enter a specific website objective before generating the staging plan.");
     }
-    if (objective.length > 2000) {
-      throw httpError(400, "objective_too_long", "The website objective must be 2,000 characters or fewer.");
+    if (objective.length > MAX_OBJECTIVE_CHARS) {
+      throw httpError(400, "objective_too_long", `The website objective must be ${MAX_OBJECTIVE_CHARS.toLocaleString()} characters or fewer.`);
     }
 
     const openaiKey = String(env.OPENAI_API_KEY || "").trim();
@@ -161,7 +162,7 @@ async function buildSourceGroundedPlan(request, env) {
       status: "ready-for-approval",
       readOnly: true,
       build: BUILD,
-      kernel: "standalone-v9",
+      kernel: "standalone-v12-planning",
       startedAt,
       completedAt: new Date().toISOString(),
       objective,
@@ -192,7 +193,7 @@ async function buildSourceGroundedPlan(request, env) {
       status: "needs-attention",
       readOnly: true,
       build: BUILD,
-      kernel: "standalone-v9",
+      kernel: "standalone-v12-planning",
       startedAt,
       completedAt: new Date().toISOString(),
       summary: "Kairos could not generate the source-grounded staging plan.",
@@ -306,7 +307,7 @@ function json(value, status = 200) {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store",
       "X-MMG-Runtime": BUILD,
-      "X-Kairos-Kernel": "standalone-v9",
+      "X-Kairos-Kernel": "standalone-v12-planning",
       "X-Content-Type-Options": "nosniff",
     },
   });
