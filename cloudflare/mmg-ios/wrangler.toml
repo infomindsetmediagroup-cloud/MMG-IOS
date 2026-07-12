@@ -1,5 +1,5 @@
 name = "mmg-ios"
-main = "src/kairos-kernel-worker-v22.js"
+main = "src/kairos-kernel-worker-v23.js"
 compatibility_date = "2026-07-11"
 workers_dev = true
 keep_vars = true
