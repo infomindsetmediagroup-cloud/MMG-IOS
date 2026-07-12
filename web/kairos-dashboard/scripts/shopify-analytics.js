@@ -1,4 +1,4 @@
-const ANALYTICS_BUILD = "kairos-shopify-analytics-20260712-1";
+const ANALYTICS_BUILD = "kairos-shopify-analytics-20260712-2";
 let latest = null;
 let loading = false;
 
@@ -56,12 +56,27 @@ function renderIntoPanel(state = {}) {
 function renderPanel(state = {}) {
   const analytics = latest?.analytics || {};
   const metrics = Array.isArray(analytics.metrics) ? analytics.metrics : [];
-  const status = state.loading ? "Refreshing Shopify analytics…" : analytics.status === "ready" ? "Live · today" : analytics.status === "partial" ? "Partial · today" : "Needs authorization";
-  const cards = state.loading
-    ? Array.from({ length: 7 }, (_, index) => cardHTML({ label: index === 0 ? "Shopify analytics" : "Loading", displayValue: "…", status: "loading" })).join("")
-    : metrics.length
-      ? metrics.map(cardHTML).join("")
-      : cardHTML({ label: "Shopify analytics", displayValue: "Unavailable", status: "authorization-required", error: latest?.error?.message || analytics.requirements?.[0] || "Shopify read_reports access is required." });
+  const available = metrics.filter(metric => metric.status === "available");
+  const restricted = metrics.filter(metric => metric.status === "authorization-required");
+  const status = state.loading
+    ? "Refreshing Shopify analytics…"
+    : analytics.status === "ready"
+      ? "Live · today"
+      : available.length
+        ? "Partial · today"
+        : "Authorization required";
+
+  let cards = "";
+  if (state.loading) {
+    cards = Array.from({ length: 4 }, (_, index) => cardHTML({ label: index === 0 ? "Shopify analytics" : "Loading", displayValue: "…", status: "loading" })).join("");
+  } else if (available.length) {
+    cards = available.map(cardHTML).join("");
+    if (restricted.length) cards += authorizationCard(restricted.length);
+  } else if (restricted.length || metrics.length) {
+    cards = authorizationCard(restricted.length || metrics.length);
+  } else {
+    cards = authorizationCard(0, latest?.error?.message || analytics.requirements?.[0]);
+  }
 
   return `<header class="shopify-analytics-head"><div><p class="eyebrow">Live Shopify Analytics</p><h2>Store performance</h2></div><div class="shopify-analytics-state"><span>${escapeHTML(status)}</span><button type="button" data-refresh-shopify>Refresh</button></div></header><div class="shopify-analytics-grid">${cards}</div>`;
 }
@@ -69,8 +84,21 @@ function renderPanel(state = {}) {
 function cardHTML(metric) {
   const available = metric.status === "available";
   const value = available ? (metric.displayValue ?? "—") : metric.status === "loading" ? "…" : "Unavailable";
-  const detail = available ? "Verified ShopifyQL" : metric.error || "Requires Shopify read_reports access";
+  const detail = available ? "Verified ShopifyQL" : "Unavailable";
   return `<article class="shopify-analytics-card" data-state="${escapeHTML(metric.status || "unknown")}"><span>${escapeHTML(metric.label || metric.id || "Metric")}</span><strong>${escapeHTML(value)}</strong><small>${escapeHTML(detail)}</small></article>`;
+}
+
+function authorizationCard(count, message = "") {
+  const detail = count
+    ? `${count} Shopify dashboard metric${count === 1 ? "" : "s"} blocked by the current app authorization.`
+    : "Shopify dashboard analytics are blocked by the current app authorization.";
+  const normalized = String(message || "").toLowerCase();
+  const requirements = [
+    "Add the read_reports access scope to the Shopify app.",
+    "Request Level 2 protected customer-data access in Shopify Partner settings.",
+    "Reinstall or reauthorize the app so Shopify issues a token with the new permissions.",
+  ];
+  return `<article class="shopify-analytics-card shopify-analytics-authorization" data-state="authorization-required"><span>Shopify analytics authorization</span><strong>Access required</strong><small>${escapeHTML(detail)}</small><ul>${requirements.map(item => `<li>${escapeHTML(item)}</li>`).join("")}</ul>${normalized && !normalized.includes("read_reports") ? `<p>${escapeHTML(message)}</p>` : ""}</article>`;
 }
 
 function bind(panel) {
