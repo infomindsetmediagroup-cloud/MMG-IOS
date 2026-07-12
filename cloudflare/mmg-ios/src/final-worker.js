@@ -14,10 +14,11 @@ export default {
     }
 
     const primary = await reconciledWorker.fetch(request.clone(), env, ctx);
-    if (primary.ok || primary.status !== 409) return primary;
+    if (primary.ok) return primary;
 
     const primaryBody = await safeJSON(primary.clone());
-    if (primaryBody?.error?.code !== "mutation_plan_blocked") return primary;
+    const recoverableCodes = new Set(["mutation_plan_blocked", "invalid_homepage_template"]);
+    if (!recoverableCodes.has(primaryBody?.error?.code)) return primary;
 
     try {
       return await buildVerifiedFallback(request, env);
@@ -107,6 +108,7 @@ async function buildVerifiedFallback(request, env) {
       homepageSelector: ".template-index",
       selectorEvidenceFile: "layout/theme.liquid",
       objective,
+      compatibilityRecovery: "shopify-generated-json-comment",
       files: [
         { key: "layout/theme.liquid", sha256: sha256(layout.value), bytes: Buffer.byteLength(layout.value, "utf8") },
         { key: stylesheet.filename, sha256: sha256(stylesheet.value), bytes: Buffer.byteLength(stylesheet.value, "utf8") },
