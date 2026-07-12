@@ -1,0 +1,59 @@
+html {
+  min-height: 100%;
+  background: #03070d;
+  overscroll-behavior-y: none;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100%;
+  min-height: 100dvh;
+  margin: 0;
+  background: #03070d;
+  overflow-x: clip;
+}
+
+.kairos-app {
+  min-height: 100dvh;
+  background: #03070d;
+}
+
+.workspace {
+  min-height: 100dvh;
+  box-sizing: border-box;
+}
+
+#dashboard-view {
+  min-height: 1px;
+  contain: layout style;
+}
+
+@media (max-width: 900px) {
+  .workspace {
+    padding-top: max(12px, env(safe-area-inset-top));
+    padding-bottom: calc(150px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .dashboard-grid,
+  .dashboard-grid > *,
+  .card,
+  .hero-panel,
+  .kpi-grid {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+  }
+
+  .card,
+  .hero-panel,
+  .kpi-grid {
+    contain: layout paint;
+  }
+
+  .live-kairos-button,
+  [data-live-kairos],
+  .live-executive-chat-launcher {
+    max-width: calc(100vw - 32px);
+    right: max(16px, env(safe-area-inset-right)) !important;
+    bottom: calc(78px + env(safe-area-inset-bottom)) !important;
+  }
+}
