@@ -32,7 +32,13 @@ function openReview(id) {
   const proposal = fullProposalFor(id, persistedProposal);
   const mutation = proposal?.mutationPlan || null;
   const files = Array.isArray(mutation?.files) ? mutation.files : [];
-  const hasExecutablePayload = !mutation?.compact && (!mutation || files.every(file => typeof file?.value === "string"));
+  const hasExecutablePayload = mutation
+    ? !mutation.compact && files.length > 0 && files.every(file =>
+        typeof file?.key === "string" && file.key &&
+        typeof file?.value === "string" && file.value.length > 0 &&
+        typeof file?.expectedSha256 === "string" && file.expectedSha256.length >= 32
+      )
+    : true;
   const summary = text(proposal.summary || proposal.executiveSummary || proposal.message || "Kairos prepared this governed proposal for executive review.", 900);
   const changes = list(proposal.recommendedChanges || proposal.changes || files.map(file => `Update ${file.key}`), 6);
   const risks = list(proposal.risks || proposal.risk || ["Execution remains bounded by the approved scope and rollback controls."], 4);
@@ -51,10 +57,10 @@ function openReview(id) {
       ${section("Files and assets affected", affected)}
       ${section("Risk and safeguards", risks)}
       <p class="kairos-lite-note">Full source-file contents are intentionally excluded from this screen to keep mobile review responsive. Source hashes and rollback controls remain preserved.</p>
-      ${hasExecutablePayload ? "" : '<p class="kairos-lite-warning">This proposal was recovered from an older oversized browser record. Regenerate it once before approval so Kairos can restore the executable mutation payload.</p>'}
+      ${hasExecutablePayload ? "" : '<p class="kairos-lite-warning">This saved proposal no longer contains the complete executable mutation payload. Regenerate it once to restore the current Shopify source and file contents.</p>'}
       <div class="kairos-lite-actions">
-        ${hasExecutablePayload ? '<button data-lite-approve>Approve & Execute Changes</button>' : '<button data-lite-regenerate>Regenerate Proposal</button>'}
-        <button data-lite-close>Close Review</button>
+        ${hasExecutablePayload ? '<button type="button" data-lite-approve>Approve & Execute Changes</button>' : '<button type="button" data-lite-regenerate>Regenerate Proposal Now</button>'}
+        <button type="button" data-lite-close>Close Review</button>
       </div>
     </div>`;
   overlay.style.cssText = "position:fixed;inset:0;z-index:10000;background:rgba(2,5,10,.96);overflow:auto;padding:20px";
@@ -73,6 +79,7 @@ function openReview(id) {
 }
 
 function approve(item, proposal, button) {
+  if (!button || button.disabled) return;
   button.disabled = true;
   button.textContent = "Executing…";
   updateWorkItem(item.id, {
@@ -98,13 +105,24 @@ function approve(item, proposal, button) {
 
 function regenerate(item) {
   updateWorkItem(item.id, {
-    status: "Revision Requested",
-    progress: 0,
+    status: "Starting",
+    progress: 10,
     proposal: null,
     error: "",
-    updatedAt: "Legacy oversized proposal cleared; regenerate the governed package",
+    updatedAt: "Regenerating current governed proposal",
   });
   closeReview();
+  window.dispatchEvent(new CustomEvent("kairos:execute-approved-action", {
+    detail: {
+      id: item.id,
+      center: item.center,
+      actionType: item.actionType,
+      objective: item.objective,
+      phase: "prepare",
+      requiresReview: Boolean(item.requiresReview),
+      proposal: null,
+    },
+  }));
 }
 
 function closeReview() {
