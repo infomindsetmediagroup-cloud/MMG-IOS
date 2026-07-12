@@ -39,3 +39,7 @@ Run **Manual MMG Kairos Operational Acceptance** from GitHub Actions.
 Use proposal-only mode first. Inspect the generated proposal evidence in the job summary. Enable production mutation only after the bounded proposal is acceptable.
 
 The executable implementation is `scripts/validate-operational-acceptance.mjs`.
+
+## Superseded path
+
+PR #64, which targeted the former Vercel authentication cutover, is superseded by the Cloudflare-native runtime and must remain closed. Authentication, session handling, Kairos requests, theme planning, and governed actions now operate through the canonical Cloudflare origin.
