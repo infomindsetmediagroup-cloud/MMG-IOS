@@ -10,7 +10,7 @@ describe("reconciled Cloudflare worker", () => {
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("Kairos");
     expect(response.headers.get("x-mmg-host")).toBe("cloudflare-assets");
-    expect(response.headers.get("x-mmg-build")).toBe("command-center-reconciled-20260711-30");
+    expect(response.headers.get("x-mmg-build")).toBe("command-center-reconciled-20260711-31");
     expect(assets.fetch).toHaveBeenCalledOnce();
     expect(assets.fetch.mock.calls[0][0].url).toBe("https://kairos.example/");
   });

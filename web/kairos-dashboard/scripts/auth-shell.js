@@ -32,6 +32,7 @@ async function initializeAuthentication() {
 }
 
 function createOperatorShell(app) {
+  removeStartupShell();
   const shell = document.createElement("section");
   shell.className = "auth-shell";
   shell.innerHTML = `
@@ -91,6 +92,7 @@ function createOperatorShell(app) {
 }
 
 function createRecoveryShell(app) {
+  removeStartupShell();
   const shell = document.createElement("section");
   shell.className = "auth-shell";
   shell.innerHTML = `
@@ -123,6 +125,11 @@ function lockApp(app) {
 function unlockApp(app) {
   app.style.filter = "";
   app.style.pointerEvents = "";
+  removeStartupShell();
+}
+
+function removeStartupShell() {
+  document.querySelector("#kairos-startup-shell")?.remove();
 }
 
 function dispatchAuthenticated(session) {

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Kairos Operations Dashboard</title>
-  <meta name="mmg-build" content="command-center-shell-recovery-20260711-28">
+  <meta name="mmg-build" content="command-center-shell-recovery-20260711-31">
   <link rel="stylesheet" href="./styles/dashboard.css?v=20260711-hotfix-28">
   <link rel="stylesheet" href="./styles/auth-shell.css?v=20260711-hotfix-28">
   <link rel="stylesheet" href="./styles/command-center.css?v=20260711-hotfix-28">
@@ -14,6 +14,16 @@
   <link rel="stylesheet" href="./styles/live-executive-chat.css?v=20260711-hotfix-28">
 </head>
 <body>
+  <section id="kairos-startup-shell" class="auth-shell" aria-live="polite">
+    <div class="auth-card">
+      <div class="brand-symbol auth-symbol">K</div>
+      <p class="eyebrow">Kairos Secure Access</p>
+      <h2>Opening Command Center</h2>
+      <p class="muted">Loading the secure operator session…</p>
+      <p class="muted auth-note">If this message remains on screen, tap Retry to reload the application shell.</p>
+      <button class="action-button" type="button" onclick="window.location.reload()">Retry</button>
+    </div>
+  </section>
   <div id="app" class="kairos-app">
     <header class="brand-header" aria-label="Kairos brand header">
       <img class="brand-strip" src="https://cdn.shopify.com/s/files/1/0754/4337/2186/files/kairos-app-header.png?v=1783815598" alt="Kairos Operating System — Mindset Media Group">
@@ -27,7 +37,7 @@
       <section id="dashboard-view" class="dashboard-grid" aria-live="polite"></section>
     </main>
   </div>
-  <script type="module" src="./scripts/auth-shell.js?v=20260711-hotfix-28"></script>
+  <script type="module" src="./scripts/auth-shell.js?v=20260711-hotfix-31"></script>
   <script type="module" src="./scripts/health-fetch-resilience.js?v=20260711-hotfix-28"></script>
   <script type="module" src="./scripts/proposal-store-guard.js?v=20260711-hotfix-28"></script>
   <script type="module" src="./scripts/approval-request-guard.js?v=20260711-hotfix-28"></script>

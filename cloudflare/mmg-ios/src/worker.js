@@ -451,7 +451,7 @@ function commandCenterResponse(response, pathname, host) {
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("X-MMG-Host", host);
   headers.set("X-MMG-Runtime", "cloudflare-native");
-  headers.set("X-MMG-Build", "command-center-reconciled-20260711-30");
+  headers.set("X-MMG-Build", "command-center-reconciled-20260711-31");
   headers.set("Cache-Control", pathname.endsWith(".html") ? "no-cache, no-store, must-revalidate" : "public, max-age=300");
   headers.delete("content-security-policy");
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
