@@ -1,8 +1,14 @@
 name: Deploy Cloudflare Production
-# Kairos schema-validation deployment trigger: 2026-07-12-14
 
 on:
   push:
+    branches:
+      - main
+    paths:
+      - "cloudflare/mmg-ios/**"
+      - "web/kairos-dashboard/**"
+      - ".github/workflows/deploy-cloudflare-production.yml"
+  pull_request:
     branches:
       - main
     paths:
@@ -15,11 +21,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: cloudflare-production
+  group: cloudflare-production-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  validate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -39,6 +45,26 @@ jobs:
 
       - name: Validate canonical Cloudflare Worker bundle
         run: npx wrangler deploy --dry-run
+
+  deploy:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: cloudflare/mmg-ios
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --no-package-lock --no-audit --no-fund
 
       - name: Deploy canonical Cloudflare Worker
         run: npx wrangler deploy
