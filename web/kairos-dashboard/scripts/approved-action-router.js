@@ -1,4 +1,4 @@
-const BUILD = "command-center-execution-route-20260711-22";
+const BUILD = "command-center-execution-payload-recovery-20260711-50";
 
 const websiteChangeRoute = {
   department: "Website Operations",
@@ -164,7 +164,6 @@ async function callMutation(action) {
     body: JSON.stringify({
       actionType: "shopify.theme.files.upsert",
       objective: String(action.objective || "").slice(0, 4000),
-      proposal: action.proposal || null,
       mutation,
       approval: action.approval || { approved: true, actor: "Executive", approvedAt: new Date().toISOString() },
     }),
