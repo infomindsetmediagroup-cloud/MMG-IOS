@@ -9,22 +9,15 @@ export default {
     const url = new URL(request.url);
     if (url.pathname !== "/api/theme-plan" || request.method !== "POST") return primaryWorker.fetch(request, env, ctx);
 
-    const primary = await primaryWorker.fetch(request.clone(), env, ctx);
-    if (primary.ok) return primary;
-
-    const body = await responseJSON(primary.clone());
-    const code = body?.error?.code || body?.code || "";
-    if (primary.status !== 409 && code !== "invalid_homepage_template" && code !== "mutation_plan_blocked") return primary;
-
     try {
-      return await verifiedFallback(request, env);
+      return await verifiedThemePlan(request, env);
     } catch (error) {
-      return json({ error: { code: error.code || "theme_plan_fallback_failed", message: error.message || "Verified fallback failed.", requestID: randomUUID() } }, error.status || 500);
+      return json({ error: { code: error.code || "theme_plan_failed", message: error.message || "Verified theme planning failed.", requestID: randomUUID() } }, error.status || 500);
     }
   },
 };
 
-async function verifiedFallback(request, env) {
+async function verifiedThemePlan(request, env) {
   const objective = String((await request.json())?.objective || "").trim();
   if (!objective) throw problem(400, "invalid_request", "The objective is required.");
 
@@ -70,7 +63,7 @@ async function verifiedFallback(request, env) {
     acceptanceCriteria: ["Homepage spacing is consistent.", "No mobile horizontal overflow.", "Non-homepage templates remain unchanged."],
     mutationPlan: { themeId, files: [{ key: stylesheet.key, value: replacement, expectedSha256: sha(stylesheet.value) }] },
     actionID: randomUUID(), completedAt: new Date().toISOString(), requestId: randomUUID(), auditId: randomUUID(),
-    sourceEvidence: { adapter: "graphql-admin-verified-homepage-fallback-v4", themeId, themeName: theme.name || "Published theme", role: "main", homepageSelector: ".template-index", objective, authSource: shop.authSource, files: [{ key: layout.key, sha256: sha(layout.value) }, { key: stylesheet.key, sha256: sha(stylesheet.value) }] },
+    sourceEvidence: { adapter: "graphql-admin-verified-homepage-direct-v5", themeId, themeName: theme.name || "Published theme", role: "main", homepageSelector: ".template-index", objective, authSource: shop.authSource, files: [{ key: layout.key, sha256: sha(layout.value) }, { key: stylesheet.key, sha256: sha(stylesheet.value) }] },
   });
 }
 
@@ -119,7 +112,6 @@ async function bodyText(body) {
   if (typeof body?.url === "string") { const response = await fetch(body.url); return response.ok ? response.text() : undefined; }
 }
 
-async function responseJSON(response) { const text = await response.text(); if (!text) return {}; try { return JSON.parse(text); } catch { return {}; } }
 function sha(value) { return createHash("sha256").update(value, "utf8").digest("hex"); }
 function problem(status, code, message) { const error = new Error(message); error.status = status; error.code = code; return error; }
-function json(value, status = 200) { return new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-MMG-Runtime": "theme-plan-recovery-v4" } }); }
+function json(value, status = 200) { return new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-MMG-Runtime": "theme-plan-direct-v5" } }); }
