@@ -1,6 +1,18 @@
 const SHOPIFY_TIMEOUT_MS = 25_000;
 const tokenCache = new Map();
 
+export function httpError(status, code, message) {
+  const error = new Error(message);
+  error.status = status;
+  error.code = code;
+  return error;
+}
+
+export async function safeJSON(response) {
+  try { return await response.json(); }
+  catch { return {}; }
+}
+
 export function parseShopifyJson(source, label = "Shopify JSON") {
   const text = String(source || "").replace(/^\uFEFF/, "");
   let jsonText = text;
@@ -12,7 +24,9 @@ export function parseShopifyJson(source, label = "Shopify JSON") {
     jsonText = text.slice(end + 2).trimStart();
   }
   try { return JSON.parse(jsonText); }
-  catch (error) { throw httpError(409, "shopify_json_invalid", `${label} is invalid after Shopify comment normalization: ${error instanceof Error ? error.message : "parse failed"}`); }
+  catch (error) {
+    throw httpError(409, "shopify_json_invalid", `${label} is invalid after Shopify comment normalization: ${error instanceof Error ? error.message : "parse failed"}`);
+  }
 }
 
 export function validateHomepageDocument(candidate, original) {
@@ -78,118 +92,111 @@ export function applyCompactPatch(original, patch) {
       throw new Error(`Unsupported patch scope: ${scope}.`);
     }
     if (!settings || typeof settings !== "object" || !(key in settings)) throw new Error(`Unknown existing setting key: ${sectionId}/${blockId || "section"}/${key}.`);
-    try { settings[key] = JSON.parse(String(operation?.valueJson ?? "null")); }
-    catch { throw new Error(`Invalid valueJson for ${sectionId}/${blockId || "section"}/${key}.`); }
+    let value;
+    try { value = JSON.parse(String(operation?.valueJson ?? "null")); }
+    catch { throw new Error(`Invalid JSON value for ${sectionId}/${blockId || "section"}/${key}.`); }
+    settings[key] = value;
   }
   validateHomepageDocument(candidate, original);
   return candidate;
 }
 
-export async function semanticHash(document) {
-  return sha256(JSON.stringify(canonicalize(document)));
+export async function semanticHash(value) {
+  const canonical = stableStringify(value);
+  const bytes = new TextEncoder().encode(canonical);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export async function inspectStagingSource(kernel, request, env, build) {
-  const response = await kernel.fetch(new Request(new URL("/api/shopify/staging/source/inspect", request.url), {
+function stableStringify(value) {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+export function extractOutputText(body) {
+  if (typeof body?.output_text === "string") return body.output_text;
+  return (Array.isArray(body?.output) ? body.output : [])
+    .flatMap(item => Array.isArray(item?.content) ? item.content : [])
+    .filter(item => item?.type === "output_text" && typeof item?.text === "string")
+    .map(item => item.text)
+    .join("\n");
+}
+
+export function extractOpenAIError(body) {
+  return String(body?.error?.message || body?.last_error?.message || body?.incomplete_details?.reason || "").trim();
+}
+
+export async function inspectStagingSource(runtime, request, env, build) {
+  const url = new URL("/api/shopify/staging/source/inspect", request.url);
+  const response = await runtime.fetch(new Request(url, {
     method: "POST",
     headers: { Accept: "application/json", "X-MMG-Internal": build },
   }), env);
   const body = await safeJSON(response);
-  if (!response.ok) throw httpError(response.status, body?.error?.code || "staging_source_unavailable", body?.error?.message || body?.summary || "Kairos could not read the staging source.");
+  if (!response.ok) throw httpError(response.status, body?.error?.code || "staging_source_inspection_failed", body?.error?.message || body?.summary || `Staging source inspection returned HTTP ${response.status}.`);
   return body;
 }
 
-export async function writeThemeFile(env, themeID, filename, content) {
+export async function writeThemeFile(env, themeGid, filename, content) {
   const config = readShopifyConfig(env);
-  const auth = await resolveAccessToken(config, env);
-  const data = await shopifyGraphQL(config, auth.accessToken, `mutation KairosCompactHomepageWrite($themeId: ID!, $files: [OnlineStoreThemeFilesUpsertFileInput!]!) { themeFilesUpsert(themeId: $themeId, files: $files) { upsertedThemeFiles { filename } userErrors { field message } } }`, {
-    themeId: themeID,
+  const accessToken = await resolveAccessToken(config, env);
+  const query = `mutation KairosThemeFilesUpsert($themeId: ID!, $files: [OnlineStoreThemeFilesUpsertFileInput!]!) { themeFilesUpsert(themeId: $themeId, files: $files) { upsertedThemeFiles { filename } userErrors { field message } } }`;
+  const data = await shopifyGraphQL(config, accessToken, query, {
+    themeId: themeGid,
     files: [{ filename, body: { type: "TEXT", value: content } }],
   });
-  const result = data?.themeFilesUpsert || {};
-  const userErrors = Array.isArray(result.userErrors) ? result.userErrors : [];
-  if (userErrors.length) throw httpError(409, "theme_files_upsert_user_error", userErrors.map(item => item?.message).filter(Boolean).join(" | ").slice(0, 1000));
-  return { credentialPath: auth.source, mutationResult: { upsertedThemeFiles: Array.isArray(result.upsertedThemeFiles) ? result.upsertedThemeFiles : [] } };
-}
-
-export function extractOutputText(response) {
-  if (typeof response?.output_text === "string" && response.output_text.trim()) return response.output_text.trim();
-  for (const item of Array.isArray(response?.output) ? response.output : []) for (const content of Array.isArray(item?.content) ? item.content : []) if (content?.type === "output_text" && typeof content?.text === "string" && content.text.trim()) return content.text.trim();
-  return "";
-}
-
-export function extractOpenAIError(body) {
-  return [body?.error?.message, body?.last_error?.message, body?.incomplete_details?.reason, body?.status_details?.message]
-    .filter(value => typeof value === "string" && value.trim()).join(" | ").slice(0, 1800);
-}
-
-export async function safeJSON(response) {
-  const text = await response.text();
-  if (!text) return {};
-  try { return JSON.parse(text); }
-  catch { return { raw: text.slice(0, 2000) }; }
-}
-
-export async function sha256(value) {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
-}
-
-export function httpError(status, code, message) {
-  const error = new Error(message);
-  error.status = status;
-  error.code = code;
-  return error;
-}
-
-function canonicalize(value) {
-  if (Array.isArray(value)) return value.map(canonicalize);
-  if (!value || typeof value !== "object") return value;
-  return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonicalize(value[key])]));
+  const payload = data?.themeFilesUpsert;
+  const errors = Array.isArray(payload?.userErrors) ? payload.userErrors.filter(error => error?.message) : [];
+  if (errors.length) throw httpError(422, "theme_file_write_rejected", errors.map(error => error.message).join("; "));
+  const written = Array.isArray(payload?.upsertedThemeFiles) ? payload.upsertedThemeFiles : [];
+  if (!written.some(file => file?.filename === filename)) throw httpError(502, "theme_file_write_unconfirmed", `Shopify did not confirm writing ${filename}.`);
+  return { credentialPath: accessToken.credentialPath, mutationResult: payload };
 }
 
 function readShopifyConfig(env) {
   const storeDomain = String(env.SHOPIFY_STORE_DOMAIN || "").trim().toLowerCase();
   const apiVersion = String(env.SHOPIFY_API_VERSION || "2026-07").trim();
-  if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(storeDomain)) throw httpError(503, "shopify_invalid_domain", "SHOPIFY_STORE_DOMAIN is missing or invalid.");
+  if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(storeDomain)) throw httpError(503, "shopify_invalid_domain", "The Shopify store domain is invalid.");
+  if (!/^\d{4}-\d{2}$/.test(apiVersion)) throw httpError(503, "shopify_invalid_version", "The Shopify API version is invalid.");
   return { storeDomain, apiVersion };
 }
 
 async function resolveAccessToken(config, env) {
   const clientId = String(env.SHOPIFY_CLIENT_ID || "").trim();
   const clientSecret = String(env.SHOPIFY_CLIENT_SECRET || "").trim();
-  const staticToken = String(env.SHOPIFY_ADMIN_ACCESS_TOKEN || "").trim();
-  if (clientId && clientSecret) return { accessToken: await getClientCredentialsToken(config.storeDomain, clientId, clientSecret), source: "client-credentials" };
-  if (staticToken) return { accessToken: staticToken, source: "admin-access-token" };
-  throw httpError(503, "shopify_not_configured", "Shopify credentials are not configured.");
+  if (clientId && clientSecret) {
+    const cacheKey = `${config.storeDomain}:${clientId}`;
+    const cached = tokenCache.get(cacheKey);
+    if (cached?.expiresAt > Date.now()) return { token: cached.token, credentialPath: "client-credentials" };
+    const response = await fetch(`https://${config.storeDomain}/admin/oauth/access_token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+      body: new URLSearchParams({ grant_type: "client_credentials", client_id: clientId, client_secret: clientSecret }),
+      signal: AbortSignal.timeout(SHOPIFY_TIMEOUT_MS),
+    });
+    const body = await safeJSON(response);
+    const token = typeof body?.access_token === "string" ? body.access_token.trim() : "";
+    if (!response.ok || !token) throw httpError(response.status === 429 ? 429 : 401, "shopify_client_credentials_invalid", String(body?.error_description || body?.error || `Shopify token request returned HTTP ${response.status}.`).slice(0, 500));
+    tokenCache.set(cacheKey, { token, expiresAt: Date.now() + 55 * 60 * 1000 });
+    return { token, credentialPath: "client-credentials" };
+  }
+  const token = String(env.SHOPIFY_ADMIN_ACCESS_TOKEN || "").trim();
+  if (!token) throw httpError(503, "shopify_not_configured", "Shopify client credentials or an Admin access token must be configured.");
+  return { token, credentialPath: "admin-access-token" };
 }
 
-async function getClientCredentialsToken(storeDomain, clientId, clientSecret) {
-  const key = `${storeDomain}:${clientId}`;
-  const cached = tokenCache.get(key);
-  if (cached?.expiresAt > Date.now()) return cached.accessToken;
-  const response = await fetch(`https://${storeDomain}/admin/oauth/access_token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
-    body: new URLSearchParams({ grant_type: "client_credentials", client_id: clientId, client_secret: clientSecret }),
-    signal: AbortSignal.timeout(SHOPIFY_TIMEOUT_MS),
-  });
-  const body = await safeJSON(response);
-  const accessToken = typeof body?.access_token === "string" ? body.access_token.trim() : "";
-  if (!response.ok || !accessToken) throw httpError(response.status === 429 ? 429 : 401, "shopify_client_credentials_invalid", String(body?.error_description || body?.error || `Token request returned HTTP ${response.status}.`).slice(0, 500));
-  tokenCache.set(key, { accessToken, expiresAt: Date.now() + 55 * 60 * 1000 });
-  return accessToken;
-}
-
-async function shopifyGraphQL(config, accessToken, query, variables) {
+async function shopifyGraphQL(config, auth, query, variables) {
   const response = await fetch(`https://${config.storeDomain}/admin/api/${config.apiVersion}/graphql.json`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json", "X-Shopify-Access-Token": accessToken },
+    headers: { "X-Shopify-Access-Token": auth.token, "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({ query, variables }),
     signal: AbortSignal.timeout(SHOPIFY_TIMEOUT_MS),
   });
   const body = await safeJSON(response);
-  if (!response.ok) throw httpError(response.status, "shopify_graphql_http_error", `Shopify GraphQL returned HTTP ${response.status}.`);
-  if (Array.isArray(body?.errors) && body.errors.length) throw httpError(409, "shopify_graphql_error", body.errors.map(item => item?.message).filter(Boolean).join(" | ").slice(0, 1000));
+  if (!response.ok) throw httpError(response.status, "shopify_graphql_http_error", body?.errors?.[0]?.message || `Shopify GraphQL returned HTTP ${response.status}.`);
+  if (Array.isArray(body?.errors) && body.errors.length) throw httpError(422, "shopify_graphql_error", body.errors.map(error => error?.message).filter(Boolean).join("; "));
   return body?.data || {};
 }
