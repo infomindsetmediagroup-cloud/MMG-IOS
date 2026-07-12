@@ -1,4 +1,4 @@
-const ANALYTICS_BUILD = "kairos-shopify-analytics-20260712-2";
+const ANALYTICS_BUILD = "kairos-shopify-analytics-20260712-3";
 let latest = null;
 let loading = false;
 
@@ -71,11 +71,11 @@ function renderPanel(state = {}) {
     cards = Array.from({ length: 4 }, (_, index) => cardHTML({ label: index === 0 ? "Shopify analytics" : "Loading", displayValue: "…", status: "loading" })).join("");
   } else if (available.length) {
     cards = available.map(cardHTML).join("");
-    if (restricted.length) cards += authorizationCard(restricted.length);
+    if (restricted.length) cards += authorizationCard(analytics.authorization, restricted.length);
   } else if (restricted.length || metrics.length) {
-    cards = authorizationCard(restricted.length || metrics.length);
+    cards = authorizationCard(analytics.authorization, restricted.length || metrics.length);
   } else {
-    cards = authorizationCard(0, latest?.error?.message || analytics.requirements?.[0]);
+    cards = authorizationCard(analytics.authorization, 0, latest?.error?.message || analytics.requirements?.[0]);
   }
 
   return `<header class="shopify-analytics-head"><div><p class="eyebrow">Live Shopify Analytics</p><h2>Store performance</h2></div><div class="shopify-analytics-state"><span>${escapeHTML(status)}</span><button type="button" data-refresh-shopify>Refresh</button></div></header><div class="shopify-analytics-grid">${cards}</div>`;
@@ -88,17 +88,18 @@ function cardHTML(metric) {
   return `<article class="shopify-analytics-card" data-state="${escapeHTML(metric.status || "unknown")}"><span>${escapeHTML(metric.label || metric.id || "Metric")}</span><strong>${escapeHTML(value)}</strong><small>${escapeHTML(detail)}</small></article>`;
 }
 
-function authorizationCard(count, message = "") {
+function authorizationCard(auth = {}, count = 0, message = "") {
+  const granted = Array.isArray(auth?.grantedScopes) ? auth.grantedScopes : [];
+  const readReports = auth?.scopeInspectionStatus === "verified"
+    ? auth.readReportsGranted ? "Granted" : "Missing"
+    : "Could not verify";
+  const protectedData = auth?.protectedCustomerDataRequired ? "Still required" : "Not detected";
   const detail = count
-    ? `${count} Shopify dashboard metric${count === 1 ? "" : "s"} blocked by the current app authorization.`
-    : "Shopify dashboard analytics are blocked by the current app authorization.";
-  const normalized = String(message || "").toLowerCase();
-  const requirements = [
-    "Add the read_reports access scope to the Shopify app.",
-    "Request Level 2 protected customer-data access in Shopify Partner settings.",
-    "Reinstall or reauthorize the app so Shopify issues a token with the new permissions.",
-  ];
-  return `<article class="shopify-analytics-card shopify-analytics-authorization" data-state="authorization-required"><span>Shopify analytics authorization</span><strong>Access required</strong><small>${escapeHTML(detail)}</small><ul>${requirements.map(item => `<li>${escapeHTML(item)}</li>`).join("")}</ul>${normalized && !normalized.includes("read_reports") ? `<p>${escapeHTML(message)}</p>` : ""}</article>`;
+    ? `${count} Shopify dashboard metric${count === 1 ? "" : "s"} blocked by the current authorization.`
+    : "Shopify dashboard analytics are blocked by the current authorization.";
+  const exactError = Array.isArray(auth?.exactErrors) && auth.exactErrors.length ? auth.exactErrors[0] : message;
+
+  return `<article class="shopify-analytics-card shopify-analytics-authorization" data-state="authorization-required"><span>Shopify analytics authorization</span><strong>Access required</strong><small>${escapeHTML(detail)}</small><dl><div><dt>read_reports</dt><dd>${escapeHTML(readReports)}</dd></div><div><dt>Protected customer data</dt><dd>${escapeHTML(protectedData)}</dd></div><div><dt>Granted scopes</dt><dd>${escapeHTML(granted.length ? granted.join(", ") : "Not returned")}</dd></div></dl>${exactError ? `<p>${escapeHTML(exactError)}</p>` : ""}</article>`;
 }
 
 function bind(panel) {
