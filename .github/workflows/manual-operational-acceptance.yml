@@ -1,0 +1,96 @@
+name: Manual MMG Kairos Operational Acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      runtime_base_url:
+        description: "Canonical Cloudflare runtime base URL"
+        required: true
+        default: "https://mmg-ios.info-mindsetmediagroup.workers.dev"
+        type: string
+      objective:
+        description: "Bounded Shopify homepage acceptance objective"
+        required: true
+        default: "Prepare one bounded, source-grounded homepage improvement that preserves the current MMG design system and changes the fewest files necessary."
+        type: string
+      execute_shopify_mutation:
+        description: "Execute the approved production Shopify mutation after proposal validation"
+        required: true
+        default: false
+        type: boolean
+      approval_phrase:
+        description: "Required only for mutation: EXECUTE GOVERNED SHOPIFY ACCEPTANCE"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  operational-acceptance:
+    name: Execute ordered operational acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      KAIROS_RUNTIME_BASE_URL: ${{ inputs.runtime_base_url }}
+      KAIROS_RUNTIME_TOKEN: ${{ secrets.KAIROS_RUNTIME_TOKEN }}
+      KAIROS_ACCEPTANCE_OBJECTIVE: ${{ inputs.objective }}
+      KAIROS_ACCEPTANCE_EXECUTE_MUTATION: ${{ inputs.execute_shopify_mutation }}
+      KAIROS_ACCEPTANCE_APPROVAL_PHRASE: ${{ inputs.approval_phrase }}
+      KAIROS_ACCEPTANCE_REPORT: kairos-operational-acceptance.json
+
+    steps:
+      - name: Check out main without third-party actions
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init repository
+          cd repository
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin main
+          git checkout --detach FETCH_HEAD
+
+      - name: Enforce explicit mutation approval boundary
+        if: ${{ inputs.execute_shopify_mutation }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${KAIROS_ACCEPTANCE_APPROVAL_PHRASE}" != "EXECUTE GOVERNED SHOPIFY ACCEPTANCE" ]]; then
+            echo "Production mutation refused: approval phrase does not match."
+            exit 1
+          fi
+
+      - name: Verify repository secret configuration
+        working-directory: repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --version
+          if [[ -z "${KAIROS_RUNTIME_TOKEN:-}" ]]; then
+            echo "Repository secret KAIROS_RUNTIME_TOKEN is not configured."
+            exit 1
+          fi
+
+      - name: Run ordered acceptance gate
+        working-directory: repository
+        shell: bash
+        run: node scripts/validate-operational-acceptance.mjs
+
+      - name: Publish acceptance summary
+        if: always()
+        working-directory: repository
+        shell: bash
+        run: |
+          if [[ -f kairos-operational-acceptance.json ]]; then
+            {
+              echo "## MMG/Kairos Operational Acceptance"
+              echo
+              echo '```json'
+              cat kairos-operational-acceptance.json
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## MMG/Kairos Operational Acceptance" >> "$GITHUB_STEP_SUMMARY"
+            echo "No report was produced." >> "$GITHUB_STEP_SUMMARY"
+          fi
