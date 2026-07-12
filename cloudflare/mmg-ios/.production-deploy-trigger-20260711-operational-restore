@@ -1,0 +1,4 @@
+MMG Kairos operational restore deployment trigger
+Restored baseline: 07acfe2f5291497b990394d3f9336a32f41bc502
+Build: command-center-operational-candidate-20260711-35
+Purpose: force Cloudflare Git integration to publish the last known operational candidate after archiving and removing the failed reconciliation hotfix chain.
