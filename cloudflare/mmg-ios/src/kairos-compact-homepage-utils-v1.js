@@ -110,9 +110,7 @@ export async function semanticHash(value) {
 
 function stableStringify(value) {
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
-  if (value && typeof value === "object") {
-    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(",")}}`;
-  }
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(",")}}`;
   return JSON.stringify(value);
 }
 
@@ -129,31 +127,78 @@ export function extractOpenAIError(body) {
   return String(body?.error?.message || body?.last_error?.message || body?.incomplete_details?.reason || "").trim();
 }
 
-export async function inspectStagingSource(runtime, request, env, build) {
-  const url = new URL("/api/shopify/staging/source/inspect", request.url);
-  const response = await runtime.fetch(new Request(url, {
-    method: "POST",
-    headers: { Accept: "application/json", "X-MMG-Internal": build },
-  }), env);
-  const body = await safeJSON(response);
-  if (!response.ok) throw httpError(response.status, body?.error?.code || "staging_source_inspection_failed", body?.error?.message || body?.summary || `Staging source inspection returned HTTP ${response.status}.`);
-  return body;
+export async function inspectStagingSource(_runtime, _request, env, build) {
+  const config = readShopifyConfig(env);
+  const auth = await resolveAccessToken(config, env);
+  const themesData = await shopifyGraphQL(config, auth, `query KairosThemes { themes(first: 20) { nodes { id name role processing processingFailed } } }`, {});
+  const themes = Array.isArray(themesData?.themes?.nodes) ? themesData.themes.nodes : [];
+  const mainTheme = themes.find(theme => theme?.role === "MAIN") || null;
+  const stagingTheme = themes.find(theme => theme?.role !== "MAIN" && String(theme?.name || "").trim().toLowerCase() === "kairos staging") || null;
+  if (!mainTheme?.id) throw httpError(409, "main_theme_not_found", "The live Rise theme could not be verified.");
+  if (!stagingTheme?.id) throw httpError(409, "staging_theme_not_found", "Kairos Staging could not be verified.");
+  if (stagingTheme.processing || stagingTheme.processingFailed) throw httpError(409, "staging_theme_not_ready", "Kairos Staging is still processing or failed processing.");
+
+  const fileData = await shopifyGraphQL(config, auth, `query KairosHomepageFile($themeId: ID!, $filenames: [String!], $first: Int!) { theme(id: $themeId) { files(first: $first, filenames: $filenames) { nodes { filename contentType body { ... on OnlineStoreThemeFileBodyText { content } ... on OnlineStoreThemeFileBodyBase64 { contentBase64 } } } userErrors { code filename } } } }`, {
+    themeId: stagingTheme.id,
+    filenames: ["templates/index.json"],
+    first: 1,
+  });
+  const connection = fileData?.theme?.files;
+  const fileErrors = Array.isArray(connection?.userErrors) ? connection.userErrors.filter(error => error?.code && error.code !== "NOT_FOUND") : [];
+  if (fileErrors.length) throw httpError(502, "theme_file_read_failed", `Shopify could not read templates/index.json: ${fileErrors.map(error => error.code).join(", ")}.`);
+  const node = Array.isArray(connection?.nodes) ? connection.nodes.find(item => item?.filename === "templates/index.json") : null;
+  const content = bodyToText(node?.body);
+  if (!content) throw httpError(409, "homepage_source_unavailable", "templates/index.json was not readable from Kairos Staging.");
+  const rawHash = await hashText(content);
+  const bytes = new TextEncoder().encode(content).length;
+  return {
+    actionID: crypto.randomUUID(),
+    actionType: "shopify.staging.source.inspect",
+    status: "completed",
+    readOnly: true,
+    build,
+    completedAt: new Date().toISOString(),
+    summary: "Kairos read the current non-live staging homepage directly from Shopify without using OpenAI.",
+    evidence: {
+      credentialPath: auth.credentialPath,
+      mainTheme: summarizeTheme(mainTheme),
+      stagingTheme: summarizeTheme(stagingTheme),
+      files: [{ filename: "templates/index.json", readable: true, content, sha256: rawHash, bytes, contentType: node?.contentType || "" }],
+      openaiAPIUsed: false,
+      sourceAdapter: "direct-shopify-graphql",
+    },
+  };
 }
 
 export async function writeThemeFile(env, themeGid, filename, content) {
   const config = readShopifyConfig(env);
-  const accessToken = await resolveAccessToken(config, env);
+  const auth = await resolveAccessToken(config, env);
   const query = `mutation KairosThemeFilesUpsert($themeId: ID!, $files: [OnlineStoreThemeFilesUpsertFileInput!]!) { themeFilesUpsert(themeId: $themeId, files: $files) { upsertedThemeFiles { filename } userErrors { field message } } }`;
-  const data = await shopifyGraphQL(config, accessToken, query, {
-    themeId: themeGid,
-    files: [{ filename, body: { type: "TEXT", value: content } }],
-  });
+  const data = await shopifyGraphQL(config, auth, query, { themeId: themeGid, files: [{ filename, body: { type: "TEXT", value: content } }] });
   const payload = data?.themeFilesUpsert;
   const errors = Array.isArray(payload?.userErrors) ? payload.userErrors.filter(error => error?.message) : [];
   if (errors.length) throw httpError(422, "theme_file_write_rejected", errors.map(error => error.message).join("; "));
   const written = Array.isArray(payload?.upsertedThemeFiles) ? payload.upsertedThemeFiles : [];
   if (!written.some(file => file?.filename === filename)) throw httpError(502, "theme_file_write_unconfirmed", `Shopify did not confirm writing ${filename}.`);
-  return { credentialPath: accessToken.credentialPath, mutationResult: payload };
+  return { credentialPath: auth.credentialPath, mutationResult: payload };
+}
+
+function summarizeTheme(theme) {
+  return { gid: theme.id, name: String(theme.name || ""), role: String(theme.role || ""), processing: Boolean(theme.processing), processingFailed: Boolean(theme.processingFailed) };
+}
+
+function bodyToText(body) {
+  if (typeof body?.content === "string") return body.content;
+  if (typeof body?.contentBase64 === "string") {
+    try { return atob(body.contentBase64); }
+    catch { return ""; }
+  }
+  return "";
+}
+
+async function hashText(value) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(value || "")));
+  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function readShopifyConfig(env) {
