@@ -52,9 +52,18 @@ export default {
       return executePlan(request, env);
     }
 
+    if (url.pathname === "/api/shopify/staging/rollback/jobs" && request.method === "POST") {
+      return executeRollback(request, env);
+    }
+
     const executionMatch = url.pathname.match(/^\/api\/shopify\/staging\/execute\/jobs\/([a-f0-9-]+)$/i);
     if (executionMatch && request.method === "GET") {
       return readJob(request, "execution", executionMatch[1]);
+    }
+
+    const rollbackMatch = url.pathname.match(/^\/api\/shopify\/staging\/rollback\/jobs\/([a-f0-9-]+)$/i);
+    if (rollbackMatch && request.method === "GET") {
+      return readJob(request, "rollback", rollbackMatch[1]);
     }
 
     if (url.pathname === "/api/hub/run" && request.method === "POST") {
@@ -249,6 +258,70 @@ async function executePlan(request, env) {
     return json({ jobID, status: "completed", build: BUILD, pollURL: `/api/shopify/staging/execute/jobs/${jobID}`, summary: result.summary, result }, 202);
   } catch (error) {
     return failure("Kairos could not complete the deterministic homepage execution.", error);
+  }
+}
+
+async function executeRollback(request, env) {
+  const startedAt = new Date().toISOString();
+  try {
+    const payload = await request.json();
+    const rollback = payload?.rollback;
+    const approval = payload?.approval;
+    if (!rollback || !Array.isArray(rollback.files) || rollback.files.length !== 1) throw httpError(400, "rollback_package_required", "A single-file staging rollback package is required.");
+    if (!approval || approval.status !== "approved") throw httpError(403, "staging_rollback_approval_required", "Explicit staging rollback approval is required.");
+    if (approval.targetThemeID !== rollback.targetThemeID) throw httpError(409, "rollback_approval_mismatch", "The approval does not match the rollback target.");
+    const rollbackFile = rollback.files[0];
+    if (rollbackFile.filename !== HOMEPAGE_FILE || typeof rollbackFile.content !== "string") throw httpError(409, "rollback_file_invalid", "The rollback package must restore only templates/index.json.");
+
+    const sourceBody = await inspectStagingSource(null, request, env, BUILD);
+    const evidence = sourceBody?.evidence || {};
+    const stagingTheme = evidence?.stagingTheme;
+    const mainTheme = evidence?.mainTheme;
+    const sourceFile = (Array.isArray(evidence?.files) ? evidence.files : []).find(file => file?.filename === HOMEPAGE_FILE && file?.readable && typeof file?.content === "string");
+    validateBoundary(stagingTheme, mainTheme);
+    if (stagingTheme.gid !== rollback.targetThemeID) throw httpError(409, "rollback_target_changed", "The rollback target no longer matches Kairos Staging.");
+    if (!sourceFile?.content) throw httpError(409, "homepage_source_unavailable", "The current staging homepage was not readable.");
+    if (approval.expectedCurrentSha256 !== sourceFile.sha256) throw httpError(409, "rollback_source_hash_mismatch", "Kairos Staging changed after rollback approval. A new inspection is required.");
+
+    const original = parseShopifyJson(rollbackFile.content, "Approved staging rollback");
+    const expectedSemanticHash = await semanticHash(original);
+    if (expectedSemanticHash !== rollbackFile.semanticSha256) throw httpError(409, "rollback_package_hash_mismatch", "The rollback content does not match its approved semantic hash.");
+
+    const write = await writeThemeFile(env, stagingTheme.gid, HOMEPAGE_FILE, rollbackFile.content);
+    const verifyBody = await inspectStagingSource(null, request, env, BUILD);
+    const readBack = (Array.isArray(verifyBody?.evidence?.files) ? verifyBody.evidence.files : []).find(file => file?.filename === HOMEPAGE_FILE && file?.readable && typeof file?.content === "string");
+    if (!readBack?.content) throw httpError(502, "rollback_readback_missing", "Shopify returned no homepage source after rollback.");
+    const verified = parseShopifyJson(readBack.content, "Shopify rollback read-back");
+    const actualSemanticHash = await semanticHash(verified);
+    if (actualSemanticHash !== expectedSemanticHash) throw httpError(502, "rollback_readback_mismatch", "Shopify read-back did not match the approved rollback content.");
+
+    const afterMain = verifyBody?.evidence?.mainTheme;
+    const afterStaging = verifyBody?.evidence?.stagingTheme;
+    validateBoundary(afterStaging, afterMain);
+    if (afterMain.gid !== mainTheme.gid) throw httpError(502, "main_theme_changed_during_rollback", "The live Rise theme did not remain unchanged.");
+
+    const completedAt = new Date().toISOString();
+    const result = {
+      actionID: crypto.randomUUID(),
+      actionType: "shopify.staging.rollback",
+      status: "completed",
+      build: BUILD,
+      completedAt,
+      execution: {
+        targetTheme: afterStaging,
+        publishedTheme: afterMain,
+        publishedThemeChanged: false,
+        filesRestored: [{ filename: HOMEPAGE_FILE, beforeSha256: sourceFile.sha256, afterSha256: readBack.sha256, semanticSha256: actualSemanticHash }],
+      },
+      verification: { matched: true, jsonValid: true, expectedSemanticSha256: expectedSemanticHash, actualSemanticSha256: actualSemanticHash },
+      evidence: { credentialPath: write.credentialPath, mutationResult: write.mutationResult, sourceInspectionActionID: sourceBody.actionID, readBackInspectionActionID: verifyBody.actionID },
+    };
+    const jobID = crypto.randomUUID();
+    const completed = { jobID, status: "completed", build: BUILD, submittedAt: startedAt, updatedAt: completedAt, completedAt, summary: "Kairos restored and verified the approved pre-change homepage on Kairos Staging.", result };
+    await writeJob(request, "rollback", jobID, completed);
+    return json({ jobID, status: "completed", build: BUILD, pollURL: `/api/shopify/staging/rollback/jobs/${jobID}`, summary: completed.summary, result }, 202);
+  } catch (error) {
+    return failure("Kairos could not complete the approved staging rollback.", error);
   }
 }
 
