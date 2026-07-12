@@ -1,4 +1,4 @@
-import kernel from "./kairos-kernel-worker-v23.js";
+import kernel from "./kairos-kernel-worker-v19.js";
 import {
   applyCompactPatch,
   buildEditableMap,
