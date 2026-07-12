@@ -1,6 +1,6 @@
 import reconciledWorker from "./reconciled-worker.js";
 
-const RESET_BUILD = "kairos-runtime-reset-20260711-2";
+const RESET_BUILD = "kairos-runtime-reset-20260711-4";
 const STOREFRONT_TIMEOUT_MS = 15_000;
 
 const CAPABILITIES = {
@@ -8,8 +8,8 @@ const CAPABILITIES = {
   operatorSession: "available",
   kairosAdvisory: "available",
   storefrontInspection: "operational-read-only",
-  shopifyThemePlanning: "not-operational",
-  shopifyThemeMutation: "not-operational",
+  shopifyThemePlanning: "validation-required",
+  shopifyThemeMutation: "locked-pending-staging-adapter",
   productPublishing: "not-implemented",
   collectionPublishing: "not-implemented",
   navigationPublishing: "not-implemented",
@@ -24,15 +24,15 @@ export default {
         status: "reset",
         runtime: "cloudflare-workers",
         build: RESET_BUILD,
-        operationalMode: "recovery",
+        operationalMode: "controlled-rebuild",
         capabilities: CAPABILITIES,
-        message: "Kairos is rebuilding from a truthful capability baseline. External Shopify mutation remains disabled until staging-theme acceptance testing is complete.",
+        message: "Kairos is rebuilding one verified capability at a time. Shopify planning preview is enabled; mutation remains locked until the staging-theme adapter passes acceptance testing.",
         checkedAt: new Date().toISOString(),
       });
     }
 
     if (url.pathname === "/api/capabilities") {
-      return json({ build: RESET_BUILD, operationalMode: "recovery", capabilities: CAPABILITIES, checkedAt: new Date().toISOString() });
+      return json({ build: RESET_BUILD, operationalMode: "controlled-rebuild", capabilities: CAPABILITIES, checkedAt: new Date().toISOString() });
     }
 
     if (url.pathname === "/api/storefront/inspect") {
@@ -40,20 +40,27 @@ export default {
       return inspectStorefront(env);
     }
 
+    if (url.pathname === "/api/shopify/theme/plan") {
+      if (request.method !== "POST") return methodNotAllowed("POST");
+      const delegatedURL = new URL(request.url);
+      delegatedURL.pathname = "/api/theme-plan";
+      return reconciledWorker.fetch(new Request(delegatedURL.toString(), request), env, ctx);
+    }
+
     if (url.pathname === "/api/theme-plan") {
       return json({
         error: {
-          code: "capability_not_operational",
-          message: "Shopify theme planning is disabled during the formal Kairos runtime rebuild. The staging-theme workflow must pass acceptance testing before this capability is re-enabled.",
+          code: "use_governed_theme_plan_route",
+          message: "Use the governed Shopify planning route inside the Kairos Command Center.",
         },
-      }, 503);
+      }, 409);
     }
 
-    if (url.pathname === "/api/actions" && request.method === "POST") {
+    if ((url.pathname === "/api/actions" || url.pathname === "/api/shopify/theme/execute") && request.method === "POST") {
       return json({
         error: {
-          code: "external_mutation_disabled",
-          message: "External Shopify mutation is disabled during the formal Kairos runtime rebuild.",
+          code: "staging_adapter_required",
+          message: "Execution is locked until Kairos verifies an explicit non-live staging theme, source hashes, read-back verification, and rollback data.",
         },
       }, 503);
     }
