@@ -1,0 +1,20 @@
+{
+  "version": "1.0.0",
+  "providers": {
+    "tiktok": {
+      "authorization": "oauth2-pkce-server-exchange",
+      "scopes": ["user.info.basic", "user.info.profile", "user.info.stats", "video.list", "video.publish", "video.upload"],
+      "formats": ["photo", "photo_carousel", "video", "draft_upload"],
+      "requiredConfiguration": ["TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET", "TIKTOK_REDIRECT_URI"]
+    },
+    "facebook": {
+      "authorization": "meta-login-page-token",
+      "scopes": ["pages_manage_posts", "pages_read_engagement"],
+      "formats": ["text", "photo", "multi_photo", "video", "reel", "page_story"],
+      "requiredConfiguration": ["META_APP_ID", "META_APP_SECRET", "META_REDIRECT_URI"]
+    }
+  },
+  "publishingLifecycle": ["draft", "validated", "approval_required", "approved", "scheduled", "publishing", "processing", "published", "failed", "cancelled"],
+  "approvalRequired": true,
+  "passwordStorageAllowed": false
+}
