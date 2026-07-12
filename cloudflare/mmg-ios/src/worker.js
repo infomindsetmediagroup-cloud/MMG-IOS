@@ -5,6 +5,7 @@ const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const SESSION_COOKIE_NAME = "mmg_kairos_session";
 const SESSION_TTL_SECONDS = 12 * 60 * 60;
 const SHOPIFY_TIMEOUT_MS = 20_000;
+const SHOPIFY_TOKEN_TTL_MS = 55 * 60 * 1000;
 const PROVIDER_TIMEOUT_MS = 45_000;
 const MAX_SOURCE_BYTES = 180_000;
 const MAX_FILES = 10;
@@ -12,6 +13,8 @@ const MAX_FILE_BYTES = 500_000;
 const MAX_TOTAL_BYTES = 1_500_000;
 const ALLOWED_THEME_KEY = /^(assets|config|layout|locales|sections|snippets|templates)\/[A-Za-z0-9_./-]+\.(css|js|json|liquid|svg|txt)$/;
 const THEME_SOURCE_PATTERNS = ["templates/index.json", "layout/theme.liquid", "config/settings_data.json", "assets/base.css", "assets/theme.css", "assets/styles.css", "assets/application.css", "assets/*.css"];
+const shopifyTokenCache = new Map();
+const shopifyTokenRequests = new Map();
 
 export default {
   async fetch(request, env) {
@@ -51,7 +54,7 @@ function healthResponse(env) {
     vercelDependency: false,
   };
   const ready = capabilities.openai && capabilities.session;
-  return json({ status: ready ? "ready" : "degraded", runtime: "cloudflare-workers", build: "cloudflare-shopify-graphql-20260711-18", capabilities, checkedAt: new Date().toISOString() }, ready ? 200 : 503);
+  return json({ status: ready ? "ready" : "degraded", runtime: "cloudflare-workers", build: "command-center-shopify-auth-20260711-32", capabilities, checkedAt: new Date().toISOString() }, ready ? 200 : 503);
 }
 
 async function handleSession(request, env) {
@@ -101,7 +104,7 @@ async function handleThemePlan(request, env) {
   if (request.method !== "POST") return methodNotAllowed("POST");
   const session = requireAuthorizedSession(request, env);
   requireOpenAI(env);
-  const shopify = requireShopify(env);
+  const shopify = await requireShopify(env);
   const body = await readBody(request);
   const objective = boundedText(body.objective, "objective", 8000);
   const theme = await readMainTheme(shopify);
@@ -131,7 +134,7 @@ async function handleActions(request, env) {
 
 async function executeHomepageAudit(body, env, session) {
   requireApproval(body.approval);
-  const shopify = requireShopify(env);
+  const shopify = await requireShopify(env);
   const theme = await readMainTheme(shopify);
   const sources = await readThemeSources(shopify, theme.id);
   return json({ actionID: randomUUID(), actionType: "shopify.homepage.audit", status: "completed", startedAt: new Date().toISOString(), completedAt: new Date().toISOString(), evidence: { themeID: theme.id, name: theme.name, role: theme.role, adapter: "graphql-admin", homepageFiles: sources.map(source => source.key) }, executionContext: executionContext(session) });
@@ -139,7 +142,7 @@ async function executeHomepageAudit(body, env, session) {
 
 async function executeThemeMutation(body, env, session) {
   const approval = requireApproval(body.approval);
-  const shopify = requireShopify(env);
+  const shopify = await requireShopify(env);
   const objective = boundedText(body.objective, "objective", 8000);
   const mutation = parseMutation(body.mutation || body.proposal?.mutationPlan);
   const startedAt = new Date();
@@ -195,14 +198,62 @@ function requireAuthorizedSession(request, env) {
 function requireOpenAI(env) { if (!env.OPENAI_API_KEY || !env.OPENAI_MODEL) throw httpError(503, "runtime_not_configured", "OpenAI is not configured in Cloudflare Worker secrets."); }
 function requireSessionConfiguration(env) { if (!env.KAIROS_RUNTIME_TOKEN || (!env.KAIROS_OPERATOR_PASSWORD && !env.KAIROS_OPERATOR_PASSWORD_HASH)) throw httpError(503, "session_unavailable", "Kairos operator authentication is not configured in Cloudflare."); }
 
-function requireShopify(env) {
+async function requireShopify(env) {
   const storeDomain = String(env.SHOPIFY_STORE_DOMAIN || "").trim().toLowerCase();
-  const accessToken = String(env.SHOPIFY_ADMIN_ACCESS_TOKEN || "").trim();
   const apiVersion = String(env.SHOPIFY_API_VERSION || "2026-07").trim();
-  if (!storeDomain || !accessToken) throw httpError(503, "shopify_not_configured", "Shopify is not configured in Cloudflare Worker secrets.");
   if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(storeDomain)) throw httpError(503, "shopify_invalid_domain", "The Shopify store domain is invalid.");
   if (!/^\d{4}-\d{2}$/.test(apiVersion)) throw httpError(503, "shopify_invalid_version", "The Shopify API version is invalid.");
-  return { storeDomain, accessToken, apiVersion };
+  const clientId = String(env.SHOPIFY_CLIENT_ID || "").trim();
+  const clientSecret = String(env.SHOPIFY_CLIENT_SECRET || "").trim();
+  let accessToken = "";
+  let authSource = "static-admin-token";
+  if (clientId && clientSecret) {
+    accessToken = await getShopifyClientCredentialsToken(storeDomain, clientId, clientSecret);
+    authSource = "client-credentials";
+  } else {
+    accessToken = String(env.SHOPIFY_ADMIN_ACCESS_TOKEN || "").trim();
+  }
+  if (!accessToken) throw httpError(503, "shopify_not_configured", "Shopify client credentials or an Admin access token must be configured in Cloudflare.");
+  return { storeDomain, accessToken, apiVersion, authSource };
+}
+
+async function getShopifyClientCredentialsToken(storeDomain, clientId, clientSecret) {
+  const cacheKey = `${storeDomain}:${clientId}`;
+  const cached = shopifyTokenCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.accessToken;
+  const pending = shopifyTokenRequests.get(cacheKey);
+  if (pending) return pending;
+  const request = requestShopifyClientCredentialsToken(storeDomain, clientId, clientSecret)
+    .then(accessToken => {
+      shopifyTokenCache.set(cacheKey, { accessToken, expiresAt: Date.now() + SHOPIFY_TOKEN_TTL_MS });
+      return accessToken;
+    })
+    .finally(() => shopifyTokenRequests.delete(cacheKey));
+  shopifyTokenRequests.set(cacheKey, request);
+  return request;
+}
+
+async function requestShopifyClientCredentialsToken(storeDomain, clientId, clientSecret) {
+  let response;
+  try {
+    response = await fetch(`https://${storeDomain}/admin/oauth/access_token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+      body: new URLSearchParams({ grant_type: "client_credentials", client_id: clientId, client_secret: clientSecret }),
+      signal: AbortSignal.timeout(SHOPIFY_TIMEOUT_MS),
+    });
+  } catch (error) {
+    const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
+    throw httpError(timedOut ? 504 : 502, timedOut ? "shopify_token_timeout" : "shopify_token_connection_failed", timedOut ? "Shopify did not issue a token before the timeout." : "Cloudflare could not reach Shopify's token endpoint.");
+  }
+  const body = await safeJSON(response);
+  const accessToken = typeof body?.access_token === "string" ? body.access_token.trim() : "";
+  if (!response.ok || !accessToken) {
+    const detail = body?.error_description || body?.error || `Shopify token request returned HTTP ${response.status}.`;
+    const status = response.status === 429 ? 429 : response.status >= 500 ? 502 : 401;
+    throw httpError(status, response.status === 429 ? "shopify_token_rate_limited" : "shopify_client_credentials_invalid", String(detail).slice(0, 500));
+  }
+  return accessToken;
 }
 
 function themeGid(themeId) {
@@ -451,7 +502,7 @@ function commandCenterResponse(response, pathname, host) {
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("X-MMG-Host", host);
   headers.set("X-MMG-Runtime", "cloudflare-native");
-  headers.set("X-MMG-Build", "command-center-reconciled-20260711-31");
+  headers.set("X-MMG-Build", "command-center-shopify-auth-20260711-32");
   headers.set("Cache-Control", pathname.endsWith(".html") ? "no-cache, no-store, must-revalidate" : "public, max-age=300");
   headers.delete("content-security-policy");
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
