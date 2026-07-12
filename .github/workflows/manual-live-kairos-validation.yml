@@ -6,7 +6,7 @@ on:
       runtime_base_url:
         description: "Deployed Kairos base URL, without a trailing slash"
         required: true
-        default: "https://mmg-ios.vercel.app"
+        default: "https://mmg-ios.info-mindsetmediagroup.workers.dev"
         type: string
 
 permissions:

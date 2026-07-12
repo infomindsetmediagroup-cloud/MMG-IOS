@@ -55,7 +55,7 @@ function healthResponse(env) {
     vercelDependency: false,
   };
   const ready = capabilities.openai && capabilities.session;
-  return json({ status: ready ? "ready" : "degraded", runtime: "cloudflare-workers", build: "command-center-mobile-stability-20260711-34", capabilities, checkedAt: new Date().toISOString() }, ready ? 200 : 503);
+  return json({ status: ready ? "ready" : "degraded", runtime: "cloudflare-workers", build: "command-center-operational-candidate-20260711-35", capabilities, checkedAt: new Date().toISOString() }, ready ? 200 : 503);
 }
 
 async function handleSession(request, env) {
@@ -531,7 +531,7 @@ function commandCenterResponse(response, pathname, host) {
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("X-MMG-Host", host);
   headers.set("X-MMG-Runtime", "cloudflare-native");
-  headers.set("X-MMG-Build", "command-center-mobile-stability-20260711-34");
+  headers.set("X-MMG-Build", "command-center-operational-candidate-20260711-35");
   headers.set("Cache-Control", pathname.endsWith(".html") ? "no-cache, no-store, must-revalidate" : "public, max-age=300");
   headers.delete("content-security-policy");
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });

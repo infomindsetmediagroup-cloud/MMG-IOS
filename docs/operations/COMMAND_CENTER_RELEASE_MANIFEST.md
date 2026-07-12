@@ -4,7 +4,7 @@ Status: implementation in progress
 
 Canonical production branch: `main`
 
-Canonical production origin: `https://mmg-ios.vercel.app`
+Canonical production origin: `https://mmg-ios.info-mindsetmediagroup.workers.dev`
 
 Recovery scope:
 

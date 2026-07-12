@@ -1,4 +1,4 @@
-const DEFAULT_RUNTIME_BASE_URL = "https://mmg-ios.vercel.app";
+const DEFAULT_RUNTIME_BASE_URL = "https://mmg-ios.info-mindsetmediagroup.workers.dev";
 const runtimeBaseURL = window.location.hostname.endsWith("github.io") ? DEFAULT_RUNTIME_BASE_URL : window.location.origin;
 const sameOriginRuntime = new URL(runtimeBaseURL).origin === window.location.origin;
 const BUILD = "command-center-shopify-mutation-20260711-8";

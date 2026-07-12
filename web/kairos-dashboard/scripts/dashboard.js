@@ -8,7 +8,7 @@ import {
   updateWorkItem,
 } from "./executive-command-center-store.js";
 
-const DEFAULT_RUNTIME_BASE_URL = "https://mmg-ios.vercel.app";
+const DEFAULT_RUNTIME_BASE_URL = "https://mmg-ios.info-mindsetmediagroup.workers.dev";
 const runtimeBaseURL = window.location.hostname.endsWith("github.io") ? DEFAULT_RUNTIME_BASE_URL : window.location.origin;
 const nav = document.querySelector("#module-nav");
 const view = document.querySelector("#dashboard-view");
