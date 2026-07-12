@@ -1,9 +1,9 @@
-const BUILD = "kairos-kernel-20260712-18";
+const BUILD = "kairos-kernel-20260712-19";
 const STORAGE_KEY = "kairos.guidedWebsiteObjective";
 const ACTIVE_JOB_KEY = "kairos.guidedWebsitePlanningJob";
 const MAX_CHARS = 12000;
 const POLL_INTERVAL_MS = 2200;
-const MAX_POLL_MS = 240000;
+const MAX_POLL_MS = 10 * 60 * 1000;
 
 queueMicrotask(installDirectiveResilience);
 
@@ -46,7 +46,7 @@ window.fetch = async function kairosResumableFetch(input, init = {}) {
   catch { return new Response(JSON.stringify({ error: { message: "The website objective payload was invalid." } }), { status: 400, headers: { "Content-Type": "application/json" } }); }
 
   const objective = String(payload?.objective || "").trim();
-  setPlanningState("Submitting Job", "Kairos is accepting the website job and moving planning off the mobile browser connection.");
+  setPlanningState("Submitting Job", "Kairos is validating the staging source and submitting the approval plan to OpenAI background processing.");
 
   const submitResponse = await nativeFetch("/api/shopify/staging/plan/jobs", {
     method: "POST",
@@ -62,7 +62,7 @@ window.fetch = async function kairosResumableFetch(input, init = {}) {
   if (!submitResponse.ok || !submitted?.jobID) return submitResponse;
 
   writeStorage(ACTIVE_JOB_KEY, submitted.jobID);
-  setPlanningState("Preparing Plan", "Job accepted. Kairos is validating Shopify and preparing the approval plan in the background.");
+  setPlanningState("Preparing Plan", "Job accepted. OpenAI is preparing the source-grounded approval plan while Kairos monitors its status.");
 
   const started = Date.now();
   while (Date.now() - started < MAX_POLL_MS) {
@@ -76,7 +76,7 @@ window.fetch = async function kairosResumableFetch(input, init = {}) {
         cache: "no-store",
       });
     } catch {
-      setPlanningState("Reconnecting", "The browser connection changed. Kairos is reconnecting to the existing planning job; no new job was submitted.");
+      setPlanningState("Reconnecting", "The browser connection changed. Kairos is reconnecting to the same OpenAI planning response; no new job was submitted.");
       continue;
     }
 
@@ -87,7 +87,7 @@ window.fetch = async function kairosResumableFetch(input, init = {}) {
     }
 
     if (job?.status === "queued" || job?.status === "working") {
-      setPlanningState("Preparing Plan", job?.summary || "Kairos is preparing the approval plan.");
+      setPlanningState("Preparing Plan", job?.summary || "OpenAI is preparing the approval plan.");
       continue;
     }
 
@@ -110,8 +110,8 @@ window.fetch = async function kairosResumableFetch(input, init = {}) {
   }
 
   return new Response(JSON.stringify({
-    summary: "The website planning job is still running.",
-    error: { message: "Kairos did not finish the approval plan within four minutes. The objective remains saved; retrying will start a new job only after this status window ends." },
+    summary: "The website planning response is still active.",
+    error: { message: "OpenAI has not reached a terminal planning state within ten minutes. The objective remains saved and no Shopify write occurred." },
     jobID: submitted.jobID,
   }), { status: 504, headers: { "Content-Type": "application/json; charset=utf-8" } });
 };
