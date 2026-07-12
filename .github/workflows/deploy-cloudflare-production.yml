@@ -1,4 +1,5 @@
 name: Deploy Cloudflare Production
+# Kairos schema-validation deployment trigger: 2026-07-12-14
 
 on:
   push:
