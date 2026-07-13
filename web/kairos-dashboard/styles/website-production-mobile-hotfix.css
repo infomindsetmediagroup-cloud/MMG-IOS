@@ -1,0 +1,123 @@
+/* WEB-003 mobile correction: isolate modal controls from global Command Center styles. */
+.website-production-overlay{
+  -webkit-text-size-adjust:100%;
+  text-size-adjust:100%;
+  overflow-x:hidden;
+}
+.website-production-panel,
+.website-production-panel *{
+  min-width:0;
+  -webkit-text-size-adjust:100%;
+  text-size-adjust:100%;
+}
+.website-production-panel>header>div{
+  min-width:0;
+  flex:1 1 auto;
+}
+.website-production-panel>header p,
+.website-production-panel h2,
+.wp-action-card span,
+.wp-doctrine-summary span{
+  overflow-wrap:anywhere;
+}
+.website-production-panel>header>[data-wp-close]{
+  width:44px;
+  min-width:44px;
+  height:44px;
+  padding:0;
+  border-radius:999px;
+  font-size:28px;
+  line-height:1;
+}
+.website-production-panel .wp-actions [data-wp-close]{
+  width:auto;
+  min-width:0;
+  height:auto;
+  min-height:48px;
+  padding:12px 18px;
+  border-radius:12px;
+  font-size:15px;
+  line-height:1.2;
+}
+.wp-objective-label{
+  font-size:15px;
+  line-height:1.4;
+}
+.wp-objective-label textarea{
+  font-size:16px;
+}
+@media(max-width:700px){
+  .website-production-overlay{
+    padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  }
+  .website-production-panel{
+    width:100%;
+    max-width:100%;
+    min-height:100dvh;
+    margin:0;
+    padding:20px 16px 32px;
+    border-left:0;
+    border-right:0;
+    border-radius:0;
+    overflow-x:hidden;
+  }
+  .website-production-panel>header{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 44px;
+    gap:12px;
+    align-items:start;
+    padding-bottom:18px;
+    margin-bottom:18px;
+  }
+  .website-production-panel h2{
+    font-size:clamp(34px,10vw,46px);
+    line-height:.98;
+    letter-spacing:-.04em;
+  }
+  .website-production-panel header p:last-child{
+    font-size:15px;
+    line-height:1.55;
+  }
+  .wp-action-grid,
+  .wp-review-grid,
+  .wp-actions{
+    grid-template-columns:minmax(0,1fr);
+  }
+  .wp-action-card{
+    width:100%;
+    padding:16px;
+    border-radius:16px;
+  }
+  .wp-action-card strong{
+    font-size:17px;
+  }
+  .wp-action-card span{
+    font-size:14px;
+  }
+  .wp-doctrine-summary{
+    display:block;
+    padding:14px;
+  }
+  .wp-doctrine-summary strong{
+    display:block;
+    margin:0 0 6px;
+    white-space:normal;
+    font-size:15px;
+  }
+  .wp-doctrine-summary span{
+    font-size:14px;
+    line-height:1.5;
+  }
+  .wp-actions button,
+  .website-production-panel .wp-actions [data-wp-close]{
+    width:100%;
+    min-height:50px;
+    border-radius:14px;
+    font-size:16px;
+  }
+  .wp-objective-label textarea{
+    min-height:180px;
+    border-radius:16px;
+    padding:15px;
+  }
+}
