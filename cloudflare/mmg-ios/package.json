@@ -8,6 +8,10 @@
     "dev": "wrangler dev",
     "test": "node --test test/*.test.js"
   },
+  "dependencies": {
+    "fflate": "^0.8.2",
+    "pdf-lib": "^1.17.1"
+  },
   "devDependencies": {
     "wrangler": "^4.24.3"
   }
