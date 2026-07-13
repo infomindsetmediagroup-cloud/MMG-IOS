@@ -6,8 +6,13 @@ import {
   readApprovedWorkReceipt,
 } from "./kairos-approved-work-dispatcher-v1.js";
 import { runApprovedWebsiteExecution } from "./kairos-approved-website-executor-v1.js";
+import {
+  prepareExecutiveCorrection,
+  readExecutiveCorrection,
+  resubmitExecutiveCorrection,
+} from "./kairos-executive-correction-loop-v1.js";
 
-const BUILD = "kairos-production-entry-20260713-5";
+const BUILD = "kairos-production-entry-20260713-6";
 
 export { KairosProject };
 
@@ -32,6 +37,25 @@ export default {
         return json({ status: "completed", build: BUILD, ...completed });
       }
 
+      if (request.method === "POST" && url.pathname === "/api/executive-briefing/fix/prepare") {
+        const payload = await safeJSON(request.clone());
+        return json({ status: "completed", build: BUILD, correction: await prepareExecutiveCorrection(request, payload) });
+      }
+
+      if (request.method === "POST" && url.pathname === "/api/executive-briefing/fix/resubmit") {
+        const payload = await safeJSON(request.clone());
+        const revised = await resubmitExecutiveCorrection(request, payload);
+        return json({ status: "completed", build: BUILD, ...revised });
+      }
+
+      if (request.method === "GET" && url.pathname.startsWith("/api/executive-briefing/fix/")) {
+        const itemID = decodeURIComponent(url.pathname.split("/").pop() || "");
+        const correction = await readExecutiveCorrection(request, itemID);
+        return correction
+          ? json({ status: "completed", build: BUILD, correction })
+          : json({ status: "not-ready", build: BUILD, message: "No correction package exists for this item." }, 404);
+      }
+
       if (request.method === "GET" && url.pathname.startsWith("/api/executive-briefing/execution/") && url.pathname.endsWith("/receipt")) {
         const parts = url.pathname.split("/").filter(Boolean);
         const itemID = decodeURIComponent(parts[parts.length - 2] || "");
@@ -51,7 +75,7 @@ export default {
 
       return await runtime.fetch(request, env, ctx);
     } catch (error) {
-      const isShopifyExecution = url.pathname.startsWith("/api/shopify/staging/") || url.pathname.includes("/execution/run");
+      const isGovernedExecution = url.pathname.startsWith("/api/shopify/staging/") || url.pathname.includes("/execution/") || url.pathname.includes("/fix/");
       const message = error instanceof Error && error.message ? error.message : "Kairos encountered an unexpected production runtime failure.";
       const status = Number(error?.statusCode || error?.status || 500);
       const safeStatus = status >= 400 && status <= 599 ? status : 500;
@@ -59,7 +83,7 @@ export default {
         status: safeStatus >= 500 ? "failed" : "needs-input",
         build: BUILD,
         route: url.pathname,
-        error: { code: error?.code || (isShopifyExecution ? "approved_website_execution_failed" : "production_runtime_failed"), message },
+        error: { code: error?.code || (isGovernedExecution ? "governed_execution_failed" : "production_runtime_failed"), message },
       }), {
         status: safeStatus,
         headers: {
