@@ -1,6 +1,12 @@
-const BUILD = "kairos-command-center-layout-20260713-1";
+const BUILD = "kairos-command-center-layout-20260713-2";
 
-const layoutState = { menuOpen: false };
+const layoutState = {
+  menuOpen: false,
+  online: "Connecting",
+  onlineState: "checking",
+  activeWork: "0",
+  capabilities: "—",
+};
 
 start();
 
@@ -16,6 +22,7 @@ function applyLayout() {
   const hero = hub?.querySelector(".hero");
   if (!hub || !header || !hero) return;
 
+  captureMetricValues(hub.querySelector(".metrics"));
   hub.querySelector(".metrics")?.remove();
 
   const heroCopy = hero.querySelector(".hero-copy");
@@ -29,11 +36,7 @@ function applyLayout() {
     header.insertAdjacentElement("afterend", strip);
   }
 
-  const ready = Boolean(window.__kairosCommandState?.health?.status === "ready" || window.__kairosCommandState?.health?.status === "ok");
-  const activeWork = Number(window.__kairosCommandState?.activeJobs || 0);
-  const capabilities = capabilityCount();
-
-  strip.innerHTML = `<button class="command-menu-button" type="button" aria-label="Open operating centers" aria-expanded="${layoutState.menuOpen}" data-command-menu><span></span><span></span><span></span></button><div class="command-indicator command-online"><i class="${ready ? "" : "checking"}"></i><span>Online</span></div><div class="command-indicator"><small>Active Work</small><strong>${activeWork}</strong></div><div class="command-indicator"><small>Capabilities</small><strong>${capabilities}</strong></div><div class="command-indicator"><small>Entry Points</small><strong>25</strong></div>`;
+  strip.innerHTML = `<button class="command-menu-button" type="button" aria-label="Open operating centers" aria-expanded="${layoutState.menuOpen}" data-command-menu><span></span><span></span><span></span></button><div class="command-indicator command-online"><i class="${layoutState.onlineState}"></i><span>${escapeHTML(layoutState.online)}</span></div><div class="command-indicator"><small>Active Work</small><strong>${escapeHTML(layoutState.activeWork)}</strong></div><div class="command-indicator"><small>Capabilities</small><strong>${escapeHTML(layoutState.capabilities)}</strong></div><div class="command-indicator"><small>Entry Points</small><strong>25</strong></div>`;
 
   let menu = hub.querySelector("#command-center-menu");
   if (!menu) {
@@ -66,11 +69,23 @@ function applyLayout() {
   }));
 }
 
-function capabilityCount() {
-  const state = window.__kairosCommandState;
-  const source = state?.capabilities?.capabilities || state?.health?.capabilities;
-  if (!source || typeof source !== "object") return "—";
-  return String(Object.values(source).filter(value => value === "available" || value === true || value === "operational").length);
+function captureMetricValues(metrics) {
+  if (!metrics) return;
+  const cards = [...metrics.querySelectorAll(".metric")];
+  const read = label => cards.find(card => card.querySelector("span")?.textContent?.trim().toLowerCase() === label)?.querySelector("strong")?.textContent?.trim();
+  const runtime = read("runtime");
+  const active = read("active work");
+  const capabilities = read("capabilities");
+  if (runtime) {
+    layoutState.online = runtime === "Online" ? "Online" : runtime;
+    layoutState.onlineState = runtime === "Online" ? "" : "checking";
+  }
+  if (active) layoutState.activeWork = active;
+  if (capabilities) layoutState.capabilities = capabilities;
+}
+
+function escapeHTML(value) {
+  return String(value ?? "").replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
 }
 
 window.KairosCommandCenterLayout = { build: BUILD, refresh: applyLayout };
