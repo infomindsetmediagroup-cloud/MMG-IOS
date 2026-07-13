@@ -133,12 +133,12 @@ jobs:
           set -euo pipefail
           for attempt in $(seq 1 18); do
             headers_file="$(mktemp)"
-            if health_json="$(curl --fail --show-error --silent --max-time 30 -D "${headers_file}" "${KAIROS_PRODUCTION_URL}/api/health?deployment=${GITHUB_SHA}")" \
-              && website_page="$(curl --fail --show-error --silent --max-time 30 "${KAIROS_PRODUCTION_URL}/web-003.html?deployment=${GITHUB_SHA}")" \
-              && command_center="$(curl --fail --show-error --silent --max-time 30 "${KAIROS_PRODUCTION_URL}/?deployment=${GITHUB_SHA}")" \
-              && briefing_ui="$(curl --fail --show-error --silent --max-time 30 "${KAIROS_PRODUCTION_URL}/scripts/executive-briefing.js?deployment=${GITHUB_SHA}")" \
-              && creation_script="$(curl --fail --show-error --silent --max-time 30 "${KAIROS_PRODUCTION_URL}/scripts/creation-engine.js?deployment=${GITHUB_SHA}")" \
-              && briefing_json="$(curl --fail --show-error --silent --max-time 30 -X POST "${KAIROS_PRODUCTION_URL}/api/executive-briefing/build?deployment=${GITHUB_SHA}")"; then
+            if health_json="$(curl --fail --show-error --silent --location --max-time 30 -D "${headers_file}" "${KAIROS_PRODUCTION_URL}/api/health?deployment=${GITHUB_SHA}")" \
+              && website_page="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/web-003.html?deployment=${GITHUB_SHA}")" \
+              && command_center="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/?deployment=${GITHUB_SHA}")" \
+              && briefing_ui="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/scripts/executive-briefing.js?deployment=${GITHUB_SHA}")" \
+              && creation_script="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/scripts/creation-engine.js?deployment=${GITHUB_SHA}")" \
+              && briefing_json="$(curl --fail --show-error --silent --location --max-time 30 -X POST "${KAIROS_PRODUCTION_URL}/api/executive-briefing/build?deployment=${GITHUB_SHA}")"; then
               runtime_header="$(awk 'BEGIN{IGNORECASE=1} /^x-mmg-runtime:/ {gsub(/\r/, ""); sub(/^[^:]+:[[:space:]]*/, ""); print; exit}' "${headers_file}")"
               if HEALTH_JSON="${health_json}" WEBSITE_PAGE="${website_page}" COMMAND_CENTER="${command_center}" BRIEFING_UI="${briefing_ui}" CREATION_SCRIPT="${creation_script}" BRIEFING_JSON="${briefing_json}" RUNTIME_HEADER="${runtime_header}" node <<'NODE'
           const health = JSON.parse(process.env.HEALTH_JSON || "{}");
@@ -174,6 +174,7 @@ jobs:
             productAssetCopy: health.capabilities?.productAssetCopy,
             briefingWindow: briefing.briefing?.window,
             briefingReady: briefing.briefing?.counts?.ready,
+            websitePageBytes: Buffer.byteLength(page),
             checks,
           }, null, 2));
           if (Object.values(checks).some(value => value !== true)) process.exit(1);
