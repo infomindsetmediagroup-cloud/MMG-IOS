@@ -1,4 +1,4 @@
-const BUILD = "kairos-command-center-layout-20260713-3";
+const BUILD = "kairos-command-center-layout-20260713-4";
 
 const layoutState = {
   menuOpen: false,
@@ -40,6 +40,7 @@ function applyLayout() {
   try {
     captureMetricValues(hub.querySelector(".metrics"));
     hub.querySelector(".metrics")?.remove();
+    header.querySelector(".app-header-status")?.remove();
 
     const heroCopy = hero.querySelector(".hero-copy");
     if (heroCopy) heroCopy.textContent = "Real-time visibility. Governed tools. Measurable outcomes.";
