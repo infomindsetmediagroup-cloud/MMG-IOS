@@ -1,6 +1,7 @@
 # WEB-003 — MMG Website Retool Production Implementation
 
 Status: Active production workstream
+Release activation: 2026-07-13
 
 ## Objective
 
