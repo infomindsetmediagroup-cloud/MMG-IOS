@@ -4,9 +4,12 @@ import { handleProductPublication } from "./kairos-product-publication-v1.js";
 import { handleProductMedia } from "./kairos-product-media-v1.js";
 import { handleProductLaunchControl } from "./kairos-product-launch-control-v1.js";
 import { handleProductionRegistry, handleRegistryObjectRequest } from "./kairos-production-registry-v1.js";
+import { handleManuscriptSourceObjectRequest } from "./kairos-manuscript-source-v1.js";
 
 export class KairosProject extends NativeKairosProject {
   async fetch(request) {
+    const manuscriptSource = await handleManuscriptSourceObjectRequest(this.state, request);
+    if (manuscriptSource) return manuscriptSource;
     const registry = await handleRegistryObjectRequest(this.state, request);
     if (registry) return registry;
     return super.fetch(request);
