@@ -156,7 +156,7 @@ jobs:
             durableProjects: health.nativeIntelligence?.projectStorage === "durable-object",
             bookProduction: health.capabilities?.bookDevelopment === "operational",
             productAssets: health.capabilities?.productAssetCopy === "operational",
-            websiteBaseline: page.includes("website-production-20260713-baseline-1"),
+            websiteBaseline: page.includes("Website Production · Kairos") && page.includes('id="job-type"') && page.includes('id="objective"') && page.includes('id="prepare"'),
             promptEmpty: !page.includes("PRESERVE_PROMPT"),
             commandCenterBriefing: commandCenter.includes("scripts/executive-briefing.js"),
             decisionSurface: briefingUI.includes("Approve") && briefingUI.includes("Deny") && briefingUI.includes("Fix") && briefingUI.includes("View Evidence"),
