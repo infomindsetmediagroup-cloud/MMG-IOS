@@ -13,9 +13,12 @@ import { handleManuscriptPlatformSubmissionObjectRequest } from "./kairos-manusc
 import { handlePublicationCatalogObjectRequest } from "./kairos-publication-catalog-v1.js";
 import { handlePublicationOperationsObjectRequest } from "./kairos-publication-operations-v1.js";
 import { handlePublicationPerformanceObjectRequest } from "./kairos-publication-performance-v1.js";
+import { handlePublicationSettlementObjectRequest } from "./kairos-publication-settlement-v1.js";
 
 export class KairosProject extends NativeKairosProject {
   async fetch(request) {
+    const publicationSettlement = await handlePublicationSettlementObjectRequest(this.state, request);
+    if (publicationSettlement) return publicationSettlement;
     const publicationPerformance = await handlePublicationPerformanceObjectRequest(this.state, request);
     if (publicationPerformance) return publicationPerformance;
     const publicationOperations = await handlePublicationOperationsObjectRequest(this.state, request);
