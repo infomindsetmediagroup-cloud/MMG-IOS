@@ -13,13 +13,7 @@ export function buildDeterministicHomepagePackage(document, objective) {
 
   if (hero) {
     addFirstMatchingSetting(operations, hero.sectionId, hero.section?.settings, ["heading", "title", "headline"], "Your Knowledge Has Value.");
-    addFirstMatchingSetting(
-      operations,
-      hero.sectionId,
-      hero.section?.settings,
-      ["subheading", "subtitle", "text", "description", "content"],
-      "Mindset Media Group helps you discover, organize, build, and share your knowledge through books, AI, business, creator education, and guided execution."
-    );
+    addFirstMatchingSetting(operations, hero.sectionId, hero.section?.settings, ["subheading", "subtitle", "text", "description", "content"], "Mindset Media Group helps you discover, organize, build, and share your knowledge through books, AI, business, creator education, and guided execution.");
     addFirstMatchingSetting(operations, hero.sectionId, hero.section?.settings, ["button_label", "button_text", "primary_button_label"], "Explore the MMG Ecosystem");
     addFirstMatchingSetting(operations, hero.sectionId, hero.section?.settings, ["second_button_label", "secondary_button_label", "button_label_2"], "Meet Kairos");
     notes.push(`Primary homepage introduction grounded in existing section ${hero.sectionId}.`);
@@ -30,13 +24,7 @@ export function buildDeterministicHomepagePackage(document, objective) {
 
   if (pathway) {
     addFirstMatchingSetting(operations, pathway.sectionId, pathway.section?.settings, ["heading", "title", "headline"], "Choose What You Want to Build");
-    addFirstMatchingSetting(
-      operations,
-      pathway.sectionId,
-      pathway.section?.settings,
-      ["subheading", "subtitle", "text", "description", "content"],
-      "Publish knowledge, build a brand, grow as a creator, learn AI, develop products, or access practical tools—then follow the MMG path designed for that objective."
-    );
+    addFirstMatchingSetting(operations, pathway.sectionId, pathway.section?.settings, ["subheading", "subtitle", "text", "description", "content"], "Publish knowledge, build a brand, grow as a creator, learn AI, develop products, or access practical tools—then follow the MMG path designed for that objective.");
     notes.push(`Guided objective pathway grounded in existing section ${pathway.sectionId}.`);
   }
 
@@ -45,13 +33,7 @@ export function buildDeterministicHomepagePackage(document, objective) {
 
   if (kairos) {
     addFirstMatchingSetting(operations, kairos.sectionId, kairos.section?.settings, ["heading", "title", "headline"], "Kairos Turns Objectives Into Guided Execution");
-    addFirstMatchingSetting(
-      operations,
-      kairos.sectionId,
-      kairos.section?.settings,
-      ["subheading", "subtitle", "text", "description", "content"],
-      "Kairos is the intelligence operating system inside MMG—organizing context, recommending the next action, and helping users move from idea to verified progress."
-    );
+    addFirstMatchingSetting(operations, kairos.sectionId, kairos.section?.settings, ["subheading", "subtitle", "text", "description", "content"], "Kairos is the intelligence operating system inside MMG—organizing context, recommending the next action, and helping users move from idea to verified progress.");
     notes.push(`Kairos positioning grounded in existing section ${kairos.sectionId}.`);
   }
 
@@ -61,8 +43,8 @@ export function buildDeterministicHomepagePackage(document, objective) {
 
   const deduped = dedupeOperations(operations).slice(0, 18);
   if (!deduped.length) {
-    const error = new Error("The verified homepage source did not expose supported existing text settings. Kairos must use the canonical package installer.");
-    error.code = "canonical_homepage_package_required";
+    const error = new Error("The approved homepage baseline does not expose any safe editable text settings. Kairos will not replace or visually restructure the page.");
+    error.code = "approved_homepage_has_no_safe_text_settings";
     throw error;
   }
 
@@ -70,35 +52,11 @@ export function buildDeterministicHomepagePackage(document, objective) {
     mode: "existing-text-settings",
     patch: { order: [], operations: deduped },
     summary: "Retool the existing homepage into a clearer MMG guided ecosystem journey without changing the approved visual identity.",
-    strategy: "Preserve the current Shopify section structure, styling, products, links, and integrations. Update only existing text-oriented settings on the non-live Kairos Staging homepage so the journey clearly introduces MMG, presents objective-based pathways, positions Kairos, and improves calls to action.",
-    changes: [{
-      filename: "templates/index.json",
-      purpose: "Clarify the homepage hierarchy and guided customer journey while preserving existing section types and visual styling.",
-      changeType: "modify",
-      instructions: [
-        "Update only existing homepage section and block settings.",
-        "Preserve all section IDs, block IDs, types, links, products, imagery, color settings, typography settings, and integrations.",
-        "Establish the core message ‘Your Knowledge Has Value.’",
-        "Clarify MMG as the ecosystem and Kairos as the intelligence operating system.",
-        "Guide visitors toward publishing, brand building, creator growth, AI learning, product development, and practical tools.",
-      ],
-      expectedOutcome: "A clearer, mobile-readable homepage journey with stronger semantic messaging and calls to action, without a visual redesign.",
-    }],
-    risks: [
-      "Existing theme settings may use unconventional key names, so only verified supported keys will be changed.",
-      "No new Shopify sections or blocks will be created in this deterministic pass.",
-    ],
-    acceptanceCriteria: [
-      "The homepage contains one clear primary value statement.",
-      "MMG is presented as the overarching ecosystem and Kairos as the guided execution layer.",
-      "Existing section IDs, block IDs, section types, block types, products, links, imagery, and styling settings remain intact.",
-      "The resulting templates/index.json is valid and semantically verified after Shopify read-back.",
-      "The live Rise theme remains MAIN and unchanged.",
-    ],
-    rollbackPlan: [
-      "Preserve the exact pre-change templates/index.json from Kairos Staging.",
-      "Rollback requires separate approval and restores only that file on the non-live staging theme.",
-    ],
+    strategy: "Preserve the current Shopify section structure, styling, products, links, and integrations. Update only existing text-oriented settings on the non-live Kairos Staging homepage.",
+    changes: [{ filename: "templates/index.json", purpose: "Update only verified text settings while preserving the rendered homepage.", changeType: "modify", instructions: ["Update only safe existing text settings.", "Preserve section IDs, block IDs, types, links, products, imagery, colors, typography, spacing, and integrations.", "Do not create or replace sections, blocks, stylesheets, or Liquid structures."], expectedOutcome: "A content-only homepage update with no visual redesign." }],
+    risks: ["Custom setting names are accepted only when they pass the strict non-visual string-field filter."],
+    acceptanceCriteria: ["Section IDs, block IDs, section types, block types, order, imagery, links, and visual settings remain intact.", "Only approved string content fields change.", "The resulting templates/index.json is valid and semantically verified after Shopify read-back.", "The live theme remains unchanged."],
+    rollbackPlan: ["Preserve the exact pre-change templates/index.json from Kairos Staging.", "Rollback requires separate approval and restores only that file on staging."],
     evidenceNotes: notes,
     objective,
   };
@@ -109,14 +67,8 @@ function buildBlockUpdates(sectionEntries, excluded) {
   const notes = [];
   const target = sectionEntries.find(item => !excluded.has(item.sectionId) && item.section?.blocks && typeof item.section.blocks === "object");
   if (!target) return { operations, notes };
-
   const blocks = Object.entries(target.section.blocks || {});
-  const copy = [
-    ["Publish Your Knowledge", "Turn expertise and lived experience into books, resources, and durable intellectual property."],
-    ["Build Your Brand", "Create a coherent business and creator presence supported by practical MMG systems."],
-    ["Grow With AI", "Learn and apply AI tools through clear education, responsible workflows, and guided execution."],
-  ];
-
+  const copy = [["Publish Your Knowledge", "Turn expertise and lived experience into books, resources, and durable intellectual property."], ["Build Your Brand", "Create a coherent business and creator presence supported by practical MMG systems."], ["Grow With AI", "Learn and apply AI tools through clear education, responsible workflows, and guided execution."]];
   for (let index = 0; index < Math.min(blocks.length, copy.length); index += 1) {
     const [blockId, block] = blocks[index];
     const [heading, text] = copy[index];
@@ -127,51 +79,33 @@ function buildBlockUpdates(sectionEntries, excluded) {
   return { operations, notes };
 }
 
-function findSection(entries, typeHints) {
-  return entries.find(({ section }) => {
-    const type = String(section?.type || "").toLowerCase();
-    return typeHints.some(hint => type.includes(hint));
-  });
-}
+function findSection(entries, typeHints) { return entries.find(({ section }) => { const type = String(section?.type || "").toLowerCase(); return typeHints.some(hint => type.includes(hint)); }); }
 
 function hasAnyEditableText(section) {
   const settings = section?.settings;
-  return settings && typeof settings === "object" && findSafeTextSettingKey(settings, ["heading", "title", "headline", "subheading", "subtitle", "text", "description", "content", "button_label", "button_text"]);
+  if (settings && typeof settings === "object" && findSafeTextSettingKey(settings, ["heading", "title", "headline", "subheading", "subtitle", "text", "description", "content", "button_label", "button_text"])) return true;
+  const blocks = section?.blocks && typeof section.blocks === "object" ? Object.values(section.blocks) : [];
+  return blocks.some(block => block?.settings && findSafeTextSettingKey(block.settings, ["heading", "title", "headline", "subheading", "subtitle", "text", "description", "content", "button_label", "button_text"]));
 }
 
-function findSafeTextSettingKey(settings, keys) {
-  const stringKeys = Object.keys(settings).filter(key => typeof settings[key] === "string");
-  for (const candidate of keys) {
-    if (stringKeys.includes(candidate)) return candidate;
-  }
+function findSafeTextSettingKey(settings, preferredKeys) {
+  const stringKeys = Object.keys(settings || {}).filter(key => typeof settings[key] === "string");
+  for (const candidate of preferredKeys) if (stringKeys.includes(candidate) && isSafeTextKey(candidate)) return candidate;
   for (const existing of stringKeys) {
     const normalized = existing.toLowerCase();
-    if (/(^|_)(position|alignment|color|scheme|opacity|height|behavior|image|ratio|padding|columns?|layout|style)(_|$)/.test(normalized)) continue;
-    if (keys.some(candidate => normalized.startsWith(`${candidate.toLowerCase()}_`) || normalized.endsWith(`_${candidate.toLowerCase()}`))) return existing;
+    if (!isSafeTextKey(normalized)) continue;
+    if (preferredKeys.some(candidate => normalized.startsWith(`${candidate.toLowerCase()}_`) || normalized.endsWith(`_${candidate.toLowerCase()}`))) return existing;
   }
-  return "";
+  return stringKeys.find(key => isSafeTextKey(key) && String(settings[key] || "").trim().length > 0) || "";
 }
 
-function addFirstMatchingSetting(operations, sectionId, settings, keys, value) {
-  if (!settings || typeof settings !== "object") return;
-  const key = findSafeTextSettingKey(settings, keys);
-  if (!key || settings[key] === value) return;
-  operations.push({ scope: "section", sectionId, blockId: "", key, valueJson: JSON.stringify(value) });
+function isSafeTextKey(key) {
+  const normalized = String(key || "").toLowerCase();
+  if (!normalized) return false;
+  if (/(^|_)(position|alignment|color|colour|scheme|opacity|height|width|behavior|behaviour|image|video|media|icon|logo|ratio|padding|margin|spacing|columns?|rows?|layout|style|font|size|weight|border|radius|shadow|animation|effect|desktop|mobile|enable|disable|show|hide|url|link|href|product|collection|menu|handle|id|class|template|liquid|css|html)(_|$)/.test(normalized)) return false;
+  return /(heading|title|headline|subheading|subtitle|text|description|content|copy|label|caption|eyebrow|kicker|message|body|intro|summary|tagline)/.test(normalized);
 }
 
-function addFirstMatchingBlockSetting(operations, sectionId, blockId, settings, keys, value) {
-  if (!settings || typeof settings !== "object") return;
-  const key = findSafeTextSettingKey(settings, keys);
-  if (!key || settings[key] === value) return;
-  operations.push({ scope: "block", sectionId, blockId, key, valueJson: JSON.stringify(value) });
-}
-
-function dedupeOperations(operations) {
-  const seen = new Set();
-  return operations.filter(operation => {
-    const key = `${operation.scope}:${operation.sectionId}:${operation.blockId}:${operation.key}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
+function addFirstMatchingSetting(operations, sectionId, settings, keys, value) { if (!settings || typeof settings !== "object") return; const key = findSafeTextSettingKey(settings, keys); if (!key || settings[key] === value) return; operations.push({ scope: "section", sectionId, blockId: "", key, valueJson: JSON.stringify(value) }); }
+function addFirstMatchingBlockSetting(operations, sectionId, blockId, settings, keys, value) { if (!settings || typeof settings !== "object") return; const key = findSafeTextSettingKey(settings, keys); if (!key || settings[key] === value) return; operations.push({ scope: "block", sectionId, blockId, key, valueJson: JSON.stringify(value) }); }
+function dedupeOperations(operations) { const seen = new Set(); return operations.filter(operation => { const key = `${operation.scope}:${operation.sectionId}:${operation.blockId}:${operation.key}`; if (seen.has(key)) return false; seen.add(key); return true; }); }
