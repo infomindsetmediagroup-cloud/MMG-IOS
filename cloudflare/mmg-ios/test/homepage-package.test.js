@@ -69,10 +69,11 @@ test("canonical package generation is idempotent and preserves its approved sect
 });
 
 test("Kairos inference policy rejects OpenAI endpoints and permits only the private Kairos target contract", () => {
+  const token = "k".repeat(48);
   assert.equal(KAIROS_PROVIDER_POLICY.openai, "prohibited");
-  assert.equal(intelligenceConfigured({ KAIROS_INFERENCE_URL: "https://api.openai.com" }), false);
-  assert.equal(intelligenceConfigured({ KAIROS_INFERENCE_URL: "https://company.openai.azure.com" }), false);
-  assert.equal(intelligenceConfigured({ KAIROS_INFERENCE_URL: "https://gpu.kairos.internal" }), true);
+  assert.equal(intelligenceConfigured({ KAIROS_INFERENCE_URL: "https://api.openai.com", KAIROS_INFERENCE_TOKEN: token }), false);
+  assert.equal(intelligenceConfigured({ KAIROS_INFERENCE_URL: "https://company.openai.azure.com", KAIROS_INFERENCE_TOKEN: token }), false);
+  assert.equal(intelligenceConfigured({ KAIROS_INFERENCE_URL: "https://gpu.kairos.internal", KAIROS_INFERENCE_TOKEN: token }), true);
 });
 
 test("website route plans, approves, installs, and verifies the canonical package when the current template has no editable text", async () => {
