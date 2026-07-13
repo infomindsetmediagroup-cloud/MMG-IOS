@@ -4,16 +4,22 @@ import { handleManuscriptRequest } from "./manuscript-studio-v1.js";
 import { handleContentEngineRequest } from "./content-engine-v1.js";
 import { handleVisualVerificationRequest } from "./shopify-visual-verification-v1.js";
 import { handleReleaseControlRequest } from "./shopify-release-control-v1.js";
+import { handleResourceReleaseRequest } from "./shopify-resource-release-v1.js";
 import { handleWebsiteRegistryRequest } from "./shopify-website-registry-v1.js";
 import { handlePageCompilerRequest } from "./shopify-page-compiler-v1.js";
 import { handleSitewideExecutionRequest } from "./shopify-sitewide-execution-v1.js";
 
-const BUILD = "kairos-standalone-command-20260712-23";
+const BUILD = "kairos-standalone-command-20260712-24";
 const CANONICAL_SHOPIFY_STORE = "07kd8e-qw.myshopify.com";
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    if (url.pathname.startsWith("/api/shopify/resource-release/")) {
+      const response = await guarded(() => handleResourceReleaseRequest(request, env), "resource_release_failed");
+      if (response) return withRuntimeHeaders(response);
+    }
 
     if (url.pathname.startsWith("/api/shopify/sitewide/")) {
       const response = await guarded(() => handleSitewideExecutionRequest(request, env), "sitewide_execution_failed");
@@ -100,6 +106,12 @@ export default {
         shopifyReleasePreparation: "operational",
         executivePublicationApproval: "operational",
         stagingToLiveThemePublication: "operational",
+        resourceAwareReleasePreparation: "operational",
+        pageTemplatePublication: "operational",
+        productTemplatePublication: "operational",
+        collectionTemplatePublication: "operational",
+        resourceLiveVerification: "operational",
+        resourceAssignmentRollback: "operational",
         liveStorefrontVerification: "operational",
         oneClickThemeRollback: "operational",
         websitePageRegistry: "operational",
