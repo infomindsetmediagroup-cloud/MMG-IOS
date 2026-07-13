@@ -18,6 +18,7 @@ const requiredFiles = [
   join(sourceRoot, "kairos-executive-briefing-v1.js"),
   join(sourceRoot, "kairos-approved-work-dispatcher-v1.js"),
   join(sourceRoot, "kairos-approved-website-executor-v1.js"),
+  join(sourceRoot, "kairos-executive-correction-loop-v1.js"),
   join(repoRoot, "web/kairos-dashboard/index.html"),
   join(repoRoot, "web/kairos-dashboard/web-003.html"),
   join(repoRoot, "web/kairos-dashboard/scripts/creation-engine.js"),
@@ -55,6 +56,9 @@ for (const route of [
   "/api/executive-briefing/execution/run",
   "/api/executive-briefing/execution/",
   "/api/executive-briefing/execution/complete",
+  "/api/executive-briefing/fix/prepare",
+  "/api/executive-briefing/fix/resubmit",
+  "/api/executive-briefing/fix/",
   "/receipt",
 ]) assert.ok(guardedSource.includes(route), `Approved work route is missing: ${route}`);
 
@@ -63,6 +67,17 @@ for (const control of ["approvalBindingVerified: true", "automaticPublication: f
 
 const websiteExecutor = readFileSync(join(sourceRoot, "kairos-approved-website-executor-v1.js"), "utf8");
 for (const control of ["prepareLifecycleReview", "decideLifecycleReview", "executeApprovedLifecycleReview", "Shopify Kairos Staging", "liveThemeChanged: false", "readBackVerified: true", "needs-preparation"]) assert.ok(websiteExecutor.includes(control), `Approved website execution control is missing: ${control}`);
+
+const correctionLoop = readFileSync(join(sourceRoot, "kairos-executive-correction-loop-v1.js"), "utf8");
+for (const control of [
+  "Only an item marked Fix can enter the correction loop.",
+  "inventedEvidenceForbidden: true",
+  "approvalRequiredAgain: true",
+  "ready-for-revision",
+  "resubmitted",
+  "previousDecision",
+  "revisionNumber",
+]) assert.ok(correctionLoop.includes(control), `Executive correction control is missing: ${control}`);
 
 const briefingSource = readFileSync(join(sourceRoot, "kairos-executive-briefing-v1.js"), "utf8");
 for (const decision of ["approve", "deny", "fix"]) assert.ok(briefingSource.includes(`"${decision}"`), `Executive briefing decision is missing: ${decision}`);
@@ -73,7 +88,7 @@ const dashboardIndex = readFileSync(join(repoRoot, "web/kairos-dashboard/index.h
 assert.ok(dashboardIndex.includes("scripts/executive-briefing.js"), "Command Center does not load the executive briefing interface.");
 assert.ok(dashboardIndex.includes("styles/executive-briefing.css"), "Command Center does not load executive briefing styles.");
 const briefingUI = readFileSync(join(repoRoot, "web/kairos-dashboard/scripts/executive-briefing.js"), "utf8");
-for (const action of ["Approve", "Deny", "Fix", "View Evidence", "Execute Approved", "Run Website Update"]) assert.ok(briefingUI.includes(action), `Command Center executive control is missing: ${action}`);
+for (const action of ["Approve", "Deny", "Fix", "View Evidence", "Execute Approved", "Run Website Update", "Prepare Fix", "Resubmit Fix"]) assert.ok(briefingUI.includes(action), `Command Center executive control is missing: ${action}`);
 
 const websiteProduction = readFileSync(join(repoRoot, "web/kairos-dashboard/web-003.html"), "utf8");
 assert.ok(!websiteProduction.includes("PRESERVE_PROMPT"), "Website Production still contains a prefilled homepage prompt.");
@@ -90,8 +105,11 @@ console.log(JSON.stringify({
   entry: "src/kairos-production-entry.js",
   approvedWorkDispatcher: true,
   approvedWebsiteExecution: true,
+  executiveCorrectionLoop: true,
+  reapprovalRequiredAfterFix: true,
   verifiedCompletionReceipts: true,
   commandCenterRunWebsiteUpdate: true,
+  commandCenterFixResubmit: true,
   websiteProductionPromptEmpty: true,
   scheduledWebsiteIntelligence: true,
   scheduledExecutiveBriefing: true,
