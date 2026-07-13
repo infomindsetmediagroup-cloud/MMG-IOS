@@ -1,3 +1,0 @@
-WEB-003 mobile production flow release
-Build: kairos-website-production-mobile-flow-20260713-1
-Purpose: compact job selector and immediate prompt entry on mobile.
