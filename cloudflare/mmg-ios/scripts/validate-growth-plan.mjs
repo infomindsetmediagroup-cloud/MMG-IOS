@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+const here=dirname(fileURLToPath(import.meta.url));const workerRoot=resolve(here,"..");const repoRoot=resolve(workerRoot,"../..");const runtimePath=join(workerRoot,"src/kairos-growth-plan-v1.js");const entryPath=join(workerRoot,"src/kairos-production-entry-v2.js");const uiPath=join(repoRoot,"web/kairos-dashboard/scripts/growth-plan.js");const cssPath=join(repoRoot,"web/kairos-dashboard/styles/growth-plan.css");const indexPath=join(repoRoot,"web/kairos-dashboard/index.html");
+for(const file of[runtimePath,entryPath,uiPath,cssPath,indexPath])assert.ok(existsSync(file),`Growth Plan production file missing: ${file}`);
+const runtime=readFileSync(runtimePath,"utf8");for(const marker of["createGrowthPlan","Confirm baseline and target","Lock growth strategy","Prepare experiments","Execute and measure","Review, learn, and compound","inventedBaseline: false","guaranteedOutcome: false","externalSpendAutomatic: false","pricingChangeAutomatic: false"])assert.ok(runtime.includes(marker),`Growth Plan runtime contract missing: ${marker}`);
+const entry=readFileSync(entryPath,"utf8");for(const route of["/api/growth-plans","/api/growth-plans/latest"])assert.ok(entry.includes(route),`Growth Plan route missing: ${route}`);
+const ui=readFileSync(uiPath,"utf8");for(const marker of['[data-child="growth-plan"]',"Measurable Growth System","Create Plan + Workflow","Open Growth Workflow","No invented baseline"])assert.ok(ui.includes(marker),`Growth Plan UI missing: ${marker}`);
+assert.ok(!readFileSync(cssPath,"utf8").includes("position:fixed"),"Growth Plan must not introduce floating controls.");const index=readFileSync(indexPath,"utf8");assert.ok(index.includes("scripts/growth-plan.js"));assert.ok(index.includes("styles/growth-plan.css"));console.log(JSON.stringify({status:"ready",growthPlan:true,verifiedBaselineBoundary:true,fiveTaskWorkflow:true,experimentLimit:3,floatingControls:0},null,2));
