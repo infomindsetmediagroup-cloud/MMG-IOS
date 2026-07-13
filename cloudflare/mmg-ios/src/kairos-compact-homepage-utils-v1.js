@@ -151,9 +151,12 @@ export function extractOpenAIError(body) {
   return String(body?.error?.message || body?.last_error?.message || body?.incomplete_details?.reason || "").trim();
 }
 
-export async function inspectStagingSource(_runtime, _request, env, build) {
+export async function inspectStagingSource(_runtime, _request, env, build, requestedFilenames = ["templates/index.json"]) {
   const config = readShopifyConfig(env);
   const auth = await resolveAccessToken(config, env);
+  const filenames = [...new Set((Array.isArray(requestedFilenames) ? requestedFilenames : [requestedFilenames]).map(value => String(value || "").trim()).filter(Boolean))];
+  if (!filenames.length || filenames.length > 50) throw httpError(400, "theme_file_request_invalid", "Kairos must inspect between one and fifty theme files.");
+  if (!filenames.includes("templates/index.json")) filenames.unshift("templates/index.json");
   const themesData = await shopifyGraphQL(config, auth, `query KairosThemes { themes(first: 20) { nodes { id name role processing processingFailed } } }`, {});
   const themes = Array.isArray(themesData?.themes?.nodes) ? themesData.themes.nodes : [];
   const mainTheme = themes.find(theme => theme?.role === "MAIN") || null;
@@ -164,17 +167,28 @@ export async function inspectStagingSource(_runtime, _request, env, build) {
 
   const fileData = await shopifyGraphQL(config, auth, `query KairosHomepageFile($themeId: ID!, $filenames: [String!], $first: Int!) { theme(id: $themeId) { files(first: $first, filenames: $filenames) { nodes { filename contentType body { ... on OnlineStoreThemeFileBodyText { content } ... on OnlineStoreThemeFileBodyBase64 { contentBase64 } } } userErrors { code filename } } } }`, {
     themeId: stagingTheme.id,
-    filenames: ["templates/index.json"],
-    first: 1,
+    filenames,
+    first: filenames.length,
   });
   const connection = fileData?.theme?.files;
   const fileErrors = Array.isArray(connection?.userErrors) ? connection.userErrors.filter(error => error?.code && error.code !== "NOT_FOUND") : [];
   if (fileErrors.length) throw httpError(502, "theme_file_read_failed", `Shopify could not read templates/index.json: ${fileErrors.map(error => error.code).join(", ")}.`);
-  const node = Array.isArray(connection?.nodes) ? connection.nodes.find(item => item?.filename === "templates/index.json") : null;
-  const content = bodyToText(node?.body);
-  if (!content) throw httpError(409, "homepage_source_unavailable", "templates/index.json was not readable from Kairos Staging.");
-  const rawHash = await hashText(content);
-  const bytes = new TextEncoder().encode(content).length;
+  const nodes = Array.isArray(connection?.nodes) ? connection.nodes : [];
+  const files = [];
+  for (const filename of filenames) {
+    const node = nodes.find(item => item?.filename === filename);
+    const content = bodyToText(node?.body);
+    if (!content) continue;
+    files.push({
+      filename,
+      readable: true,
+      content,
+      sha256: await hashText(content),
+      bytes: new TextEncoder().encode(content).length,
+      contentType: node?.contentType || "",
+    });
+  }
+  if (!files.some(file => file.filename === "templates/index.json")) throw httpError(409, "homepage_source_unavailable", "templates/index.json was not readable from Kairos Staging.");
   return {
     actionID: crypto.randomUUID(),
     actionType: "shopify.staging.source.inspect",
@@ -187,7 +201,8 @@ export async function inspectStagingSource(_runtime, _request, env, build) {
       credentialPath: auth.credentialPath,
       mainTheme: summarizeTheme(mainTheme),
       stagingTheme: summarizeTheme(stagingTheme),
-      files: [{ filename: "templates/index.json", readable: true, content, sha256: rawHash, bytes, contentType: node?.contentType || "" }],
+      files,
+      missingFiles: filenames.filter(filename => !files.some(file => file.filename === filename)),
       openaiAPIUsed: false,
       sourceAdapter: "direct-shopify-graphql",
     },
@@ -195,16 +210,42 @@ export async function inspectStagingSource(_runtime, _request, env, build) {
 }
 
 export async function writeThemeFile(env, themeGid, filename, content) {
+  return writeThemeFiles(env, themeGid, [{ filename, content }]);
+}
+
+export async function writeThemeFiles(env, themeGid, files) {
+  const normalized = Array.isArray(files) ? files.map(file => ({ filename: String(file?.filename || "").trim(), content: file?.content })) : [];
+  if (!normalized.length || normalized.length > 50) throw httpError(400, "theme_file_write_invalid", "Kairos must write between one and fifty theme files.");
+  if (normalized.some(file => !file.filename || typeof file.content !== "string")) throw httpError(400, "theme_file_write_invalid", "Every theme file write requires a filename and text content.");
+  if (new Set(normalized.map(file => file.filename)).size !== normalized.length) throw httpError(400, "theme_file_write_duplicate", "Kairos will not write the same theme filename twice in one operation.");
   const config = readShopifyConfig(env);
   const auth = await resolveAccessToken(config, env);
   const query = `mutation KairosThemeFilesUpsert($themeId: ID!, $files: [OnlineStoreThemeFilesUpsertFileInput!]!) { themeFilesUpsert(themeId: $themeId, files: $files) { upsertedThemeFiles { filename } userErrors { field message } } }`;
-  const data = await shopifyGraphQL(config, auth, query, { themeId: themeGid, files: [{ filename, body: { type: "TEXT", value: content } }] });
+  const data = await shopifyGraphQL(config, auth, query, { themeId: themeGid, files: normalized.map(file => ({ filename: file.filename, body: { type: "TEXT", value: file.content } })) });
   const payload = data?.themeFilesUpsert;
   const errors = Array.isArray(payload?.userErrors) ? payload.userErrors.filter(error => error?.message) : [];
   if (errors.length) throw httpError(422, "theme_file_write_rejected", errors.map(error => error.message).join("; "));
   const written = Array.isArray(payload?.upsertedThemeFiles) ? payload.upsertedThemeFiles : [];
-  if (!written.some(file => file?.filename === filename)) throw httpError(502, "theme_file_write_unconfirmed", `Shopify did not confirm writing ${filename}.`);
-  return { credentialPath: auth.credentialPath, mutationResult: payload };
+  const unconfirmed = normalized.map(file => file.filename).filter(filename => !written.some(file => file?.filename === filename));
+  if (unconfirmed.length) throw httpError(502, "theme_file_write_unconfirmed", `Shopify did not confirm writing: ${unconfirmed.join(", ")}.`);
+  return { credentialPath: auth.credentialPath, mutationResult: payload, filenames: normalized.map(file => file.filename) };
+}
+
+export async function deleteThemeFiles(env, themeGid, filenames) {
+  const normalized = [...new Set((Array.isArray(filenames) ? filenames : []).map(value => String(value || "").trim()).filter(Boolean))];
+  if (!normalized.length || normalized.length > 50) throw httpError(400, "theme_file_delete_invalid", "Kairos must delete between one and fifty theme files.");
+  if (normalized.includes("templates/index.json")) throw httpError(400, "homepage_template_delete_forbidden", "Kairos will never delete the Shopify homepage template.");
+  const config = readShopifyConfig(env);
+  const auth = await resolveAccessToken(config, env);
+  const query = `mutation KairosThemeFilesDelete($themeId: ID!, $files: [String!]!) { themeFilesDelete(themeId: $themeId, files: $files) { deletedThemeFiles { filename } userErrors { field message } } }`;
+  const data = await shopifyGraphQL(config, auth, query, { themeId: themeGid, files: normalized });
+  const payload = data?.themeFilesDelete;
+  const errors = Array.isArray(payload?.userErrors) ? payload.userErrors.filter(error => error?.message) : [];
+  if (errors.length) throw httpError(422, "theme_file_delete_rejected", errors.map(error => error.message).join("; "));
+  const deleted = Array.isArray(payload?.deletedThemeFiles) ? payload.deletedThemeFiles : [];
+  const unconfirmed = normalized.filter(filename => !deleted.some(file => file?.filename === filename));
+  if (unconfirmed.length) throw httpError(502, "theme_file_delete_unconfirmed", `Shopify did not confirm deleting: ${unconfirmed.join(", ")}.`);
+  return { credentialPath: auth.credentialPath, mutationResult: payload, filenames: normalized };
 }
 
 function summarizeTheme(theme) {
@@ -220,7 +261,7 @@ function bodyToText(body) {
   return "";
 }
 
-async function hashText(value) {
+export async function hashText(value) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(value || "")));
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
 }

@@ -61,10 +61,13 @@ export function buildDeterministicHomepagePackage(document, objective) {
 
   const deduped = dedupeOperations(operations).slice(0, 18);
   if (!deduped.length) {
-    throw new Error("The verified homepage source did not expose supported existing text settings for a safe deterministic retool.");
+    const error = new Error("The verified homepage source did not expose supported existing text settings. Kairos must use the canonical package installer.");
+    error.code = "canonical_homepage_package_required";
+    throw error;
   }
 
   return {
+    mode: "existing-text-settings",
     patch: { order: [], operations: deduped },
     summary: "Retool the existing homepage into a clearer MMG guided ecosystem journey without changing the approved visual identity.",
     strategy: "Preserve the current Shopify section structure, styling, products, links, and integrations. Update only existing text-oriented settings on the non-live Kairos Staging homepage so the journey clearly introduces MMG, presents objective-based pathways, positions Kairos, and improves calls to action.",

@@ -1,7 +1,13 @@
 const DEFAULT_MODEL = "Qwen3.6-35B-A3B";
+export const KAIROS_PROVIDER_POLICY = Object.freeze({
+  openai: "prohibited",
+  externalInferenceProviders: "prohibited",
+  permittedInference: "kairos-controlled-hardware-only",
+});
 
 export function intelligenceConfigured(env) {
-  return Boolean(String(env.KAIROS_INFERENCE_URL || "").trim() && String(env.KAIROS_INFERENCE_TOKEN || "").trim());
+  try { return Boolean(validatedKairosInferenceBaseURL(env?.KAIROS_INFERENCE_URL) && String(env?.KAIROS_INFERENCE_TOKEN || "").trim()); }
+  catch { return false; }
 }
 
 export async function probeKairosIntelligence(env) {
@@ -55,9 +61,22 @@ export function parseStrictJSON(text) {
   throw gatewayError("Kairos returned invalid structured output.", "kairos_invalid_json", 502);
 }
 
+function validatedKairosInferenceBaseURL(value) {
+  const raw = String(value || "").trim().replace(/\/+$/, "");
+  if (!raw) throw gatewayError("Kairos private intelligence runtime is not configured.", "kairos_inference_not_configured", 503);
+  let url;
+  try { url = new URL(raw); }
+  catch { throw gatewayError("Kairos private intelligence requires a valid HTTPS URL.", "kairos_inference_url_invalid", 503); }
+  if (url.protocol !== "https:") throw gatewayError("Kairos private intelligence requires HTTPS.", "kairos_inference_url_invalid", 503);
+  const hostname = url.hostname.toLowerCase();
+  if (/(^|\.)(openai\.com|chatgpt\.com|oaistatic\.com|oaiusercontent\.com)$/.test(hostname) || /(^|\.)openai\.azure\.com$/.test(hostname)) {
+    throw gatewayError("Kairos policy prohibits OpenAI endpoints.", "openai_provider_prohibited", 503);
+  }
+  return raw;
+}
+
 function baseURLFor(env) {
-  const value = String(env.KAIROS_INFERENCE_URL || "").trim().replace(/\/$/, "");
-  return value.replace(/\/v1\/(chat\/completions|models)$/i, "");
+  return validatedKairosInferenceBaseURL(env?.KAIROS_INFERENCE_URL).replace(/\/v1\/(chat\/completions|models)$/i, "");
 }
 
 function authHeaders(env) {

@@ -2,7 +2,7 @@ import runtime from "./kairos-standalone-command-worker-v2.js";
 import { readShopifyDashboardAnalytics } from "./shopify-live-analytics-v1.js";
 import { handleManuscriptRequest } from "./manuscript-studio-v1.js";
 import { handleContentEngineRequest } from "./content-engine-v1.js";
-import { intelligenceConfigured, probeKairosIntelligence } from "./kairos-intelligence-v1.js";
+import { KAIROS_PROVIDER_POLICY, intelligenceConfigured, probeKairosIntelligence } from "./kairos-intelligence-v1.js";
 
 const BUILD = "kairos-standalone-command-20260712-17";
 const CANONICAL_SHOPIFY_STORE = "07kd8e-qw.myshopify.com";
@@ -47,7 +47,7 @@ export default {
       body.build = BUILD;
       body.kernel = "standalone-command-v5";
       body.shopifyStore = String(env.SHOPIFY_STORE_DOMAIN || CANONICAL_SHOPIFY_STORE).trim().toLowerCase();
-      body.intelligenceRuntime = { provider: "kairos-private-runtime", configured: intelligenceReady, model: String(env.KAIROS_MODEL || "Qwen3.6-35B-A3B"), healthEndpoint: "/api/inference/health" };
+      body.intelligenceRuntime = { provider: "kairos-private-runtime", providerPolicy: KAIROS_PROVIDER_POLICY, configured: intelligenceReady, model: String(env.KAIROS_MODEL || "Qwen3.6-35B-A3B"), healthEndpoint: "/api/inference/health" };
       body.shopifyCredentialConfiguration = {
         clientCredentials: Boolean(env.SHOPIFY_CLIENT_ID && env.SHOPIFY_CLIENT_SECRET),
         apiKeyCredentials: Boolean(env.SHOPIFY_API_KEY && env.SHOPIFY_API_SECRET),
