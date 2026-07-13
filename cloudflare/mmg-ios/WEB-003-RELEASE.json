@@ -1,0 +1,9 @@
+{
+  "release": "WEB-003",
+  "runtime": "mmg-ios",
+  "status": "active",
+  "executionConsole": "/web-003.html",
+  "shopifyTarget": "Kairos Staging",
+  "publishedThemeMutation": false,
+  "activatedAt": "2026-07-13T14:46:00Z"
+}
