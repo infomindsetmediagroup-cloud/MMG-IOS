@@ -4,13 +4,19 @@ import { handleManuscriptRequest } from "./manuscript-studio-v1.js";
 import { handleContentEngineRequest } from "./content-engine-v1.js";
 import { handleVisualVerificationRequest } from "./shopify-visual-verification-v1.js";
 import { handleReleaseControlRequest } from "./shopify-release-control-v1.js";
+import { handleWebsiteRegistryRequest } from "./shopify-website-registry-v1.js";
 
-const BUILD = "kairos-standalone-command-20260712-20";
+const BUILD = "kairos-standalone-command-20260712-21";
 const CANONICAL_SHOPIFY_STORE = "07kd8e-qw.myshopify.com";
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    if (url.pathname.startsWith("/api/shopify/website-registry")) {
+      const response = await guarded(() => handleWebsiteRegistryRequest(request, env), "website_registry_failed");
+      if (response) return withRuntimeHeaders(response);
+    }
 
     if (url.pathname.startsWith("/api/shopify/release/")) {
       const response = await guarded(() => handleReleaseControlRequest(request, env), "release_control_failed");
@@ -76,6 +82,10 @@ export default {
         stagingToLiveThemePublication: "operational",
         liveStorefrontVerification: "operational",
         oneClickThemeRollback: "operational",
+        websitePageRegistry: "operational",
+        customerJourneyGraph: "operational",
+        storefrontSitemapDiscovery: "operational",
+        brokenJourneyDetection: "operational",
         manuscriptStudio: "intake-only",
         docxExtraction: "operational",
         pdfTextExtraction: "operational",
@@ -100,7 +110,7 @@ export default {
 async function guarded(run, code) {
   try { return await run(); }
   catch (error) {
-    const status = Number(error?.statusCode || 500);
+    const status = Number(error?.statusCode || error?.status || 500);
     return json({ status: status >= 500 ? "failed" : "needs-input", build: BUILD, error: { code: error?.code || code, message: error instanceof Error ? error.message : "Kairos could not complete this request." } }, status);
   }
 }
