@@ -1,0 +1,13 @@
+import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+const here=dirname(fileURLToPath(import.meta.url));const workerRoot=resolve(here,"..");const repoRoot=resolve(workerRoot,"../..");
+const files={runtime:join(workerRoot,"src/kairos-visitor-activity-v1.js"),entry:join(workerRoot,"src/kairos-production-entry-v2.js"),ui:join(repoRoot,"web/kairos-dashboard/scripts/visitor-activity.js"),css:join(repoRoot,"web/kairos-dashboard/styles/visitor-activity.css"),index:join(repoRoot,"web/kairos-dashboard/index.html")};
+for(const file of Object.values(files))assert.ok(existsSync(file),`Visitor Activity production file missing: ${file}`);
+const runtime=readFileSync(files.runtime,"utf8");for(const marker of ["runVisitorReview","/api/analytics/shopify","aggregateEvidenceOnly: true","individualVisitorIdentification: false","inferredIdentity: false","personalProfiling: false","Confirm visitor-data coverage","Review verified behavior signals","Identify journey friction","Choose one customer-experience action","Measure the next visitor snapshot"])assert.ok(runtime.includes(marker),`Visitor Activity runtime contract missing: ${marker}`);
+const entry=readFileSync(files.entry,"utf8");for(const route of ["/api/visitor-activity/reviews","/api/visitor-activity/latest"])assert.ok(entry.includes(route),`Visitor Activity route missing: ${route}`);
+const ui=readFileSync(files.ui,"utf8");for(const marker of ['[data-child="visitor-activity"]',"Verified Visitor Evidence","Run Verified Review","Aggregate evidence only","No inferred identity","No profiling"])assert.ok(ui.includes(marker),`Visitor Activity UI missing: ${marker}`);
+assert.ok(!readFileSync(files.css,"utf8").includes("position:fixed"),"Visitor Activity must not introduce floating controls.");
+const index=readFileSync(files.index,"utf8");assert.ok(index.includes("scripts/visitor-activity.js"));assert.ok(index.includes("styles/visitor-activity.css"));
+console.log(JSON.stringify({status:"ready",visitorActivity:true,aggregateEvidenceOnly:true,individualIdentification:false,inferredIdentity:false,personalProfiling:false,followThroughWorkflow:true,floatingControls:0},null,2));
