@@ -1,5 +1,4 @@
 name: Deploy Cloudflare Production
-# Cloudflare account auto-resolution trigger: 2026-07-12
 
 on:
   push:
@@ -99,7 +98,7 @@ jobs:
 
           echo "Cloudflare production credentials are available."
 
-      - name: Verify runtime
+      - name: Verify runtime tools
         shell: bash
         run: |
           set -euo pipefail
@@ -111,10 +110,10 @@ jobs:
         working-directory: repository/cloudflare/mmg-ios
         run: npm install --no-package-lock --no-audit --no-fund
 
-      - name: Test native creation pipeline
+      - name: Validate reconciled production baseline
         shell: bash
         working-directory: repository/cloudflare/mmg-ios
-        run: npm test
+        run: npm run validate:production
 
       - name: Validate canonical Cloudflare Worker bundle
         shell: bash
@@ -126,50 +125,54 @@ jobs:
         working-directory: repository/cloudflare/mmg-ios
         run: npx wrangler deploy
 
-      - name: Verify deployed native creation runtime
+      - name: Verify deployed production baseline
         shell: bash
         env:
           KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
         run: |
           set -euo pipefail
           for attempt in $(seq 1 18); do
-            if health_json="$(curl --fail --show-error --silent --max-time 30 "${KAIROS_PRODUCTION_URL}/api/health?deployment=${GITHUB_SHA}")" \
-              && capabilities_json="$(curl --fail --show-error --silent --max-time 30 "${KAIROS_PRODUCTION_URL}/api/content/capabilities?deployment=${GITHUB_SHA}")" \
+            headers_file="$(mktemp)"
+            if health_json="$(curl --fail --show-error --silent --max-time 30 -D "${headers_file}" "${KAIROS_PRODUCTION_URL}/api/health?deployment=${GITHUB_SHA}")" \
+              && website_page="$(curl --fail --show-error --silent --max-time 30 "${KAIROS_PRODUCTION_URL}/web-003.html?deployment=${GITHUB_SHA}")" \
               && creation_script="$(curl --fail --show-error --silent --max-time 30 "${KAIROS_PRODUCTION_URL}/scripts/creation-engine.js?deployment=${GITHUB_SHA}")"; then
-              if HEALTH_JSON="${health_json}" CAPABILITIES_JSON="${capabilities_json}" CREATION_SCRIPT="${creation_script}" node <<'NODE'
+              runtime_header="$(awk 'BEGIN{IGNORECASE=1} /^x-mmg-runtime:/ {gsub(/\r/, ""); sub(/^[^:]+:[[:space:]]*/, ""); print; exit}' "${headers_file}")"
+              if HEALTH_JSON="${health_json}" WEBSITE_PAGE="${website_page}" CREATION_SCRIPT="${creation_script}" RUNTIME_HEADER="${runtime_header}" node <<'NODE'
           const health = JSON.parse(process.env.HEALTH_JSON || "{}");
-          const capabilities = JSON.parse(process.env.CAPABILITIES_JSON || "{}");
+          const page = process.env.WEBSITE_PAGE || "";
           const script = process.env.CREATION_SCRIPT || "";
+          const runtime = process.env.RUNTIME_HEADER || "";
           const valid =
-            health.launchMode === "native-generative-production" &&
+            runtime === "kairos-production-baseline-20260713-1" &&
+            ["ready", "ok"].includes(health.status) &&
             health.openaiAPIUsed === false &&
             health.nativeIntelligence?.externalInferenceAPI === false &&
             health.nativeIntelligence?.projectStorage === "durable-object" &&
             health.capabilities?.bookDevelopment === "operational" &&
             health.capabilities?.productAssetCopy === "operational" &&
-            capabilities.status === "ready" &&
-            capabilities.productionActions?.fullManuscript === "operational" &&
-            capabilities.productionActions?.kdpManufacturing === "operational" &&
-            capabilities.productionActions?.productPage === "operational" &&
+            page.includes("website-production-20260713-baseline-1") &&
+            !page.includes("PRESERVE_PROMPT") &&
             script.includes("Build Complete Package");
           if (!valid) process.exit(1);
           console.log(JSON.stringify({
-            build: health.build,
-            launchMode: health.launchMode,
-            intelligenceRuntime: health.intelligenceRuntime?.provider,
+            runtime,
+            healthBuild: health.build,
             projectStorage: health.nativeIntelligence?.projectStorage,
-            creationPipeline: capabilities.version,
+            websiteProductionPrompt: "empty",
+            creationEngine: "available",
           }, null, 2));
           NODE
               then
-                echo "Kairos native creation deployment verified on attempt ${attempt}."
+                rm -f "${headers_file}"
+                echo "Kairos reconciled production baseline verified on attempt ${attempt}."
                 exit 0
               fi
             fi
-            echo "Kairos production has not exposed the new native creation build yet (attempt ${attempt}/18)."
+            rm -f "${headers_file}"
+            echo "Kairos production has not exposed the reconciled baseline yet (attempt ${attempt}/18)."
             sleep 5
           done
-          echo "::error::Kairos production did not pass the native creation health contract."
+          echo "::error::Kairos production did not pass the reconciled baseline contract."
           exit 1
 
       - name: Publish Kairos deployment receipt
@@ -182,10 +185,10 @@ jobs:
           set -euo pipefail
           if [ "${DEPLOY_JOB_STATUS}" = "success" ]; then
             state="success"
-            description="Kairos native creation deployment verified"
+            description="Kairos reconciled production baseline verified"
           else
             state="failure"
-            description="Kairos native creation deployment failed verification"
+            description="Kairos production baseline failed verification"
           fi
           target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           payload="$(STATE="${state}" DESCRIPTION="${description}" TARGET_URL="${target_url}" node -e '
