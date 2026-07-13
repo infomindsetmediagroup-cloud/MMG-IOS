@@ -1,14 +1,17 @@
 const DEFAULT_MODEL = "Qwen3.6-35B-A3B";
+export const KAIROS_PROVIDER_POLICY = Object.freeze({
+  openai: "prohibited",
+  externalInferenceProviders: "prohibited",
+  permittedInference: "kairos-controlled-hardware-only",
+});
 
 export function intelligenceConfigured(env) {
-  return Boolean(String(env.KAIROS_INFERENCE_URL || "").trim());
+  try { return Boolean(validatedKairosInferenceBaseURL(env?.KAIROS_INFERENCE_URL)); }
+  catch { return false; }
 }
 
 export async function runKairosIntelligence(env, input) {
-  const baseURL = String(env.KAIROS_INFERENCE_URL || "").trim().replace(/\/$/, "");
-  if (!baseURL) {
-    throw gatewayError("Kairos private intelligence runtime is not configured.", "kairos_inference_not_configured", 503);
-  }
+  const baseURL = validatedKairosInferenceBaseURL(env?.KAIROS_INFERENCE_URL);
 
   const model = String(env.KAIROS_MODEL || DEFAULT_MODEL).trim();
   const endpoint = baseURL.endsWith("/v1/chat/completions") ? baseURL : `${baseURL}/v1/chat/completions`;
@@ -52,6 +55,20 @@ export async function runKairosIntelligence(env, input) {
   }
 
   return { text: text.trim(), model, provider: "kairos-private-runtime" };
+}
+
+function validatedKairosInferenceBaseURL(value) {
+  const raw = String(value || "").trim().replace(/\/+$/, "");
+  if (!raw) throw gatewayError("Kairos private intelligence runtime is not configured.", "kairos_inference_not_configured", 503);
+  let url;
+  try { url = new URL(raw); }
+  catch { throw gatewayError("Kairos private intelligence requires a valid HTTPS URL.", "kairos_inference_url_invalid", 503); }
+  if (url.protocol !== "https:") throw gatewayError("Kairos private intelligence requires HTTPS.", "kairos_inference_url_invalid", 503);
+  const hostname = url.hostname.toLowerCase();
+  if (/(^|\.)(openai\.com|chatgpt\.com|oaistatic\.com|oaiusercontent\.com)$/.test(hostname) || /(^|\.)openai\.azure\.com$/.test(hostname)) {
+    throw gatewayError("Kairos policy prohibits OpenAI endpoints.", "openai_provider_prohibited", 503);
+  }
+  return raw;
 }
 
 export function parseStrictJSON(text) {

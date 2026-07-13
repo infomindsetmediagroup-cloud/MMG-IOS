@@ -2,7 +2,7 @@ import runtime from "./kairos-standalone-command-worker-v2.js";
 import { readShopifyDashboardAnalytics } from "./shopify-live-analytics-v1.js";
 import { handleManuscriptRequest } from "./manuscript-studio-v1.js";
 import { handleContentEngineRequest } from "./content-engine-v1.js";
-import { intelligenceConfigured } from "./kairos-intelligence-v1.js";
+import { KAIROS_PROVIDER_POLICY, intelligenceConfigured } from "./kairos-intelligence-v1.js";
 
 const BUILD = "kairos-standalone-command-20260712-16";
 const CANONICAL_SHOPIFY_STORE = "07kd8e-qw.myshopify.com";
@@ -54,6 +54,7 @@ export default {
       body.shopifyStore = String(env.SHOPIFY_STORE_DOMAIN || CANONICAL_SHOPIFY_STORE).trim().toLowerCase();
       body.intelligenceRuntime = {
         provider: "kairos-private-runtime",
+        providerPolicy: KAIROS_PROVIDER_POLICY,
         configured: intelligenceReady,
         model: String(env.KAIROS_MODEL || "Qwen3.6-35B-A3B"),
       };
