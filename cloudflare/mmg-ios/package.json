@@ -7,7 +7,7 @@
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
     "test": "node --test test/*.test.js",
-    "validate:production": "node scripts/validate-production-baseline.mjs && node scripts/validate-workflow-runtime.mjs && node scripts/validate-objective-router.mjs"
+    "validate:production": "node scripts/validate-production-baseline.mjs && node scripts/validate-workflow-runtime.mjs && node scripts/validate-objective-router.mjs && node scripts/validate-creative-studio.mjs"
   },
   "dependencies": {
     "fflate": "^0.8.2",
