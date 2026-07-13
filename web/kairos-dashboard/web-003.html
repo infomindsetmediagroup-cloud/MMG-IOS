@@ -2,122 +2,80 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="color-scheme" content="dark">
-  <title>WEB-003 · MMG Website Retool</title>
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+  <title>Website Production · Kairos</title>
   <style>
-    :root{--bg:#050b11;--panel:#0b1721;--line:#183448;--text:#eef8ff;--muted:#8ca2b1;--cyan:#47d7ff;--green:#5ee6ad;--danger:#ff8f8f}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 80% 0,#0d3044 0,transparent 36%),var(--bg);color:var(--text);font-family:Arial,Helvetica,sans-serif}.shell{width:min(980px,calc(100% - 32px));margin:0 auto;padding:42px 0 70px}.eyebrow{margin:0 0 12px;color:var(--cyan);font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase}h1{max-width:760px;margin:0;font-size:clamp(42px,8vw,82px);line-height:.92;letter-spacing:-.06em}h1 span{color:#7c96a7}.lede{max-width:760px;margin:24px 0 0;color:var(--muted);font-size:16px;line-height:1.7}.status{display:flex;gap:10px;align-items:center;margin-top:26px;color:var(--muted);font-size:12px}.status i{width:9px;height:9px;border-radius:50%;background:#7a8790}.status[data-state="ready"] i{background:var(--green);box-shadow:0 0 16px rgba(94,230,173,.7)}.grid{display:grid;grid-template-columns:1.15fr .85fr;gap:16px;margin-top:34px}.card{padding:24px;border:1px solid var(--line);border-radius:22px;background:rgba(11,23,33,.92)}h2{margin:0 0 16px;font-size:24px}.scope{display:grid;gap:12px;margin:0;padding:0;list-style:none}.scope li{display:grid;grid-template-columns:28px 1fr;gap:10px;color:var(--muted);line-height:1.45}.scope b{color:var(--text)}.scope span{width:24px;height:24px;display:grid;place-items:center;border:1px solid #23516c;border-radius:8px;color:var(--cyan);font-size:11px}.boundary{padding:16px;border:1px solid #28566e;border-radius:15px;background:#0d2432;color:#a9c2d0;font-size:13px;line-height:1.6}.boundary b{color:var(--cyan)}.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}button,a.button{min-height:48px;display:inline-flex;align-items:center;justify-content:center;padding:0 18px;border:1px solid #2e5870;border-radius:12px;background:#102534;color:var(--text);font-weight:800;text-decoration:none;cursor:pointer}button.primary{border:0;background:linear-gradient(135deg,var(--cyan),#168ed6);color:#03101a}button:disabled{opacity:.45;cursor:not-allowed}.log{min-height:190px;margin-top:16px;padding:16px;overflow:auto;border:1px solid #173247;border-radius:14px;background:#061018;color:#9fb7c5;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap}.error{color:var(--danger)}.success{color:var(--green)}.receipt{display:none;margin-top:16px;padding:16px;border:1px solid rgba(94,230,173,.35);border-radius:14px;background:rgba(94,230,173,.07);color:#bdf4da;font-size:13px;line-height:1.6}.receipt.show{display:block}@media(max-width:760px){.grid{grid-template-columns:1fr}.shell{padding-top:28px}.card{padding:20px}}
+    :root{--bg:#05080d;--panel:#0b121b;--panel2:#0f1a26;--line:#20364d;--text:#f4f8fb;--muted:#98a8b8;--blue:#35bdf7;--green:#55d6a5;--red:#ff8f9c}*{box-sizing:border-box}html{-webkit-text-size-adjust:100%;text-size-adjust:100%;background:var(--bg)}body{margin:0;min-width:320px;background:radial-gradient(circle at 50% -10%,rgba(27,137,201,.18),transparent 32rem),var(--bg);color:var(--text);font:15px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Display",Inter,Segoe UI,sans-serif}.shell{width:min(760px,100%);margin:auto;padding:max(18px,env(safe-area-inset-top)) 16px max(34px,env(safe-area-inset-bottom))}.top{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;padding-bottom:18px;border-bottom:1px solid var(--line)}.eyebrow{margin:0 0 6px;color:#81d9ff;font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}h1{margin:0;font-size:clamp(34px,10vw,54px);line-height:.95;letter-spacing:-.045em}.lede{margin:14px 0 0;color:var(--muted);line-height:1.55}.back{flex:0 0 auto;min-height:42px;padding:0 13px;border:1px solid #31506d;border-radius:12px;background:#0e1823;color:var(--text);text-decoration:none;font-weight:750}.status{display:flex;align-items:center;gap:9px;margin:18px 0;color:var(--muted);font-size:13px}.status i{width:9px;height:9px;border-radius:50%;background:#7d8791}.status.ready i{background:var(--green);box-shadow:0 0 14px rgba(85,214,165,.65)}.card{margin-top:14px;padding:18px;border:1px solid var(--line);border-radius:20px;background:linear-gradient(180deg,rgba(13,22,33,.97),rgba(8,13,20,.98))}label{display:block;font-weight:800;margin-bottom:8px}select,textarea{display:block;width:100%;border:1px solid #31506d;border-radius:14px;background:#050a11;color:#fff;font:inherit}select{height:50px;padding:0 13px}textarea{min-height:210px;padding:15px;resize:vertical;font-size:16px;line-height:1.5}.hint{margin:9px 0 0;color:var(--muted);font-size:13px}.actions{display:grid;gap:10px;margin-top:16px}.actions button{min-height:50px;border-radius:14px;font-size:16px;font-weight:850;cursor:pointer}.primary{border:0;background:linear-gradient(135deg,var(--blue),#1686ce);color:#03121c}.secondary{border:1px solid #31506d;background:#0e1823;color:var(--text)}button:disabled{opacity:.45;cursor:not-allowed}.progress,.error,.success{margin-top:16px;padding:14px;border-radius:14px;line-height:1.5}.progress{border:1px solid #31506d;background:#0a1621;color:#c7d8e7}.error{border:1px solid #813c49;background:#251116;color:#ffc0c7}.success{border:1px solid #287258;background:#0b2119;color:#baf0d8}.review{display:grid;gap:10px;margin-top:14px}.review article{padding:14px;border:1px solid #243b52;border-radius:14px;background:#08111a}.review h3{margin:0 0 7px;font-size:16px;color:#8bdcff}.review p,.review li{margin:0;color:#b1c0ce;overflow-wrap:anywhere}.review ul{margin:0;padding-left:18px}.hidden{display:none}@media(min-width:700px){.shell{padding-top:38px}.actions{grid-template-columns:1fr 1fr}.card{padding:24px}}
   </style>
 </head>
 <body>
 <main class="shell">
-  <p class="eyebrow">Kairos · Full Operation Mode</p>
-  <h1>WEB-003<br><span>MMG Website Retool</span></h1>
-  <p class="lede">Execute the approved canonical homepage package on Kairos Staging, verify every written file, preserve rollback evidence, and keep the published Shopify theme unchanged until visual acceptance.</p>
-  <div class="status" id="runtime-status" data-state="checking"><i></i><span>Checking the canonical MMG-IOS runtime…</span></div>
+  <header class="top">
+    <div><p class="eyebrow">Kairos · Governed Shopify Staging</p><h1>Website<br>Production</h1><p class="lede">Describe the website outcome. Kairos will inspect staging, prepare the exact proposal, and execute only after approval.</p></div>
+    <a class="back" href="./?v=website-production-mobile-2">Back</a>
+  </header>
 
-  <section class="grid">
-    <article class="card">
-      <p class="eyebrow">Approved production scope</p>
-      <h2>First governed website package</h2>
-      <ul class="scope">
-        <li><span>01</span><div><b>Canonical homepage</b><br>Install the connected MMG ecosystem homepage package.</div></li>
-        <li><span>02</span><div><b>Native header doctrine</b><br>Preserve Shopify’s native menu, centered brand area, search, and cart architecture for the next source-grounded header pass.</div></li>
-        <li><span>03</span><div><b>Verification</b><br>Read back the complete package and compare approved hashes.</div></li>
-        <li><span>04</span><div><b>Rollback</b><br>Preserve the original files and deletion instructions for newly created assets.</div></li>
-      </ul>
-      <div class="actions">
-        <button class="primary" id="execute" disabled>Execute WEB-003 on Staging</button>
-        <a class="button" href="./">Return to Command Center</a>
-      </div>
-      <div class="log" id="log">Waiting for runtime verification.</div>
-      <div class="receipt" id="receipt"></div>
-    </article>
+  <div class="status" id="status"><i></i><span>Checking MMG-IOS runtime…</span></div>
 
-    <aside class="card">
-      <p class="eyebrow">Safety boundary</p>
-      <h2>Staging first</h2>
-      <div class="boundary"><b>This action does not publish the live theme.</b><br><br>It writes only to the verified unpublished <strong>Kairos Staging</strong> theme. Promotion to the published theme remains a separate governed release after desktop and iPhone acceptance.</div>
-    </aside>
+  <section class="card" id="input-view">
+    <label for="job-type">Website job</label>
+    <select id="job-type">
+      <option value="homepage">Retool Homepage</option>
+      <option value="landing-page">Build Page</option>
+      <option value="existing-page">Retool Existing Page</option>
+      <option value="product-page">Build Product Page</option>
+      <option value="journey-graph">Connect Customer Journey</option>
+      <option value="inspection">Inspect Website</option>
+    </select>
+    <p class="hint" id="job-hint">Rebuild the homepage around the approved MMG Experience-First Journey.</p>
+    <div style="height:16px"></div>
+    <label for="objective" id="objective-label">Describe the homepage you want Kairos to build</label>
+    <textarea id="objective" maxlength="12000" placeholder="Describe the homepage structure, message, sections, customer journey, and desired outcome."></textarea>
+    <p class="hint">MMG doctrine, verified Shopify assets and links, staging-only execution, backup, verification, and rollback are applied automatically.</p>
+    <div id="input-error" class="error hidden"></div>
+    <div class="actions"><button class="primary" id="prepare" disabled>Inspect & Prepare Proposal</button><a class="secondary" href="./?v=website-production-mobile-2" style="display:grid;place-items:center;text-decoration:none">Cancel</a></div>
   </section>
+
+  <section class="card hidden" id="working-view"><div class="progress" id="working-message">Kairos is working…</div></section>
+
+  <section class="card hidden" id="review-view">
+    <p class="eyebrow">Proposal ready</p>
+    <div class="review" id="review-content"></div>
+    <div class="actions"><button class="primary" id="execute">Approve & Execute on Staging</button><button class="secondary" id="revise">Revise Request</button></div>
+  </section>
+
+  <section class="card hidden" id="complete-view"><div id="complete-message"></div><div class="actions"><button class="primary" id="new-job">Start Another Website Job</button><a class="secondary" href="./?v=website-production-mobile-2" style="display:grid;place-items:center;text-decoration:none">Return to Command Center</a></div></section>
 </main>
 <script>
-const BUILD="web-003-execution-console-20260713-1";
-const OBJECTIVE=`WEB-003 — Install and verify the canonical MMG homepage package on Kairos Staging. Preserve Shopify native header architecture for the subsequent source-grounded header retool: hamburger/menu on the left, centered Mindset Media Group brand area, search and cart on the right, compact ecosystem category language, black premium MMG styling, mobile-first behavior, and no replacement navigation system. Do not mutate the published theme. Preserve complete rollback evidence.`;
-const statusEl=document.querySelector("#runtime-status");
-const executeButton=document.querySelector("#execute");
-const logEl=document.querySelector("#log");
-const receiptEl=document.querySelector("#receipt");
-let running=false;
-
-function write(message,kind=""){
-  const time=new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit",second:"2-digit"});
-  logEl.textContent+=`\n[${time}] ${message}`;
-  logEl.scrollTop=logEl.scrollHeight;
-  if(kind) logEl.className=`log ${kind}`;
-}
-async function jsonFetch(url,init={}){
-  const response=await fetch(url,{cache:"no-store",credentials:"include",...init});
-  const text=await response.text();
-  let body={};try{body=text?JSON.parse(text):{}}catch{body={summary:text}}
-  return{response,body};
-}
-async function poll(url,label){
-  const deadline=Date.now()+10*60*1000;
-  while(Date.now()<deadline){
-    await new Promise(r=>setTimeout(r,1000));
-    const{response,body}=await jsonFetch(url);
-    if(body?.status==="completed"&&body?.result)return body.result;
-    if(["failed","cancelled","needs-attention"].includes(body?.status)||(!response.ok&&response.status!==202))throw new Error(body?.error?.message||body?.summary||`${label} failed.`);
-    write(body?.summary||`${label} in progress…`);
-  }
-  throw new Error(`${label} exceeded the monitoring window.`);
-}
-async function submit(url,payload,label){
-  const{response,body}=await jsonFetch(url,{method:"POST",headers:{"Content-Type":"application/json","X-MMG-Client-Build":BUILD},body:JSON.stringify(payload)});
-  if(!response.ok||!body?.jobID)throw new Error(body?.error?.message||body?.summary||`${label} returned ${response.status}.`);
-  write(`${label} accepted: ${body.jobID}`);
-  return poll(body.pollURL||url.replace(/\/jobs$/,`/jobs/${body.jobID}`),label);
-}
-async function verifyRuntime(){
-  try{
-    const{response,body}=await jsonFetch("/api/health");
-    if(!response.ok||!["ready","ok"].includes(body?.status))throw new Error(body?.error?.message||"Runtime not ready.");
-    statusEl.dataset.state="ready";
-    statusEl.querySelector("span").textContent=`MMG-IOS online · ${body.build||"verified build"}`;
-    executeButton.disabled=false;
-    logEl.textContent=`Runtime verified.\nBuild: ${body.build||"unknown"}\nAction: WEB-003 governed staging execution.`;
-  }catch(error){
-    statusEl.dataset.state="error";
-    statusEl.querySelector("span").textContent="Runtime verification failed";
-    logEl.textContent=error.message;
-    logEl.classList.add("error");
-  }
-}
-executeButton.addEventListener("click",async()=>{
-  if(running)return;
-  running=true;executeButton.disabled=true;receiptEl.className="receipt";logEl.className="log";
-  logEl.textContent="Starting WEB-003…";
-  try{
-    write("Inspecting Shopify themes and preparing the canonical package.");
-    const plan=await submit("/api/shopify/staging/plan/jobs",{objective:OBJECTIVE},"Planning");
-    const approval={status:"approved",approvedAt:new Date().toISOString(),build:BUILD,planID:plan.planID,actionID:plan.actionID,targetThemeID:plan?.plan?.targetTheme?.gid||"",sourceHashes:plan?.plan?.sourceHashes||{},objective:plan.objective||OBJECTIVE};
-    write(`Plan ready: ${plan.planID||"verified plan"}.`);
-    write("Applying the approved package to Kairos Staging.");
-    const execution=await submit("/api/shopify/staging/execute/jobs",{plan,approval},"Execution");
-    const files=execution?.execution?.filesWritten||[];
-    const matched=(execution?.verification||[]).every(item=>item?.matched===true);
-    if(!matched)throw new Error("Shopify read-back verification did not match the approved package.");
-    write(`WEB-003 completed. ${files.length} staging files verified.`,"success");
-    receiptEl.innerHTML=`<strong>WEB-003 staging package completed.</strong><br>${files.length} file${files.length===1?"":"s"} written and verified. The published theme remained unchanged. Rollback evidence is preserved in the execution record.`;
-    receiptEl.className="receipt show";
-  }catch(error){
-    write(error.message||"WEB-003 did not complete.","error");
-  }finally{
-    running=false;executeButton.disabled=false;
-  }
-});
-verifyRuntime();
+const BUILD="website-production-mobile-20260713-2";
+const PLAN_URL="/api/shopify/staging/plan/jobs";
+const EXECUTE_URL="/api/shopify/staging/execute/jobs";
+const jobs={
+  homepage:{label:"Retool Homepage",description:"Rebuild the homepage around the approved MMG Experience-First Journey.",prompt:"Describe the homepage you want Kairos to build",placeholder:"Describe the homepage structure, message, sections, customer journey, and desired outcome."},
+  "landing-page":{label:"Build Page",description:"Create a new landing, service, campaign, or information page.",prompt:"Describe the page you want Kairos to build",placeholder:"Describe the page purpose, audience, sections, calls to action, and destination."},
+  "existing-page":{label:"Retool Existing Page",description:"Redesign and reconnect an existing Shopify page.",prompt:"Describe the existing page and the outcome you want",placeholder:"Name the page and describe the structure, content, links, and customer journey changes."},
+  "product-page":{label:"Build Product Page",description:"Create or upgrade a product page using verified product data and approved assets.",prompt:"Describe the product page outcome",placeholder:"Name the product and describe the benefits, sections, assets, and purchase journey."},
+  "journey-graph":{label:"Connect Customer Journey",description:"Interconnect pages, products, resources, and next steps.",prompt:"Describe the customer journey Kairos should connect",placeholder:"Describe the starting point, destinations, calls to action, and desired progression."},
+  inspection:{label:"Inspect Website",description:"Inspect structure, links, mobile behavior, claims, SEO, and customer pathways.",prompt:"Describe what Kairos should inspect",placeholder:"Describe the pages, problems, devices, links, or customer pathways to inspect."}
+};
+const state={plan:null,objective:"",type:"homepage"};
+const $=s=>document.querySelector(s);
+const views=["#input-view","#working-view","#review-view","#complete-view"];
+function show(id){views.forEach(v=>$(v).classList.toggle("hidden",v!==id));window.scrollTo({top:0,behavior:"smooth"})}
+function escapeHTML(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}
+async function jsonFetch(url,init={}){const response=await fetch(url,{cache:"no-store",credentials:"include",...init});const text=await response.text();let body={};try{body=text?JSON.parse(text):{}}catch{body={summary:text}}return{response,body}}
+async function poll(url,label){const deadline=Date.now()+10*60*1000;while(Date.now()<deadline){await new Promise(r=>setTimeout(r,1000));const{response,body}=await jsonFetch(url);if(body?.status==="completed"&&body?.result)return body.result;if(["failed","cancelled","needs-attention"].includes(body?.status)||(!response.ok&&response.status!==202))throw new Error(body?.error?.message||body?.summary||`${label} failed.`);$("#working-message").textContent=body?.summary||`${label} in progress…`}throw new Error(`${label} exceeded the monitoring window.`)}
+async function submit(url,payload,label){const{response,body}=await jsonFetch(url,{method:"POST",headers:{"Content-Type":"application/json","X-MMG-Client-Build":BUILD},body:JSON.stringify(payload)});if(!response.ok||!body?.jobID)throw new Error(body?.error?.message||body?.summary||`${label} returned ${response.status}.`);return poll(body.pollURL||url.replace(/\/jobs$/,`/jobs/${body.jobID}`),label)}
+function updateJob(){state.type=$("#job-type").value;const j=jobs[state.type];$("#job-hint").textContent=j.description;$("#objective-label").textContent=j.prompt;$("#objective").placeholder=j.placeholder}
+$("#job-type").addEventListener("change",updateJob);
+async function verify(){try{const{response,body}=await jsonFetch("/api/health");if(!response.ok||!["ready","ok"].includes(body?.status))throw new Error("Runtime unavailable");$("#status").classList.add("ready");$("#status span").textContent=`MMG-IOS online · ${body.build||"verified build"}`;$("#prepare").disabled=false}catch(e){$("#status span").textContent="Runtime verification failed"}}
+$("#prepare").onclick=async()=>{state.objective=$("#objective").value.trim();state.type=$("#job-type").value;if(state.objective.length<5){$("#input-error").textContent="Describe the website outcome before Kairos begins.";$("#input-error").classList.remove("hidden");return}$("#input-error").classList.add("hidden");show("#working-view");$("#working-message").textContent="Inspecting Shopify staging and preparing the proposal…";try{const j=jobs[state.type];const objective=`WEBSITE PRODUCTION ACTION: ${j.label}\nPAGE TYPE: ${state.type}\nEXECUTIVE OBJECTIVE: ${state.objective}\n\nApply approved MMG website doctrine, verified Shopify assets and links, native Shopify maintainability, mobile-first behavior, staging-only execution, pre-write backup, source-hash binding, post-write verification, and rollback evidence. Do not publish the live theme.`;state.plan=await submit(PLAN_URL,{objective,requestType:state.type,clientBuild:BUILD},"Planning");const plan=state.plan?.plan||{};const changes=(plan.changes||[]).filter(x=>x?.changeType!=="no-change");$("#review-content").innerHTML=`<article><h3>Objective</h3><p>${escapeHTML(state.objective)}</p></article><article><h3>Strategy</h3><p>${escapeHTML(plan.strategy||state.plan?.summary||"Bounded staging proposal prepared.")}</p></article><article><h3>Proposed changes</h3>${changes.length?`<ul>${changes.slice(0,10).map(x=>`<li><strong>${escapeHTML(x.filename||"Shopify asset")}</strong> — ${escapeHTML(x.purpose||x.expectedOutcome||"Approved change")}</li>`).join("")}</ul>`:"<p>No executable changes were returned. Revise the request.</p>"}</article><article><h3>Safeguards</h3><p>Staging only · backup · source hashes · read-back verification · rollback evidence.</p></article>`;$("#execute").disabled=!changes.length;show("#review-view")}catch(e){$("#complete-message").innerHTML=`<div class="error">${escapeHTML(e.message||"Kairos could not prepare the proposal.")}</div>`;show("#complete-view")}};
+$("#revise").onclick=()=>show("#input-view");
+$("#execute").onclick=async()=>{show("#working-view");$("#working-message").textContent="Executing approved changes on Kairos Staging and verifying files…";try{const plan=state.plan;const approval={status:"approved",approvedAt:new Date().toISOString(),build:BUILD,planID:plan.planID,actionID:plan.actionID,targetThemeID:plan?.plan?.targetTheme?.gid||"",sourceHashes:plan?.plan?.sourceHashes||{},objective:plan.objective||state.objective};const result=await submit(EXECUTE_URL,{plan,approval},"Execution");const files=result?.execution?.filesWritten||[];$("#complete-message").innerHTML=`<div class="success"><strong>Staging updated and verified.</strong><br>${files.length} file${files.length===1?"":"s"} verified. The published theme was not promoted.</div>`;show("#complete-view")}catch(e){$("#complete-message").innerHTML=`<div class="error">${escapeHTML(e.message||"Execution failed.")}</div>`;show("#complete-view")}};
+$("#new-job").onclick=()=>{state.plan=null;$("#objective").value="";show("#input-view")};
+updateJob();verify();
 </script>
 </body>
 </html>
