@@ -49,13 +49,25 @@ assert.ok(source.includes("scheduled(controller, env, ctx)"), "Scheduled website
 assert.ok(source.includes("buildExecutiveBriefing"), "Scheduled executive briefing build is missing.");
 
 const guardedSource = readFileSync(guardedEntryPath, "utf8");
-for (const route of ["/api/executive-briefing/execute", "/api/executive-briefing/execution/"]) {
-  assert.ok(guardedSource.includes(route), `Approved work dispatch route is missing: ${route}`);
-}
+for (const route of [
+  "/api/executive-briefing/execute",
+  "/api/executive-briefing/execution/",
+  "/api/executive-briefing/execution/complete",
+  "/receipt",
+]) assert.ok(guardedSource.includes(route), `Approved work route is missing: ${route}`);
+
 const dispatcher = readFileSync(join(sourceRoot, "kairos-approved-work-dispatcher-v1.js"), "utf8");
-for (const control of ["approvalBindingVerified: true", "automaticPublication: false", "receiptRequired: true", "knowledgeCaptureRequired: true"]) {
-  assert.ok(dispatcher.includes(control), `Approved work safeguard is missing: ${control}`);
-}
+for (const control of [
+  "approvalBindingVerified: true",
+  "automaticPublication: false",
+  "receiptRequired: true",
+  "knowledgeCaptureRequired: true",
+  "readBackConfirmed",
+  "verified-complete",
+  "receiptImmutable: true",
+  "unverifiedCompletionBlocked: true",
+  "libraryPath",
+]) assert.ok(dispatcher.includes(control), `Approved work safeguard is missing: ${control}`);
 
 const briefingSource = readFileSync(join(sourceRoot, "kairos-executive-briefing-v1.js"), "utf8");
 for (const decision of ["approve", "deny", "fix"]) assert.ok(briefingSource.includes(`"${decision}"`), `Executive briefing decision is missing: ${decision}`);
@@ -82,7 +94,9 @@ console.log(JSON.stringify({
   baseline: "kairos-production-baseline-20260713-2",
   entry: "src/kairos-production-entry.js",
   approvedWorkDispatcher: true,
-  approvalBindingVerified: true,
+  verifiedCompletionReceipts: true,
+  knowledgeCaptureEnvelope: true,
+  unverifiedCompletionBlocked: true,
   commandCenterExecuteApproved: true,
   websiteProductionPromptEmpty: true,
   scheduledWebsiteIntelligence: true,
