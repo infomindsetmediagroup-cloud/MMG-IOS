@@ -1,6 +1,7 @@
-const BUILD = "kairos-visual-review-20260712-1";
+const BUILD = "kairos-visual-review-20260712-2";
 const originalFetch = window.fetch.bind(window);
-const state = { verification:null, loading:false, error:"", decision:null };
+const state = { verification:null, loading:false, error:"", decision:null, lastExecution:null };
+let renderQueued = false;
 
 window.fetch = async (...args) => {
   const response = await originalFetch(...args);
@@ -9,11 +10,13 @@ window.fetch = async (...args) => {
     if (/\/api\/shopify\/staging\/execute\/jobs\/[a-f0-9-]+/i.test(url)) {
       const body = await response.clone().json();
       if (body?.status === "completed" && body?.result?.execution && !state.verification && !state.loading) {
+        state.lastExecution = body.result;
+        sessionStorage.setItem("kairos.website.last-execution", JSON.stringify(body.result));
         queueMicrotask(() => createVerification(body.result));
       }
     }
   } catch {
-    // The primary website workflow must never fail because the visual-review observer could not parse a response.
+    // The primary website workflow must never fail because visual-review observation failed.
   }
   return response;
 };
@@ -21,7 +24,7 @@ window.fetch = async (...args) => {
 async function createVerification(result) {
   state.loading = true;
   state.error = "";
-  render();
+  scheduleRender();
   try {
     const response = await originalFetch("/api/shopify/staging/visual-verification", {
       method: "POST",
@@ -37,20 +40,31 @@ async function createVerification(result) {
     state.error = error?.message || "Kairos could not prepare the visual review.";
   } finally {
     state.loading = false;
-    render();
+    scheduleRender();
   }
+}
+
+function scheduleRender() {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => { renderQueued = false; render(); });
 }
 
 function render() {
   const host = document.querySelector("#website-production-overlay .website-production-panel");
   if (!host) return;
-  host.querySelector("#kairos-visual-review")?.remove();
   const completion = host.querySelector(".wp-review-banner.success");
   if (!completion && !state.loading && !state.error && !state.verification) return;
+
+  const signature = JSON.stringify({ loading:state.loading, error:state.error, reviewID:state.verification?.reviewID, decision:state.verification?.executiveDecision?.decision });
+  const existing = host.querySelector("#kairos-visual-review");
+  if (existing?.dataset.signature === signature) return;
+  existing?.remove();
 
   const section = document.createElement("section");
   section.id = "kairos-visual-review";
   section.className = "kairos-visual-review";
+  section.dataset.signature = signature;
 
   if (state.loading) {
     section.innerHTML = `<p class="eyebrow">Visual Verification</p><h3>Preparing staging review…</h3><p>Kairos is probing the rendered staging page and assembling the executive mobile and desktop review gate.</p>`;
@@ -87,8 +101,8 @@ function reviewMarkup(record) {
 
 function bind(section) {
   section.querySelector("[data-vr-retry]")?.addEventListener("click",()=>{
-    const stored = sessionStorage.getItem("kairos.website.last-execution");
-    if (stored) createVerification(JSON.parse(stored));
+    const stored = state.lastExecution || JSON.parse(sessionStorage.getItem("kairos.website.last-execution") || "null");
+    if (stored) createVerification(stored);
   });
   section.querySelector("[data-vr-approve]")?.addEventListener("click",()=>decide("approved"));
   section.querySelector("[data-vr-revise]")?.addEventListener("click",()=>decide("revision-requested"));
@@ -112,18 +126,18 @@ async function decide(decision) {
     body: JSON.stringify({ reviewID: state.verification.reviewID, decision, actor: "Executive", notes })
   });
   const body = await response.json();
-  if (!response.ok) { state.error = body?.error?.message || "The visual decision could not be recorded."; render(); return; }
+  if (!response.ok) { state.error = body?.error?.message || "The visual decision could not be recorded."; scheduleRender(); return; }
   state.verification = body;
   state.decision = decision;
   sessionStorage.setItem("kairos.website.visual-review", JSON.stringify(body));
   window.dispatchEvent(new CustomEvent("kairos:website-visual-decision", { detail: body }));
-  render();
+  scheduleRender();
 }
 
 function label(value) { return String(value || "check").replace(/_/g," ").replace(/\b\w/g,letter=>letter.toUpperCase()); }
 function esc(value) { return String(value ?? "").replace(/[&<>'"]/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"})[char]); }
 function escAttr(value) { return esc(value).replace(/`/g,"&#96;"); }
 
-const observer = new MutationObserver(render);
+const observer = new MutationObserver(scheduleRender);
 observer.observe(document.documentElement, { childList:true, subtree:true });
-render();
+scheduleRender();
