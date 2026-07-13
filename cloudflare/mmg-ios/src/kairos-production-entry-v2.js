@@ -41,8 +41,13 @@ import {
   readLatestLaunchProject,
   readLaunchProject,
 } from "./kairos-product-launch-studio-v1.js";
+import {
+  readLatestRevenueReview,
+  readRevenueReview,
+  runRevenueReview,
+} from "./kairos-revenue-intelligence-v1.js";
 
-const BUILD = "kairos-production-entry-20260713-12";
+const BUILD = "kairos-production-entry-20260713-13";
 
 export { KairosProject };
 
@@ -50,6 +55,19 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     try {
+      if (request.method === "POST" && url.pathname === "/api/revenue-intelligence/reviews") {
+        const payload = await safeJSON(request.clone());
+        return json({ status: "completed", build: BUILD, ...(await runRevenueReview(request, payload)) }, 201);
+      }
+      if (request.method === "GET" && url.pathname === "/api/revenue-intelligence/latest") {
+        const report = await readLatestRevenueReview(request);
+        return report ? json({ status: "completed", build: BUILD, report }) : json({ status: "not-ready", build: BUILD }, 404);
+      }
+      if (request.method === "GET" && url.pathname.startsWith("/api/revenue-intelligence/reviews/")) {
+        const reportID = decodeURIComponent(url.pathname.split("/").pop() || "");
+        const report = await readRevenueReview(request, reportID);
+        return report ? json({ status: "completed", build: BUILD, report }) : json({ status: "not-found", build: BUILD }, 404);
+      }
       if (request.method === "POST" && url.pathname === "/api/product-launch/projects") {
         const payload = await safeJSON(request.clone());
         return json({ status: "completed", build: BUILD, ...(await createLaunchProject(request, payload)) }, 201);
