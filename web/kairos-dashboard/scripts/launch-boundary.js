@@ -1,8 +1,6 @@
-const BUILD = "kairos-launch-boundary-20260712-2";
+const BUILD = "kairos-launch-boundary-20260712-3";
 
 function applyLaunchBoundary() {
-  document.querySelectorAll(".creation-engine-launch").forEach(button => button.remove());
-
   const overlay = document.querySelector("#manuscript-studio-overlay");
   if (!overlay || overlay.dataset.launchBoundaryApplied === BUILD) return;
   overlay.dataset.launchBoundaryApplied = BUILD;

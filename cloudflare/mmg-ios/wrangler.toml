@@ -1,5 +1,5 @@
 name = "mmg-ios"
-main = "src/kairos-standalone-command-worker-v5.js"
+main = "src/kairos-native-publishing-worker-v1.js"
 compatibility_date = "2026-07-11"
 workers_dev = true
 keep_vars = true
@@ -9,6 +9,14 @@ directory = "../../web/kairos-dashboard"
 binding = "ASSETS"
 run_worker_first = true
 not_found_handling = "single-page-application"
+
+[[durable_objects.bindings]]
+name = "KAIROS_PROJECTS"
+class_name = "KairosProject"
+
+[[migrations]]
+tag = "native-publishing-v1"
+new_sqlite_classes = ["KairosProject"]
 
 [vars]
 SHOPIFY_STORE_DOMAIN = "07kd8e-qw.myshopify.com"

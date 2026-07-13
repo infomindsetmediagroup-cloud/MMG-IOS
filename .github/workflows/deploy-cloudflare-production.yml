@@ -110,6 +110,11 @@ jobs:
         working-directory: repository/cloudflare/mmg-ios
         run: npm install --no-package-lock --no-audit --no-fund
 
+      - name: Test native creation pipeline
+        shell: bash
+        working-directory: repository/cloudflare/mmg-ios
+        run: npm test
+
       - name: Validate canonical Cloudflare Worker bundle
         shell: bash
         working-directory: repository/cloudflare/mmg-ios
