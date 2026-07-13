@@ -1,0 +1,8 @@
+WEB-003 mobile production flow v2
+
+Purpose: trigger the canonical Cloudflare production deployment for commit ce9f90dfacb25006a174bd3085baec66ab61257c and publish the compact mobile Website Production interface.
+
+Release requirements:
+- deploy current main
+- preserve Shopify staging-only execution boundary
+- publish authoritative kairos-cloudflare-production receipt
