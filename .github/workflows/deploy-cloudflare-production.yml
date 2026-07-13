@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 concurrency:
   group: cloudflare-production
@@ -124,3 +125,82 @@ jobs:
         shell: bash
         working-directory: repository/cloudflare/mmg-ios
         run: npx wrangler deploy
+
+      - name: Verify deployed native creation runtime
+        shell: bash
+        env:
+          KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 18); do
+            if health_json="$(curl --fail --show-error --silent --max-time 30 "${KAIROS_PRODUCTION_URL}/api/health?deployment=${GITHUB_SHA}")" \
+              && capabilities_json="$(curl --fail --show-error --silent --max-time 30 "${KAIROS_PRODUCTION_URL}/api/content/capabilities?deployment=${GITHUB_SHA}")" \
+              && creation_script="$(curl --fail --show-error --silent --max-time 30 "${KAIROS_PRODUCTION_URL}/scripts/creation-engine.js?deployment=${GITHUB_SHA}")"; then
+              if HEALTH_JSON="${health_json}" CAPABILITIES_JSON="${capabilities_json}" CREATION_SCRIPT="${creation_script}" node <<'NODE'
+          const health = JSON.parse(process.env.HEALTH_JSON || "{}");
+          const capabilities = JSON.parse(process.env.CAPABILITIES_JSON || "{}");
+          const script = process.env.CREATION_SCRIPT || "";
+          const valid =
+            health.launchMode === "native-generative-production" &&
+            health.openaiAPIUsed === false &&
+            health.nativeIntelligence?.externalInferenceAPI === false &&
+            health.nativeIntelligence?.projectStorage === "durable-object" &&
+            health.capabilities?.bookDevelopment === "operational" &&
+            health.capabilities?.productAssetCopy === "operational" &&
+            capabilities.status === "ready" &&
+            capabilities.productionActions?.fullManuscript === "operational" &&
+            capabilities.productionActions?.kdpManufacturing === "operational" &&
+            capabilities.productionActions?.productPage === "operational" &&
+            script.includes("Build Complete Package");
+          if (!valid) process.exit(1);
+          console.log(JSON.stringify({
+            build: health.build,
+            launchMode: health.launchMode,
+            intelligenceRuntime: health.intelligenceRuntime?.provider,
+            projectStorage: health.nativeIntelligence?.projectStorage,
+            creationPipeline: capabilities.version,
+          }, null, 2));
+          NODE
+              then
+                echo "Kairos native creation deployment verified on attempt ${attempt}."
+                exit 0
+              fi
+            fi
+            echo "Kairos production has not exposed the new native creation build yet (attempt ${attempt}/18)."
+            sleep 5
+          done
+          echo "::error::Kairos production did not pass the native creation health contract."
+          exit 1
+
+      - name: Publish Kairos deployment receipt
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          if [ "${DEPLOY_JOB_STATUS}" = "success" ]; then
+            state="success"
+            description="Kairos native creation deployment verified"
+          else
+            state="failure"
+            description="Kairos native creation deployment failed verification"
+          fi
+          target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          payload="$(STATE="${state}" DESCRIPTION="${description}" TARGET_URL="${target_url}" node -e '
+            process.stdout.write(JSON.stringify({
+              state: process.env.STATE,
+              description: process.env.DESCRIPTION,
+              context: "kairos-cloudflare-production",
+              target_url: process.env.TARGET_URL,
+            }));
+          ')"
+          curl --fail --show-error --silent \
+            -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "${payload}"
