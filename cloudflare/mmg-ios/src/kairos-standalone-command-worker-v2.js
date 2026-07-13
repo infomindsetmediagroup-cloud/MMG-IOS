@@ -1,6 +1,6 @@
 import runtime from "./kairos-standalone-shopify-worker-v1.js";
 
-const BUILD = "kairos-standalone-command-20260712-4";
+const BUILD = "kairos-standalone-command-20260712-5";
 
 const ACTIONS = {
   "knowledge-library": { title: "Knowledge Library", operation: "search", input: "Search terms" },
@@ -27,7 +27,7 @@ export default {
       const body = await readJSON(response.clone());
       body.build = BUILD;
       body.kernel = "standalone-command-v4";
-      body.openaiAPIUsed = false;
+      body.externalModelAPIUsed = false;
       body.capabilities = {
         ...(body.capabilities || {}),
         childCardActionContracts: "operational",
@@ -63,7 +63,7 @@ function buildDeliverable(action, objective, env) {
     status: "completed",
     build: BUILD,
     kernel: "standalone-command-v4",
-    openaiAPIUsed: false,
+    externalModelAPIUsed: false,
     action,
     operation: ACTIONS[action].operation,
     workItemID: crypto.randomUUID(),
