@@ -22,13 +22,16 @@ const requiredFiles = [
   join(repoRoot, "web/kairos-dashboard/index.html"),
   join(repoRoot, "web/kairos-dashboard/web-003.html"),
   join(repoRoot, "web/kairos-dashboard/scripts/command-hub.js"),
+  join(repoRoot, "web/kairos-dashboard/scripts/command-center-layout.js"),
   join(repoRoot, "web/kairos-dashboard/scripts/command-center-governance.js"),
   join(repoRoot, "web/kairos-dashboard/scripts/creation-engine.js"),
   join(repoRoot, "web/kairos-dashboard/scripts/executive-briefing.js"),
   join(repoRoot, "web/kairos-dashboard/scripts/social-production.js"),
+  join(repoRoot, "web/kairos-dashboard/styles/command-center-layout.css"),
   join(repoRoot, "web/kairos-dashboard/styles/command-center-governance.css"),
   join(repoRoot, "web/kairos-dashboard/styles/executive-briefing.css"),
   join(repoRoot, "web/kairos-dashboard/styles/social-production.css"),
+  join(repoRoot, "web/kairos-dashboard/styles/shopify-analytics.css"),
 ];
 for (const filename of requiredFiles) assert.ok(existsSync(filename), `Required production file is missing: ${filename}`);
 
@@ -64,28 +67,38 @@ for (const control of [
 
 const dashboardIndex = readFileSync(join(repoRoot, "web/kairos-dashboard/index.html"), "utf8");
 for (const asset of [
+  "scripts/command-center-layout.js", "styles/command-center-layout.css",
   "scripts/command-center-governance.js", "styles/command-center-governance.css",
   "scripts/executive-briefing.js", "styles/executive-briefing.css",
   "scripts/social-production.js", "styles/social-production.css",
 ]) assert.ok(dashboardIndex.includes(asset), `Command Center asset missing: ${asset}`);
 
 const commandHub = readFileSync(join(repoRoot, "web/kairos-dashboard/scripts/command-hub.js"), "utf8");
-for (const center of ["knowledge", "content", "business", "customers", "operations"]) {
-  assert.ok(commandHub.includes(`id: "${center}"`), `Command Center parent is missing: ${center}`);
-}
-for (const embeddedTool of ["Manuscript Studio", "Social Production", "Executive Briefing", "System Registry"]) {
-  assert.ok(commandHub.includes(embeddedTool), `Embedded child tool is missing: ${embeddedTool}`);
-}
+for (const center of ["knowledge", "content", "business", "customers", "operations"]) assert.ok(commandHub.includes(`id: "${center}"`), `Command Center parent is missing: ${center}`);
+for (const embeddedTool of ["Manuscript Studio", "Social Production", "Executive Briefing", "System Registry"]) assert.ok(commandHub.includes(embeddedTool), `Embedded child tool is missing: ${embeddedTool}`);
 const childActionCount = (commandHub.match(/^\s*\["[^"]+",\s*"[^"]+",\s*"[^"]+",\s*"[^"]+"\],?$/gm) || []).length;
 assert.equal(childActionCount, 25, `Command Center must define exactly 25 child cards; found ${childActionCount}.`);
-assert.ok(commandHub.includes('metric("Entry points","25"'), "Command Center must report the 25-entry-point architecture.");
+
+const layout = readFileSync(join(repoRoot, "web/kairos-dashboard/scripts/command-center-layout.js"), "utf8");
+for (const label of ["Online", "Active Work", "Capabilities", "Entry Points"]) assert.ok(layout.includes(label), `Compact status strip is missing: ${label}`);
+assert.ok(layout.includes("command-menu-button"), "Integrated hamburger control is missing.");
+assert.ok(layout.includes('hub.querySelector(".metrics")?.remove()'), "Legacy metric cards are not removed.");
+assert.ok(layout.includes("Real-time visibility. Governed tools. Measurable outcomes."), "Simplified command hero copy is missing.");
+
+const briefingUI = readFileSync(join(repoRoot, "web/kairos-dashboard/scripts/executive-briefing.js"), "utf8");
+assert.ok(briefingUI.includes("America/Los_Angeles"), "Briefing UI must use Pacific time.");
+assert.ok(briefingUI.includes("Morning Approval Brief") && briefingUI.includes("Evening Approval Brief"), "Dynamic morning/evening briefing titles are missing.");
+assert.ok(briefingUI.includes("state.briefing.window !== currentWindow()"), "Briefing does not refresh when the approval window changes.");
+assert.ok(briefingUI.includes('hero.insertAdjacentElement("afterend", section)'), "Executive briefing must mount immediately after the command hero.");
+
+const analyticsCSS = readFileSync(join(repoRoot, "web/kairos-dashboard/styles/shopify-analytics.css"), "utf8");
+assert.ok(analyticsCSS.includes("overflow:visible"), "Store performance cards must not use a horizontal scroller.");
+assert.ok(analyticsCSS.includes("repeat(2,minmax(0,1fr))"), "Store performance mobile grid must remain fixed at two columns.");
 
 const governance = readFileSync(join(repoRoot, "web/kairos-dashboard/scripts/command-center-governance.js"), "utf8");
 assert.ok(governance.includes("exactly five parent cards"), "Five-parent runtime guard is missing.");
 const governanceCSS = readFileSync(join(repoRoot, "web/kairos-dashboard/styles/command-center-governance.css"), "utf8");
-for (const selector of [".manuscript-launch", ".social-production-launch", "[data-floating-launch]"]) {
-  assert.ok(governanceCSS.includes(selector), `Floating-launch suppression is missing: ${selector}`);
-}
+for (const selector of [".manuscript-launch", ".social-production-launch", "[data-floating-launch]"]) assert.ok(governanceCSS.includes(selector), `Floating-launch suppression is missing: ${selector}`);
 
 const socialUI = readFileSync(join(repoRoot, "web/kairos-dashboard/scripts/social-production.js"), "utf8");
 for (const label of ["TikTok Single Image Post", "TikTok Multi-Image / Carousel Post", "TikTok Video Post", "Cross-Platform Caption Package", "Social Asset Production Queue", "Approve Package", "Request Fix", "Connector-ready payload"]) assert.ok(socialUI.includes(label), `Social Production UI is missing: ${label}`);
@@ -102,13 +115,16 @@ assert.equal(typeof runtimeModule.KairosProject, "function", "Canonical runtime 
 
 console.log(JSON.stringify({
   status: "ready",
-  baseline: "kairos-production-baseline-20260713-4",
+  baseline: "kairos-production-baseline-20260713-5",
+  integratedHeaderStatusStrip: true,
+  integratedHamburgerNavigation: true,
+  legacyMetricCardsRemoved: true,
+  dynamicMorningEveningBriefing: true,
+  fixedStorePerformanceGrid: true,
   commandCenterParents: 5,
   childCardsPerParent: 5,
   totalEntryPoints: 25,
   floatingLaunchControls: 0,
-  socialProductionEmbedded: true,
-  manuscriptStudioEmbedded: true,
   websiteProductionPromptEmpty: true,
   scheduledWebsiteIntelligence: true,
   scheduledExecutiveBriefing: true,
