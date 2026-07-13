@@ -10,109 +10,41 @@ import { createPublishingProject, readLatestPublishingProject, readPublishingPro
 import { createLaunchProject, readLatestLaunchProject, readLaunchProject } from "./kairos-product-launch-studio-v1.js";
 import { readLatestRevenueReview, readRevenueReview, runRevenueReview } from "./kairos-revenue-intelligence-v1.js";
 import { createGrowthPlan, readGrowthPlan, readLatestGrowthPlan } from "./kairos-growth-plan-v1.js";
+import { createOffer, readLatestOffer, readOffer } from "./kairos-offer-builder-v1.js";
 
-const BUILD = "kairos-production-entry-20260713-14";
+const BUILD = "kairos-production-entry-20260713-15";
 export { KairosProject };
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     try {
-      if (request.method === "POST" && url.pathname === "/api/growth-plans") {
-        const payload = await safeJSON(request.clone());
-        return json({ status: "completed", build: BUILD, ...(await createGrowthPlan(request, payload)) }, 201);
-      }
-      if (request.method === "GET" && url.pathname === "/api/growth-plans/latest") {
-        const plan = await readLatestGrowthPlan(request);
-        return plan ? json({ status: "completed", build: BUILD, plan }) : json({ status: "not-ready", build: BUILD }, 404);
-      }
-      if (request.method === "GET" && url.pathname.startsWith("/api/growth-plans/")) {
-        const planID = decodeURIComponent(url.pathname.split("/").pop() || "");
-        const plan = await readGrowthPlan(request, planID);
-        return plan ? json({ status: "completed", build: BUILD, plan }) : json({ status: "not-found", build: BUILD }, 404);
-      }
-      if (request.method === "POST" && url.pathname === "/api/revenue-intelligence/reviews") {
-        const payload = await safeJSON(request.clone());
-        return json({ status: "completed", build: BUILD, ...(await runRevenueReview(request, payload)) }, 201);
-      }
-      if (request.method === "GET" && url.pathname === "/api/revenue-intelligence/latest") {
-        const report = await readLatestRevenueReview(request);
-        return report ? json({ status: "completed", build: BUILD, report }) : json({ status: "not-ready", build: BUILD }, 404);
-      }
-      if (request.method === "GET" && url.pathname.startsWith("/api/revenue-intelligence/reviews/")) {
-        const reportID = decodeURIComponent(url.pathname.split("/").pop() || "");
-        const report = await readRevenueReview(request, reportID);
-        return report ? json({ status: "completed", build: BUILD, report }) : json({ status: "not-found", build: BUILD }, 404);
-      }
-      if (request.method === "POST" && url.pathname === "/api/product-launch/projects") {
-        const payload = await safeJSON(request.clone());
-        return json({ status: "completed", build: BUILD, ...(await createLaunchProject(request, payload)) }, 201);
-      }
-      if (request.method === "GET" && url.pathname === "/api/product-launch/latest") {
-        const result = await readLatestLaunchProject(request);
-        return result ? json({ status: "completed", build: BUILD, ...result }) : json({ status: "not-ready", build: BUILD }, 404);
-      }
-      if (request.method === "GET" && url.pathname.startsWith("/api/product-launch/projects/")) {
-        const projectID = decodeURIComponent(url.pathname.split("/").pop() || "");
-        const result = await readLaunchProject(request, projectID);
-        return result ? json({ status: "completed", build: BUILD, ...result }) : json({ status: "not-found", build: BUILD }, 404);
-      }
-      if (request.method === "POST" && url.pathname === "/api/publishing-studio/projects") {
-        const payload = await safeJSON(request.clone());
-        return json({ status: "completed", build: BUILD, ...(await createPublishingProject(request, payload)) }, 201);
-      }
-      if (request.method === "GET" && url.pathname === "/api/publishing-studio/latest") {
-        const result = await readLatestPublishingProject(request);
-        return result ? json({ status: "completed", build: BUILD, ...result }) : json({ status: "not-ready", build: BUILD }, 404);
-      }
-      if (request.method === "GET" && url.pathname.startsWith("/api/publishing-studio/projects/")) {
-        const projectID = decodeURIComponent(url.pathname.split("/").pop() || "");
-        const result = await readPublishingProject(request, projectID);
-        return result ? json({ status: "completed", build: BUILD, ...result }) : json({ status: "not-found", build: BUILD }, 404);
-      }
-      if (request.method === "POST" && url.pathname === "/api/creative-studio/projects") {
-        const payload = await safeJSON(request.clone());
-        return json({ status: "completed", build: BUILD, ...(await createCreativeProject(request, payload)) }, 201);
-      }
-      if (request.method === "GET" && url.pathname === "/api/creative-studio/latest") {
-        const result = await readLatestCreativeProject(request);
-        return result ? json({ status: "completed", build: BUILD, ...result }) : json({ status: "not-ready", build: BUILD }, 404);
-      }
-      if (request.method === "GET" && url.pathname.startsWith("/api/creative-studio/projects/")) {
-        const projectID = decodeURIComponent(url.pathname.split("/").pop() || "");
-        const result = await readCreativeProject(request, projectID);
-        return result ? json({ status: "completed", build: BUILD, ...result }) : json({ status: "not-found", build: BUILD }, 404);
-      }
-      if (request.method === "POST" && url.pathname === "/api/objectives/route") {
-        const payload = await safeJSON(request.clone());
-        return json({ status: "completed", build: BUILD, route: routeObjective(payload) });
-      }
-      if (request.method === "POST" && url.pathname === "/api/objectives/dispatch") {
-        const payload = await safeJSON(request.clone());
-        return json({ status: "completed", build: BUILD, dispatch: await dispatchObjective(request, payload) }, 201);
-      }
-      if (request.method === "POST" && url.pathname === "/api/workflows") {
-        const payload = await safeJSON(request.clone());
-        return json({ status: "completed", build: BUILD, workflow: await createWorkflow(request, payload) }, 201);
-      }
+      if (request.method === "POST" && url.pathname === "/api/offers") { const payload = await safeJSON(request.clone()); return json({ status: "completed", build: BUILD, ...(await createOffer(request, payload)) }, 201); }
+      if (request.method === "GET" && url.pathname === "/api/offers/latest") { const result = await readLatestOffer(request); return result ? json({ status: "completed", build: BUILD, ...result }) : json({ status: "not-ready", build: BUILD }, 404); }
+      if (request.method === "GET" && url.pathname.startsWith("/api/offers/")) { const offerID = decodeURIComponent(url.pathname.split("/").pop() || ""); const result = await readOffer(request, offerID); return result ? json({ status: "completed", build: BUILD, ...result }) : json({ status: "not-found", build: BUILD }, 404); }
+      if (request.method === "POST" && url.pathname === "/api/growth-plans") { const payload = await safeJSON(request.clone()); return json({ status: "completed", build: BUILD, ...(await createGrowthPlan(request, payload)) }, 201); }
+      if (request.method === "GET" && url.pathname === "/api/growth-plans/latest") { const plan = await readLatestGrowthPlan(request); return plan ? json({ status: "completed", build: BUILD, plan }) : json({ status: "not-ready", build: BUILD }, 404); }
+      if (request.method === "GET" && url.pathname.startsWith("/api/growth-plans/")) { const planID = decodeURIComponent(url.pathname.split("/").pop() || ""); const plan = await readGrowthPlan(request, planID); return plan ? json({ status: "completed", build: BUILD, plan }) : json({ status: "not-found", build: BUILD }, 404); }
+      if (request.method === "POST" && url.pathname === "/api/revenue-intelligence/reviews") { const payload = await safeJSON(request.clone()); return json({ status: "completed", build: BUILD, ...(await runRevenueReview(request, payload)) }, 201); }
+      if (request.method === "GET" && url.pathname === "/api/revenue-intelligence/latest") { const report = await readLatestRevenueReview(request); return report ? json({ status: "completed", build: BUILD, report }) : json({ status: "not-ready", build: BUILD }, 404); }
+      if (request.method === "GET" && url.pathname.startsWith("/api/revenue-intelligence/reviews/")) { const reportID = decodeURIComponent(url.pathname.split("/").pop() || ""); const report = await readRevenueReview(request, reportID); return report ? json({ status: "completed", build: BUILD, report }) : json({ status: "not-found", build: BUILD }, 404); }
+      if (request.method === "POST" && url.pathname === "/api/product-launch/projects") { const payload = await safeJSON(request.clone()); return json({ status: "completed", build: BUILD, ...(await createLaunchProject(request, payload)) }, 201); }
+      if (request.method === "GET" && url.pathname === "/api/product-launch/latest") { const result = await readLatestLaunchProject(request); return result ? json({ status: "completed", build: BUILD, ...result }) : json({ status: "not-ready", build: BUILD }, 404); }
+      if (request.method === "GET" && url.pathname.startsWith("/api/product-launch/projects/")) { const projectID = decodeURIComponent(url.pathname.split("/").pop() || ""); const result = await readLaunchProject(request, projectID); return result ? json({ status: "completed", build: BUILD, ...result }) : json({ status: "not-found", build: BUILD }, 404); }
+      if (request.method === "POST" && url.pathname === "/api/publishing-studio/projects") { const payload = await safeJSON(request.clone()); return json({ status: "completed", build: BUILD, ...(await createPublishingProject(request, payload)) }, 201); }
+      if (request.method === "GET" && url.pathname === "/api/publishing-studio/latest") { const result = await readLatestPublishingProject(request); return result ? json({ status: "completed", build: BUILD, ...result }) : json({ status: "not-ready", build: BUILD }, 404); }
+      if (request.method === "GET" && url.pathname.startsWith("/api/publishing-studio/projects/")) { const projectID = decodeURIComponent(url.pathname.split("/").pop() || ""); const result = await readPublishingProject(request, projectID); return result ? json({ status: "completed", build: BUILD, ...result }) : json({ status: "not-found", build: BUILD }, 404); }
+      if (request.method === "POST" && url.pathname === "/api/creative-studio/projects") { const payload = await safeJSON(request.clone()); return json({ status: "completed", build: BUILD, ...(await createCreativeProject(request, payload)) }, 201); }
+      if (request.method === "GET" && url.pathname === "/api/creative-studio/latest") { const result = await readLatestCreativeProject(request); return result ? json({ status: "completed", build: BUILD, ...result }) : json({ status: "not-ready", build: BUILD }, 404); }
+      if (request.method === "GET" && url.pathname.startsWith("/api/creative-studio/projects/")) { const projectID = decodeURIComponent(url.pathname.split("/").pop() || ""); const result = await readCreativeProject(request, projectID); return result ? json({ status: "completed", build: BUILD, ...result }) : json({ status: "not-found", build: BUILD }, 404); }
+      if (request.method === "POST" && url.pathname === "/api/objectives/route") { const payload = await safeJSON(request.clone()); return json({ status: "completed", build: BUILD, route: routeObjective(payload) }); }
+      if (request.method === "POST" && url.pathname === "/api/objectives/dispatch") { const payload = await safeJSON(request.clone()); return json({ status: "completed", build: BUILD, dispatch: await dispatchObjective(request, payload) }, 201); }
+      if (request.method === "POST" && url.pathname === "/api/workflows") { const payload = await safeJSON(request.clone()); return json({ status: "completed", build: BUILD, workflow: await createWorkflow(request, payload) }, 201); }
       if (request.method === "GET" && url.pathname === "/api/workflows") return json({ status: "completed", build: BUILD, workflows: await listWorkflows(request) });
-      if (request.method === "GET" && /^\/api\/workflows\/[^/]+$/.test(url.pathname)) {
-        const workflowID = decodeURIComponent(url.pathname.split("/").pop() || "");
-        const workflow = await readWorkflow(request, workflowID);
-        return workflow ? json({ status: "completed", build: BUILD, workflow }) : json({ status: "not-found", build: BUILD }, 404);
-      }
-      if (request.method === "POST" && /^\/api\/workflows\/[^/]+\/tasks$/.test(url.pathname)) {
-        const parts = url.pathname.split("/").filter(Boolean); const payload = await safeJSON(request.clone());
-        return json({ status: "completed", build: BUILD, workflow: await createTask(request, decodeURIComponent(parts[2]), payload) }, 201);
-      }
-      if (request.method === "PATCH" && /^\/api\/workflows\/[^/]+\/tasks\/[^/]+$/.test(url.pathname)) {
-        const parts = url.pathname.split("/").filter(Boolean); const payload = await safeJSON(request.clone());
-        return json({ status: "completed", build: BUILD, workflow: await updateTask(request, decodeURIComponent(parts[2]), decodeURIComponent(parts[4]), payload) });
-      }
-      if (request.method === "PATCH" && /^\/api\/workflows\/[^/]+$/.test(url.pathname)) {
-        const workflowID = decodeURIComponent(url.pathname.split("/").pop() || ""); const payload = await safeJSON(request.clone());
-        return json({ status: "completed", build: BUILD, workflow: await updateWorkflow(request, workflowID, payload) });
-      }
+      if (request.method === "GET" && /^\/api\/workflows\/[^/]+$/.test(url.pathname)) { const workflowID = decodeURIComponent(url.pathname.split("/").pop() || ""); const workflow = await readWorkflow(request, workflowID); return workflow ? json({ status: "completed", build: BUILD, workflow }) : json({ status: "not-found", build: BUILD }, 404); }
+      if (request.method === "POST" && /^\/api\/workflows\/[^/]+\/tasks$/.test(url.pathname)) { const parts = url.pathname.split("/").filter(Boolean); const payload = await safeJSON(request.clone()); return json({ status: "completed", build: BUILD, workflow: await createTask(request, decodeURIComponent(parts[2]), payload) }, 201); }
+      if (request.method === "PATCH" && /^\/api\/workflows\/[^/]+\/tasks\/[^/]+$/.test(url.pathname)) { const parts = url.pathname.split("/").filter(Boolean); const payload = await safeJSON(request.clone()); return json({ status: "completed", build: BUILD, workflow: await updateTask(request, decodeURIComponent(parts[2]), decodeURIComponent(parts[4]), payload) }); }
+      if (request.method === "PATCH" && /^\/api\/workflows\/[^/]+$/.test(url.pathname)) { const workflowID = decodeURIComponent(url.pathname.split("/").pop() || ""); const payload = await safeJSON(request.clone()); return json({ status: "completed", build: BUILD, workflow: await updateWorkflow(request, workflowID, payload) }); }
       if (request.method === "POST" && url.pathname === "/api/social-production/prepare") { const payload = await safeJSON(request.clone()); return json({ status: "completed", build: BUILD, socialPackage: await prepareSocialPackage(request, payload) }); }
       if (request.method === "POST" && url.pathname === "/api/social-production/decide") { const payload = await safeJSON(request.clone()); return json({ status: "completed", build: BUILD, socialPackage: await decideSocialPackage(request, payload) }); }
       if (request.method === "GET" && url.pathname === "/api/social-production/latest") { const socialPackage = await readLatestSocialPackage(request); return socialPackage ? json({ status: "completed", build: BUILD, socialPackage }) : json({ status: "not-ready", build: BUILD }, 404); }
