@@ -14,6 +14,7 @@ const requiredFiles = [
   entryPath,
   join(sourceRoot, "kairos-production-entry-v1.js"),
   join(sourceRoot, "kairos-production-entry-v2.js"),
+  join(sourceRoot, "kairos-executive-briefing-v1.js"),
   join(repoRoot, "web/kairos-dashboard/index.html"),
   join(repoRoot, "web/kairos-dashboard/web-003.html"),
   join(repoRoot, "web/kairos-dashboard/scripts/creation-engine.js"),
@@ -52,11 +53,22 @@ for (const route of [
   "/api/shopify/link-intelligence/review/prepare",
   "/api/shopify/link-intelligence/review/decide",
   "/api/shopify/link-intelligence/review/execute",
+  "/api/executive-briefing/build",
+  "/api/executive-briefing/latest",
+  "/api/executive-briefing/decide",
 ]) {
   assert.ok(source.includes(route), `Canonical runtime is missing route: ${route}`);
 }
 assert.ok(source.includes("visual_replacement_forbidden"), "Patch-only homepage replacement guard is missing.");
 assert.ok(source.includes("scheduled(controller, env, ctx)"), "Scheduled website intelligence handler is missing.");
+assert.ok(source.includes("buildExecutiveBriefing"), "Scheduled executive briefing build is missing.");
+
+const briefingSource = readFileSync(join(sourceRoot, "kairos-executive-briefing-v1.js"), "utf8");
+for (const decision of ["approve", "deny", "fix"]) {
+  assert.ok(briefingSource.includes(`\"${decision}\"`), `Executive briefing decision is missing: ${decision}`);
+}
+assert.ok(briefingSource.includes("America/Los_Angeles"), "Executive briefing must resolve morning/evening in Pacific time.");
+assert.ok(briefingSource.includes("externalSocialPublishingAvailable: false"), "Briefing must not claim social publishing before connectors exist.");
 
 const websiteProduction = readFileSync(join(repoRoot, "web/kairos-dashboard/web-003.html"), "utf8");
 assert.ok(!websiteProduction.includes("PRESERVE_PROMPT"), "Website Production still contains a prefilled homepage prompt.");
@@ -69,9 +81,11 @@ assert.equal(typeof runtimeModule.KairosProject, "function", "Canonical runtime 
 
 console.log(JSON.stringify({
   status: "ready",
-  baseline: "kairos-production-baseline-20260713-1",
+  baseline: "kairos-production-baseline-20260713-2",
   entry: "src/kairos-production-entry.js",
   staleRuntimeFilesRemoved: true,
   websiteProductionPromptEmpty: true,
   scheduledWebsiteIntelligence: true,
+  scheduledExecutiveBriefing: true,
+  executiveDecisionControls: ["approve", "deny", "fix", "view-evidence"],
 }, null, 2));
