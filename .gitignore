@@ -15,15 +15,23 @@ Package.resolved
 node_modules/
 coverage/
 .vitest/
-.vercel/
 *.tsbuildinfo
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# macOS
+# Cloudflare local state
+.wrangler/
+.dev.vars
+
+# Local/editor state
 .DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
 
 # Credentials and local environment
 *.env
@@ -33,7 +41,24 @@ pnpm-debug.log*
 *.xcconfig
 !.example.xcconfig
 
-# Archives
+# Generated archives and reports
 *.ipa
 *.dSYM.zip
 *.dSYM
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.log
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+
+# Temporary audit and handoff artifacts
+reports/
+tmp/
+temp/
+artifacts/
+screenshots/
