@@ -135,12 +135,16 @@ jobs:
             headers_file="$(mktemp)"
             if health_json="$(curl --fail --show-error --silent --max-time 30 -D "${headers_file}" "${KAIROS_PRODUCTION_URL}/api/health?deployment=${GITHUB_SHA}")" \
               && website_page="$(curl --fail --show-error --silent --max-time 30 "${KAIROS_PRODUCTION_URL}/web-003.html?deployment=${GITHUB_SHA}")" \
+              && command_center="$(curl --fail --show-error --silent --max-time 30 "${KAIROS_PRODUCTION_URL}/?deployment=${GITHUB_SHA}")" \
+              && briefing_ui="$(curl --fail --show-error --silent --max-time 30 "${KAIROS_PRODUCTION_URL}/scripts/executive-briefing.js?deployment=${GITHUB_SHA}")" \
               && creation_script="$(curl --fail --show-error --silent --max-time 30 "${KAIROS_PRODUCTION_URL}/scripts/creation-engine.js?deployment=${GITHUB_SHA}")" \
               && briefing_json="$(curl --fail --show-error --silent --max-time 30 -X POST "${KAIROS_PRODUCTION_URL}/api/executive-briefing/build?deployment=${GITHUB_SHA}")"; then
               runtime_header="$(awk 'BEGIN{IGNORECASE=1} /^x-mmg-runtime:/ {gsub(/\r/, ""); sub(/^[^:]+:[[:space:]]*/, ""); print; exit}' "${headers_file}")"
-              if HEALTH_JSON="${health_json}" WEBSITE_PAGE="${website_page}" CREATION_SCRIPT="${creation_script}" BRIEFING_JSON="${briefing_json}" RUNTIME_HEADER="${runtime_header}" node <<'NODE'
+              if HEALTH_JSON="${health_json}" WEBSITE_PAGE="${website_page}" COMMAND_CENTER="${command_center}" BRIEFING_UI="${briefing_ui}" CREATION_SCRIPT="${creation_script}" BRIEFING_JSON="${briefing_json}" RUNTIME_HEADER="${runtime_header}" node <<'NODE'
           const health = JSON.parse(process.env.HEALTH_JSON || "{}");
           const page = process.env.WEBSITE_PAGE || "";
+          const commandCenter = process.env.COMMAND_CENTER || "";
+          const briefingUI = process.env.BRIEFING_UI || "";
           const script = process.env.CREATION_SCRIPT || "";
           const briefing = JSON.parse(process.env.BRIEFING_JSON || "{}");
           const runtime = process.env.RUNTIME_HEADER || "";
@@ -154,6 +158,8 @@ jobs:
             productAssets: health.capabilities?.productAssetCopy === "operational",
             websiteBaseline: page.includes("website-production-20260713-baseline-1"),
             promptEmpty: !page.includes("PRESERVE_PROMPT"),
+            commandCenterBriefing: commandCenter.includes("scripts/executive-briefing.js"),
+            decisionSurface: briefingUI.includes("Approve") && briefingUI.includes("Deny") && briefingUI.includes("Fix") && briefingUI.includes("View Evidence"),
             creationEngine: script.includes("Build Complete Package"),
             executiveBriefing: briefing.status === "completed" && Array.isArray(briefing.briefing?.actions) && briefing.briefing.actions.includes("approve") && briefing.briefing.actions.includes("deny") && briefing.briefing.actions.includes("fix"),
             connectorHonesty: briefing.briefing?.safeguards?.externalSocialPublishingAvailable === false,
