@@ -21,9 +21,12 @@ const requiredFiles = [
   join(sourceRoot, "kairos-social-production-v1.js"),
   join(repoRoot, "web/kairos-dashboard/index.html"),
   join(repoRoot, "web/kairos-dashboard/web-003.html"),
+  join(repoRoot, "web/kairos-dashboard/scripts/command-hub.js"),
+  join(repoRoot, "web/kairos-dashboard/scripts/command-center-governance.js"),
   join(repoRoot, "web/kairos-dashboard/scripts/creation-engine.js"),
   join(repoRoot, "web/kairos-dashboard/scripts/executive-briefing.js"),
   join(repoRoot, "web/kairos-dashboard/scripts/social-production.js"),
+  join(repoRoot, "web/kairos-dashboard/styles/command-center-governance.css"),
   join(repoRoot, "web/kairos-dashboard/styles/executive-briefing.css"),
   join(repoRoot, "web/kairos-dashboard/styles/social-production.css"),
 ];
@@ -60,9 +63,33 @@ for (const control of [
 ]) assert.ok(social.includes(control), `Social production contract is missing: ${control}`);
 
 const dashboardIndex = readFileSync(join(repoRoot, "web/kairos-dashboard/index.html"), "utf8");
-for (const asset of ["scripts/executive-briefing.js", "styles/executive-briefing.css", "scripts/social-production.js", "styles/social-production.css"]) assert.ok(dashboardIndex.includes(asset), `Command Center asset missing: ${asset}`);
+for (const asset of [
+  "scripts/command-center-governance.js", "styles/command-center-governance.css",
+  "scripts/executive-briefing.js", "styles/executive-briefing.css",
+  "scripts/social-production.js", "styles/social-production.css",
+]) assert.ok(dashboardIndex.includes(asset), `Command Center asset missing: ${asset}`);
+
+const commandHub = readFileSync(join(repoRoot, "web/kairos-dashboard/scripts/command-hub.js"), "utf8");
+for (const center of ["knowledge", "content", "business", "customers", "operations"]) {
+  assert.ok(commandHub.includes(`id: "${center}"`), `Command Center parent is missing: ${center}`);
+}
+for (const embeddedTool of ["Manuscript Studio", "Social Production", "Executive Briefing", "System Registry"]) {
+  assert.ok(commandHub.includes(embeddedTool), `Embedded child tool is missing: ${embeddedTool}`);
+}
+const childActionCount = (commandHub.match(/^\s*\["[^"]+",\s*"[^"]+",\s*"[^"]+",\s*"[^"]+"\],?$/gm) || []).length;
+assert.equal(childActionCount, 25, `Command Center must define exactly 25 child cards; found ${childActionCount}.`);
+assert.ok(commandHub.includes('metric("Entry points","25"'), "Command Center must report the 25-entry-point architecture.");
+
+const governance = readFileSync(join(repoRoot, "web/kairos-dashboard/scripts/command-center-governance.js"), "utf8");
+assert.ok(governance.includes("exactly five parent cards"), "Five-parent runtime guard is missing.");
+const governanceCSS = readFileSync(join(repoRoot, "web/kairos-dashboard/styles/command-center-governance.css"), "utf8");
+for (const selector of [".manuscript-launch", ".social-production-launch", "[data-floating-launch]"]) {
+  assert.ok(governanceCSS.includes(selector), `Floating-launch suppression is missing: ${selector}`);
+}
+
 const socialUI = readFileSync(join(repoRoot, "web/kairos-dashboard/scripts/social-production.js"), "utf8");
 for (const label of ["TikTok Single Image Post", "TikTok Multi-Image / Carousel Post", "TikTok Video Post", "Cross-Platform Caption Package", "Social Asset Production Queue", "Approve Package", "Request Fix", "Connector-ready payload"]) assert.ok(socialUI.includes(label), `Social Production UI is missing: ${label}`);
+assert.ok(!socialUI.includes("document.body.appendChild(button)"), "Social Production still creates a standalone launcher.");
 
 const websiteProduction = readFileSync(join(repoRoot, "web/kairos-dashboard/web-003.html"), "utf8");
 assert.ok(!websiteProduction.includes("PRESERVE_PROMPT"), "Website Production still contains a prefilled homepage prompt.");
@@ -75,12 +102,13 @@ assert.equal(typeof runtimeModule.KairosProject, "function", "Canonical runtime 
 
 console.log(JSON.stringify({
   status: "ready",
-  baseline: "kairos-production-baseline-20260713-3",
-  socialProductionEngine: true,
-  socialModes: 5,
-  connectorIndependent: true,
-  externalPublishingClaimsBlocked: true,
-  executiveApprovalRequired: true,
+  baseline: "kairos-production-baseline-20260713-4",
+  commandCenterParents: 5,
+  childCardsPerParent: 5,
+  totalEntryPoints: 25,
+  floatingLaunchControls: 0,
+  socialProductionEmbedded: true,
+  manuscriptStudioEmbedded: true,
   websiteProductionPromptEmpty: true,
   scheduledWebsiteIntelligence: true,
   scheduledExecutiveBriefing: true,
