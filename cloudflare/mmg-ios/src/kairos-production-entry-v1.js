@@ -14,9 +14,12 @@ import { handlePublicationCatalogObjectRequest } from "./kairos-publication-cata
 import { handlePublicationOperationsObjectRequest } from "./kairos-publication-operations-v1.js";
 import { handlePublicationPerformanceObjectRequest } from "./kairos-publication-performance-v1.js";
 import { handlePublicationSettlementObjectRequest } from "./kairos-publication-settlement-v1.js";
+import { handlePublicationTaxComplianceObjectRequest } from "./kairos-publication-tax-compliance-v1.js";
 
 export class KairosProject extends NativeKairosProject {
   async fetch(request) {
+    const publicationTax = await handlePublicationTaxComplianceObjectRequest(this.state, request);
+    if (publicationTax) return publicationTax;
     const publicationSettlement = await handlePublicationSettlementObjectRequest(this.state, request);
     if (publicationSettlement) return publicationSettlement;
     const publicationPerformance = await handlePublicationPerformanceObjectRequest(this.state, request);
