@@ -17,6 +17,7 @@ const requiredFiles = [
   guardedEntryPath,
   join(sourceRoot, "kairos-executive-briefing-v1.js"),
   join(sourceRoot, "kairos-approved-work-dispatcher-v1.js"),
+  join(sourceRoot, "kairos-approved-website-executor-v1.js"),
   join(repoRoot, "web/kairos-dashboard/index.html"),
   join(repoRoot, "web/kairos-dashboard/web-003.html"),
   join(repoRoot, "web/kairos-dashboard/scripts/creation-engine.js"),
@@ -51,23 +52,17 @@ assert.ok(source.includes("buildExecutiveBriefing"), "Scheduled executive briefi
 const guardedSource = readFileSync(guardedEntryPath, "utf8");
 for (const route of [
   "/api/executive-briefing/execute",
+  "/api/executive-briefing/execution/run",
   "/api/executive-briefing/execution/",
   "/api/executive-briefing/execution/complete",
   "/receipt",
 ]) assert.ok(guardedSource.includes(route), `Approved work route is missing: ${route}`);
 
 const dispatcher = readFileSync(join(sourceRoot, "kairos-approved-work-dispatcher-v1.js"), "utf8");
-for (const control of [
-  "approvalBindingVerified: true",
-  "automaticPublication: false",
-  "receiptRequired: true",
-  "knowledgeCaptureRequired: true",
-  "readBackConfirmed",
-  "verified-complete",
-  "receiptImmutable: true",
-  "unverifiedCompletionBlocked: true",
-  "libraryPath",
-]) assert.ok(dispatcher.includes(control), `Approved work safeguard is missing: ${control}`);
+for (const control of ["approvalBindingVerified: true", "automaticPublication: false", "receiptRequired: true", "knowledgeCaptureRequired: true", "readBackConfirmed", "verified-complete", "receiptImmutable: true", "unverifiedCompletionBlocked: true", "libraryPath"]) assert.ok(dispatcher.includes(control), `Approved work safeguard is missing: ${control}`);
+
+const websiteExecutor = readFileSync(join(sourceRoot, "kairos-approved-website-executor-v1.js"), "utf8");
+for (const control of ["prepareLifecycleReview", "decideLifecycleReview", "executeApprovedLifecycleReview", "Shopify Kairos Staging", "liveThemeChanged: false", "readBackVerified: true", "needs-preparation"]) assert.ok(websiteExecutor.includes(control), `Approved website execution control is missing: ${control}`);
 
 const briefingSource = readFileSync(join(sourceRoot, "kairos-executive-briefing-v1.js"), "utf8");
 for (const decision of ["approve", "deny", "fix"]) assert.ok(briefingSource.includes(`"${decision}"`), `Executive briefing decision is missing: ${decision}`);
@@ -78,7 +73,7 @@ const dashboardIndex = readFileSync(join(repoRoot, "web/kairos-dashboard/index.h
 assert.ok(dashboardIndex.includes("scripts/executive-briefing.js"), "Command Center does not load the executive briefing interface.");
 assert.ok(dashboardIndex.includes("styles/executive-briefing.css"), "Command Center does not load executive briefing styles.");
 const briefingUI = readFileSync(join(repoRoot, "web/kairos-dashboard/scripts/executive-briefing.js"), "utf8");
-for (const action of ["Approve", "Deny", "Fix", "View Evidence", "Execute Approved"]) assert.ok(briefingUI.includes(action), `Command Center executive control is missing: ${action}`);
+for (const action of ["Approve", "Deny", "Fix", "View Evidence", "Execute Approved", "Run Website Update"]) assert.ok(briefingUI.includes(action), `Command Center executive control is missing: ${action}`);
 
 const websiteProduction = readFileSync(join(repoRoot, "web/kairos-dashboard/web-003.html"), "utf8");
 assert.ok(!websiteProduction.includes("PRESERVE_PROMPT"), "Website Production still contains a prefilled homepage prompt.");
@@ -94,10 +89,9 @@ console.log(JSON.stringify({
   baseline: "kairos-production-baseline-20260713-2",
   entry: "src/kairos-production-entry.js",
   approvedWorkDispatcher: true,
+  approvedWebsiteExecution: true,
   verifiedCompletionReceipts: true,
-  knowledgeCaptureEnvelope: true,
-  unverifiedCompletionBlocked: true,
-  commandCenterExecuteApproved: true,
+  commandCenterRunWebsiteUpdate: true,
   websiteProductionPromptEmpty: true,
   scheduledWebsiteIntelligence: true,
   scheduledExecutiveBriefing: true,
