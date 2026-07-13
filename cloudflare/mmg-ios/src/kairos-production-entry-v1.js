@@ -9,9 +9,12 @@ import { handleManuscriptProjectSetupObjectRequest } from "./kairos-manuscript-p
 import { handleManuscriptEditorialObjectRequest } from "./kairos-manuscript-editorial-workbench-v1.js";
 import { handleManuscriptManufacturingObjectRequest } from "./kairos-manuscript-manufacturing-v1.js";
 import { handleManuscriptDeliveryObjectRequest } from "./kairos-manuscript-delivery-v1.js";
+import { handleManuscriptPlatformSubmissionObjectRequest } from "./kairos-manuscript-platform-submission-v1.js";
 
 export class KairosProject extends NativeKairosProject {
   async fetch(request) {
+    const platformSubmission = await handleManuscriptPlatformSubmissionObjectRequest(this.state, request);
+    if (platformSubmission) return platformSubmission;
     const delivery = await handleManuscriptDeliveryObjectRequest(this.state, request);
     if (delivery) return delivery;
     const manufacturing = await handleManuscriptManufacturingObjectRequest(this.state, request);
