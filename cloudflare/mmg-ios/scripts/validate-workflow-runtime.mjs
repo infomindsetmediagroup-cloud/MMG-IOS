@@ -18,8 +18,8 @@ const runtime = readFileSync(runtimePath, "utf8");
 for (const capability of [
   "createWorkflow", "listWorkflows", "readWorkflow", "updateWorkflow", "createTask", "updateTask",
   "completionRequiresTaskClosure: true", "externalPublicationAutomatic: false", "destructiveActionAutomatic: false",
-  "approvalRequired", "calculateProgress", "Production queue",
-]) assert.ok(runtime.toLowerCase().includes(capability.toLowerCase()), `Workflow runtime contract missing: ${capability}`);
+  "approvalRequired", "calculateProgress", "upsertQueue", "queueRequest",
+]) assert.ok(runtime.includes(capability), `Workflow runtime contract missing: ${capability}`);
 
 const entry = readFileSync(entryPath, "utf8");
 for (const route of ["/api/workflows", "/tasks", "PATCH"]) assert.ok(entry.includes(route), `Workflow route missing: ${route}`);
@@ -27,7 +27,9 @@ for (const route of ["/api/workflows", "/tasks", "PATCH"]) assert.ok(entry.inclu
 const ui = readFileSync(uiPath, "utf8");
 for (const label of ["Workflow Runtime", "Production Queue", "Create Workflow", "Require executive approval before start", "Add Task"]) assert.ok(ui.includes(label), `Workflow UI missing: ${label}`);
 assert.ok(ui.includes('[data-child="work-queue"]'), "Work Queue child card is not connected to Workflow Runtime.");
-assert.ok(!ui.includes("position:fixed"), "Workflow Runtime must not introduce floating controls.");
+
+const css = readFileSync(cssPath, "utf8");
+assert.ok(!css.includes("position:fixed"), "Workflow Runtime must not introduce floating controls.");
 
 const index = readFileSync(indexPath, "utf8");
 assert.ok(index.includes("scripts/workflow-runtime.js"), "Command Center does not load Workflow Runtime.");
