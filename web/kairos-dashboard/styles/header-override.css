@@ -1,5 +1,22 @@
 .app-header{position:relative;width:100%;margin:0 0 18px;border:0;border-radius:0;overflow:visible;background:transparent;box-shadow:none}
-.app-header-image{display:block;width:100%;height:auto;margin:0;padding:0;border:1px solid rgba(48,148,205,.35);border-radius:24px;background:transparent;box-shadow:0 20px 60px rgba(0,0,0,.34);object-fit:fill}
+.app-header-image{display:block;width:100%;height:auto;margin:0;padding:0;border:1px solid rgba(48,148,205,.35);border-radius:24px;background:transparent;box-shadow:0 20px 60px rgba(0,0,0,.34);object-fit:cover}
 .app-header-status{display:flex;align-items:center;justify-content:flex-start;gap:10px;padding:12px 2px 0;border:0;background:transparent;color:#8998a8;font-size:12px}
 .app-header-status .live-state{margin-left:0}
-@media(max-width:760px){.hub-shell{padding-top:8px}.app-header{margin:0 0 14px;width:100%}.app-header-image{display:block;width:100%;height:auto;max-height:none;aspect-ratio:auto;object-fit:fill;border-radius:18px}.app-header-status{padding:10px 2px 0;justify-content:flex-start}.app-header-status>span:first-child{display:none}.app-header-status .live-state{margin-left:0}}
+@media(max-width:760px){
+  html,body{min-height:100%;overflow-x:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+  .hub-shell{padding:8px 14px 60px;overflow-x:hidden}
+  .app-header{margin:0 0 12px;width:100%;min-height:0;overflow:hidden}
+  .app-header-image{display:none!important;width:0!important;height:0!important;max-height:0!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;box-shadow:none!important}
+  .app-header-status{padding:8px 2px 0;justify-content:flex-start;min-height:28px}
+  .app-header-status>span:first-child{display:none}
+  .app-header-status .live-state{margin-left:0}
+  .hero{padding-top:24px}
+  .workspace{margin-top:18px;border-radius:20px}
+  .workspace-head{display:grid!important;grid-template-columns:minmax(0,1fr);gap:10px;align-items:start!important;padding:18px!important}
+  .workspace-head>div{min-width:0}
+  .workspace-head h2{font-size:28px!important;line-height:1.05!important;overflow-wrap:anywhere}
+  .workspace-head .back{justify-self:start;padding:4px 0;font-size:14px;line-height:1.35;text-align:left}
+  .parent-card,.child-card,.job{min-width:0}
+  .parent-card{min-height:170px!important}
+  .parent-card h3,.child-card h3{overflow-wrap:anywhere}
+}
