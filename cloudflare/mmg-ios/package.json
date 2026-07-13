@@ -6,7 +6,8 @@
   "scripts": {
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "validate:production": "node scripts/validate-production-baseline.mjs"
   },
   "dependencies": {
     "fflate": "^0.8.2",
