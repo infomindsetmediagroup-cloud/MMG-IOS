@@ -1,4 +1,4 @@
-const BUILD = "kairos-publishing-production-center-20260713-1";
+const BUILD = "kairos-publishing-production-center-20260713-2";
 const PARENT_ID = "kairos-publishing-production-parent";
 
 function enhance() {
@@ -17,6 +17,7 @@ function enhance() {
     if (["Publishing Studio", "Creative Studio"].includes(title)) card.remove();
   }
 
+  const summary = window.KairosProductionWorkspace?.summary?.() || {};
   const parent = document.createElement("article");
   parent.id = PARENT_ID;
   parent.className = "child-card publishing-production-parent";
@@ -24,7 +25,8 @@ function enhance() {
   parent.innerHTML = `
     <p class="eyebrow">Content · Production</p>
     <h3>Publishing & Product Production</h3>
-    <p>Start a complete product from an idea, cover, or manuscript—or open a manuscript directly for intake and editorial production.</p>
+    <p>Start a complete product from an idea, cover, or manuscript—or move an existing manuscript through editorial and production.</p>
+    ${summary.resumable ? `<div class="publishing-production-resume"><strong>Work available to resume</strong><span>${labelFor(summary)}</span></div>` : ""}
     <div class="publishing-production-children">
       <button type="button" class="publishing-production-child" data-open-complete-product>
         <strong>Build Complete Product</strong>
@@ -37,17 +39,24 @@ function enhance() {
     </div>`;
 
   children.appendChild(parent);
-  parent.querySelector("[data-open-complete-product]")?.addEventListener("click", () => openLegacy(".creation-engine-launch", "Complete Product"));
-  parent.querySelector("[data-open-manuscript-studio]")?.addEventListener("click", () => openLegacy(".manuscript-launch", "Manuscript Studio"));
+  parent.querySelector("[data-open-complete-product]")?.addEventListener("click", () => open("complete-product"));
+  parent.querySelector("[data-open-manuscript-studio]")?.addEventListener("click", () => open("manuscript-studio"));
 }
 
-function openLegacy(selector, label) {
-  const launcher = document.querySelector(selector);
-  if (!launcher) {
-    console.error(`${label} launcher is not available.`);
+function open(workspace) {
+  if (window.KairosProductionWorkspace?.open) {
+    window.KairosProductionWorkspace.open(workspace);
     return;
   }
-  launcher.click();
+  window.dispatchEvent(new CustomEvent("kairos:production:open", { detail: { workspace } }));
+}
+
+function labelFor(summary) {
+  if (summary.activeWorkspace === "complete-product") return "Complete Product workspace";
+  if (summary.activeWorkspace === "manuscript-studio") return "Manuscript Studio";
+  if (summary.product) return "Complete Product project";
+  if (summary.manuscript) return "Manuscript review";
+  return "Production work";
 }
 
 function hideLegacyLaunchers() {
@@ -57,6 +66,11 @@ function hideLegacyLaunchers() {
     button.tabIndex = -1;
   });
 }
+
+window.addEventListener("kairos:production:state-changed", () => {
+  document.querySelector(`#${PARENT_ID}`)?.remove();
+  enhance();
+});
 
 const observer = new MutationObserver(enhance);
 observer.observe(document.documentElement, { childList: true, subtree: true });
