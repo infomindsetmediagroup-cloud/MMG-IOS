@@ -1,8 +1,10 @@
 import runtime from "./kairos-standalone-command-worker-v2.js";
 import { readShopifyDashboardAnalytics } from "./shopify-live-analytics-v1.js";
 import { handleManuscriptRequest } from "./manuscript-studio-v1.js";
+import { handleContentEngineRequest } from "./content-engine-v1.js";
+import { intelligenceConfigured } from "./kairos-intelligence-v1.js";
 
-const BUILD = "kairos-standalone-command-20260712-15";
+const BUILD = "kairos-standalone-command-20260712-16";
 const CANONICAL_SHOPIFY_STORE = "07kd8e-qw.myshopify.com";
 
 export default {
@@ -10,28 +12,24 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname.startsWith("/api/manuscript/")) {
-      try {
-        const response = await handleManuscriptRequest(request, env);
-        if (response) {
-          const headers = new Headers(response.headers);
-          headers.set("X-MMG-Runtime", BUILD);
-          headers.set("X-Kairos-Kernel", "standalone-command-v5");
-          return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
-        }
-      } catch (error) {
-        return json({ status: "failed", build: BUILD, error: { code: "manuscript_pipeline_failed", message: error instanceof Error ? error.message : "The manuscript pipeline failed." } }, 500);
-      }
+      const response = await guarded(() => handleManuscriptRequest(request, env), "manuscript_pipeline_failed");
+      if (response) return withRuntimeHeaders(response);
+    }
+
+    if (url.pathname.startsWith("/api/content/")) {
+      const response = await guarded(() => handleContentEngineRequest(request, env), "content_engine_failed");
+      if (response) return withRuntimeHeaders(response);
     }
 
     if (url.pathname === "/api/analytics/shopify" && request.method === "GET") {
       try {
         const analytics = await readShopifyDashboardAnalytics(env);
-        return json({ status: analytics.status, build: BUILD, openaiAPIUsed: false, analytics });
+        return json({ status: analytics.status, build: BUILD, externalModelAPIUsed: false, analytics });
       } catch (error) {
         return json({
           status: "needs-attention",
           build: BUILD,
-          openaiAPIUsed: false,
+          externalModelAPIUsed: false,
           analytics: {
             status: "unavailable",
             source: "shopifyql-admin-api",
@@ -50,9 +48,15 @@ export default {
     if (url.pathname === "/api/health" || url.pathname === "/api/capabilities") {
       const response = await runtime.fetch(request, env, ctx);
       const body = await safeJSON(response.clone());
+      const intelligenceReady = intelligenceConfigured(env);
       body.build = BUILD;
       body.kernel = "standalone-command-v5";
       body.shopifyStore = String(env.SHOPIFY_STORE_DOMAIN || CANONICAL_SHOPIFY_STORE).trim().toLowerCase();
+      body.intelligenceRuntime = {
+        provider: "kairos-private-runtime",
+        configured: intelligenceReady,
+        model: String(env.KAIROS_MODEL || "Qwen3.6-35B-A3B"),
+      };
       body.shopifyCredentialConfiguration = {
         clientCredentials: Boolean(env.SHOPIFY_CLIENT_ID && env.SHOPIFY_CLIENT_SECRET),
         apiKeyCredentials: Boolean(env.SHOPIFY_API_KEY && env.SHOPIFY_API_SECRET),
@@ -64,20 +68,42 @@ export default {
         ...(body.capabilities || {}),
         shopifyDashboardAnalytics: "configured",
         shopifyQLAnalytics: "configured",
+        governedWebsiteRetool: "operational",
         manuscriptStudio: "operational",
-        manuscriptEditorialReview: env.OPENAI_API_KEY ? "operational" : "needs-configuration",
-        kdpReadinessReview: env.OPENAI_API_KEY ? "operational" : "needs-configuration",
+        docxExtraction: "operational",
+        pdfTextExtraction: "operational",
+        pdfOCR: "not-enabled",
+        manuscriptEditorialReview: intelligenceReady ? "operational" : "needs-configuration",
+        kdpReadinessReview: intelligenceReady ? "operational" : "needs-configuration",
+        socialContentProduction: intelligenceReady ? "operational" : "needs-configuration",
+        productAssetCopy: intelligenceReady ? "operational" : "needs-configuration",
+        bookDevelopment: intelligenceReady ? "operational" : "needs-configuration",
+        imageGeneration: "not-enabled",
+        videoGeneration: "not-enabled",
+        audioGeneration: "not-enabled",
       };
       return json(body, response.status);
     }
 
     const response = await runtime.fetch(request, env, ctx);
-    const headers = new Headers(response.headers);
-    headers.set("X-MMG-Runtime", BUILD);
-    headers.set("X-Kairos-Kernel", "standalone-command-v5");
-    return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+    return withRuntimeHeaders(response);
   },
 };
+
+async function guarded(run, code) {
+  try { return await run(); }
+  catch (error) {
+    const status = Number(error?.statusCode || 500);
+    return json({ status: status >= 500 ? "failed" : "needs-input", build: BUILD, error: { code: error?.code || code, message: error instanceof Error ? error.message : "Kairos could not complete this request." } }, status);
+  }
+}
+
+function withRuntimeHeaders(response) {
+  const headers = new Headers(response.headers);
+  headers.set("X-MMG-Runtime", BUILD);
+  headers.set("X-Kairos-Kernel", "standalone-command-v5");
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
 
 async function safeJSON(response) {
   try { return await response.json(); } catch { return {}; }
