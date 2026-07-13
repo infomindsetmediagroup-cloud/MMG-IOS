@@ -1,62 +1,65 @@
 # MMG IOS / Kairos Operating System
 
-MMG IOS is the native iOS foundation and canonical GitHub repository for the Mindset Media Group / Kairos operating system.
+Canonical production repository for the Mindset Media Group ecosystem and Kairos operating system.
 
-This repository stores and versions the connected MMG ecosystem: native iOS source, Kairos platform architecture, Shopify site source, assets, documentation, registries, backlog records, QA notes, and release packages.
+## Production Scope
 
-## Product Direction
+This repository contains only material required to build, operate, verify, or govern the platform:
 
-Kairos is the flagship operating platform for MMG. The long-term architecture treats the MMG website, customer portal, admin portal, publishing workflows, production workflows, growth workflows, quality workflows, release workflows, and future native app experience as parts of one connected operating system.
+- `MMGIOS/` and `MMGIOS.xcodeproj` — native SwiftUI application
+- `cloudflare/mmg-ios/` — canonical Cloudflare Worker runtime and deployment contract
+- `web/kairos-dashboard/` — Command Center and browser production assets
+- `shopify/` — approved Shopify source, staging assets, and governed release material
+- `kairos/` — active platform modules, models, and orchestration logic
+- `assets/` — approved brand and product assets used by production systems
+- `docs/` — canonical Constitution, security architecture, technical decisions, and required runbooks
+- `registry/` — active system, release, page, product, asset, and editorial registries
+- `.github/workflows/` — build, validation, and deployment automation
 
-## Repository Structure
+Historical chat exports, duplicate completion reports, temporary audits, generated archives, screenshots, local caches, and superseded deployment adapters do not belong on `main`.
 
-- MMGIOS.xcodeproj: Native iOS project file.
-- MMGIOS: SwiftUI application source.
-- shopify: Shopify site source, page code, product code, snippets, templates, and deployment notes.
-- kairos: Kairos platform architecture, command centers, modules, data models, and operating logic.
-- assets: Brand assets, image references, prompts, logos, covers, and visual systems.
-- docs: Doctrine, standards, architecture notes, and technical decisions.
-- registry: Page, product, campaign, release, asset, and editorial registries.
-- backlog: Production backlog, blockers, implementation queues, and execution sequencing.
-- releases: Release packages, QA records, changelogs, and deployment summaries.
+## Canonical Runtime
 
-## Native iOS Build Scope
+Cloudflare is the production browser runtime. The canonical Worker entry is:
 
-The current native app scaffold establishes:
+```text
+cloudflare/mmg-ios/src/kairos-production-entry.js
+```
 
-- SwiftUI application entry point
-- Authentication gate and local session persistence
-- Role-gated tab shell
-- Kairos Command Center registry
-- Customer Portal workspace
-- Project Board workspace
-- Publishing Command Center
-- Production Command Center
-- Quality and Release Center
-- Release Package Builder
-- Growth Campaign Engine
-- System status workspace
-- Local JSON persistence stores for current vertical slices
-- XcodeGen project configuration
+The browser assets are served from:
 
-## Local Development
+```text
+web/kairos-dashboard/
+```
 
-Use the project make targets to bootstrap, generate, and open the native project. Run the MMGIOS scheme on an iPhone simulator.
+The authoritative deployment receipt is:
 
-Minimum target: iOS 17.0.
+```text
+kairos-cloudflare-production: success
+```
 
-## Build Validation
+## Native Development
 
-GitHub Actions contains an iOS build validation workflow at .github/workflows/ios-build.yml.
+Minimum deployment target: iOS 17.0.
 
-The workflow checks out the repository, installs XcodeGen, regenerates the Xcode project, and runs an Xcode clean build against the MMGIOS scheme on an iOS simulator.
+Use the repository make targets or XcodeGen configuration to generate and build the `MMGIOS` scheme on an iPhone simulator.
 
-## Execution Mode
+## Validation
 
-Kairos implementation work should run in coherent production batches. Each batch should inspect the relevant source, make only the necessary changes, validate where the environment permits, commit the completed unit of work, and then proceed to the next batch by executive direction.
+Before promotion:
 
-During rapid development, commits should preserve GitHub Actions minutes until final validation is explicitly approved.
+```bash
+npm run check
+cd cloudflare/mmg-ios
+npm run validate:production
+npx wrangler deploy --dry-run
+```
 
-## Operating Rule
+Production deployment is handled by `.github/workflows/deploy-cloudflare-production.yml`.
 
-All production-ready page source code, product source code, and release documentation should be preserved in complete form. Do not store shortened, representative, placeholder, or partial production source when the full version is available.
+## Governance Boundary
+
+- GitHub is the canonical source of truth for code, approved assets, version history, and production governance.
+- Shopify customer-facing changes remain governed and staging-first.
+- Live publication, destructive changes, pricing, legal claims, and structural redesign require explicit executive approval.
+- New files must have a current production, validation, security, governance, or operational purpose.
