@@ -1,0 +1,3 @@
+WEB-003 mobile production flow release
+Build: kairos-website-production-mobile-flow-20260713-1
+Purpose: replace the stacked mobile action-card wall with a compact job selector and immediate prompt entry.
