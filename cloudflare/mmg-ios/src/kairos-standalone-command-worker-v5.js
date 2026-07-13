@@ -6,13 +6,19 @@ import { handleVisualVerificationRequest } from "./shopify-visual-verification-v
 import { handleReleaseControlRequest } from "./shopify-release-control-v1.js";
 import { handleWebsiteRegistryRequest } from "./shopify-website-registry-v1.js";
 import { handlePageCompilerRequest } from "./shopify-page-compiler-v1.js";
+import { handleSitewideExecutionRequest } from "./shopify-sitewide-execution-v1.js";
 
-const BUILD = "kairos-standalone-command-20260712-22";
+const BUILD = "kairos-standalone-command-20260712-23";
 const CANONICAL_SHOPIFY_STORE = "07kd8e-qw.myshopify.com";
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    if (url.pathname.startsWith("/api/shopify/sitewide/")) {
+      const response = await guarded(() => handleSitewideExecutionRequest(request, env), "sitewide_execution_failed");
+      if (response) return withRuntimeHeaders(response);
+    }
 
     if (url.pathname.startsWith("/api/shopify/page-compiler/")) {
       const response = await guarded(() => handlePageCompilerRequest(request, env), "page_compiler_failed");
@@ -80,6 +86,14 @@ export default {
         shopifyQLAnalytics: "configured",
         governedWebsiteRetool: "operational",
         shopifyMutationExecution: "operational",
+        sitewideShopifyExecution: "operational",
+        arbitraryThemeFilePackages: "operational",
+        governedPageInstallation: "operational",
+        governedProductTemplateInstallation: "operational",
+        governedCollectionTemplateInstallation: "operational",
+        unpublishedPreviewPageCreation: "operational",
+        sitewideSourceHashBinding: "operational",
+        sitewideRollback: "operational",
         stagingVisualVerification: "operational",
         executiveVisualApprovalGate: "operational",
         stagingPreviewPackage: "operational",
