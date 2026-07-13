@@ -1,0 +1,19 @@
+/* Command Center architecture: five parent cards, five child cards per parent, no standalone launch controls. */
+.manuscript-launch,
+.social-production-launch,
+[data-floating-launch],
+.kairos-floating-launch{
+  display:none!important;
+  visibility:hidden!important;
+  pointer-events:none!important;
+}
+
+@media (min-width:1200px){
+  .children{grid-template-columns:repeat(5,minmax(0,1fr));}
+  .child-card{display:flex;min-width:0;flex-direction:column;}
+  .child-card .child-action{margin-top:auto;}
+}
+
+@media (min-width:761px) and (max-width:1199px){
+  .children{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
