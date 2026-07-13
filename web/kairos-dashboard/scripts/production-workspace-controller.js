@@ -1,4 +1,4 @@
-const BUILD = "kairos-production-workspace-20260713-2";
+const BUILD = "kairos-production-workspace-20260713-3";
 const ACTIVE_KEY = "kairos.production.active-workspace";
 const REGISTRY_CACHE_KEY = "kairos.production.registry-cache";
 const PRODUCT_KEYS = ["kairos.complete-product.job", "kairos.product.publication", "kairos.product.media", "kairos.product.launch"];
@@ -45,6 +45,12 @@ async function resumeProject(project) {
     sessionStorage.setItem("kairos.complete-product.job", JSON.stringify(job));
     window.dispatchEvent(new CustomEvent("kairos:complete-product:restore", { detail: { job, registryProject: project } }));
   }
+  if (project.projectType === "manuscript-studio") {
+    const response = await originalFetch(`/api/production-registry/manuscripts/${encodeURIComponent(project.projectId)}/source/text`, { credentials: "include", cache: "no-store" });
+    const source = await response.json();
+    if (!response.ok) throw new Error(source?.error?.message || "The manuscript source could not be restored.");
+    window.dispatchEvent(new CustomEvent("kairos:manuscript:restore", { detail: { project, source: source.source, manuscript: source.manuscript } }));
+  }
   openWorkspace(project.projectType === "manuscript-studio" ? "manuscript-studio" : "complete-product");
   window.dispatchEvent(new CustomEvent("kairos:production:state-changed", { detail: productionSummary() }));
 }
@@ -71,10 +77,12 @@ async function captureProductionResponse(input, response) {
     const job = await response.json();
     if (job?.projectId) await upsertProject({ projectId: `product-${job.projectId}`, projectType: "complete-product", title: job.title || "Complete Product", status: job.status || "active", stage: job.stage || "production", progress: job.overallProgress || 0, activeWorkspace: "complete-product", sourceProjectId: job.projectId, summary: job.stageLabel || "Production project updated.", nextAction: nextActionForJob(job), checkpoints: checkpointsForJob(job) });
   }
+  if (url.includes("/api/production-registry/manuscripts/") && url.includes("/source")) await refreshRegistry();
   if (url.includes("/api/manuscript/intake/advance")) {
     const record = await response.json();
-    const id = record.projectId || record.intakeId || crypto.randomUUID();
-    await upsertProject({ projectId: `manuscript-${id}`, projectType: "manuscript-studio", title: record.title || record.source?.filename || "Manuscript Project", status: record.status || "production-intake-created", stage: record.stage || "production-intake", progress: record.overallProgress || 20, activeWorkspace: "manuscript-studio", sourceProjectId: record.projectId || null, summary: "Manuscript intake was validated and advanced into production.", nextAction: record.nextAction || "Continue the manuscript production workflow.", checkpoints: [{ id: "intake", label: "Source intake validated", status: "completed", recordedAt: new Date().toISOString() }] });
+    const active = readJSON(ACTIVE_KEY);
+    const id = active?.projectId || `manuscript-${record.projectId || record.intakeId || crypto.randomUUID()}`;
+    await upsertProject({ projectId: id, projectType: "manuscript-studio", title: record.title || record.source?.filename || "Manuscript Project", status: record.status || "production-intake-created", stage: record.stage || "production-intake", progress: record.overallProgress || 20, activeWorkspace: "manuscript-studio", sourceProjectId: record.projectId || null, summary: "Manuscript intake was validated and advanced into production.", nextAction: record.nextAction || "Continue the manuscript production workflow.", checkpoints: [{ id: "intake", label: "Source intake validated", status: "completed", recordedAt: new Date().toISOString() }] });
   }
   if (url.includes("/api/shopify/product-publication/") || url.includes("/api/shopify/product-media/") || url.includes("/api/shopify/product-launch/")) {
     const record = await response.json();
