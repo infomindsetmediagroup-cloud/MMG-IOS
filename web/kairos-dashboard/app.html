@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#05070a">
+  <meta name="mmg-build" content="kairos-command-hub-staged-20260713-1">
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Kairos Command Center</title>
+  <link rel="stylesheet" href="./styles/command-hub.css?v=staged-20260713-1">
+  <link rel="stylesheet" href="./styles/header-override.css?v=staged-20260713-1">
+  <link rel="stylesheet" href="./styles/shopify-analytics.css?v=staged-20260713-1">
+  <link rel="stylesheet" href="./styles/manuscript-studio.css?v=staged-20260713-1">
+  <link rel="stylesheet" href="./styles/publication-operations.css?v=staged-20260713-1">
+  <link rel="stylesheet" href="./styles/publication-performance.css?v=staged-20260713-1">
+  <link rel="stylesheet" href="./styles/publication-settlement.css?v=staged-20260713-1">
+  <link rel="stylesheet" href="./styles/publication-tax-compliance.css?v=staged-20260713-1">
+  <link rel="stylesheet" href="./styles/creation-engine.css?v=staged-20260713-1">
+  <link rel="stylesheet" href="./styles/publishing-production-center.css?v=staged-20260713-1">
+  <link rel="stylesheet" href="./styles/website-visual-verification.css?v=staged-20260713-1">
+  <link rel="stylesheet" href="./styles/shopify-release-control.css?v=staged-20260713-1">
+  <link rel="stylesheet" href="./styles/website-registry.css?v=staged-20260713-1">
+  <link rel="stylesheet" href="./styles/shopify-page-compiler.css?v=staged-20260713-1">
+</head>
+<body>
+  <div id="kairos-hub" class="hub-shell" aria-live="polite"></div>
+  <script type="module" src="./scripts/command-hub.js?v=staged-20260713-1"></script>
+  <script>
+    const modules = [
+      "shopify-analytics.js",
+      "manuscript-studio.js",
+      "manuscript-project-setup.js",
+      "manuscript-editorial-workbench.js",
+      "manuscript-manufacturing.js",
+      "manuscript-delivery.js",
+      "manuscript-platform-submission.js",
+      "publication-catalog.js",
+      "publication-operations.js",
+      "publication-performance.js",
+      "publication-settlement.js",
+      "publication-tax-compliance.js",
+      "launch-boundary.js",
+      "complete-product-engine.js",
+      "production-workspace-controller.js",
+      "publishing-production-center.js",
+      "product-media-installer.js",
+      "product-launch-control.js",
+      "website-visual-verification.js",
+      "shopify-release-control.js",
+      "website-registry.js",
+      "shopify-page-compiler.js"
+    ];
+    function loadNext(index = 0) {
+      if (index >= modules.length) return;
+      const script = document.createElement("script");
+      script.type = "module";
+      script.src = `./scripts/${modules[index]}?v=staged-20260713-1`;
+      script.onload = () => setTimeout(() => loadNext(index + 1), 40);
+      script.onerror = () => setTimeout(() => loadNext(index + 1), 40);
+      document.body.appendChild(script);
+    }
+    window.addEventListener("load", () => setTimeout(() => loadNext(), 1200), { once: true });
+  </script>
+</body>
+</html>
