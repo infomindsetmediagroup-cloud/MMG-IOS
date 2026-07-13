@@ -8,32 +8,26 @@ const workerRoot = resolve(here, "..");
 const repoRoot = resolve(workerRoot, "../..");
 const sourceRoot = join(workerRoot, "src");
 const entryPath = join(sourceRoot, "kairos-production-entry.js");
+const guardedEntryPath = join(sourceRoot, "kairos-production-entry-v2.js");
 const wranglerPath = join(workerRoot, "wrangler.toml");
 
 const requiredFiles = [
   entryPath,
   join(sourceRoot, "kairos-production-entry-v1.js"),
-  join(sourceRoot, "kairos-production-entry-v2.js"),
+  guardedEntryPath,
   join(sourceRoot, "kairos-executive-briefing-v1.js"),
+  join(sourceRoot, "kairos-approved-work-dispatcher-v1.js"),
   join(repoRoot, "web/kairos-dashboard/index.html"),
   join(repoRoot, "web/kairos-dashboard/web-003.html"),
   join(repoRoot, "web/kairos-dashboard/scripts/creation-engine.js"),
   join(repoRoot, "web/kairos-dashboard/scripts/executive-briefing.js"),
   join(repoRoot, "web/kairos-dashboard/styles/executive-briefing.css"),
 ];
+for (const filename of requiredFiles) assert.ok(existsSync(filename), `Required production file is missing: ${filename}`);
 
-for (const filename of requiredFiles) {
-  assert.ok(existsSync(filename), `Required production file is missing: ${filename}`);
-}
-
-const staleRuntimeFiles = readdirSync(sourceRoot)
-  .filter(name => /^kairos-production-entry-v(?:[3-9]|1[0-5])\.js$/.test(name));
+const staleRuntimeFiles = readdirSync(sourceRoot).filter(name => /^kairos-production-entry-v(?:[3-9]|1[0-5])\.js$/.test(name));
 assert.deepEqual(staleRuntimeFiles, [], `Obsolete production wrappers remain: ${staleRuntimeFiles.join(", ")}`);
-
-assert.ok(
-  !existsSync(join(sourceRoot, "kairos-deterministic-homepage-v2.js")),
-  "Unused duplicate homepage planner remains in the production source tree.",
-);
+assert.ok(!existsSync(join(sourceRoot, "kairos-deterministic-homepage-v2.js")), "Unused duplicate homepage planner remains in the production source tree.");
 
 const wrangler = readFileSync(wranglerPath, "utf8");
 assert.match(wrangler, /^main\s*=\s*"src\/kairos-production-entry\.js"/m, "Wrangler must point to the canonical production entry.");
@@ -41,34 +35,30 @@ assert.match(wrangler, /crons\s*=\s*\["0 15 \* \* \*", "0 2 \* \* \*"\]/, "Morni
 
 const source = readFileSync(entryPath, "utf8");
 for (const route of [
-  "/api/shopify/staging/plan/jobs",
-  "/api/shopify/staging/execute/jobs",
-  "/api/shopify/website-retool/schema-inspection",
-  "/api/shopify/website-retool/exceptions/prepare",
-  "/api/shopify/website-retool/exceptions/execute",
-  "/api/shopify/website-retool/exceptions/rollback",
-  "/api/shopify/website-intelligence/run",
-  "/api/shopify/website-intelligence/latest",
-  "/api/shopify/link-intelligence/audit",
-  "/api/shopify/link-intelligence/repair/prepare",
-  "/api/shopify/link-intelligence/repair/execute",
-  "/api/shopify/link-intelligence/review/prepare",
-  "/api/shopify/link-intelligence/review/decide",
-  "/api/shopify/link-intelligence/review/execute",
-  "/api/executive-briefing/build",
-  "/api/executive-briefing/latest",
-  "/api/executive-briefing/decide",
-]) {
-  assert.ok(source.includes(route), `Canonical runtime is missing route: ${route}`);
-}
+  "/api/shopify/staging/plan/jobs", "/api/shopify/staging/execute/jobs",
+  "/api/shopify/website-retool/schema-inspection", "/api/shopify/website-retool/exceptions/prepare",
+  "/api/shopify/website-retool/exceptions/execute", "/api/shopify/website-retool/exceptions/rollback",
+  "/api/shopify/website-intelligence/run", "/api/shopify/website-intelligence/latest",
+  "/api/shopify/link-intelligence/audit", "/api/shopify/link-intelligence/repair/prepare",
+  "/api/shopify/link-intelligence/repair/execute", "/api/shopify/link-intelligence/review/prepare",
+  "/api/shopify/link-intelligence/review/decide", "/api/shopify/link-intelligence/review/execute",
+  "/api/executive-briefing/build", "/api/executive-briefing/latest", "/api/executive-briefing/decide",
+]) assert.ok(source.includes(route), `Canonical runtime is missing route: ${route}`);
 assert.ok(source.includes("visual_replacement_forbidden"), "Patch-only homepage replacement guard is missing.");
 assert.ok(source.includes("scheduled(controller, env, ctx)"), "Scheduled website intelligence handler is missing.");
 assert.ok(source.includes("buildExecutiveBriefing"), "Scheduled executive briefing build is missing.");
 
-const briefingSource = readFileSync(join(sourceRoot, "kairos-executive-briefing-v1.js"), "utf8");
-for (const decision of ["approve", "deny", "fix"]) {
-  assert.ok(briefingSource.includes(`"${decision}"`), `Executive briefing decision is missing: ${decision}`);
+const guardedSource = readFileSync(guardedEntryPath, "utf8");
+for (const route of ["/api/executive-briefing/execute", "/api/executive-briefing/execution/"]) {
+  assert.ok(guardedSource.includes(route), `Approved work dispatch route is missing: ${route}`);
 }
+const dispatcher = readFileSync(join(sourceRoot, "kairos-approved-work-dispatcher-v1.js"), "utf8");
+for (const control of ["approvalBindingVerified: true", "automaticPublication: false", "receiptRequired: true", "knowledgeCaptureRequired: true"]) {
+  assert.ok(dispatcher.includes(control), `Approved work safeguard is missing: ${control}`);
+}
+
+const briefingSource = readFileSync(join(sourceRoot, "kairos-executive-briefing-v1.js"), "utf8");
+for (const decision of ["approve", "deny", "fix"]) assert.ok(briefingSource.includes(`"${decision}"`), `Executive briefing decision is missing: ${decision}`);
 assert.ok(briefingSource.includes("America/Los_Angeles"), "Executive briefing must resolve morning/evening in Pacific time.");
 assert.ok(briefingSource.includes("externalSocialPublishingAvailable: false"), "Briefing must not claim social publishing before connectors exist.");
 
@@ -76,9 +66,7 @@ const dashboardIndex = readFileSync(join(repoRoot, "web/kairos-dashboard/index.h
 assert.ok(dashboardIndex.includes("scripts/executive-briefing.js"), "Command Center does not load the executive briefing interface.");
 assert.ok(dashboardIndex.includes("styles/executive-briefing.css"), "Command Center does not load executive briefing styles.");
 const briefingUI = readFileSync(join(repoRoot, "web/kairos-dashboard/scripts/executive-briefing.js"), "utf8");
-for (const action of ["Approve", "Deny", "Fix", "View Evidence"]) {
-  assert.ok(briefingUI.includes(action), `Command Center executive control is missing: ${action}`);
-}
+for (const action of ["Approve", "Deny", "Fix", "View Evidence", "Execute Approved"]) assert.ok(briefingUI.includes(action), `Command Center executive control is missing: ${action}`);
 
 const websiteProduction = readFileSync(join(repoRoot, "web/kairos-dashboard/web-003.html"), "utf8");
 assert.ok(!websiteProduction.includes("PRESERVE_PROMPT"), "Website Production still contains a prefilled homepage prompt.");
@@ -93,10 +81,10 @@ console.log(JSON.stringify({
   status: "ready",
   baseline: "kairos-production-baseline-20260713-2",
   entry: "src/kairos-production-entry.js",
-  staleRuntimeFilesRemoved: true,
+  approvedWorkDispatcher: true,
+  approvalBindingVerified: true,
+  commandCenterExecuteApproved: true,
   websiteProductionPromptEmpty: true,
   scheduledWebsiteIntelligence: true,
   scheduledExecutiveBriefing: true,
-  commandCenterExecutiveBriefing: true,
-  executiveDecisionControls: ["approve", "deny", "fix", "view-evidence"],
 }, null, 2));
