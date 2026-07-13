@@ -2,13 +2,19 @@ import runtime from "./kairos-standalone-command-worker-v2.js";
 import { readShopifyDashboardAnalytics } from "./shopify-live-analytics-v1.js";
 import { handleManuscriptRequest } from "./manuscript-studio-v1.js";
 import { handleContentEngineRequest } from "./content-engine-v1.js";
+import { handleVisualVerificationRequest } from "./shopify-visual-verification-v1.js";
 
-const BUILD = "kairos-standalone-command-20260712-18";
+const BUILD = "kairos-standalone-command-20260712-19";
 const CANONICAL_SHOPIFY_STORE = "07kd8e-qw.myshopify.com";
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    if (url.pathname.startsWith("/api/shopify/staging/visual-")) {
+      const response = await guarded(() => handleVisualVerificationRequest(request, env), "visual_verification_failed");
+      if (response) return withRuntimeHeaders(response);
+    }
 
     if (url.pathname === "/api/inference/health" && request.method === "GET") {
       return withRuntimeHeaders(json({
@@ -80,6 +86,9 @@ export default {
         shopifyQLAnalytics: "configured",
         governedWebsiteRetool: "operational",
         shopifyMutationExecution: "operational",
+        stagingVisualVerification: "operational",
+        executiveVisualApprovalGate: "operational",
+        stagingPreviewPackage: "operational",
         manuscriptStudio: "intake-only",
         docxExtraction: "operational",
         pdfTextExtraction: "operational",
