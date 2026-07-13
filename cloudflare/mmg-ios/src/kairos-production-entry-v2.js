@@ -26,8 +26,13 @@ import {
   updateWorkflow,
 } from "./kairos-workflow-runtime-v1.js";
 import { dispatchObjective, routeObjective } from "./kairos-objective-router-v1.js";
+import {
+  createCreativeProject,
+  readCreativeProject,
+  readLatestCreativeProject,
+} from "./kairos-creative-studio-v1.js";
 
-const BUILD = "kairos-production-entry-20260713-9";
+const BUILD = "kairos-production-entry-20260713-10";
 
 export { KairosProject };
 
@@ -35,6 +40,19 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     try {
+      if (request.method === "POST" && url.pathname === "/api/creative-studio/projects") {
+        const payload = await safeJSON(request.clone());
+        return json({ status: "completed", build: BUILD, ...(await createCreativeProject(request, payload)) }, 201);
+      }
+      if (request.method === "GET" && url.pathname === "/api/creative-studio/latest") {
+        const result = await readLatestCreativeProject(request);
+        return result ? json({ status: "completed", build: BUILD, ...result }) : json({ status: "not-ready", build: BUILD }, 404);
+      }
+      if (request.method === "GET" && url.pathname.startsWith("/api/creative-studio/projects/")) {
+        const projectID = decodeURIComponent(url.pathname.split("/").pop() || "");
+        const result = await readCreativeProject(request, projectID);
+        return result ? json({ status: "completed", build: BUILD, ...result }) : json({ status: "not-found", build: BUILD }, 404);
+      }
       if (request.method === "POST" && url.pathname === "/api/objectives/route") {
         const payload = await safeJSON(request.clone());
         return json({ status: "completed", build: BUILD, route: routeObjective(payload) });
