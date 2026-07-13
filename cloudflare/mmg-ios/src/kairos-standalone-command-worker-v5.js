@@ -5,13 +5,19 @@ import { handleContentEngineRequest } from "./content-engine-v1.js";
 import { handleVisualVerificationRequest } from "./shopify-visual-verification-v1.js";
 import { handleReleaseControlRequest } from "./shopify-release-control-v1.js";
 import { handleWebsiteRegistryRequest } from "./shopify-website-registry-v1.js";
+import { handlePageCompilerRequest } from "./shopify-page-compiler-v1.js";
 
-const BUILD = "kairos-standalone-command-20260712-21";
+const BUILD = "kairos-standalone-command-20260712-22";
 const CANONICAL_SHOPIFY_STORE = "07kd8e-qw.myshopify.com";
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    if (url.pathname.startsWith("/api/shopify/page-compiler/")) {
+      const response = await guarded(() => handlePageCompilerRequest(request, env), "page_compiler_failed");
+      if (response) return withRuntimeHeaders(response);
+    }
 
     if (url.pathname.startsWith("/api/shopify/website-registry")) {
       const response = await guarded(() => handleWebsiteRegistryRequest(request, env), "website_registry_failed");
@@ -86,6 +92,9 @@ export default {
         customerJourneyGraph: "operational",
         storefrontSitemapDiscovery: "operational",
         brokenJourneyDetection: "operational",
+        mmgComponentLibrary: "operational",
+        deterministicPageCompiler: "operational",
+        governedPagePackageValidation: "operational",
         manuscriptStudio: "intake-only",
         docxExtraction: "operational",
         pdfTextExtraction: "operational",
