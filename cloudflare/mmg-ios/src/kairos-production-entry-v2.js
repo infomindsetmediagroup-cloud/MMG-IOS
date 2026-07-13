@@ -12,14 +12,18 @@ import { readLatestRevenueReview, readRevenueReview, runRevenueReview } from "./
 import { createGrowthPlan, readGrowthPlan, readLatestGrowthPlan } from "./kairos-growth-plan-v1.js";
 import { createOffer, readLatestOffer, readOffer } from "./kairos-offer-builder-v1.js";
 import { createCampaign, readCampaign, readLatestCampaign } from "./kairos-campaign-operations-v1.js";
+import { readLatestVisitorReview, readVisitorReview, runVisitorReview } from "./kairos-visitor-activity-v1.js";
 
-const BUILD = "kairos-production-entry-20260713-16";
+const BUILD = "kairos-production-entry-20260713-17";
 export { KairosProject };
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     try {
+      if (request.method === "POST" && url.pathname === "/api/visitor-activity/reviews") { const payload = await safeJSON(request.clone()); return json({ status: "completed", build: BUILD, ...(await runVisitorReview(request, payload)) }, 201); }
+      if (request.method === "GET" && url.pathname === "/api/visitor-activity/latest") { const report = await readLatestVisitorReview(request); return report ? json({ status: "completed", build: BUILD, report }) : json({ status: "not-ready", build: BUILD }, 404); }
+      if (request.method === "GET" && url.pathname.startsWith("/api/visitor-activity/reviews/")) { const reportID = decodeURIComponent(url.pathname.split("/").pop() || ""); const report = await readVisitorReview(request, reportID); return report ? json({ status: "completed", build: BUILD, report }) : json({ status: "not-found", build: BUILD }, 404); }
       if (request.method === "POST" && url.pathname === "/api/campaigns") { const payload = await safeJSON(request.clone()); return json({ status: "completed", build: BUILD, ...(await createCampaign(request, payload)) }, 201); }
       if (request.method === "GET" && url.pathname === "/api/campaigns/latest") { const result = await readLatestCampaign(request); return result ? json({ status: "completed", build: BUILD, ...result }) : json({ status: "not-ready", build: BUILD }, 404); }
       if (request.method === "GET" && url.pathname.startsWith("/api/campaigns/")) { const campaignID = decodeURIComponent(url.pathname.split("/").pop() || ""); const result = await readCampaign(request, campaignID); return result ? json({ status: "completed", build: BUILD, ...result }) : json({ status: "not-found", build: BUILD }, 404); }
