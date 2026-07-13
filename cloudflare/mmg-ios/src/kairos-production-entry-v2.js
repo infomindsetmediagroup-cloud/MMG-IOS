@@ -5,8 +5,9 @@ import {
   readApprovedWorkDispatch,
   readApprovedWorkReceipt,
 } from "./kairos-approved-work-dispatcher-v1.js";
+import { runApprovedWebsiteExecution } from "./kairos-approved-website-executor-v1.js";
 
-const BUILD = "kairos-production-entry-20260713-4";
+const BUILD = "kairos-production-entry-20260713-5";
 
 export { KairosProject };
 
@@ -17,6 +18,12 @@ export default {
       if (request.method === "POST" && url.pathname === "/api/executive-briefing/execute") {
         const payload = await safeJSON(request.clone());
         return json({ status: "completed", build: BUILD, workOrder: await dispatchApprovedBriefingItem(request, payload) });
+      }
+
+      if (request.method === "POST" && url.pathname === "/api/executive-briefing/execution/run") {
+        const payload = await safeJSON(request.clone());
+        const result = await runApprovedWebsiteExecution(request, env, payload);
+        return json({ status: result.status, build: BUILD, result }, result.status === "needs-preparation" ? 409 : 200);
       }
 
       if (request.method === "POST" && url.pathname === "/api/executive-briefing/execution/complete") {
@@ -44,7 +51,7 @@ export default {
 
       return await runtime.fetch(request, env, ctx);
     } catch (error) {
-      const isShopifyExecution = url.pathname.startsWith("/api/shopify/staging/");
+      const isShopifyExecution = url.pathname.startsWith("/api/shopify/staging/") || url.pathname.includes("/execution/run");
       const message = error instanceof Error && error.message ? error.message : "Kairos encountered an unexpected production runtime failure.";
       const status = Number(error?.statusCode || error?.status || 500);
       const safeStatus = status >= 400 && status <= 599 ? status : 500;
@@ -52,7 +59,7 @@ export default {
         status: safeStatus >= 500 ? "failed" : "needs-input",
         build: BUILD,
         route: url.pathname,
-        error: { code: error?.code || (isShopifyExecution ? "shopify_execution_failed" : "production_runtime_failed"), message },
+        error: { code: error?.code || (isShopifyExecution ? "approved_website_execution_failed" : "production_runtime_failed"), message },
       }), {
         status: safeStatus,
         headers: {
