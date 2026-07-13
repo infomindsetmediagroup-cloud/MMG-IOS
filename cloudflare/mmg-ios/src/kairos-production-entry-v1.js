@@ -7,9 +7,12 @@ import { handleProductionRegistry, handleRegistryObjectRequest } from "./kairos-
 import { handleManuscriptSourceObjectRequest } from "./kairos-manuscript-source-v1.js";
 import { handleManuscriptProjectSetupObjectRequest } from "./kairos-manuscript-project-setup-v1.js";
 import { handleManuscriptEditorialObjectRequest } from "./kairos-manuscript-editorial-workbench-v1.js";
+import { handleManuscriptManufacturingObjectRequest } from "./kairos-manuscript-manufacturing-v1.js";
 
 export class KairosProject extends NativeKairosProject {
   async fetch(request) {
+    const manufacturing = await handleManuscriptManufacturingObjectRequest(this.state, request);
+    if (manufacturing) return manufacturing;
     const editorial = await handleManuscriptEditorialObjectRequest(this.state, request);
     if (editorial) return editorial;
     const manuscriptSetup = await handleManuscriptProjectSetupObjectRequest(this.state, request);
