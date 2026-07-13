@@ -17,8 +17,16 @@ import {
   readLatestSocialPackage,
   readSocialPackage,
 } from "./kairos-social-production-v1.js";
+import {
+  createTask,
+  createWorkflow,
+  listWorkflows,
+  readWorkflow,
+  updateTask,
+  updateWorkflow,
+} from "./kairos-workflow-runtime-v1.js";
 
-const BUILD = "kairos-production-entry-20260713-7";
+const BUILD = "kairos-production-entry-20260713-8";
 
 export { KairosProject };
 
@@ -26,6 +34,33 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     try {
+      if (request.method === "POST" && url.pathname === "/api/workflows") {
+        const payload = await safeJSON(request.clone());
+        return json({ status: "completed", build: BUILD, workflow: await createWorkflow(request, payload) }, 201);
+      }
+      if (request.method === "GET" && url.pathname === "/api/workflows") {
+        return json({ status: "completed", build: BUILD, workflows: await listWorkflows(request) });
+      }
+      if (request.method === "GET" && /^\/api\/workflows\/[^/]+$/.test(url.pathname)) {
+        const workflowID = decodeURIComponent(url.pathname.split("/").pop() || "");
+        const workflow = await readWorkflow(request, workflowID);
+        return workflow ? json({ status: "completed", build: BUILD, workflow }) : json({ status: "not-found", build: BUILD }, 404);
+      }
+      if (request.method === "POST" && /^\/api\/workflows\/[^/]+\/tasks$/.test(url.pathname)) {
+        const parts = url.pathname.split("/").filter(Boolean);
+        const payload = await safeJSON(request.clone());
+        return json({ status: "completed", build: BUILD, workflow: await createTask(request, decodeURIComponent(parts[2]), payload) }, 201);
+      }
+      if (request.method === "PATCH" && /^\/api\/workflows\/[^/]+\/tasks\/[^/]+$/.test(url.pathname)) {
+        const parts = url.pathname.split("/").filter(Boolean);
+        const payload = await safeJSON(request.clone());
+        return json({ status: "completed", build: BUILD, workflow: await updateTask(request, decodeURIComponent(parts[2]), decodeURIComponent(parts[4]), payload) });
+      }
+      if (request.method === "PATCH" && /^\/api\/workflows\/[^/]+$/.test(url.pathname)) {
+        const workflowID = decodeURIComponent(url.pathname.split("/").pop() || "");
+        const payload = await safeJSON(request.clone());
+        return json({ status: "completed", build: BUILD, workflow: await updateWorkflow(request, workflowID, payload) });
+      }
       if (request.method === "POST" && url.pathname === "/api/social-production/prepare") {
         const payload = await safeJSON(request.clone());
         return json({ status: "completed", build: BUILD, socialPackage: await prepareSocialPackage(request, payload) });
