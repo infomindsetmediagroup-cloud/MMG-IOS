@@ -48,6 +48,30 @@ export class KairosProject extends NativeKairosProject {
 
 export default {
   async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+
+    // Static dashboard pages and assets must never traverse production API handlers.
+    // Cloudflare's asset binding is the authoritative responder for browser routes.
+    if ((request.method === "GET" || request.method === "HEAD") && !url.pathname.startsWith("/api/")) {
+      if (!env.ASSETS || typeof env.ASSETS.fetch !== "function") {
+        return new Response("Kairos dashboard assets are unavailable.", {
+          status: 503,
+          headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" },
+        });
+      }
+      const response = await env.ASSETS.fetch(request);
+      const headers = new Headers(response.headers);
+      headers.set("X-MMG-Static-Bypass", "production-entry-v1");
+      if (headers.get("Content-Type")?.includes("text/html")) {
+        headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
+      }
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      });
+    }
+
     const registry = await handleProductionRegistry(request, env);
     if (registry) return registry;
     const productLaunch = await handleProductLaunchControl(request, env);
