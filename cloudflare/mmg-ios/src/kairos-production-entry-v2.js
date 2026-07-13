@@ -11,8 +11,14 @@ import {
   readExecutiveCorrection,
   resubmitExecutiveCorrection,
 } from "./kairos-executive-correction-loop-v1.js";
+import {
+  decideSocialPackage,
+  prepareSocialPackage,
+  readLatestSocialPackage,
+  readSocialPackage,
+} from "./kairos-social-production-v1.js";
 
-const BUILD = "kairos-production-entry-20260713-6";
+const BUILD = "kairos-production-entry-20260713-7";
 
 export { KairosProject };
 
@@ -20,94 +26,71 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     try {
+      if (request.method === "POST" && url.pathname === "/api/social-production/prepare") {
+        const payload = await safeJSON(request.clone());
+        return json({ status: "completed", build: BUILD, socialPackage: await prepareSocialPackage(request, payload) });
+      }
+      if (request.method === "POST" && url.pathname === "/api/social-production/decide") {
+        const payload = await safeJSON(request.clone());
+        return json({ status: "completed", build: BUILD, socialPackage: await decideSocialPackage(request, payload) });
+      }
+      if (request.method === "GET" && url.pathname === "/api/social-production/latest") {
+        const socialPackage = await readLatestSocialPackage(request);
+        return socialPackage ? json({ status: "completed", build: BUILD, socialPackage }) : json({ status: "not-ready", build: BUILD }, 404);
+      }
+      if (request.method === "GET" && url.pathname.startsWith("/api/social-production/")) {
+        const packageID = decodeURIComponent(url.pathname.split("/").pop() || "");
+        const socialPackage = await readSocialPackage(request, packageID);
+        return socialPackage ? json({ status: "completed", build: BUILD, socialPackage }) : json({ status: "not-ready", build: BUILD }, 404);
+      }
       if (request.method === "POST" && url.pathname === "/api/executive-briefing/execute") {
         const payload = await safeJSON(request.clone());
         return json({ status: "completed", build: BUILD, workOrder: await dispatchApprovedBriefingItem(request, payload) });
       }
-
       if (request.method === "POST" && url.pathname === "/api/executive-briefing/execution/run") {
         const payload = await safeJSON(request.clone());
         const result = await runApprovedWebsiteExecution(request, env, payload);
         return json({ status: result.status, build: BUILD, result }, result.status === "needs-preparation" ? 409 : 200);
       }
-
       if (request.method === "POST" && url.pathname === "/api/executive-briefing/execution/complete") {
         const payload = await safeJSON(request.clone());
         const completed = await completeApprovedWorkDispatch(request, payload);
         return json({ status: "completed", build: BUILD, ...completed });
       }
-
       if (request.method === "POST" && url.pathname === "/api/executive-briefing/fix/prepare") {
         const payload = await safeJSON(request.clone());
         return json({ status: "completed", build: BUILD, correction: await prepareExecutiveCorrection(request, payload) });
       }
-
       if (request.method === "POST" && url.pathname === "/api/executive-briefing/fix/resubmit") {
         const payload = await safeJSON(request.clone());
         const revised = await resubmitExecutiveCorrection(request, payload);
         return json({ status: "completed", build: BUILD, ...revised });
       }
-
       if (request.method === "GET" && url.pathname.startsWith("/api/executive-briefing/fix/")) {
         const itemID = decodeURIComponent(url.pathname.split("/").pop() || "");
         const correction = await readExecutiveCorrection(request, itemID);
-        return correction
-          ? json({ status: "completed", build: BUILD, correction })
-          : json({ status: "not-ready", build: BUILD, message: "No correction package exists for this item." }, 404);
+        return correction ? json({ status: "completed", build: BUILD, correction }) : json({ status: "not-ready", build: BUILD }, 404);
       }
-
       if (request.method === "GET" && url.pathname.startsWith("/api/executive-briefing/execution/") && url.pathname.endsWith("/receipt")) {
         const parts = url.pathname.split("/").filter(Boolean);
         const itemID = decodeURIComponent(parts[parts.length - 2] || "");
         const receipt = await readApprovedWorkReceipt(request, itemID);
-        return receipt
-          ? json({ status: "completed", build: BUILD, receipt })
-          : json({ status: "not-ready", build: BUILD, message: "No verified execution receipt exists for this item." }, 404);
+        return receipt ? json({ status: "completed", build: BUILD, receipt }) : json({ status: "not-ready", build: BUILD }, 404);
       }
-
       if (request.method === "GET" && url.pathname.startsWith("/api/executive-briefing/execution/")) {
         const itemID = decodeURIComponent(url.pathname.split("/").pop() || "");
         const workOrder = await readApprovedWorkDispatch(request, itemID);
-        return workOrder
-          ? json({ status: "completed", build: BUILD, workOrder })
-          : json({ status: "not-ready", build: BUILD, message: "No execution work order exists for this item." }, 404);
+        return workOrder ? json({ status: "completed", build: BUILD, workOrder }) : json({ status: "not-ready", build: BUILD }, 404);
       }
-
       return await runtime.fetch(request, env, ctx);
     } catch (error) {
-      const isGovernedExecution = url.pathname.startsWith("/api/shopify/staging/") || url.pathname.includes("/execution/") || url.pathname.includes("/fix/");
       const message = error instanceof Error && error.message ? error.message : "Kairos encountered an unexpected production runtime failure.";
-      const status = Number(error?.statusCode || error?.status || 500);
-      const safeStatus = status >= 400 && status <= 599 ? status : 500;
-      return new Response(JSON.stringify({
-        status: safeStatus >= 500 ? "failed" : "needs-input",
-        build: BUILD,
-        route: url.pathname,
-        error: { code: error?.code || (isGovernedExecution ? "governed_execution_failed" : "production_runtime_failed"), message },
-      }), {
-        status: safeStatus,
-        headers: {
-          "Content-Type": "application/json; charset=utf-8",
-          "Cache-Control": "no-store",
-          "X-MMG-Runtime": BUILD,
-          "X-Kairos-Exception-Guard": "active",
-          "X-Content-Type-Options": "nosniff",
-        },
-      });
+      return json({ status: "failed", build: BUILD, route: url.pathname, error: { code: "production_runtime_failed", message } }, 500);
     }
   },
 };
 
 async function safeJSON(response) { try { return await response.json(); } catch { return {}; } }
 function json(value, status = 200) {
-  return new Response(JSON.stringify(value), {
-    status,
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "no-store",
-      "X-MMG-Runtime": BUILD,
-      "X-Kairos-Approved-Work-Dispatcher": "active",
-      "X-Content-Type-Options": "nosniff",
-    },
-  });
+  return new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-MMG-Runtime": BUILD, "X-Content-Type-Options": "nosniff" } });
 }
