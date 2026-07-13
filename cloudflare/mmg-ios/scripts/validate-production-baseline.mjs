@@ -18,6 +18,8 @@ const requiredFiles = [
   join(repoRoot, "web/kairos-dashboard/index.html"),
   join(repoRoot, "web/kairos-dashboard/web-003.html"),
   join(repoRoot, "web/kairos-dashboard/scripts/creation-engine.js"),
+  join(repoRoot, "web/kairos-dashboard/scripts/executive-briefing.js"),
+  join(repoRoot, "web/kairos-dashboard/styles/executive-briefing.css"),
 ];
 
 for (const filename of requiredFiles) {
@@ -65,10 +67,18 @@ assert.ok(source.includes("buildExecutiveBriefing"), "Scheduled executive briefi
 
 const briefingSource = readFileSync(join(sourceRoot, "kairos-executive-briefing-v1.js"), "utf8");
 for (const decision of ["approve", "deny", "fix"]) {
-  assert.ok(briefingSource.includes(`\"${decision}\"`), `Executive briefing decision is missing: ${decision}`);
+  assert.ok(briefingSource.includes(`"${decision}"`), `Executive briefing decision is missing: ${decision}`);
 }
 assert.ok(briefingSource.includes("America/Los_Angeles"), "Executive briefing must resolve morning/evening in Pacific time.");
 assert.ok(briefingSource.includes("externalSocialPublishingAvailable: false"), "Briefing must not claim social publishing before connectors exist.");
+
+const dashboardIndex = readFileSync(join(repoRoot, "web/kairos-dashboard/index.html"), "utf8");
+assert.ok(dashboardIndex.includes("scripts/executive-briefing.js"), "Command Center does not load the executive briefing interface.");
+assert.ok(dashboardIndex.includes("styles/executive-briefing.css"), "Command Center does not load executive briefing styles.");
+const briefingUI = readFileSync(join(repoRoot, "web/kairos-dashboard/scripts/executive-briefing.js"), "utf8");
+for (const action of ["Approve", "Deny", "Fix", "View Evidence"]) {
+  assert.ok(briefingUI.includes(action), `Command Center executive control is missing: ${action}`);
+}
 
 const websiteProduction = readFileSync(join(repoRoot, "web/kairos-dashboard/web-003.html"), "utf8");
 assert.ok(!websiteProduction.includes("PRESERVE_PROMPT"), "Website Production still contains a prefilled homepage prompt.");
@@ -87,5 +97,6 @@ console.log(JSON.stringify({
   websiteProductionPromptEmpty: true,
   scheduledWebsiteIntelligence: true,
   scheduledExecutiveBriefing: true,
+  commandCenterExecutiveBriefing: true,
   executiveDecisionControls: ["approve", "deny", "fix", "view-evidence"],
 }, null, 2));
