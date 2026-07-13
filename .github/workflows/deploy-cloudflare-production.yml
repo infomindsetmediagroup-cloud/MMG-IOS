@@ -142,25 +142,29 @@ jobs:
           const page = process.env.WEBSITE_PAGE || "";
           const script = process.env.CREATION_SCRIPT || "";
           const runtime = process.env.RUNTIME_HEADER || "";
-          const valid =
-            runtime === "kairos-production-baseline-20260713-1" &&
-            ["ready", "ok"].includes(health.status) &&
-            health.openaiAPIUsed === false &&
-            health.nativeIntelligence?.externalInferenceAPI === false &&
-            health.nativeIntelligence?.projectStorage === "durable-object" &&
-            health.capabilities?.bookDevelopment === "operational" &&
-            health.capabilities?.productAssetCopy === "operational" &&
-            page.includes("website-production-20260713-baseline-1") &&
-            !page.includes("PRESERVE_PROMPT") &&
-            script.includes("Build Complete Package");
-          if (!valid) process.exit(1);
+          const checks = {
+            canonicalRuntime: runtime === "kairos-production-baseline-20260713-1",
+            healthy: ["ready", "ok", "operational"].includes(health.status),
+            noExternalOpenAI: health.openaiAPIUsed === false,
+            noExternalInference: health.nativeIntelligence?.externalInferenceAPI === false,
+            durableProjects: health.nativeIntelligence?.projectStorage === "durable-object",
+            bookProduction: health.capabilities?.bookDevelopment === "operational",
+            productAssets: health.capabilities?.productAssetCopy === "operational",
+            websiteBaseline: page.includes("website-production-20260713-baseline-1"),
+            promptEmpty: !page.includes("PRESERVE_PROMPT"),
+            creationEngine: script.includes("Build Complete Package"),
+          };
           console.log(JSON.stringify({
             runtime,
+            healthStatus: health.status,
             healthBuild: health.build,
+            launchMode: health.launchMode,
             projectStorage: health.nativeIntelligence?.projectStorage,
-            websiteProductionPrompt: "empty",
-            creationEngine: "available",
+            bookDevelopment: health.capabilities?.bookDevelopment,
+            productAssetCopy: health.capabilities?.productAssetCopy,
+            checks,
           }, null, 2));
+          if (Object.values(checks).some(value => value !== true)) process.exit(1);
           NODE
               then
                 rm -f "${headers_file}"
