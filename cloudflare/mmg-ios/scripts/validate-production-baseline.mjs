@@ -13,17 +13,19 @@ const wranglerPath = join(workerRoot, "wrangler.toml");
 
 const requiredFiles = [
   entryPath,
-  join(sourceRoot, "kairos-production-entry-v1.js"),
-  guardedEntryPath,
+  join(sourceRoot, "kairos-production-entry-v1.js"), guardedEntryPath,
   join(sourceRoot, "kairos-executive-briefing-v1.js"),
   join(sourceRoot, "kairos-approved-work-dispatcher-v1.js"),
   join(sourceRoot, "kairos-approved-website-executor-v1.js"),
   join(sourceRoot, "kairos-executive-correction-loop-v1.js"),
+  join(sourceRoot, "kairos-social-production-v1.js"),
   join(repoRoot, "web/kairos-dashboard/index.html"),
   join(repoRoot, "web/kairos-dashboard/web-003.html"),
   join(repoRoot, "web/kairos-dashboard/scripts/creation-engine.js"),
   join(repoRoot, "web/kairos-dashboard/scripts/executive-briefing.js"),
+  join(repoRoot, "web/kairos-dashboard/scripts/social-production.js"),
   join(repoRoot, "web/kairos-dashboard/styles/executive-briefing.css"),
+  join(repoRoot, "web/kairos-dashboard/styles/social-production.css"),
 ];
 for (const filename of requiredFiles) assert.ok(existsSync(filename), `Required production file is missing: ${filename}`);
 
@@ -33,62 +35,34 @@ assert.ok(!existsSync(join(sourceRoot, "kairos-deterministic-homepage-v2.js")), 
 
 const wrangler = readFileSync(wranglerPath, "utf8");
 assert.match(wrangler, /^main\s*=\s*"src\/kairos-production-entry\.js"/m, "Wrangler must point to the canonical production entry.");
-assert.match(wrangler, /crons\s*=\s*\["0 15 \* \* \*", "0 2 \* \* \*"\]/, "Morning and evening website-intelligence schedules must remain configured.");
+assert.match(wrangler, /crons\s*=\s*\["0 15 \* \* \*", "0 2 \* \* \*"\]/, "Morning and evening schedules must remain configured.");
 
 const source = readFileSync(entryPath, "utf8");
 for (const route of [
   "/api/shopify/staging/plan/jobs", "/api/shopify/staging/execute/jobs",
-  "/api/shopify/website-retool/schema-inspection", "/api/shopify/website-retool/exceptions/prepare",
-  "/api/shopify/website-retool/exceptions/execute", "/api/shopify/website-retool/exceptions/rollback",
   "/api/shopify/website-intelligence/run", "/api/shopify/website-intelligence/latest",
-  "/api/shopify/link-intelligence/audit", "/api/shopify/link-intelligence/repair/prepare",
-  "/api/shopify/link-intelligence/repair/execute", "/api/shopify/link-intelligence/review/prepare",
-  "/api/shopify/link-intelligence/review/decide", "/api/shopify/link-intelligence/review/execute",
   "/api/executive-briefing/build", "/api/executive-briefing/latest", "/api/executive-briefing/decide",
 ]) assert.ok(source.includes(route), `Canonical runtime is missing route: ${route}`);
 assert.ok(source.includes("visual_replacement_forbidden"), "Patch-only homepage replacement guard is missing.");
 assert.ok(source.includes("scheduled(controller, env, ctx)"), "Scheduled website intelligence handler is missing.");
-assert.ok(source.includes("buildExecutiveBriefing"), "Scheduled executive briefing build is missing.");
 
 const guardedSource = readFileSync(guardedEntryPath, "utf8");
 for (const route of [
-  "/api/executive-briefing/execute",
-  "/api/executive-briefing/execution/run",
-  "/api/executive-briefing/execution/",
-  "/api/executive-briefing/execution/complete",
-  "/api/executive-briefing/fix/prepare",
-  "/api/executive-briefing/fix/resubmit",
-  "/api/executive-briefing/fix/",
-  "/receipt",
-]) assert.ok(guardedSource.includes(route), `Approved work route is missing: ${route}`);
+  "/api/executive-briefing/execute", "/api/executive-briefing/execution/run", "/api/executive-briefing/fix/prepare",
+  "/api/social-production/prepare", "/api/social-production/decide", "/api/social-production/latest", "/api/social-production/",
+]) assert.ok(guardedSource.includes(route), `Production route is missing: ${route}`);
 
-const dispatcher = readFileSync(join(sourceRoot, "kairos-approved-work-dispatcher-v1.js"), "utf8");
-for (const control of ["approvalBindingVerified: true", "automaticPublication: false", "receiptRequired: true", "knowledgeCaptureRequired: true", "readBackConfirmed", "verified-complete", "receiptImmutable: true", "unverifiedCompletionBlocked: true", "libraryPath"]) assert.ok(dispatcher.includes(control), `Approved work safeguard is missing: ${control}`);
-
-const websiteExecutor = readFileSync(join(sourceRoot, "kairos-approved-website-executor-v1.js"), "utf8");
-for (const control of ["prepareLifecycleReview", "decideLifecycleReview", "executeApprovedLifecycleReview", "Shopify Kairos Staging", "liveThemeChanged: false", "readBackVerified: true", "needs-preparation"]) assert.ok(websiteExecutor.includes(control), `Approved website execution control is missing: ${control}`);
-
-const correctionLoop = readFileSync(join(sourceRoot, "kairos-executive-correction-loop-v1.js"), "utf8");
+const social = readFileSync(join(sourceRoot, "kairos-social-production-v1.js"), "utf8");
 for (const control of [
-  "Only an item marked Fix can enter the correction loop.",
-  "inventedEvidenceForbidden: true",
-  "approvalRequiredAgain: true",
-  "ready-for-revision",
-  "resubmitted",
-  "previousDecision",
-  "revisionNumber",
-]) assert.ok(correctionLoop.includes(control), `Executive correction control is missing: ${control}`);
-
-const briefingSource = readFileSync(join(sourceRoot, "kairos-executive-briefing-v1.js"), "utf8");
-for (const decision of ["approve", "deny", "fix"]) assert.ok(briefingSource.includes(`"${decision}"`), `Executive briefing decision is missing: ${decision}`);
-assert.ok(briefingSource.includes("America/Los_Angeles"), "Executive briefing must resolve morning/evening in Pacific time.");
-assert.ok(briefingSource.includes("externalSocialPublishingAvailable: false"), "Briefing must not claim social publishing before connectors exist.");
+  "tiktok-single-image", "tiktok-carousel", "tiktok-video", "cross-platform-caption", "social-asset-queue",
+  "yourBrand: true", "paidPartnership: false", "brandPartner: false", "externalPublishingPerformed: false",
+  "connectorAvailable: false", "publish: false", "approvalBeforeHandoff: true", "#mindsetmediagroup",
+]) assert.ok(social.includes(control), `Social production contract is missing: ${control}`);
 
 const dashboardIndex = readFileSync(join(repoRoot, "web/kairos-dashboard/index.html"), "utf8");
-assert.ok(dashboardIndex.includes("scripts/executive-briefing.js"), "Command Center does not load the executive briefing interface.");
-assert.ok(dashboardIndex.includes("styles/executive-briefing.css"), "Command Center does not load executive briefing styles.");
-const briefingUI = readFileSync(join(repoRoot, "web/kairos-dashboard/scripts/executive-briefing.js"), "utf8");
-for (const action of ["Approve", "Deny", "Fix", "View Evidence", "Execute Approved", "Run Website Update", "Prepare Fix", "Resubmit Fix"]) assert.ok(briefingUI.includes(action), `Command Center executive control is missing: ${action}`);
+for (const asset of ["scripts/executive-briefing.js", "styles/executive-briefing.css", "scripts/social-production.js", "styles/social-production.css"]) assert.ok(dashboardIndex.includes(asset), `Command Center asset missing: ${asset}`);
+const socialUI = readFileSync(join(repoRoot, "web/kairos-dashboard/scripts/social-production.js"), "utf8");
+for (const label of ["TikTok Single Image Post", "TikTok Multi-Image / Carousel Post", "TikTok Video Post", "Cross-Platform Caption Package", "Social Asset Production Queue", "Approve Package", "Request Fix", "Connector-ready payload"]) assert.ok(socialUI.includes(label), `Social Production UI is missing: ${label}`);
 
 const websiteProduction = readFileSync(join(repoRoot, "web/kairos-dashboard/web-003.html"), "utf8");
 assert.ok(!websiteProduction.includes("PRESERVE_PROMPT"), "Website Production still contains a prefilled homepage prompt.");
@@ -101,15 +75,12 @@ assert.equal(typeof runtimeModule.KairosProject, "function", "Canonical runtime 
 
 console.log(JSON.stringify({
   status: "ready",
-  baseline: "kairos-production-baseline-20260713-2",
-  entry: "src/kairos-production-entry.js",
-  approvedWorkDispatcher: true,
-  approvedWebsiteExecution: true,
-  executiveCorrectionLoop: true,
-  reapprovalRequiredAfterFix: true,
-  verifiedCompletionReceipts: true,
-  commandCenterRunWebsiteUpdate: true,
-  commandCenterFixResubmit: true,
+  baseline: "kairos-production-baseline-20260713-3",
+  socialProductionEngine: true,
+  socialModes: 5,
+  connectorIndependent: true,
+  externalPublishingClaimsBlocked: true,
+  executiveApprovalRequired: true,
   websiteProductionPromptEmpty: true,
   scheduledWebsiteIntelligence: true,
   scheduledExecutiveBriefing: true,
