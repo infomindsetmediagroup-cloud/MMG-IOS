@@ -20,8 +20,13 @@ import {
   readLatestWebsiteIntelligenceReport,
   runWebsiteIntelligenceSupervisor,
 } from "./kairos-website-intelligence-supervisor-v1.js";
+import {
+  buildExecutiveBriefing,
+  decideExecutiveBriefingItem,
+  readLatestExecutiveBriefing,
+} from "./kairos-executive-briefing-v1.js";
 
-const BUILD = "kairos-production-baseline-20260713-1";
+const BUILD = "kairos-production-baseline-20260713-2";
 const CANONICAL_PREFIX = "kairos-canonical-homepage";
 const STAGING_PLAN_PATH = "/api/shopify/staging/plan/jobs";
 const STAGING_EXECUTE_PATH = "/api/shopify/staging/execute/jobs";
@@ -103,6 +108,25 @@ export default {
         : json({ status: "not-ready", build: BUILD, message: "No website review has been completed yet." }, 404);
     }
 
+    if (request.method === "POST" && url.pathname === "/api/executive-briefing/build") {
+      return guarded("executive_briefing_build_failed", async () => ({
+        briefing: await buildExecutiveBriefing(request, env, "manual"),
+      }), 502);
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/executive-briefing/latest") {
+      const briefing = await readLatestExecutiveBriefing(request);
+      return briefing
+        ? json({ status: "completed", build: BUILD, briefing })
+        : json({ status: "not-ready", build: BUILD, message: "No executive briefing has been prepared yet." }, 404);
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/executive-briefing/decide") {
+      return guarded("executive_briefing_decision_failed", async () => ({
+        briefing: await decideExecutiveBriefingItem(request, await safeJSON(request.clone())),
+      }));
+    }
+
     if (request.method === "POST" && url.pathname === STAGING_PLAN_PATH) {
       return handleStagingPlan(request, env, ctx);
     }
@@ -123,9 +147,10 @@ export default {
 
   async scheduled(controller, env, ctx) {
     const request = new Request("https://kairos.internal/api/shopify/website-intelligence/run", { method: "POST" });
-    ctx.waitUntil(
-      runWebsiteIntelligenceSupervisor(request, env, `scheduled:${controller.cron}`).catch(() => null),
-    );
+    ctx.waitUntil((async () => {
+      await runWebsiteIntelligenceSupervisor(request, env, `scheduled:${controller.cron}`);
+      await buildExecutiveBriefing(request, env, `scheduled:${controller.cron}`);
+    })().catch(() => null));
   },
 };
 
@@ -284,7 +309,7 @@ async function safeJSON(response) {
 function stamp(response) {
   const headers = new Headers(response.headers);
   headers.set("X-MMG-Runtime", BUILD);
-  headers.set("X-Kairos-Production-Baseline", "reconciled-v1");
+  headers.set("X-Kairos-Production-Baseline", "reconciled-v2");
   headers.set("X-Kairos-Visual-Lock", "patch-only");
   if (headers.get("Content-Type")?.includes("text/html")) {
     headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
@@ -303,7 +328,7 @@ function json(value, status = 200, additionalHeaders = {}) {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store",
       "X-MMG-Runtime": BUILD,
-      "X-Kairos-Production-Baseline": "reconciled-v1",
+      "X-Kairos-Production-Baseline": "reconciled-v2",
       "X-Content-Type-Options": "nosniff",
       ...additionalHeaders,
     },
