@@ -25,8 +25,9 @@ import {
   updateTask,
   updateWorkflow,
 } from "./kairos-workflow-runtime-v1.js";
+import { dispatchObjective, routeObjective } from "./kairos-objective-router-v1.js";
 
-const BUILD = "kairos-production-entry-20260713-8";
+const BUILD = "kairos-production-entry-20260713-9";
 
 export { KairosProject };
 
@@ -34,6 +35,14 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     try {
+      if (request.method === "POST" && url.pathname === "/api/objectives/route") {
+        const payload = await safeJSON(request.clone());
+        return json({ status: "completed", build: BUILD, route: routeObjective(payload) });
+      }
+      if (request.method === "POST" && url.pathname === "/api/objectives/dispatch") {
+        const payload = await safeJSON(request.clone());
+        return json({ status: "completed", build: BUILD, dispatch: await dispatchObjective(request, payload) }, 201);
+      }
       if (request.method === "POST" && url.pathname === "/api/workflows") {
         const payload = await safeJSON(request.clone());
         return json({ status: "completed", build: BUILD, workflow: await createWorkflow(request, payload) }, 201);
