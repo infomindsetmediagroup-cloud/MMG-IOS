@@ -1,0 +1,17 @@
+{
+  "release": "WEB-003",
+  "status": "active",
+  "activatedAt": "2026-07-13T14:45:00Z",
+  "runtime": "mmg-ios",
+  "executionPath": "/web-003.html",
+  "target": "Kairos Staging",
+  "publishedThemeMutation": false,
+  "workflow": [
+    "inspect",
+    "plan",
+    "approve",
+    "execute",
+    "verify",
+    "preserve-rollback"
+  ]
+}
