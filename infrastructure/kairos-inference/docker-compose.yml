@@ -1,0 +1,44 @@
+services:
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: kairos-inference
+    restart: unless-stopped
+    ipc: host
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - kairos-model-cache:/root/.cache/huggingface
+    environment:
+      HF_HOME: /root/.cache/huggingface
+    command:
+      - --model
+      - Qwen/Qwen3.6-35B-A3B
+      - --served-model-name
+      - Qwen3.6-35B-A3B
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --api-key
+      - ${KAIROS_INFERENCE_TOKEN}
+      - --tensor-parallel-size
+      - ${KAIROS_TENSOR_PARALLEL_SIZE:-1}
+      - --gpu-memory-utilization
+      - ${KAIROS_GPU_MEMORY_UTILIZATION:-0.90}
+      - --max-model-len
+      - ${KAIROS_MAX_MODEL_LEN:-32768}
+      - --max-num-seqs
+      - ${KAIROS_MAX_NUM_SEQS:-8}
+      - --enable-prefix-caching
+      - --generation-config
+      - vllm
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  kairos-model-cache:
