@@ -1,0 +1,17 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+const here=dirname(fileURLToPath(import.meta.url));
+const workerRoot=resolve(here,"..");
+const repoRoot=resolve(workerRoot,"../..");
+const index=readFileSync(join(repoRoot,"web/kairos-dashboard/index.html"),"utf8");
+const source=readFileSync(join(repoRoot,"web/kairos-dashboard/scripts/executive-simple-mode.js"),"utf8");
+const css=readFileSync(join(repoRoot,"web/kairos-dashboard/styles/executive-simple-mode.css"),"utf8");
+assert.ok(index.includes("executive-simple-mode.js"),"Executive simple mode script is not loaded.");
+assert.ok(index.includes("executive-simple-mode.css"),"Executive simple mode stylesheet is not loaded.");
+assert.ok(index.includes("recovery-20260714-25"),"Executive simple mode build marker is not current.");
+for(const marker of ["System Care","Review & Approve","Resolve Issue","Kairos is ready","data-open-system-workflow"])assert.ok(source.includes(marker),`Executive simple mode is missing: ${marker}`);
+for(const selector of ["readiness-operational-remediation","readiness-recovery-verification","readiness-certificate-succession"])assert.ok(css.includes(selector),`Technical panel is not hidden: ${selector}`);
+assert.ok(!source.includes("setInterval("),"Executive simple mode must not add polling.");
+console.log(JSON.stringify({status:"ready",feature:"executive-simple-mode",technicalPanelsHidden:true,oneClickAction:true},null,2));
