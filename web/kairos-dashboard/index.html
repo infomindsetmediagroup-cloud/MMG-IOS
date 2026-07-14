@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#05070a">
-  <meta name="mmg-build" content="kairos-command-hub-recovery-20260714-45">
+  <meta name="mmg-build" content="kairos-command-hub-recovery-20260714-46">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -91,6 +91,7 @@
   <script type="module" src="./scripts/deliverables.js?v=recovery-20260714-30"></script>
   <script type="module" src="./scripts/deliverable-acceptance-loop.js?v=recovery-20260714-45"></script>
   <script type="module" src="./scripts/customer-portal.js?v=recovery-20260714-30"></script>
+  <script type="module" src="./scripts/portal-access-lifecycle.js?v=recovery-20260714-46"></script>
   <script type="module" src="./scripts/customer-journeys.js?v=recovery-20260714-32"></script>
   <script type="module" src="./scripts/support-intelligence.js?v=recovery-20260714-31"></script>
   <script type="module" src="./scripts/support-recovery-loop.js?v=recovery-20260714-43"></script>
@@ -109,7 +110,7 @@
   <script type="module" src="./scripts/website-production-mobile-route.js?v=recovery-20260714-18"></script>
   <script>
     const modules=["shopify-analytics.js","manuscript-studio.js","content-access-cleanup.js","manuscript-project-setup.js","manuscript-editorial-workbench.js","manuscript-manufacturing.js","manuscript-delivery.js","manuscript-platform-submission.js","publication-catalog.js","publication-operations.js","publication-performance.js","publication-settlement.js","publication-tax-compliance.js","launch-boundary.js","complete-product-engine.js","production-workspace-controller.js","publishing-production-center.js","product-media-installer.js","product-launch-control.js","website-visual-verification.js","shopify-release-control.js","website-registry.js","shopify-page-compiler.js"];
-    function loadNext(index=0){if(index>=modules.length)return;const script=document.createElement("script");script.type="module";script.src=`./scripts/${modules[index]}?v=recovery-20260714-45`;script.onload=()=>setTimeout(()=>loadNext(index+1),50);script.onerror=()=>setTimeout(()=>loadNext(index+1),50);document.body.appendChild(script)}
+    function loadNext(index=0){if(index>=modules.length)return;const script=document.createElement("script");script.type="module";script.src=`./scripts/${modules[index]}?v=recovery-20260714-46`;script.onload=()=>setTimeout(()=>loadNext(index+1),50);script.onerror=()=>setTimeout(()=>loadNext(index+1),50);document.body.appendChild(script)}
     window.addEventListener("load",()=>setTimeout(()=>loadNext(),1400),{once:true});
   </script>
 </body>
