@@ -14,14 +14,19 @@ import { createOffer, readLatestOffer, readOffer } from "./kairos-offer-builder-
 import { createCampaign, readCampaign, readLatestCampaign } from "./kairos-campaign-operations-v1.js";
 import { readLatestVisitorReview, readVisitorReview, runVisitorReview } from "./kairos-visitor-activity-v1.js";
 import { createJourney, readJourney, readLatestJourney } from "./kairos-customer-journey-v1.js";
+import { createCustomerProject, readCustomerProject, readLatestCustomerProject, updateCustomerProject } from "./kairos-customer-portal-v1.js";
 
-const BUILD = "kairos-production-entry-20260713-18";
+const BUILD = "kairos-production-entry-20260713-19";
 export { KairosProject };
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     try {
+      if (request.method === "POST" && url.pathname === "/api/customer-projects") { const payload = await safeJSON(request.clone()); return json({ status: "completed", build: BUILD, ...(await createCustomerProject(request, payload)) }, 201); }
+      if (request.method === "GET" && url.pathname === "/api/customer-projects/latest") { const result = await readLatestCustomerProject(request); return result ? json({ status: "completed", build: BUILD, ...result }) : json({ status: "not-ready", build: BUILD }, 404); }
+      if (request.method === "PATCH" && url.pathname.startsWith("/api/customer-projects/")) { const projectID = decodeURIComponent(url.pathname.split("/").pop() || ""); const payload = await safeJSON(request.clone()); return json({ status: "completed", build: BUILD, ...(await updateCustomerProject(request, projectID, payload)) }); }
+      if (request.method === "GET" && url.pathname.startsWith("/api/customer-projects/")) { const projectID = decodeURIComponent(url.pathname.split("/").pop() || ""); const result = await readCustomerProject(request, projectID); return result ? json({ status: "completed", build: BUILD, ...result }) : json({ status: "not-found", build: BUILD }, 404); }
       if (request.method === "POST" && url.pathname === "/api/customer-journeys") { const payload = await safeJSON(request.clone()); return json({ status: "completed", build: BUILD, ...(await createJourney(request, payload)) }, 201); }
       if (request.method === "GET" && url.pathname === "/api/customer-journeys/latest") { const result = await readLatestJourney(request); return result ? json({ status: "completed", build: BUILD, ...result }) : json({ status: "not-ready", build: BUILD }, 404); }
       if (request.method === "GET" && url.pathname.startsWith("/api/customer-journeys/")) { const journeyID = decodeURIComponent(url.pathname.split("/").pop() || ""); const result = await readJourney(request, journeyID); return result ? json({ status: "completed", build: BUILD, ...result }) : json({ status: "not-found", build: BUILD }, 404); }
