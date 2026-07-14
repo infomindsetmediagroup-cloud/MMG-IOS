@@ -11,12 +11,13 @@ const css=readFileSync(join(repoRoot,"web/kairos-dashboard/styles/executive-simp
 assert.ok(index.includes("executive-simple-mode.js"),"Executive simple mode script is not loaded.");
 assert.ok(index.includes("executive-simple-mode.css"),"Executive simple mode stylesheet is not loaded.");
 assert.ok(index.includes("recovery-20260714-27"),"Executive simple mode build marker is not current.");
-for(const marker of ["System Care","Approve & Start","Continue Fix","Resume","Ready to finish","Finish","next appears automatically","Kairos is ready","data-executive-command","approve-start"])assert.ok(source.includes(marker),`Executive simple mode is missing: ${marker}`);
+for(const marker of ["System Care","Approve & Start","Continue Fix","Resume","Finish","Kairos is ready","data-executive-command","approve-start","Open My Work","finished today","in progress"])assert.ok(source.includes(marker),`Executive simple mode is missing: ${marker}`);
 for(const selector of ["readiness-operational-remediation","readiness-recovery-verification","readiness-certificate-succession"])assert.ok(css.includes(selector),`Technical panel is not hidden: ${selector}`);
 assert.ok(source.includes('workflowCommand(workflowID,"approve")'),"One-click approval must issue the approve command.");
 assert.ok(source.includes('workflowCommand(workflowID,"start")'),"One-click approval must start approved ready work.");
 assert.ok(source.includes('workflowCommand(workflowID,"resume")'),"One-click recovery must resume blocked work.");
-assert.ok(source.includes('workflowCommand(workflowID,"complete")'),"One-click finish must complete finished work.");
-assert.ok(css.includes(".system-care-queue"),"Next-action queue styling is missing.");
+assert.ok(source.includes('workflowCommand(workflowID,"complete")'),"One-click finish must close completed work.");
+assert.ok(source.includes('detail:{filter:"active"}'),"Executive pulse must open active work directly.");
+assert.ok(css.includes(".system-care-pulse"),"Executive pulse styling is missing.");
 assert.ok(!source.includes("setInterval("),"Executive simple mode must not add polling.");
-console.log(JSON.stringify({status:"ready",feature:"executive-simple-mode",technicalPanelsHidden:true,oneClickApproval:true,oneClickRecovery:true,oneClickFinish:true,nextActionQueue:true},null,2));
+console.log(JSON.stringify({status:"ready",feature:"executive-simple-mode",technicalPanelsHidden:true,oneClickApproval:true,oneClickRecovery:true,oneClickFinish:true,executivePulse:true},null,2));
