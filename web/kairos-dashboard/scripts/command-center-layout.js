@@ -1,11 +1,12 @@
-const BUILD = "kairos-command-center-layout-20260713-4";
+const BUILD = "kairos-command-center-layout-20260714-5";
 
 const layoutState = {
   menuOpen: false,
   online: "Connecting",
   onlineState: "checking",
   activeWork: "0",
-  capabilities: "—",
+  finishedWork: "0",
+  workToBeDone: "0",
 };
 
 let observer;
@@ -53,7 +54,7 @@ function applyLayout() {
       header.insertAdjacentElement("afterend", strip);
     }
 
-    strip.innerHTML = `<button class="command-menu-button" type="button" aria-label="Open operating centers" aria-expanded="${layoutState.menuOpen}" data-command-menu><span></span><span></span><span></span></button><div class="command-indicator command-online"><i class="${layoutState.onlineState}"></i><span>${escapeHTML(layoutState.online)}</span></div><div class="command-indicator"><small>Active Work</small><strong>${escapeHTML(layoutState.activeWork)}</strong></div><div class="command-indicator"><small>Capabilities</small><strong>${escapeHTML(layoutState.capabilities)}</strong></div><div class="command-indicator"><small>Entry Points</small><strong>25</strong></div>`;
+    strip.innerHTML = `<button class="command-menu-button" type="button" aria-label="Open operating centers" aria-expanded="${layoutState.menuOpen}" data-command-menu><span></span><span></span><span></span></button><div class="command-indicator command-online"><i class="${layoutState.onlineState}"></i><span>${escapeHTML(layoutState.online)}</span></div><div class="command-indicator"><small>Active Work</small><strong>${escapeHTML(layoutState.activeWork)}</strong></div><div class="command-indicator"><small>Finished Work</small><strong>${escapeHTML(layoutState.finishedWork)}</strong></div><div class="command-indicator"><small>Work To Be Done</small><strong>${escapeHTML(layoutState.workToBeDone)}</strong></div>`;
 
     let menu = hub.querySelector("#command-center-menu");
     if (!menu) {
@@ -95,13 +96,15 @@ function captureMetricValues(metrics) {
   const read = label => cards.find(card => card.querySelector("span")?.textContent?.trim().toLowerCase() === label)?.querySelector("strong")?.textContent?.trim();
   const runtime = read("runtime");
   const active = read("active work");
-  const capabilities = read("capabilities");
+  const finished = read("finished work");
+  const remaining = read("work to be done");
   if (runtime) {
     layoutState.online = runtime === "Online" ? "Online" : runtime;
     layoutState.onlineState = runtime === "Online" ? "" : "checking";
   }
-  if (active) layoutState.activeWork = active;
-  if (capabilities) layoutState.capabilities = capabilities;
+  if (active !== undefined) layoutState.activeWork = active;
+  if (finished !== undefined) layoutState.finishedWork = finished;
+  if (remaining !== undefined) layoutState.workToBeDone = remaining;
 }
 
 function escapeHTML(value) {
