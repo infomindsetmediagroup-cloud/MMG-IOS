@@ -27,6 +27,7 @@ const requiredFiles = [
   join(repoRoot, "web/kairos-dashboard/scripts/creation-engine.js"),
   join(repoRoot, "web/kairos-dashboard/scripts/executive-briefing.js"),
   join(repoRoot, "web/kairos-dashboard/scripts/social-production.js"),
+  join(repoRoot, "web/kairos-dashboard/styles/command-hub.css"),
   join(repoRoot, "web/kairos-dashboard/styles/command-center-layout.css"),
   join(repoRoot, "web/kairos-dashboard/styles/command-center-governance.css"),
   join(repoRoot, "web/kairos-dashboard/styles/executive-briefing.css"),
@@ -74,11 +75,15 @@ for (const asset of [
 ]) assert.ok(dashboardIndex.includes(asset), `Command Center asset missing: ${asset}`);
 
 const commandHub = readFileSync(join(repoRoot, "web/kairos-dashboard/scripts/command-hub.js"), "utf8");
-for (const center of ["knowledge", "content", "business", "customers", "operations"]) assert.ok(commandHub.includes(`id: "${center}"`), `Command Center parent is missing: ${center}`);
+for (const center of ["knowledge", "content", "business", "customers", "operations"]) assert.match(commandHub, new RegExp(`id\\s*:\\s*["']${center}["']`), `Command Center parent is missing: ${center}`);
 for (const embeddedTool of ["Manuscript Studio", "Social Production", "Executive Briefing", "System Registry"]) assert.ok(commandHub.includes(embeddedTool), `Embedded child tool is missing: ${embeddedTool}`);
 const childActionCount = (commandHub.match(/\["[^"]+",\s*"[^"]+",\s*"[^"]+",\s*"[^"]+"\]/g) || []).length;
 assert.equal(childActionCount, 25, `Command Center must define exactly 25 child cards; found ${childActionCount}.`);
 for (const token of ["workPulse", "finishedWork24h", "workToBeDone", 'fetchJSON("/api/workflows")']) assert.ok(commandHub.includes(token), `Command Center workflow pulse is missing: ${token}`);
+for (const token of ["readinessRegistry", "centerReadiness", "readinessPanel", "readiness-breakdown", "nextReadinessGate"]) assert.ok(commandHub.includes(token), `Center readiness breakdown is missing: ${token}`);
+
+const commandHubCSS = readFileSync(join(repoRoot, "web/kairos-dashboard/styles/command-hub.css"), "utf8");
+for (const selector of [".center-readiness", ".readiness-overall", ".readiness-breakdown", ".readiness-child-meter", ".child-readiness"]) assert.ok(commandHubCSS.includes(selector), `Center readiness styling is missing: ${selector}`);
 
 const layout = readFileSync(join(repoRoot, "web/kairos-dashboard/scripts/command-center-layout.js"), "utf8");
 for (const label of ["Online", "In Progress", "Done 24h", "Not Started"]) assert.ok(layout.includes(label), `Compact status strip is missing: ${label}`);
@@ -117,11 +122,13 @@ assert.equal(typeof runtimeModule.KairosProject, "function", "Canonical runtime 
 
 console.log(JSON.stringify({
   status: "ready",
-  baseline: "kairos-production-baseline-20260714-7",
+  baseline: "kairos-production-baseline-20260714-8",
   integratedHeaderStatusStrip: true,
   integratedWorkflowPulse: true,
   mobileWorkflowLabels: ["In Progress", "Done 24h", "Not Started"],
   finishedWindowHours: 24,
+  readinessDrivenParentMeters: true,
+  centerReadinessBreakdowns: true,
   integratedHamburgerNavigation: true,
   legacyMetricCardsRemoved: true,
   dynamicMorningEveningBriefing: true,
