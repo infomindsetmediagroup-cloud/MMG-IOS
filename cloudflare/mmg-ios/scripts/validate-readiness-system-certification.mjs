@@ -12,7 +12,7 @@ const css = readFileSync(join(repoRoot, "web/kairos-dashboard/styles/readiness-s
 
 assert.ok(index.includes("scripts/readiness-system-certification.js"), "System certification module is not loaded.");
 assert.ok(index.includes("styles/readiness-system-certification.css"), "System certification stylesheet is not loaded.");
-assert.ok(index.includes("recovery-20260714-18"), "Browser build marker is not current for persistent system certification.");
+assert.ok(index.includes("recovery-20260714-19"), "Browser build marker is not current for persistent system certification.");
 for (const marker of ["Kairos Operational Certification", "command-center-kairos-operational-certification", "Reconcile five center certificates", "Approve current-blueprint operational status", "data-create-system-certification"]) {
   assert.ok(source.includes(marker), `System certification is missing: ${marker}`);
 }
