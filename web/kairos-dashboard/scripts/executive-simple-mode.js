@@ -1,4 +1,4 @@
-const BUILD="kairos-executive-simple-mode-20260714-5";
+const BUILD="kairos-executive-simple-mode-20260714-6";
 const TECHNICAL_SELECTORS=[
   ".readiness-system-certification",
   ".readiness-operational-assurance",
@@ -9,6 +9,7 @@ const TECHNICAL_SELECTORS=[
   ".readiness-recertification",
   ".readiness-certificate-succession"
 ];
+const PRIORITY_WEIGHT={critical:4,high:3,normal:2,low:1};
 let working=false;
 let myWorkOpen=false;
 let cachedWorkflows=[];
@@ -43,8 +44,7 @@ async function renderSystemCare(){
     const pulse=buildExecutivePulse(workflows);
     const healthy=healthResult.response.ok&&["ready","ok"].includes(String(healthResult.body?.status||"").toLowerCase());
     if(actions.length){
-      const current=actions[0];
-      panel.innerHTML=actionCard(current,actions.length-1,pulse);
+      panel.innerHTML=actionCard(actions[0],actions.length-1,pulse);
     }else if(!healthy){
       panel.innerHTML=`${copyBlock("Kairos needs attention","Open Operations for the guided fix.",pulse)}<button type="button" class="system-care-action" data-open-operations>Open Operations</button><span class="system-care-status" data-state="attention">Needs attention</span>`;
     }else{
@@ -110,8 +110,28 @@ function renderMyWork(){
   const active=cachedWorkflows.filter(item=>item.state==="active");
   const waiting=cachedWorkflows.filter(item=>!["active","completed","cancelled"].includes(item.state));
   const done=cachedWorkflows.filter(item=>item.state==="completed"&&Date.parse(item.updatedAt||item.completedAt||0)>=cutoff);
-  root.innerHTML=`<header class="my-work-head"><div><span class="system-care-kicker">My Work</span><h2>What Kairos is handling</h2><p>Only the work that needs your attention or is moving now.</p></div><button type="button" class="my-work-close" data-close-my-work>Close</button></header><div class="my-work-groups">${workGroup("In Progress",active,"Nothing is running right now.")}${workGroup("Waiting",waiting,"Nothing is waiting on you.")}${workGroup("Finished Today",done,"Nothing has finished today yet.")}</div>`;
+  const focus=selectNextBestAction(cachedWorkflows);
+  root.innerHTML=`<header class="my-work-head"><div><span class="system-care-kicker">My Work</span><h2>What Kairos is handling</h2><p>Only the work that needs your attention or is moving now.</p></div><button type="button" class="my-work-close" data-close-my-work>Close</button></header>${focus?focusMarkup(focus):`<section class="my-work-focus is-clear"><div><span class="system-care-kicker">Today’s Focus</span><strong>You are caught up</strong><small>Kairos has no next action waiting for you.</small></div><span class="my-work-focus-state">Clear</span></section>`}<div class="my-work-groups">${workGroup("In Progress",active,"Nothing is running right now.")}${workGroup("Waiting",waiting,"Nothing is waiting on you.")}${workGroup("Finished Today",done,"Nothing has finished today yet.")}</div>`;
   setTimeout(()=>root.scrollIntoView({behavior:"smooth",block:"start"}),20);
+}
+
+function selectNextBestAction(workflows){
+  const candidates=workflows.filter(item=>!["completed","cancelled"].includes(item.state)).map(item=>{
+    const approval=item.approvalRequired&&String(item.approvalStatus||"pending")==="pending";
+    const blocked=item.state==="blocked";
+    const finish=Number(item.progress||0)===100;
+    const active=item.state==="active";
+    const score=(approval?500:blocked?400:finish?350:active?300:200)+(PRIORITY_WEIGHT[item.priority]||2)*10+Number(item.progress||0)/100;
+    return {item,score,action:workAction(item)};
+  }).filter(entry=>entry.action).sort((a,b)=>b.score-a.score||Date.parse(b.item.updatedAt||0)-Date.parse(a.item.updatedAt||0));
+  return candidates[0]||null;
+}
+
+function focusMarkup(focus){
+  const item=focus.item;
+  const action=focus.action;
+  const progress=Math.max(0,Math.min(100,Number(item.progress||0)));
+  return `<section class="my-work-focus"><div class="my-work-focus-copy"><span class="system-care-kicker">Today’s Focus</span><strong>${escapeHTML(item.title||"Next best action")}</strong><small>${escapeHTML(plainObjective(item))}</small><div class="my-work-focus-meter"><span style="width:${progress}%"></span></div></div><div class="my-work-focus-action"><b>${progress}%</b><button type="button" data-executive-command="${escapeHTML(action.command)}" data-workflow-id="${escapeHTML(item.id)}">${escapeHTML(action.label)}</button></div></section>`;
 }
 
 function workGroup(title,items,empty){
