@@ -76,7 +76,7 @@ for (const asset of [
 const commandHub = readFileSync(join(repoRoot, "web/kairos-dashboard/scripts/command-hub.js"), "utf8");
 for (const center of ["knowledge", "content", "business", "customers", "operations"]) assert.ok(commandHub.includes(`id: "${center}"`), `Command Center parent is missing: ${center}`);
 for (const embeddedTool of ["Manuscript Studio", "Social Production", "Executive Briefing", "System Registry"]) assert.ok(commandHub.includes(embeddedTool), `Embedded child tool is missing: ${embeddedTool}`);
-const childActionCount = (commandHub.match(/^\s*\["[^"]+",\s*"[^"]+",\s*"[^"]+",\s*"[^"]+"\],?$/gm) || []).length;
+const childActionCount = (commandHub.match(/\["[^"]+",\s*"[^"]+",\s*"[^"]+",\s*"[^"]+"\]/g) || []).length;
 assert.equal(childActionCount, 25, `Command Center must define exactly 25 child cards; found ${childActionCount}.`);
 
 const layout = readFileSync(join(repoRoot, "web/kairos-dashboard/scripts/command-center-layout.js"), "utf8");
