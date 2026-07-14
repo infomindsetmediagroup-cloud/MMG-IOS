@@ -1,0 +1,15 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+const here=dirname(fileURLToPath(import.meta.url));const workerRoot=resolve(here,"..");const repoRoot=resolve(workerRoot,"../..");
+const visitor=readFileSync(join(repoRoot,"web/kairos-dashboard/scripts/visitor-activity.js"),"utf8");
+const journey=readFileSync(join(repoRoot,"web/kairos-dashboard/scripts/customer-journeys.js"),"utf8");
+const registry=readFileSync(join(workerRoot,"src/kairos-readiness-registry-v1.js"),"utf8");
+const index=readFileSync(join(repoRoot,"web/kairos-dashboard/index.html"),"utf8");
+for(const marker of ["Customer Evidence Operations","Recommended customer action","Improve Customer Journey","Open My Work","kairos:customer-journeys:open"])assert.ok(visitor.includes(marker),`Visitor evidence operation missing: ${marker}`);
+for(const marker of ["Verified evidence carried in","state.draft","currentState","friction","successMetrics"])assert.ok(journey.includes(marker),`Journey evidence handoff missing: ${marker}`);
+for(const marker of ['"visitor-activity":65','"customer-portal":70','deliverables:70','"customer-journey":65','"support-intelligence":65','baselineMigrationFloor'])assert.ok(registry.includes(marker),`Customer readiness migration missing: ${marker}`);
+assert.ok(index.includes("recovery-20260714-32"),"Customer evidence browser marker is not current.");
+assert.ok(!visitor.includes("setInterval("),"Customer evidence UI must not add polling.");
+console.log(JSON.stringify({status:"ready",batch:"customer-evidence-operations",visitorEvidence:true,journeyHandoff:true,customerReadiness:67},null,2));
