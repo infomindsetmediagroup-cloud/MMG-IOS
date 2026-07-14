@@ -1,0 +1,13 @@
+import assert from "node:assert/strict";
+import{existsSync,readFileSync}from"node:fs";
+import{dirname,join,resolve}from"node:path";
+import{fileURLToPath}from"node:url";
+const here=dirname(fileURLToPath(import.meta.url));const workerRoot=resolve(here,"..");const repoRoot=resolve(workerRoot,"../..");
+const files={runtime:join(workerRoot,"src/kairos-deliverables-v1.js"),entry:join(workerRoot,"src/kairos-production-entry-v2.js"),ui:join(repoRoot,"web/kairos-dashboard/scripts/deliverables.js"),css:join(repoRoot,"web/kairos-dashboard/styles/deliverables.css"),index:join(repoRoot,"web/kairos-dashboard/index.html")};
+for(const file of Object.values(files))assert.ok(existsSync(file),`Deliverables production file missing: ${file}`);
+const runtime=readFileSync(files.runtime,"utf8");for(const marker of["createDeliverable","Confirm deliverable scope","Assemble delivery package","Run final quality assurance","Approve release package","Deliver and record receipt","finalApprovalRequired: true","internalSourceFilesHidden: true","deliveryAutomatic: false","versionHistoryPreserved: true"])assert.ok(runtime.includes(marker),`Deliverables runtime contract missing: ${marker}`);
+const entry=readFileSync(files.entry,"utf8");for(const route of["/api/deliverables","/api/deliverables/latest","updateDeliverable"])assert.ok(entry.includes(route),`Deliverables route missing: ${route}`);
+const ui=readFileSync(files.ui,"utf8");for(const marker of['[data-child="deliverables"]',"Delivery Package Registry","Create Deliverable + Workflow","Open in Work Queue","Customers receive only the approved final package"])assert.ok(ui.includes(marker),`Deliverables UI missing: ${marker}`);
+assert.ok(!readFileSync(files.css,"utf8").includes("position:fixed"),"Deliverables must not introduce floating controls.");
+const index=readFileSync(files.index,"utf8");assert.ok(index.includes("scripts/deliverables.js"));assert.ok(index.includes("styles/deliverables.css"));
+console.log(JSON.stringify({status:"ready",deliverablesRegistry:true,fiveStageWorkflow:true,versionHistory:true,finalApproval:true,automaticDelivery:false,floatingControls:0},null,2));
