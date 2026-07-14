@@ -10,8 +10,11 @@ const source=readFileSync(join(repoRoot,"web/kairos-dashboard/scripts/executive-
 const css=readFileSync(join(repoRoot,"web/kairos-dashboard/styles/executive-simple-mode.css"),"utf8");
 assert.ok(index.includes("executive-simple-mode.js"),"Executive simple mode script is not loaded.");
 assert.ok(index.includes("executive-simple-mode.css"),"Executive simple mode stylesheet is not loaded.");
-assert.ok(index.includes("recovery-20260714-25"),"Executive simple mode build marker is not current.");
-for(const marker of ["System Care","Review & Approve","Resolve Issue","Kairos is ready","data-open-system-workflow"])assert.ok(source.includes(marker),`Executive simple mode is missing: ${marker}`);
+assert.ok(index.includes("recovery-20260714-26"),"Executive simple mode build marker is not current.");
+for(const marker of ["System Care","Approve & Start","Continue Fix","Resume","Kairos is ready","data-executive-command","approve-start"])assert.ok(source.includes(marker),`Executive simple mode is missing: ${marker}`);
 for(const selector of ["readiness-operational-remediation","readiness-recovery-verification","readiness-certificate-succession"])assert.ok(css.includes(selector),`Technical panel is not hidden: ${selector}`);
+assert.ok(source.includes('workflowCommand(workflowID,"approve")'),"One-click approval must issue the approve command.");
+assert.ok(source.includes('workflowCommand(workflowID,"start")'),"One-click approval must start approved ready work.");
+assert.ok(source.includes('workflowCommand(workflowID,"resume")'),"One-click recovery must resume blocked work.");
 assert.ok(!source.includes("setInterval("),"Executive simple mode must not add polling.");
-console.log(JSON.stringify({status:"ready",feature:"executive-simple-mode",technicalPanelsHidden:true,oneClickAction:true},null,2));
+console.log(JSON.stringify({status:"ready",feature:"executive-simple-mode",technicalPanelsHidden:true,oneClickApproval:true,oneClickRecovery:true},null,2));
