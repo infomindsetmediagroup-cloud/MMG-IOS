@@ -1,0 +1,13 @@
+import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+const here=dirname(fileURLToPath(import.meta.url));const workerRoot=resolve(here,"..");const repoRoot=resolve(workerRoot,"../..");
+const files={runtime:join(workerRoot,"src/kairos-customer-journey-v1.js"),entry:join(workerRoot,"src/kairos-production-entry-v2.js"),ui:join(repoRoot,"web/kairos-dashboard/scripts/customer-journeys.js"),css:join(repoRoot,"web/kairos-dashboard/styles/customer-journeys.css"),index:join(repoRoot,"web/kairos-dashboard/index.html")};
+for(const file of Object.values(files))assert.ok(existsSync(file),`Customer Journey production file missing: ${file}`);
+const runtime=readFileSync(files.runtime,"utf8");for(const marker of ["createJourney","Define journey and customer state","Map touchpoints and handoffs","Identify friction and failure points","Design the improved journey","Approve and measure the journey","customerFacingChangesRequireApproval: true","automatedMessagingRequiresApproval: true","personalProfilingAutomatic: false","unsupportedIdentityInference: false"])assert.ok(runtime.includes(marker),`Customer Journey contract missing: ${marker}`);
+const entry=readFileSync(files.entry,"utf8");for(const route of ["/api/customer-journeys","/api/customer-journeys/latest"])assert.ok(entry.includes(route),`Customer Journey route missing: ${route}`);
+const ui=readFileSync(files.ui,"utf8");for(const marker of ['[data-child="customer-journeys"]',"Customer Journey Workspace","Create Journey + Workflow","Open in Work Queue","does not perform automatic profiling"])assert.ok(ui.includes(marker),`Customer Journey UI missing: ${marker}`);
+assert.ok(!readFileSync(files.css,"utf8").includes("position:fixed"),"Customer Journeys must not introduce floating controls.");
+const index=readFileSync(files.index,"utf8");assert.ok(index.includes("scripts/customer-journeys.js"));assert.ok(index.includes("styles/customer-journeys.css"));
+console.log(JSON.stringify({status:"ready",customerJourneys:true,fiveStageWorkflow:true,customerFacingApproval:true,automaticProfiling:false,identityInference:false,floatingControls:0},null,2));
