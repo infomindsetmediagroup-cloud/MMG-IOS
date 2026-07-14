@@ -1,4 +1,4 @@
-const BUILD = "kairos-readiness-system-certification-ui-20260714-1";
+const BUILD = "kairos-readiness-system-certification-ui-20260714-2";
 const CENTERS = ["knowledge", "content", "business", "customers", "operations"];
 let working = false;
 
@@ -31,12 +31,12 @@ async function handleClick(event) {
 }
 
 async function enhanceSystemCertification() {
-  const grid = document.querySelector(".parent-grid");
-  if (!grid || document.querySelector(".readiness-system-certification")) return;
+  const hub = document.querySelector("#kairos-hub");
+  if (!hub || document.querySelector(".readiness-system-certification")) return;
   const section = document.createElement("section");
   section.className = "readiness-system-certification";
   section.innerHTML = `<header><div><p class="eyebrow">Kairos Operational Certification</p><h2>Enterprise readiness across all five operating centers</h2></div><span data-system-certification-state>Checking</span></header><div class="system-certification-centers" data-system-certification-centers></div><div data-system-certification-action><p class="readiness-register-empty">Reconciling center certificates and current-blueprint completion evidence…</p></div><p class="system-certification-boundary">System certification confirms Kairos is operational across the current governed blueprint. It does not freeze future expansion or replace production monitoring.</p>`;
-  grid.insertAdjacentElement("afterend", section);
+  hub.insertAdjacentElement("afterend", section);
   await loadCertification();
 }
 
