@@ -1,10 +1,10 @@
 import { readWorkflow } from "./kairos-workflow-runtime-v1.js";
 
-const BUILD = "kairos-readiness-registry-20260714-2";
+const BUILD = "kairos-readiness-registry-20260714-3";
 const CACHE_SECONDS = 60 * 60 * 24 * 365;
 const DEFAULTS = {
   knowledge: { "knowledge-library":60, "research-brief":60, "decision-record":60, "doctrine-vault":50, "intelligence-synthesis":60 },
-  content: { website:90, "manuscript-studio":80, "social-production":70, "publishing-studio":60, "creative-studio":60 },
+  content: { website:90, "manuscript-studio":80, "social-production":70, "publishing-studio":80, "creative-studio":80 },
   business: { "product-launch":50, "revenue-intelligence":45, "growth-plan":40, "offer-builder":40, "campaign-operations":35 },
   customers: { "visitor-activity":65, "customer-portal":70, deliverables:70, "customer-journey":65, "support-intelligence":65 },
   operations: { health:100, "work-queue":100, "release-control":100, "executive-briefing":100, "system-registry":100 },
