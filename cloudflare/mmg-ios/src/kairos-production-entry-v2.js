@@ -11,12 +11,12 @@ import{createLaunchProject,readLatestLaunchProject,readLaunchProject}from"./kair
 import{readLatestRevenueReview,readRevenueReview,runRevenueReview}from"./kairos-revenue-intelligence-v1.js";
 import{createGrowthPlan,readGrowthPlan,readLatestGrowthPlan}from"./kairos-growth-plan-v1.js";
 import{createOffer,readLatestOffer,readOffer}from"./kairos-offer-builder-v1.js";
-import{createCampaign,readCampaign,readLatestCampaign}from"./kairos-campaign-operations-v1.js";
+import{closeCampaign,createCampaign,readCampaign,readLatestCampaign}from"./kairos-campaign-operations-v1.js";
 import{readLatestVisitorReview,readVisitorReview,runVisitorReview}from"./kairos-visitor-activity-v1.js";
 import{createJourney,readJourney,readLatestJourney}from"./kairos-customer-journey-v1.js";
 import{createCustomerProject,readCustomerProject,readLatestCustomerProject,updateCustomerProject}from"./kairos-customer-portal-v1.js";
 import{createDeliverable,readDeliverable,readLatestDeliverable,updateDeliverable}from"./kairos-deliverables-v1.js";
-const BUILD="kairos-production-entry-20260713-20";export{KairosProject};
+const BUILD="kairos-production-entry-20260714-21";export{KairosProject};
 export default{async fetch(request,env,ctx){const url=new URL(request.url);try{
 if(request.method==="POST"&&url.pathname==="/api/deliverables"){const payload=await safeJSON(request.clone());return json({status:"completed",build:BUILD,...await createDeliverable(request,payload)},201)}
 if(request.method==="GET"&&url.pathname==="/api/deliverables/latest"){const result=await readLatestDeliverable(request);return result?json({status:"completed",build:BUILD,...result}):json({status:"not-ready",build:BUILD},404)}
@@ -33,6 +33,7 @@ if(request.method==="POST"&&url.pathname==="/api/visitor-activity/reviews"){cons
 if(request.method==="GET"&&url.pathname==="/api/visitor-activity/latest"){const report=await readLatestVisitorReview(request);return report?json({status:"completed",build:BUILD,report}):json({status:"not-ready",build:BUILD},404)}
 if(request.method==="GET"&&url.pathname.startsWith("/api/visitor-activity/reviews/")){const id=decodeURIComponent(url.pathname.split("/").pop()||"");const report=await readVisitorReview(request,id);return report?json({status:"completed",build:BUILD,report}):json({status:"not-found",build:BUILD},404)}
 if(request.method==="POST"&&url.pathname==="/api/campaigns"){const payload=await safeJSON(request.clone());return json({status:"completed",build:BUILD,...await createCampaign(request,payload)},201)}
+if(request.method==="PATCH"&&/^\/api\/campaigns\/[^/]+\/closeout$/.test(url.pathname)){const parts=url.pathname.split("/").filter(Boolean),payload=await safeJSON(request.clone());return json({status:"completed",build:BUILD,...await closeCampaign(request,decodeURIComponent(parts[2]),payload)})}
 if(request.method==="GET"&&url.pathname==="/api/campaigns/latest"){const result=await readLatestCampaign(request);return result?json({status:"completed",build:BUILD,...result}):json({status:"not-ready",build:BUILD},404)}
 if(request.method==="GET"&&url.pathname.startsWith("/api/campaigns/")){const id=decodeURIComponent(url.pathname.split("/").pop()||"");const result=await readCampaign(request,id);return result?json({status:"completed",build:BUILD,...result}):json({status:"not-found",build:BUILD},404)}
 if(request.method==="POST"&&url.pathname==="/api/offers"){const payload=await safeJSON(request.clone());return json({status:"completed",build:BUILD,...await createOffer(request,payload)},201)}
