@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "preinstall": "node scripts/validate-operational-workspaces.mjs",
+    "preinstall": "node scripts/validate-production-suite.mjs",
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
     "test": "node --test test/*.test.js",
