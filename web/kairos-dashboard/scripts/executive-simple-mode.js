@@ -1,4 +1,4 @@
-const BUILD="kairos-executive-simple-mode-20260714-2";
+const BUILD="kairos-executive-simple-mode-20260714-3";
 const TECHNICAL_SELECTORS=[
   ".readiness-system-certification",
   ".readiness-operational-assurance",
@@ -37,15 +37,20 @@ async function renderSystemCare(){
     const workflows=workflowResult.body?.workflows||[];
     const open=workflows.filter(item=>!["completed","cancelled"].includes(item.state));
     const approval=open.find(item=>item.approvalRequired&&String(item.approvalStatus||"pending")==="pending");
-    const blocked=open.find(item=>item.state==="blocked");
+    const finishable=open.find(item=>Number(item.progress||0)===100&&item.state!=="completed");
     const remediation=open.find(item=>["command-center-operational-remediation","command-center-recovery-verification"].includes(item.source));
+    const blocked=open.find(item=>item.state==="blocked");
+    const actionable=[approval,finishable,remediation,blocked].filter((item,index,list)=>item&&list.findIndex(other=>other?.id===item.id)===index);
+    const waiting=actionable.length;
     const healthy=healthResult.response.ok&&["ready","ok"].includes(String(healthResult.body?.status||"").toLowerCase());
     if(approval){
-      panel.innerHTML=actionCard("Approval needed",plainObjective(approval),"Approve & Start",approval.id,"approve-start","approval");
+      panel.innerHTML=actionCard("Approval needed",plainObjective(approval),"Approve & Start",approval.id,"approve-start","approval",waiting);
+    }else if(finishable){
+      panel.innerHTML=actionCard("Ready to finish",plainObjective(finishable),"Finish",finishable.id,"complete","approval",waiting);
     }else if(remediation){
-      panel.innerHTML=actionCard("Kairos needs attention","A guided fix is prepared and ready to continue.","Continue Fix",remediation.id,"open","attention");
+      panel.innerHTML=actionCard("Kairos needs attention","A guided fix is prepared and ready to continue.","Continue Fix",remediation.id,"open","attention",waiting);
     }else if(blocked){
-      panel.innerHTML=actionCard("Kairos needs attention",plainObjective(blocked),"Resume",blocked.id,"resume","attention");
+      panel.innerHTML=actionCard("Kairos needs attention",plainObjective(blocked),"Resume",blocked.id,"resume","attention",waiting);
     }else if(!healthy){
       panel.innerHTML=`<div class="system-care-copy"><span class="system-care-kicker">System Care</span><strong>Kairos needs attention</strong><small>Open Operations for the guided fix.</small></div><button type="button" class="system-care-action" data-open-operations>Open Operations</button><span class="system-care-status" data-state="attention">Needs attention</span>`;
     }else{
@@ -57,8 +62,9 @@ async function renderSystemCare(){
   hideTechnicalPanels();
 }
 
-function actionCard(title,description,label,id,command,state){
-  return `<div class="system-care-copy"><span class="system-care-kicker">System Care</span><strong>${escapeHTML(title)}</strong><small>${escapeHTML(description)}</small></div><button type="button" class="system-care-action" data-executive-command="${escapeHTML(command)}" data-workflow-id="${escapeHTML(id)}">${escapeHTML(label)}</button><span class="system-care-status" data-state="${escapeHTML(state)}">${state==="approval"?"Your approval":"Needs attention"}</span>`;
+function actionCard(title,description,label,id,command,state,waiting){
+  const queueNote=waiting>1?`<span class="system-care-queue">${waiting} actions waiting · next appears automatically</span>`:"";
+  return `<div class="system-care-copy"><span class="system-care-kicker">System Care</span><strong>${escapeHTML(title)}</strong><small>${escapeHTML(description)}</small>${queueNote}</div><button type="button" class="system-care-action" data-executive-command="${escapeHTML(command)}" data-workflow-id="${escapeHTML(id)}">${escapeHTML(label)}</button><span class="system-care-status" data-state="${escapeHTML(state)}">${state==="approval"?"Your action":"Needs attention"}</span>`;
 }
 
 function plainObjective(workflow){
@@ -94,7 +100,7 @@ async function runExecutiveAction(button){
   working=true;
   const original=button.textContent;
   button.disabled=true;
-  button.textContent=command==="approve-start"?"Approving…":"Resuming…";
+  button.textContent=command==="approve-start"?"Approving…":command==="complete"?"Finishing…":"Resuming…";
   try{
     if(command==="approve-start"){
       await workflowCommand(workflowID,"approve");
@@ -103,6 +109,8 @@ async function runExecutiveAction(button){
       if(opened.response.ok&&workflow?.state==="ready"&&workflow?.approvalStatus==="approved")await workflowCommand(workflowID,"start");
     }else if(command==="resume"){
       await workflowCommand(workflowID,"resume");
+    }else if(command==="complete"){
+      await workflowCommand(workflowID,"complete");
     }
     button.textContent="Done";
     setTimeout(renderSystemCare,350);
