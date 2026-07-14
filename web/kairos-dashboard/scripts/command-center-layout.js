@@ -1,4 +1,4 @@
-const BUILD = "kairos-command-center-layout-20260714-5";
+const BUILD = "kairos-command-center-layout-20260714-6";
 
 const layoutState = {
   menuOpen: false,
@@ -54,7 +54,7 @@ function applyLayout() {
       header.insertAdjacentElement("afterend", strip);
     }
 
-    strip.innerHTML = `<button class="command-menu-button" type="button" aria-label="Open operating centers" aria-expanded="${layoutState.menuOpen}" data-command-menu><span></span><span></span><span></span></button><div class="command-indicator command-online"><i class="${layoutState.onlineState}"></i><span>${escapeHTML(layoutState.online)}</span></div><div class="command-indicator"><small>Active Work</small><strong>${escapeHTML(layoutState.activeWork)}</strong></div><div class="command-indicator"><small>Finished Work</small><strong>${escapeHTML(layoutState.finishedWork)}</strong></div><div class="command-indicator"><small>Work To Be Done</small><strong>${escapeHTML(layoutState.workToBeDone)}</strong></div>`;
+    strip.innerHTML = `<button class="command-menu-button" type="button" aria-label="Open operating centers" aria-expanded="${layoutState.menuOpen}" data-command-menu><span></span><span></span><span></span></button><div class="command-indicator command-online"><i class="${layoutState.onlineState}"></i><span>${escapeHTML(layoutState.online)}</span></div><div class="command-indicator"><small>In Progress</small><strong>${escapeHTML(layoutState.activeWork)}</strong></div><div class="command-indicator"><small>Done 24h</small><strong>${escapeHTML(layoutState.finishedWork)}</strong></div><div class="command-indicator"><small>Not Started</small><strong>${escapeHTML(layoutState.workToBeDone)}</strong></div>`;
 
     let menu = hub.querySelector("#command-center-menu");
     if (!menu) {
