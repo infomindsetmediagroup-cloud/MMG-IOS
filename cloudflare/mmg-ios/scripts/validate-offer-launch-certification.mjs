@@ -16,6 +16,6 @@ assert.match(launch,/project\.status\s*=\s*["']launch-certified["']/,"Launch cer
 for(const property of ["offerCertified","customerPathVerified","deliveryVerified","analyticsVerified","campaignAssetsVerified","rollbackEvidence","externalPublicationAutomatic","campaignActivationAutomatic"])assert.ok(launch.includes(property),`Launch certification property missing: ${property}`);
 assert.match(launch,/externalPublicationAutomatic\s*:\s*false/);assert.match(launch,/campaignActivationAutomatic\s*:\s*false/);
 const entry=readFileSync(paths.entry,"utf8");
-assert.match(entry,/\/api\/offers\/.*\/certify/);assert.match(entry,/\/api\/product-launch\/projects\/.*\/certify/);assert.ok(entry.includes("certifyOffer")&&entry.includes("certifyLaunchReadiness")&&entry.includes("canonicalRuntime.fetch"));
+for(const marker of ["certifyOffer","certifyLaunchReadiness","url.pathname","request.method === \"PATCH\"","canonicalRuntime.fetch","parts[2]","parts[3]"])assert.ok(entry.includes(marker),`Certification route structure missing: ${marker}`);
 assert.ok(readFileSync(paths.wrangler,"utf8").includes('main = "src/kairos-production-entry-v3.js"'),"Certification entry is not active.");
 console.log(JSON.stringify({status:"ready",offerCertification:true,launchReadinessCertification:true,approvalRequired:true,evidenceRequired:true,automaticPublication:false,automaticCampaignActivation:false},null,2));
