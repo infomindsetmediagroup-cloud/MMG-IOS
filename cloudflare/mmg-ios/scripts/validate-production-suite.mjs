@@ -9,6 +9,7 @@ const scripts=[
 "validate-objective-router.mjs",
 "validate-campaign-operations.mjs",
 "validate-offer-launch-certification.mjs",
+"validate-customer-support-learning-loop.mjs",
 "validate-readiness-system-certification.mjs",
 "validate-readiness-operational-remediation.mjs",
 "validate-readiness-recovery-verification.mjs",
@@ -26,15 +27,7 @@ const scripts=[
 "validate-decision-record-operations.mjs",
 "validate-social-campaign-operations.mjs"
 ];
-
 const failures=[];let passed=0;
-for(const script of scripts){
-  const result=spawnSync(process.execPath,[new URL(script,import.meta.url).pathname],{encoding:"utf8",env:process.env,maxBuffer:10*1024*1024});
-  if(result.status===0){passed+=1;continue}
-  const combined=`${result.stdout||""}\n${result.stderr||""}`.trim();
-  const evidence=combined.split(/\r?\n/).filter(Boolean).slice(-12).join(" | ");
-  failures.push({script,evidence});
-}
-const summary={status:failures.length?"failed":"ready",runner:"kairos-production-validation-suite-20260714-7",mode:dependenciesInstalled?"full":"static-preflight",total:scripts.length,passed,failed:failures.length,failures};
-console.log(`KAIROS_VALIDATION_SUMMARY=${JSON.stringify(summary)}`);
-if(failures.length)process.exit(1);
+for(const script of scripts){const result=spawnSync(process.execPath,[new URL(script,import.meta.url).pathname],{encoding:"utf8",env:process.env,maxBuffer:10*1024*1024});if(result.status===0){passed+=1;continue}const combined=`${result.stdout||""}\n${result.stderr||""}`.trim();const evidence=combined.split(/\r?\n/).filter(Boolean).slice(-12).join(" | ");failures.push({script,evidence})}
+const summary={status:failures.length?"failed":"ready",runner:"kairos-production-validation-suite-20260714-8",mode:dependenciesInstalled?"full":"static-preflight",total:scripts.length,passed,failed:failures.length,failures};
+console.log(`KAIROS_VALIDATION_SUMMARY=${JSON.stringify(summary)}`);if(failures.length)process.exit(1);
