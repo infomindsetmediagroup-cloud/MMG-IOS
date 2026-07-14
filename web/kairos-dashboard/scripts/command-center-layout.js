@@ -1,4 +1,4 @@
-const BUILD = "kairos-command-center-layout-20260714-6";
+const BUILD = "kairos-command-center-layout-20260714-7";
 
 const layoutState = {
   menuOpen: false,
@@ -54,7 +54,7 @@ function applyLayout() {
       header.insertAdjacentElement("afterend", strip);
     }
 
-    strip.innerHTML = `<button class="command-menu-button" type="button" aria-label="Open operating centers" aria-expanded="${layoutState.menuOpen}" data-command-menu><span></span><span></span><span></span></button><div class="command-indicator command-online"><i class="${layoutState.onlineState}"></i><span>${escapeHTML(layoutState.online)}</span></div><div class="command-indicator"><small>In Progress</small><strong>${escapeHTML(layoutState.activeWork)}</strong></div><div class="command-indicator"><small>Done 24h</small><strong>${escapeHTML(layoutState.finishedWork)}</strong></div><div class="command-indicator"><small>Not Started</small><strong>${escapeHTML(layoutState.workToBeDone)}</strong></div>`;
+    strip.innerHTML = `<button class="command-menu-button" type="button" aria-label="Open operating centers" aria-expanded="${layoutState.menuOpen}" data-command-menu><span></span><span></span><span></span></button><div class="command-indicator command-online"><i class="${layoutState.onlineState}"></i><span>${escapeHTML(layoutState.online)}</span></div>${pulseButton("active","In Progress",layoutState.activeWork)}${pulseButton("finished","Done 24h",layoutState.finishedWork)}${pulseButton("pending","Not Started",layoutState.workToBeDone)}`;
 
     let menu = hub.querySelector("#command-center-menu");
     if (!menu) {
@@ -78,6 +78,9 @@ function applyLayout() {
       layoutState.menuOpen = !layoutState.menuOpen;
       applyLayout();
     });
+    strip.querySelectorAll("[data-work-pulse]").forEach(button => button.addEventListener("click", () => {
+      window.dispatchEvent(new CustomEvent("kairos:workflow-runtime:open", { detail: { filter: button.dataset.workPulse } }));
+    }));
 
     menu.querySelectorAll("[data-menu-center]").forEach(button => button.addEventListener("click", () => {
       layoutState.menuOpen = false;
@@ -88,6 +91,10 @@ function applyLayout() {
   } finally {
     observe();
   }
+}
+
+function pulseButton(filter, label, value) {
+  return `<button class="command-indicator command-pulse" type="button" data-work-pulse="${filter}" aria-label="Open ${escapeHTML(label)} workflows"><small>${escapeHTML(label)}</small><strong>${escapeHTML(value)}</strong></button>`;
 }
 
 function captureMetricValues(metrics) {
