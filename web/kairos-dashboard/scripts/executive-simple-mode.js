@@ -1,4 +1,4 @@
-const BUILD="kairos-executive-simple-mode-20260714-4";
+const BUILD="kairos-executive-simple-mode-20260714-5";
 const TECHNICAL_SELECTORS=[
   ".readiness-system-certification",
   ".readiness-operational-assurance",
@@ -10,6 +10,8 @@ const TECHNICAL_SELECTORS=[
   ".readiness-certificate-succession"
 ];
 let working=false;
+let myWorkOpen=false;
+let cachedWorkflows=[];
 
 start();
 
@@ -35,6 +37,7 @@ async function renderSystemCare(){
   try{
     const [healthResult,workflowResult]=await Promise.all([request("/api/health"),request("/api/workflows")]);
     const workflows=workflowResult.body?.workflows||[];
+    cachedWorkflows=workflows;
     const open=workflows.filter(item=>!["completed","cancelled"].includes(item.state));
     const actions=buildActionQueue(open);
     const pulse=buildExecutivePulse(workflows);
@@ -47,6 +50,7 @@ async function renderSystemCare(){
     }else{
       panel.innerHTML=`${copyBlock("Kairos is ready","No action is required.",pulse)}${pulse.total?`<button type="button" class="system-care-secondary" data-open-my-work>Open My Work</button>`:""}<span class="system-care-status" data-state="healthy">Ready</span>`;
     }
+    if(myWorkOpen)renderMyWork();
   }catch{
     panel.innerHTML=checkingCard();
   }
@@ -91,6 +95,44 @@ function checkingCard(){
   return `<div class="system-care-copy"><span class="system-care-kicker">System Care</span><strong>Kairos is checking itself</strong><small>You only need to act when Kairos asks.</small></div><span class="system-care-status" data-state="checking">Checking</span>`;
 }
 
+function renderMyWork(){
+  const care=document.querySelector("#kairos-system-care");
+  if(!care)return;
+  let root=document.querySelector("#kairos-my-work");
+  if(!myWorkOpen){root?.remove();return;}
+  if(!root){
+    root=document.createElement("section");
+    root.id="kairos-my-work";
+    root.className="kairos-my-work";
+    care.insertAdjacentElement("afterend",root);
+  }
+  const cutoff=Date.now()-24*60*60*1000;
+  const active=cachedWorkflows.filter(item=>item.state==="active");
+  const waiting=cachedWorkflows.filter(item=>!["active","completed","cancelled"].includes(item.state));
+  const done=cachedWorkflows.filter(item=>item.state==="completed"&&Date.parse(item.updatedAt||item.completedAt||0)>=cutoff);
+  root.innerHTML=`<header class="my-work-head"><div><span class="system-care-kicker">My Work</span><h2>What Kairos is handling</h2><p>Only the work that needs your attention or is moving now.</p></div><button type="button" class="my-work-close" data-close-my-work>Close</button></header><div class="my-work-groups">${workGroup("In Progress",active,"Nothing is running right now.")}${workGroup("Waiting",waiting,"Nothing is waiting on you.")}${workGroup("Finished Today",done,"Nothing has finished today yet.")}</div>`;
+  setTimeout(()=>root.scrollIntoView({behavior:"smooth",block:"start"}),20);
+}
+
+function workGroup(title,items,empty){
+  return `<section class="my-work-group"><header><h3>${escapeHTML(title)}</h3><span>${items.length}</span></header>${items.length?`<div class="my-work-list">${items.slice(0,6).map(workRow).join("")}</div>`:`<p class="my-work-empty">${escapeHTML(empty)}</p>`}</section>`;
+}
+
+function workRow(item){
+  const action=workAction(item);
+  const progress=Math.max(0,Math.min(100,Number(item.progress||0)));
+  return `<article class="my-work-row"><div class="my-work-copy"><strong>${escapeHTML(item.title||"Kairos work")}</strong><small>${escapeHTML(plainObjective(item))}</small><div class="my-work-meter"><span style="width:${progress}%"></span></div></div><div class="my-work-meta"><b>${progress}%</b>${action?`<button type="button" data-executive-command="${escapeHTML(action.command)}" data-workflow-id="${escapeHTML(item.id)}">${escapeHTML(action.label)}</button>`:"<span>Done</span>"}</div></article>`;
+}
+
+function workAction(item){
+  if(item.approvalRequired&&String(item.approvalStatus||"pending")==="pending")return{label:"Approve & Start",command:"approve-start"};
+  if(item.state==="blocked")return{label:"Resume",command:"resume"};
+  if(Number(item.progress||0)===100&&item.state!=="completed")return{label:"Finish",command:"complete"};
+  if(item.state==="active")return{label:"Continue",command:"open"};
+  if(item.state==="completed")return null;
+  return{label:"Open",command:"open"};
+}
+
 function plainObjective(workflow){
   const objective=String(workflow?.objective||"").trim();
   if(objective)return objective.length>150?`${objective.slice(0,147)}…`:objective;
@@ -111,8 +153,13 @@ async function handleClick(event){
   const myWork=event.target.closest?.("[data-open-my-work]");
   if(myWork){
     event.preventDefault();event.stopImmediatePropagation();
-    window.dispatchEvent(new CustomEvent("kairos:workflow-runtime:open",{detail:{filter:"active"}}));
-    setTimeout(()=>document.querySelector("#workflow-runtime")?.scrollIntoView({behavior:"smooth",block:"start"}),80);
+    myWorkOpen=true;renderMyWork();
+    return;
+  }
+  const closeMyWork=event.target.closest?.("[data-close-my-work]");
+  if(closeMyWork){
+    event.preventDefault();event.stopImmediatePropagation();
+    myWorkOpen=false;renderMyWork();
     return;
   }
   const operations=event.target.closest?.("[data-open-operations]");
@@ -165,4 +212,4 @@ function openWorkflow(workflowID){
 
 async function request(url,init={}){const response=await fetch(url,{cache:"no-store",credentials:"include",...init});const text=await response.text();let body={};try{body=text?JSON.parse(text):{}}catch{body={message:text}}return{response,body}}
 function escapeHTML(value){return String(value??"").replace(/[&<>'"]/g,character=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"})[character])}
-window.KairosExecutiveSimpleMode={build:BUILD,refresh:renderSystemCare};
+window.KairosExecutiveSimpleMode={build:BUILD,refresh:renderSystemCare,openMyWork:()=>{myWorkOpen=true;renderMyWork();}};
