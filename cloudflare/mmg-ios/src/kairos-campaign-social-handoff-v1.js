@@ -1,0 +1,60 @@
+import { readCampaign } from "./kairos-campaign-operations-v1.js";
+import { readSocialPackage } from "./kairos-social-production-v1.js";
+
+const BUILD="kairos-campaign-social-handoff-20260714-1";
+const CACHE_SECONDS=60*60*24*30;
+
+export async function certifyCampaignActivation(request,campaignID,payload={}){
+  const current=await readCampaign(request,campaignID);
+  if(!current)throw new Error("Campaign was not found.");
+  const {campaign,workflow}=current;
+  if(campaign.status==="measured-and-closed")throw new Error("A closed campaign cannot be activated.");
+  if(workflow?.approvalRequired&&workflow.approvalStatus!=="approved")throw new Error("Campaign activation requires an approved workflow.");
+  const activationEvidence=clean(payload.activationEvidence,5000);
+  const rollbackEvidence=clean(payload.rollbackEvidence,3000);
+  const trackingEvidence=clean(payload.trackingEvidence,3000);
+  const claimsEvidence=clean(payload.claimsEvidence,3000);
+  const actor=clean(payload.actor,180);
+  if(!actor)throw new Error("Activation approval actor is required.");
+  if(activationEvidence.length<20)throw new Error("Verified activation evidence is required.");
+  if(rollbackEvidence.length<20)throw new Error("Rollback evidence is required.");
+  if(trackingEvidence.length<10)throw new Error("Tracking verification is required.");
+  if(payload.assetsVerified!==true||payload.destinationsVerified!==true||payload.permissionsVerified!==true||payload.scheduleApproved!==true)throw new Error("Assets, destinations, permissions, and schedule must be verified.");
+  if(campaign.channel==="paid-media"&&payload.paidSpendApproved!==true)throw new Error("Paid-media activation requires explicit spend approval.");
+  const now=new Date().toISOString();
+  const activation={id:`campaign-activation-${crypto.randomUUID()}`,build:BUILD,campaignID:campaign.id,status:"activation-certified",certifiedAt:now,actor,activationEvidence,rollbackEvidence,trackingEvidence,claimsEvidence,approvedSchedule:clean(payload.approvedSchedule,500),approvedBudget:clean(payload.approvedBudget,500),socialPackageIDs:list(payload.socialPackageIDs,24),governance:{externalPublicationAutomatic:false,paidSpendAutomatic:false,pricingChangesAutomatic:false,scheduleMutationAutomatic:false,claimsRequireEvidence:true,rollbackEvidenceRequired:true,connectorHandoffRequiresAuthorization:true}};
+  await persist(request,activationRequest(request,activation.id),activation);
+  await persist(request,latestActivationRequest(request),activation);
+  return{activation,campaign,workflow};
+}
+
+export async function authorizeSocialConnectorHandoff(request,payload={}){
+  const activationID=clean(payload.activationID,180);
+  const packageID=clean(payload.packageID,180);
+  if(!activationID||!packageID)throw new Error("Campaign activation and social package references are required.");
+  const activation=await readStored(activationRequest(request,activationID));
+  if(!activation||activation.status!=="activation-certified")throw new Error("Certified campaign activation was not found.");
+  const socialPackage=await readSocialPackage(request,packageID);
+  if(!socialPackage)throw new Error("Social package was not found.");
+  if(socialPackage.approval?.state!=="approved")throw new Error("Social package must be approved before connector handoff.");
+  const actor=clean(payload.actor,180),authorizationEvidence=clean(payload.authorizationEvidence,5000),connector=clean(payload.connector,180),destination=clean(payload.destination,240);
+  if(!actor||!connector||!destination)throw new Error("Actor, connector, and destination are required.");
+  if(authorizationEvidence.length<20)throw new Error("Connector authorization evidence is required.");
+  if(payload.mediaVerified!==true||payload.captionVerified!==true||payload.disclosureVerified!==true||payload.scheduleVerified!==true)throw new Error("Media, caption, disclosure, and schedule must be verified.");
+  const now=new Date().toISOString();
+  const handoff={id:`social-handoff-${crypto.randomUUID()}`,build:BUILD,status:"authorized-for-connector-handoff",campaignActivationID:activation.id,campaignID:activation.campaignID,socialPackageID:socialPackage.id,actor,connector,destination,scheduledFor:clean(payload.scheduledFor,180),authorizationEvidence,authorizedAt:now,payload:{...socialPackage.connectorReadyPayload,publish:false},governance:{externalPublishingPerformed:false,automaticScheduling:false,automaticPaidSpend:false,automaticDeletion:false,automaticRepublication:false,publicationReceiptRequired:true,connectorExecutionSeparate:true}};
+  await persist(request,handoffRequest(request,handoff.id),handoff);
+  await persist(request,latestHandoffRequest(request),handoff);
+  return{handoff,activation,socialPackage};
+}
+
+export async function readLatestCampaignActivation(request){return readStored(latestActivationRequest(request));}
+export async function readLatestSocialHandoff(request){return readStored(latestHandoffRequest(request));}
+async function readStored(key){const r=await caches.default.match(key);if(!r)return null;try{return await r.json()}catch{return null}}
+async function persist(request,key,value){await caches.default.put(key,new Response(JSON.stringify(value),{headers:{"Content-Type":"application/json; charset=utf-8","Cache-Control":`public, max-age=${CACHE_SECONDS}`}}));}
+function activationRequest(request,id){return new Request(new URL(`/_kairos/campaign-activations/${encodeURIComponent(id)}`,request.url),{method:"GET"})}
+function latestActivationRequest(request){return new Request(new URL("/_kairos/campaign-activations/latest",request.url),{method:"GET"})}
+function handoffRequest(request,id){return new Request(new URL(`/_kairos/social-handoffs/${encodeURIComponent(id)}`,request.url),{method:"GET"})}
+function latestHandoffRequest(request){return new Request(new URL("/_kairos/social-handoffs/latest",request.url),{method:"GET"})}
+function clean(value,max){return String(value??"").trim().slice(0,max)}
+function list(value,max){return(Array.isArray(value)?value:String(value??"").split(",")).map(x=>clean(x,180)).filter(Boolean).slice(0,max)}
