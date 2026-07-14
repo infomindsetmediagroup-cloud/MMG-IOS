@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "preinstall": "node scripts/validate-operational-workspaces.mjs",
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
     "test": "node --test test/*.test.js",
