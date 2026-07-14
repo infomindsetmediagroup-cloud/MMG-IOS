@@ -48,16 +48,12 @@ for (const script of scripts) {
   }
   const combined = `${result.stdout || ""}\n${result.stderr || ""}`.trim();
   const lines = combined.split(/\r?\n/).filter(Boolean);
-  failures.push({
-    script,
-    exitCode: result.status,
-    evidence: lines.slice(-18),
-  });
+  failures.push({ script, exitCode: result.status, evidence: lines.slice(-18) });
 }
 
 console.log(JSON.stringify({
   status: failures.length ? "failed" : "ready",
-  runner: "kairos-production-validation-suite-20260714-1",
+  runner: "kairos-production-validation-suite-20260714-2",
   total: scripts.length,
   passed: passed.length,
   failed: failures.length,
