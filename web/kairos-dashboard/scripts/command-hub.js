@@ -1,4 +1,4 @@
-const BUILD = "kairos-command-hub-20260713-37";
+const BUILD = "kairos-command-hub-20260714-38";
 const HEADER_ASSET = "https://cdn.shopify.com/s/files/1/0754/4337/2186/files/kairos-app-header.png?v=1783815598";
 const root = document.querySelector("#kairos-hub");
 
@@ -8,6 +8,7 @@ const state = {
   latency: null,
   activeCenter: null,
   activeJobs: 0,
+  workPulse: { activeWork: 0, finishedWork24h: 0, workToBeDone: 0, openWorkflows: 0, blockedWorkflows: 0, available: false },
   job: null,
   plan: null,
   approval: null,
@@ -20,112 +21,71 @@ const state = {
 
 const centers = [
   {
-    id: "knowledge",
-    icon: "⌘",
-    title: "Knowledge",
-    description: "Doctrine, research, decisions, and reusable intelligence.",
-    children: [
-      ["Knowledge Library", "Search authoritative MMG knowledge.", "Open Library", "knowledge-library"],
-      ["Research Brief", "Build a structured evidence-ready brief.", "Start Research", "research-brief"],
-      ["Decision Record", "Preserve an approved decision and its impact.", "Record Decision", "decision-record"],
-      ["Doctrine Vault", "Review canonical MMG and Kairos operating doctrine.", "Open Doctrine", "doctrine-vault"],
-      ["Intelligence Synthesis", "Combine verified knowledge into an actionable executive synthesis.", "Build Synthesis", "intelligence-synthesis"],
-    ],
+    id: "knowledge", icon: "⌘", title: "Knowledge", description: "Doctrine, research, decisions, and reusable intelligence.",
+    children: [["Knowledge Library","Search authoritative MMG knowledge.","Open Library","knowledge-library"],["Research Brief","Build a structured evidence-ready brief.","Start Research","research-brief"],["Decision Record","Preserve an approved decision and its impact.","Record Decision","decision-record"],["Doctrine Vault","Review canonical MMG and Kairos operating doctrine.","Open Doctrine","doctrine-vault"],["Intelligence Synthesis","Combine verified knowledge into an actionable executive synthesis.","Build Synthesis","intelligence-synthesis"]],
   },
   {
-    id: "content",
-    icon: "✦",
-    title: "Content",
-    description: "Website, publishing, social, visual assets, and production.",
-    children: [
-      ["Website Retool", "Plan, approve, execute, and verify staging website changes.", "Start Website Retool", "website"],
-      ["Manuscript Studio", "Upload, preserve, and advance manuscripts into production.", "Open Manuscript Studio", "manuscript-studio"],
-      ["Social Production", "Build governed, connector-ready social content packages.", "Open Social Production", "social-production"],
-      ["Publishing Studio", "Create publication production packages.", "Create Publication", "publishing-studio"],
-      ["Creative Studio", "Create governed creative production briefs.", "Create Asset", "creative-studio"],
-    ],
+    id: "content", icon: "✦", title: "Content", description: "Website, publishing, social, visual assets, and production.",
+    children: [["Website Retool","Plan, approve, execute, and verify staging website changes.","Start Website Retool","website"],["Manuscript Studio","Upload, preserve, and advance manuscripts into production.","Open Manuscript Studio","manuscript-studio"],["Social Production","Build governed, connector-ready social content packages.","Open Social Production","social-production"],["Publishing Studio","Create publication production packages.","Create Publication","publishing-studio"],["Creative Studio","Create governed creative production briefs.","Create Asset","creative-studio"]],
   },
   {
-    id: "business",
-    icon: "◇",
-    title: "Business",
-    description: "Products, revenue, growth, offers, and campaigns.",
-    children: [
-      ["Product Launch", "Build a complete launch package.", "Start Product Launch", "product-launch"],
-      ["Revenue Intelligence", "Review verified commerce performance.", "Run Revenue Review", "revenue-intelligence"],
-      ["Growth Plan", "Build a measurable MMG growth plan.", "Build Growth Plan", "growth-plan"],
-      ["Offer Builder", "Shape an offer, value proposition, and delivery model.", "Build Offer", "offer-builder"],
-      ["Campaign Operations", "Coordinate campaign objectives, assets, timing, and measurement.", "Open Campaign", "campaign-operations"],
-    ],
+    id: "business", icon: "◇", title: "Business", description: "Products, revenue, growth, offers, and campaigns.",
+    children: [["Product Launch","Build a complete launch package.","Start Product Launch","product-launch"],["Revenue Intelligence","Review verified commerce performance.","Run Revenue Review","revenue-intelligence"],["Growth Plan","Build a measurable MMG growth plan.","Build Growth Plan","growth-plan"],["Offer Builder","Shape an offer, value proposition, and delivery model.","Build Offer","offer-builder"],["Campaign Operations","Coordinate campaign objectives, assets, timing, and measurement.","Open Campaign","campaign-operations"]],
   },
   {
-    id: "customers",
-    icon: "◎",
-    title: "Customers",
-    description: "Visitor activity, customer journeys, support, and delivery.",
-    children: [
-      ["Visitor Activity", "Inspect verified visitor evidence.", "Review Activity", "visitor-activity"],
-      ["Customer Portal", "Open customer projects and approvals.", "Open Customer Hub", "customer-portal"],
-      ["Deliverables", "Inspect completed customer work.", "View Deliverables", "deliverables"],
-      ["Customer Journey", "Review the end-to-end customer experience and next actions.", "Open Journey", "customer-journey"],
-      ["Support Intelligence", "Organize support needs, recurring issues, and resolutions.", "Review Support", "support-intelligence"],
-    ],
+    id: "customers", icon: "◎", title: "Customers", description: "Visitor activity, customer journeys, support, and delivery.",
+    children: [["Visitor Activity","Inspect verified visitor evidence.","Review Activity","visitor-activity"],["Customer Portal","Open customer projects and approvals.","Open Customer Hub","customer-portal"],["Deliverables","Inspect completed customer work.","View Deliverables","deliverables"],["Customer Journey","Review the end-to-end customer experience and next actions.","Open Journey","customer-journey"],["Support Intelligence","Organize support needs, recurring issues, and resolutions.","Review Support","support-intelligence"]],
   },
   {
-    id: "operations",
-    icon: "⚙",
-    title: "Operations",
-    description: "Runtime, queues, approvals, releases, and system control.",
-    children: [
-      ["Runtime Health", "Inspect live runtime and capabilities.", "Refresh Health", "health"],
-      ["Work Queue", "Inspect active and completed work.", "View Queue", "work-queue"],
-      ["Release Control", "Inspect approvals, verification, and rollback.", "Open Releases", "release-control"],
-      ["Executive Briefing", "Review approval-ready work and governed decisions.", "Open Briefing", "executive-briefing"],
-      ["System Registry", "Inspect canonical services, routes, assets, and ownership.", "Open Registry", "system-registry"],
-    ],
+    id: "operations", icon: "⚙", title: "Operations", description: "Runtime, queues, approvals, releases, and system control.",
+    children: [["Runtime Health","Inspect live runtime and capabilities.","Refresh Health","health"],["Work Queue","Inspect active and completed work.","View Queue","work-queue"],["Release Control","Inspect approvals, verification, and rollback.","Open Releases","release-control"],["Executive Briefing","Review approval-ready work and governed decisions.","Open Briefing","executive-briefing"],["System Registry","Inspect canonical services, routes, assets, and ownership.","Open Registry","system-registry"]],
   },
 ];
 
 const destinations = {
-  "knowledge-library": { kind: "library", title: "Knowledge Library", description: "Search authoritative MMG doctrine, specifications, research, and decisions.", label: "Search terms", placeholder: "Example: Kairos staging doctrine", action: "Search Library", requiresInput: true },
-  "research-brief": { kind: "workflow", title: "Research Brief", description: "Build a structured research brief with scope and evidence standards.", label: "Research question", placeholder: "What should the brief investigate?", action: "Build Research Brief", requiresInput: true },
-  "decision-record": { kind: "workspace", title: "Decision Record", description: "Create a governed decision record.", label: "Decision", placeholder: "State the approved decision.", action: "Record Decision", requiresInput: true },
-  "doctrine-vault": { kind: "library", title: "Doctrine Vault", description: "Review canonical MMG and Kairos operating doctrine.", label: "Doctrine or topic", placeholder: "Example: experience-first doctrine", action: "Open Doctrine", requiresInput: true },
-  "intelligence-synthesis": { kind: "workflow", title: "Intelligence Synthesis", description: "Combine verified knowledge into an executive-ready synthesis.", label: "Synthesis objective", placeholder: "What should Kairos synthesize?", action: "Build Synthesis", requiresInput: true },
-  "publishing-studio": { kind: "workspace", title: "Publishing Studio", description: "Create a publication production package.", label: "Publication title", placeholder: "Enter the book, guide, or publication title.", action: "Create Publication", requiresInput: true },
-  "creative-studio": { kind: "workspace", title: "Creative Studio", description: "Create a governed creative production brief.", label: "Asset or campaign name", placeholder: "Enter the asset or campaign name.", action: "Create Asset", requiresInput: true },
-  "product-launch": { kind: "workflow", title: "Product Launch", description: "Build a governed product launch package.", label: "Product or offer", placeholder: "Enter the product or offer name.", action: "Build Product Launch", requiresInput: true },
-  "revenue-intelligence": { kind: "library", title: "Revenue Intelligence", description: "Review authoritative commerce evidence without inventing data.", label: "Review period or objective", placeholder: "Example: Last 30 days by product", action: "Run Revenue Review", requiresInput: true },
-  "growth-plan": { kind: "workflow", title: "Growth Plan", description: "Build a complete MMG growth plan.", label: "Growth objective", placeholder: "Enter the measurable growth objective.", action: "Build Growth Plan", requiresInput: true },
-  "offer-builder": { kind: "workflow", title: "Offer Builder", description: "Build a governed offer and delivery model.", label: "Offer objective", placeholder: "Describe the customer, outcome, and offer.", action: "Build Offer", requiresInput: true },
-  "campaign-operations": { kind: "workspace", title: "Campaign Operations", description: "Coordinate campaign scope, assets, timing, and measurement.", label: "Campaign objective", placeholder: "Describe the campaign objective.", action: "Open Campaign", requiresInput: true },
-  "visitor-activity": { kind: "control", title: "Visitor Activity", description: "Inspect connected analytics and verified visitor evidence.", label: "", placeholder: "", action: "Review Activity", requiresInput: false },
-  "customer-portal": { kind: "workspace", title: "Customer Portal", description: "Open verified customer project records.", label: "Customer or project", placeholder: "Enter the customer or project name.", action: "Open Customer Hub", requiresInput: true },
-  "deliverables": { kind: "library", title: "Deliverables", description: "Inspect completed work and release evidence.", label: "Project or customer", placeholder: "Enter a project or customer.", action: "View Deliverables", requiresInput: true },
-  "customer-journey": { kind: "workflow", title: "Customer Journey", description: "Review the end-to-end customer experience and next actions.", label: "Customer or journey objective", placeholder: "Enter a customer, project, or journey objective.", action: "Open Journey", requiresInput: true },
-  "support-intelligence": { kind: "library", title: "Support Intelligence", description: "Organize support needs, recurring issues, and resolutions.", label: "Support topic", placeholder: "Enter a customer issue or support theme.", action: "Review Support", requiresInput: true },
-  "health": { kind: "control", title: "Runtime Health", description: "Refresh live runtime state and deployment identity.", label: "", placeholder: "", action: "Refresh Runtime", requiresInput: false },
-  "work-queue": { kind: "control", title: "Work Queue", description: "Inspect active, waiting, completed, and blocked work.", label: "", placeholder: "", action: "View Queue", requiresInput: false },
-  "release-control": { kind: "control", title: "Release Control", description: "Inspect approvals, verified releases, rollback packages, and history.", label: "Release or project", placeholder: "Optional release or project filter.", action: "Open Releases", requiresInput: false },
-  "executive-briefing": { kind: "control", title: "Executive Briefing", description: "Review approval-ready work and governed decisions.", label: "", placeholder: "", action: "Open Briefing", requiresInput: false },
-  "system-registry": { kind: "library", title: "System Registry", description: "Inspect canonical services, routes, assets, and ownership.", label: "Registry search", placeholder: "Optional service, route, asset, or owner.", action: "Open Registry", requiresInput: false },
+  "knowledge-library": { kind:"library", title:"Knowledge Library", description:"Search authoritative MMG doctrine, specifications, research, and decisions.", label:"Search terms", placeholder:"Example: Kairos staging doctrine", action:"Search Library", requiresInput:true },
+  "research-brief": { kind:"workflow", title:"Research Brief", description:"Build a structured research brief with scope and evidence standards.", label:"Research question", placeholder:"What should the brief investigate?", action:"Build Research Brief", requiresInput:true },
+  "decision-record": { kind:"workspace", title:"Decision Record", description:"Create a governed decision record.", label:"Decision", placeholder:"State the approved decision.", action:"Record Decision", requiresInput:true },
+  "doctrine-vault": { kind:"library", title:"Doctrine Vault", description:"Review canonical MMG and Kairos operating doctrine.", label:"Doctrine or topic", placeholder:"Example: experience-first doctrine", action:"Open Doctrine", requiresInput:true },
+  "intelligence-synthesis": { kind:"workflow", title:"Intelligence Synthesis", description:"Combine verified knowledge into an executive-ready synthesis.", label:"Synthesis objective", placeholder:"What should Kairos synthesize?", action:"Build Synthesis", requiresInput:true },
+  "publishing-studio": { kind:"workspace", title:"Publishing Studio", description:"Create a publication production package.", label:"Publication title", placeholder:"Enter the book, guide, or publication title.", action:"Create Publication", requiresInput:true },
+  "creative-studio": { kind:"workspace", title:"Creative Studio", description:"Create a governed creative production brief.", label:"Asset or campaign name", placeholder:"Enter the asset or campaign name.", action:"Create Asset", requiresInput:true },
+  "product-launch": { kind:"workflow", title:"Product Launch", description:"Build a governed product launch package.", label:"Product or offer", placeholder:"Enter the product or offer name.", action:"Build Product Launch", requiresInput:true },
+  "revenue-intelligence": { kind:"library", title:"Revenue Intelligence", description:"Review authoritative commerce evidence without inventing data.", label:"Review period or objective", placeholder:"Example: Last 30 days by product", action:"Run Revenue Review", requiresInput:true },
+  "growth-plan": { kind:"workflow", title:"Growth Plan", description:"Build a complete MMG growth plan.", label:"Growth objective", placeholder:"Enter the measurable growth objective.", action:"Build Growth Plan", requiresInput:true },
+  "offer-builder": { kind:"workflow", title:"Offer Builder", description:"Build a governed offer and delivery model.", label:"Offer objective", placeholder:"Describe the customer, outcome, and offer.", action:"Build Offer", requiresInput:true },
+  "campaign-operations": { kind:"workspace", title:"Campaign Operations", description:"Coordinate campaign scope, assets, timing, and measurement.", label:"Campaign objective", placeholder:"Describe the campaign objective.", action:"Open Campaign", requiresInput:true },
+  "visitor-activity": { kind:"control", title:"Visitor Activity", description:"Inspect connected analytics and verified visitor evidence.", label:"", placeholder:"", action:"Review Activity", requiresInput:false },
+  "customer-portal": { kind:"workspace", title:"Customer Portal", description:"Open verified customer project records.", label:"Customer or project", placeholder:"Enter the customer or project name.", action:"Open Customer Hub", requiresInput:true },
+  "deliverables": { kind:"library", title:"Deliverables", description:"Inspect completed work and release evidence.", label:"Project or customer", placeholder:"Enter a project or customer.", action:"View Deliverables", requiresInput:true },
+  "customer-journey": { kind:"workflow", title:"Customer Journey", description:"Review the end-to-end customer experience and next actions.", label:"Customer or journey objective", placeholder:"Enter a customer, project, or journey objective.", action:"Open Journey", requiresInput:true },
+  "support-intelligence": { kind:"library", title:"Support Intelligence", description:"Organize support needs, recurring issues, and resolutions.", label:"Support topic", placeholder:"Enter a customer issue or support theme.", action:"Review Support", requiresInput:true },
+  "health": { kind:"control", title:"Runtime Health", description:"Refresh live runtime state and deployment identity.", label:"", placeholder:"", action:"Refresh Runtime", requiresInput:false },
+  "work-queue": { kind:"control", title:"Work Queue", description:"Inspect active, waiting, completed, and blocked work.", label:"", placeholder:"", action:"View Queue", requiresInput:false },
+  "release-control": { kind:"control", title:"Release Control", description:"Inspect approvals, verified releases, rollback packages, and history.", label:"Release or project", placeholder:"Optional release or project filter.", action:"Open Releases", requiresInput:false },
+  "executive-briefing": { kind:"control", title:"Executive Briefing", description:"Review approval-ready work and governed decisions.", label:"", placeholder:"", action:"Open Briefing", requiresInput:false },
+  "system-registry": { kind:"library", title:"System Registry", description:"Inspect canonical services, routes, assets, and ownership.", label:"Registry search", placeholder:"Optional service, route, asset, or owner.", action:"Open Registry", requiresInput:false },
 };
 
 render();
 refreshTelemetry();
-setInterval(refreshTelemetry, 15000);
+setInterval(refreshTelemetry,15000);
 
-function render() {
-  const ready = Boolean(state.health && (state.health.status === "ready" || state.health.status === "ok"));
-  root.innerHTML = `<header class="app-header"><img class="app-header-image" src="${HEADER_ASSET}" alt="Kairos Operating System — Mindset Media Group"><div class="app-header-status"><span>${new Date().toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span><span class="live-state"><i class="state-dot ${state.health ? ready ? "" : "offline" : "checking"}"></i>${state.health ? ready ? "Systems online" : "Attention required" : "Connecting"}</span></div></header><section class="hero"><div><p class="eyebrow">Executive Command Center</p><h1>One objective.<br>Coordinated execution.</h1><p class="hero-copy">Five operating centers. Five governed child entry points per center. Every tool has one permanent home.</p></div><aside class="pulse-panel"><div class="pulse-head"><strong>Operating signal</strong><span class="quiet">${ready ? "Live" : "Waiting for runtime"}</span></div><div class="wave ${ready ? "active" : ""}">${[35,70,46,88,52,76,38,92,58,80,44,68,32,84,54,74].map((h,i)=>`<i style="--h:${h}%;--d:-${i*.09}s"></i>`).join("")}</div></aside></section><section class="metrics">${metric("Runtime",ready?"Online":"Checking",state.latency?`${state.latency} ms response`:"Awaiting response",ready?"live":"limited")}${metric("Active work",String(state.activeJobs),state.activeJobs===1?"execution in progress":"no execution running","live")}${metric("Capabilities",capabilityCount(),state.capabilities?"reported by runtime":"syncing registry","live")}${metric("Entry points","25","five centers · five child cards","live")}</section><div class="section-head"><div><p class="eyebrow">Operating Centers</p><h2>Choose where Kairos should work</h2></div><p>All tools live inside the five-center system.</p></div><section class="parent-grid">${centers.map(c=>parentCard(c,ready)).join("")}</section>${state.activeCenter?workspace(centers.find(c=>c.id===state.activeCenter)):""}`;
+function render(){
+  const ready=Boolean(state.health&&(state.health.status==="ready"||state.health.status==="ok"));
+  const pulse=state.workPulse;
+  const activeTotal=pulse.activeWork+state.activeJobs;
+  const activeDetail=state.activeJobs?"browser execution in progress":pulse.available?(activeTotal===1?"workflow in active execution":`${activeTotal} workflows in active execution`):"syncing governed Work Queue";
+  const finishedDetail=pulse.available?"completed within the last 24 hours":"syncing 24-hour completion history";
+  const backlogDetail=pulse.available?`${pulse.openWorkflows} open workflow${pulse.openWorkflows===1?"":"s"}${pulse.blockedWorkflows?` · ${pulse.blockedWorkflows} blocked`:""}`:"syncing governed backlog";
+  root.innerHTML=`<header class="app-header"><img class="app-header-image" src="${HEADER_ASSET}" alt="Kairos Operating System — Mindset Media Group"><div class="app-header-status"><span>${new Date().toLocaleString([],{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</span><span class="live-state"><i class="state-dot ${state.health?ready?"":"offline":"checking"}"></i>${state.health?ready?"Systems online":"Attention required":"Connecting"}</span></div></header><section class="hero"><div><p class="eyebrow">Executive Command Center</p><h1>One objective.<br>Coordinated execution.</h1><p class="hero-copy">Five operating centers. Five governed child entry points per center. Every tool has one permanent home.</p></div><aside class="pulse-panel"><div class="pulse-head"><strong>Operating signal</strong><span class="quiet">${ready?"Live":"Waiting for runtime"}</span></div><div class="wave ${ready?"active":""}">${[35,70,46,88,52,76,38,92,58,80,44,68,32,84,54,74].map((h,i)=>`<i style="--h:${h}%;--d:-${i*.09}s"></i>`).join("")}</div></aside></section><section class="metrics">${metric("Runtime",ready?"Online":"Checking",state.latency?`${state.latency} ms response`:"Awaiting response",ready?"live":"limited")}${metric("Active work",pulse.available?String(activeTotal):"—",activeDetail,pulse.available?"live":"limited")}${metric("Finished work",pulse.available?String(pulse.finishedWork24h):"—",finishedDetail,pulse.available?"live":"limited")}${metric("Work to be done",pulse.available?String(pulse.workToBeDone):"—",backlogDetail,pulse.available?"live":"limited")}</section><div class="section-head"><div><p class="eyebrow">Operating Centers</p><h2>Choose where Kairos should work</h2></div><p>All tools live inside the five-center system.</p></div><section class="parent-grid">${centers.map(c=>parentCard(c,ready)).join("")}</section>${state.activeCenter?workspace(centers.find(c=>c.id===state.activeCenter)):""}`;
   bind();
 }
 
 function metric(label,value,detail,status){return `<article class="metric" data-state="${status}"><span>${label}</span><strong>${escapeHTML(value)}</strong><small>${escapeHTML(detail)}</small></article>`;}
-function capabilityCount(){const c=state.capabilities?.capabilities||state.health?.capabilities;return c&&typeof c==="object"?String(Object.values(c).filter(v=>v==="available"||v===true||v==="operational").length):"—";}
 function parentCard(c,ready){const meter=c.id==="operations"?(ready?100:22):c.id==="content"?72:c.id==="knowledge"?58:c.id==="business"?42:34;return `<button class="parent-card" data-center="${c.id}"><div class="card-top"><span class="parent-icon">${c.icon}</span><span class="card-signal"><i></i>${c.id==="operations"&&ready?"LIVE":"READY"}</span></div><h3>${c.title}</h3><p>${c.description}</p><div class="mini-meter"><span style="--meter:${meter}%"></span></div><div class="card-foot"><b>5 child cards</b><span>Open center →</span></div></button>`;}
 function workspace(c){return `<section class="workspace" id="workspace"><header class="workspace-head"><div><p class="eyebrow">${c.title} Center · 5 of 5</p><h2>Choose an action</h2></div><button class="back" data-back>Return to Command Center</button></header><div class="children">${c.children.map(child=>`<article class="child-card"><p class="eyebrow">${c.title}</p><h3>${child[0]}</h3><p>${child[1]}</p><button class="child-action" data-child="${child[3]}">${child[2]}</button></article>`).join("")}</div>${state.job?jobPanel():state.destination?destinationPanel(state.destination):""}</section>`;}
-function destinationPanel(id){const d=destinations[id];if(!d)return "";const showInput=!state.destinationResult&&(d.requiresInput||d.label);const input=showInput?`<label>${escapeHTML(d.label)}</label><textarea class="objective" id="destination-input" maxlength="12000" placeholder="${escapeHTML(d.placeholder)}">${escapeHTML(state.destinationInput||"")}</textarea>`:"";const result=state.destinationResult?destinationResultPanel(state.destinationResult):state.destinationError?`<p class="error">${escapeHTML(state.destinationError)}</p>`:"";const primary=state.destinationResult?`<button class="primary" data-new-destination>Start Another ${escapeHTML(d.title)}</button>`:`<button class="primary" data-run-destination ${state.destinationWorking?"disabled":""}>${escapeHTML(d.action)}</button>`;return `<section class="job"><p class="eyebrow">${escapeHTML(d.kind)} action</p><h3>${escapeHTML(d.title)}</h3><p>${escapeHTML(d.description)}</p>${input}${state.destinationWorking?progressPanel(`Kairos is running ${d.title}.`):result}<div class="job-actions">${primary}<button class="secondary" data-close-destination>Close</button></div></section>`;}
+function destinationPanel(id){const d=destinations[id];if(!d)return"";const showInput=!state.destinationResult&&(d.requiresInput||d.label);const input=showInput?`<label>${escapeHTML(d.label)}</label><textarea class="objective" id="destination-input" maxlength="12000" placeholder="${escapeHTML(d.placeholder)}">${escapeHTML(state.destinationInput||"")}</textarea>`:"";const result=state.destinationResult?destinationResultPanel(state.destinationResult):state.destinationError?`<p class="error">${escapeHTML(state.destinationError)}</p>`:"";const primary=state.destinationResult?`<button class="primary" data-new-destination>Start Another ${escapeHTML(d.title)}</button>`:`<button class="primary" data-run-destination ${state.destinationWorking?"disabled":""}>${escapeHTML(d.action)}</button>`;return `<section class="job"><p class="eyebrow">${escapeHTML(d.kind)} action</p><h3>${escapeHTML(d.title)}</h3><p>${escapeHTML(d.description)}</p>${input}${state.destinationWorking?progressPanel(`Kairos is running ${d.title}.`):result}<div class="job-actions">${primary}<button class="secondary" data-close-destination>Close</button></div></section>`;}
 function destinationResultPanel(r){const sections=Array.isArray(r.sections)?r.sections:[];return `<div class="deliverable"><strong>${escapeHTML(r.summary||"Action completed.")}</strong><p>Work item: ${escapeHTML(r.workItemID||"—")} · Status: ${escapeHTML(r.status||"unknown")} · Execution engine: Kairos private runtime</p>${sections.map(s=>`<section class="summary-card"><h4>${escapeHTML(s.name||"Section")}</h4><p>${escapeHTML(s.content||s.status||"")}</p></section>`).join("")}<p><strong>Next action:</strong> ${escapeHTML(r.nextAction||"Review the completed deliverable.")}</p></div>`;}
 function jobPanel(){const j=state.job;const title=j.mode==="complete"?(j.error?"Action blocked":"Deliverable ready"):j.mode==="review"?"Review execution summary":"What should Kairos change?";return `<section class="job"><p class="eyebrow">Website Retool · Kairos Native · Governed Staging</p><h3>${title}</h3>${j.mode==="input"?`<p>Describe the website outcome.</p><textarea class="objective" id="objective" maxlength="12000" placeholder="Describe the approved staging outcome.">${escapeHTML(j.objective||"")}</textarea><div class="job-actions"><button class="primary" data-plan>Prepare Execution Summary</button><button class="secondary" data-close-job>Cancel</button></div>`:j.mode==="working"?progressPanel(j.message):j.mode==="review"?reviewPanel():j.mode==="executing"?progressPanel(j.message):completionPanel(j.result,j.error)}</section>`;}
 function progressPanel(message){return `<div class="stage-row"><span class="stage done">1 · Request</span><span class="stage active">2 · Execute</span><span class="stage">3 · Verify</span><span class="stage">4 · Deliver</span></div><p class="status-line"><i class="spinner"></i>${escapeHTML(message)}</p>`;}
@@ -147,19 +107,11 @@ function bind(){
 }
 
 function resetPanels(){state.job=null;state.destination=null;state.plan=null;state.approval=null;state.destinationInput="";state.destinationResult=null;state.destinationError=null;state.destinationWorking=false;}
-function openChild(type){
-  resetPanels();
-  if(type==="website") state.job={mode:"input",objective:"",action:"website"};
-  else if(type==="social-production") { window.dispatchEvent(new CustomEvent("kairos:social-production:open")); return; }
-  else if(type==="manuscript-studio") { window.dispatchEvent(new CustomEvent("kairos:manuscript-studio:open")); return; }
-  else if(type==="executive-briefing") { document.querySelector("#executive-briefing")?.scrollIntoView({behavior:"smooth"}); return; }
-  else state.destination=type;
-  render();
-  setTimeout(()=>document.querySelector(".job")?.scrollIntoView({behavior:"smooth"}),20);
-}
+function openChild(type){resetPanels();if(type==="website")state.job={mode:"input",objective:"",action:"website"};else if(type==="social-production"){window.dispatchEvent(new CustomEvent("kairos:social-production:open"));return;}else if(type==="manuscript-studio"){window.dispatchEvent(new CustomEvent("kairos:manuscript-studio:open"));return;}else if(type==="executive-briefing"){document.querySelector("#executive-briefing")?.scrollIntoView({behavior:"smooth"});return;}else state.destination=type;render();setTimeout(()=>document.querySelector(".job")?.scrollIntoView({behavior:"smooth"}),20);}
 
 async function runDestinationAction(){const d=destinations[state.destination];if(!d)return;const objective=document.querySelector("#destination-input")?.value.trim()||"";state.destinationInput=objective;if(d.requiresInput&&objective.length<2){state.destinationError=`Enter ${d.label.toLowerCase()} before running this action.`;render();return;}if(state.destination==="health"){await refreshTelemetry(false);state.destinationResult={status:"completed",workItemID:"live",summary:"Runtime health refreshed.",openaiAPIUsed:false,sections:[{name:"Runtime",content:state.health?.status||"unknown"},{name:"Build",content:state.health?.build||"unknown"},{name:"Latency",content:state.latency?`${state.latency} ms`:"unknown"}],nextAction:"Continue monitoring the active runtime."};render();return;}state.destinationWorking=true;state.destinationError=null;state.destinationResult=null;state.activeJobs=1;render();try{const{response,body}=await fetchJSON("/api/hub/run",{method:"POST",headers:{"Content-Type":"application/json","X-MMG-Client-Build":BUILD},body:JSON.stringify({action:state.destination,objective})});if(!response.ok)throw new Error(body?.error?.message||"Kairos could not complete this action.");state.destinationResult=body;}catch(error){state.destinationError=error.message||"Kairos could not complete this action.";}finally{state.destinationWorking=false;state.activeJobs=0;render();}}
-async function refreshTelemetry(scroll=false){const start=performance.now();try{const[h,c]=await Promise.all([fetchJSON("/api/health"),fetchJSON("/api/capabilities")]);state.health=h.body;state.capabilities=c.body;state.latency=Math.max(1,Math.round(performance.now()-start));}catch{state.health={status:"unavailable"};state.latency=null;}render();if(scroll)setTimeout(()=>document.querySelector(".job")?.scrollIntoView({behavior:"smooth"}),20);}
+async function refreshTelemetry(scroll=false){const start=performance.now();const [healthResult,capabilitiesResult,workflowResult]=await Promise.allSettled([fetchJSON("/api/health"),fetchJSON("/api/capabilities"),fetchJSON("/api/workflows")]);if(healthResult.status==="fulfilled"){state.health=healthResult.value.body;state.latency=Math.max(1,Math.round(performance.now()-start));}else{state.health={status:"unavailable"};state.latency=null;}if(capabilitiesResult.status==="fulfilled")state.capabilities=capabilitiesResult.value.body;if(workflowResult.status==="fulfilled"&&workflowResult.value.response.ok){state.workPulse=calculateWorkPulse(workflowResult.value.body?.workflows||[]);}else{state.workPulse={...state.workPulse,available:false};}render();if(scroll)setTimeout(()=>document.querySelector(".job")?.scrollIntoView({behavior:"smooth"}),20);}
+function calculateWorkPulse(workflows){const list=Array.isArray(workflows)?workflows:[];const cutoff=Date.now()-24*60*60*1000;const open=list.filter(item=>!["completed","cancelled"].includes(item.state));return{activeWork:list.filter(item=>item.state==="active").length,finishedWork24h:list.filter(item=>item.state==="completed"&&Date.parse(item.updatedAt||"")>=cutoff).length,workToBeDone:open.reduce((sum,item)=>sum+Math.max(0,Number(item.taskCount||0)-Number(item.completedTasks||0)),0),openWorkflows:open.length,blockedWorkflows:list.filter(item=>item.state==="blocked").length,available:true};}
 async function preparePlan(){const objective=document.querySelector("#objective")?.value.trim()||state.job?.objective||"";if(objective.length<3){state.job={mode:"complete",action:"website",objective,error:"Describe the outcome before Kairos begins."};render();return;}state.job={mode:"working",action:"website",objective,message:"Kairos is inspecting Shopify staging and preparing a deterministic approval summary."};state.activeJobs=1;render();try{const submitted=await submitJob("/api/shopify/staging/plan/jobs",{objective});const body=await pollJob(submitted,"planning");state.plan=body;state.job={mode:"review",action:"website",objective};}catch(error){state.job={mode:"complete",action:"website",objective,error:error.message||"Kairos could not complete this action."};}finally{state.activeJobs=0;render();}}
 async function executePlan(){const plan=state.plan;if(!plan)return;const approval={status:"approved",approvedAt:new Date().toISOString(),build:BUILD,planID:plan.planID,actionID:plan.actionID,targetThemeID:plan?.plan?.targetTheme?.gid||"",sourceHashes:plan?.plan?.sourceHashes||{},objective:plan.objective||state.job.objective};state.approval=approval;state.job={mode:"executing",objective:state.job.objective,action:"website",message:"Applying and verifying the approved staging change."};state.activeJobs=1;render();try{const submitted=await submitJob("/api/shopify/staging/execute/jobs",{plan,approval});const body=await pollJob(submitted,"execution");state.job={mode:"complete",objective:state.job.objective,action:"website",result:body};}catch(error){state.job={mode:"complete",objective:state.job.objective,action:"website",error:error.message||"The approved website job did not complete."};}finally{state.activeJobs=0;render();}}
 async function submitJob(url,payload){const{response,body}=await fetchJSON(url,{method:"POST",headers:{"Content-Type":"application/json","X-MMG-Client-Build":BUILD},credentials:"include",body:JSON.stringify(payload)});if(!response.ok||!body?.jobID)throw new Error(body?.error?.message||body?.summary||`Kairos returned ${response.status}.`);return body;}
