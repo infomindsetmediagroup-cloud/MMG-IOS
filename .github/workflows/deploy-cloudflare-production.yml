@@ -98,17 +98,18 @@ jobs:
 
           echo "Cloudflare production credentials are available."
 
-      - name: Verify runtime tools
+      - name: Verify runtime tools and complete validation suite
         shell: bash
         run: |
           set -euo pipefail
+          node repository/cloudflare/mmg-ios/scripts/validate-production-suite.mjs
           node --version
           npm --version
 
       - name: Install dependencies
         shell: bash
         working-directory: repository/cloudflare/mmg-ios
-        run: npm install --no-package-lock --no-audit --no-fund
+        run: npm install --ignore-scripts --no-package-lock --no-audit --no-fund
 
       - name: Validate reconciled production baseline
         shell: bash
