@@ -12,13 +12,15 @@ const css = readFileSync(join(repoRoot, "web/kairos-dashboard/styles/readiness-s
 
 assert.ok(index.includes("scripts/readiness-system-certification.js"), "System certification module is not loaded.");
 assert.ok(index.includes("styles/readiness-system-certification.css"), "System certification stylesheet is not loaded.");
-assert.ok(index.includes("recovery-20260714-16"), "Browser build marker is not current for system certification.");
+assert.ok(index.includes("recovery-20260714-18"), "Browser build marker is not current for persistent system certification.");
 for (const marker of ["Kairos Operational Certification", "command-center-kairos-operational-certification", "Reconcile five center certificates", "Approve current-blueprint operational status", "data-create-system-certification"]) {
   assert.ok(source.includes(marker), `System certification is missing: ${marker}`);
 }
 for (const center of ["knowledge", "content", "business", "customers", "operations"]) assert.ok(source.includes(`"${center}"`), `System certification omits center: ${center}`);
+assert.ok(source.includes('document.querySelector("#kairos-hub")'), "System certification must anchor outside the replaceable Command Center render root.");
+assert.ok(source.includes('hub.insertAdjacentElement("afterend", section)'), "System certification must remain persistent across Command Center rerenders.");
 assert.ok(source.includes("approvalRequired: true"), "System certification must require approval.");
 assert.ok(source.includes('priority: "critical"'), "System certification must remain critical priority.");
 assert.ok(css.includes(".readiness-system-certification"), "System certification styling is missing.");
 
-console.log(JSON.stringify({ status: "ready", feature: "kairos-current-blueprint-operational-certification", centersRequired: 5, approvalRequired: true }, null, 2));
+console.log(JSON.stringify({ status: "ready", feature: "kairos-current-blueprint-operational-certification", centersRequired: 5, persistentAcrossHubRenders: true, approvalRequired: true }, null, 2));
