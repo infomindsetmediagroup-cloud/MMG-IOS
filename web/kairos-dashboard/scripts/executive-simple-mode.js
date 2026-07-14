@@ -1,4 +1,4 @@
-const BUILD="kairos-executive-simple-mode-20260714-3";
+const BUILD="kairos-executive-simple-mode-20260714-4";
 const TECHNICAL_SELECTORS=[
   ".readiness-system-certification",
   ".readiness-operational-assurance",
@@ -31,40 +31,64 @@ async function renderSystemCare(){
     panel.className="kairos-system-care";
     hub.insertAdjacentElement("afterend",panel);
   }
-  panel.innerHTML=`<div class="system-care-copy"><span class="system-care-kicker">System Care</span><strong>Kairos is checking itself</strong><small>You only need to act when Kairos asks.</small></div><span class="system-care-status" data-state="checking">Checking</span>`;
+  panel.innerHTML=checkingCard();
   try{
     const [healthResult,workflowResult]=await Promise.all([request("/api/health"),request("/api/workflows")]);
     const workflows=workflowResult.body?.workflows||[];
     const open=workflows.filter(item=>!["completed","cancelled"].includes(item.state));
-    const approval=open.find(item=>item.approvalRequired&&String(item.approvalStatus||"pending")==="pending");
-    const finishable=open.find(item=>Number(item.progress||0)===100&&item.state!=="completed");
-    const remediation=open.find(item=>["command-center-operational-remediation","command-center-recovery-verification"].includes(item.source));
-    const blocked=open.find(item=>item.state==="blocked");
-    const actionable=[approval,finishable,remediation,blocked].filter((item,index,list)=>item&&list.findIndex(other=>other?.id===item.id)===index);
-    const waiting=actionable.length;
+    const actions=buildActionQueue(open);
+    const pulse=buildExecutivePulse(workflows);
     const healthy=healthResult.response.ok&&["ready","ok"].includes(String(healthResult.body?.status||"").toLowerCase());
-    if(approval){
-      panel.innerHTML=actionCard("Approval needed",plainObjective(approval),"Approve & Start",approval.id,"approve-start","approval",waiting);
-    }else if(finishable){
-      panel.innerHTML=actionCard("Ready to finish",plainObjective(finishable),"Finish",finishable.id,"complete","approval",waiting);
-    }else if(remediation){
-      panel.innerHTML=actionCard("Kairos needs attention","A guided fix is prepared and ready to continue.","Continue Fix",remediation.id,"open","attention",waiting);
-    }else if(blocked){
-      panel.innerHTML=actionCard("Kairos needs attention",plainObjective(blocked),"Resume",blocked.id,"resume","attention",waiting);
+    if(actions.length){
+      const current=actions[0];
+      panel.innerHTML=actionCard(current,actions.length-1,pulse);
     }else if(!healthy){
-      panel.innerHTML=`<div class="system-care-copy"><span class="system-care-kicker">System Care</span><strong>Kairos needs attention</strong><small>Open Operations for the guided fix.</small></div><button type="button" class="system-care-action" data-open-operations>Open Operations</button><span class="system-care-status" data-state="attention">Needs attention</span>`;
+      panel.innerHTML=`${copyBlock("Kairos needs attention","Open Operations for the guided fix.",pulse)}<button type="button" class="system-care-action" data-open-operations>Open Operations</button><span class="system-care-status" data-state="attention">Needs attention</span>`;
     }else{
-      panel.innerHTML=`<div class="system-care-copy"><span class="system-care-kicker">System Care</span><strong>Kairos is ready</strong><small>No action is required.</small></div><span class="system-care-status" data-state="healthy">Ready</span>`;
+      panel.innerHTML=`${copyBlock("Kairos is ready","No action is required.",pulse)}${pulse.total?`<button type="button" class="system-care-secondary" data-open-my-work>Open My Work</button>`:""}<span class="system-care-status" data-state="healthy">Ready</span>`;
     }
   }catch{
-    panel.innerHTML=`<div class="system-care-copy"><span class="system-care-kicker">System Care</span><strong>Kairos is checking itself</strong><small>No action is required unless a guided fix appears.</small></div><span class="system-care-status" data-state="checking">Checking</span>`;
+    panel.innerHTML=checkingCard();
   }
   hideTechnicalPanels();
 }
 
-function actionCard(title,description,label,id,command,state,waiting){
-  const queueNote=waiting>1?`<span class="system-care-queue">${waiting} actions waiting · next appears automatically</span>`:"";
-  return `<div class="system-care-copy"><span class="system-care-kicker">System Care</span><strong>${escapeHTML(title)}</strong><small>${escapeHTML(description)}</small>${queueNote}</div><button type="button" class="system-care-action" data-executive-command="${escapeHTML(command)}" data-workflow-id="${escapeHTML(id)}">${escapeHTML(label)}</button><span class="system-care-status" data-state="${escapeHTML(state)}">${state==="approval"?"Your action":"Needs attention"}</span>`;
+function buildActionQueue(open){
+  const actions=[];
+  for(const item of open){
+    const approval=item.approvalRequired&&String(item.approvalStatus||"pending")==="pending";
+    const remediation=["command-center-operational-remediation","command-center-recovery-verification"].includes(item.source);
+    if(approval)actions.push({rank:1,title:"Approval needed",description:plainObjective(item),label:"Approve & Start",id:item.id,command:"approve-start",state:"approval"});
+    else if(remediation)actions.push({rank:2,title:"Kairos needs attention",description:"A guided fix is prepared and ready to continue.",label:"Continue Fix",id:item.id,command:"open",state:"attention"});
+    else if(item.state==="blocked")actions.push({rank:3,title:"Kairos needs attention",description:plainObjective(item),label:"Resume",id:item.id,command:"resume",state:"attention"});
+    else if(Number(item.progress||0)===100&&item.state!=="completed")actions.push({rank:4,title:"Work ready to finish",description:plainObjective(item),label:"Finish",id:item.id,command:"complete",state:"approval"});
+  }
+  return actions.sort((a,b)=>a.rank-b.rank);
+}
+
+function buildExecutivePulse(workflows){
+  const cutoff=Date.now()-24*60*60*1000;
+  const inProgress=workflows.filter(item=>item.state==="active").length;
+  const finished=workflows.filter(item=>item.state==="completed"&&Date.parse(item.updatedAt||item.completedAt||0)>=cutoff).length;
+  const waiting=workflows.filter(item=>!["active","completed","cancelled"].includes(item.state)).length;
+  const parts=[];
+  if(inProgress)parts.push(`${inProgress} in progress`);
+  if(waiting)parts.push(`${waiting} waiting`);
+  if(finished)parts.push(`${finished} finished today`);
+  return {text:parts.length?parts.join(" · "):"No open work",total:inProgress+waiting+finished};
+}
+
+function actionCard(action,remaining,pulse){
+  const queued=remaining>0?`<span class="system-care-queued">${remaining} more waiting</span>`:"";
+  return `${copyBlock(action.title,action.description,pulse)}<div class="system-care-actions"><button type="button" class="system-care-action" data-executive-command="${escapeHTML(action.command)}" data-workflow-id="${escapeHTML(action.id)}">${escapeHTML(action.label)}</button>${queued}</div><span class="system-care-status" data-state="${escapeHTML(action.state)}">${action.state==="approval"?"Your approval":"Needs attention"}</span>`;
+}
+
+function copyBlock(title,description,pulse){
+  return `<div class="system-care-copy"><span class="system-care-kicker">System Care</span><strong>${escapeHTML(title)}</strong><small>${escapeHTML(description)}</small><span class="system-care-pulse">${escapeHTML(pulse.text)}</span></div>`;
+}
+
+function checkingCard(){
+  return `<div class="system-care-copy"><span class="system-care-kicker">System Care</span><strong>Kairos is checking itself</strong><small>You only need to act when Kairos asks.</small></div><span class="system-care-status" data-state="checking">Checking</span>`;
 }
 
 function plainObjective(workflow){
@@ -82,6 +106,13 @@ async function handleClick(event){
   if(action){
     event.preventDefault();event.stopImmediatePropagation();
     await runExecutiveAction(action);
+    return;
+  }
+  const myWork=event.target.closest?.("[data-open-my-work]");
+  if(myWork){
+    event.preventDefault();event.stopImmediatePropagation();
+    window.dispatchEvent(new CustomEvent("kairos:workflow-runtime:open",{detail:{filter:"active"}}));
+    setTimeout(()=>document.querySelector("#workflow-runtime")?.scrollIntoView({behavior:"smooth",block:"start"}),80);
     return;
   }
   const operations=event.target.closest?.("[data-open-operations]");
