@@ -78,9 +78,11 @@ for (const center of ["knowledge", "content", "business", "customers", "operatio
 for (const embeddedTool of ["Manuscript Studio", "Social Production", "Executive Briefing", "System Registry"]) assert.ok(commandHub.includes(embeddedTool), `Embedded child tool is missing: ${embeddedTool}`);
 const childActionCount = (commandHub.match(/\["[^"]+",\s*"[^"]+",\s*"[^"]+",\s*"[^"]+"\]/g) || []).length;
 assert.equal(childActionCount, 25, `Command Center must define exactly 25 child cards; found ${childActionCount}.`);
+for (const token of ["workPulse", "finishedWork24h", "workToBeDone", 'fetchJSON("/api/workflows")']) assert.ok(commandHub.includes(token), `Command Center workflow pulse is missing: ${token}`);
 
 const layout = readFileSync(join(repoRoot, "web/kairos-dashboard/scripts/command-center-layout.js"), "utf8");
-for (const label of ["Online", "Active Work", "Capabilities", "Entry Points"]) assert.ok(layout.includes(label), `Compact status strip is missing: ${label}`);
+for (const label of ["Online", "Active Work", "Finished Work", "Work To Be Done"]) assert.ok(layout.includes(label), `Compact status strip is missing: ${label}`);
+for (const capture of ['read("active work")', 'read("finished work")', 'read("work to be done")']) assert.ok(layout.includes(capture), `Compact status strip does not capture: ${capture}`);
 assert.ok(layout.includes("command-menu-button"), "Integrated hamburger control is missing.");
 assert.ok(layout.includes('hub.querySelector(".metrics")?.remove()'), "Legacy metric cards are not removed.");
 assert.ok(layout.includes("Real-time visibility. Governed tools. Measurable outcomes."), "Simplified command hero copy is missing.");
@@ -115,8 +117,10 @@ assert.equal(typeof runtimeModule.KairosProject, "function", "Canonical runtime 
 
 console.log(JSON.stringify({
   status: "ready",
-  baseline: "kairos-production-baseline-20260713-5",
+  baseline: "kairos-production-baseline-20260714-6",
   integratedHeaderStatusStrip: true,
+  integratedWorkflowPulse: true,
+  finishedWindowHours: 24,
   integratedHamburgerNavigation: true,
   legacyMetricCardsRemoved: true,
   dynamicMorningEveningBriefing: true,
