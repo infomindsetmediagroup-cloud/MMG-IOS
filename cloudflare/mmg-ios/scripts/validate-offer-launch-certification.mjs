@@ -1,0 +1,12 @@
+import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+const here=dirname(fileURLToPath(import.meta.url));const root=resolve(here,"..");
+const paths={offer:join(root,"src/kairos-offer-builder-v1.js"),launch:join(root,"src/kairos-product-launch-studio-v1.js"),entry:join(root,"src/kairos-production-entry-v3.js"),wrangler:join(root,"wrangler.toml")};
+for(const path of Object.values(paths))assert.ok(existsSync(path),`Certification file missing: ${path}`);
+const offer=readFileSync(paths.offer,"utf8");for(const marker of ["certifyOffer","offer-certified","pricingApproved","claimsApproved","deliveryReady","launchHandoffAuthorized","inventedEvidence: false","guaranteedOutcomeAuthorized: false"])assert.ok(offer.includes(marker),`Offer certification contract missing: ${marker}`);
+const launch=readFileSync(paths.launch,"utf8");for(const marker of ["certifyLaunchReadiness","launch-certified","offerCertified","customerPathVerified","deliveryVerified","analyticsVerified","campaignAssetsVerified","rollbackEvidence","externalPublicationAutomatic: false","campaignActivationAutomatic: false"])assert.ok(launch.includes(marker),`Launch certification contract missing: ${marker}`);
+const entry=readFileSync(paths.entry,"utf8");for(const marker of ["/api/offers/","/certify","/api/product-launch/projects/","certifyOffer","certifyLaunchReadiness","canonicalRuntime.fetch"])assert.ok(entry.includes(marker),`Certification route missing: ${marker}`);
+assert.ok(readFileSync(paths.wrangler,"utf8").includes('main = "src/kairos-production-entry-v3.js"'),"Certification entry is not active.");
+console.log(JSON.stringify({status:"ready",offerCertification:true,launchReadinessCertification:true,approvalRequired:true,evidenceRequired:true,automaticPublication:false,automaticCampaignActivation:false},null,2));
