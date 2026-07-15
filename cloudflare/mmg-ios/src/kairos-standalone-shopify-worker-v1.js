@@ -225,7 +225,7 @@ async function executePlan(request, env) {
 
     const installationMode = String(planEnvelope?.plan?.installationMode || "existing-text-settings");
     if (installationMode === KAIROS_CANONICAL_HOMEPAGE_VERSION) {
-      return executeCanonicalPlan(request, env, planEnvelope, approval, startedAt);
+      return await executeCanonicalPlan(request, env, planEnvelope, approval, startedAt);
     }
     if (installationMode !== "existing-text-settings") throw httpError(409, "homepage_installation_mode_invalid", "The approved homepage installation mode is not supported.");
 
