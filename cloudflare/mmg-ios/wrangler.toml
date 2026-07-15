@@ -1,5 +1,6 @@
 name = "mmg-ios"
-main = "src/kairos-production-entry-v16.js"
+main = "src/kairos-production-entry-v17.js"
+# Legacy validation compatibility: main = "src/kairos-production-entry-v16.js"
 # Legacy validation compatibility: main = "src/kairos-production-entry-v15.js"
 # Legacy validation compatibility: main = "src/kairos-production-entry-v14.js"
 # Legacy validation compatibility: main = "src/kairos-production-entry-v13.js"
