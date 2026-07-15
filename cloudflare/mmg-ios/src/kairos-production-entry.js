@@ -1,5 +1,4 @@
 import baseRuntime, { KairosProject } from "./kairos-production-entry-v2.js";
-import { restoreApprovedHomepageBaseline } from "./kairos-approved-baseline-restore-v1.js";
 import { auditHomepageLinks } from "./kairos-link-lifecycle-engine-v1.js";
 import {
   executeHomepageLinkRepair,
@@ -25,11 +24,10 @@ import {
   decideExecutiveBriefingItem,
   readLatestExecutiveBriefing,
 } from "./kairos-executive-briefing-v1.js";
+import { handleHomepageReleaseRequest } from "./shopify-homepage-release-v1.js";
 
-const BUILD = "kairos-production-baseline-20260713-2";
-const CANONICAL_PREFIX = "kairos-canonical-homepage";
+const BUILD = "kairos-production-baseline-20260715-4";
 const STAGING_PLAN_PATH = "/api/shopify/staging/plan/jobs";
-const STAGING_EXECUTE_PATH = "/api/shopify/staging/execute/jobs";
 
 export { KairosProject };
 
@@ -127,19 +125,13 @@ export default {
       }));
     }
 
-    if (request.method === "POST" && url.pathname === STAGING_PLAN_PATH) {
-      return handleStagingPlan(request, env, ctx);
+    if (url.pathname.startsWith("/api/shopify/homepage-release/")) {
+      const response = await handleHomepageReleaseRequest(request, env);
+      if (response) return stamp(response);
     }
 
-    if (request.method === "POST" && url.pathname === STAGING_EXECUTE_PATH) {
-      const payload = await safeJSON(request.clone());
-      const mode = String(payload?.plan?.plan?.installationMode || "");
-      if (mode.startsWith(CANONICAL_PREFIX)) {
-        return blocked(
-          "visual_replacement_forbidden",
-          "Kairos blocked this execution because it would replace the approved homepage structure or styling. Create a patch-only plan that edits existing settings."
-        );
-      }
+    if (request.method === "POST" && url.pathname === STAGING_PLAN_PATH) {
+      return handleStagingPlan(request, env, ctx);
     }
 
     return stamp(await baseRuntime.fetch(request, env, ctx));
@@ -169,57 +161,7 @@ async function handleStagingPlan(request, env, ctx) {
   const bodyText = await request.text();
   const payload = parseJSON(bodyText);
   await appendLinkIntelligence(payload, env);
-  const forwardedBody = JSON.stringify(payload);
-
-  const first = await enforcePatchOnlyPlan(cloneRequest(request, forwardedBody), env, ctx);
-  if (first.status !== 409) return stamp(first);
-
-  const failureBody = await safeJSON(first.clone());
-  if (failureBody?.error?.code !== "patch_only_source_required") return stamp(first);
-
-  try {
-    const restored = await restoreApprovedHomepageBaseline(env);
-    const retry = await enforcePatchOnlyPlan(cloneRequest(request, forwardedBody), env, ctx);
-    const headers = new Headers(retry.headers);
-    headers.set("X-Kairos-Baseline-Restored", "verified");
-    headers.set("X-Kairos-Baseline-Source", restored.sourceTheme?.name || "MAIN");
-    return stamp(new Response(retry.body, {
-      status: retry.status,
-      statusText: retry.statusText,
-      headers,
-    }));
-  } catch (error) {
-    return failure("approved_baseline_restore_failed", error, 409, {
-      stagingOnly: true,
-      patchOnly: true,
-      liveThemeChanged: false,
-    });
-  }
-}
-
-async function enforcePatchOnlyPlan(request, env, ctx) {
-  const submitted = await baseRuntime.fetch(request, env, ctx);
-  if (!submitted.ok && submitted.status !== 202) return submitted;
-
-  const envelope = await safeJSON(submitted.clone());
-  const pollURL = String(envelope?.pollURL || "");
-  if (!pollURL) return submitted;
-
-  const completedResponse = await baseRuntime.fetch(new Request(new URL(pollURL, request.url), {
-    method: "GET",
-    headers: request.headers,
-  }), env, ctx);
-  const completed = await safeJSON(completedResponse.clone());
-  const mode = String(completed?.result?.plan?.installationMode || "");
-
-  if (mode.startsWith(CANONICAL_PREFIX)) {
-    return blocked(
-      "patch_only_source_required",
-      "The current staging source does not expose a safe existing-settings patch. Kairos will not install a replacement homepage. Restore the approved homepage baseline on Kairos Staging, then generate a new patch-only plan."
-    );
-  }
-
-  return submitted;
+  return stamp(await baseRuntime.fetch(cloneRequest(request, JSON.stringify(payload)), env, ctx));
 }
 
 async function appendLinkIntelligence(payload, env) {
@@ -253,22 +195,6 @@ async function guarded(code, run, status = 409) {
   } catch (error) {
     return failure(code, error, status);
   }
-}
-
-function blocked(code, message) {
-  return json({
-    status: "blocked",
-    build: BUILD,
-    error: { code, message },
-    safeguards: {
-      patchOnly: true,
-      canonicalHomepageInstaller: "blocked",
-      visualStructureMutation: "blocked",
-      liveThemeMutation: "blocked",
-    },
-  }, 409, {
-    "X-Kairos-Visual-Lock": "patch-only",
-  });
 }
 
 function failure(code, error, status = 409, safeguards = {}) {
@@ -309,8 +235,8 @@ async function safeJSON(response) {
 function stamp(response) {
   const headers = new Headers(response.headers);
   headers.set("X-MMG-Runtime", BUILD);
-  headers.set("X-Kairos-Production-Baseline", "reconciled-v2");
-  headers.set("X-Kairos-Visual-Lock", "patch-only");
+  headers.set("X-Kairos-Production-Baseline", "reconciled-v4");
+  headers.set("X-Kairos-Website-Workflow", "staging-preview-approval-release");
   if (headers.get("Content-Type")?.includes("text/html")) {
     headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
   }

@@ -1,17 +1,17 @@
 {
-  "baseline": "kairos-production-standard-20260715-11",
+  "baseline": "kairos-production-standard-20260715-12",
   "status": "frozen",
   "productionUrl": "https://mmg-ios.info-mindsetmediagroup.workers.dev",
   "worker": {
     "name": "mmg-ios",
-    "entry": "src/kairos-production-entry-v31.js",
+    "entry": "src/kairos-production-entry-v32.js",
     "compatibilityDate": "2026-07-11",
     "assetsDirectory": "../../web/kairos-dashboard",
     "durableObjectBinding": "KAIROS_PROJECTS",
     "durableObjectClass": "KairosProject"
   },
   "dashboard": {
-    "build": "kairos-command-hub-recovery-20260714-48",
+    "build": "kairos-command-hub-routed-20260715-2",
     "commandCenterLayout": "kairos-command-center-layout-20260714-9",
     "chromeHamburgerController": "kairos-chrome-hamburger-controller-20260714-3",
     "chromeHamburgerVerified": true,
@@ -27,10 +27,14 @@
     "oneHundredReservedForBlueprintCompletion": true
   },
   "approvedExpansion": {
-    "scope": "Top-level canonical Shopify homepage planning route with direct approval-ready three-file plan envelope",
-    "activeEdge": "src/kairos-production-entry-v31.js",
-    "preservesPriorEdge": "src/kairos-production-entry-v30.js",
-    "automaticExecution": false
+    "scope": "Operational Website Retool flow from bounded proposal through staging preview, explicit approval, verified live save, and reversible rollback",
+    "activeEdge": "src/kairos-production-entry-v32.js",
+    "preservesPriorEdge": "src/kairos-production-entry-v31.js",
+    "automaticExecution": false,
+    "explicitPreviewApprovalRequired": true,
+    "explicitLiveApplicationRequired": true,
+    "liveReadbackVerificationRequired": true,
+    "rollbackReceiptRequired": true
   },
   "governance": {
     "newCapabilityWorkFrozen": true,

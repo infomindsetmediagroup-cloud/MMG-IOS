@@ -6,16 +6,26 @@ const ACTIONS = {
   "knowledge-library": { title: "Knowledge Library", operation: "search", input: "Search terms" },
   "research-brief": { title: "Research Brief", operation: "build", input: "Research question" },
   "decision-record": { title: "Decision Record", operation: "record", input: "Decision" },
+  "doctrine-vault": { title: "Doctrine Vault", operation: "review", input: "Doctrine or topic" },
+  "intelligence-synthesis": { title: "Intelligence Synthesis", operation: "synthesize", input: "Synthesis objective" },
+  "manuscript-studio": { title: "Manuscript Studio", operation: "open", input: "Manuscript objective" },
+  "social-production": { title: "Social Production", operation: "prepare", input: "Social objective" },
   "publishing-studio": { title: "Publishing Project", operation: "create", input: "Publication title" },
   "creative-studio": { title: "Creative Project", operation: "create", input: "Asset or campaign name" },
   "product-launch": { title: "Product Launch", operation: "build", input: "Product or offer" },
   "revenue-intelligence": { title: "Revenue Review", operation: "review", input: "Review period or objective" },
   "growth-plan": { title: "Growth Plan", operation: "build", input: "Growth objective" },
+  "offer-builder": { title: "Offer Builder", operation: "build", input: "Offer objective" },
+  "campaign-operations": { title: "Campaign Operations", operation: "coordinate", input: "Campaign objective" },
   "visitor-activity": { title: "Visitor Activity", operation: "inspect", input: "" },
   "customer-portal": { title: "Customer Portal", operation: "open", input: "Customer or project" },
   "deliverables": { title: "Deliverables", operation: "inspect", input: "Project or customer" },
+  "customer-journey": { title: "Customer Journey", operation: "map", input: "Customer or journey objective" },
+  "support-intelligence": { title: "Support Intelligence", operation: "review", input: "Support topic" },
   "work-queue": { title: "Work Queue", operation: "inspect", input: "" },
-  "release-control": { title: "Release Control", operation: "inspect", input: "Release or project" },
+  "release-control": { title: "Release Control", operation: "inspect", input: "" },
+  "executive-briefing": { title: "Executive Briefing", operation: "brief", input: "" },
+  "system-registry": { title: "System Registry", operation: "inspect", input: "" },
 };
 
 export default {
@@ -103,6 +113,38 @@ function buildDeliverable(action, objective, env) {
       section("Review trigger", "Revisit when assumptions change, evidence contradicts the decision, or the governing architecture is amended."),
     ], "Approve and persist this record in the authoritative decision registry."),
 
+    "doctrine-vault": () => complete(base, "The doctrine review package is complete.", [
+      section("Doctrine request", objective),
+      section("Authority check", "Resolve the current governing version, effective date, superseded versions, amendments, and affected MMG or Kairos systems before applying the doctrine."),
+      section("Application map", "Trace the doctrine to the relevant operating center, child workspace, production workflow, approval boundary, customer experience, and verification evidence."),
+      section("Conflict handling", "Preserve existing authority until an explicit amendment is approved. Record conflicts, ambiguity, and unresolved implementation impact instead of silently rewriting doctrine."),
+      section("Required evidence", "Canonical source reference, current-version confirmation, affected consumers, implementation receipt, and any approved supersession record."),
+    ], "Open the authoritative doctrine record and verify its current application."),
+
+    "intelligence-synthesis": () => complete(base, "The executive synthesis framework is complete.", [
+      section("Synthesis objective", objective),
+      section("Evidence boundary", "Use only verified source material and preserve provenance, date, authority, uncertainty, and rejected alternatives."),
+      section("Synthesis structure", "Executive finding; supporting evidence; constraints; alternatives; trade-offs; risks; recommended bounded action; measurement plan."),
+      section("Decision boundary", "A synthesis is a recommendation, not an automatic decision or implementation authorization."),
+      section("Completion gate", "Verify source coverage, resolve material contradictions, and record executive disposition before downstream execution."),
+    ], "Attach the verified sources and produce the decision-ready synthesis."),
+
+    "manuscript-studio": () => complete(base, "The manuscript production workspace is ready.", [
+      section("Manuscript objective", objective),
+      section("Intake", "Preserve the source manuscript, identify format and rights, capture audience and promise, and record the current editorial stage."),
+      section("Production path", "Source validation → architecture → developmental edit → copy edit → proof → formatting → cover and metadata → approval → packaging."),
+      section("Quality gates", "Completeness, factual integrity, rights, readability, consistency, accessibility, file integrity, and explicit final approval."),
+      section("Asset boundary", "Drafts, editable production files, source assets, and intermediate outputs remain inside the governed project workspace."),
+    ], "Upload the manuscript source and complete the intake record."),
+
+    "social-production": () => complete(base, "The governed social production package is ready for channel-specific production.", [
+      section("Social objective", objective),
+      section("Production contract", "Select the exact platform and format, then build the hook, core message, caption, CTA, accessibility text, media requirements, and connector-ready payload."),
+      section("Format coverage", "Single image, carousel, short video, text post, reel, story, and platform-specific caption variants remain separate production modes."),
+      section("Quality gate", "Verify aspect ratio, safe area, spelling, brand alignment, disclosure, accessibility, links, and platform constraints."),
+      section("Publication boundary", "The package remains a draft until explicit approval and an authorized platform connector complete publication with a receipt."),
+    ], "Choose the platform and format, attach approved media, and prepare the final connector payload."),
+
     "publishing-studio": () => complete(base, "The publication production package is complete.", [
       section("Publication", objective),
       section("Editorial architecture", "Define audience, promise, scope, table of contents, chapter objectives, examples, exercises, front matter, and back matter."),
@@ -129,6 +171,52 @@ function buildDeliverable(action, objective, env) {
       section("Readiness gates", "Offer approved; fulfillment tested; links verified; analytics connected; customer support ready; rollback and pause criteria defined."),
       section("Launch cadence", "Pre-launch education, announcement, proof and demonstrations, objection handling, deadline or evergreen transition, and post-launch review."),
     ], "Complete the readiness checklist and approve the launch window."),
+
+    "offer-builder": () => complete(base, "The governed offer framework is complete.", [
+      section("Offer objective", objective),
+      section("Customer and problem", "Define the specific customer, current situation, desired outcome, urgency, objections, and evidence of demand."),
+      section("Offer architecture", "Outcome, scope, deliverables, exclusions, service or product model, timeline, support, proof, risk reversal, and fulfillment capacity."),
+      section("Commercial inputs", "Record pricing rationale, cost and margin inputs, payment structure, channel fit, and approval requirements without changing live pricing automatically."),
+      section("Validation", "Test message clarity, customer fit, delivery feasibility, checkout path, support readiness, measurement, and rollback or pause criteria."),
+    ], "Attach verified customer and revenue evidence, then approve the bounded offer."),
+
+    "campaign-operations": () => complete(base, "The campaign operations package is complete.", [
+      section("Campaign objective", objective),
+      section("Scope", "Define audience, offer, message, channels, schedule, assets, owners, dependencies, budget inputs, and success criteria."),
+      section("Production plan", "Brief → asset production → channel adaptation → QA → approval → scheduled handoff → verified launch → measurement."),
+      section("Control points", "No paid spend, public post, customer message, discount, or channel activation occurs without the appropriate approval and connector receipt."),
+      section("Measurement", "Preserve the baseline, campaign identifiers, source data, conversion events, review cadence, stop conditions, and adoption decision."),
+    ], "Complete asset readiness and approve the campaign handoff."),
+
+    "customer-journey": () => complete(base, "The customer journey review is complete.", [
+      section("Journey objective", objective),
+      section("Journey map", "Discovery → evaluation → purchase or intake → project progress → approval → delivery → support → retention and next-best value."),
+      section("Evidence", "Use verified customer, storefront, project, support, delivery, and analytics records. Keep anonymous activity separate from authenticated customer records."),
+      section("Friction review", "Identify dead ends, repeated input, unclear status, missing ownership, delayed approvals, weak handoffs, and unsupported customer expectations."),
+      section("Change boundary", "Recommendations do not automatically alter customer messaging, profiling, targeting, offers, policies, or live experiences."),
+    ], "Attach the verified journey evidence and approve the next bounded improvement."),
+
+    "support-intelligence": () => complete(base, "The support intelligence review is complete.", [
+      section("Support topic", objective),
+      section("Case framing", "Capture the customer need, impact, urgency, project or order context, available evidence, desired resolution, and communication commitment."),
+      section("Resolution path", "Choose the least disruptive authorized resolution, identify policy or executive approvals, and define verification and customer confirmation."),
+      section("Learning", "Classify root cause and preserve a bounded prevention recommendation for onboarding, product, journey, policy, communication, or delivery."),
+      section("Safety boundary", "No refund, policy exception, customer communication, personal profiling, or journey mutation occurs automatically."),
+    ], "Open the verified support case and execute only the approved resolution path."),
+
+    "executive-briefing": () => complete(base, "The executive operating briefing is ready.", [
+      section("System posture", "Review runtime health, active work, blocked work, recent verified completions, pending approvals, and release risk."),
+      section("Attention queue", "Prioritize decisions that block customer delivery, production reliability, revenue evidence, security, or time-sensitive commitments."),
+      section("Approval queue", "Separate approve, deny, fix, and defer decisions. Preserve evidence and downstream execution boundaries for each item."),
+      section("Execution handoff", "Approved items become bounded work orders with owners, acceptance criteria, verification, rollback, and receipts."),
+    ], "Review the current approval queue and dispatch only approved work."),
+
+    "system-registry": () => complete(base, "The system registry inspection is complete.", [
+      section("Canonical runtime", "Cloudflare Workers service mmg-ios is the active production runtime and deployment target."),
+      section("Operating structure", "Five parent centers and twenty-five governed child workspaces are registered in one routed Command Center."),
+      section("Website path", "Shopify staging plan → governed staging write → rendered preview → visual approval → live file promotion → read-back verification → rollback receipt."),
+      section("Registry standard", "Every capability requires a permanent owner, route, source of truth, readiness state, approval boundary, verification contract, and release history."),
+    ], "Use the registry to resolve the next capability owner or production route."),
 
     "knowledge-library": () => sourceReport(base, "Knowledge Library search", objective, Boolean(env?.KNOWLEDGE_LIBRARY), ["Doctrine", "Specifications", "Research", "Decision records"]),
     "revenue-intelligence": () => sourceReport(base, "Revenue intelligence review", objective, Boolean(env?.COMMERCE_DATA), ["Revenue", "Product performance", "Trends", "Evidence"]),

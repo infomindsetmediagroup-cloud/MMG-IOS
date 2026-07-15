@@ -25,6 +25,12 @@ async function createVerification(request, env) {
   const probe = await probePreview(previewURL);
   const pendingAssignment = execution?.pendingLiveAssignment || null;
   const resource = execution?.resource || null;
+  const approvedFiles = (Array.isArray(execution?.filesWritten) ? execution.filesWritten : [])
+    .map(file => ({
+      filename: String(typeof file === "string" ? file : file?.filename || file?.key || "").trim(),
+      afterSha256: String(typeof file === "object" ? file?.afterSha256 || file?.actualSha256 || "" : "").trim(),
+    }))
+    .filter(file => file.filename && file.afterSha256);
 
   const record = {
     reviewID,
@@ -57,6 +63,7 @@ async function createVerification(request, env) {
       releaseType: "theme-publication",
       stagingTheme: theme,
       publishedTheme: execution?.publishedTheme || null,
+      approvedFiles,
       sourceExecutionID: result?.actionID || null,
       sourceBuild: result?.build || null
     },
