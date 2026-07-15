@@ -1,4 +1,4 @@
-const BUILD = "kairos-command-center-layout-20260714-8";
+const BUILD = "kairos-command-center-layout-20260714-9";
 
 const layoutState = {
   menuOpen: false,
@@ -38,7 +38,7 @@ function handleCommandClick(event) {
   if (toggle) {
     event.preventDefault();
     event.stopImmediatePropagation();
-    setMenuOpen(!layoutState.menuOpen);
+    setMenuOpen(!layoutState.menuOpen, { focusMenu: layoutState.menuOpen === false });
     return;
   }
 
@@ -48,9 +48,8 @@ function handleCommandClick(event) {
     event.stopImmediatePropagation();
     const hub = document.querySelector("#kairos-hub");
     const target = hub?.querySelector(`[data-center="${center.dataset.menuCenter}"]`);
-    layoutState.menuOpen = false;
+    setMenuOpen(false);
     target?.click();
-    applyLayout();
     return;
   }
 
@@ -65,20 +64,26 @@ function handleCommandClick(event) {
 function handleCommandKeydown(event) {
   if (event.key === "Escape" && layoutState.menuOpen) {
     event.preventDefault();
-    setMenuOpen(false);
+    setMenuOpen(false, { restoreFocus: true });
   }
 }
 
-function setMenuOpen(open) {
+function setMenuOpen(open, options = {}) {
   layoutState.menuOpen = Boolean(open);
-  applyLayout();
-  requestAnimationFrame(() => {
-    const button = document.querySelector("[data-command-menu]");
-    const menu = document.querySelector("#command-center-menu");
-    button?.setAttribute("aria-expanded", String(layoutState.menuOpen));
-    if (menu) menu.hidden = !layoutState.menuOpen;
-    if (layoutState.menuOpen) menu?.querySelector("button")?.focus({ preventScroll: true });
-  });
+  const button = document.querySelector("[data-command-menu]");
+  const menu = document.querySelector("#command-center-menu");
+  button?.setAttribute("aria-expanded", String(layoutState.menuOpen));
+  button?.setAttribute("aria-label", `${layoutState.menuOpen ? "Close" : "Open"} operating centers`);
+  button?.classList.toggle("is-open", layoutState.menuOpen);
+  if (menu) {
+    menu.hidden = !layoutState.menuOpen;
+    menu.classList.toggle("is-open", layoutState.menuOpen);
+  }
+  if (layoutState.menuOpen && options.focusMenu) {
+    requestAnimationFrame(() => menu?.querySelector("button")?.focus({ preventScroll: true }));
+  } else if (!layoutState.menuOpen && options.restoreFocus) {
+    requestAnimationFrame(() => button?.focus({ preventScroll: true }));
+  }
 }
 
 function applyLayout() {
@@ -101,10 +106,9 @@ function applyLayout() {
       strip = document.createElement("section");
       strip.id = "command-status-strip";
       strip.className = "command-status-strip";
+      strip.innerHTML = `<button class="command-menu-button" type="button" aria-label="Open operating centers" aria-controls="command-center-menu" aria-expanded="false" data-command-menu><span></span><span></span><span></span></button><div class="command-indicator command-online"><i></i><span></span></div>${pulseButton("active","In Progress","0")}${pulseButton("finished","Done 24h","0")}${pulseButton("pending","Not Started","0")}`;
       header.insertAdjacentElement("afterend", strip);
     }
-
-    strip.innerHTML = `<button class="command-menu-button" type="button" aria-label="${layoutState.menuOpen ? "Close" : "Open"} operating centers" aria-expanded="${layoutState.menuOpen}" data-command-menu><span></span><span></span><span></span></button><div class="command-indicator command-online"><i class="${layoutState.onlineState}"></i><span>${escapeHTML(layoutState.online)}</span></div>${pulseButton("active","In Progress",layoutState.activeWork)}${pulseButton("finished","Done 24h",layoutState.finishedWork)}${pulseButton("pending","Not Started",layoutState.workToBeDone)}`;
 
     let menu = hub.querySelector("#command-center-menu");
     if (!menu) {
@@ -112,20 +116,36 @@ function applyLayout() {
       menu.id = "command-center-menu";
       menu.className = "command-center-menu";
       menu.setAttribute("aria-label", "Operating centers");
+      menu.innerHTML = [
+        ["Knowledge", "knowledge"],
+        ["Content", "content"],
+        ["Business", "business"],
+        ["Customers", "customers"],
+        ["Operations", "operations"],
+      ].map(([label, id]) => `<button type="button" data-menu-center="${id}">${label}</button>`).join("");
       strip.insertAdjacentElement("afterend", menu);
     }
 
-    menu.hidden = !layoutState.menuOpen;
-    menu.innerHTML = [
-      ["Knowledge", "knowledge"],
-      ["Content", "content"],
-      ["Business", "business"],
-      ["Customers", "customers"],
-      ["Operations", "operations"],
-    ].map(([label, id]) => `<button type="button" data-menu-center="${id}">${label}</button>`).join("");
+    updateStrip(strip);
+    setMenuOpen(layoutState.menuOpen);
   } finally {
     observe();
   }
+}
+
+function updateStrip(strip) {
+  const onlineDot = strip.querySelector(".command-online i");
+  const onlineText = strip.querySelector(".command-online span");
+  if (onlineDot) onlineDot.className = layoutState.onlineState;
+  if (onlineText) onlineText.textContent = layoutState.online;
+  setPulseValue(strip, "active", layoutState.activeWork);
+  setPulseValue(strip, "finished", layoutState.finishedWork);
+  setPulseValue(strip, "pending", layoutState.workToBeDone);
+}
+
+function setPulseValue(strip, filter, value) {
+  const target = strip.querySelector(`[data-work-pulse="${filter}"] strong`);
+  if (target) target.textContent = value;
 }
 
 function pulseButton(filter, label, value) {
