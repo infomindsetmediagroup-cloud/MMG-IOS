@@ -37,8 +37,12 @@ const managerPath=join(repo,"web/kairos-dashboard/scripts/parent-card-completion
 assert.ok(existsSync(managerPath),"Parent-card completion controller missing");
 const manager=readFileSync(managerPath,"utf8");
 const cleanup=readFileSync(join(repo,"web/kairos-dashboard/scripts/content-access-cleanup.js"),"utf8");
+const stabilityPath=join(repo,"web/kairos-dashboard/scripts/card-navigation-stability.js");
+assert.ok(existsSync(stabilityPath),"Card navigation stability controller missing");
+const stability=readFileSync(stabilityPath,"utf8");
 for(const marker of["kairos-parent-card-completion-20260715-2","knowledge-library","research-brief","decision-record","doctrine-vault","intelligence-synthesis","/api/hub/run","data-operational-contract","100% operational","RECEIPT_KEY","completed","failed","command-center"])assert.ok(manager.includes(marker),`Knowledge completion contract missing ${marker}`);
 for(const marker of["website","manuscript-studio","social-production","publishing-studio","creative-studio","/api/shopify/staging/plan/jobs","/api/manuscript/intake/advance","/api/social-production/prepare","manuscript-result","social-package","content:{status:\"verified\""])assert.ok(manager.includes(marker),`Content completion contract missing ${marker}`);
-assert.ok(cleanup.startsWith("import'./parent-card-completion.js'"),"Parent-card completion controller must load in dashboard sequence");
+assert.ok(cleanup.startsWith("import'./card-navigation-stability.js';\nimport'./parent-card-completion.js';"),"Navigation stability must load before parent-card completion");
+for(const marker of["kairos-card-navigation-stability-20260715-1","kairos-stable-workspace-host","#social-production","#creative-studio","#publishing-studio","#campaign-operations","#product-launch-studio","behavior:\"auto\"","MutationObserver","sessionStorage"])assert.ok(stability.includes(marker),`Card navigation stability missing ${marker}`);
 assert.ok(manager.includes("MutationObserver")&&manager.includes("requestAnimationFrame"),"Parent-card completion must reconcile dashboard renders safely");
-console.log(JSON.stringify({status:"ready",validator:"kairos-operational-workspaces-20260715-6",workspacesVerified:verified.length,knowledgeParentComplete:true,knowledgeChildrenVerified:5,contentParentComplete:true,contentChildrenVerified:5,structuralContracts:true,floatingControls:0},null,2));
+console.log(JSON.stringify({status:"ready",validator:"kairos-operational-workspaces-20260715-7",workspacesVerified:verified.length,knowledgeParentComplete:true,knowledgeChildrenVerified:5,contentParentComplete:true,contentChildrenVerified:5,navigationStable:true,externalWorkspacesPersistent:true,competingSmoothScrollRemoved:true,structuralContracts:true,floatingControls:0},null,2));
