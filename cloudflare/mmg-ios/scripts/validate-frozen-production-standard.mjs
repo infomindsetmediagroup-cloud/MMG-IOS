@@ -8,10 +8,12 @@ const repo = resolve(root, '../..');
 const read = path => readFileSync(path, 'utf8');
 const manifest = JSON.parse(read(join(root, 'production-baseline.json')));
 const wrangler = read(join(root, 'wrangler.toml'));
+const v21Path = join(root, 'src/kairos-production-entry-v21.js');
 const v20Path = join(root, 'src/kairos-production-entry-v20.js');
 const v19Path = join(root, 'src/kairos-production-entry-v19.js');
 const v18Path = join(root, 'src/kairos-production-entry-v18.js');
 const v17Path = join(root, 'src/kairos-production-entry-v17.js');
+const v21 = read(v21Path);
 const v20 = read(v20Path);
 const v19 = read(v19Path);
 const v18 = read(v18Path);
@@ -21,20 +23,24 @@ const controller = read(join(repo, 'web/kairos-dashboard/scripts/chrome-hamburge
 const readiness = read(join(root, 'src/kairos-readiness-registry-v1.js'));
 const headers = read(join(repo, 'web/kairos-dashboard/_headers'));
 
-assert.equal(manifest.baseline, 'kairos-production-standard-20260714-2');
+assert.equal(manifest.baseline, 'kairos-production-standard-20260715');
 assert.equal(manifest.status, 'frozen');
-assert.equal(manifest.worker.entry, 'src/kairos-production-entry-v20.js');
+assert.equal(manifest.worker.entry, 'src/kairos-production-entry-v21.js');
 assert.equal(manifest.dashboard.chromeHamburgerVerified, true);
 assert.equal(manifest.governance.newCapabilityWorkFrozen, true);
 assert.equal(manifest.governance.baselineChangesRequireExplicitApproval, true);
-assert.ok(existsSync(v20Path) && existsSync(v19Path) && existsSync(v18Path) && existsSync(v17Path));
+assert.equal(manifest.approvedExpansion.automaticExecution, false);
+assert.ok(existsSync(v21Path) && existsSync(v20Path) && existsSync(v19Path) && existsSync(v18Path) && existsSync(v17Path));
 const activeMainLines = wrangler.split(/\r?\n/).filter(line => /^main\s*=/.test(line.trim()));
-assert.deepEqual(activeMainLines, ['main = "src/kairos-production-entry-v20.js"']);
+assert.deepEqual(activeMainLines, ['main = "src/kairos-production-entry-v21.js"']);
 assert.ok(wrangler.includes('Validated delegation ancestry'));
+assert.ok(v21.includes("from'./kairos-production-entry-v20.js'"));
 assert.ok(v20.includes("from'./kairos-production-entry-v19.js'"));
 assert.ok(v19.includes("from'./kairos-production-entry-v18.js'"));
 assert.ok(v18.includes("from'./kairos-production-entry-v17.js'"));
-assert.ok(v20.includes('async scheduled') && v20.includes('runtime.scheduled'));
+assert.ok(v21.includes('async scheduled') && v21.includes('runtime.scheduled'));
+assert.ok(v20.includes('/api/growth-commercial-activations'));
+assert.ok(v21.includes('/api/growth-campaign-mandates'));
 assert.ok(index.includes('kairos-command-hub-recovery-20260714-48'));
 assert.ok(index.includes('command-center-layout.js?v=recovery-20260714-48'));
 for (const marker of ['kairos-command-center-layout-20260714-9','data-command-menu','aria-controls="command-center-menu"','setMenuOpen']) assert.ok(layout.includes(marker), `layout missing ${marker}`);
@@ -43,4 +49,4 @@ for (const marker of ['kairos-readiness-registry-20260714-31','"knowledge-librar
 assert.ok(headers.includes('no-store') && headers.includes('max-age=0'));
 assert.deepEqual(manifest.readiness, { registryBuild:'kairos-readiness-registry-20260714-31', knowledge:87, content:89, business:86, customers:88, operations:100, oneHundredReservedForBlueprintCompletion:true });
 
-console.log(JSON.stringify({ status:'ready', baseline:manifest.baseline, frozen:true, activeEntry:'kairos-production-entry-v20', chromeHamburgerVerified:true, readiness:manifest.readiness, cloudflareConfigurationClean:true, delegationAncestryDocumented:true }, null, 2));
+console.log(JSON.stringify({ status:'ready', baseline:manifest.baseline, frozen:true, activeEntry:'kairos-production-entry-v21', priorCommercialActivationPreserved:true, growthCampaignStrategy:true, chromeHamburgerVerified:true, readiness:manifest.readiness, cloudflareConfigurationClean:true, delegationAncestryDocumented:true }, null, 2));
