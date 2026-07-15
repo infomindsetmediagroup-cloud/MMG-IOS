@@ -116,7 +116,7 @@ jobs:
             completeCenters:["knowledge","content","business","customers","operations"].every(id=>hub.includes(`id:"${id}"`)),
             completeCards:hub.includes('data-readiness="100"')&&hub.includes('<span>100%</span>')
           };
-          console.log(JSON.stringify({healthStatus:health.status,htmlBytes:Buffer.byteLength(html),hubBytes:Buffer.byteLength(hub),layoutBytes:Buffer.byteLength(layout),analyticsBytes:Buffer.byteLength(analytics),checkpointBytes:Buffer.byteLength(checkpoints),checks},null,2));
+          console.log(JSON.stringify({healthStatus:health.status,checks},null,2));
           if(Object.values(checks).some(value=>value!==true))process.exit(1);
           NODE
               then
@@ -128,7 +128,6 @@ jobs:
               echo "::error::Kairos production did not pass the executive checkpoint contract."
               exit 1
             fi
-            echo "Kairos executive checkpoint build not ready yet (attempt ${attempt}/18)."
             sleep 5
           done
 
@@ -139,17 +138,36 @@ jobs:
         run: |
           set -euo pipefail
           objective='Prepare the canonical Mindset Media Group homepage retool on Kairos Staging using the approved three-file package. Do not publish the live theme.'
-          submission="$(curl --fail-with-body --show-error --silent --location --max-time 60 \
+          payload="$(OBJECTIVE="${objective}" node -e 'process.stdout.write(JSON.stringify({objective:process.env.OBJECTIVE}))')"
+          submission_code="$(curl --show-error --silent --location --max-time 60 \
+            -o submission.json -w '%{http_code}' \
             -H 'Content-Type: application/json' -H 'Cache-Control: no-cache' \
-            --data "$(OBJECTIVE="${objective}" node -e 'process.stdout.write(JSON.stringify({objective:process.env.OBJECTIVE}))')" \
+            --data "${payload}" \
             "${KAIROS_PRODUCTION_URL}/api/shopify/staging/plan/jobs?deployment=${GITHUB_SHA}")"
-          poll_url="$(SUBMISSION="${submission}" node -e 'const b=JSON.parse(process.env.SUBMISSION||"{}");if(!b.jobID||!b.pollURL){console.error(JSON.stringify(b));process.exit(1)}process.stdout.write(b.pollURL)')"
+          echo "Planner submission HTTP ${submission_code}"
+          cat submission.json
+          echo
+          if [[ ! "${submission_code}" =~ ^2 ]]; then
+            echo "::error::Live homepage planning submission failed with HTTP ${submission_code}."
+            exit 1
+          fi
+          poll_url="$(node -e 'const fs=require("fs");const b=JSON.parse(fs.readFileSync("submission.json","utf8")||"{}");if(!b.jobID||!b.pollURL){console.error(JSON.stringify(b));process.exit(1)}process.stdout.write(b.pollURL)')"
           for attempt in $(seq 1 30); do
-            job="$(curl --fail-with-body --show-error --silent --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}${poll_url}?deployment=${GITHUB_SHA}-${attempt}")"
-            status="$(JOB="${job}" node -e 'const b=JSON.parse(process.env.JOB||"{}");process.stdout.write(String(b.status||""))')"
+            job_code="$(curl --show-error --silent --location --max-time 30 \
+              -o job.json -w '%{http_code}' -H 'Cache-Control: no-cache' \
+              "${KAIROS_PRODUCTION_URL}${poll_url}?deployment=${GITHUB_SHA}-${attempt}")"
+            echo "Planner poll ${attempt} HTTP ${job_code}"
+            cat job.json
+            echo
+            if [[ ! "${job_code}" =~ ^2 ]]; then
+              echo "::error::Live homepage planning poll failed with HTTP ${job_code}."
+              exit 1
+            fi
+            status="$(node -e 'const fs=require("fs");const b=JSON.parse(fs.readFileSync("job.json","utf8")||"{}");process.stdout.write(String(b.status||""))')"
             if [ "${status}" = "completed" ]; then
-              JOB="${job}" node <<'NODE'
-          const envelope=JSON.parse(process.env.JOB||"{}");
+              node <<'NODE'
+          const fs=require('fs');
+          const envelope=JSON.parse(fs.readFileSync('job.json','utf8')||'{}');
           const result=envelope.result||{};
           const plan=result.plan||{};
           const files=Array.isArray(plan.canonicalPackage?.files)?plan.canonicalPackage.files:[];
@@ -171,7 +189,7 @@ jobs:
               exit 0
             fi
             if [ "${status}" = "failed" ] || [ "${status}" = "needs-attention" ] || [ "${status}" = "cancelled" ]; then
-              echo "${job}"
+              echo "::error::Live homepage planning job ended in ${status}."
               exit 1
             fi
             sleep 2
