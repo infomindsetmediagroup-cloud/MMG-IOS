@@ -131,3 +131,40 @@ jobs:
           console.log(JSON.stringify({ build: envelope.build, files: names, checks }, null, 2));
           if (Object.values(checks).some(value => value !== true)) process.exit(1);
           NODE
+
+      - name: Verify live child workspaces and release boundary
+        env:
+          KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+        run: |
+          node - <<'NODE'
+          const actions = [
+            'knowledge-library','research-brief','decision-record','doctrine-vault','intelligence-synthesis',
+            'manuscript-studio','social-production','publishing-studio','creative-studio','product-launch',
+            'revenue-intelligence','growth-plan','offer-builder','campaign-operations','visitor-activity',
+            'customer-portal','deliverables','customer-journey','support-intelligence','work-queue',
+            'release-control','executive-briefing','system-registry'
+          ];
+          async function request(path, body) {
+            const response = await fetch(`${process.env.KAIROS_PRODUCTION_URL}${path}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
+              body: JSON.stringify(body),
+              signal: AbortSignal.timeout(30_000),
+            });
+            let value = {};
+            try { value = await response.json(); } catch {}
+            return { response, value };
+          }
+          (async () => {
+            const results = await Promise.all(actions.map(async action => {
+              const { response, value } = await request('/api/hub/run', { action, objective: `Production contract verification for ${action}` });
+              const accepted = ['completed', 'needs-connector'].includes(value.status);
+              const complete = response.ok && accepted && typeof value.summary === 'string' && value.summary.length > 10 && Array.isArray(value.sections) && value.sections.length > 0 && value.evidence?.externalActionTaken === false;
+              if (!complete) throw new Error(`${action} failed its production contract: HTTP ${response.status} ${value.error?.code || value.status || 'invalid-response'}`);
+              return { action, status: value.status };
+            }));
+            const boundary = await request('/api/shopify/homepage-release/prepare', {});
+            if (boundary.response.status !== 400 || boundary.value.error?.code !== 'review_id_required') throw new Error('Homepage release approval boundary is not enforced.');
+            console.log(JSON.stringify({ childWorkspacesVerified: results.length, sourceReadinessReports: results.filter(item => item.status === 'needs-connector').map(item => item.action), releaseApprovalBoundary: true }, null, 2));
+          })().catch(error => { console.error(error); process.exit(1); });
+          NODE
