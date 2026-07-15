@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#05070a">
-  <meta name="mmg-build" content="kairos-command-center-routed-20260715-1">
+  <meta name="mmg-build" content="kairos-command-center-routed-20260715-2">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>Kairos Command Center</title>
-  <link rel="stylesheet" href="./styles/command-hub.css?v=routed-20260715-1">
+  <link rel="stylesheet" href="./styles/command-hub.css?v=routed-20260715-2">
   <link rel="stylesheet" href="./styles/readiness-priority.css?v=recovery-20260714-18">
   <link rel="stylesheet" href="./styles/readiness-advancement.css?v=recovery-20260714-18">
   <link rel="stylesheet" href="./styles/readiness-promotion.css?v=recovery-20260714-18">
@@ -26,20 +26,31 @@
   <link rel="stylesheet" href="./styles/readiness-certificate-succession.css?v=recovery-20260714-24">
   <link rel="stylesheet" href="./styles/executive-simple-mode.css?v=recovery-20260714-29">
   <link rel="stylesheet" href="./styles/parent-icon-alignment.css?v=recovery-20260714-18">
-  <link rel="stylesheet" href="./styles/command-center-layout.css?v=routed-20260715-1">
-  <link rel="stylesheet" href="./styles/command-router.css?v=routed-20260715-1">
+  <link rel="stylesheet" href="./styles/command-center-layout.css?v=routed-20260715-2">
+  <link rel="stylesheet" href="./styles/command-router.css?v=routed-20260715-2">
   <link rel="stylesheet" href="./styles/header-override.css?v=recovery-20260714-18">
   <style>
     html{scroll-behavior:auto!important;overflow-anchor:none!important}
     body,#kairos-hub,.command-view,.parent-grid{overflow-anchor:none!important}
     .parent-card,.parent-card:hover,.parent-card:focus-visible{transform:none!important;transition:none!important}
     .mini-meter span,.readiness-overall span,.readiness-child-meter span{transition:none!important}
+    .parent-card[data-route-center=knowledge] .parent-icon:before{content:"🧠"!important}
+    .parent-card[data-route-center=content] .parent-icon:before{content:"🎬"!important}
+    .parent-card[data-route-center=business] .parent-icon:before{content:"💼"!important}
+    .parent-card[data-route-center=customers] .parent-icon:before{content:"👥"!important}
+    .parent-card[data-route-center=operations] .parent-icon:before{content:"⚙️"!important}
+    .shopify-summary{margin:14px 0 26px;padding:18px;border:1px solid var(--line);border-radius:20px;background:rgba(10,16,23,.9)}
+    .shopify-summary-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:14px}.shopify-summary-head h2{margin:0;font-size:20px}.shopify-summary-head small{color:var(--muted)}
+    .shopify-summary-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.shopify-summary-controls>div{display:flex;gap:6px;flex-wrap:wrap}.shopify-summary-controls button{padding:8px 10px;border:1px solid #28465a;border-radius:10px;background:#0d1821;color:#cfe8f5;cursor:pointer}.shopify-summary-controls button[aria-pressed=true]{border-color:#27b5ff;background:#102c3d}
+    .shopify-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.shopify-summary-grid article{min-width:0;padding:14px;border:1px solid #1c3040;border-radius:14px;background:#09121a}.shopify-summary-grid span,.shopify-summary-grid small{display:block;color:var(--muted);font-size:11px}.shopify-summary-grid strong{display:block;margin:7px 0 3px;font-size:22px;overflow-wrap:anywhere}
+    @media(max-width:760px){.shopify-summary-head{flex-direction:column}.shopify-summary-controls{width:100%}.shopify-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
   </style>
 </head>
 <body>
   <div id="kairos-hub" class="hub-shell"></div>
   <script>if("scrollRestoration" in history)history.scrollRestoration="manual";</script>
-  <script type="module" src="./scripts/command-hub.js?v=routed-20260715-1"></script>
-  <script type="module" src="./scripts/command-center-layout.js?v=routed-20260715-1"></script>
+  <script type="module" src="./scripts/command-hub.js?v=routed-20260715-2"></script>
+  <script type="module" src="./scripts/command-center-layout.js?v=routed-20260715-2"></script>
+  <script type="module" src="./scripts/shopify-analytics-summary.js?v=routed-20260715-2"></script>
 </body>
 </html>
