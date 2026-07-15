@@ -11,7 +11,7 @@ import {
   buildCanonicalHomepagePackage,
 } from "./kairos-canonical-homepage-package-v1.js";
 
-const BUILD = "kairos-canonical-shopify-planner-20260715-1";
+const BUILD = "kairos-canonical-shopify-planner-20260715-2";
 const HOMEPAGE_FILE = "templates/index.json";
 const JOB_TTL_SECONDS = 3600;
 const MAX_OBJECTIVE_CHARS = 12000;
@@ -19,6 +19,17 @@ const MAX_OBJECTIVE_CHARS = 12000;
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (url.pathname === "/api/shopify/staging/planner-identity" && request.method === "GET") {
+      return json({
+        status: "ready",
+        build: BUILD,
+        planner: "canonical-three-file",
+        installationMode: KAIROS_CANONICAL_HOMEPAGE_VERSION,
+        files: CANONICAL_HOMEPAGE_FILENAMES,
+        stagingOnly: true,
+        liveThemeMutationAuthorized: false,
+      });
+    }
     if (url.pathname === "/api/shopify/staging/plan/jobs" && request.method === "POST") {
       return createCanonicalPlan(request, env);
     }
