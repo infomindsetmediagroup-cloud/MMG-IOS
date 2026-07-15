@@ -10,7 +10,7 @@ const STAGING_ID = "gid://shopify/OnlineStoreTheme/2";
 test("Website Retool completes proposal, staging preview, approval, live save, verification, and rollback", async () => {
   const originalFetch = globalThis.fetch;
   const originalCaches = globalThis.caches;
-  const shopify = new MultiThemeShopify(uneditableHomepage());
+  const shopify = new MultiThemeShopify(uneditableHomepage(), { deferredWrites: 1 });
   globalThis.fetch = shopify.fetch.bind(shopify);
   globalThis.caches = { default: new MemoryCache() };
   const env = {
@@ -51,6 +51,8 @@ test("Website Retool completes proposal, staging preview, approval, live save, v
     assert.equal(execution.status, "completed");
     assert.equal(execution.execution.publishedThemeChanged, false);
     assert.equal(execution.execution.filesWritten.length, 3);
+    assert.equal(shopify.completedWriteJobs, 1);
+    assert.equal(shopify.writeJobPolls, 2);
     assert.notDeepEqual(shopify.themeFiles(STAGING_ID), shopify.themeFiles(MAIN_ID));
 
     const visual = await jsonBody(await request("/api/shopify/staging/visual-verification", {
@@ -148,8 +150,13 @@ class MemoryCache {
 }
 
 class MultiThemeShopify {
-  constructor(homepage) {
+  constructor(homepage, { deferredWrites = 0 } = {}) {
     this.storefrontOK = true;
+    this.deferredWrites = deferredWrites;
+    this.completedWriteJobs = 0;
+    this.writeJobPolls = 0;
+    this.jobs = new Map();
+    this.nextJobID = 1;
     const source = JSON.stringify(homepage, null, 2) + "\n";
     this.themes = new Map([
       [MAIN_ID, { id: MAIN_ID, name: "Rise", role: "MAIN", processing: false, processingFailed: false }],
@@ -190,10 +197,29 @@ class MultiThemeShopify {
       const userErrors = (variables.filenames || []).filter(filename => !files.has(filename)).map(filename => ({ code: "NOT_FOUND", filename }));
       return Response.json({ data: { theme: { files: { nodes, userErrors } } } });
     }
+    if (query.includes("query KairosThemeFileJob")) {
+      const job = this.jobs.get(variables.id);
+      if (!job) return Response.json({ data: { job: null } });
+      this.writeJobPolls += 1;
+      job.pollsRemaining -= 1;
+      if (job.pollsRemaining <= 0 && !job.done) {
+        const files = this.files.get(job.themeId);
+        for (const file of job.files) files.set(file.filename, file.body.value);
+        job.done = true;
+        this.completedWriteJobs += 1;
+      }
+      return Response.json({ data: { job: { id: job.id, done: job.done } } });
+    }
     if (query.includes("mutation KairosThemeFilesUpsert")) {
+      if (this.deferredWrites > 0) {
+        this.deferredWrites -= 1;
+        const id = `gid://shopify/Job/${this.nextJobID++}`;
+        this.jobs.set(id, { id, done: false, pollsRemaining: 2, themeId: variables.themeId, files: structuredClone(variables.files || []) });
+        return Response.json({ data: { themeFilesUpsert: { job: { id, done: false }, upsertedThemeFiles: [], userErrors: [] } } });
+      }
       const files = this.files.get(variables.themeId);
       for (const file of variables.files || []) files.set(file.filename, file.body.value);
-      return Response.json({ data: { themeFilesUpsert: { upsertedThemeFiles: (variables.files || []).map(file => ({ filename: file.filename })), userErrors: [] } } });
+      return Response.json({ data: { themeFilesUpsert: { job: null, upsertedThemeFiles: (variables.files || []).map(file => ({ filename: file.filename })), userErrors: [] } } });
     }
     if (query.includes("mutation KairosThemeFilesDelete")) {
       const files = this.files.get(variables.themeId);
