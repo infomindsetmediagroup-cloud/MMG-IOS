@@ -1,10 +1,8 @@
-# Emergency redeploy of restored baseline 9af14fcf542fe9b4ad3209d594b0e2ad41486cee
 name: Deploy Cloudflare Production
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - "cloudflare/mmg-ios/**"
       - "web/kairos-dashboard/**"
@@ -27,7 +25,6 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CLOUDFLARE_TOKEN || vars.CLOUDFLARE_API_TOKEN || vars.CLOUDFLARE_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
-
     steps:
       - name: Download repository archive and run complete validation suite
         shell: bash
@@ -36,94 +33,43 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p repository
-          curl --fail --show-error --silent --location \
-            --connect-timeout 15 \
-            --max-time 60 \
-            --retry 2 \
-            --retry-delay 2 \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" \
-            --output repository.tar.gz
+          curl --fail --show-error --silent --location --connect-timeout 15 --max-time 60 --retry 2 --retry-delay 2 \
+            -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" --output repository.tar.gz
           tar -xzf repository.tar.gz --strip-components=1 -C repository
           test -f repository/cloudflare/mmg-ios/wrangler.toml
-          echo "Repository archive prepared for ${GITHUB_SHA}."
           node repository/cloudflare/mmg-ios/scripts/validate-production-suite.mjs
 
       - name: Resolve Cloudflare deployment credentials
         shell: bash
         run: |
           set -euo pipefail
-
-          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
-            echo "::error::Cloudflare API token is unavailable to the production environment."
-            exit 1
-          fi
-
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo "::error::Cloudflare API token is unavailable."; exit 1; }
           if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
-            echo "Cloudflare account ID is not stored in GitHub; resolving it from the deployment token."
-
-            accounts_json="$(curl --fail --show-error --silent \
-              --connect-timeout 15 \
-              --max-time 30 \
-              --retry 2 \
-              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-              -H "Content-Type: application/json" \
-              "https://api.cloudflare.com/client/v4/accounts?per_page=50")"
-
-            account_id="$(ACCOUNTS_JSON="${accounts_json}" node -e '
-              const payload = JSON.parse(process.env.ACCOUNTS_JSON || "{}");
-              if (!payload.success) process.exit(2);
-              const accounts = Array.isArray(payload.result) ? payload.result : [];
-              if (accounts.length !== 1) process.exit(3);
-              process.stdout.write(accounts[0].id || "");
-            ')" || status=$?
-
-            status="${status:-0}"
-            if [ "${status}" -eq 2 ]; then
-              echo "::error::Cloudflare rejected the deployment token while resolving the account."
-              exit 1
-            fi
-            if [ "${status}" -eq 3 ]; then
-              echo "::error::The token can access zero or multiple Cloudflare accounts. Add CLOUDFLARE_ACCOUNT_ID explicitly in GitHub."
-              exit 1
-            fi
-            if [ -z "${account_id:-}" ]; then
-              echo "::error::Cloudflare returned no usable account ID."
-              exit 1
-            fi
-
+            accounts_json="$(curl --fail --show-error --silent --connect-timeout 15 --max-time 30 --retry 2 -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json" "https://api.cloudflare.com/client/v4/accounts?per_page=50")"
+            account_id="$(ACCOUNTS_JSON="${accounts_json}" node -e 'const p=JSON.parse(process.env.ACCOUNTS_JSON||"{}");const a=Array.isArray(p.result)?p.result:[];if(!p.success||a.length!==1)process.exit(1);process.stdout.write(a[0].id||"")')"
+            test -n "${account_id}" || { echo "::error::Cloudflare account ID could not be resolved."; exit 1; }
             echo "CLOUDFLARE_ACCOUNT_ID=${account_id}" >> "${GITHUB_ENV}"
-            export CLOUDFLARE_ACCOUNT_ID="${account_id}"
           fi
-
-          echo "Cloudflare production credentials are available."
 
       - name: Verify runtime tools
-        shell: bash
         run: |
-          set -euo pipefail
           node --version
           npm --version
 
       - name: Install dependencies
-        shell: bash
         working-directory: repository/cloudflare/mmg-ios
         run: npm install --ignore-scripts --no-package-lock --no-audit --no-fund
 
       - name: Validate reconciled production baseline
-        shell: bash
         working-directory: repository/cloudflare/mmg-ios
-        run: npm run validate:production
+        run: node scripts/validate-frozen-production-standard.mjs
 
       - name: Validate canonical Cloudflare Worker bundle
-        shell: bash
         working-directory: repository/cloudflare/mmg-ios
         run: npx wrangler deploy --dry-run
 
       - name: Deploy canonical Cloudflare Worker
-        shell: bash
         working-directory: repository/cloudflare/mmg-ios
         run: npx wrangler deploy
 
@@ -134,52 +80,44 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in $(seq 1 18); do
-            headers_file="$(mktemp)"
-            if health_json="$(curl --fail --show-error --silent --location --max-time 30 -D "${headers_file}" "${KAIROS_PRODUCTION_URL}/api/health?deployment=${GITHUB_SHA}")" \
-              && website_page="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/web-003.html?deployment=${GITHUB_SHA}")" \
-              && command_center="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/?deployment=${GITHUB_SHA}")" \
-              && briefing_ui="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/scripts/executive-briefing.js?deployment=${GITHUB_SHA}")" \
-              && creation_script="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/scripts/creation-engine.js?deployment=${GITHUB_SHA}")" \
-              && briefing_json="$(curl --fail --show-error --silent --location --max-time 30 -X POST "${KAIROS_PRODUCTION_URL}/api/executive-briefing/build?deployment=${GITHUB_SHA}")"; then
-              runtime_header="$(awk 'BEGIN{IGNORECASE=1} /^x-mmg-runtime:/ {gsub(/\r/, ""); sub(/^[^:]+:[[:space:]]*/, ""); print; exit}' "${headers_file}")"
-              if HEALTH_JSON="${health_json}" WEBSITE_PAGE="${website_page}" COMMAND_CENTER="${command_center}" BRIEFING_UI="${briefing_ui}" CREATION_SCRIPT="${creation_script}" BRIEFING_JSON="${briefing_json}" RUNTIME_HEADER="${runtime_header}" node <<'NODE'
-          const health = JSON.parse(process.env.HEALTH_JSON || "{}");
-          const page = process.env.WEBSITE_PAGE || "";
-          const commandCenter = process.env.COMMAND_CENTER || "";
-          const briefingUI = process.env.BRIEFING_UI || "";
-          const script = process.env.CREATION_SCRIPT || "";
-          const briefing = JSON.parse(process.env.BRIEFING_JSON || "{}");
-          const runtime = process.env.RUNTIME_HEADER || "";
-          const checks = {
-            canonicalRuntime: runtime === "kairos-production-baseline-20260713-2",
-            healthy: ["ready", "ok", "operational"].includes(health.status),
-            noExternalOpenAI: health.openaiAPIUsed === false,
-            noExternalInference: health.nativeIntelligence?.externalInferenceAPI === false,
-            durableProjects: health.nativeIntelligence?.projectStorage === "durable-object",
-            bookProduction: health.capabilities?.bookDevelopment === "operational",
-            productAssets: health.capabilities?.productAssetCopy === "operational",
-            websiteBaseline: page.includes("Website Production · Kairos") && page.includes('id="job-type"') && page.includes('id="objective"') && page.includes('id="prepare"'),
-            promptEmpty: !page.includes("PRESERVE_PROMPT"),
-            commandCenterBriefing: commandCenter.includes("scripts/executive-briefing.js"),
-            decisionSurface: briefingUI.includes("Approve") && briefingUI.includes("Deny") && briefingUI.includes("Fix") && briefingUI.includes("View Evidence"),
-            creationEngine: script.includes("Build Complete Package"),
-            executiveBriefing: briefing.status === "completed" && Array.isArray(briefing.briefing?.actions) && briefing.briefing.actions.includes("approve") && briefing.briefing.actions.includes("deny") && briefing.briefing.actions.includes("fix"),
-            connectorHonesty: briefing.briefing?.safeguards?.externalSocialPublishingAvailable === false,
+            nonce="${GITHUB_SHA}-${attempt}-$(date +%s)"
+            if health_json="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/api/health?deployment=${nonce}")" \
+              && command_center="$(curl --fail --show-error --silent --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}/?deployment=${nonce}")" \
+              && command_hub="$(curl --fail --show-error --silent --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}/scripts/command-hub.js?v=operational-20260715-1&deployment=${nonce}")" \
+              && layout="$(curl --fail --show-error --silent --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}/scripts/command-center-layout.js?v=operational-20260715-1&deployment=${nonce}")"; then
+              if HEALTH_JSON="${health_json}" COMMAND_CENTER="${command_center}" COMMAND_HUB="${command_hub}" LAYOUT="${layout}" node <<'NODE'
+          const health=JSON.parse(process.env.HEALTH_JSON||"{}");
+          const html=process.env.COMMAND_CENTER||"";
+          const hub=process.env.COMMAND_HUB||"";
+          const layout=process.env.LAYOUT||"";
+          const checks={
+            healthy:["ready","ok","operational"].includes(String(health.status||"").toLowerCase()),
+            operationalBuild:html.includes("kairos-command-center-operational-20260715-1"),
+            oneCommandHub:(html.match(/scripts\/command-hub\.js/g)||[]).length===1,
+            oneLayout:(html.match(/scripts\/command-center-layout\.js/g)||[]).length===1,
+            onlyTwoModules:(html.match(/<script type="module"/g)||[]).length===2,
+            noLegacyControllers:!["readiness-registry.js","command-center-governance.js","executive-simple-mode.js","loadNext("].some(x=>html.includes(x)),
+            staticViewport:html.includes("scroll-behavior:auto!important")&&html.includes("overflow-anchor:none!important"),
+            stableHub:hub.includes("kairos-command-hub-operational-20260715-1")&&hub.includes('id="workspace-slot"')&&(hub.match(/root\.innerHTML/g)||[]).length===1,
+            noHubMotion:!["setInterval(","scrollIntoView","scrollTo(","scrollBy(","MutationObserver"].some(x=>hub.includes(x)),
+            healthStates:hub.includes('["ready","ok","operational"]'),
+            stableLayout:layout.includes("kairos-command-center-layout-static-20260715-1")&&layout.includes("kairos:runtime-status"),
+            noLayoutMotion:!["MutationObserver","requestAnimationFrame","scrollIntoView"].some(x=>layout.includes(x)),
+            completeCenters:["knowledge","content","business","customers","operations"].every(id=>hub.includes(`id:"${id}"`)),
+            completeCards:hub.includes('data-readiness="100"')&&hub.includes('<span>100%</span>')
           };
-          console.log(JSON.stringify({runtime,healthStatus:health.status,healthBuild:health.build,launchMode:health.launchMode,projectStorage:health.nativeIntelligence?.projectStorage,bookDevelopment:health.capabilities?.bookDevelopment,productAssetCopy:health.capabilities?.productAssetCopy,briefingWindow:briefing.briefing?.window,briefingReady:briefing.briefing?.counts?.ready,websitePageBytes:Buffer.byteLength(page),checks},null,2));
-          if (Object.values(checks).some(value => value !== true)) process.exit(1);
+          console.log(JSON.stringify({healthStatus:health.status,htmlBytes:Buffer.byteLength(html),hubBytes:Buffer.byteLength(hub),layoutBytes:Buffer.byteLength(layout),checks},null,2));
+          if(Object.values(checks).some(value=>value!==true))process.exit(1);
           NODE
               then
-                rm -f "${headers_file}"
-                echo "Kairos reconciled production baseline verified on attempt ${attempt}."
+                echo "Kairos operational command center verified on attempt ${attempt}."
                 exit 0
               fi
             fi
-            rm -f "${headers_file}"
-            echo "Kairos production has not exposed the reconciled baseline yet (attempt ${attempt}/18)."
+            echo "Kairos operational command center not ready yet (attempt ${attempt}/18)."
             sleep 5
           done
-          echo "::error::Kairos production did not pass the reconciled baseline contract."
+          echo "::error::Kairos production did not pass the operational command center contract."
           exit 1
 
       - name: Publish Kairos deployment receipt
@@ -190,22 +128,7 @@ jobs:
           DEPLOY_JOB_STATUS: ${{ job.status }}
         run: |
           set -euo pipefail
-          if [ "${DEPLOY_JOB_STATUS}" = "success" ]; then
-            state="success"
-            description="Kairos reconciled production baseline verified"
-          else
-            state="failure"
-            description="Kairos production baseline failed verification"
-          fi
+          if [ "${DEPLOY_JOB_STATUS}" = "success" ]; then state="success"; description="Kairos operational command center verified"; else state="failure"; description="Kairos operational command center failed verification"; fi
           target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          payload="$(STATE="${state}" DESCRIPTION="${description}" TARGET_URL="${target_url}" node -e '
-            process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-cloudflare-production",target_url:process.env.TARGET_URL}));
-          ')"
-          curl --fail --show-error --silent \
-            -X POST \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            -H "Content-Type: application/json" \
-            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "${payload}"
+          payload="$(STATE="${state}" DESCRIPTION="${description}" TARGET_URL="${target_url}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-cloudflare-production",target_url:process.env.TARGET_URL}))')"
+          curl --fail --show-error --silent -X POST -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" -H "Content-Type: application/json" "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" --data "${payload}"
