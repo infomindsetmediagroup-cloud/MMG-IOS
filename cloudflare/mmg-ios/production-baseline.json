@@ -1,10 +1,10 @@
 {
-  "baseline": "kairos-production-standard-20260715-3",
+  "baseline": "kairos-production-standard-20260715-4",
   "status": "frozen",
   "productionUrl": "https://mmg-ios.info-mindsetmediagroup.workers.dev",
   "worker": {
     "name": "mmg-ios",
-    "entry": "src/kairos-production-entry-v23.js",
+    "entry": "src/kairos-production-entry-v24.js",
     "compatibilityDate": "2026-07-11",
     "assetsDirectory": "../../web/kairos-dashboard",
     "durableObjectBinding": "KAIROS_PROJECTS",
@@ -27,9 +27,9 @@
     "oneHundredReservedForBlueprintCompletion": true
   },
   "approvedExpansion": {
-    "scope": "Approval-gated Revenue Intelligence to Growth Plan operating mandate, verified measured outcome, and cross-workspace adoption receipt",
-    "activeEdge": "src/kairos-production-entry-v23.js",
-    "preservesPriorEdge": "src/kairos-production-entry-v22.js",
+    "scope": "Approval-gated Product Launch to Revenue Intelligence commercial outcome mandate with verified cross-workspace adoption receipt",
+    "activeEdge": "src/kairos-production-entry-v24.js",
+    "preservesPriorEdge": "src/kairos-production-entry-v23.js",
     "automaticExecution": false
   },
   "governance": {
