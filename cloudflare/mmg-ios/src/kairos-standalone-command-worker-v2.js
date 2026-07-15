@@ -1,4 +1,4 @@
-import runtime from "./kairos-canonical-shopify-planner-v2.js";
+import runtime from "./kairos-canonical-shopify-planner-v3.js";
 
 const BUILD = "kairos-standalone-command-20260712-5";
 
