@@ -1,0 +1,37 @@
+{
+  "baseline": "kairos-production-standard-20260714",
+  "status": "frozen",
+  "productionUrl": "https://mmg-ios.info-mindsetmediagroup.workers.dev",
+  "worker": {
+    "name": "mmg-ios",
+    "entry": "src/kairos-production-entry-v19.js",
+    "compatibilityDate": "2026-07-11",
+    "assetsDirectory": "../../web/kairos-dashboard",
+    "durableObjectBinding": "KAIROS_PROJECTS",
+    "durableObjectClass": "KairosProject"
+  },
+  "dashboard": {
+    "build": "kairos-command-hub-recovery-20260714-48",
+    "commandCenterLayout": "kairos-command-center-layout-20260714-9",
+    "chromeHamburgerController": "kairos-chrome-hamburger-controller-20260714-3",
+    "chromeHamburgerVerified": true,
+    "assetCaching": "no-store"
+  },
+  "readiness": {
+    "registryBuild": "kairos-readiness-registry-20260714-30",
+    "knowledge": 87,
+    "content": 89,
+    "business": 85,
+    "customers": 88,
+    "operations": 100,
+    "oneHundredReservedForBlueprintCompletion": true
+  },
+  "governance": {
+    "newCapabilityWorkFrozen": true,
+    "baselineChangesRequireExplicitApproval": true,
+    "productionValidationRequired": true,
+    "workerBundleValidationRequired": true,
+    "cloudflareDeploymentRequired": true,
+    "liveVerificationRequired": true
+  }
+}
