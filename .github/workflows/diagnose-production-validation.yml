@@ -22,11 +22,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout canonical repository
-        uses: actions/checkout@v4
+      - name: Download canonical repository source
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p repository
+          curl --fail --silent --show-error --location \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" \
+            --output repository.tar.gz
+          tar -xzf repository.tar.gz --strip-components=1 -C repository
+          test -f repository/cloudflare/mmg-ios/production-baseline.json
 
       - name: Run complete validation suite
-        working-directory: cloudflare/mmg-ios
+        working-directory: repository/cloudflare/mmg-ios
         run: node scripts/validate-production-suite.mjs
 
       - name: Publish diagnostic receipt

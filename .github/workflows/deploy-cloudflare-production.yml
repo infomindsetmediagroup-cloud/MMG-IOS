@@ -51,16 +51,18 @@ jobs:
           node scripts/validate-frozen-production-standard.mjs
           npx wrangler deploy --dry-run
 
-      - name: Deploy Cloudflare Worker
+      - name: Deploy or await connected Cloudflare rollout
         working-directory: repository/cloudflare/mmg-ios
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
-          test -n "${CLOUDFLARE_API_TOKEN:-}"
-          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
-          npx wrangler deploy
+          if [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            npx wrangler deploy
+          else
+            echo "Direct deploy credentials are incomplete; verifying the connected Cloudflare rollout instead."
+          fi
 
       - name: Verify live Kairos application
         env:
@@ -69,9 +71,16 @@ jobs:
           set -euo pipefail
           for attempt in $(seq 1 18); do
             nonce="${GITHUB_SHA}-${attempt}-$(date +%s)"
-            health="$(curl --fail --silent --show-error --location --max-time 30 "${KAIROS_PRODUCTION_URL}/api/health?deployment=${nonce}")" || true
-            html="$(curl --fail --silent --show-error --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}/?deployment=${nonce}")" || true
-            if HEALTH="${health}" HTML="${html}" node -e 'let h={};try{h=JSON.parse(process.env.HEALTH||"{}")}catch{};const x=process.env.HTML||"";const ok=["ready","ok","operational"].includes(String(h.status||"").toLowerCase())&&x.includes("scripts/job-transport.js?v=20260715-1")&&x.includes("scripts/command-hub.js?v=routed-20260715-3");process.exit(ok?0:1)'; then
+            rm -f health.json health-headers.txt dashboard.html
+            curl --fail --silent --show-error --location --max-time 30 \
+              --dump-header health-headers.txt \
+              --output health.json \
+              "${KAIROS_PRODUCTION_URL}/api/health?deployment=${nonce}" || true
+            curl --fail --silent --show-error --location --max-time 30 \
+              -H 'Cache-Control: no-cache' \
+              --output dashboard.html \
+              "${KAIROS_PRODUCTION_URL}/?deployment=${nonce}" || true
+            if node -e 'const fs=require("fs");let h={};try{h=JSON.parse(fs.readFileSync("health.json","utf8"))}catch{};const x=fs.existsSync("dashboard.html")?fs.readFileSync("dashboard.html","utf8"):"";const headers=fs.existsSync("health-headers.txt")?fs.readFileSync("health-headers.txt","utf8").toLowerCase():"";const ok=["ready","ok","operational"].includes(String(h.status||"").toLowerCase())&&x.includes("scripts/job-transport.js?v=20260715-1")&&x.includes("scripts/command-hub.js?v=routed-20260715-4")&&headers.includes("x-kairos-production-entry: kairos-production-entry-20260715-79")&&headers.includes("x-kairos-website-retool-flow: proposal-preview-approval-live-save");process.exit(ok?0:1)'; then
               exit 0
             fi
             sleep 5
@@ -91,9 +100,21 @@ jobs:
             --data "${payload}" \
             "${KAIROS_PRODUCTION_URL}/api/shopify/staging/plan/jobs?deployment=${GITHUB_SHA}" \
             --output plan-envelope.json
+          poll_url="$(node -e 'const fs=require("fs");const value=JSON.parse(fs.readFileSync("plan-envelope.json","utf8"));const url=String(value.pollURL||"");if(!url.startsWith("/"))process.exit(1);process.stdout.write(url)')"
+          for attempt in $(seq 1 12); do
+            rm -f plan-result.json
+            curl --fail-with-body --silent --show-error --location --max-time 60 \
+              -H 'Cache-Control: no-cache' \
+              "${KAIROS_PRODUCTION_URL}${poll_url}?deployment=${GITHUB_SHA}-${attempt}" \
+              --output plan-result.json || true
+            if node -e 'const fs=require("fs");let value={};try{value=JSON.parse(fs.readFileSync("plan-result.json","utf8"))}catch{};process.exit(value.status==="completed"&&value.result?0:1)'; then
+              break
+            fi
+            sleep 3
+          done
           node - <<'NODE'
           const fs = require('fs');
-          const envelope = JSON.parse(fs.readFileSync('plan-envelope.json', 'utf8'));
+          const envelope = JSON.parse(fs.readFileSync('plan-result.json', 'utf8'));
           const result = envelope.result || {};
           const plan = result.plan || {};
           const names = (plan.canonicalPackage?.files || []).map(file => file.filename).sort();
