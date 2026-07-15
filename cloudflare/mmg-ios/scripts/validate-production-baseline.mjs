@@ -1,1 +1,40 @@
-import assert from'node:assert/strict';import{existsSync,readFileSync}from'node:fs';import{dirname,join,resolve}from'node:path';import{fileURLToPath}from'node:url';const root=resolve(dirname(fileURLToPath(import.meta.url)),'..'),repo=resolve(root,'../..'),entry=join(root,'src/kairos-production-entry-v24.js'),v23=join(root,'src/kairos-production-entry-v23.js'),v22=join(root,'src/kairos-production-entry-v22.js'),v21=join(root,'src/kairos-production-entry-v21.js'),v20=join(root,'src/kairos-production-entry-v20.js'),v19=join(root,'src/kairos-production-entry-v19.js'),v18=join(root,'src/kairos-production-entry-v18.js'),v17=join(root,'src/kairos-production-entry-v17.js'),manifest=join(root,'production-baseline.json'),ui=join(repo,'web/kairos-dashboard/scripts/command-center-layout.js'),controller=join(repo,'web/kairos-dashboard/scripts/chrome-hamburger-controller.js');for(const f of[entry,v23,v22,v21,v20,v19,v18,v17,manifest,ui,controller])assert.ok(existsSync(f));const wrangler=readFileSync(join(root,'wrangler.toml'),'utf8'),active=wrangler.split(/\r?\n/).filter(line=>/^main\s*=/.test(line.trim()));assert.deepEqual(active,['main = "src/kairos-production-entry-v24.js"']);assert.ok(wrangler.includes('Validated delegation ancestry'));const edge=readFileSync(entry,'utf8'),prior=readFileSync(v23,'utf8'),v22source=readFileSync(v22,'utf8'),v21source=readFileSync(v21,'utf8'),v20source=readFileSync(v20,'utf8'),v19source=readFileSync(v19,'utf8'),v18source=readFileSync(v18,'utf8');for(const m of["kairos-production-entry-v23.js",'openLaunchRevenueMandate','approveLaunchRevenueMandate','recordLaunchRevenueOutcome','adoptLaunchRevenueLearning','/api/launch-revenue-mandates','async scheduled','runtime.scheduled','X-Kairos-Launch-Revenue'])assert.ok(edge.includes(m));for(const m of["kairos-production-entry-v22.js",'/api/revenue-growth-mandates'])assert.ok(prior.includes(m));for(const m of["kairos-production-entry-v21.js",'/api/growth-offer-mandates'])assert.ok(v22source.includes(m));for(const m of["kairos-production-entry-v20.js",'/api/growth-campaign-mandates'])assert.ok(v21source.includes(m));for(const m of["kairos-production-entry-v19.js",'/api/growth-commercial-activations'])assert.ok(v20source.includes(m));for(const m of["kairos-production-entry-v18.js",'/api/customer-evidence-ledgers'])assert.ok(v19source.includes(m));for(const m of["kairos-production-entry-v17.js",'/api/manuscript-edition-reviews'])assert.ok(v18source.includes(m));const baseline=JSON.parse(readFileSync(manifest,'utf8'));assert.equal(baseline.baseline,'kairos-production-standard-20260715-4');assert.equal(baseline.status,'frozen');assert.equal(baseline.worker.entry,'src/kairos-production-entry-v24.js');assert.equal(baseline.approvedExpansion.automaticExecution,false);const layout=readFileSync(ui,'utf8'),hamburger=readFileSync(controller,'utf8');for(const m of['kairos-command-center-layout-20260714-9','data-command-menu','aria-controls="command-center-menu"'])assert.ok(layout.includes(m));for(const m of['kairos-chrome-hamburger-controller-20260714-3','button.matches(\'[data-command-menu]\')'])assert.ok(hamburger.includes(m));console.log(JSON.stringify({status:'ready',baseline:baseline.baseline,activeEntry:'kairos-production-entry-v24',priorStrategyEdgesPreserved:true,launchRevenueStrategy:true,delegationPreserved:true,delegationAncestryDocumented:true,scheduledHandlers:true,chromeCommandCenterHamburger:true,frozen:true},null,2));
+import assert from 'node:assert/strict';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const repo = resolve(root, '../..');
+const read = path => readFileSync(path, 'utf8');
+const paths = {
+  v25: join(root, 'src/kairos-production-entry-v25.js'),
+  v24: join(root, 'src/kairos-production-entry-v24.js'),
+  v23: join(root, 'src/kairos-production-entry-v23.js'),
+  v22: join(root, 'src/kairos-production-entry-v22.js'),
+  v21: join(root, 'src/kairos-production-entry-v21.js'),
+  v20: join(root, 'src/kairos-production-entry-v20.js'),
+  manifest: join(root, 'production-baseline.json'),
+  layout: join(repo, 'web/kairos-dashboard/scripts/command-center-layout.js'),
+  controller: join(repo, 'web/kairos-dashboard/scripts/chrome-hamburger-controller.js')
+};
+for (const path of Object.values(paths)) assert.ok(existsSync(path), `missing ${path}`);
+const wrangler = read(join(root, 'wrangler.toml'));
+const active = wrangler.split(/\r?\n/).filter(line => /^main\s*=/.test(line.trim()));
+assert.deepEqual(active, ['main = "src/kairos-production-entry-v25.js"']);
+assert.ok(wrangler.includes('Validated delegation ancestry'));
+const v25 = read(paths.v25), v24 = read(paths.v24), v23 = read(paths.v23), v22 = read(paths.v22), v21 = read(paths.v21), v20 = read(paths.v20);
+for (const marker of ['kairos-production-entry-v24.js','openLaunchOfferLearning','approveLaunchOfferLearning','recordLaunchOfferAdoption','/api/launch-offer-learning','async scheduled','runtime.scheduled','X-Kairos-Launch-Offer-Learning']) assert.ok(v25.includes(marker), `v25 missing ${marker}`);
+assert.ok(v24.includes("from'./kairos-production-entry-v23.js'") && v24.includes('/api/launch-revenue-mandates'));
+assert.ok(v23.includes("from'./kairos-production-entry-v22.js'") && v23.includes('/api/revenue-growth-mandates'));
+assert.ok(v22.includes("from'./kairos-production-entry-v21.js'") && v22.includes('/api/growth-offer-mandates'));
+assert.ok(v21.includes("from'./kairos-production-entry-v20.js'") && v21.includes('/api/growth-campaign-mandates'));
+assert.ok(v20.includes('/api/growth-commercial-activations'));
+const baseline = JSON.parse(read(paths.manifest));
+assert.equal(baseline.baseline, 'kairos-production-standard-20260715-5');
+assert.equal(baseline.status, 'frozen');
+assert.equal(baseline.worker.entry, 'src/kairos-production-entry-v25.js');
+assert.equal(baseline.approvedExpansion.automaticExecution, false);
+const layout = read(paths.layout), controller = read(paths.controller);
+for (const marker of ['kairos-command-center-layout-20260714-9','data-command-menu','aria-controls="command-center-menu"']) assert.ok(layout.includes(marker));
+for (const marker of ['kairos-chrome-hamburger-controller-20260714-3','button.matches(\'[data-command-menu]\')']) assert.ok(controller.includes(marker));
+console.log(JSON.stringify({status:'ready',baseline:baseline.baseline,activeEntry:'kairos-production-entry-v25',launchOfferLearning:true,delegationPreserved:true,scheduledHandlers:true,frozen:true},null,2));
