@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#05070a">
-  <meta name="mmg-build" content="kairos-command-hub-recovery-20260715-53">
+  <meta name="mmg-build" content="kairos-command-center-operational-20260715-1">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>Kairos Command Center</title>
-  <link rel="stylesheet" href="./styles/command-hub.css?v=recovery-20260715-53">
+  <link rel="stylesheet" href="./styles/command-hub.css?v=operational-20260715-1">
   <link rel="stylesheet" href="./styles/readiness-priority.css?v=recovery-20260714-18">
   <link rel="stylesheet" href="./styles/readiness-advancement.css?v=recovery-20260714-18">
   <link rel="stylesheet" href="./styles/readiness-promotion.css?v=recovery-20260714-18">
@@ -26,7 +26,7 @@
   <link rel="stylesheet" href="./styles/readiness-certificate-succession.css?v=recovery-20260714-24">
   <link rel="stylesheet" href="./styles/executive-simple-mode.css?v=recovery-20260714-29">
   <link rel="stylesheet" href="./styles/parent-icon-alignment.css?v=recovery-20260714-18">
-  <link rel="stylesheet" href="./styles/command-center-layout.css?v=recovery-20260714-48">
+  <link rel="stylesheet" href="./styles/command-center-layout.css?v=operational-20260715-1">
   <link rel="stylesheet" href="./styles/command-center-governance.css?v=recovery-20260714-18">
   <link rel="stylesheet" href="./styles/objective-router.css?v=recovery-20260714-18">
   <link rel="stylesheet" href="./styles/executive-briefing.css?v=recovery-20260714-18">
@@ -62,57 +62,17 @@
   <link rel="stylesheet" href="./styles/shopify-release-control.css?v=recovery-20260714-18">
   <link rel="stylesheet" href="./styles/website-registry.css?v=recovery-20260714-18">
   <link rel="stylesheet" href="./styles/shopify-page-compiler.css?v=recovery-20260714-18">
+  <style>
+    html{scroll-behavior:auto!important;overflow-anchor:none!important}
+    body,#kairos-hub,.parent-grid,#workspace-slot{overflow-anchor:none!important}
+    .parent-card,.parent-card:hover,.parent-card:focus-visible{transform:none!important;transition:none!important}
+    .mini-meter span,.readiness-overall span,.readiness-child-meter span{transition:none!important}
+  </style>
 </head>
 <body>
-  <div id="kairos-hub" class="hub-shell" aria-live="polite"></div>
-  <script type="module" src="./scripts/command-hub.js?v=recovery-20260715-53"></script>
-  <script type="module" src="./scripts/readiness-registry.js?v=recovery-20260715-53"></script>
-  <script type="module" src="./scripts/readiness-priority.js?v=recovery-20260714-18"></script>
-  <script type="module" src="./scripts/readiness-promotion.js?v=recovery-20260714-18"></script>
-  <script type="module" src="./scripts/readiness-post-verification.js?v=recovery-20260714-18"></script>
-  <script type="module" src="./scripts/readiness-center-certification.js?v=recovery-20260714-18"></script>
-  <script type="module" src="./scripts/readiness-system-certification.js?v=recovery-20260714-19"></script>
-  <script type="module" src="./scripts/readiness-operational-assurance.js?v=recovery-20260714-18"></script>
-  <script type="module" src="./scripts/readiness-operational-remediation.js?v=recovery-20260714-18"></script>
-  <script type="module" src="./scripts/readiness-recovery-verification.js?v=recovery-20260714-20"></script>
-  <script type="module" src="./scripts/readiness-assurance-renewal.js?v=recovery-20260714-21"></script>
-  <script type="module" src="./scripts/readiness-certification-applicability.js?v=recovery-20260714-22"></script>
-  <script type="module" src="./scripts/readiness-recertification.js?v=recovery-20260714-23"></script>
-  <script type="module" src="./scripts/readiness-certificate-succession.js?v=recovery-20260714-24"></script>
-  <script type="module" src="./scripts/executive-simple-mode.js?v=recovery-20260714-29"></script>
-  <script type="module" src="./scripts/command-center-layout.js?v=recovery-20260714-48"></script>
-  <script type="module" src="./scripts/command-center-governance.js?v=recovery-20260714-18"></script>
-  <script type="module" src="./scripts/objective-router.js?v=recovery-20260714-18"></script>
-  <script type="module" src="./scripts/executive-briefing.js?v=recovery-20260714-18"></script>
-  <script type="module" src="./scripts/workflow-runtime.js?v=recovery-20260714-18"></script>
-  <script type="module" src="./scripts/knowledge-operations.js?v=recovery-20260714-37"></script>
-  <script type="module" src="./scripts/research-synthesis-operations.js?v=recovery-20260714-38"></script>
-  <script type="module" src="./scripts/decision-record-operations.js?v=recovery-20260714-39"></script>
-  <script type="module" src="./scripts/deliverables.js?v=recovery-20260714-30"></script>
-  <script type="module" src="./scripts/deliverable-acceptance-loop.js?v=recovery-20260714-45"></script>
-  <script type="module" src="./scripts/customer-portal.js?v=recovery-20260714-30"></script>
-  <script type="module" src="./scripts/portal-access-lifecycle.js?v=recovery-20260714-46"></script>
-  <script type="module" src="./scripts/customer-journeys.js?v=recovery-20260714-32"></script>
-  <script type="module" src="./scripts/support-intelligence.js?v=recovery-20260714-31"></script>
-  <script type="module" src="./scripts/support-recovery-loop.js?v=recovery-20260714-43"></script>
-  <script type="module" src="./scripts/support-closure-loop.js?v=recovery-20260714-47"></script>
-  <script type="module" src="./scripts/visitor-activity.js?v=recovery-20260714-32"></script>
-  <script type="module" src="./scripts/visitor-experiment-outcome-loop.js?v=recovery-20260714-44"></script>
-  <script type="module" src="./scripts/revenue-intelligence.js?v=recovery-20260714-36"></script>
-  <script type="module" src="./scripts/growth-plan.js?v=recovery-20260714-35"></script>
-  <script type="module" src="./scripts/offer-builder.js?v=recovery-20260714-36"></script>
-  <script type="module" src="./scripts/campaign-operations.js?v=recovery-20260714-35"></script>
-  <script type="module" src="./scripts/product-launch-studio.js?v=recovery-20260714-34"></script>
-  <script type="module" src="./scripts/publishing-studio.js?v=recovery-20260714-33"></script>
-  <script type="module" src="./scripts/creative-studio.js?v=recovery-20260714-33"></script>
-  <script type="module" src="./scripts/social-production.js?v=recovery-20260714-40"></script>
-  <script type="module" src="./scripts/content-certification-chain.js?v=recovery-20260714-41"></script>
-  <script type="module" src="./scripts/campaign-social-handoff.js?v=recovery-20260714-42"></script>
-  <script type="module" src="./scripts/website-production-mobile-route.js?v=recovery-20260714-18"></script>
-  <script>
-    const modules=["shopify-analytics.js","shopify-analytics-kpi-goals.js","manuscript-studio.js","content-access-cleanup.js","manuscript-project-setup.js","manuscript-editorial-workbench.js","manuscript-manufacturing.js","manuscript-delivery.js","manuscript-platform-submission.js","publication-catalog.js","publication-operations.js","publication-performance.js","publication-settlement.js","publication-tax-compliance.js","launch-boundary.js","complete-product-engine.js","production-workspace-controller.js","publishing-production-center.js","product-media-installer.js","product-launch-control.js","website-visual-verification.js","shopify-release-control.js","website-registry.js","shopify-page-compiler.js"];
-    function loadNext(index=0){if(index>=modules.length)return;const script=document.createElement("script");script.type="module";script.src=`./scripts/${modules[index]}?v=recovery-20260715-53`;script.onload=()=>setTimeout(()=>loadNext(index+1),50);script.onerror=()=>setTimeout(()=>loadNext(index+1),50);document.body.appendChild(script)}
-    window.addEventListener("load",()=>setTimeout(()=>loadNext(),1400),{once:true});
-  </script>
+  <div id="kairos-hub" class="hub-shell"></div>
+  <script>if("scrollRestoration" in history)history.scrollRestoration="manual";</script>
+  <script type="module" src="./scripts/command-hub.js?v=operational-20260715-1"></script>
+  <script type="module" src="./scripts/command-center-layout.js?v=operational-20260715-1"></script>
 </body>
 </html>
