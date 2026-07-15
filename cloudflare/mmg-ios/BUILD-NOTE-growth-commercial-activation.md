@@ -20,4 +20,4 @@ This batch advances the clean production edge from v19 to v20 and adds an approv
 - Frozen baseline advancement
 - Feature validation contract
 
-The production validation suite still requires final reconciliation before merge and deployment.
+Deployment verification trigger issued from the reconciled `main` baseline on July 14, 2026. This batch is complete only after the canonical Cloudflare production workflow validates, deploys, and verifies the live Worker green.
