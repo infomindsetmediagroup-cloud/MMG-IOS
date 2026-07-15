@@ -38,10 +38,10 @@ const cleanup=readFileSync(join(repo,"web/kairos-dashboard/scripts/content-acces
 const viewportPath=join(repo,"web/kairos-dashboard/scripts/viewport-stability-lock.js");
 assert.ok(existsSync(viewportPath),"Viewport stability lock missing");
 const viewport=readFileSync(viewportPath,"utf8");
-for(const marker of['knowledge-library":100','website:100','function updateTelemetryDOM()','setInterval(refreshTelemetry,15000)'])assert.ok(commandHub.includes(marker),`Single command-hub renderer missing ${marker}`);
+for(const marker of['knowledge-library":100','website:100','function updateTelemetryDOM(){','setInterval(refreshTelemetry,15000)'])assert.ok(commandHub.includes(marker),`Single command-hub renderer missing ${marker}`);
 assert.ok(cleanup.startsWith("import'./viewport-stability-lock.js';"),"Viewport lock must load before delayed production modules");
 assert.ok(!cleanup.includes("parent-card-completion.js"),"Parent-card mutation controller must not load");
 assert.ok(!cleanup.includes("parent-meter-stability.js"),"Parent-meter mutation controller must not load");
-for(const marker of["kairos-viewport-stability-lock-20260715-1","window.scrollTo=function","window.scrollBy=function","Element.prototype.scrollIntoView=function","preventScroll:true","overflowAnchor"] )assert.ok(viewport.includes(marker),`Viewport lock missing ${marker}`);
+for(const marker of["kairos-viewport-stability-lock-20260715-1","window.scrollTo=function","window.scrollBy=function","Element.prototype.scrollIntoView=function","preventScroll:true","overflowAnchor"])assert.ok(viewport.includes(marker),`Viewport lock missing ${marker}`);
 assert.ok(!commandHub.includes("if(scroll)setTimeout"),"Telemetry must not schedule viewport movement");
-console.log(JSON.stringify({status:"ready",validator:"kairos-operational-workspaces-20260715-9",workspacesVerified:verified.length,knowledgeParentComplete:true,contentParentComplete:true,singleParentCardRenderer:true,competingParentControllers:0,unsolicitedViewportMovementBlocked:true,telemetryDOMStable:true,structuralContracts:true,floatingControls:0},null,2));
+console.log(JSON.stringify({status:"ready",validator:"kairos-operational-workspaces-20260715-10",workspacesVerified:verified.length,knowledgeParentComplete:true,contentParentComplete:true,singleParentCardRenderer:true,competingParentControllers:0,unsolicitedViewportMovementBlocked:true,telemetryDOMStable:true,structuralContracts:true,floatingControls:0},null,2));
