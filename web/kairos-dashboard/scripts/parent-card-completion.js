@@ -1,4 +1,4 @@
-const BUILD="kairos-parent-card-completion-20260715-2";
+const BUILD="kairos-parent-card-completion-20260715-3";
 const RECEIPT_KEY="kairos.parent-card.completion.receipts";
 const centerChildren={
   knowledge:["knowledge-library","research-brief","decision-record","doctrine-vault","intelligence-synthesis"],
@@ -22,6 +22,7 @@ const completionSelectors={
 };
 let activeChild=null;
 let scheduled=false;
+let reconciling=false;
 const root=document.querySelector("#kairos-hub");
 
 document.addEventListener("click",event=>{
@@ -31,26 +32,33 @@ document.addEventListener("click",event=>{
 window.addEventListener("kairos:manuscript-studio:open",()=>{activeChild="manuscript-studio"});
 window.addEventListener("kairos:social-production:open",()=>{activeChild="social-production"});
 window.addEventListener("kairos:creative-studio:open",()=>{activeChild="creative-studio"});
+window.addEventListener("kairos:production:state-changed",schedule);
+window.addEventListener("kairos:production:close",schedule);
 
 function allChildren(){return Object.values(centerChildren).flat()}
 function schedule(){
-  if(scheduled)return;
+  if(scheduled||reconciling)return;
   scheduled=true;
-  requestAnimationFrame(()=>{scheduled=false;applyContracts();captureReceipt()});
+  requestAnimationFrame(()=>{
+    scheduled=false;
+    reconciling=true;
+    observer?.disconnect();
+    try{applyContracts();captureReceipt()}finally{
+      reconciling=false;
+      if(root)observer?.observe(root,{childList:true,subtree:true});
+    }
+  });
 }
 function setText(node,value){if(node&&node.textContent!==value)node.textContent=value}
 function setAttr(node,name,value){if(node&&node.getAttribute(name)!==String(value))node.setAttribute(name,String(value))}
-
-function applyContracts(){
-  for(const center of Object.keys(centerChildren))applyCenterContract(center);
-}
+function applyContracts(){for(const center of Object.keys(centerChildren))applyCenterContract(center)}
 function applyCenterContract(center){
   const children=centerChildren[center];
   const parent=document.querySelector(`.parent-card[data-center="${center}"]`);
   if(parent){
     setAttr(parent,"data-readiness",100);setAttr(parent,"data-operational-contract","verified");
     const signal=parent.querySelector(".card-signal");
-    if(signal){const dot=signal.querySelector("i")?.outerHTML||"<i></i>";if(signal.innerHTML!==`${dot}COMPLETE`)signal.innerHTML=`${dot}COMPLETE`}
+    if(signal&&signal.textContent.trim()!=="COMPLETE"){const dot=signal.querySelector("i")?.outerHTML||"<i></i>";signal.innerHTML=`${dot}COMPLETE`}
     const meter=parent.querySelector('[role="progressbar"]');setAttr(meter,"aria-valuenow",100);
     const fill=meter?.querySelector("span");if(fill&&fill.style.getPropertyValue("--meter")!=="100%")fill.style.setProperty("--meter","100%");
     setText(parent.querySelector(".card-foot b"),"100% operational");
@@ -87,9 +95,8 @@ function captureReceipt(){
 function centerFor(child){return Object.entries(centerChildren).find(([,children])=>children.includes(child))?.[0]||"unknown"}
 function title(value){return value.charAt(0).toUpperCase()+value.slice(1)}
 function readReceipts(){try{const value=JSON.parse(localStorage.getItem(RECEIPT_KEY)||"{}");return value&&typeof value==="object"&&!Array.isArray(value)?value:{}}catch{return{}}}
-
-if(root)new MutationObserver(schedule).observe(root,{childList:true,subtree:true});
-new MutationObserver(schedule).observe(document.body,{childList:true,subtree:true});
+const observer=root?new MutationObserver(schedule):null;
+if(root)observer.observe(root,{childList:true,subtree:true});
 window.addEventListener("load",schedule,{once:true});
 schedule();
 window.KairosParentCardCompletion={build:BUILD,contracts,getReceipts:readReceipts,refresh:schedule};
