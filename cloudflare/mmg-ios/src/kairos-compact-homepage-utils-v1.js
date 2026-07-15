@@ -177,8 +177,8 @@ export async function inspectStagingSource(_runtime, _request, env, build, reque
   const files = [];
   for (const filename of filenames) {
     const node = nodes.find(item => item?.filename === filename);
+    if (!node) continue;
     const content = bodyToText(node?.body);
-    if (!content) continue;
     files.push({
       filename,
       readable: true,
@@ -206,6 +206,61 @@ export async function inspectStagingSource(_runtime, _request, env, build, reque
       openaiAPIUsed: false,
       sourceAdapter: "direct-shopify-graphql",
     },
+  };
+}
+
+export async function inspectThemeFiles(env, themeGid, requestedFilenames = ["templates/index.json"]) {
+  const config = readShopifyConfig(env);
+  const auth = await resolveAccessToken(config, env);
+  const filenames = [...new Set((Array.isArray(requestedFilenames) ? requestedFilenames : [requestedFilenames])
+    .map(value => String(value || "").trim())
+    .filter(Boolean))];
+  if (!filenames.length || filenames.length > 50) {
+    throw httpError(400, "theme_file_request_invalid", "Kairos must inspect between one and fifty theme files.");
+  }
+
+  const themesData = await shopifyGraphQL(config, auth, `query KairosThemes { themes(first: 20) { nodes { id name role processing processingFailed } } }`, {});
+  const themes = Array.isArray(themesData?.themes?.nodes) ? themesData.themes.nodes : [];
+  const normalizedThemeGid = normalizeThemeGid(themeGid);
+  const theme = themes.find(item => normalizeThemeGid(item?.id) === normalizedThemeGid) || null;
+  if (!theme?.id) throw httpError(409, "theme_not_found", "The approved Shopify theme could not be verified.");
+  if (theme.processing || theme.processingFailed) throw httpError(409, "theme_not_ready", `${String(theme.name || "The approved theme")} is still processing or failed processing.`);
+
+  const fileData = await shopifyGraphQL(config, auth, `query KairosThemeFiles($themeId: ID!, $filenames: [String!], $first: Int!) { theme(id: $themeId) { files(first: $first, filenames: $filenames) { nodes { filename contentType body { ... on OnlineStoreThemeFileBodyText { content } ... on OnlineStoreThemeFileBodyBase64 { contentBase64 } } } userErrors { code filename } } } }`, {
+    themeId: theme.id,
+    filenames,
+    first: filenames.length,
+  });
+  const connection = fileData?.theme?.files;
+  const fileErrors = Array.isArray(connection?.userErrors)
+    ? connection.userErrors.filter(error => error?.code && error.code !== "NOT_FOUND")
+    : [];
+  if (fileErrors.length) {
+    throw httpError(502, "theme_file_read_failed", `Shopify could not read the approved theme files: ${fileErrors.map(error => error.code).join(", ")}.`);
+  }
+
+  const nodes = Array.isArray(connection?.nodes) ? connection.nodes : [];
+  const files = [];
+  for (const filename of filenames) {
+    const node = nodes.find(item => item?.filename === filename);
+    const content = bodyToText(node?.body);
+    if (!content) continue;
+    files.push({
+      filename,
+      readable: true,
+      content,
+      sha256: await hashText(content),
+      bytes: new TextEncoder().encode(content).length,
+      contentType: node?.contentType || "",
+    });
+  }
+
+  return {
+    theme: summarizeTheme(theme),
+    mainTheme: summarizeTheme(themes.find(item => item?.role === "MAIN") || null),
+    files,
+    missingFiles: filenames.filter(filename => !files.some(file => file.filename === filename)),
+    credentialPath: auth.credentialPath,
   };
 }
 
@@ -249,7 +304,15 @@ export async function deleteThemeFiles(env, themeGid, filenames) {
 }
 
 function summarizeTheme(theme) {
-  return { gid: theme.id, name: String(theme.name || ""), role: String(theme.role || ""), processing: Boolean(theme.processing), processingFailed: Boolean(theme.processingFailed) };
+  return theme?.id
+    ? { gid: theme.id, name: String(theme.name || ""), role: String(theme.role || ""), processing: Boolean(theme.processing), processingFailed: Boolean(theme.processingFailed) }
+    : null;
+}
+
+function normalizeThemeGid(value) {
+  const text = String(value || "").trim();
+  const numeric = text.match(/(\d+)(?!.*\d)/)?.[1];
+  return numeric ? `gid://shopify/OnlineStoreTheme/${numeric}` : text;
 }
 
 function bodyToText(body) {

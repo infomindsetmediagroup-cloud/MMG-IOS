@@ -1,17 +1,18 @@
 # Kairos Production Standard Baseline
 
-**Baseline:** `kairos-production-standard-20260714`  
+**Baseline:** `kairos-production-standard-20260715-12`
 **Status:** Frozen  
 **Production:** `https://mmg-ios.info-mindsetmediagroup.workers.dev`
 
 ## Canonical runtime
 
 - Cloudflare Worker: `mmg-ios`
-- Active entry: `src/kairos-production-entry-v19.js`
+- Active entry: `src/kairos-production-entry-v32.js`
 - Dashboard assets: `web/kairos-dashboard`
 - Durable Object binding: `KAIROS_PROJECTS`
 - Durable Object class: `KairosProject`
-- Readiness registry: `kairos-readiness-registry-20260714-30`
+- Dashboard build: `kairos-command-hub-routed-20260715-2`
+- Readiness registry: `kairos-readiness-registry-20260714-31`
 
 ## Verified application baseline
 
@@ -21,12 +22,15 @@
 - The generic hamburger controller excludes the Command Center-owned control.
 - Dashboard HTML, JavaScript, CSS, and readiness responses use controlled no-store behavior where required.
 - Readiness numbers are sourced from the canonical backend registry.
+- All 25 child workspaces have an operational routed action contract.
+- Website Retool supports proposal review, non-live staging execution, responsive preview links, explicit preview approval, explicit live apply/save, live read-back verification, and recorded rollback.
+- Approved website files are source-hash bound and promoted into the current MAIN theme without changing Shopify theme roles.
 
 ## Current readiness floors
 
 - Knowledge: 87%
 - Content: 89%
-- Business: 85%
+- Business: 86%
 - Customers: 88%
 - Operations: 100%
 
