@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import commandWorker from "../src/kairos-standalone-command-worker-v2.js";
+import commandWorker from "../src/kairos-production-entry-v33.js";
 
 const REQUIRED_ACTIONS = [
   "knowledge-library",
@@ -46,6 +46,7 @@ test("every routed non-website child card returns a complete operational contrac
     const body = await response.json();
     assert.equal(response.status, 200, `${action}: ${JSON.stringify(body)}`);
     assert.notEqual(body?.error?.code, "unknown_child_action", action);
+    assert.ok(["completed", "needs-connector"].includes(body.status), `${action}: ${body.status}`);
     assert.equal(typeof body.summary, "string", action);
     assert.ok(body.summary.length > 10, action);
     assert.ok(Array.isArray(body.sections) && body.sections.length > 0, action);
