@@ -1,4 +1,4 @@
-const BUILD = "kairos-command-center-layout-20260714-7";
+const BUILD = "kairos-command-center-layout-20260714-8";
 
 const layoutState = {
   menuOpen: false,
@@ -15,6 +15,8 @@ let scheduled = false;
 start();
 
 function start() {
+  document.addEventListener("click", handleCommandClick, true);
+  document.addEventListener("keydown", handleCommandKeydown, true);
   observer = new MutationObserver(() => {
     if (scheduled) return;
     scheduled = true;
@@ -29,6 +31,54 @@ function start() {
 
 function observe() {
   observer.observe(document.documentElement, { childList: true, subtree: true });
+}
+
+function handleCommandClick(event) {
+  const toggle = event.target.closest?.("[data-command-menu]");
+  if (toggle) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    setMenuOpen(!layoutState.menuOpen);
+    return;
+  }
+
+  const center = event.target.closest?.("[data-menu-center]");
+  if (center) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const hub = document.querySelector("#kairos-hub");
+    const target = hub?.querySelector(`[data-center="${center.dataset.menuCenter}"]`);
+    layoutState.menuOpen = false;
+    target?.click();
+    applyLayout();
+    return;
+  }
+
+  const pulse = event.target.closest?.("[data-work-pulse]");
+  if (pulse) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    window.dispatchEvent(new CustomEvent("kairos:workflow-runtime:open", { detail: { filter: pulse.dataset.workPulse } }));
+  }
+}
+
+function handleCommandKeydown(event) {
+  if (event.key === "Escape" && layoutState.menuOpen) {
+    event.preventDefault();
+    setMenuOpen(false);
+  }
+}
+
+function setMenuOpen(open) {
+  layoutState.menuOpen = Boolean(open);
+  applyLayout();
+  requestAnimationFrame(() => {
+    const button = document.querySelector("[data-command-menu]");
+    const menu = document.querySelector("#command-center-menu");
+    button?.setAttribute("aria-expanded", String(layoutState.menuOpen));
+    if (menu) menu.hidden = !layoutState.menuOpen;
+    if (layoutState.menuOpen) menu?.querySelector("button")?.focus({ preventScroll: true });
+  });
 }
 
 function applyLayout() {
@@ -54,7 +104,7 @@ function applyLayout() {
       header.insertAdjacentElement("afterend", strip);
     }
 
-    strip.innerHTML = `<button class="command-menu-button" type="button" aria-label="Open operating centers" aria-expanded="${layoutState.menuOpen}" data-command-menu><span></span><span></span><span></span></button><div class="command-indicator command-online"><i class="${layoutState.onlineState}"></i><span>${escapeHTML(layoutState.online)}</span></div>${pulseButton("active","In Progress",layoutState.activeWork)}${pulseButton("finished","Done 24h",layoutState.finishedWork)}${pulseButton("pending","Not Started",layoutState.workToBeDone)}`;
+    strip.innerHTML = `<button class="command-menu-button" type="button" aria-label="${layoutState.menuOpen ? "Close" : "Open"} operating centers" aria-expanded="${layoutState.menuOpen}" data-command-menu><span></span><span></span><span></span></button><div class="command-indicator command-online"><i class="${layoutState.onlineState}"></i><span>${escapeHTML(layoutState.online)}</span></div>${pulseButton("active","In Progress",layoutState.activeWork)}${pulseButton("finished","Done 24h",layoutState.finishedWork)}${pulseButton("pending","Not Started",layoutState.workToBeDone)}`;
 
     let menu = hub.querySelector("#command-center-menu");
     if (!menu) {
@@ -73,21 +123,6 @@ function applyLayout() {
       ["Customers", "customers"],
       ["Operations", "operations"],
     ].map(([label, id]) => `<button type="button" data-menu-center="${id}">${label}</button>`).join("");
-
-    strip.querySelector("[data-command-menu]")?.addEventListener("click", () => {
-      layoutState.menuOpen = !layoutState.menuOpen;
-      applyLayout();
-    });
-    strip.querySelectorAll("[data-work-pulse]").forEach(button => button.addEventListener("click", () => {
-      window.dispatchEvent(new CustomEvent("kairos:workflow-runtime:open", { detail: { filter: button.dataset.workPulse } }));
-    }));
-
-    menu.querySelectorAll("[data-menu-center]").forEach(button => button.addEventListener("click", () => {
-      layoutState.menuOpen = false;
-      const target = hub.querySelector(`[data-center="${button.dataset.menuCenter}"]`);
-      target?.click();
-      applyLayout();
-    }));
   } finally {
     observe();
   }
@@ -118,4 +153,4 @@ function escapeHTML(value) {
   return String(value ?? "").replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
 }
 
-window.KairosCommandCenterLayout = { build: BUILD, refresh: applyLayout };
+window.KairosCommandCenterLayout = { build: BUILD, refresh: applyLayout, setMenuOpen };
