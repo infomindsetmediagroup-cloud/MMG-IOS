@@ -1,59 +1,46 @@
-# MMG/Kairos Cloudflare Production Baseline
+# Kairos Production Standard Baseline
 
-Status: reconciled and refrozen  
-Baseline: `kairos-production-baseline-20260713-2`  
-Canonical Worker entry: `src/kairos-production-entry.js`
+**Baseline:** `kairos-production-standard-20260714`  
+**Status:** Frozen  
+**Production:** `https://mmg-ios.info-mindsetmediagroup.workers.dev`
 
-## Runtime Structure
+## Canonical runtime
 
-The production Worker uses one canonical entry module. It composes the retained publishing runtime with Website Retool, link intelligence, Website Intelligence, executive briefing, governed approval, approved-work dispatch, correction/resubmission, verified completion receipts, and scheduled operations.
+- Cloudflare Worker: `mmg-ios`
+- Active entry: `src/kairos-production-entry-v19.js`
+- Dashboard assets: `web/kairos-dashboard`
+- Durable Object binding: `KAIROS_PROJECTS`
+- Durable Object class: `KairosProject`
+- Readiness registry: `kairos-readiness-registry-20260714-30`
 
-Retained runtime foundation:
+## Verified application baseline
 
-- `src/kairos-production-entry-v1.js` — publishing and production subsystem composition
-- `src/kairos-production-entry-v2.js` — production exception and approved-work boundary
-- `src/kairos-production-entry.js` — canonical Cloudflare entry and route composition
+- Kairos Command Center loads from the Cloudflare Worker asset binding.
+- Chrome Command Center hamburger uses the persistent layout shell.
+- The menu button is not destroyed during telemetry or layout refresh.
+- The generic hamburger controller excludes the Command Center-owned control.
+- Dashboard HTML, JavaScript, CSS, and readiness responses use controlled no-store behavior where required.
+- Readiness numbers are sourced from the canonical backend registry.
 
-Obsolete incremental production wrappers and retired Vercel deployment adapters have been removed.
+## Current readiness floors
 
-## Browser Baseline
+- Knowledge: 87%
+- Content: 89%
+- Business: 85%
+- Customers: 88%
+- Operations: 100%
 
-Cloudflare serves `../../web/kairos-dashboard` through the `ASSETS` binding. Website Production remains at `web-003.html` with empty objective fields, customer-facing language, staging safeguards, verification, rollback, visual review, and separate live approval.
+## Production gates
 
-## Deployment Contract
+Every change to this baseline must pass:
 
-A production success receipt requires:
+1. Complete production validation suite
+2. Reconciled baseline validation
+3. Canonical Cloudflare Worker bundle validation
+4. Cloudflare deployment
+5. Live production verification
+6. Deployment receipt publication
 
-1. Production validation.
-2. Wrangler dry-run bundle validation.
-3. Canonical Worker deployment.
-4. Runtime health and header verification.
-5. Durable project storage verification.
-6. Publishing and product capability verification.
-7. Website Production structural verification.
-8. Empty objective-state verification.
-9. Command Center and executive briefing verification.
-10. Creation Engine asset verification.
+## Freeze rule
 
-The authoritative success check is:
-
-```text
-kairos-cloudflare-production: success
-```
-
-## Scheduled Operations
-
-Website Intelligence and executive briefing preparation run through Cloudflare cron triggers:
-
-```text
-0 15 * * *
-0 2 * * *
-```
-
-Scheduled runs prepare evidence and approval-ready work. They do not authorize live publication.
-
-## Governance Boundary
-
-- Diagnostics, evidence collection, and bounded staging preparation may run automatically.
-- Customer-facing changes remain governed.
-- Live publication, structural redesign, pricing, legal claims, and destructive actions require explicit executive approval.
+No capability expansion, readiness increase, runtime wrapper, asset-loader change, navigation change, or Cloudflare configuration change may be added to this baseline without explicit executive approval. Maintenance fixes must preserve the manifest and update it only after the replacement state passes all production gates.
