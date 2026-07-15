@@ -35,12 +35,11 @@ for(const[name,runtimeFile,uiFile,cssFile,child,markers]of workspaces){
 for(const route of["/api/visitor-activity/reviews","/api/customer-journeys","/api/deliverables","/api/customer-projects"])assert.ok(entry.includes(route),`Core route missing: ${route}`);
 const commandHub=readFileSync(join(repo,"web/kairos-dashboard/scripts/command-hub.js"),"utf8");
 const cleanup=readFileSync(join(repo,"web/kairos-dashboard/scripts/content-access-cleanup.js"),"utf8");
-const viewportPath=join(repo,"web/kairos-dashboard/scripts/viewport-stability-lock.js");
-assert.ok(existsSync(viewportPath),"Viewport stability lock missing");
-const viewport=readFileSync(viewportPath,"utf8");
+const chrome=readFileSync(join(repo,"web/kairos-dashboard/scripts/chrome-hamburger-controller.js"),"utf8");
 for(const marker of['knowledge-library":100','website:100','function updateTelemetryDOM(){','setInterval(refreshTelemetry,15000)'])assert.ok(commandHub.includes(marker),`Single command-hub renderer missing ${marker}`);
-assert.ok(cleanup.startsWith("import'./viewport-stability-lock.js?v=20260715-2';"),"Versioned viewport watchdog must load before delayed production modules");
+assert.ok(!cleanup.includes("viewport-stability-lock.js"),"Recurring viewport watchdog must not load from delayed modules");
+assert.ok(!chrome.includes("viewport-stability-lock.js"),"Recurring viewport watchdog must not load from command-center chrome");
 assert.ok(!cleanup.includes("parent-card-completion.js"),"Parent-card mutation controller must not load");
 assert.ok(!cleanup.includes("parent-meter-stability.js"),"Parent-meter mutation controller must not load");
-for(const marker of["kairos-viewport-stability-lock-20260715-2","window.scrollTo=function","window.scrollBy=function","Element.prototype.scrollIntoView=function","preventScroll:true","overflowAnchor","programmaticNavigationAllowed","stableY","userSettlingUntil","restoreStablePosition","visualViewport","touchmove"])assert.ok(viewport.includes(marker),`Viewport watchdog missing ${marker}`);
-console.log(JSON.stringify({status:"ready",validator:"kairos-operational-workspaces-20260715-12",workspacesVerified:verified.length,knowledgeParentComplete:true,contentParentComplete:true,singleParentCardRenderer:true,competingParentControllers:0,unsolicitedViewportMovementBlocked:true,safariNativeAnchoringCorrected:true,touchMomentumPreserved:true,telemetryDOMStable:true,structuralContracts:true,floatingControls:0},null,2));
+assert.ok(chrome.includes("focus({preventScroll:true})"),"Menu focus must not move the viewport");
+console.log(JSON.stringify({status:"ready",validator:"kairos-operational-workspaces-20260715-13",workspacesVerified:verified.length,knowledgeParentComplete:true,contentParentComplete:true,singleParentCardRenderer:true,competingParentControllers:0,viewportWatchdogsLoaded:0,nativeTouchScrollingOnly:true,telemetryDOMStable:true,structuralContracts:true,floatingControls:0},null,2));
