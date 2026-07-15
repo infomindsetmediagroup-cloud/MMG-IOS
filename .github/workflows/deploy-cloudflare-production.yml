@@ -132,6 +132,7 @@ jobs:
           done
 
       - name: Verify live canonical homepage planning
+        id: canonical_plan
         shell: bash
         env:
           KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
@@ -139,30 +140,18 @@ jobs:
           set -euo pipefail
           objective='Prepare the canonical Mindset Media Group homepage retool on Kairos Staging using the approved three-file package. Do not publish the live theme.'
           payload="$(OBJECTIVE="${objective}" node -e 'process.stdout.write(JSON.stringify({objective:process.env.OBJECTIVE}))')"
-          submission_code="$(curl --show-error --silent --location --max-time 60 \
-            -o submission.json -w '%{http_code}' \
-            -H 'Content-Type: application/json' -H 'Cache-Control: no-cache' \
-            --data "${payload}" \
-            "${KAIROS_PRODUCTION_URL}/api/shopify/staging/plan/jobs?deployment=${GITHUB_SHA}")"
+          submission_code="$(curl --show-error --silent --location --max-time 60 -o submission.json -w '%{http_code}' -H 'Content-Type: application/json' -H 'Cache-Control: no-cache' --data "${payload}" "${KAIROS_PRODUCTION_URL}/api/shopify/staging/plan/jobs?deployment=${GITHUB_SHA}")"
           echo "Planner submission HTTP ${submission_code}"
           cat submission.json
           echo
-          if [[ ! "${submission_code}" =~ ^2 ]]; then
-            echo "::error::Live homepage planning submission failed with HTTP ${submission_code}."
-            exit 1
-          fi
+          if [[ ! "${submission_code}" =~ ^2 ]]; then exit 1; fi
           poll_url="$(node -e 'const fs=require("fs");const b=JSON.parse(fs.readFileSync("submission.json","utf8")||"{}");if(!b.jobID||!b.pollURL){console.error(JSON.stringify(b));process.exit(1)}process.stdout.write(b.pollURL)')"
           for attempt in $(seq 1 30); do
-            job_code="$(curl --show-error --silent --location --max-time 30 \
-              -o job.json -w '%{http_code}' -H 'Cache-Control: no-cache' \
-              "${KAIROS_PRODUCTION_URL}${poll_url}?deployment=${GITHUB_SHA}-${attempt}")"
+            job_code="$(curl --show-error --silent --location --max-time 30 -o job.json -w '%{http_code}' -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}${poll_url}?deployment=${GITHUB_SHA}-${attempt}")"
             echo "Planner poll ${attempt} HTTP ${job_code}"
             cat job.json
             echo
-            if [[ ! "${job_code}" =~ ^2 ]]; then
-              echo "::error::Live homepage planning poll failed with HTTP ${job_code}."
-              exit 1
-            fi
+            if [[ ! "${job_code}" =~ ^2 ]]; then exit 1; fi
             status="$(node -e 'const fs=require("fs");const b=JSON.parse(fs.readFileSync("job.json","utf8")||"{}");process.stdout.write(String(b.status||""))')"
             if [ "${status}" = "completed" ]; then
               node <<'NODE'
@@ -173,29 +162,27 @@ jobs:
           const files=Array.isArray(plan.canonicalPackage?.files)?plan.canonicalPackage.files:[];
           const names=files.map(file=>file.filename).sort();
           const required=["assets/mmg-canonical-homepage.css","sections/mmg-canonical-homepage.liquid","templates/index.json"].sort();
-          const checks={
-            readyForApproval:result.status==="ready-for-approval",
-            canonicalMode:plan.installationMode==="kairos-canonical-homepage-v1",
-            threeFiles:files.length===3&&JSON.stringify(names)===JSON.stringify(required),
-            stagingOnly:String(plan.targetTheme?.role||"").toUpperCase()!=="MAIN",
-            publishedThemeProtected:String(plan.publishedTheme?.role||"").toUpperCase()==="MAIN",
-            liveMutationUnauthorized:plan.liveThemeMutationAuthorized===false&&plan.productionPublishAuthorized===false,
-            rollbackReady:Array.isArray(plan.rollbackPlan)&&plan.rollbackPlan.length>=3
-          };
+          const checks={readyForApproval:result.status==="ready-for-approval",canonicalMode:plan.installationMode==="kairos-canonical-homepage-v1",threeFiles:files.length===3&&JSON.stringify(names)===JSON.stringify(required),stagingOnly:String(plan.targetTheme?.role||"").toUpperCase()!=="MAIN",publishedThemeProtected:String(plan.publishedTheme?.role||"").toUpperCase()==="MAIN",liveMutationUnauthorized:plan.liveThemeMutationAuthorized===false&&plan.productionPublishAuthorized===false,rollbackReady:Array.isArray(plan.rollbackPlan)&&plan.rollbackPlan.length>=3};
           console.log(JSON.stringify({jobID:envelope.jobID,summary:result.summary,installationMode:plan.installationMode,targetTheme:plan.targetTheme,publishedTheme:plan.publishedTheme,files:names,checks},null,2));
           if(Object.values(checks).some(value=>value!==true))process.exit(1);
           NODE
-              echo "Canonical homepage planning verified against live production."
               exit 0
             fi
-            if [ "${status}" = "failed" ] || [ "${status}" = "needs-attention" ] || [ "${status}" = "cancelled" ]; then
-              echo "::error::Live homepage planning job ended in ${status}."
-              exit 1
-            fi
+            if [ "${status}" = "failed" ] || [ "${status}" = "needs-attention" ] || [ "${status}" = "cancelled" ]; then exit 1; fi
             sleep 2
           done
-          echo "::error::Canonical homepage planning did not complete within the verification window."
           exit 1
+
+      - name: Upload live planner diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-homepage-planner-transaction
+          path: |
+            submission.json
+            job.json
+          if-no-files-found: warn
+          retention-days: 3
 
       - name: Publish Kairos deployment receipt
         if: always()
