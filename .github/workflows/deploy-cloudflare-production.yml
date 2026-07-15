@@ -83,41 +83,47 @@ jobs:
             nonce="${GITHUB_SHA}-${attempt}-$(date +%s)"
             if health_json="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/api/health?deployment=${nonce}")" \
               && command_center="$(curl --fail --show-error --silent --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}/?deployment=${nonce}")" \
-              && command_hub="$(curl --fail --show-error --silent --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}/scripts/command-hub.js?v=operational-20260715-1&deployment=${nonce}")" \
-              && layout="$(curl --fail --show-error --silent --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}/scripts/command-center-layout.js?v=operational-20260715-1&deployment=${nonce}")"; then
-              if HEALTH_JSON="${health_json}" COMMAND_CENTER="${command_center}" COMMAND_HUB="${command_hub}" LAYOUT="${layout}" node <<'NODE'
+              && command_hub="$(curl --fail --show-error --silent --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}/scripts/command-hub.js?v=routed-20260715-2&deployment=${nonce}")" \
+              && layout="$(curl --fail --show-error --silent --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}/scripts/command-center-layout.js?v=routed-20260715-2&deployment=${nonce}")" \
+              && analytics="$(curl --fail --show-error --silent --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}/scripts/shopify-analytics-summary.js?v=routed-20260715-2&deployment=${nonce}")"; then
+              if HEALTH_JSON="${health_json}" COMMAND_CENTER="${command_center}" COMMAND_HUB="${command_hub}" LAYOUT="${layout}" ANALYTICS="${analytics}" node <<'NODE'
           const health=JSON.parse(process.env.HEALTH_JSON||"{}");
           const html=process.env.COMMAND_CENTER||"";
           const hub=process.env.COMMAND_HUB||"";
           const layout=process.env.LAYOUT||"";
+          const analytics=process.env.ANALYTICS||"";
           const checks={
             healthy:["ready","ok","operational"].includes(String(health.status||"").toLowerCase()),
-            operationalBuild:html.includes("kairos-command-center-operational-20260715-1"),
+            routedBuild:html.includes("kairos-command-center-routed-20260715-2"),
             oneCommandHub:(html.match(/scripts\/command-hub\.js/g)||[]).length===1,
             oneLayout:(html.match(/scripts\/command-center-layout\.js/g)||[]).length===1,
-            onlyTwoModules:(html.match(/<script type="module"/g)||[]).length===2,
+            oneAnalytics:(html.match(/scripts\/shopify-analytics-summary\.js/g)||[]).length===1,
+            threeModules:(html.match(/<script type="module"/g)||[]).length===3,
+            visibleIcons:["knowledge","content","business","customers","operations"].every(id=>html.includes(`data-route-center=${id}`)),
+            iconGlyphs:["🧠","🎬","💼","👥","⚙️"].every(icon=>html.includes(icon)),
             noLegacyControllers:!["readiness-registry.js","command-center-governance.js","executive-simple-mode.js","loadNext("].some(x=>html.includes(x)),
             staticViewport:html.includes("scroll-behavior:auto!important")&&html.includes("overflow-anchor:none!important"),
-            stableHub:hub.includes("kairos-command-hub-operational-20260715-1")&&hub.includes('id="workspace-slot"')&&(hub.match(/root\.innerHTML/g)||[]).length===1,
+            routedHub:hub.includes("kairos-command-hub-routed-20260715-1")&&hub.includes('id="command-view"')&&hub.includes("history.pushState")&&(hub.match(/root\.innerHTML/g)||[]).length===1,
             noHubMotion:!["setInterval(","scrollIntoView","scrollTo(","scrollBy(","MutationObserver"].some(x=>hub.includes(x)),
-            healthStates:hub.includes('["ready","ok","operational"]'),
-            stableLayout:layout.includes("kairos-command-center-layout-static-20260715-1")&&layout.includes("kairos:runtime-status"),
+            statusStrip:layout.includes("kairos-command-center-layout-routed-20260715-1")&&layout.includes("In Progress")&&layout.includes("Done 24h")&&layout.includes("Pending"),
             noLayoutMotion:!["MutationObserver","requestAnimationFrame","scrollIntoView"].some(x=>layout.includes(x)),
+            containedAnalytics:analytics.includes("kairos-shopify-analytics-summary-20260715-1")&&analytics.includes("/api/analytics/shopify?range=")&&analytics.includes('insertAdjacentElement("afterend",section)'),
+            noAnalyticsMotion:!["setInterval(","MutationObserver","scrollIntoView"].some(x=>analytics.includes(x)),
             completeCenters:["knowledge","content","business","customers","operations"].every(id=>hub.includes(`id:"${id}"`)),
             completeCards:hub.includes('data-readiness="100"')&&hub.includes('<span>100%</span>')
           };
-          console.log(JSON.stringify({healthStatus:health.status,htmlBytes:Buffer.byteLength(html),hubBytes:Buffer.byteLength(hub),layoutBytes:Buffer.byteLength(layout),checks},null,2));
+          console.log(JSON.stringify({healthStatus:health.status,htmlBytes:Buffer.byteLength(html),hubBytes:Buffer.byteLength(hub),layoutBytes:Buffer.byteLength(layout),analyticsBytes:Buffer.byteLength(analytics),checks},null,2));
           if(Object.values(checks).some(value=>value!==true))process.exit(1);
           NODE
               then
-                echo "Kairos operational command center verified on attempt ${attempt}."
+                echo "Kairos routed command center verified on attempt ${attempt}."
                 exit 0
               fi
             fi
-            echo "Kairos operational command center not ready yet (attempt ${attempt}/18)."
+            echo "Kairos routed command center not ready yet (attempt ${attempt}/18)."
             sleep 5
           done
-          echo "::error::Kairos production did not pass the operational command center contract."
+          echo "::error::Kairos production did not pass the routed command center contract."
           exit 1
 
       - name: Publish Kairos deployment receipt
@@ -128,7 +134,7 @@ jobs:
           DEPLOY_JOB_STATUS: ${{ job.status }}
         run: |
           set -euo pipefail
-          if [ "${DEPLOY_JOB_STATUS}" = "success" ]; then state="success"; description="Kairos operational command center verified"; else state="failure"; description="Kairos operational command center failed verification"; fi
+          if [ "${DEPLOY_JOB_STATUS}" = "success" ]; then state="success"; description="Kairos routed command center verified"; else state="failure"; description="Kairos routed command center failed verification"; fi
           target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           payload="$(STATE="${state}" DESCRIPTION="${description}" TARGET_URL="${target_url}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-cloudflare-production",target_url:process.env.TARGET_URL}))')"
           curl --fail --show-error --silent -X POST -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" -H "Content-Type: application/json" "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" --data "${payload}"
