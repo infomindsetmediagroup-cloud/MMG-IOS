@@ -1,4 +1,4 @@
-import'./live-analytics.js';const ANALYTICS_BUILD = "kairos-shopify-analytics-20260715-4";
+const ANALYTICS_BUILD = "kairos-shopify-analytics-20260715-5";
 let latest = null;
 let loading = false;
 
