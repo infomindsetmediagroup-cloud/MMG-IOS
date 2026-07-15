@@ -80,7 +80,7 @@ jobs:
               -H 'Cache-Control: no-cache' \
               --output dashboard.html \
               "${KAIROS_PRODUCTION_URL}/?deployment=${nonce}" || true
-            if node -e 'const fs=require("fs");let h={};try{h=JSON.parse(fs.readFileSync("health.json","utf8"))}catch{};const x=fs.existsSync("dashboard.html")?fs.readFileSync("dashboard.html","utf8"):"";const headers=fs.existsSync("health-headers.txt")?fs.readFileSync("health-headers.txt","utf8").toLowerCase():"";const ok=["ready","ok","operational"].includes(String(h.status||"").toLowerCase())&&x.includes("scripts/job-transport.js?v=20260715-1")&&x.includes("scripts/command-hub.js?v=routed-20260715-4")&&headers.includes("x-kairos-production-entry: kairos-production-entry-20260715-79")&&headers.includes("x-kairos-website-retool-flow: proposal-preview-approval-live-save");process.exit(ok?0:1)'; then
+            if node -e 'const fs=require("fs");let h={};try{h=JSON.parse(fs.readFileSync("health.json","utf8"))}catch{};const x=fs.existsSync("dashboard.html")?fs.readFileSync("dashboard.html","utf8"):"";const headers=fs.existsSync("health-headers.txt")?fs.readFileSync("health-headers.txt","utf8").toLowerCase():"";const ok=["ready","ok","operational"].includes(String(h.status||"").toLowerCase())&&x.includes("scripts/job-transport.js?v=20260715-1")&&x.includes("scripts/command-hub.js?v=routed-20260715-4")&&headers.includes("x-kairos-production-entry: kairos-production-entry-20260715-80")&&headers.includes("x-kairos-website-retool-flow: proposal-preview-approval-live-save")&&headers.includes("x-kairos-child-card-contracts: normalized-top-edge");process.exit(ok?0:1)'; then
               exit 0
             fi
             sleep 5

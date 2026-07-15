@@ -1,10 +1,10 @@
 {
-  "baseline": "kairos-production-standard-20260715-12",
+  "baseline": "kairos-production-standard-20260715-13",
   "status": "frozen",
   "productionUrl": "https://mmg-ios.info-mindsetmediagroup.workers.dev",
   "worker": {
     "name": "mmg-ios",
-    "entry": "src/kairos-production-entry-v32.js",
+    "entry": "src/kairos-production-entry-v33.js",
     "compatibilityDate": "2026-07-11",
     "assetsDirectory": "../../web/kairos-dashboard",
     "durableObjectBinding": "KAIROS_PROJECTS",
@@ -27,9 +27,9 @@
     "oneHundredReservedForBlueprintCompletion": true
   },
   "approvedExpansion": {
-    "scope": "Operational Website Retool flow from bounded proposal through staging preview, explicit approval, verified live save, and reversible rollback",
-    "activeEdge": "src/kairos-production-entry-v32.js",
-    "preservesPriorEdge": "src/kairos-production-entry-v31.js",
+    "scope": "Operational Website Retool flow plus normalized, complete response contracts for every routed parent-center child card",
+    "activeEdge": "src/kairos-production-entry-v33.js",
+    "preservesPriorEdge": "src/kairos-production-entry-v32.js",
     "automaticExecution": false,
     "explicitPreviewApprovalRequired": true,
     "explicitLiveApplicationRequired": true,

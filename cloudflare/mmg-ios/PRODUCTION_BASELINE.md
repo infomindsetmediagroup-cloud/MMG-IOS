@@ -1,13 +1,13 @@
 # Kairos Production Standard Baseline
 
-**Baseline:** `kairos-production-standard-20260715-12`
+**Baseline:** `kairos-production-standard-20260715-13`
 **Status:** Frozen  
 **Production:** `https://mmg-ios.info-mindsetmediagroup.workers.dev`
 
 ## Canonical runtime
 
 - Cloudflare Worker: `mmg-ios`
-- Active entry: `src/kairos-production-entry-v32.js`
+- Active entry: `src/kairos-production-entry-v33.js`
 - Dashboard assets: `web/kairos-dashboard`
 - Durable Object binding: `KAIROS_PROJECTS`
 - Durable Object class: `KairosProject`
