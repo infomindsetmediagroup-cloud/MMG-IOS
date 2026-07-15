@@ -1,6 +1,5 @@
-import'./chrome-hamburger-controller.js';
 import'./deliverables-portfolio-bridge.js';
-const BUILD="kairos-content-access-cleanup-20260714-3";
+const BUILD="kairos-content-access-cleanup-20260714-4";
 window.addEventListener("kairos:manuscript-studio:open",openManuscript);
 window.addEventListener("load",()=>setTimeout(removeFloatingLaunchers,3200),{once:true});
 function openManuscript(){const launch=document.querySelector(".manuscript-launch");if(launch){launch.click();removeFloatingLaunchers();return}setTimeout(()=>{document.querySelector(".manuscript-launch")?.click();removeFloatingLaunchers()},500)}
