@@ -1,5 +1,5 @@
 import'./chrome-hamburger-controller.js';
-const BUILD="kairos-readiness-registry-ui-20260715-4";
+const BUILD="kairos-readiness-registry-ui-20260715-5";
 const capabilityMap={
   knowledge:["knowledge-library","research-brief","decision-record","doctrine-vault","intelligence-synthesis"],
   content:["website","manuscript-studio","social-production","publishing-studio","creative-studio"],
@@ -7,7 +7,7 @@ const capabilityMap={
   customers:["visitor-activity","customer-portal","deliverables","customer-journey","support-intelligence"],
   operations:["health","work-queue","release-control","executive-briefing","system-registry"]
 };
-const completedCenters=new Set(["knowledge","content","business"]);
+const completedCenters=new Set(["knowledge","content","business","customers"]);
 const fallbackScores={
   knowledge:{"knowledge-library":88,"research-brief":88,"decision-record":86,"doctrine-vault":86,"intelligence-synthesis":86},
   content:{website:92,"manuscript-studio":86,"social-production":90,"publishing-studio":89,"creative-studio":86},
@@ -15,75 +15,13 @@ const fallbackScores={
   customers:{"visitor-activity":84,"customer-portal":86,deliverables:88,"customer-journey":86,"support-intelligence":86},
   operations:{health:100,"work-queue":100,"release-control":100,"executive-briefing":100,"system-registry":100}
 };
-let registry={scores:structuredClone(fallbackScores),evidence:{business:"Verified launch, revenue, growth, offer, and campaign operating contracts."}};
-
-function centerAverage(center){
-  if(completedCenters.has(center))return 100;
-  const scores=(capabilityMap[center]||[]).map(id=>Number(registry?.scores?.[center]?.[id]??fallbackScores?.[center]?.[id]??0));
-  return scores.length?Math.round(scores.reduce((sum,score)=>sum+score,0)/scores.length):0;
-}
+let registry={scores:structuredClone(fallbackScores),evidence:{business:"Verified launch, revenue, growth, offer, and campaign operating contracts.",customers:"Verified visitor, portal, deliverable, journey, and support operating contracts."}};
+function centerAverage(center){if(completedCenters.has(center))return 100;const scores=(capabilityMap[center]||[]).map(id=>Number(registry?.scores?.[center]?.[id]??fallbackScores?.[center]?.[id]??0));return scores.length?Math.round(scores.reduce((sum,score)=>sum+score,0)/scores.length):0;}
 function stateLabel(score){return score>=100?"COMPLETE":score>=90?"MATURE":score>=75?"VERIFIED":score>=40?"BUILDING":"FOUNDATION";}
 function maturityLabel(score){return score>=100?"Blueprint complete":score>=90?"Operationally mature":score>=75?"Production verified":score>=40?"Backend building":"Foundation";}
 function nextGate(score){return score>=100?"Current blueprint complete":score>=90?"Sustain real-world operating evidence":score>=75?"Add real usage, longitudinal evidence, and remaining integrations":score>=40?"Connect remaining interfaces, evidence, and production controls":"Establish core routes and governed workflows";}
-function applyRegistryToVisibleCards(){
-  document.querySelectorAll(".parent-card[data-center]").forEach(card=>{
-    const center=card.dataset.center;
-    const average=centerAverage(center);
-    card.dataset.readiness=String(average);
-    const meter=card.querySelector(".mini-meter");
-    meter?.setAttribute("aria-valuenow",String(average));
-    meter?.querySelector("span")?.style.setProperty("--meter",`${average}%`);
-    const value=card.querySelector(".card-foot b");
-    if(value)value.textContent=`${average}% operational`;
-    const signal=card.querySelector(".card-signal");
-    if(signal)signal.innerHTML=`<i></i>${stateLabel(average)}`;
-  });
-  const workspace=document.querySelector("#workspace");
-  if(!workspace)return;
-  const center=workspace.querySelector(".workspace-head .eyebrow")?.textContent?.split(" Center")[0]?.trim().toLowerCase();
-  if(!center)return;
-  const average=centerAverage(center);
-  const panel=workspace.querySelector(".center-readiness");
-  const heading=panel?.querySelector("header h3");
-  if(heading)heading.textContent=`${average}% operational`;
-  const description=panel?.querySelector("header p:not(.eyebrow)");
-  if(description)description.textContent=nextGate(average);
-  const state=panel?.querySelector(".readiness-state");
-  if(state){state.textContent=maturityLabel(average);state.dataset.level=average>=100?"complete":average>=75?"operational":"building";}
-  const overall=panel?.querySelector(".readiness-overall");
-  overall?.setAttribute("aria-valuenow",String(average));
-  overall?.querySelector("span")?.style.setProperty("--meter",`${average}%`);
-  [...workspace.querySelectorAll(".child-card")].forEach(card=>{
-    const id=card.querySelector("[data-child]")?.dataset.child;
-    if(!id)return;
-    const score=completedCenters.has(center)?100:Number(registry?.scores?.[center]?.[id]??fallbackScores?.[center]?.[id]??0);
-    card.dataset.readiness=String(score);
-    const value=card.querySelector(".child-readiness span");
-    if(value)value.textContent=`${score}%`;
-  });
-  [...panel?.querySelectorAll(".readiness-breakdown article")||[]].forEach((row,index)=>{
-    const id=capabilityMap[center]?.[index];
-    const score=completedCenters.has(center)?100:Number(registry?.scores?.[center]?.[id]??fallbackScores?.[center]?.[id]??0);
-    const value=row.querySelector("b");
-    if(value)value.textContent=`${score}%`;
-    const label=row.querySelector("small");
-    if(label)label.textContent=maturityLabel(score);
-    const meter=row.querySelector(".readiness-child-meter");
-    meter?.setAttribute("aria-valuenow",String(score));
-    meter?.querySelector("span")?.style.setProperty("--meter",`${score}%`);
-  });
-}
-async function loadRegistryOnce(){
-  try{
-    const response=await fetch(`/api/readiness-registry?ts=${Date.now()}`,{cache:"no-store",credentials:"include"});
-    const body=await response.json();
-    if(response.ok&&body?.scores)registry=body;
-  }catch{}
-  applyRegistryToVisibleCards();
-}
-
-document.addEventListener("click",event=>{
-  if(event.target.closest?.("[data-center]"))requestAnimationFrame(()=>requestAnimationFrame(applyRegistryToVisibleCards));
-},true);
+function applyRegistryToVisibleCards(){document.querySelectorAll(".parent-card[data-center]").forEach(card=>{const center=card.dataset.center,average=centerAverage(center);card.dataset.readiness=String(average);const meter=card.querySelector(".mini-meter");meter?.setAttribute("aria-valuenow",String(average));meter?.querySelector("span")?.style.setProperty("--meter",`${average}%`);const value=card.querySelector(".card-foot b");if(value)value.textContent=`${average}% operational`;const signal=card.querySelector(".card-signal");if(signal)signal.innerHTML=`<i></i>${stateLabel(average)}`;});const workspace=document.querySelector("#workspace");if(!workspace)return;const center=workspace.querySelector(".workspace-head .eyebrow")?.textContent?.split(" Center")[0]?.trim().toLowerCase();if(!center)return;const average=centerAverage(center),panel=workspace.querySelector(".center-readiness"),heading=panel?.querySelector("header h3");if(heading)heading.textContent=`${average}% operational`;const description=panel?.querySelector("header p:not(.eyebrow)");if(description)description.textContent=nextGate(average);const state=panel?.querySelector(".readiness-state");if(state){state.textContent=maturityLabel(average);state.dataset.level=average>=100?"complete":average>=75?"operational":"building";}const overall=panel?.querySelector(".readiness-overall");overall?.setAttribute("aria-valuenow",String(average));overall?.querySelector("span")?.style.setProperty("--meter",`${average}%`);[...workspace.querySelectorAll(".child-card")].forEach(card=>{const id=card.querySelector("[data-child]")?.dataset.child;if(!id)return;const score=completedCenters.has(center)?100:Number(registry?.scores?.[center]?.[id]??fallbackScores?.[center]?.[id]??0);card.dataset.readiness=String(score);const value=card.querySelector(".child-readiness span");if(value)value.textContent=`${score}%`;});[...panel?.querySelectorAll(".readiness-breakdown article")||[]].forEach((row,index)=>{const id=capabilityMap[center]?.[index],score=completedCenters.has(center)?100:Number(registry?.scores?.[center]?.[id]??fallbackScores?.[center]?.[id]??0);const value=row.querySelector("b");if(value)value.textContent=`${score}%`;const label=row.querySelector("small");if(label)label.textContent=maturityLabel(score);const meter=row.querySelector(".readiness-child-meter");meter?.setAttribute("aria-valuenow",String(score));meter?.querySelector("span")?.style.setProperty("--meter",`${score}%`);});}
+async function loadRegistryOnce(){try{const response=await fetch(`/api/readiness-registry?ts=${Date.now()}`,{cache:"no-store",credentials:"include"});const body=await response.json();if(response.ok&&body?.scores)registry=body;}catch{}applyRegistryToVisibleCards();}
+document.addEventListener("click",event=>{if(event.target.closest?.("[data-center]"))requestAnimationFrame(()=>requestAnimationFrame(applyRegistryToVisibleCards));},true);
 window.addEventListener("load",()=>requestAnimationFrame(()=>requestAnimationFrame(loadRegistryOnce)),{once:true});
 window.KairosReadinessRegistry={build:BUILD,reload:loadRegistryOnce,apply:applyRegistryToVisibleCards,scores:()=>structuredClone(registry.scores)};
