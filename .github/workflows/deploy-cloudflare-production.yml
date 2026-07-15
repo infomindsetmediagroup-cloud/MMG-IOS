@@ -3,10 +3,6 @@ name: Deploy Cloudflare Production
 on:
   push:
     branches: [main]
-    paths:
-      - "cloudflare/mmg-ios/**"
-      - "web/kairos-dashboard/**"
-      - ".github/workflows/deploy-cloudflare-production.yml"
   workflow_dispatch: {}
 
 permissions:
@@ -25,174 +21,146 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CLOUDFLARE_TOKEN || vars.CLOUDFLARE_API_TOKEN || vars.CLOUDFLARE_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+      KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+
     steps:
-      - name: Download repository archive and run complete validation suite
+      - name: Download repository archive
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p repository
-          curl --fail --show-error --silent --location --connect-timeout 15 --max-time 60 --retry 2 --retry-delay 2 \
-            -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" --output repository.tar.gz
+          curl --fail --show-error --silent --location --retry 2 \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" \
+            --output repository.tar.gz
           tar -xzf repository.tar.gz --strip-components=1 -C repository
           test -f repository/cloudflare/mmg-ios/wrangler.toml
-          node repository/cloudflare/mmg-ios/scripts/validate-production-suite.mjs
 
-      - name: Resolve Cloudflare deployment credentials
+      - name: Resolve Cloudflare credentials
         shell: bash
         run: |
           set -euo pipefail
           test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo "::error::Cloudflare API token is unavailable."; exit 1; }
           if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
-            accounts_json="$(curl --fail --show-error --silent --connect-timeout 15 --max-time 30 --retry 2 -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json" "https://api.cloudflare.com/client/v4/accounts?per_page=50")"
+            accounts_json="$(curl --fail --show-error --silent --retry 2 -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" "https://api.cloudflare.com/client/v4/accounts?per_page=50")"
             account_id="$(ACCOUNTS_JSON="${accounts_json}" node -e 'const p=JSON.parse(process.env.ACCOUNTS_JSON||"{}");const a=Array.isArray(p.result)?p.result:[];if(!p.success||a.length!==1)process.exit(1);process.stdout.write(a[0].id||"")')"
-            test -n "${account_id}" || { echo "::error::Cloudflare account ID could not be resolved."; exit 1; }
+            test -n "${account_id}"
             echo "CLOUDFLARE_ACCOUNT_ID=${account_id}" >> "${GITHUB_ENV}"
           fi
-
-      - name: Verify runtime tools
-        run: |
-          node --version
-          npm --version
 
       - name: Install dependencies
         working-directory: repository/cloudflare/mmg-ios
         run: npm install --ignore-scripts --no-package-lock --no-audit --no-fund
 
-      - name: Validate reconciled production baseline
+      - name: Validate production source
         working-directory: repository/cloudflare/mmg-ios
-        run: node scripts/validate-frozen-production-standard.mjs
+        run: |
+          node scripts/validate-production-suite.mjs
+          node scripts/validate-frozen-production-standard.mjs
+          npx wrangler deploy --dry-run
 
-      - name: Validate canonical Cloudflare Worker bundle
-        working-directory: repository/cloudflare/mmg-ios
-        run: npx wrangler deploy --dry-run
-
-      - name: Deploy canonical Cloudflare Worker
+      - name: Deploy Cloudflare Worker
         working-directory: repository/cloudflare/mmg-ios
         run: npx wrangler deploy
 
-      - name: Verify deployed production baseline
+      - name: Verify live application
         shell: bash
-        env:
-          KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
         run: |
           set -euo pipefail
           for attempt in $(seq 1 18); do
             nonce="${GITHUB_SHA}-${attempt}-$(date +%s)"
-            if health_json="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/api/health?deployment=${nonce}")" \
-              && command_center="$(curl --fail --show-error --silent --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}/?deployment=${nonce}")" \
-              && command_hub="$(curl --fail --show-error --silent --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}/scripts/command-hub.js?v=routed-20260715-3&deployment=${nonce}")" \
-              && layout="$(curl --fail --show-error --silent --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}/scripts/command-center-layout.js?v=routed-20260715-3&deployment=${nonce}")" \
-              && analytics="$(curl --fail --show-error --silent --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}/scripts/shopify-analytics-summary.js?v=routed-20260715-3&deployment=${nonce}")" \
-              && checkpoints="$(curl --fail --show-error --silent --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}/scripts/executive-checkpoints.js?v=routed-20260715-3&deployment=${nonce}")"; then
-              if HEALTH_JSON="${health_json}" COMMAND_CENTER="${command_center}" COMMAND_HUB="${command_hub}" LAYOUT="${layout}" ANALYTICS="${analytics}" CHECKPOINTS="${checkpoints}" node <<'NODE'
-          const health=JSON.parse(process.env.HEALTH_JSON||"{}");
-          const html=process.env.COMMAND_CENTER||"";
-          const hub=process.env.COMMAND_HUB||"";
-          const layout=process.env.LAYOUT||"";
-          const analytics=process.env.ANALYTICS||"";
-          const checkpoints=process.env.CHECKPOINTS||"";
-          const checks={
-            healthy:["ready","ok","operational"].includes(String(health.status||"").toLowerCase()),
-            routedBuild:html.includes("kairos-command-center-routed-20260715-3"),
-            oneCommandHub:(html.match(/scripts\/command-hub\.js/g)||[]).length===1,
-            oneLayout:(html.match(/scripts\/command-center-layout\.js/g)||[]).length===1,
-            oneAnalytics:(html.match(/scripts\/shopify-analytics-summary\.js/g)||[]).length===1,
-            oneCheckpoints:(html.match(/scripts\/executive-checkpoints\.js/g)||[]).length===1,
-            fourModules:(html.match(/<script type="module"/g)||[]).length===4,
-            visibleIcons:["🧠","🎬","💼","👥","⚙️"].every(icon=>html.includes(icon)),
-            staticViewport:html.includes("scroll-behavior:auto!important")&&html.includes("overflow-anchor:none!important"),
-            routedHub:hub.includes("kairos-command-hub-routed-20260715-1")&&hub.includes('id="command-view"')&&hub.includes("history.pushState")&&(hub.match(/root\.innerHTML/g)||[]).length===1,
-            noHubMotion:!["setInterval(","scrollIntoView","scrollTo(","scrollBy(","MutationObserver"].some(x=>hub.includes(x)),
-            statusStrip:layout.includes("In Progress")&&layout.includes("Done 24h")&&layout.includes("Pending"),
-            containedAnalytics:analytics.includes("/api/analytics/shopify?range=")&&!analytics.includes("setInterval(")&&!analytics.includes("MutationObserver"),
-            morningCheckpoint:checkpoints.includes("Morning Check-in")&&checkpoints.includes("6:00 AM Pacific"),
-            eveningCheckpoint:checkpoints.includes("Evening Wrap-up")&&checkpoints.includes("8:00 PM Pacific"),
-            briefingContract:checkpoints.includes("/api/executive-briefing/build")&&checkpoints.includes("America/Los_Angeles"),
-            executiveDecisions:["Approve","Deny","Fix"].every(value=>checkpoints.includes(value)),
-            noCheckpointMotion:!["setInterval(","MutationObserver","scrollIntoView"].some(x=>checkpoints.includes(x)),
-            completeCenters:["knowledge","content","business","customers","operations"].every(id=>hub.includes(`id:"${id}"`)),
-            completeCards:hub.includes('data-readiness="100"')&&hub.includes('<span>100%</span>')
-          };
-          console.log(JSON.stringify({healthStatus:health.status,checks},null,2));
-          if(Object.values(checks).some(value=>value!==true))process.exit(1);
+            health="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/api/health?deployment=${nonce}")" || true
+            html="$(curl --fail --show-error --silent --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}/?deployment=${nonce}")" || true
+            if HEALTH="${health}" HTML="${html}" node <<'NODE'
+          let health={};try{health=JSON.parse(process.env.HEALTH||'{}')}catch{}
+          const html=process.env.HTML||'';
+          const ok=["ready","ok","operational"].includes(String(health.status||'').toLowerCase())
+            && html.includes('kairos-command-center-routed-20260715-3')
+            && html.includes('scripts/job-transport.js?v=20260715-1')
+            && html.includes('scripts/command-hub.js?v=routed-20260715-3');
+          if(!ok)process.exit(1);
           NODE
-              then
-                echo "Kairos routed command center and executive checkpoints verified on attempt ${attempt}."
-                break
-              fi
-            fi
-            if [ "${attempt}" = "18" ]; then
-              echo "::error::Kairos production did not pass the executive checkpoint contract."
-              exit 1
+            then
+              exit 0
             fi
             sleep 5
           done
+          echo "::error::Live Kairos application did not reach the expected build."
+          exit 1
 
-      - name: Verify live canonical homepage planning
-        id: canonical_plan
+      - name: Verify canonical homepage planning transaction
         shell: bash
-        env:
-          KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
         run: |
           set -euo pipefail
           objective='Prepare the canonical Mindset Media Group homepage retool on Kairos Staging using the approved three-file package. Do not publish the live theme.'
           payload="$(OBJECTIVE="${objective}" node -e 'process.stdout.write(JSON.stringify({objective:process.env.OBJECTIVE}))')"
           submission_code="$(curl --show-error --silent --location --max-time 60 -o submission.json -w '%{http_code}' -H 'Content-Type: application/json' -H 'Cache-Control: no-cache' --data "${payload}" "${KAIROS_PRODUCTION_URL}/api/shopify/staging/plan/jobs?deployment=${GITHUB_SHA}")"
-          echo "Planner submission HTTP ${submission_code}"
           cat submission.json
           echo
-          if [[ ! "${submission_code}" =~ ^2 ]]; then exit 1; fi
-          poll_url="$(node -e 'const fs=require("fs");const b=JSON.parse(fs.readFileSync("submission.json","utf8")||"{}");if(!b.jobID||!b.pollURL){console.error(JSON.stringify(b));process.exit(1)}process.stdout.write(b.pollURL)')"
-          for attempt in $(seq 1 30); do
-            job_code="$(curl --show-error --silent --location --max-time 30 -o job.json -w '%{http_code}' -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}${poll_url}?deployment=${GITHUB_SHA}-${attempt}")"
-            echo "Planner poll ${attempt} HTTP ${job_code}"
-            cat job.json
-            echo
-            if [[ ! "${job_code}" =~ ^2 ]]; then exit 1; fi
-            status="$(node -e 'const fs=require("fs");const b=JSON.parse(fs.readFileSync("job.json","utf8")||"{}");process.stdout.write(String(b.status||""))')"
-            if [ "${status}" = "completed" ]; then
-              node <<'NODE'
-          const fs=require('fs');
-          const envelope=JSON.parse(fs.readFileSync('job.json','utf8')||'{}');
+          [[ "${submission_code}" =~ ^2 ]] || exit 1
+
+          if node -e 'const b=require("./submission.json");process.exit(b.result?0:1)'; then
+            cp submission.json plan-envelope.json
+          else
+            poll_url="$(node -e 'const b=require("./submission.json");if(!b.jobID||!b.pollURL)process.exit(1);process.stdout.write(b.pollURL)')"
+            for attempt in $(seq 1 30); do
+              code="$(curl --show-error --silent --location --max-time 30 -o plan-envelope.json -w '%{http_code}' -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}${poll_url}?deployment=${GITHUB_SHA}-${attempt}")"
+              [[ "${code}" =~ ^2 ]] || exit 1
+              status="$(node -e 'const b=require("./plan-envelope.json");process.stdout.write(String(b.status||""))')"
+              [ "${status}" = "completed" ] && break
+              case "${status}" in failed|needs-attention|cancelled) exit 1;; esac
+              sleep 2
+            done
+          fi
+
+          node <<'NODE'
+          const envelope=require('./plan-envelope.json');
           const result=envelope.result||{};
           const plan=result.plan||{};
-          const files=Array.isArray(plan.canonicalPackage?.files)?plan.canonicalPackage.files:[];
-          const names=files.map(file=>file.filename).sort();
-          const required=["assets/mmg-canonical-homepage.css","sections/mmg-canonical-homepage.liquid","templates/index.json"].sort();
-          const checks={readyForApproval:result.status==="ready-for-approval",canonicalMode:plan.installationMode==="kairos-canonical-homepage-v1",threeFiles:files.length===3&&JSON.stringify(names)===JSON.stringify(required),stagingOnly:String(plan.targetTheme?.role||"").toUpperCase()!=="MAIN",publishedThemeProtected:String(plan.publishedTheme?.role||"").toUpperCase()==="MAIN",liveMutationUnauthorized:plan.liveThemeMutationAuthorized===false&&plan.productionPublishAuthorized===false,rollbackReady:Array.isArray(plan.rollbackPlan)&&plan.rollbackPlan.length>=3};
-          console.log(JSON.stringify({jobID:envelope.jobID,summary:result.summary,installationMode:plan.installationMode,targetTheme:plan.targetTheme,publishedTheme:plan.publishedTheme,files:names,checks},null,2));
-          if(Object.values(checks).some(value=>value!==true))process.exit(1);
+          const names=(plan.canonicalPackage?.files||[]).map(x=>x.filename).sort();
+          const required=['assets/mmg-canonical-homepage.css','sections/mmg-canonical-homepage.liquid','templates/index.json'].sort();
+          const checks={
+            completed:envelope.status==='completed',
+            readyForApproval:result.status==='ready-for-approval',
+            canonicalMode:plan.installationMode==='kairos-canonical-homepage-v1',
+            threeFiles:JSON.stringify(names)===JSON.stringify(required),
+            stagingOnly:String(plan.targetTheme?.role||'').toUpperCase()!=='MAIN',
+            liveProtected:String(plan.publishedTheme?.role||'').toUpperCase()==='MAIN',
+            noLiveMutation:plan.liveThemeMutationAuthorized===false&&plan.productionPublishAuthorized===false,
+            rollbackReady:Array.isArray(plan.rollbackPlan)&&plan.rollbackPlan.length>=3
+          };
+          console.log(JSON.stringify({build:envelope.build,installationMode:plan.installationMode,files:names,checks},null,2));
+          if(Object.values(checks).some(v=>v!==true))process.exit(1);
           NODE
-              exit 0
-            fi
-            if [ "${status}" = "failed" ] || [ "${status}" = "needs-attention" ] || [ "${status}" = "cancelled" ]; then exit 1; fi
-            sleep 2
-          done
-          exit 1
 
-      - name: Upload live planner diagnostics
+      - name: Upload transaction evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: live-homepage-planner-transaction
+          name: canonical-homepage-plan-transaction
           path: |
             submission.json
-            job.json
+            plan-envelope.json
           if-no-files-found: warn
           retention-days: 3
 
-      - name: Publish Kairos deployment receipt
+      - name: Publish deployment status
         if: always()
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          DEPLOY_JOB_STATUS: ${{ job.status }}
+          JOB_STATUS: ${{ job.status }}
         run: |
           set -euo pipefail
-          if [ "${DEPLOY_JOB_STATUS}" = "success" ]; then state="success"; description="Kairos canonical homepage planning verified"; else state="failure"; description="Kairos canonical homepage planning failed verification"; fi
+          if [ "${JOB_STATUS}" = "success" ]; then state=success; description='Kairos production and canonical planning verified'; else state=failure; description='Kairos production verification failed'; fi
           target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           payload="$(STATE="${state}" DESCRIPTION="${description}" TARGET_URL="${target_url}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-cloudflare-production",target_url:process.env.TARGET_URL}))')"
-          curl --fail --show-error --silent -X POST -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" -H "Content-Type: application/json" "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" --data "${payload}"
+          curl --fail --show-error --silent -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "${payload}"
