@@ -121,13 +121,62 @@ jobs:
           NODE
               then
                 echo "Kairos routed command center and executive checkpoints verified on attempt ${attempt}."
-                exit 0
+                break
               fi
+            fi
+            if [ "${attempt}" = "18" ]; then
+              echo "::error::Kairos production did not pass the executive checkpoint contract."
+              exit 1
             fi
             echo "Kairos executive checkpoint build not ready yet (attempt ${attempt}/18)."
             sleep 5
           done
-          echo "::error::Kairos production did not pass the executive checkpoint contract."
+
+      - name: Verify live canonical homepage planning
+        shell: bash
+        env:
+          KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+        run: |
+          set -euo pipefail
+          objective='Prepare the canonical Mindset Media Group homepage retool on Kairos Staging using the approved three-file package. Do not publish the live theme.'
+          submission="$(curl --fail-with-body --show-error --silent --location --max-time 60 \
+            -H 'Content-Type: application/json' -H 'Cache-Control: no-cache' \
+            --data "$(OBJECTIVE="${objective}" node -e 'process.stdout.write(JSON.stringify({objective:process.env.OBJECTIVE}))')" \
+            "${KAIROS_PRODUCTION_URL}/api/shopify/staging/plan/jobs?deployment=${GITHUB_SHA}")"
+          poll_url="$(SUBMISSION="${submission}" node -e 'const b=JSON.parse(process.env.SUBMISSION||"{}");if(!b.jobID||!b.pollURL){console.error(JSON.stringify(b));process.exit(1)}process.stdout.write(b.pollURL)')"
+          for attempt in $(seq 1 30); do
+            job="$(curl --fail-with-body --show-error --silent --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}${poll_url}?deployment=${GITHUB_SHA}-${attempt}")"
+            status="$(JOB="${job}" node -e 'const b=JSON.parse(process.env.JOB||"{}");process.stdout.write(String(b.status||""))')"
+            if [ "${status}" = "completed" ]; then
+              JOB="${job}" node <<'NODE'
+          const envelope=JSON.parse(process.env.JOB||"{}");
+          const result=envelope.result||{};
+          const plan=result.plan||{};
+          const files=Array.isArray(plan.canonicalPackage?.files)?plan.canonicalPackage.files:[];
+          const names=files.map(file=>file.filename).sort();
+          const required=["assets/mmg-canonical-homepage.css","sections/mmg-canonical-homepage.liquid","templates/index.json"].sort();
+          const checks={
+            readyForApproval:result.status==="ready-for-approval",
+            canonicalMode:plan.installationMode==="kairos-canonical-homepage-v1",
+            threeFiles:files.length===3&&JSON.stringify(names)===JSON.stringify(required),
+            stagingOnly:String(plan.targetTheme?.role||"").toUpperCase()!=="MAIN",
+            publishedThemeProtected:String(plan.publishedTheme?.role||"").toUpperCase()==="MAIN",
+            liveMutationUnauthorized:plan.liveThemeMutationAuthorized===false&&plan.productionPublishAuthorized===false,
+            rollbackReady:Array.isArray(plan.rollbackPlan)&&plan.rollbackPlan.length>=3
+          };
+          console.log(JSON.stringify({jobID:envelope.jobID,summary:result.summary,installationMode:plan.installationMode,targetTheme:plan.targetTheme,publishedTheme:plan.publishedTheme,files:names,checks},null,2));
+          if(Object.values(checks).some(value=>value!==true))process.exit(1);
+          NODE
+              echo "Canonical homepage planning verified against live production."
+              exit 0
+            fi
+            if [ "${status}" = "failed" ] || [ "${status}" = "needs-attention" ] || [ "${status}" = "cancelled" ]; then
+              echo "${job}"
+              exit 1
+            fi
+            sleep 2
+          done
+          echo "::error::Canonical homepage planning did not complete within the verification window."
           exit 1
 
       - name: Publish Kairos deployment receipt
@@ -138,7 +187,7 @@ jobs:
           DEPLOY_JOB_STATUS: ${{ job.status }}
         run: |
           set -euo pipefail
-          if [ "${DEPLOY_JOB_STATUS}" = "success" ]; then state="success"; description="Kairos executive checkpoints verified"; else state="failure"; description="Kairos executive checkpoint verification failed"; fi
+          if [ "${DEPLOY_JOB_STATUS}" = "success" ]; then state="success"; description="Kairos canonical homepage planning verified"; else state="failure"; description="Kairos canonical homepage planning failed verification"; fi
           target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           payload="$(STATE="${state}" DESCRIPTION="${description}" TARGET_URL="${target_url}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-cloudflare-production",target_url:process.env.TARGET_URL}))')"
           curl --fail --show-error --silent -X POST -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" -H "Content-Type: application/json" "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" --data "${payload}"
