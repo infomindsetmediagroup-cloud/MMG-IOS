@@ -1,10 +1,10 @@
 {
-  "baseline": "kairos-production-standard-20260714",
+  "baseline": "kairos-production-standard-20260714-2",
   "status": "frozen",
   "productionUrl": "https://mmg-ios.info-mindsetmediagroup.workers.dev",
   "worker": {
     "name": "mmg-ios",
-    "entry": "src/kairos-production-entry-v19.js",
+    "entry": "src/kairos-production-entry-v20.js",
     "compatibilityDate": "2026-07-11",
     "assetsDirectory": "../../web/kairos-dashboard",
     "durableObjectBinding": "KAIROS_PROJECTS",
@@ -18,13 +18,18 @@
     "assetCaching": "no-store"
   },
   "readiness": {
-    "registryBuild": "kairos-readiness-registry-20260714-30",
+    "registryBuild": "kairos-readiness-registry-20260714-31",
     "knowledge": 87,
     "content": 89,
-    "business": 85,
+    "business": 86,
     "customers": 88,
     "operations": 100,
     "oneHundredReservedForBlueprintCompletion": true
+  },
+  "approvedExpansion": {
+    "scope": "Growth Plan receipt to governed Offer Builder or Campaign Operations activation and verified handoff receipt",
+    "activeEdge": "src/kairos-production-entry-v20.js",
+    "automaticExecution": false
   },
   "governance": {
     "newCapabilityWorkFrozen": true,
