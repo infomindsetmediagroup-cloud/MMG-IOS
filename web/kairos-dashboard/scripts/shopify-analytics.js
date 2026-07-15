@@ -1,9 +1,9 @@
-const ANALYTICS_BUILD = "kairos-shopify-analytics-20260712-3";
+import'./live-analytics.js';const ANALYTICS_BUILD = "kairos-shopify-analytics-20260715-4";
 let latest = null;
 let loading = false;
 
 boot();
-setInterval(loadAnalytics, 60000);
+setInterval(loadAnalytics, 15000);
 
 function boot() {
   ensurePanel();
@@ -61,9 +61,9 @@ function renderPanel(state = {}) {
   const status = state.loading
     ? "Refreshing Shopify analytics…"
     : analytics.status === "ready"
-      ? "Live · today"
+      ? "Live · synchronized"
       : available.length
-        ? "Partial · today"
+        ? "Partial · synchronized"
         : "Authorization required";
 
   let cards = "";
