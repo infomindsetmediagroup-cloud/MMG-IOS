@@ -243,8 +243,8 @@ export async function inspectThemeFiles(env, themeGid, requestedFilenames = ["te
   const files = [];
   for (const filename of filenames) {
     const node = nodes.find(item => item?.filename === filename);
+    if (!node) continue;
     const content = bodyToText(node?.body);
-    if (!content) continue;
     files.push({
       filename,
       readable: true,
