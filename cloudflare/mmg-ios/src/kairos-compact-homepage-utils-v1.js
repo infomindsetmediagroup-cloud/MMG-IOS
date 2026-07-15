@@ -1,4 +1,6 @@
 const SHOPIFY_TIMEOUT_MS = 25_000;
+const SHOPIFY_THEME_JOB_TIMEOUT_MS = 60_000;
+const SHOPIFY_THEME_JOB_POLL_MS = 500;
 const tokenCache = new Map();
 
 export function httpError(status, code, message) {
@@ -275,15 +277,34 @@ export async function writeThemeFiles(env, themeGid, files) {
   if (new Set(normalized.map(file => file.filename)).size !== normalized.length) throw httpError(400, "theme_file_write_duplicate", "Kairos will not write the same theme filename twice in one operation.");
   const config = readShopifyConfig(env);
   const auth = await resolveAccessToken(config, env);
-  const query = `mutation KairosThemeFilesUpsert($themeId: ID!, $files: [OnlineStoreThemeFilesUpsertFileInput!]!) { themeFilesUpsert(themeId: $themeId, files: $files) { upsertedThemeFiles { filename } userErrors { field message } } }`;
+  const query = `mutation KairosThemeFilesUpsert($themeId: ID!, $files: [OnlineStoreThemeFilesUpsertFileInput!]!) { themeFilesUpsert(themeId: $themeId, files: $files) { job { id done } upsertedThemeFiles { filename } userErrors { field message } } }`;
   const data = await shopifyGraphQL(config, auth, query, { themeId: themeGid, files: normalized.map(file => ({ filename: file.filename, body: { type: "TEXT", value: file.content } })) });
   const payload = data?.themeFilesUpsert;
   const errors = Array.isArray(payload?.userErrors) ? payload.userErrors.filter(error => error?.message) : [];
   if (errors.length) throw httpError(422, "theme_file_write_rejected", errors.map(error => error.message).join("; "));
   const written = Array.isArray(payload?.upsertedThemeFiles) ? payload.upsertedThemeFiles : [];
   const unconfirmed = normalized.map(file => file.filename).filter(filename => !written.some(file => file?.filename === filename));
-  if (unconfirmed.length) throw httpError(502, "theme_file_write_unconfirmed", `Shopify did not confirm writing: ${unconfirmed.join(", ")}.`);
-  return { credentialPath: auth.credentialPath, mutationResult: payload, filenames: normalized.map(file => file.filename) };
+  if (unconfirmed.length && !payload?.job?.id) throw httpError(502, "theme_file_write_unconfirmed", `Shopify did not confirm writing: ${unconfirmed.join(", ")}.`);
+  const job = await waitForThemeFileWriteJob(config, auth, payload?.job);
+  return { credentialPath: auth.credentialPath, mutationResult: payload, job, filenames: normalized.map(file => file.filename) };
+}
+
+async function waitForThemeFileWriteJob(config, auth, initialJob) {
+  const id = String(initialJob?.id || "").trim();
+  if (!id) return null;
+  if (initialJob?.done === true) return { id, done: true, polls: 0 };
+
+  const deadline = Date.now() + SHOPIFY_THEME_JOB_TIMEOUT_MS;
+  let polls = 0;
+  while (Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, SHOPIFY_THEME_JOB_POLL_MS));
+    const data = await shopifyGraphQL(config, auth, `query KairosThemeFileJob($id: ID!) { job(id: $id) { id done } }`, { id });
+    const job = data?.job;
+    polls += 1;
+    if (!job?.id) throw httpError(502, "theme_file_write_job_missing", "Shopify accepted the theme file write but its completion job could not be verified.");
+    if (job.done === true) return { id: String(job.id), done: true, polls };
+  }
+  throw httpError(504, "theme_file_write_job_timeout", "Shopify accepted the theme file write, but it did not finish before the verification deadline. Kairos did not perform read-back against an incomplete write.");
 }
 
 export async function deleteThemeFiles(env, themeGid, filenames) {
