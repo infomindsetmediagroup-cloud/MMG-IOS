@@ -1,10 +1,10 @@
 {
-  "baseline": "kairos-production-standard-20260715-8",
+  "baseline": "kairos-production-standard-20260715-9",
   "status": "frozen",
   "productionUrl": "https://mmg-ios.info-mindsetmediagroup.workers.dev",
   "worker": {
     "name": "mmg-ios",
-    "entry": "src/kairos-production-entry-v28.js",
+    "entry": "src/kairos-production-entry-v29.js",
     "compatibilityDate": "2026-07-11",
     "assetsDirectory": "../../web/kairos-dashboard",
     "durableObjectBinding": "KAIROS_PROJECTS",
@@ -27,9 +27,9 @@
     "oneHundredReservedForBlueprintCompletion": true
   },
   "approvedExpansion": {
-    "scope": "Approval-gated Support Intelligence evidence adoption into Offer Builder with verified offer-learning receipt",
-    "activeEdge": "src/kairos-production-entry-v28.js",
-    "preservesPriorEdge": "src/kairos-production-entry-v27.js",
+    "scope": "Approval-gated Customer Journey portfolio evidence adoption into Offer Builder with verified offer-learning receipt",
+    "activeEdge": "src/kairos-production-entry-v29.js",
+    "preservesPriorEdge": "src/kairos-production-entry-v28.js",
     "automaticExecution": false
   },
   "governance": {
