@@ -10,7 +10,7 @@ const STAGING_ID = "gid://shopify/OnlineStoreTheme/2";
 test("Website Retool completes proposal, staging preview, approval, live save, verification, and rollback", async () => {
   const originalFetch = globalThis.fetch;
   const originalCaches = globalThis.caches;
-  const shopify = new MultiThemeShopify(uneditableHomepage(), { deferredWrites: 1 });
+  const shopify = new MultiThemeShopify(uneditableHomepage(), { deferredWrites: 1, staleReadsAfterJob: 1 });
   globalThis.fetch = shopify.fetch.bind(shopify);
   globalThis.caches = { default: new MemoryCache() };
   const env = {
@@ -53,6 +53,8 @@ test("Website Retool completes proposal, staging preview, approval, live save, v
     assert.equal(execution.execution.filesWritten.length, 3);
     assert.equal(shopify.completedWriteJobs, 1);
     assert.equal(shopify.writeJobPolls, 2);
+    assert.equal(shopify.staleReadbacks, 1);
+    assert.equal(execution.evidence.readBackAttempts, 2);
     assert.notDeepEqual(shopify.themeFiles(STAGING_ID), shopify.themeFiles(MAIN_ID));
 
     const visual = await jsonBody(await request("/api/shopify/staging/visual-verification", {
@@ -150,12 +152,15 @@ class MemoryCache {
 }
 
 class MultiThemeShopify {
-  constructor(homepage, { deferredWrites = 0 } = {}) {
+  constructor(homepage, { deferredWrites = 0, staleReadsAfterJob = 0 } = {}) {
     this.storefrontOK = true;
     this.deferredWrites = deferredWrites;
+    this.staleReadsAfterJob = staleReadsAfterJob;
     this.completedWriteJobs = 0;
     this.writeJobPolls = 0;
+    this.staleReadbacks = 0;
     this.jobs = new Map();
+    this.pendingWrites = [];
     this.nextJobID = 1;
     const source = JSON.stringify(homepage, null, 2) + "\n";
     this.themes = new Map([
@@ -188,6 +193,7 @@ class MultiThemeShopify {
       return Response.json({ data: { themes: { nodes: [...this.themes.values()] } } });
     }
     if (query.includes("query KairosHomepageFile") || query.includes("query KairosThemeFiles")) {
+      this.releaseCompletedWrites(variables.themeId);
       const files = this.files.get(variables.themeId) || new Map();
       const nodes = (variables.filenames || []).filter(filename => files.has(filename)).map(filename => ({
         filename,
@@ -203,8 +209,11 @@ class MultiThemeShopify {
       this.writeJobPolls += 1;
       job.pollsRemaining -= 1;
       if (job.pollsRemaining <= 0 && !job.done) {
-        const files = this.files.get(job.themeId);
-        for (const file of job.files) files.set(file.filename, file.body.value);
+        if (this.staleReadsAfterJob > 0) {
+          this.pendingWrites.push({ themeId: job.themeId, files: job.files, readsRemaining: this.staleReadsAfterJob });
+        } else {
+          this.applyFiles(job.themeId, job.files);
+        }
         job.done = true;
         this.completedWriteJobs += 1;
       }
@@ -217,8 +226,7 @@ class MultiThemeShopify {
         this.jobs.set(id, { id, done: false, pollsRemaining: 2, themeId: variables.themeId, files: structuredClone(variables.files || []) });
         return Response.json({ data: { themeFilesUpsert: { job: { id, done: false }, upsertedThemeFiles: [], userErrors: [] } } });
       }
-      const files = this.files.get(variables.themeId);
-      for (const file of variables.files || []) files.set(file.filename, file.body.value);
+      this.applyFiles(variables.themeId, variables.files || []);
       return Response.json({ data: { themeFilesUpsert: { job: null, upsertedThemeFiles: (variables.files || []).map(file => ({ filename: file.filename })), userErrors: [] } } });
     }
     if (query.includes("mutation KairosThemeFilesDelete")) {
@@ -227,5 +235,24 @@ class MultiThemeShopify {
       return Response.json({ data: { themeFilesDelete: { deletedThemeFiles: (variables.files || []).map(filename => ({ filename })), userErrors: [] } } });
     }
     return Response.json({ errors: [{ message: "Unexpected Shopify GraphQL operation." }] }, { status: 422 });
+  }
+
+  applyFiles(themeId, files) {
+    const target = this.files.get(themeId);
+    for (const file of files) target.set(file.filename, file.body.value);
+  }
+
+  releaseCompletedWrites(themeId) {
+    for (const pending of this.pendingWrites) {
+      if (pending.themeId !== themeId || pending.applied) continue;
+      if (pending.readsRemaining > 0) {
+        pending.readsRemaining -= 1;
+        this.staleReadbacks += 1;
+        continue;
+      }
+      this.applyFiles(pending.themeId, pending.files);
+      pending.applied = true;
+    }
+    this.pendingWrites = this.pendingWrites.filter(pending => !pending.applied);
   }
 }
