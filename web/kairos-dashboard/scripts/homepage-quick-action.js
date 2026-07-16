@@ -1,6 +1,8 @@
 const BUILD = "kairos-homepage-quick-action-20260716-2";
 const ROUTE = "/center/content/website";
 const STATE_KEY = "kairos.homepage.quick-action.v3";
+const LEGACY_STATE_KEY = "kairos.homepage.quick-action.v2";
+try { sessionStorage.removeItem(LEGACY_STATE_KEY); } catch {}
 const state = loadState();
 
 mount();
