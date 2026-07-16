@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { KairosProject } from "../src/kairos-native-publishing-worker-v1.js";
 import { handleOperationalRequest, KAIROS_ACTION_CONTRACTS, mirrorOperationalResponse } from "../src/kairos-operational-runtime-v1.js";
 import { handleAutonomyRequest, runAutonomyCycle } from "../src/kairos-autonomy-runtime-v1.js";
+import { normalizeNativeTaskOutput } from "../src/kairos-native-task-execution-v1.js";
 import productionRuntime from "../src/kairos-production-entry-v36.js";
 
 const REQUIRED_ACTIONS = [
@@ -40,6 +41,52 @@ const OBJECTIVE_OPTIONAL = new Set([
   "executive-briefing",
   "system-registry",
 ]);
+
+test("native execution accepts a grounded string deliverable from Qwen", () => {
+  const evidenceReference = "workflow:deployment-proof";
+  const result = normalizeNativeTaskOutput({
+    status: "completed",
+    summary: "Kairos completed the deployment observation from the authoritative durable workflow.",
+    deliverable: "This usable internal deployment observation is grounded only in the supplied workflow record. It records the required evidence and reports no external action or live mutation.",
+    findings: [{ claim: "The durable workflow can support this bounded internal observation.", evidenceReference, confidence: 0.98 }],
+    evidenceReferences: [evidenceReference],
+    verification: ["Persist and read back the artifact before task completion."],
+    nextAction: "Continue the governed workflow.",
+  }, [{ id: evidenceReference }], { stage: "observe", executionClass: "native-analysis" });
+  assert.equal(result.status, "completed");
+  assert.equal(result.normalization.deliverableSource, "deliverable");
+  assert.equal(result.normalization.deliverableReconstructed, false);
+});
+
+test("native execution reconstructs a missing deliverable only from grounded structured fields", () => {
+  const evidenceReference = "workflow:deployment-proof";
+  const result = normalizeNativeTaskOutput({
+    status: "completed",
+    summary: "Kairos completed the deployment observation from the authoritative durable workflow.",
+    findings: [{ claim: "The deployment workflow is present and eligible for bounded internal analysis.", evidenceReference, confidence: 0.97 }],
+    evidenceReferences: [evidenceReference],
+    verification: [{ check: "Durable read-back", result: "Verify the artifact hash before task completion." }],
+    nextAction: "Continue the governed workflow.",
+  }, [{ id: evidenceReference }], { stage: "observe", executionClass: "native-analysis" });
+  assert.equal(result.status, "completed");
+  assert.equal(result.normalization.deliverableSource, "grounded-structured-fields");
+  assert.equal(result.normalization.deliverableReconstructed, true);
+  assert.match(result.deliverable.content, /workflow:deployment-proof/);
+  assert.match(result.deliverable.content, /Durable read-back/);
+});
+
+test("native execution still blocks missing deliverables without valid evidence and verification", () => {
+  const result = normalizeNativeTaskOutput({
+    status: "completed",
+    summary: "Kairos returned a summary without the evidence required to prove completion.",
+    evidenceReferences: ["external:invented"],
+    verification: [],
+  }, [{ id: "workflow:deployment-proof" }], { stage: "observe", executionClass: "native-analysis" });
+  assert.equal(result.status, "blocked");
+  assert.match(result.blockedReason, /deliverable/);
+  assert.match(result.blockedReason, /grounded-evidence-reference/);
+  assert.match(result.blockedReason, /verification/);
+});
 
 test("all 25 canonical actions have explicit domain ownership and routes", () => {
   assert.equal(Object.keys(KAIROS_ACTION_CONTRACTS).length, 25);
