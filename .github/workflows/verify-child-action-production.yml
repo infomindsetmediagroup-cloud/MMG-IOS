@@ -1,0 +1,146 @@
+name: Verify Kairos Child Actions
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "cloudflare/mmg-ios/src/kairos-child-action-runtime-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-v38.js"
+      - "web/kairos-dashboard/scripts/child-action-bridge.js"
+      - "web/kairos-dashboard/index.html"
+      - ".github/workflows/verify-child-action-production.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: kairos-child-action-production
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+    steps:
+      - name: Verify deployed child-action runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 24); do
+            curl --silent --show-error --location --max-time 30 \
+              -H 'Cache-Control: no-cache' \
+              "${KAIROS_PRODUCTION_URL}/api/health?child-smoke=${GITHUB_SHA}-${attempt}-$(date +%s)" \
+              --output health.json || true
+            curl --silent --show-error --location --max-time 30 \
+              -H 'Cache-Control: no-cache' \
+              "${KAIROS_PRODUCTION_URL}/center/knowledge/research-brief?child-smoke=${GITHUB_SHA}-${attempt}" \
+              --output dashboard.html || true
+            if node -e '
+              const fs=require("fs");
+              let h={};try{h=JSON.parse(fs.readFileSync("health.json","utf8"))}catch{}
+              const page=fs.existsSync("dashboard.html")?fs.readFileSync("dashboard.html","utf8"):"";
+              const ok=["ready","ok","operational"].includes(String(h.status||"").toLowerCase())
+                &&h.build==="kairos-production-entry-20260716-95"
+                &&h.childActionExecution?.status==="operational"
+                &&h.childActionExecution?.contract==="objective-to-verified-deliverable"
+                &&h.capabilities?.queuedAcknowledgementOnly==="retired"
+                &&page.includes("id=\"kairos-hub\"")
+                &&page.includes("scripts/child-action-bridge.js");
+              process.exit(ok?0:1);
+            '; then
+              break
+            fi
+            if [ "${attempt}" -eq 24 ]; then
+              echo "The deployed child-action runtime did not become ready." >&2
+              cat health.json >&2 || true
+              exit 1
+            fi
+            sleep 5
+          done
+
+      - name: Execute real child objective and verify deliverable
+        shell: bash
+        run: |
+          set -euo pipefail
+          success="false"
+          for attempt in 1 2 3; do
+            objective="Produce a concise internal research brief proving the Kairos child-action objective-to-deliverable runtime is operational. Include the execution contract, durable evidence, read-back verification, and safety boundaries. Verification attempt ${attempt}."
+            http_code="$(curl --silent --show-error --location --max-time 300 \
+              -D child-headers.txt \
+              -H 'Content-Type: application/json' \
+              -H 'Cache-Control: no-cache' \
+              --data "$(OBJECTIVE="${objective}" node -e 'process.stdout.write(JSON.stringify({action:"research-brief",objective:process.env.OBJECTIVE,executionMode:"direct-objective-to-deliverable"}))')" \
+              "${KAIROS_PRODUCTION_URL}/api/hub/execute" \
+              --output child-result.json \
+              --write-out '%{http_code}' || true)"
+            if HTTP_CODE="${http_code}" node <<'NODE'
+          const fs=require('fs');
+          let result={};
+          try{result=JSON.parse(fs.readFileSync('child-result.json','utf8'))}catch{}
+          const headers=fs.existsSync('child-headers.txt')?fs.readFileSync('child-headers.txt','utf8'):'';
+          const deliverable=(result.deliverables||[])[0]||{};
+          const checks={
+            httpOK:Number(process.env.HTTP_CODE)===200,
+            completed:result.status==='completed',
+            runtime:result.build==='kairos-child-action-runtime-20260716-1',
+            kernel:result.kernel==='kairos-child-objective-to-deliverable-v1',
+            identifiers:Boolean(result.resultID&&result.workflowID&&result.workItemID),
+            workflowCompleted:result.workflow?.state==='completed'&&result.workflow?.progress===100,
+            sectionContent:Array.isArray(result.sections)&&result.sections.some(section=>String(section?.content||'').length>=80),
+            deliverableContent:String(deliverable.content||'').length>=80,
+            artifact:Boolean(deliverable.artifactID)&&typeof deliverable.contentHash==='string'&&deliverable.contentHash.length===64,
+            persistent:result.evidence?.persistent===true,
+            readback:result.evidence?.artifactReadbackVerified===true,
+            noExternal:result.evidence?.externalActionTaken===false,
+            noLiveMutation:result.evidence?.liveMutationPerformed===false,
+            responseHeader:/x-kairos-child-action-runtime:\s*kairos-child-action-runtime-20260716-1/i.test(headers),
+          };
+          console.log(JSON.stringify({checks,summary:result.summary||null,resultID:result.resultID||null,workflowID:result.workflowID||null,workItemID:result.workItemID||null,error:result.error||null},null,2));
+          process.exit(Object.values(checks).every(Boolean)?0:1);
+          NODE
+            then
+              success="true"
+              break
+            fi
+            echo "Child action attempt ${attempt} did not reach verified completion." >&2
+            cat child-result.json >&2 || true
+            sleep 10
+          done
+          test "${success}" = "true" || { echo "Kairos child-action production verification failed." >&2; exit 1; }
+
+      - name: Publish child-action verification receipt
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          if [ "${JOB_STATUS}" = "success" ]; then
+            state="success"
+            description="Kairos child action returned a verified durable deliverable"
+          else
+            state="failure"
+            description="Kairos child-action production verification failed"
+          fi
+          payload="$(STATE="${state}" DESCRIPTION="${description}" node -e '
+            process.stdout.write(JSON.stringify({
+              state:process.env.STATE,
+              description:process.env.DESCRIPTION,
+              context:"kairos-child-action-production",
+              target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            }));
+          ')"
+          curl --fail --show-error --silent \
+            -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "${payload}"
