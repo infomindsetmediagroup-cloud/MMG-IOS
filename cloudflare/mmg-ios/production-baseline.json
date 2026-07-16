@@ -1,5 +1,5 @@
 {
-  "baseline": "kairos-production-standard-20260715-23",
+  "baseline": "kairos-production-standard-20260715-24",
   "status": "frozen",
   "productionUrl": "https://mmg-ios.info-mindsetmediagroup.workers.dev",
   "worker": {
@@ -11,7 +11,9 @@
     "durableObjectClass": "KairosProject"
   },
   "dashboard": {
-    "build": "kairos-command-hub-routed-20260715-2",
+    "build": "kairos-command-hub-routed-20260715-3",
+    "workspaceRuntime": "kairos-workspace-runtime-20260715-1",
+    "operationalRuntime": "kairos-operational-runtime-20260715-1",
     "commandCenterLayout": "kairos-command-center-layout-20260714-9",
     "chromeHamburgerController": "kairos-chrome-hamburger-controller-20260714-3",
     "chromeHamburgerVerified": true,
@@ -27,14 +29,18 @@
     "oneHundredReservedForBlueprintCompletion": true
   },
   "approvedExpansion": {
-    "scope": "Operational Website Retool flow with objective intent classification, content-only Liquid visible-text planning and single-file execution, fail-closed structural and style protections, explicit full-retool routing, authoritative Shopify read-back, rendered staging verification, approvals, live read-back, and rollback receipts",
+    "scope": "Operational Command Center with lazy-loaded domain workspaces for all 25 canonical actions, durable work items and workflows, durable mutation receipts, native objective analysis, optional private-intelligence planning, live readiness labels, and the approved Website Retool execution and rollback flow",
     "activeEdge": "src/kairos-production-entry-v35.js",
     "preservesPriorEdge": "src/kairos-production-entry-v34.js",
     "automaticExecution": false,
     "explicitPreviewApprovalRequired": true,
     "explicitLiveApplicationRequired": true,
     "liveReadbackVerificationRequired": true,
-    "rollbackReceiptRequired": true
+    "rollbackReceiptRequired": true,
+    "durableOperationalLedgerRequired": true,
+    "domainWorkspaceRoutingRequired": true,
+    "falseCompletionTemplatesRetired": true,
+    "privateIntelligenceConfigurationReportedHonestly": true
   },
   "governance": {
     "newCapabilityWorkFrozen": true,

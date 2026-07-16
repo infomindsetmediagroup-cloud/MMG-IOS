@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import commandWorker from "../src/kairos-production-entry-v33.js";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { KairosProject } from "../src/kairos-native-publishing-worker-v1.js";
+import { handleOperationalRequest, KAIROS_ACTION_CONTRACTS, mirrorOperationalResponse } from "../src/kairos-operational-runtime-v1.js";
 
 const REQUIRED_ACTIONS = [
   "knowledge-library",
@@ -36,20 +39,185 @@ const OBJECTIVE_OPTIONAL = new Set([
   "system-registry",
 ]);
 
-test("every routed non-website child card returns a complete operational contract", async () => {
+test("all 25 canonical actions have explicit domain ownership and routes", () => {
+  assert.equal(Object.keys(KAIROS_ACTION_CONTRACTS).length, 25);
+  for (const [id, contract] of Object.entries(KAIROS_ACTION_CONTRACTS)) {
+    assert.ok(contract.title, id);
+    assert.ok(contract.center, id);
+    assert.ok(contract.owner, id);
+    assert.ok(Array.isArray(contract.apiRoutes) && contract.apiRoutes.length > 0, id);
+    if (!["website", "health"].includes(id)) {
+      assert.ok(contract.module, id);
+      assert.ok(contract.event, id);
+    }
+  }
+});
+
+test("every non-website child command creates durable work and workflow records", async () => {
+  const env = memoryEnv();
   for (const action of REQUIRED_ACTIONS) {
-    const response = await commandWorker.fetch(new Request("https://kairos.example/api/hub/run", {
+    const response = await handleOperationalRequest(new Request("https://kairos.example/api/hub/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action, objective: OBJECTIVE_OPTIONAL.has(action) ? "" : `Complete ${action} objective` }),
-    }), {}, {});
+    }), env, {});
     const body = await response.json();
-    assert.equal(response.status, 200, `${action}: ${JSON.stringify(body)}`);
-    assert.notEqual(body?.error?.code, "unknown_child_action", action);
-    assert.ok(["completed", "needs-connector"].includes(body.status), `${action}: ${body.status}`);
-    assert.equal(typeof body.summary, "string", action);
-    assert.ok(body.summary.length > 10, action);
-    assert.ok(Array.isArray(body.sections) && body.sections.length > 0, action);
-    assert.equal(body.evidence?.externalActionTaken, false, action);
+    assert.ok([200, 202].includes(response.status), `${action}: ${JSON.stringify(body)}`);
+    assert.ok(["ready", "completed"].includes(body.status), `${action}: ${body.status}`);
+    assert.match(body.workItemID, /^work-/i, action);
+    assert.match(body.workflowID, /^workflow-/i, action);
+    assert.equal(body.evidence?.persistent, true, action);
+    assert.equal(body.evidence?.storage, "durable-object", action);
+    assert.equal(body.evidence?.inventedData, false, action);
+    assert.ok(Array.isArray(body.workflow?.tasks) && body.workflow.tasks.length >= 3, action);
+    assert.notEqual(body.evidence?.source, "deterministic-child-deliverable-v1", action);
   }
+
+  const workResponse = await handleOperationalRequest(new Request("https://kairos.example/api/hub/work-items"), env, {});
+  const work = await workResponse.json();
+  assert.equal(work.workItems.length, REQUIRED_ACTIONS.length);
+
+  const workflowResponse = await handleOperationalRequest(new Request("https://kairos.example/api/workflows"), env, {});
+  const workflows = await workflowResponse.json();
+  assert.equal(workflows.workflows.length, REQUIRED_ACTIONS.length);
+  assert.equal(workflows.persistence, "durable-object");
 });
+
+test("decision-record preservation stores actual context instead of a template", async () => {
+  const env = memoryEnv();
+  const response = await handleOperationalRequest(new Request("https://kairos.example/api/hub/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "decision-record",
+      objective: "Use Durable Object storage as the operational source of truth.",
+      context: "Cache entries do not replicate between data centers.",
+      rationale: "Work and evidence must survive requests and deployments.",
+      impact: "All command work enters the durable ledger.",
+      owner: "Executive",
+      effectiveDate: "2026-07-15",
+      reviewTrigger: "Review after the first production execution cycle.",
+    }),
+  }), env, {});
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "completed");
+  assert.match(body.sections.find(section => section.name === "Context")?.content || "", /do not replicate/i);
+  const stored = await handleOperationalRequest(new Request(`https://kairos.example/api/hub/work-items/${body.workItemID}`), env, {});
+  const record = (await stored.json()).workItem;
+  assert.equal(record.payload.owner, "Executive");
+  assert.equal(record.evidence.persistent, true);
+});
+
+test("approved workflows start and persist completion of the third task", async () => {
+  const env = memoryEnv();
+  const createdResponse = await handleOperationalRequest(new Request("https://kairos.example/api/workflows", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "Approval execution regression",
+      objective: "Verify that the third child task executes after approval.",
+      center: "operations",
+      approvalRequired: true,
+      tasks: [
+        { title: "First task", description: "Observe" },
+        { title: "Second task", description: "Decide" },
+        { title: "Third task", description: "Execute" },
+      ],
+    }),
+  }), env, {});
+  assert.equal(createdResponse.status, 201);
+  let workflow = (await createdResponse.json()).workflow;
+  assert.equal(workflow.approvalStatus, "pending");
+  assert.equal(workflow.taskCount, 3);
+  assert.equal(workflow.completedTasks, 0);
+
+  const approvedResponse = await patchWorkflow(env, workflow.id, { command: "approve", actor: "Executive" });
+  workflow = (await approvedResponse.json()).workflow;
+  assert.equal(approvedResponse.status, 200);
+  assert.equal(workflow.approvalStatus, "approved");
+
+  const startedResponse = await patchWorkflow(env, workflow.id, { command: "start" });
+  workflow = (await startedResponse.json()).workflow;
+  assert.equal(startedResponse.status, 200);
+  assert.equal(workflow.state, "active");
+
+  for (const task of workflow.tasks) {
+    const response = await handleOperationalRequest(new Request(`https://kairos.example/api/workflows/${workflow.id}/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ state: "completed" }),
+    }), env, {});
+    assert.equal(response.status, 200, task.title);
+    workflow = (await response.json()).workflow;
+  }
+
+  assert.equal(workflow.tasks[2].state, "completed");
+  assert.equal(workflow.completedTasks, 3);
+  assert.equal(workflow.taskCount, 3);
+  assert.equal(workflow.progress, 100);
+  const stored = await handleOperationalRequest(new Request(`https://kairos.example/api/workflows/${workflow.id}`), env, {});
+  assert.equal((await stored.json()).workflow.tasks[2].state, "completed");
+});
+
+test("successful domain mutations are mirrored into durable receipts and workflows", async () => {
+  const env = memoryEnv();
+  const request = new Request("https://kairos.example/api/offers", { method: "POST", body: "{}" });
+  const workflow = { id: "workflow-mirrored", title: "Mirrored workflow", objective: "Preserve it", state: "ready", tasks: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+  const offer = { id: "offer-mirrored", title: "Mirrored offer", status: "draft", updatedAt: new Date().toISOString() };
+  await mirrorOperationalResponse(request, Response.json({ status: "completed", workflow, offer }), env);
+  const response = await handleOperationalRequest(new Request("https://kairos.example/api/workflows/workflow-mirrored"), env, {});
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).workflow.id, "workflow-mirrored");
+  const registry = await handleOperationalRequest(new Request("https://kairos.example/api/system-registry"), env, {}, async requestValue => Response.json({ status: "ready", route: new URL(requestValue.url).pathname }));
+  const body = await registry.json();
+  assert.equal(body.counts.executionReceipts, 1);
+  assert.equal(body.counts.workflows, 1);
+});
+
+test("routed UI lazy-loads every specialized action instead of the generic hub form", async () => {
+  const path = fileURLToPath(new URL("../../../web/kairos-dashboard/scripts/workspace-runtime.js", import.meta.url));
+  const source = await readFile(path, "utf8");
+  for (const action of REQUIRED_ACTIONS) assert.match(source, new RegExp(`["]${escapeRegex(action)}["]\\s*:`), action);
+  assert.doesNotMatch(source, /api\/hub\/run/);
+  assert.match(source, /openDomainWorkspace/);
+  assert.match(source, /import\(`\.\/\$\{definition\.module\}`\)/);
+});
+
+function memoryEnv() {
+  const namespace = new MemoryNamespace();
+  return { KAIROS_PROJECTS: namespace };
+}
+
+function patchWorkflow(env, id, body) {
+  return handleOperationalRequest(new Request(`https://kairos.example/api/workflows/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }), env, {});
+}
+
+class MemoryNamespace {
+  constructor() { this.objects = new Map(); }
+  idFromName(name) { return String(name); }
+  get(id) {
+    if (!this.objects.has(id)) this.objects.set(id, new KairosProject({ storage: new MemoryStorage() }, {}));
+    return this.objects.get(id);
+  }
+}
+
+class MemoryStorage {
+  constructor() { this.values = new Map(); }
+  async get(key) { return structuredClone(this.values.get(key)); }
+  async put(key, value) {
+    if (typeof key === "object" && key !== null && value === undefined) {
+      for (const [entryKey, entryValue] of Object.entries(key)) this.values.set(entryKey, structuredClone(entryValue));
+      return;
+    }
+    this.values.set(key, structuredClone(value));
+  }
+  async delete(key) { this.values.delete(key); }
+  async setAlarm() {}
+}
+
+function escapeRegex(value) { return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
