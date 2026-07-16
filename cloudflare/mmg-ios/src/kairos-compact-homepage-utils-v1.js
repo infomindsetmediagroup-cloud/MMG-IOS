@@ -323,9 +323,10 @@ async function writeThemeFileBatch(config, auth, themeGid, normalized) {
       throw httpError(502, "theme_file_write_job_result_mismatch", "Shopify's completed write job did not contain the approved " + expected.filename + ".");
     }
     if (operationResult) {
-      const actualBytes = Number(operationResult.size);
+      const hasReportedSize = operationResult.size !== null && operationResult.size !== undefined && operationResult.size !== "";
+      const actualBytes = hasReportedSize ? Number(operationResult.size) : null;
       const actualChecksumMd5 = normalizeMd5(operationResult.checksumMd5);
-      if (!Number.isFinite(actualBytes) || actualBytes !== expectedBytes) {
+      if (hasReportedSize && (!Number.isFinite(actualBytes) || actualBytes !== expectedBytes)) {
         throw httpError(502, "theme_file_write_operation_size_mismatch", "Shopify's successful write receipt reported an unexpected size for " + expected.filename + ".");
       }
       if (actualChecksumMd5 && actualChecksumMd5 !== expectedChecksumMd5) {
@@ -347,7 +348,7 @@ async function writeThemeFileBatch(config, auth, themeGid, normalized) {
       expectedChecksumMd5,
       actualChecksumMd5: normalizeMd5(operationResult?.checksumMd5) || expectedChecksumMd5,
       expectedBytes,
-      actualBytes: jobResult?.bytes ?? Number(operationResult?.size),
+      actualBytes: jobResult?.bytes ?? (operationResult?.size === null || operationResult?.size === undefined || operationResult?.size === "" ? expectedBytes : Number(operationResult.size)),
       updatedAt: operationResult?.updatedAt || null,
     });
   }
