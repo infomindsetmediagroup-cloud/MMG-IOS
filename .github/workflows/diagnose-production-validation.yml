@@ -66,7 +66,10 @@ jobs:
           KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 24); do
+          expected_entry="$(node -e 'const fs=require("fs");const x=fs.readFileSync("repository/cloudflare/mmg-ios/src/kairos-production-entry-v36.js","utf8").match(/const BUILD\s*=\s*"([^"]+)"/);if(!x)process.exit(1);process.stdout.write(x[1])')"
+          expected_autonomy="$(node -e 'const fs=require("fs");const x=fs.readFileSync("repository/cloudflare/mmg-ios/src/kairos-autonomy-runtime-v1.js","utf8").match(/KAIROS_AUTONOMY_BUILD\s*=\s*"([^"]+)"/);if(!x)process.exit(1);process.stdout.write(x[1])')"
+          export EXPECTED_ENTRY="${expected_entry}" EXPECTED_AUTONOMY="${expected_autonomy}"
+          for attempt in $(seq 1 36); do
             nonce="${GITHUB_SHA}-${attempt}-$(date +%s)"
             rm -f health.json dashboard.html
             curl --fail --silent --show-error --location --max-time 30 \
@@ -77,8 +80,8 @@ jobs:
               -H 'Cache-Control: no-cache' \
               "${KAIROS_PRODUCTION_URL}/center/content/website?deployment=${nonce}" \
               --output dashboard.html || true
-            if node -e 'const fs=require("fs");let h={};try{h=JSON.parse(fs.readFileSync("health.json","utf8"))}catch{};const x=fs.existsSync("dashboard.html")?fs.readFileSync("dashboard.html","utf8"):"";const ok=["ready","ok","operational"].includes(String(h.status||"").toLowerCase())&&h.enhancedInference?.status==="operational"&&h.enhancedInference?.provider==="cloudflare-workers-ai"&&h.autonomy?.status==="operational"&&x.includes("id=\"kairos-hub\"")&&x.includes("scripts/command-hub.js")&&x.includes("scripts/website-stage-three-recovery.js");process.exit(ok?0:1)'; then
-              echo "Kairos is live on Cloudflare."
+            if node -e 'const fs=require("fs");let h={};try{h=JSON.parse(fs.readFileSync("health.json","utf8"))}catch{};const x=fs.existsSync("dashboard.html")?fs.readFileSync("dashboard.html","utf8"):"";const ok=["ready","ok","operational"].includes(String(h.status||"").toLowerCase())&&h.build===process.env.EXPECTED_ENTRY&&h.enhancedInference?.status==="operational"&&h.enhancedInference?.provider==="cloudflare-workers-ai"&&h.autonomy?.status==="operational"&&h.autonomy?.build===process.env.EXPECTED_AUTONOMY&&x.includes("id=\"kairos-hub\"")&&x.includes("scripts/command-hub.js")&&x.includes("scripts/website-stage-three-recovery.js");process.exit(ok?0:1)'; then
+              echo "Kairos exact deployment builds are live on Cloudflare."
               exit 0
             fi
             sleep 5
@@ -91,6 +94,9 @@ jobs:
           KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
         run: |
           set -euo pipefail
+          expected_autonomy="$(node -e 'const fs=require("fs");const x=fs.readFileSync("repository/cloudflare/mmg-ios/src/kairos-autonomy-runtime-v1.js","utf8").match(/KAIROS_AUTONOMY_BUILD\s*=\s*"([^"]+)"/);if(!x)process.exit(1);process.stdout.write(x[1])')"
+          expected_native="$(node -e 'const fs=require("fs");const x=fs.readFileSync("repository/cloudflare/mmg-ios/src/kairos-native-task-execution-v1.js","utf8").match(/KAIROS_NATIVE_TASK_EXECUTION_BUILD\s*=\s*"([^"]+)"/);if(!x)process.exit(1);process.stdout.write(x[1])')"
+          export EXPECTED_AUTONOMY="${expected_autonomy}" EXPECTED_NATIVE="${expected_native}"
           inference_code=""
           for attempt in $(seq 1 6); do
             inference_code="$(curl --silent --show-error --location --max-time 180 \
@@ -133,7 +139,26 @@ jobs:
             "${KAIROS_PRODUCTION_URL}/api/autonomy/run" \
             --output autonomy-cycle.json
           artifact_id="$(node -e 'const x=JSON.parse(require("fs").readFileSync("autonomy-cycle.json","utf8"));process.stdout.write(x.applied?.[0]?.artifactID||"")')"
-          test -n "${artifact_id}"
+          if [ -z "${artifact_id}" ]; then
+            curl --silent --show-error --location --max-time 60 \
+              -H 'Cache-Control: no-cache' \
+              "${KAIROS_PRODUCTION_URL}/api/autonomy/decisions?deployment=${GITHUB_SHA}" \
+              --output autonomy-decisions.json || true
+            WORKFLOW_ID="${workflow_id}" node <<'NODE'
+          const fs=require('fs');
+          const cycle=JSON.parse(fs.readFileSync('autonomy-cycle.json','utf8'));
+          let decisions={};
+          try{decisions=JSON.parse(fs.readFileSync('autonomy-decisions.json','utf8'))}catch{}
+          const decision=(decisions.decisions||[]).find(value=>value.cycleID===cycle.id&&value.workflowID===process.env.WORKFLOW_ID)||null;
+          console.error(JSON.stringify({
+            error:'native-validation-artifact-missing',
+            expected:{autonomy:process.env.EXPECTED_AUTONOMY,nativeExecution:process.env.EXPECTED_NATIVE},
+            cycle:{id:cycle.id,status:cycle.status,build:cycle.build,nativeExecutionBuild:cycle.nativeExecutionBuild,actionsApplied:cycle.actionsApplied,decisionsPreserved:cycle.decisionsPreserved,error:cycle.error||null},
+            decision:decision?{id:decision.id,status:decision.status,action:decision.action,blockedReason:decision.blockedReason||null,classification:decision.classification||null}:null,
+          },null,2));
+          NODE
+            exit 1
+          fi
           curl --fail-with-body --silent --show-error --location --max-time 60 \
             -H 'Cache-Control: no-cache' \
             "${KAIROS_PRODUCTION_URL}/api/autonomy/artifacts/${artifact_id}?deployment=${GITHUB_SHA}" \
@@ -161,6 +186,7 @@ jobs:
             qwenModel:inference.model==='@cf/qwen/qwen3-30b-a3b-fp8',
             privacy:inference.privacy==='customer-content-isolated-no-training',
             autonomyOperational:autonomy.status==='operational'&&autonomy.enabled===true,
+            exactRuntimeBuilds:cycle?.build===process.env.EXPECTED_AUTONOMY&&cycle?.nativeExecutionBuild===process.env.EXPECTED_NATIVE&&autonomy?.build===process.env.EXPECTED_AUTONOMY&&autonomy?.nativeExecutionBuild===process.env.EXPECTED_NATIVE,
             cycleCompleted:cycle?.status==='completed',
             intelligentDecision:cycle?.inference?.mode==='cloudflare-account-scoped',
             nativeActionApplied:cycle?.actionsApplied===1&&cycle?.applied?.[0]?.artifactReadbackVerified===true&&cycle?.applied?.[0]?.atomicCommitVerified===true,

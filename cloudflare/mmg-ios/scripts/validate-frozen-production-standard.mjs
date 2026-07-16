@@ -4,7 +4,7 @@ import{dirname,join,resolve}from'node:path';
 import{fileURLToPath}from'node:url';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..'),repo=resolve(root,'../..'),read=p=>readFileSync(p,'utf8');
 const manifest=JSON.parse(read(join(root,'production-baseline.json'))),wrangler=read(join(root,'wrangler.toml'));
-assert.equal(manifest.baseline,'kairos-production-standard-20260716-26');
+assert.equal(manifest.baseline,'kairos-production-standard-20260716-27');
 assert.equal(manifest.status,'frozen');
 assert.equal(manifest.worker.entry,'src/kairos-production-entry-v36.js');
 assert.equal(manifest.governance.newCapabilityWorkFrozen,true);

@@ -1,7 +1,7 @@
 import { inferenceRuntime, parseStrictJSON, runKairosIntelligence } from "./kairos-intelligence-v1.js";
 import { ledgerGet, ledgerList, ledgerUpsert } from "./kairos-operational-runtime-v1.js";
 
-export const KAIROS_NATIVE_TASK_EXECUTION_BUILD = "kairos-native-task-execution-20260716-1";
+export const KAIROS_NATIVE_TASK_EXECUTION_BUILD = "kairos-native-task-execution-20260716-2";
 
 const SAFE_STAGES = new Set(["observe", "understand", "decide", "verify", "preserve", "improve"]);
 const HIGH_IMPACT_ACTIONS = new Set(["website", "release-control"]);
@@ -56,7 +56,7 @@ export async function executeNativeTask(env, input) {
       purpose: `native-task-${classification.stage}`,
       temperature: 0.1,
       maxTokens: 3200,
-      system: "You are the Kairos native internal analysis and execution engine. Complete exactly one safe internal workflow task and return strict JSON only. Required keys: status, summary, deliverable, findings, evidenceReferences, verification, nextAction, blockedReason. status must be completed or blocked. deliverable must contain title, type, and usable content. findings must contain claim, evidenceReference, and confidence. Every evidenceReference must exactly match an ID from evidenceCatalog. Never invent external facts, analytics, customer activity, publication, communication, spending, billing, destructive changes, access changes, or live mutations. Never report an external action. For an Execute-stage task, create the finished internal domain deliverable only; do not publish, send, deploy, spend, delete, or mutate a live system. Return blocked when the supplied records cannot support a grounded deliverable.",
+      system: "You are the Kairos native internal analysis and execution engine. Complete exactly one safe internal workflow task and return strict JSON only. Required keys: status, summary, deliverable, findings, evidenceReferences, verification, nextAction, blockedReason. status must be completed or blocked. deliverable must contain title, type, and usable content. findings must be an array of objects containing claim, evidenceReference, and numeric confidence. evidenceReferences and verification must be arrays of strings. Every evidenceReference must exactly match an ID from evidenceCatalog. Never invent external facts, analytics, customer activity, publication, communication, spending, billing, destructive changes, access changes, or live mutations. Never report an external action. For an Execute-stage task, create the finished internal domain deliverable only; do not publish, send, deploy, spend, delete, or mutate a live system. Return blocked when the supplied records cannot support a grounded deliverable.",
       user: JSON.stringify({
         task: {
           id: task?.id,
@@ -162,10 +162,10 @@ function normalizeOutput(value, catalog, classification) {
   const findings = Array.isArray(value?.findings) ? value.findings.slice(0, 12).map(item => ({
     claim: clean(item?.claim, 2000),
     evidenceReference: clean(item?.evidenceReference, 240),
-    confidence: Math.max(0, Math.min(1, Number(item?.confidence || 0.5))),
+    confidence: normalizedConfidence(item?.confidence, 0.5),
   })).filter(item => item.claim && allowed.has(item.evidenceReference)) : [];
   const evidenceReferences = [...new Set([...directReferences, ...findings.map(item => item.evidenceReference)])];
-  const verification = Array.isArray(value?.verification) ? value.verification.slice(0, 10).map(item => clean(item, 1200)).filter(Boolean) : [];
+  const verification = normalizeVerification(value?.verification);
   const nextAction = clean(value?.nextAction, 2000);
   const failures = [];
   if (summary.length < 20) failures.push("summary");
@@ -174,6 +174,41 @@ function normalizeOutput(value, catalog, classification) {
   if (!verification.length) failures.push("verification");
   if (failures.length) return { status: "blocked", blockedReason: `Native output failed required evidence gates: ${failures.join(", ")}.` };
   return { status: "completed", summary, deliverable, findings, evidenceReferences, verification, nextAction, blockedReason: "" };
+}
+
+function normalizeVerification(value) {
+  const queue = value == null ? [] : Array.isArray(value) ? [...value] : [value];
+  const verification = [];
+  while (queue.length && verification.length < 10) {
+    const item = queue.shift();
+    if (item == null) continue;
+    if (Array.isArray(item)) {
+      queue.unshift(...item);
+      continue;
+    }
+    if (typeof item !== "object") {
+      const text = clean(item, 1200);
+      if (text) verification.push(text);
+      continue;
+    }
+    const nested = ["checks", "steps", "evidence", "results", "items"]
+      .flatMap(key => Array.isArray(item[key]) ? item[key] : item[key] == null ? [] : [item[key]]);
+    const subject = clean(item.check || item.step || item.method || item.name || item.status, 500);
+    const outcome = clean(item.result || item.outcome || item.detail || item.message || item.readBack, 700);
+    const text = clean([subject, outcome].filter(Boolean).join(": "), 1200);
+    if (text) verification.push(text);
+    else if (!nested.length) {
+      const serialized = clean(JSON.stringify(item), 1200);
+      if (serialized && serialized !== "{}") verification.push(serialized);
+    }
+    queue.push(...nested);
+  }
+  return [...new Set(verification)].slice(0, 10);
+}
+
+function normalizedConfidence(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, Math.min(1, number)) : fallback;
 }
 
 function buildEvidenceCatalog(workflow, workItem, snapshot, artifacts) {
