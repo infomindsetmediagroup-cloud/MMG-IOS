@@ -49,7 +49,7 @@ assert.equal(manifest.baseline, "kairos-production-standard-20260716-32");
 assert.equal(manifest.worker.entry, "src/kairos-production-entry-v39.js");
 assert.equal(manifest.dashboard.childActionRuntime, "kairos-child-action-runtime-20260716-1");
 assert.equal(manifest.dashboard.childActionBridge, "kairos-child-action-bridge-20260716-1");
-assert.equal(manifest.dashboard.websiteIntentRouter, "kairos-website-intent-router-20260716-1");
+assert.equal(manifest.dashboard.websiteIntentRouter, "kairos-website-intent-router-20260716-2");
 for (const flag of [
   "synchronousChildActionExecution",
   "childActionObjectiveBridgeRequired",
@@ -123,14 +123,16 @@ requiredAll(childRuntime, [
 assert.ok(!childRuntime.includes('"/api/hub/run"'), "Direct execution regressed to the queued-only endpoint");
 
 requiredAll(index, [
-  'kairos-command-center-operational-20260716-14',
+  'kairos-command-center-operational-20260716-15',
   '/scripts/command-hub.js?v=operational-20260716-12',
-  '/scripts/website-intent-router.js?v=operational-20260716-1',
+  '/scripts/website-intent-router.js?v=operational-20260716-2',
   '/scripts/child-action-bridge.js?v=operational-20260716-1',
 ], "Command Center index");
 requiredAll(websiteRouter, [
-  'kairos-website-intent-router-20260716-1',
+  'kairos-website-intent-router-20260716-2',
   'kairos.website.operational-flow.v2',
+  'EXPLICIT_CONTENT_ONLY',
+  'isExplicitContentOnly',
   'structuralObjective',
   'requestType:"full-retool"',
   'mode:"input"',
@@ -138,6 +140,7 @@ requiredAll(websiteRouter, [
   'data-website-plan',
   'data-website-full-retool-confirm',
   'location.reload()',
+  'queueMicrotask(applyRouting)',
 ], "Website intent router");
 for (const forbidden of ["MutationObserver", "setInterval(", "scrollIntoView", "scrollTo(", "scrollBy("]) {
   assert.ok(!websiteRouter.includes(forbidden), `Website intent router contains prohibited behavior: ${forbidden}`);
