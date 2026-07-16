@@ -7,7 +7,8 @@ on:
     paths:
       - ".github/workflows/verify-timeline-homepage-production.yml"
       - "cloudflare/mmg-ios/src/kairos-homepage-preserve-planner-v1.js"
-      - "cloudflare/mmg-ios/src/kairos-production-entry-v40.js"
+      - "cloudflare/mmg-ios/src/kairos-homepage-template-text-executor-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-v41.js"
       - "cloudflare/mmg-ios/production-baseline.json"
       - "cloudflare/mmg-ios/wrangler.toml"
       - "web/kairos-dashboard/index.html"
@@ -33,7 +34,7 @@ jobs:
     env:
       KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
     steps:
-      - name: Verify live v40 health and dashboard assets
+      - name: Verify live v41 health and dashboard assets
         shell: bash
         run: |
           set -euo pipefail
@@ -55,16 +56,25 @@ jobs:
           const quick=fs.readFileSync('homepage-quick.js','utf8');
           const work=fs.readFileSync('workflow-runtime.js','utf8');
           const workspace=fs.readFileSync('workspace-runtime.js','utf8');
+          const preserve=health.homepagePreserveDesign||{};
           const checks={
-            productionBuild:health.build==='kairos-production-entry-20260716-97',
-            preserveRuntime:health.homepagePreserveDesign?.status==='operational',
-            preserveContract:health.homepagePreserveDesign?.contract==='objective-to-node-preserving-homepage-preview',
+            productionBuild:health.build==='kairos-production-entry-20260716-98',
+            preserveRuntime:preserve.status==='operational',
+            preserveContract:preserve.contract==='published-main-template-to-text-only-staging-preview',
+            preserveSource:preserve.sourceOfTruth==='published-main-theme',
+            singleMutableFile:Array.isArray(preserve.mutableFiles)&&preserve.mutableFiles.length===1&&preserve.mutableFiles[0]==='templates/index.json',
+            stringSettingsOnly:preserve.mutableValues==='existing-customer-facing-string-settings-only',
+            canonicalFallbackBlocked:preserve.canonicalPackageInstallation==='prohibited-in-preserve-mode'&&preserve.structuralFallback==='stop-instead-of-rebuild',
             oneButtonCapability:health.capabilities?.oneButtonHomepagePreview==='operational',
-            timelineCapability:health.capabilities?.completedWorkTimelineArchive==='dashboard-bound',
-            commandCenterBuild:website.includes('kairos-command-center-operational-20260716-16'),
-            quickScriptBound:website.includes('/scripts/homepage-quick-action.js?v=operational-20260716-1'),
+            publishedSourceCapability:health.capabilities?.homepagePublishedFrameworkSource==='operational',
+            textOnlyCapability:health.capabilities?.homepageTemplateTextOnlyMutation==='operational',
+            rebuildFallbackCapability:health.capabilities?.homepageCanonicalRebuildFallback==='prohibited',
+            timelineCapability:health.capabilities?.completedWorkTimelineArchive==='operational',
+            commandCenterBuild:website.includes('kairos-command-center-operational-20260716-17'),
+            quickScriptBound:website.includes('/scripts/homepage-quick-action.js?v=operational-20260716-2'),
             quickStyleBound:website.includes('/styles/homepage-quick-action.css?v=operational-20260716-1'),
-            quickAction:quick.includes('Build My Homepage Preview')&&quick.includes('preserve-current-design')&&quick.includes('/api/shopify/staging/visual-verification'),
+            quickAction:quick.includes('Keep my homepage. Change the words.')&&quick.includes('preserve-published-framework')&&quick.includes('published-main-template-text-settings-v1')&&quick.includes('/api/shopify/staging/visual-verification'),
+            quickActionNoCanonicalAuthorization:quick.includes('canonicalPackageAuthorized: false')&&quick.includes('liquidMutationAuthorized: false')&&quick.includes('assetMutationAuthorized: false'),
             workTimeline:work.includes('Work Timeline')&&work.includes('Completed Timeline')&&work.includes('Recent days')&&work.includes('Previous weeks')&&work.includes('Earlier months'),
             completedExcluded:work.includes('!["completed","cancelled"].includes(item.state)'),
             clickableArchive:work.includes('data-open-workflow')&&work.includes('Open verified deliverable'),
@@ -74,7 +84,7 @@ jobs:
           if(Object.values(checks).some(value=>value!==true))process.exit(1);
           NODE
 
-      - name: Verify preserve-design planner routing without Shopify mutation
+      - name: Verify published-framework planner routing without Shopify mutation
         shell: bash
         run: |
           set -euo pipefail
@@ -82,7 +92,7 @@ jobs:
             -D planner-headers.txt \
             -H 'Content-Type: application/json' \
             -H 'Cache-Control: no-cache' \
-            --data '{"objective":"x","requestType":"homepage-preserve-design","homepageMode":"preserve-current-design","preserveExistingDesign":true}' \
+            --data '{"objective":"x","requestType":"homepage-preserve-design","homepageMode":"preserve-published-framework","sourceOfTruth":"published-main-theme","preserveExistingDesign":true,"preservePublishedFramework":true,"templateTextOnly":true,"canonicalPackageAuthorized":false}' \
             "${KAIROS_PRODUCTION_URL}/api/shopify/staging/plan/jobs" \
             --output planner-body.json \
             --write-out '%{http_code}')"
@@ -93,10 +103,12 @@ jobs:
           const checks={
             safeValidation:Number(process.env.HTTP_CODE)===400,
             objectiveGuard:body?.error?.code==='objective_required',
-            plannerBuild:body?.build==='kairos-homepage-preserve-planner-20260716-1',
-            productionHeader:/x-kairos-production-entry:\s*kairos-production-entry-20260716-97/i.test(headers),
-            preserveModeHeader:/x-kairos-homepage-mode:\s*preserve-current-design/i.test(headers),
-            designHeader:/x-kairos-design-preservation:\s*template-css-markup-node-distribution/i.test(headers),
+            plannerBuild:body?.build==='kairos-homepage-preserve-planner-20260716-2',
+            productionHeader:/x-kairos-production-entry:\s*kairos-production-entry-20260716-98/i.test(headers),
+            preserveModeHeader:/x-kairos-homepage-mode:\s*preserve-published-framework/i.test(headers),
+            publishedSourceHeader:/x-kairos-homepage-source:\s*published-main-theme/i.test(headers),
+            mutationScopeHeader:/x-kairos-mutation-scope:\s*templates-index-json-existing-string-settings-only/i.test(headers),
+            fallbackBlockedHeader:/x-kairos-canonical-rebuild-fallback:\s*prohibited/i.test(headers),
           };
           console.log(JSON.stringify({httpStatus:Number(process.env.HTTP_CODE),checks},null,2));
           if(Object.values(checks).some(value=>value!==true))process.exit(1);
@@ -112,10 +124,10 @@ jobs:
           set -euo pipefail
           if [ "${JOB_STATUS}" = "success" ]; then
             state="success"
-            description="Timeline archive and one-button homepage production checks passed"
+            description="Published-framework homepage text and timeline checks passed"
           else
             state="failure"
-            description="Timeline archive or homepage production verification failed"
+            description="Published-framework homepage or timeline verification failed"
           fi
           payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-timeline-homepage-production",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
           curl --fail --silent --show-error \
