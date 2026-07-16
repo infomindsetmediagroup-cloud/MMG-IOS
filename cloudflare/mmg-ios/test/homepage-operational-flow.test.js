@@ -60,14 +60,18 @@ test("Website Retool completes proposal, staging preview, approval, live save, v
     assert.equal(shopify.completedWriteJobs, 1);
     assert.equal(shopify.writeJobPolls, 2);
     assert.equal(shopify.staleReadbacks, 0);
-    assert.equal(execution.evidence.verificationSource, "shopify-successful-operation-results");
+    assert.equal(execution.evidence.verificationSource, "shopify-authoritative-write-verification");
     assert.equal(execution.evidence.operationConfirmations.length, 3);
     assert.equal(execution.evidence.operationConfirmations.every(item => item.matched), true);
     const templateConfirmation = execution.evidence.operationConfirmations.find(item => item.filename === "templates/index.json");
-    assert.equal(templateConfirmation.actualBytes, templateConfirmation.expectedBytes);
+    assert.equal(templateConfirmation.actualSha256, templateConfirmation.expectedSha256);
     assert.equal(templateConfirmation.sizeMatched, false);
-    assert.equal(templateConfirmation.checksumMatched, true);
-    assert.equal(templateConfirmation.method, "operation-result-checksum-md5");
+    assert.equal(templateConfirmation.checksumMatched, false);
+    assert.equal(templateConfirmation.byteMatched, true);
+    assert.equal(templateConfirmation.semanticMatched, false);
+    assert.equal(templateConfirmation.method, "rest-asset-sha256");
+    assert.equal(templateConfirmation.restReadbackAttempts, 1);
+    assert.equal(execution.verification.find(item => item.filename === "templates/index.json").matchType, "bytes");
     assert.deepEqual(shopify.writeBatches, [
       ["sections/mmg-canonical-homepage.liquid", "assets/mmg-canonical-homepage.css"],
       ["sections/mmg-canonical-homepage.liquid", "templates/index.json"],
@@ -203,6 +207,16 @@ class MultiThemeShopify {
         headers: { "Content-Type": "text/html; charset=utf-8" },
       });
     }
+    if (url.includes("/assets.json")) {
+      const parsedURL = new URL(url);
+      const numericThemeID = parsedURL.pathname.match(/\/themes\/(\d+)\/assets\.json$/)?.[1] || "";
+      const themeGid = `gid://shopify/OnlineStoreTheme/${numericThemeID}`;
+      const filename = parsedURL.searchParams.get("asset[key]") || "";
+      const content = this.files.get(themeGid)?.get(filename);
+      if (typeof content !== "string") return Response.json({ errors: "Not found" }, { status: 404 });
+      const value = content;
+      return Response.json({ asset: { key: filename, value, checksum: md5Text(value), size: new TextEncoder().encode(value).length, updated_at: new Date().toISOString() } });
+    }
     const body = JSON.parse(init.body);
     const query = String(body.query || "");
     const variables = body.variables || {};
@@ -250,7 +264,7 @@ class MultiThemeShopify {
         return Response.json({ data: { themeFilesUpsert: { job: { id, done: false }, upsertedThemeFiles: [], userErrors: [] } } });
       }
       this.applyFiles(variables.themeId, variables.files || []);
-      return Response.json({ data: { themeFilesUpsert: { job: null, upsertedThemeFiles: (variables.files || []).map(file => ({ filename: file.filename, checksumMd5: md5Text(file.body.value), size: new TextEncoder().encode(file.body.value).length + (file.filename === "templates/index.json" ? 338 : 0), updatedAt: new Date().toISOString() })), userErrors: [] } } });
+      return Response.json({ data: { themeFilesUpsert: { job: null, upsertedThemeFiles: (variables.files || []).map(file => ({ filename: file.filename, checksumMd5: file.filename === "templates/index.json" ? "00000000000000000000000000000000" : md5Text(file.body.value), size: new TextEncoder().encode(file.body.value).length + (file.filename === "templates/index.json" ? 338 : 0), updatedAt: new Date().toISOString() })), userErrors: [] } } });
     }
     if (query.includes("mutation KairosThemeFilesDelete")) {
       const files = this.files.get(variables.themeId);

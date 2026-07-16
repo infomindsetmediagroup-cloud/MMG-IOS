@@ -17,7 +17,7 @@ import {
   buildCanonicalHomepagePackage,
 } from "./kairos-canonical-homepage-package-v1.js";
 
-const BUILD = "kairos-standalone-shopify-20260715-7";
+const BUILD = "kairos-standalone-shopify-20260715-8";
 const HOMEPAGE_FILE = "templates/index.json";
 const JOB_TTL_SECONDS = 3600;
 const MAX_OBJECTIVE_CHARS = 12000;
@@ -331,7 +331,7 @@ async function executeCanonicalPlan(request, env, planEnvelope, approval, starte
   const confirmations = new Map(write.confirmations.map(item => [item.filename, item]));
   const verification = expectedManifest.map(expected => {
     const confirmation = confirmations.get(expected.filename);
-    if (!confirmation?.matched || confirmation.actualSha256 !== expected.sha256) {
+    if (!confirmation?.matched || (!confirmation.byteMatched && !confirmation.semanticMatched)) {
       throw httpError(502, "staging_operation_receipt_mismatch", "Shopify's successful operation receipt did not match the approved " + expected.filename + ".");
     }
     return {
@@ -342,6 +342,8 @@ async function executeCanonicalPlan(request, env, planEnvelope, approval, starte
       bytes: confirmation.actualBytes,
       jsonValid: expected.filename === HOMEPAGE_FILE ? true : null,
       verificationSource: confirmation.method,
+      matchType: confirmation.matchType,
+      semanticMatched: confirmation.semanticMatched,
     };
   });
 
@@ -400,7 +402,7 @@ async function executeCanonicalPlan(request, env, planEnvelope, approval, starte
       mutationResult: write.mutationResult,
       sourceInspectionActionID: sourceBody.actionID,
       operationConfirmations: write.confirmations,
-      verificationSource: "shopify-successful-operation-results",
+      verificationSource: "shopify-authoritative-write-verification",
       packageVersion: packageResult.version,
       sectionId: packageResult.sectionId,
     },

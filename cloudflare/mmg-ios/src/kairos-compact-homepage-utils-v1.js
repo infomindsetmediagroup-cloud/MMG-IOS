@@ -325,41 +325,103 @@ async function writeThemeFileBatch(config, auth, themeGid, normalized) {
     const expectedSha256 = await hashText(expected.content);
     const expectedChecksumMd5 = md5Text(expected.content);
     const expectedBytes = new TextEncoder().encode(expected.content).length;
-    if (jobResult && jobResult.sha256 !== expectedSha256) {
-      throw httpError(502, "theme_file_write_job_result_mismatch", "Shopify's completed write job did not contain the approved " + expected.filename + ".");
-    }
-    if (operationResult) {
-      const actualChecksumMd5 = normalizeMd5(operationResult.checksumMd5);
-      if (!jobResult && actualChecksumMd5 && actualChecksumMd5 !== expectedChecksumMd5) {
-        throw httpError(502, "theme_file_write_operation_checksum_mismatch", "Shopify's successful write receipt did not match the approved " + expected.filename + ".");
-      }
-      if (!actualChecksumMd5 && !jobResult) {
-        throw httpError(502, "theme_file_write_operation_checksum_missing", "Shopify confirmed writing " + expected.filename + " but returned no integrity checksum.");
-      }
-    }
     if (!operationResult && !jobResult) {
       throw httpError(502, "theme_file_write_result_missing", "Shopify returned no successful operation receipt for " + expected.filename + ".");
     }
+    const jobByteMatched = jobResult?.sha256 === expectedSha256;
+    const jobSemanticMatched = !jobByteMatched && jobResult?.content && expected.filename.endsWith(".json")
+      ? await jsonSemanticallyMatches(jobResult.content, expected.content)
+      : false;
     const reportedBytes = operationResult?.size === null || operationResult?.size === undefined || operationResult?.size === "" ? null : Number(operationResult.size);
     const actualChecksumMd5 = normalizeMd5(operationResult?.checksumMd5);
     const checksumMatched = actualChecksumMd5 ? actualChecksumMd5 === expectedChecksumMd5 : null;
+    const restVerification = jobByteMatched || jobSemanticMatched || checksumMatched
+      ? null
+      : await verifyThemeFileViaRest(config, auth, themeGid, expected, expectedSha256);
+    const byteMatched = Boolean(jobByteMatched || checksumMatched || restVerification?.byteMatched);
+    const semanticMatched = Boolean(jobSemanticMatched || restVerification?.semanticMatched);
+    if (!byteMatched && !semanticMatched) {
+      throw httpError(502, "theme_file_write_integrity_mismatch", "Shopify did not return the approved " + expected.filename + " through its write job, checksum receipt, or Asset read-back.");
+    }
+    const method = jobByteMatched
+      ? (checksumMatched ? "operation-result-and-job-query" : "job-query-sha256")
+      : jobSemanticMatched
+        ? "job-query-semantic-json"
+        : checksumMatched
+          ? "operation-result-checksum-md5"
+          : restVerification.byteMatched
+            ? "rest-asset-sha256"
+            : "rest-asset-semantic-json";
     confirmations.push({
       filename: expected.filename,
       matched: true,
-      method: jobResult ? (checksumMatched ? "operation-result-and-job-query" : "job-query-sha256") : "operation-result-checksum-md5",
+      method,
+      matchType: byteMatched ? "bytes" : "semantic-json",
       expectedSha256,
-      actualSha256: expectedSha256,
+      actualSha256: jobResult?.sha256 || restVerification?.sha256 || expectedSha256,
+      byteMatched,
+      semanticMatched,
       expectedChecksumMd5,
       actualChecksumMd5: actualChecksumMd5 || null,
       checksumMatched,
       expectedBytes,
-      actualBytes: jobResult?.bytes ?? expectedBytes,
+      actualBytes: jobResult?.bytes ?? restVerification?.bytes ?? expectedBytes,
       reportedBytes,
       sizeMatched: Number.isFinite(reportedBytes) ? reportedBytes === expectedBytes : null,
       updatedAt: operationResult?.updatedAt || null,
+      restReadbackAttempts: restVerification?.attempts || 0,
     });
   }
   return { mutationResult: payload, job, confirmations, filenames: normalized.map(file => file.filename) };
+}
+
+async function verifyThemeFileViaRest(config, auth, themeGid, expected, expectedSha256) {
+  const delays = [0, 250, 500, 1_000, 2_000, 3_000, 5_000];
+  for (let index = 0; index < delays.length; index += 1) {
+    if (delays[index]) await new Promise(resolve => setTimeout(resolve, delays[index]));
+    const asset = await readThemeFileViaRest(config, auth, themeGid, expected.filename);
+    const sha256 = await hashText(asset.content);
+    const bytes = new TextEncoder().encode(asset.content).length;
+    const byteMatched = sha256 === expectedSha256;
+    const semanticMatched = !byteMatched && expected.filename.endsWith(".json")
+      ? await jsonSemanticallyMatches(asset.content, expected.content)
+      : false;
+    const verification = { ...asset, sha256, bytes, byteMatched, semanticMatched, attempts: index + 1 };
+    if (byteMatched || semanticMatched) return verification;
+  }
+  throw httpError(502, "theme_file_rest_verification_mismatch", "Shopify's Asset read-back did not converge to the approved " + expected.filename + ".");
+}
+
+async function readThemeFileViaRest(config, auth, themeGid, filename) {
+  const themeID = normalizeThemeGid(themeGid).match(/\d+$/)?.[0] || "";
+  if (!themeID) throw httpError(400, "theme_id_invalid", "The Shopify theme ID is invalid.");
+  const url = new URL(`https://${config.storeDomain}/admin/api/${config.apiVersion}/themes/${themeID}/assets.json`);
+  url.searchParams.set("asset[key]", filename);
+  url.searchParams.set("fields", "key,value,checksum,size,updated_at");
+  const response = await fetch(url, {
+    headers: { "X-Shopify-Access-Token": auth.token, Accept: "application/json", "Cache-Control": "no-cache" },
+    signal: AbortSignal.timeout(SHOPIFY_TIMEOUT_MS),
+  });
+  const body = await safeJSON(response);
+  const asset = body?.asset;
+  if (!response.ok || typeof asset?.value !== "string") {
+    throw httpError(response.status || 502, "theme_file_rest_read_failed", "Shopify's Asset API could not read " + filename + " after the write.");
+  }
+  return {
+    filename: String(asset.key || filename),
+    content: asset.value,
+    checksumMd5: normalizeMd5(asset.checksum),
+    size: asset.size === null || asset.size === undefined ? null : Number(asset.size),
+    updatedAt: asset.updated_at || null,
+  };
+}
+
+async function jsonSemanticallyMatches(actualContent, expectedContent) {
+  try {
+    return await semanticHash(JSON.parse(actualContent)) === await semanticHash(JSON.parse(expectedContent));
+  } catch {
+    return false;
+  }
 }
 
 async function waitForThemeFileWriteJob(config, auth, initialJob, themeGid, expectedFiles) {
