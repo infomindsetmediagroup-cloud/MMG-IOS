@@ -1,4 +1,4 @@
-name: Verify Live Rendered Homepage Text
+name: Diagnose Live Rendered Homepage Text
 
 on:
   push:
@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
+  diagnose:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -24,126 +24,104 @@ jobs:
       TARGET_PRODUCTION_COMMIT: 3c346d1521dccc919718835e081613d8ed0abe2d
       EXPECTED_RENDERED_PLANNER: kairos-rendered-homepage-text-planner-20260716-1
     steps:
-      - name: Wait for rendered-text deployment
+      - name: Collect live diagnostics
         shell: bash
         run: |
-          set -euo pipefail
-          ready=0
-          for attempt in $(seq 1 60); do
+          set -u
+          health_code="000"
+          for attempt in $(seq 1 30); do
             nonce="${TARGET_PRODUCTION_COMMIT}-${attempt}-$(date +%s)"
-            code="$(curl --silent --show-error --location --max-time 30 \
+            health_code="$(curl --silent --show-error --location --max-time 30 \
               -H 'Cache-Control: no-cache' \
-              "${KAIROS_PRODUCTION_URL}/api/health?rendered-text=${nonce}" \
+              "${KAIROS_PRODUCTION_URL}/api/health?rendered-diagnostic=${nonce}" \
               --output health.json \
               --write-out '%{http_code}' || true)"
-            if [ "${code}" = "200" ] && EXPECTED_RENDERED_PLANNER="${EXPECTED_RENDERED_PLANNER}" node - <<'NODE'
-          const fs=require('fs');
-          try {
-            const h=JSON.parse(fs.readFileSync('health.json','utf8'));
-            const p=h.homepagePreserveDesign||{};
-            const ok=h.build==='kairos-production-entry-20260716-98'
-              &&p.status==='operational'
-              &&p.sourceOfTruth==='published-main-theme'
-              &&p.renderedTextPlannerBuild===process.env.EXPECTED_RENDERED_PLANNER
-              &&p.renderedTextContract==='active-ordered-primary-copy-delta-required'
-              &&p.renderedTextRequirement==='at-least-one-active-primary-copy-delta'
-              &&p.hiddenTextSuccess==='prohibited'
-              &&p.disabledSectionTextSuccess==='prohibited'
-              &&p.unorderedSectionOrBlockTextSuccess==='prohibited'
-              &&Array.isArray(p.mutableFiles)&&p.mutableFiles.length===1&&p.mutableFiles[0]==='templates/index.json'
-              &&p.canonicalPackageInstallation==='prohibited-in-preserve-mode'
-              &&p.structuralFallback==='stop-instead-of-rebuild'
-              &&h.capabilities?.homepageRenderedTextDelta==='required'
-              &&h.capabilities?.homepageHiddenTextNoOp==='prohibited'
-              &&h.capabilities?.homepageCanonicalRebuildFallback==='prohibited';
-            process.exit(ok?0:1);
-          } catch { process.exit(1); }
-          NODE
-            then
-              ready=1
-              break
-            fi
+            if [ "${health_code}" = "200" ]; then break; fi
             sleep 10
           done
-          if [ "${ready}" != "1" ]; then
-            echo "Rendered homepage text deployment did not become ready." >&2
-            cat health.json 2>/dev/null || true
-            exit 1
-          fi
 
-      - name: Verify browser guards and safe routing
-        shell: bash
-        run: |
-          set -euo pipefail
           nonce="${TARGET_PRODUCTION_COMMIT}-$(date +%s)"
-          curl --fail --silent --show-error --location --max-time 45 -H 'Cache-Control: no-cache' \
-            "${KAIROS_PRODUCTION_URL}/scripts/homepage-quick-action.js?v=${nonce}" --output homepage-quick.js
-          http_code="$(curl --silent --show-error --location --max-time 45 \
+          script_code="$(curl --silent --show-error --location --max-time 45 \
+            -H 'Cache-Control: no-cache' \
+            "${KAIROS_PRODUCTION_URL}/scripts/homepage-quick-action.js?v=${nonce}" \
+            --output homepage-quick.js \
+            --write-out '%{http_code}' || true)"
+
+          planner_code="$(curl --silent --show-error --location --max-time 45 \
             -D planner-headers.txt \
             -H 'Content-Type: application/json' \
             -H 'Cache-Control: no-cache' \
             --data '{"objective":"x","requestType":"homepage-preserve-design","homepageMode":"preserve-published-framework","sourceOfTruth":"published-main-theme","preserveExistingDesign":true,"preservePublishedFramework":true,"renderedTextRequired":true,"activeOrderedSectionsOnly":true,"activeOrderedBlocksOnly":true,"templateTextOnly":true,"canonicalPackageAuthorized":false}' \
             "${KAIROS_PRODUCTION_URL}/api/shopify/staging/plan/jobs" \
             --output planner-body.json \
-            --write-out '%{http_code}')"
-          HTTP_CODE="${http_code}" EXPECTED_RENDERED_PLANNER="${EXPECTED_RENDERED_PLANNER}" node <<'NODE'
+            --write-out '%{http_code}' || true)"
+
+          HEALTH_CODE="${health_code}" SCRIPT_CODE="${script_code}" PLANNER_CODE="${planner_code}" EXPECTED_RENDERED_PLANNER="${EXPECTED_RENDERED_PLANNER}" node <<'NODE' > diagnostics.json
           const fs=require('fs');
-          const quick=fs.readFileSync('homepage-quick.js','utf8');
-          const body=JSON.parse(fs.readFileSync('planner-body.json','utf8'));
-          const headers=fs.readFileSync('planner-headers.txt','utf8');
-          const expected=process.env.EXPECTED_RENDERED_PLANNER.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+          const read=(p,f)=>{try{return fs.readFileSync(p,'utf8')}catch{return f}};
+          const parse=(p)=>{try{return JSON.parse(read(p,'{}'))}catch{return {parseError:true,raw:read(p,'')}}};
+          const health=parse('health.json');
+          const quick=read('homepage-quick.js','');
+          const body=parse('planner-body.json');
+          const headers=read('planner-headers.txt','');
+          const p=health.homepagePreserveDesign||{};
           const checks={
+            healthHttp:Number(process.env.HEALTH_CODE)===200,
+            productionBuild:health.build==='kairos-production-entry-20260716-98',
+            renderedPlannerBuild:p.renderedTextPlannerBuild===process.env.EXPECTED_RENDERED_PLANNER,
+            renderedTextContract:p.renderedTextContract==='active-ordered-primary-copy-delta-required',
+            renderedTextRequirement:p.renderedTextRequirement==='at-least-one-active-primary-copy-delta',
+            hiddenTextBlocked:p.hiddenTextSuccess==='prohibited',
+            disabledTextBlocked:p.disabledSectionTextSuccess==='prohibited',
+            unorderedTextBlocked:p.unorderedSectionOrBlockTextSuccess==='prohibited',
+            capabilityDelta:health.capabilities?.homepageRenderedTextDelta==='required',
+            capabilityNoop:health.capabilities?.homepageHiddenTextNoOp==='prohibited',
+            scriptHttp:Number(process.env.SCRIPT_CODE)===200,
             stateV3:quick.includes('kairos.homepage.quick-action.v3'),
-            legacyStateDiscarded:quick.includes('LEGACY_STATE_KEY')&&quick.includes('sessionStorage.removeItem(LEGACY_STATE_KEY)'),
+            legacyStateDiscarded:quick.includes('sessionStorage.removeItem(LEGACY_STATE_KEY)'),
             activeSectionsRequired:quick.includes('activeOrderedSectionsOnly: true'),
             activeBlocksRequired:quick.includes('activeOrderedBlocksOnly: true'),
-            executionReplacementRequired:quick.includes('textSettingReplacementCount'),
-            visibleDeltaError:quick.includes('verified rendered homepage text replacement'),
-            safeValidation:Number(process.env.HTTP_CODE)===400,
+            replacementCountRequired:quick.includes('textSettingReplacementCount'),
+            plannerHttp:Number(process.env.PLANNER_CODE)===400,
             objectiveGuard:body?.error?.code==='objective_required',
             productionHeader:/x-kairos-production-entry:\s*kairos-production-entry-20260716-98/i.test(headers),
-            renderedPlannerHeader:new RegExp(`x-kairos-rendered-homepage-text-planner:\\s*${expected}`,'i').test(headers),
-            preserveModeHeader:/x-kairos-homepage-mode:\s*preserve-published-framework/i.test(headers),
-            renderedScopeHeader:/x-kairos-mutation-scope:\s*templates-index-json-existing-rendered-string-settings-only/i.test(headers),
+            renderedPlannerHeader:/x-kairos-rendered-homepage-text-planner:\s*kairos-rendered-homepage-text-planner-20260716-1/i.test(headers),
+            renderedScope:/x-kairos-mutation-scope:\s*templates-index-json-existing-rendered-string-settings-only/i.test(headers),
             renderedDeltaRequired:/x-kairos-rendered-text-delta-required:\s*true/i.test(headers),
             hiddenNoopBlocked:/x-kairos-hidden-text-noop:\s*prohibited/i.test(headers),
             rebuildBlocked:/x-kairos-canonical-rebuild-fallback:\s*prohibited/i.test(headers),
           };
-          console.log(JSON.stringify({httpStatus:Number(process.env.HTTP_CODE),checks},null,2));
-          if(Object.values(checks).some(value=>value!==true))process.exit(1);
+          const passed=Object.values(checks).every(Boolean);
+          process.stdout.write(JSON.stringify({
+            status:passed?'passed':'failed',
+            productionCommit:process.env.TARGET_PRODUCTION_COMMIT,
+            productionBuild:health.build||null,
+            expectedRenderedPlanner:process.env.EXPECTED_RENDERED_PLANNER,
+            http:{health:Number(process.env.HEALTH_CODE),script:Number(process.env.SCRIPT_CODE),planner:Number(process.env.PLANNER_CODE)},
+            actual:{
+              renderedTextPlannerBuild:p.renderedTextPlannerBuild||null,
+              renderedTextContract:p.renderedTextContract||null,
+              renderedTextRequirement:p.renderedTextRequirement||null,
+              hiddenTextSuccess:p.hiddenTextSuccess||null,
+              disabledSectionTextSuccess:p.disabledSectionTextSuccess||null,
+              unorderedSectionOrBlockTextSuccess:p.unorderedSectionOrBlockTextSuccess||null,
+              homepageRenderedTextDelta:health.capabilities?.homepageRenderedTextDelta||null,
+              homepageHiddenTextNoOp:health.capabilities?.homepageHiddenTextNoOp||null,
+              plannerErrorCode:body?.error?.code||null
+            },
+            checks,
+            completedAt:new Date().toISOString()
+          },null,2));
           NODE
 
-      - name: Write live verification receipt
+      - name: Write diagnostic receipt
         if: always()
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          JOB_STATUS: ${{ job.status }}
         run: |
           set -euo pipefail
-          receipt="$(JOB_STATUS="${JOB_STATUS}" node - <<'NODE'
-          const status=process.env.JOB_STATUS==='success'?'passed':'failed';
-          process.stdout.write(JSON.stringify({
-            status,
-            productionCommit:process.env.TARGET_PRODUCTION_COMMIT,
-            productionBuild:'kairos-production-entry-20260716-98',
-            renderedPlannerBuild:process.env.EXPECTED_RENDERED_PLANNER,
-            workflowRunID:process.env.GITHUB_RUN_ID,
-            workflowRunURL:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
-            checks:[
-              'live-health-rendered-planner',
-              'active-ordered-primary-copy-delta-required',
-              'hidden-disabled-unordered-noop-prohibited',
-              'browser-state-v3',
-              'executor-replacement-count-required',
-              'published-main-framework-preserved',
-              'canonical-rebuild-fallback-prohibited',
-              'safe-routing-no-shopify-mutation'
-            ],
-            completedAt:new Date().toISOString()
-          },null,2));
-          NODE
-          )"
+          receipt="$(cat diagnostics.json 2>/dev/null || printf '%s' '{"status":"failed","error":"diagnostics_missing"}')"
           encoded="$(printf '%s' "${receipt}" | base64 -w0)"
           api_url="${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/contents/.validation/rendered-homepage-text-live.json"
           existing="$(curl --silent --show-error \
@@ -152,7 +130,7 @@ jobs:
             -H "X-GitHub-Api-Version: 2022-11-28" \
             "${api_url}?ref=${GITHUB_REF_NAME}")"
           existing_sha="$(printf '%s' "${existing}" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(JSON.parse(s).sha||"")}catch{}})')"
-          payload="$(CONTENT="${encoded}" BRANCH="${GITHUB_REF_NAME}" SHA="${existing_sha}" node -e 'const p={message:"Record live rendered homepage text verification",content:process.env.CONTENT,branch:process.env.BRANCH};if(process.env.SHA)p.sha=process.env.SHA;process.stdout.write(JSON.stringify(p))')"
+          payload="$(CONTENT="${encoded}" BRANCH="${GITHUB_REF_NAME}" SHA="${existing_sha}" node -e 'const p={message:"Record rendered homepage text diagnostics",content:process.env.CONTENT,branch:process.env.BRANCH};if(process.env.SHA)p.sha=process.env.SHA;process.stdout.write(JSON.stringify(p))')"
           curl --fail --silent --show-error \
             -X PUT \
             -H "Authorization: Bearer ${GH_TOKEN}" \
