@@ -5,7 +5,7 @@ import {
   writeThemeFiles,
 } from "./kairos-compact-homepage-utils-v1.js";
 
-const BUILD = "shopify-homepage-release-20260715-1";
+const BUILD = "shopify-homepage-release-20260716-2";
 const CACHE_SECONDS = 60 * 60 * 24 * 7;
 const PUBLISH_CONFIRMATION = "APPLY APPROVED HOMEPAGE";
 const ROLLBACK_CONFIRMATION = "ROLL BACK APPROVED HOMEPAGE";
@@ -207,6 +207,9 @@ function normalizeApprovedFiles(value) {
 
 function isAllowedHomepageFile(filename) {
   return filename === "templates/index.json"
+    || filename === "sections/header-group.json"
+    || filename === "sections/footer-group.json"
+    || filename === "config/settings_data.json"
     || /^sections\/[a-z0-9][a-z0-9_-]*\.liquid$/i.test(filename)
     || /^assets\/[a-z0-9][a-z0-9_.-]*\.(?:css|js|json)$/i.test(filename);
 }
