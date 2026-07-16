@@ -1,6 +1,6 @@
 import {httpError,inspectStagingSource,parseShopifyJson} from './kairos-compact-homepage-utils-v1.js';
 
-const BUILD='kairos-content-only-shopify-planner-20260715-7';
+const BUILD='kairos-content-only-shopify-planner-20260715-8';
 const HOMEPAGE_FILE='templates/index.json';
 const SECTION_FILE='sections/mmg-canonical-homepage.liquid';
 const CSS_FILE='assets/mmg-canonical-homepage.css';
@@ -8,22 +8,6 @@ const JOB_TTL_SECONDS=3600;
 const MAX_OBJECTIVE_CHARS=12000;
 const BLOCK_TAGS=new Set(['address','article','aside','blockquote','button','div','figcaption','figure','footer','form','h1','h2','h3','h4','h5','h6','header','li','main','nav','p','section','td','th']);
 const BLOCKED_TAGS=new Set(['script','style','svg','template','noscript','code','pre']);
-
-const APPROVED_REPLACEMENTS=new Map([
-  ['The guided path','The customer journey'],
-  ['Start where you are. Build what comes next.','Start where you are. Move toward what comes next.'],
-  ['You do not need the entire future mapped out. Choose the stage that matches your work today, then move through a connected system.','Choose the stage that matches your work today, then follow a connected path from learning and planning to a finished outcome.'],
-  ['Choose what you want to build','Choose your path'],
-  ['One ecosystem. Multiple ways forward.','One ecosystem. A clear way forward.'],
-  ['Every pathway combines education, practical tools, and production support so the next step connects to the larger body of work.','Each pathway connects practical learning, digital resources, professional support, and a clear next step.'],
-  ['A connected knowledge ecosystem','Your connected knowledge journey'],
-  ['Every asset should lead somewhere useful.','Every step should lead somewhere useful.'],
-  ['MMG is designed as a connected journey—not a shelf of unrelated products.','MMG connects learning, creation, publishing, and continued growth in one guided customer journey.'],
-  ['Continue through MMG','Continue your journey'],
-  ['Keep moving through the system.','Keep moving through your journey.'],
-  ['Choose your next step','Your next step'],
-  ['Start with a free tool, explore the library, or bring a serious publishing project into production.','Explore a resource, continue learning, or bring a publishing project into professional production.']
-]);
 
 export default{async fetch(request,env){
   const url=new URL(request.url);
@@ -42,58 +26,127 @@ async function createPlan(request,env){
     const evidence=sourceBody?.evidence||{};
     const stagingTheme=evidence.stagingTheme,mainTheme=evidence.mainTheme;
     validateBoundary(stagingTheme,mainTheme);
-    const files=new Map((Array.isArray(evidence.files)?evidence.files:[]).filter(file=>file?.readable&&typeof file?.filename==='string'&&typeof file?.content==='string').map(file=>[file.filename,file]));
+    const files=new Map((Array.isArray(evidence.files)?evidence.files:[])
+      .filter(file=>file?.readable&&typeof file?.filename==='string'&&typeof file?.content==='string')
+      .map(file=>[file.filename,file]));
     const templateFile=files.get(HOMEPAGE_FILE);
     if(!templateFile?.content)throw httpError(409,'homepage_source_unavailable','templates/index.json was not readable from Kairos Staging.');
     const document=parseShopifyJson(templateFile.content,'Current Kairos Staging homepage');
     const sectionFile=files.get(SECTION_FILE);
     const canonicalActive=Object.values(document.sections||{}).some(section=>String(section?.type||'')==='mmg-canonical-homepage');
-    const requested=extractExplicitReplacements(objective);
-    const replacements=requested.size?requested:APPROVED_REPLACEMENTS;
+    const replacements=extractExplicitReplacements(objective);
 
     let installationMode='inspection-only',liquidContentPatch=null;
-    let applied=[],unmatched=[...replacements.entries()].map(([before,after])=>({before,after,reason:'source unavailable'}));
+    let applied=[],unmatched=[];
     let inventory=[];
     let beforeSignature=null,afterSignature=null,replacementSource=sectionFile?.content||'';
 
-    if(canonicalActive&&sectionFile?.content){
+    if(!replacements.size){
+      unmatched=[{before:'',after:'',reason:'No explicit Replace “source” with “replacement” pairs were supplied. No inferred or default copy is permitted.'}];
+    }else if(canonicalActive&&sectionFile?.content){
       const result=replaceVisibleGroups(sectionFile.content,replacements);
-      applied=result.applied;unmatched=result.unmatched;inventory=result.inventory;
+      applied=result.applied;
+      unmatched=result.unmatched;
+      inventory=result.inventory;
       replacementSource=result.value;
-      beforeSignature=markupSignature(sectionFile.content);afterSignature=markupSignature(replacementSource);
+      beforeSignature=markupSignature(sectionFile.content);
+      afterSignature=markupSignature(replacementSource);
       if(beforeSignature!==afterSignature)throw httpError(409,'content_only_structure_change_detected','Content-only planning changed Liquid or markup structure.');
       if(applied.length){
         installationMode='existing-liquid-visible-text';
-        liquidContentPatch={filename:SECTION_FILE,originalSource:sectionFile.content,replacementSource,beforeSignature,afterSignature,visibleTextReplacementCount:applied.length,replacements:applied,unmatched,inventory,nodeDistributionPreserved:true};
+        liquidContentPatch={
+          filename:SECTION_FILE,
+          originalSource:sectionFile.content,
+          replacementSource,
+          beforeSignature,
+          afterSignature,
+          visibleTextReplacementCount:applied.filter(item=>!item.alreadyPresent).length,
+          verifiedAlreadyPresentCount:applied.filter(item=>item.alreadyPresent).length,
+          replacements:applied,
+          unmatched,
+          inventory,
+          nodeDistributionPreserved:true,
+          styledTextNodesPreserved:true,
+          literalOnly:true,
+          fuzzyMatchingUsed:false,
+          defaultReplacementMapUsed:false
+        };
       }
     }
 
+    const changedCount=applied.filter(item=>!item.alreadyPresent).length;
+    const alreadyCount=applied.filter(item=>item.alreadyPresent).length;
     const summary=applied.length
-      ?`Inspection complete: ${applied.length} safe visible-text replacement${applied.length===1?'':'s'} found; ${unmatched.length} phrase${unmatched.length===1?'':'s'} unmatched.`
-      :`Inspection complete: no uniquely matching visible source phrases were found; ${unmatched.length} requested phrase${unmatched.length===1?'':'s'} reported as unmatched. No write package was generated.`;
+      ?`Inspection complete: ${changedCount} exact visible-text replacement${changedCount===1?'':'s'} ready; ${alreadyCount} already present; ${unmatched.length} unmatched.`
+      :`Inspection complete: no exact unique source phrases were eligible for writing; ${unmatched.length} item${unmatched.length===1?'':'s'} reported without mutation.`;
     const changes=[
-      ...applied.map(item=>({filename:SECTION_FILE,purpose:`Replace “${item.before}” with “${item.after}”.`,changeType:'modify',instructions:['Change only this uniquely matched visible-text group.','Preserve all Liquid and HTML tokens.','Preserve the original styled text-node distribution.'],expectedOutcome:'One surgical content substitution using the existing styles, spans, cards, and pills.'})),
-      ...unmatched.map(item=>({filename:SECTION_FILE,purpose:`Unmatched source phrase: “${item.before}”.`,changeType:'no-change',instructions:['Do not substitute a different phrase.','Report the closest visible source candidates.'],expectedOutcome:'No source change.'}))
+      ...applied.map(item=>({
+        filename:SECTION_FILE,
+        purpose:item.alreadyPresent?`Verify approved text already present: “${item.after}”.`:`Replace “${item.before}” with “${item.after}”.`,
+        changeType:item.alreadyPresent?'verify':'modify',
+        instructions:['Use only the explicitly supplied source and replacement pair.','Preserve all Liquid and HTML tokens.','Preserve the original styled text-node distribution.','Do not infer, generate, or rewrite surrounding copy.'],
+        expectedOutcome:item.alreadyPresent?'No write; verified approved text remains in the existing design.':'One literal content substitution inside the existing design.'
+      })),
+      ...unmatched.map(item=>({
+        filename:SECTION_FILE,
+        purpose:item.before?`Unmatched or ambiguous source phrase: “${item.before}”.`:item.reason,
+        changeType:'no-change',
+        instructions:['Do not substitute a similar phrase.','Do not use fuzzy matching.','Do not invoke a default content map.'],
+        expectedOutcome:'No source change.'
+      }))
     ];
     const targetFiles=[HOMEPAGE_FILE,SECTION_FILE,CSS_FILE];
     const sourceHashes=Object.fromEntries(targetFiles.map(filename=>[filename,files.get(filename)?.sha256||null]));
     const now=new Date().toISOString();
     const executable=installationMode==='existing-liquid-visible-text'&&applied.length>0;
-    const result={actionID:crypto.randomUUID(),planID:crypto.randomUUID(),actionType:'shopify.staging.plan',requestType:'content-only',mutationScope:installationMode,status:executable?'ready-for-approval':'inspection-complete',readOnly:true,build:BUILD,kernel:'content-only-shopify-planner-v7',startedAt:now,completedAt:now,objective,summary,plan:{summary,strategy:'Build a read-only inventory of complete rendered text groups from the current staging Liquid, then replace only one uniquely matched group per requested phrase while preserving every existing styled text node. Never generate a homepage package.',changes,risks:executable?['Replacement copy may wrap naturally; no design mutation is authorized.']:['No executable text patch exists until a unique visible source match is found.'],acceptanceCriteria:['Only uniquely matched visible-text groups may change.','Every original non-empty styled text node remains non-empty when the replacement has enough words.','Liquid and HTML token signatures remain identical.','templates/index.json and the stylesheet remain unchanged.','No homepage package is generated.','The live MAIN theme remains unchanged.'],rollbackPlan:executable?['Restore only the original canonical homepage Liquid section.']:['No rollback is required because Step 1 generated no writes.'],installationMode,deterministicPatch:null,liquidContentPatch,canonicalPackage:null,targetTheme:stagingTheme,publishedTheme:mainTheme,sourceHashes,mutationScope:'surgical-content-only',executable,structuralMutationAuthorized:false,styleMutationAuthorized:false,productionPublishAuthorized:false,liveThemeMutationAuthorized:false,providerPolicy:{externalInferenceProviders:'prohibited'}},evidence:{sourceInspectionActionID:sourceBody.actionID||'',stagingTheme,mainTheme,suppliedFiles:targetFiles.map(filename=>({filename,exists:files.has(filename),sha256:files.get(filename)?.sha256||null,bytes:files.get(filename)?.bytes||0})),planningEngine:BUILD,externalInferenceProviderUsed:false,evidenceNotes:[...applied.map(item=>`Unique visible match (${item.confidence.toFixed(2)}): “${item.matchedText}”; styled nodes preserved: ${item.nodeCount}.`),...unmatched.map(item=>`Unmatched: “${item.before}”. Closest: ${item.closest||'none'}.`)],visibleTextInventory:inventory}};
+    const result={
+      actionID:crypto.randomUUID(),planID:crypto.randomUUID(),actionType:'shopify.staging.plan',requestType:'content-only',mutationScope:installationMode,
+      status:executable?'ready-for-approval':'inspection-complete',readOnly:true,build:BUILD,kernel:'content-only-shopify-planner-v8-literal-only',
+      startedAt:now,completedAt:now,objective,summary,
+      plan:{
+        summary,
+        strategy:'Apply only explicit Replace “source” with “replacement” pairs to one exact normalized visible-text group. Never infer copy, use fuzzy matching, load a default replacement map, or generate a homepage package.',
+        changes,
+        risks:executable?['Replacement copy may wrap naturally; no design mutation is authorized.']:['No executable literal text patch exists.'],
+        acceptanceCriteria:['Only explicit replacement pairs may change.','Each source phrase must match exactly one normalized visible-text group.','Every styled text node remains present.','Liquid and HTML token signatures remain identical.','templates/index.json and the stylesheet remain unchanged.','No inferred or default content is used.','No homepage package is generated.','The live MAIN theme remains unchanged.'],
+        rollbackPlan:executable?['Restore only the original canonical homepage Liquid section.']:['No rollback is required because no write package exists.'],
+        installationMode,deterministicPatch:null,liquidContentPatch,canonicalPackage:null,targetTheme:stagingTheme,publishedTheme:mainTheme,sourceHashes,
+        mutationScope:'surgical-content-only',executable,structuralMutationAuthorized:false,styleMutationAuthorized:false,productionPublishAuthorized:false,liveThemeMutationAuthorized:false,
+        literalOnly:true,fuzzyMatchingAuthorized:false,defaultReplacementMapAuthorized:false,providerPolicy:{externalInferenceProviders:'prohibited'}
+      },
+      evidence:{
+        sourceInspectionActionID:sourceBody.actionID||'',stagingTheme,mainTheme,
+        suppliedFiles:targetFiles.map(filename=>({filename,exists:files.has(filename),sha256:files.get(filename)?.sha256||null,bytes:files.get(filename)?.bytes||0})),
+        planningEngine:BUILD,externalInferenceProviderUsed:false,
+        evidenceNotes:[...applied.map(item=>item.alreadyPresent?`Already present exactly: “${item.after}”.`:`Exact unique match: “${item.matchedText}”; styled nodes preserved: ${item.nodeCount}.`),...unmatched.map(item=>item.before?`No exact unique match: “${item.before}”.`:item.reason)],
+        visibleTextInventory:inventory
+      }
+    };
     const jobID=crypto.randomUUID();
     const completed={jobID,status:'completed',build:BUILD,submittedAt:now,updatedAt:now,completedAt:now,summary,result};
     await caches.default.put(jobRequest(request,jobID),new Response(JSON.stringify(completed),{status:200,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':`public, max-age=${JOB_TTL_SECONDS}`,'X-MMG-Runtime':BUILD}}));
     return json({jobID,status:'completed',build:BUILD,pollURL:`/api/shopify/staging/plan/jobs/${jobID}`,summary,result},202);
   }catch(error){
     const status=Number.isInteger(error?.status)?error.status:500;
-    return json({status:'needs-attention',build:BUILD,summary:'Kairos could not inspect the content-only Shopify source.',error:{status,code:typeof error?.code==='string'?error.code:'content_only_plan_failed',message:error instanceof Error?error.message:'Content-only inspection failed.'}},status);
+    return json({status:'needs-attention',build:BUILD,summary:'Kairos could not inspect the literal content-only Shopify source.',error:{status,code:typeof error?.code==='string'?error.code:'content_only_plan_failed',message:error instanceof Error?error.message:'Content-only inspection failed.'}},status);
   }
 }
 
 function extractExplicitReplacements(objective){
   const map=new Map();
-  const patterns=[/replace\s+[“"]([^”"]+)[”"]\s+with\s+[“"]([^”"]+)[”"]/gi,/change\s+[“"]([^”"]+)[”"]\s+to\s+[“"]([^”"]+)[”"]/gi,/[“"]([^”"]+)[”"]\s*(?:→|=>)\s*[“"]([^”"]+)[”"]/g];
-  for(const pattern of patterns){let match;while((match=pattern.exec(objective))!==null){const before=match[1].trim(),after=match[2].trim();if(before&&after&&before!==after)map.set(before,after);}}
+  const patterns=[
+    /replace\s+[“"]([\s\S]*?)[”"]\s+with\s+[“"]([\s\S]*?)[”"]/gi,
+    /change\s+[“"]([\s\S]*?)[”"]\s+to\s+[“"]([\s\S]*?)[”"]/gi,
+    /[“"]([\s\S]*?)[”"]\s*(?:→|=>)\s*[“"]([\s\S]*?)[”"]/g
+  ];
+  for(const pattern of patterns){
+    let match;
+    while((match=pattern.exec(objective))!==null){
+      const before=match[1].replace(/\s+/g,' ').trim();
+      const after=match[2].replace(/\s+/g,' ').trim();
+      if(before&&after&&normalizeVisible(before)!==normalizeVisible(after))map.set(before,after);
+    }
+  }
   return map;
 }
 
@@ -101,25 +154,48 @@ function replaceVisibleGroups(source,replacements){
   const tokens=String(source||'').split(/({{[\s\S]*?}}|{%[\s\S]*?%}|<[^>]+>)/g);
   const groups=buildGroups(tokens);
   const inventory=groups.map(group=>({text:group.text,normalized:group.normalized,tokenIndexes:group.textIndexes}));
-  const applied=[],unmatched=[];const used=new Set();
+  const applied=[],unmatched=[];
+  const used=new Set();
   for(const [before,after] of replacements.entries()){
     const target=normalizeVisible(before);
-    const ranked=groups.map((group,index)=>({group,index,score:similarity(target,group.normalized)})).filter(item=>!used.has(item.index)).sort((a,b)=>b.score-a.score);
-    const best=ranked[0],second=ranked[1];
-    const unique=best&&best.score>=0.72&&(!second||best.score-second.score>=0.08);
-    if(!unique){unmatched.push({before,after,closest:best?.group?.text||'',confidence:best?.score||0,reason:'no unique visible match'});continue;}
-    writeGroupPreservingNodes(tokens,best.group,after);
-    used.add(best.index);
-    applied.push({requestedBefore:before,before:best.group.text,matchedText:best.group.text,after,confidence:best.score,unique:true,nodeCount:best.group.textIndexes.length,nodeDistributionPreserved:true});
+    const desired=normalizeVisible(after);
+    const exact=groups.map((group,index)=>({group,index})).filter(item=>!used.has(item.index)&&item.group.normalized===target);
+    if(exact.length===1){
+      const match=exact[0];
+      writeGroupPreservingNodes(tokens,match.group,after);
+      used.add(match.index);
+      applied.push({requestedBefore:before,before:match.group.text,matchedText:match.group.text,after,confidence:1,unique:true,nodeCount:match.group.textIndexes.length,nodeDistributionPreserved:true,alreadyPresent:false,literalMatch:true});
+      continue;
+    }
+    if(exact.length>1){
+      unmatched.push({before,after,closest:'',confidence:1,reason:'multiple exact visible matches'});
+      continue;
+    }
+    const already=groups.map((group,index)=>({group,index})).filter(item=>!used.has(item.index)&&item.group.normalized===desired);
+    if(already.length===1){
+      const match=already[0];
+      used.add(match.index);
+      applied.push({requestedBefore:before,before:match.group.text,matchedText:match.group.text,after,confidence:1,unique:true,nodeCount:match.group.textIndexes.length,nodeDistributionPreserved:true,alreadyPresent:true,literalMatch:true});
+      continue;
+    }
+    unmatched.push({before,after,closest:'',confidence:0,reason:already.length>1?'replacement text appears more than once':'no exact normalized visible match'});
   }
   return{value:tokens.join(''),applied,unmatched,inventory};
 }
 
 function buildGroups(tokens){
-  const groups=[];let current=[];let blocked=0;
-  const flush=()=>{const textIndexes=current.filter(index=>isVisibleText(tokens[index]));const text=textIndexes.map(index=>decodeEntities(tokens[index])).join(' ').replace(/\s+/g,' ').trim();if(text)groups.push({text,normalized:normalizeVisible(text),textIndexes});current=[];};
+  const groups=[];
+  let current=[];
+  let blocked=0;
+  const flush=()=>{
+    const textIndexes=current.filter(index=>isVisibleText(tokens[index]));
+    const text=textIndexes.map(index=>decodeEntities(tokens[index])).join(' ').replace(/\s+/g,' ').trim();
+    if(text)groups.push({text,normalized:normalizeVisible(text),textIndexes});
+    current=[];
+  };
   for(let i=0;i<tokens.length;i++){
-    const token=tokens[i];if(!token)continue;
+    const token=tokens[i];
+    if(!token)continue;
     if(token.startsWith('{{')||token.startsWith('{%')){current.push(i);continue;}
     if(token.startsWith('<')){
       const close=token.match(/^<\s*\/\s*([a-z0-9:-]+)/i),open=token.match(/^<\s*([a-z0-9:-]+)/i);
@@ -133,11 +209,13 @@ function buildGroups(tokens){
     }
     if(blocked===0)current.push(i);
   }
-  flush();return groups;
+  flush();
+  return groups;
 }
 
 function writeGroupPreservingNodes(tokens,group,replacement){
-  const indexes=group.textIndexes;if(!indexes.length)return;
+  const indexes=group.textIndexes;
+  if(!indexes.length)return;
   const originals=indexes.map(index=>tokens[index]);
   const weights=originals.map(token=>Math.max(1,normalizeVisible(token).split(' ').filter(Boolean).length));
   const parts=distributeReplacement(String(replacement||'').trim(),weights);
@@ -158,16 +236,18 @@ function distributeReplacement(replacement,weights){
     let assigned=counts.reduce((sum,value)=>sum+value,0);
     while(assigned>words.length){
       let changed=false;
-      for(let i=counts.length-1;i>=0&&assigned>words.length;i--)if(counts[i]>1){counts[i]--;assigned--;changed=true;}
+      for(let i=counts.length-1;i>=0&&assigned>words.length;i--){if(counts[i]>1){counts[i]--;assigned--;changed=true;}}
       if(!changed)break;
     }
     while(assigned<words.length){counts[counts.length-1]++;assigned++;}
-    const parts=[];let cursor=0;
+    const parts=[];
+    let cursor=0;
     for(const count of counts){parts.push(words.slice(cursor,cursor+count).join(' '));cursor+=count;}
     return parts;
   }
   const characters=[...replacement];
-  const parts=[];let cursor=0;
+  const parts=[];
+  let cursor=0;
   for(let i=0;i<nodeCount;i++){
     const remainingNodes=nodeCount-i;
     const remainingChars=characters.length-cursor;
@@ -181,8 +261,7 @@ function distributeReplacement(replacement,weights){
 function isVisibleText(token){return Boolean(token&&!token.startsWith('<')&&!token.startsWith('{{')&&!token.startsWith('{%')&&token.trim());}
 function normalizeVisible(value){return decodeEntities(String(value||'')).toLowerCase().replace(/[“”]/g,'"').replace(/[‘’]/g,"'").replace(/[–—]/g,'-').replace(/[^a-z0-9'"-]+/g,' ').replace(/\s+/g,' ').trim();}
 function decodeEntities(value){return String(value||'').replace(/&nbsp;|&#160;/gi,' ').replace(/&amp;/gi,'&').replace(/&quot;|&#34;/gi,'"').replace(/&apos;|&#39;/gi,"'").replace(/&mdash;|&#8212;/gi,'—').replace(/&ndash;|&#8211;/gi,'–').replace(/<br\s*\/?\s*>/gi,' ');}
-function similarity(a,b){if(!a||!b)return 0;if(a===b)return 1;if(a.includes(b)||b.includes(a))return Math.min(a.length,b.length)/Math.max(a.length,b.length)*0.95;const A=new Set(a.split(' ')),B=new Set(b.split(' '));let intersection=0;for(const word of A)if(B.has(word))intersection++;const union=new Set([...A,...B]).size||1;const jaccard=intersection/union;const length=Math.min(a.length,b.length)/Math.max(a.length,b.length);return jaccard*0.8+length*0.2;}
 function markupSignature(source){return(String(source||'').match(/{{[\s\S]*?}}|{%[\s\S]*?%}|<[^>]+>/g)||[]).join('\u001f');}
 function validateBoundary(stagingTheme,mainTheme){if(!stagingTheme?.gid||String(stagingTheme.role||'').toUpperCase()==='MAIN')throw httpError(409,'verified_staging_required','A verified non-live Kairos Staging theme is required.');if(!mainTheme?.gid||String(mainTheme.role||'').toUpperCase()!=='MAIN')throw httpError(409,'main_theme_verification_failed','The live MAIN theme could not be verified.');}
 function jobRequest(request,jobID){return new Request(new URL(`/_kairos/standalone-plan-jobs/${jobID}`,request.url).toString(),{method:'GET'});}
-function json(value,status=200){return new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-MMG-Runtime':BUILD,'X-Kairos-Website-Intent':'content-only','X-Kairos-Content-Mutation':'section-aware-visible-text-node-preserving','X-Kairos-Content-Only-Fallback':'prohibited','X-Content-Type-Options':'nosniff'}});}
+function json(value,status=200){return new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-MMG-Runtime':BUILD,'X-Kairos-Website-Intent':'content-only','X-Kairos-Content-Mutation':'section-aware-visible-text-literal-only','X-Kairos-Content-Only-Fallback':'prohibited','X-Kairos-Fuzzy-Matching':'prohibited','X-Content-Type-Options':'nosniff'}});}
