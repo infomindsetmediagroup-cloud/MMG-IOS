@@ -1,3 +1,4 @@
+# Production diagnostic trigger: capture the exact live Website Retool routing response.
 name: Verify Website Intent Routing
 
 on:
