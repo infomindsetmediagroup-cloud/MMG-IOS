@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - fix/preserve-published-homepage-framework
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
