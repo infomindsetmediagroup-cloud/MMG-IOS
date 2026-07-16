@@ -16,7 +16,10 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    env:
+      KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+      TARGET_PRODUCTION_COMMIT: d808620da182a00fe17b3b04648051e67ebe7291
     steps:
       - name: Download validation source
         shell: bash
@@ -54,6 +57,94 @@ jobs:
           node scripts/validate-frozen-production-standard.mjs
           npx wrangler deploy --dry-run
 
+      - name: Wait for live v41 deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=0
+          for attempt in $(seq 1 60); do
+            nonce="${TARGET_PRODUCTION_COMMIT}-${attempt}-$(date +%s)"
+            code="$(curl --silent --show-error --location --max-time 30 \
+              -H 'Cache-Control: no-cache' \
+              "${KAIROS_PRODUCTION_URL}/api/health?published-framework=${nonce}" \
+              --output health.json \
+              --write-out '%{http_code}' || true)"
+            if [ "${code}" = "200" ] && node - <<'NODE'
+          const fs=require('fs');
+          try {
+            const h=JSON.parse(fs.readFileSync('health.json','utf8'));
+            const p=h.homepagePreserveDesign||{};
+            const ok=h.build==='kairos-production-entry-20260716-98'
+              &&p.status==='operational'
+              &&p.contract==='published-main-template-to-text-only-staging-preview'
+              &&p.sourceOfTruth==='published-main-theme'
+              &&Array.isArray(p.mutableFiles)&&p.mutableFiles.length===1&&p.mutableFiles[0]==='templates/index.json'
+              &&p.mutableValues==='existing-customer-facing-string-settings-only'
+              &&p.canonicalPackageInstallation==='prohibited-in-preserve-mode'
+              &&p.structuralFallback==='stop-instead-of-rebuild'
+              &&h.capabilities?.homepagePublishedFrameworkSource==='operational'
+              &&h.capabilities?.homepageTemplateTextOnlyMutation==='operational'
+              &&h.capabilities?.homepageCanonicalRebuildFallback==='prohibited';
+            process.exit(ok?0:1);
+          } catch { process.exit(1); }
+          NODE
+            then
+              ready=1
+              break
+            fi
+            sleep 10
+          done
+          if [ "${ready}" != "1" ]; then
+            echo "Live v41 deployment did not become ready within ten minutes." >&2
+            cat health.json 2>/dev/null || true
+            exit 1
+          fi
+
+      - name: Verify live dashboard and safe routing
+        shell: bash
+        run: |
+          set -euo pipefail
+          nonce="${TARGET_PRODUCTION_COMMIT}-$(date +%s)"
+          curl --fail --silent --show-error --location --max-time 45 -H 'Cache-Control: no-cache' \
+            "${KAIROS_PRODUCTION_URL}/center/content/website?published-framework=${nonce}" --output website.html
+          curl --fail --silent --show-error --location --max-time 45 -H 'Cache-Control: no-cache' \
+            "${KAIROS_PRODUCTION_URL}/scripts/homepage-quick-action.js?v=${nonce}" --output homepage-quick.js
+          http_code="$(curl --silent --show-error --location --max-time 45 \
+            -D planner-headers.txt \
+            -H 'Content-Type: application/json' \
+            -H 'Cache-Control: no-cache' \
+            --data '{"objective":"x","requestType":"homepage-preserve-design","homepageMode":"preserve-published-framework","sourceOfTruth":"published-main-theme","preserveExistingDesign":true,"preservePublishedFramework":true,"templateTextOnly":true,"canonicalPackageAuthorized":false}' \
+            "${KAIROS_PRODUCTION_URL}/api/shopify/staging/plan/jobs" \
+            --output planner-body.json \
+            --write-out '%{http_code}')"
+          HTTP_CODE="${http_code}" node <<'NODE'
+          const fs=require('fs');
+          const health=JSON.parse(fs.readFileSync('health.json','utf8'));
+          const website=fs.readFileSync('website.html','utf8');
+          const quick=fs.readFileSync('homepage-quick.js','utf8');
+          const body=JSON.parse(fs.readFileSync('planner-body.json','utf8'));
+          const headers=fs.readFileSync('planner-headers.txt','utf8');
+          const checks={
+            productionBuild:health.build==='kairos-production-entry-20260716-98',
+            commandCenterBuild:website.includes('kairos-command-center-operational-20260716-17'),
+            quickScriptBound:website.includes('/scripts/homepage-quick-action.js?v=operational-20260716-2'),
+            quickCopy:quick.includes('Keep my homepage. Change the words.')&&quick.includes('Rewrite Text & Build Preview'),
+            publishedMode:quick.includes('homepageMode: "preserve-published-framework"')&&quick.includes('sourceOfTruth: "published-main-theme"'),
+            textOnlyPlan:quick.includes('published-main-template-text-settings-v1')&&quick.includes('templateTextOnly: true'),
+            canonicalBlocked:quick.includes('canonicalPackageAuthorized: false')&&quick.includes('liquidMutationAuthorized: false')&&quick.includes('assetMutationAuthorized: false'),
+            safeValidation:Number(process.env.HTTP_CODE)===400,
+            objectiveGuard:body?.error?.code==='objective_required',
+            plannerBuild:body?.build==='kairos-homepage-preserve-planner-20260716-2',
+            productionHeader:/x-kairos-production-entry:\s*kairos-production-entry-20260716-98/i.test(headers),
+            preserveModeHeader:/x-kairos-homepage-mode:\s*preserve-published-framework/i.test(headers),
+            publishedSourceHeader:/x-kairos-homepage-source:\s*published-main-theme/i.test(headers),
+            mutationScopeHeader:/x-kairos-mutation-scope:\s*templates-index-json-existing-string-settings-only/i.test(headers),
+            fallbackBlockedHeader:/x-kairos-canonical-rebuild-fallback:\s*prohibited/i.test(headers),
+          };
+          console.log(JSON.stringify({checks},null,2));
+          if(Object.values(checks).some(value=>value!==true))process.exit(1);
+          NODE
+
       - name: Write validation receipt
         if: always()
         shell: bash
@@ -67,6 +158,8 @@ jobs:
           process.stdout.write(JSON.stringify({
             status,
             validatedCommit:process.env.GITHUB_SHA,
+            productionCommit:process.env.TARGET_PRODUCTION_COMMIT,
+            productionBuild:'kairos-production-entry-20260716-98',
             branch:process.env.GITHUB_REF_NAME,
             workflowRunID:process.env.GITHUB_RUN_ID,
             workflowRunURL:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
@@ -74,7 +167,14 @@ jobs:
               'javascript-syntax',
               'production-validation-suite',
               'frozen-production-standard',
-              'wrangler-deploy-dry-run'
+              'wrangler-deploy-dry-run',
+              'live-v41-health',
+              'live-dashboard-build-17',
+              'published-main-source',
+              'templates-index-json-only',
+              'existing-string-settings-only',
+              'canonical-rebuild-fallback-prohibited',
+              'safe-routing-no-shopify-mutation'
             ],
             completedAt:new Date().toISOString()
           },null,2));
@@ -88,7 +188,7 @@ jobs:
             -H "X-GitHub-Api-Version: 2022-11-28" \
             "${api_url}?ref=${GITHUB_REF_NAME}")"
           existing_sha="$(printf '%s' "${existing}" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(JSON.parse(s).sha||"")}catch{}})')"
-          payload="$(CONTENT="${encoded}" BRANCH="${GITHUB_REF_NAME}" SHA="${existing_sha}" node -e 'const p={message:"Record published homepage validation result",content:process.env.CONTENT,branch:process.env.BRANCH};if(process.env.SHA)p.sha=process.env.SHA;process.stdout.write(JSON.stringify(p))')"
+          payload="$(CONTENT="${encoded}" BRANCH="${GITHUB_REF_NAME}" SHA="${existing_sha}" node -e 'const p={message:"Record live published homepage verification",content:process.env.CONTENT,branch:process.env.BRANCH};if(process.env.SHA)p.sha=process.env.SHA;process.stdout.write(JSON.stringify(p))')"
           curl --fail --silent --show-error \
             -X PUT \
             -H "Authorization: Bearer ${GH_TOKEN}" \
