@@ -1,5 +1,5 @@
 {
-  "baseline": "kairos-production-standard-20260715-14",
+  "baseline": "kairos-production-standard-20260715-15",
   "status": "frozen",
   "productionUrl": "https://mmg-ios.info-mindsetmediagroup.workers.dev",
   "worker": {
@@ -27,7 +27,7 @@
     "oneHundredReservedForBlueprintCompletion": true
   },
   "approvedExpansion": {
-    "scope": "Operational Website Retool flow with verified Shopify asynchronous write completion plus normalized, complete response contracts for every routed parent-center child card",
+    "scope": "Operational Website Retool flow with verified Shopify asynchronous write completion and bounded read-back convergence plus normalized, complete response contracts for every routed parent-center child card",
     "activeEdge": "src/kairos-production-entry-v33.js",
     "preservesPriorEdge": "src/kairos-production-entry-v32.js",
     "automaticExecution": false,

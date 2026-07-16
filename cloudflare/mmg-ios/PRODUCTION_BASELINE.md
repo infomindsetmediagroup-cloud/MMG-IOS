@@ -1,6 +1,6 @@
 # Kairos Production Standard Baseline
 
-**Baseline:** `kairos-production-standard-20260715-14`
+**Baseline:** `kairos-production-standard-20260715-15`
 **Status:** Frozen  
 **Production:** `https://mmg-ios.info-mindsetmediagroup.workers.dev`
 
@@ -25,6 +25,7 @@
 - All 25 child workspaces have an operational routed action contract.
 - Website Retool supports proposal review, non-live staging execution, responsive preview links, explicit preview approval, explicit live apply/save, live read-back verification, and recorded rollback.
 - Theme-file upserts wait for Shopify's asynchronous write job to finish before any source read-back or completion claim.
+- Staging verification retries Shopify's briefly stale file-read response until all approved hashes converge or the bounded deadline expires.
 - Approved website files are source-hash bound and promoted into the current MAIN theme without changing Shopify theme roles.
 
 ## Current readiness floors

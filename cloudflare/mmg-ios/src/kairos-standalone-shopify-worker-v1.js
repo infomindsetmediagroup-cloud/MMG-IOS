@@ -17,10 +17,11 @@ import {
   buildCanonicalHomepagePackage,
 } from "./kairos-canonical-homepage-package-v1.js";
 
-const BUILD = "kairos-standalone-shopify-20260712-2";
+const BUILD = "kairos-standalone-shopify-20260715-3";
 const HOMEPAGE_FILE = "templates/index.json";
 const JOB_TTL_SECONDS = 3600;
 const MAX_OBJECTIVE_CHARS = 12000;
+const SHOPIFY_READBACK_RETRY_DELAYS_MS = [250, 500, 1_000, 2_000, 3_000, 5_000, 8_000];
 
 export default {
   async fetch(request, env) {
@@ -328,12 +329,9 @@ async function executeCanonicalPlan(request, env, planEnvelope, approval, starte
   const beforeSemanticHash = await semanticHash(original);
   const expectedSemanticHash = await semanticHash(packageResult.document);
   const write = await writeThemeFiles(env, stagingTheme.gid, packageResult.files);
-  const verifyBody = await inspectStagingSource(null, request, env, BUILD, CANONICAL_HOMEPAGE_FILENAMES);
-  const verifiedFiles = themeFileMap(verifyBody?.evidence || {});
+  const { verifyBody, verifiedFiles, attempts: readBackAttempts } = await verifyCanonicalReadback(request, env, expectedManifest);
   const verification = expectedManifest.map(expected => {
     const actual = verifiedFiles.get(expected.filename);
-    if (!actual?.content) throw httpError(502, "staging_readback_missing", "Shopify returned no read-back for " + expected.filename + ".");
-    if (actual.sha256 !== expected.sha256) throw httpError(502, "staging_readback_hash_mismatch", "Shopify read-back did not match the approved " + expected.filename + ".");
     return {
       filename: expected.filename,
       expectedSha256: expected.sha256,
@@ -404,6 +402,7 @@ async function executeCanonicalPlan(request, env, planEnvelope, approval, starte
       mutationResult: write.mutationResult,
       sourceInspectionActionID: sourceBody.actionID,
       readBackInspectionActionID: verifyBody.actionID,
+      readBackAttempts,
       packageVersion: packageResult.version,
       sectionId: packageResult.sectionId,
     },
@@ -421,6 +420,27 @@ async function executeCanonicalPlan(request, env, planEnvelope, approval, starte
   const completed = { jobID, status: "completed", build: BUILD, submittedAt: startedAt, updatedAt: completedAt, completedAt, summary: result.summary, result };
   await writeJob(request, "execution", jobID, completed);
   return json({ jobID, status: "completed", build: BUILD, pollURL: "/api/shopify/staging/execute/jobs/" + jobID, summary: result.summary, result }, 202);
+}
+
+async function verifyCanonicalReadback(request, env, expectedManifest) {
+  let verifyBody = null;
+  let verifiedFiles = new Map();
+  let mismatches = [];
+
+  for (let attempt = 0; attempt <= SHOPIFY_READBACK_RETRY_DELAYS_MS.length; attempt += 1) {
+    verifyBody = await inspectStagingSource(null, request, env, BUILD, CANONICAL_HOMEPAGE_FILENAMES);
+    verifiedFiles = themeFileMap(verifyBody?.evidence || {});
+    mismatches = expectedManifest.filter(expected => verifiedFiles.get(expected.filename)?.sha256 !== expected.sha256);
+    if (!mismatches.length) return { verifyBody, verifiedFiles, attempts: attempt + 1 };
+    if (attempt < SHOPIFY_READBACK_RETRY_DELAYS_MS.length) {
+      await new Promise(resolve => setTimeout(resolve, SHOPIFY_READBACK_RETRY_DELAYS_MS[attempt]));
+    }
+  }
+
+  const expected = mismatches[0];
+  const actual = verifiedFiles.get(expected.filename);
+  if (!actual?.content) throw httpError(502, "staging_readback_missing", "Shopify returned no read-back for " + expected.filename + ".");
+  throw httpError(502, "staging_readback_hash_mismatch", "Shopify read-back did not converge to the approved " + expected.filename + " before the verification deadline.");
 }
 
 async function executeRollback(request, env) {
