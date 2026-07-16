@@ -2,9 +2,19 @@ import runtime,{KairosProject} from './kairos-production-entry-v34.js';
 import contentOnlyPlanner from './kairos-content-only-shopify-planner-v2.js';
 import liquidContentExecutor from './kairos-liquid-content-only-executor-v1.js';
 
-const BUILD='kairos-production-entry-20260715-87';
+const BUILD='kairos-production-entry-20260715-88';
 const PLAN_ROUTE='/api/shopify/staging/plan/jobs';
 const EXECUTE_ROUTE='/api/shopify/staging/execute/jobs';
+const CONTENT_ONLY_DECLARATIONS=new Set(['content-only','copy-only','text-only','literal-replacement']);
+const FULL_RETOOL_DECLARATIONS=new Set(['full-retool','structural','structural-retool','design-retool','website-build','site-build','homepage-build','page-build']);
+const STRUCTURAL_PATTERNS=[
+  /\b(full|complete|comprehensive|canonical)\s+(website|site|homepage|page|storefront)\s+(retool|redesign|rebuild|build|overhaul|implementation)\b/i,
+  /\b(retool|redesign|rebuild|overhaul|build|implement|develop|restructure)\b[\s\S]{0,80}\b(website|site|homepage|storefront|customer journey|navigation|header|footer|layout|section|sections|design system)\b/i,
+  /\b(website|site|homepage|storefront|customer journey|navigation|header|footer|layout|section|sections|design system)\b[\s\S]{0,80}\b(retool|redesign|rebuild|overhaul|build|implement|develop|restructure)\b/i,
+  /\bapple[- ]style\b/i,
+  /\b(structural|layout|visual|styling|responsive|mobile|desktop|animation|motion|component|template|theme)\s+(change|changes|work|update|updates|implementation|retool|redesign)\b/i,
+  /\b(add|remove|move|reorder|create|replace)\b[\s\S]{0,60}\b(section|sections|component|components|navigation|header|footer|layout|template|card|cards|carousel|hero)\b/i
+];
 
 export{KairosProject};
 
@@ -12,19 +22,22 @@ export default{
   async fetch(request,env,ctx){
     const url=new URL(request.url);
     if(request.method==='POST'&&url.pathname===PLAN_ROUTE){
-      const intent=await classifyWebsiteIntent(request.clone());
-      const response=intent==='full-retool'?await runtime.fetch(request,env,ctx):await contentOnlyPlanner.fetch(request,env,ctx);
-      return stamp(response,intent);
+      const classification=await classifyWebsiteIntent(request.clone());
+      const response=classification.intent==='full-retool'
+        ?await runtime.fetch(withIntentHeaders(request,classification),env,ctx)
+        :await contentOnlyPlanner.fetch(withIntentHeaders(request,classification),env,ctx);
+      return stamp(response,classification);
     }
     if(request.method==='POST'&&url.pathname===EXECUTE_ROUTE){
       let payload={};
       try{payload=await request.clone().json();}catch{}
       if(isContentOnlyExecution(payload)){
         const response=await executeFreshContentOnlyPlan(request,payload,env,ctx);
-        return stamp(response,'content-only');
+        return stamp(response,{intent:'content-only',reason:'approved-content-only-plan'});
       }
+      return stamp(await runtime.fetch(request,env,ctx),{intent:'full-retool',reason:'approved-structural-plan'});
     }
-    return stamp(await runtime.fetch(request,env,ctx),'passthrough');
+    return stamp(await runtime.fetch(request,env,ctx),{intent:'passthrough',reason:'non-website-plan-route'});
   },
   async scheduled(controller,env,ctx){if(typeof runtime.scheduled==='function')return runtime.scheduled(controller,env,ctx);}
 };
@@ -70,15 +83,42 @@ async function executeFreshContentOnlyPlan(request,payload,env,ctx){
 function isContentOnlyExecution(payload){
   const requestType=String(payload?.plan?.requestType||payload?.plan?.plan?.requestType||'').toLowerCase();
   const mode=String(payload?.plan?.plan?.installationMode||'');
-  return requestType==='content-only'||mode==='existing-liquid-visible-text'||mode==='inspection-only';
+  return CONTENT_ONLY_DECLARATIONS.has(requestType)||mode==='existing-liquid-visible-text'||mode==='inspection-only';
 }
 
 async function classifyWebsiteIntent(request){
   let payload={};try{payload=await request.json();}catch{}
-  const declared=String(payload?.requestType||payload?.intent||'').toLowerCase();
-  const confirmed=payload?.fullRetoolConfirmed===true;
-  if(declared==='full-retool'&&confirmed)return'full-retool';
-  return'content-only';
+  const declared=String(payload?.requestType||payload?.intent||payload?.mode||'').trim().toLowerCase();
+  const objective=String(payload?.objective||payload?.prompt||payload?.instruction||'').trim();
+  const contentOnlyLocked=payload?.contentOnlyLocked===true||payload?.literalOnly===true||request.headers.get('X-Kairos-Content-Only-Lock')==='true';
+  const explicitFull=FULL_RETOOL_DECLARATIONS.has(declared)||payload?.fullRetoolConfirmed===true||payload?.structuralMutationAuthorized===true||payload?.styleMutationAuthorized===true;
+  const inferredFull=STRUCTURAL_PATTERNS.some(pattern=>pattern.test(objective));
+
+  if(contentOnlyLocked||CONTENT_ONLY_DECLARATIONS.has(declared))return{intent:'content-only',reason:contentOnlyLocked?'explicit-content-only-lock':'explicit-content-only-declaration',declared,objective};
+  if(explicitFull)return{intent:'full-retool',reason:'explicit-structural-authorization',declared,objective};
+  if(inferredFull)return{intent:'full-retool',reason:'structural-objective-detected',declared,objective};
+  return{intent:'content-only',reason:'no-structural-operation-detected',declared,objective};
 }
-function stamp(response,intent){const headers=new Headers(response.headers);headers.set('X-Kairos-Production-Entry',BUILD);headers.set('X-Kairos-Website-Intent',intent);headers.set('X-Kairos-Content-Only-Lock',intent==='content-only'?'true':'false');headers.set('X-Kairos-Liquid-Content-Only','enabled');headers.set('X-Kairos-Server-Plan-Refresh','enabled');return new Response(response.body,{status:response.status,statusText:response.statusText,headers});}
+
+function withIntentHeaders(request,classification){
+  const headers=new Headers(request.headers);
+  headers.set('X-Kairos-Website-Intent',classification.intent);
+  headers.set('X-Kairos-Intent-Reason',classification.reason);
+  headers.set('X-Kairos-Content-Only-Lock',classification.intent==='content-only'?'true':'false');
+  return new Request(request,{headers});
+}
+
+function stamp(response,classification){
+  const intent=classification?.intent||'passthrough';
+  const reason=classification?.reason||'unspecified';
+  const headers=new Headers(response.headers);
+  headers.set('X-Kairos-Production-Entry',BUILD);
+  headers.set('X-Kairos-Website-Intent',intent);
+  headers.set('X-Kairos-Intent-Reason',reason);
+  headers.set('X-Kairos-Content-Only-Lock',intent==='content-only'?'true':'false');
+  headers.set('X-Kairos-Structural-Runtime',intent==='full-retool'?'enabled':'not-selected');
+  headers.set('X-Kairos-Liquid-Content-Only',intent==='content-only'?'enabled':'not-selected');
+  headers.set('X-Kairos-Server-Plan-Refresh','enabled');
+  return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
+}
 function jsonError(status,code,message){return new Response(JSON.stringify({status:'needs-attention',build:BUILD,summary:message,error:{status,code,message}}),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Kairos-Production-Entry':BUILD,'X-Kairos-Website-Intent':'content-only','X-Kairos-Content-Only-Lock':'true','X-Kairos-Server-Plan-Refresh':'enabled','X-Content-Type-Options':'nosniff'}});}
