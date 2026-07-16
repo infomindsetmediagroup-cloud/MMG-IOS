@@ -6,24 +6,28 @@ import {
 } from './kairos-compact-homepage-utils-v1.js';
 import { buildDeterministicHomepagePackage } from './kairos-deterministic-homepage-v1.js';
 
-const BUILD='kairos-content-only-shopify-planner-20260715-3';
+const BUILD='kairos-content-only-shopify-planner-20260715-4';
 const HOMEPAGE_FILE='templates/index.json';
 const SECTION_FILE='sections/mmg-canonical-homepage.liquid';
 const CSS_FILE='assets/mmg-canonical-homepage.css';
 const JOB_TTL_SECONDS=3600;
 const MAX_OBJECTIVE_CHARS=12000;
 
-const COPY=[
-  'Mindset Media Group × Kairos','Your knowledge has value.','Learn it. Build it. Publish it. Keep moving forward.',
-  'Mindset Media Group connects practical learning, publishing support, creator resources, and guided execution in one knowledge ecosystem.',
-  'Find your path','Start with free resources','Practical guidance','Professional production','Clear next steps',
-  'The customer journey','Start where you are. Build what comes next.','Choose the stage that matches your work today, then move through a connected path from learning to finished outcomes.',
-  'Learn','Build','Publish','Grow','Discover useful knowledge and practical resources.','Turn ideas and experience into organized work.','Move finished assets through professional production.','Strengthen what works through consistent execution.',
-  'Choose what you want to build','One ecosystem. Multiple ways forward.','Every path connects education, digital products, professional services, and a clear next step.',
-  'Books + Publishing','Turn expertise into a finished publication.','Practical AI','Use AI with purpose and judgment.','Creator Growth','Build a repeatable publishing practice.','Business Systems','Package knowledge into useful assets.',
-  'Continue Your Journey','Every asset should lead somewhere useful.','Explore the next resource, service, or learning path that moves your work forward.',
-  'We’re not gatekeepers. We’re door openers.','Knowledge grows when it’s shared. Opportunity grows when doors are opened.'
-];
+const APPROVED_REPLACEMENTS=new Map([
+  ['The guided path','The customer journey'],
+  ['Start where you are.\nBuild what comes next.','Start where you are.\nMove toward what comes next.'],
+  ['You do not need the entire future mapped out. Choose the stage that matches your work today, then move through a connected system.','Choose the stage that matches your work today, then follow a connected path from learning and planning to a finished outcome.'],
+  ['Choose what you want to build','Choose your path'],
+  ['One ecosystem.\nMultiple ways forward.','One ecosystem.\nA clear way forward.'],
+  ['Every pathway combines education, practical tools, and production support so the next step connects to the larger body of work.','Each pathway connects practical learning, digital resources, professional support, and a clear next step.'],
+  ['A connected knowledge ecosystem','Your connected knowledge journey'],
+  ['Every asset should lead\nsomewhere useful.','Every step should lead\nsomewhere useful.'],
+  ['MMG is designed as a connected journey—not a shelf of unrelated products.','MMG connects learning, creation, publishing, and continued growth in one guided customer journey.'],
+  ['Continue through MMG','Continue your journey'],
+  ['Keep moving through\nthe system.','Keep moving through\nyour journey.'],
+  ['Choose your next step','Your next step'],
+  ['Start with a free tool, explore the library, or bring a serious publishing project into production.','Explore a resource, continue learning, or bring a publishing project into professional production.']
+]);
 
 export default{
   async fetch(request,env){
@@ -56,20 +60,22 @@ async function createContentOnlyPlan(request,env){
     let liquidContentPatch=null;
 
     if(canonicalActive&&sectionFile?.content){
-      const replacement=replaceVisibleLiquidText(sectionFile.content);
-      if(!replacement.changed)throw httpError(409,'content_only_visible_text_unavailable','The canonical homepage section contains no replaceable visible customer-facing text.');
+      const requestedReplacements=extractExplicitReplacements(objective);
+      const replacements=requestedReplacements.size?requestedReplacements:APPROVED_REPLACEMENTS;
+      const replacement=replaceExactVisibleLiquidText(sectionFile.content,replacements);
+      if(!replacement.changed)throw httpError(409,'content_only_exact_text_unavailable','No approved source phrases matched the current homepage. Kairos stopped without changing unrelated text.');
       const beforeSignature=markupSignature(sectionFile.content),afterSignature=markupSignature(replacement.value);
       if(beforeSignature!==afterSignature)throw httpError(409,'content_only_structure_change_detected','Content-only planning changed Liquid or markup structure.');
       installationMode='existing-liquid-visible-text';
-      liquidContentPatch={filename:SECTION_FILE,originalSource:sectionFile.content,replacementSource:replacement.value,beforeSignature,afterSignature,visibleTextReplacementCount:replacement.count};
+      liquidContentPatch={filename:SECTION_FILE,originalSource:sectionFile.content,replacementSource:replacement.value,beforeSignature,afterSignature,visibleTextReplacementCount:replacement.count,replacements:replacement.applied};
       packageResult={
-        summary:'Replace only the visible homepage copy inside the existing canonical Liquid section.',
-        strategy:'Preserve the current homepage design exactly. Keep every Liquid expression, tag, attribute, class, link, image, card, pill, color, stylesheet, template, section, and responsive behavior unchanged.',
-        changes:[{filename:SECTION_FILE,purpose:'Replace visible customer-facing words only.',changeType:'modify',instructions:['Write only the existing canonical homepage Liquid section.','Preserve the complete markup/Liquid token signature.','Do not write templates/index.json or assets/mmg-canonical-homepage.css.'],expectedOutcome:'The same homepage design with updated knowledge-ecosystem and customer-journey copy.'}],
-        risks:['Different copy lengths may create natural line wrapping; no styling or structure change is authorized.'],
-        acceptanceCriteria:['Liquid and HTML token signatures remain identical.','The template and stylesheet hashes remain unchanged.','Only visible text nodes change.','Shopify read-back exactly matches the approved section source.','The live MAIN theme remains unchanged.'],
+        summary:`Prepare ${replacement.count} exact homepage text replacement${replacement.count===1?'':'s'} without changing any other content or design.`,
+        strategy:'Match approved existing phrases exactly and replace only those phrases. Leave every unmatched word, Liquid expression, tag, attribute, class, link, image, card, pill, color, stylesheet, template, section, and responsive behavior unchanged.',
+        changes:replacement.applied.map(item=>({filename:SECTION_FILE,purpose:`Replace “${item.before}” with “${item.after}”.`,changeType:'modify',instructions:['Change this exact visible phrase only.','Leave all surrounding source byte-for-byte unchanged.'],expectedOutcome:'One surgical content substitution in the existing homepage.'})),
+        risks:['Approved replacement copy may wrap naturally; no style or structure mutation is authorized.'],
+        acceptanceCriteria:['Only the listed exact phrases change.','Every unmatched visible word remains unchanged.','Liquid and HTML token signatures remain identical.','The template and stylesheet hashes remain unchanged.','Shopify read-back exactly matches the approved section source.','The live MAIN theme remains unchanged.'],
         rollbackPlan:['Preserve and restore only the original canonical homepage Liquid section.'],
-        evidenceNotes:[`${replacement.count} visible text nodes identified in the active canonical homepage section.`]
+        evidenceNotes:replacement.applied.map(item=>`Exact match: “${item.before}” → “${item.after}”.`)
       };
     }else{
       try{packageResult=buildDeterministicHomepagePackage(document,objective);}catch(error){
@@ -82,39 +88,54 @@ async function createContentOnlyPlan(request,env){
     const targetFiles=installationMode==='existing-liquid-visible-text'?[HOMEPAGE_FILE,SECTION_FILE,CSS_FILE]:[HOMEPAGE_FILE];
     const sourceHashes=Object.fromEntries(targetFiles.map(filename=>[filename,files.get(filename)?.sha256||null]));
     const now=new Date().toISOString();
-    const result={actionID:crypto.randomUUID(),planID:crypto.randomUUID(),actionType:'shopify.staging.plan',requestType:'content-only',mutationScope:installationMode,status:'ready-for-approval',readOnly:true,build:BUILD,kernel:'content-only-shopify-planner-v3',startedAt:now,completedAt:now,objective,summary:packageResult.summary,plan:{summary:packageResult.summary,strategy:packageResult.strategy,changes:packageResult.changes,risks:packageResult.risks,acceptanceCriteria:packageResult.acceptanceCriteria,rollbackPlan:packageResult.rollbackPlan,installationMode,deterministicPatch:installationMode==='existing-text-settings'?packageResult.patch:null,liquidContentPatch,canonicalPackage:null,targetTheme:stagingTheme,publishedTheme:mainTheme,sourceHashes,mutationScope:'content-only',structuralMutationAuthorized:false,styleMutationAuthorized:false,productionPublishAuthorized:false,liveThemeMutationAuthorized:false,providerPolicy:{externalInferenceProviders:'prohibited'}},evidence:{sourceInspectionActionID:sourceBody.actionID||'',stagingTheme,mainTheme,suppliedFiles:targetFiles.map(filename=>({filename,exists:files.has(filename),sha256:files.get(filename)?.sha256||null,bytes:files.get(filename)?.bytes||0})),planningEngine:BUILD,externalInferenceProviderUsed:false,evidenceNotes:packageResult.evidenceNotes}};
+    const result={actionID:crypto.randomUUID(),planID:crypto.randomUUID(),actionType:'shopify.staging.plan',requestType:'content-only',mutationScope:installationMode,status:'ready-for-approval',readOnly:true,build:BUILD,kernel:'content-only-shopify-planner-v4',startedAt:now,completedAt:now,objective,summary:packageResult.summary,plan:{summary:packageResult.summary,strategy:packageResult.strategy,changes:packageResult.changes,risks:packageResult.risks,acceptanceCriteria:packageResult.acceptanceCriteria,rollbackPlan:packageResult.rollbackPlan,installationMode,deterministicPatch:installationMode==='existing-text-settings'?packageResult.patch:null,liquidContentPatch,canonicalPackage:null,targetTheme:stagingTheme,publishedTheme:mainTheme,sourceHashes,mutationScope:'surgical-content-only',structuralMutationAuthorized:false,styleMutationAuthorized:false,productionPublishAuthorized:false,liveThemeMutationAuthorized:false,providerPolicy:{externalInferenceProviders:'prohibited'}},evidence:{sourceInspectionActionID:sourceBody.actionID||'',stagingTheme,mainTheme,suppliedFiles:targetFiles.map(filename=>({filename,exists:files.has(filename),sha256:files.get(filename)?.sha256||null,bytes:files.get(filename)?.bytes||0})),planningEngine:BUILD,externalInferenceProviderUsed:false,evidenceNotes:packageResult.evidenceNotes}};
     const jobID=crypto.randomUUID();
     const completed={jobID,status:'completed',build:BUILD,submittedAt:now,updatedAt:now,completedAt:now,summary:result.summary,result};
     await caches.default.put(jobRequest(request,jobID),new Response(JSON.stringify(completed),{status:200,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':`public, max-age=${JOB_TTL_SECONDS}`,'X-MMG-Runtime':BUILD}}));
     return json({jobID,status:'completed',build:BUILD,pollURL:`/api/shopify/staging/plan/jobs/${jobID}`,summary:result.summary,result},202);
   }catch(error){
     const status=Number.isInteger(error?.status)?error.status:500;
-    return json({status:'needs-attention',build:BUILD,summary:'Kairos could not prepare the content-only Shopify plan.',error:{status,code:typeof error?.code==='string'?error.code:'content_only_plan_failed',message:error instanceof Error?error.message:'Content-only planning failed.'}},status);
+    return json({status:'needs-attention',build:BUILD,summary:'Kairos could not prepare the surgical content-only Shopify plan.',error:{status,code:typeof error?.code==='string'?error.code:'content_only_plan_failed',message:error instanceof Error?error.message:'Content-only planning failed.'}},status);
   }
 }
 
-function replaceVisibleLiquidText(source){
+function extractExplicitReplacements(objective){
+  const replacements=new Map();
+  const patterns=[
+    /replace\s+[“"]([^”"]+)[”"]\s+with\s+[“"]([^”"]+)[”"]/gi,
+    /change\s+[“"]([^”"]+)[”"]\s+to\s+[“"]([^”"]+)[”"]/gi,
+    /[“"]([^”"]+)[”"]\s*(?:→|=>)\s*[“"]([^”"]+)[”"]/g
+  ];
+  for(const pattern of patterns){
+    let match;
+    while((match=pattern.exec(objective))!==null){
+      const before=match[1].trim(),after=match[2].trim();
+      if(before&&after&&before!==after)replacements.set(before,after);
+    }
+  }
+  return replacements;
+}
+
+function replaceExactVisibleLiquidText(source,replacements){
   const tokens=String(source||'').split(/({{[\s\S]*?}}|{%[\s\S]*?%}|<[^>]+>)/g);
-  const blocked=[];let count=0,changed=false,copyIndex=0;
-  for(let i=0;i<tokens.length&&copyIndex<COPY.length;i++){
+  const blocked=[];let count=0,changed=false;const applied=[];
+  for(let i=0;i<tokens.length;i++){
     const token=tokens[i];if(!token)continue;
     if(token.startsWith('{{')||token.startsWith('{%'))continue;
     if(token.startsWith('<')){updateBlockedStack(blocked,token);continue;}
     if(blocked.length)continue;
-    const text=token.trim();
-    if(!isVisibleText(text))continue;
     const leading=token.match(/^\s*/)?.[0]||'',trailing=token.match(/\s*$/)?.[0]||'';
-    const replacement=COPY[copyIndex++];
-    tokens[i]=`${leading}${replacement}${trailing}`;count++;changed=true;
+    const core=token.slice(leading.length,token.length-trailing.length);
+    if(!core)continue;
+    const normalized=core.replace(/<br\s*\/?\s*>/gi,'\n');
+    const exact=replacements.get(core)||replacements.get(normalized);
+    if(!exact)continue;
+    tokens[i]=`${leading}${exact}${trailing}`;
+    applied.push({before:core,after:exact});count++;changed=true;
   }
-  return{changed,count,value:tokens.join('')};
+  return{changed,count,applied,value:tokens.join('')};
 }
-function isVisibleText(text){
-  if(!text||text.length<2||text.length>2000||!/[a-z]/i.test(text))return false;
-  if(/^(&[a-z0-9#]+;|[\s\W])+$/i.test(text)||/^(https?:\/\/|\/|#|mailto:|tel:)/i.test(text))return false;
-  if(/\b(var|const|let|function|return|display|position|background|color|padding|margin)\s*[:=(]/i.test(text))return false;
-  return true;
-}
+
 function updateBlockedStack(stack,token){
   const close=token.match(/^<\s*\/\s*([a-z0-9:-]+)/i);if(close){const tag=close[1].toLowerCase(),last=stack.lastIndexOf(tag);if(last!==-1)stack.splice(last,1);return;}
   const open=token.match(/^<\s*([a-z0-9:-]+)/i);if(!open||/\/\s*>$/.test(token))return;
@@ -136,4 +157,4 @@ function validateBoundary(stagingTheme,mainTheme){
   if(!mainTheme?.gid||String(mainTheme.role||'').toUpperCase()!=='MAIN')throw httpError(409,'main_theme_verification_failed','The live MAIN theme could not be verified.');
 }
 function jobRequest(request,jobID){return new Request(new URL(`/_kairos/standalone-plan-jobs/${jobID}`,request.url).toString(),{method:'GET'});}
-function json(value,status=200){return new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-MMG-Runtime':BUILD,'X-Kairos-Website-Intent':'content-only','X-Content-Type-Options':'nosniff'}});}
+function json(value,status=200){return new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-MMG-Runtime':BUILD,'X-Kairos-Website-Intent':'content-only','X-Kairos-Content-Mutation':'surgical-exact-match','X-Content-Type-Options':'nosniff'}});}
