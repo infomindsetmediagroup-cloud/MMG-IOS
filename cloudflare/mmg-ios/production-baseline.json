@@ -19,7 +19,7 @@
     "nativeTaskExecutionRuntime": "kairos-native-task-execution-20260716-3",
     "childActionRuntime": "kairos-child-action-runtime-20260716-1",
     "childActionBridge": "kairos-child-action-bridge-20260716-1",
-    "websiteIntentRouter": "kairos-website-intent-router-20260716-1",
+    "websiteIntentRouter": "kairos-website-intent-router-20260716-2",
     "systemRegistry": "kairos-system-registry-ui-20260716-3",
     "commandCenterLayout": "kairos-command-center-layout-20260714-9",
     "chromeHamburgerController": "kairos-chrome-hamburger-controller-20260714-3",
