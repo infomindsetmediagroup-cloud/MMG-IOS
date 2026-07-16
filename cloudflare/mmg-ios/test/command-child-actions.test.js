@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { KairosProject } from "../src/kairos-native-publishing-worker-v1.js";
 import { handleOperationalRequest, KAIROS_ACTION_CONTRACTS, mirrorOperationalResponse } from "../src/kairos-operational-runtime-v1.js";
+import { runAutonomyCycle } from "../src/kairos-autonomy-runtime-v1.js";
 
 const REQUIRED_ACTIONS = [
   "knowledge-library",
@@ -175,6 +176,93 @@ test("successful domain mutations are mirrored into durable receipts and workflo
   assert.equal(body.counts.workflows, 1);
 });
 
+test("bounded autonomy uses enhanced inference and advances one evidence-backed internal task", async () => {
+  const env = memoryEnv({
+    KAIROS_AUTONOMY_ENABLED: "true",
+    KAIROS_AUTONOMY_MIN_INTERVAL_MS: "60000",
+    AI: {
+      async run(model, input) {
+        assert.equal(model, "@cf/qwen/qwen3-30b-a3b-fp8");
+        const state = JSON.parse(input.messages[1].content);
+        return { response: JSON.stringify({
+          summary: "Advance the highest-priority internal analysis step.",
+          decisions: [{ workflowID: state.candidateWorkflows[0].id, action: "advance-internal", rationale: "The authoritative queue snapshot supports the Observe step.", confidence: 0.97 }],
+          recommendations: ["Keep external effects approval-gated."],
+          verification: ["Read back the workflow and durable receipt."],
+        }) };
+      },
+    },
+  });
+  const created = await handleOperationalRequest(new Request("https://kairos.example/api/workflows", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "Autonomous internal operations",
+      objective: "Observe the durable queue and prepare the next governed decision.",
+      priority: "high",
+      tasks: [
+        { title: "Observe authoritative current state", description: "Read durable records." },
+        { title: "Execute through the domain workspace", description: "Remain bounded." },
+      ],
+    }),
+  }), env, {});
+  const workflow = (await created.json()).workflow;
+
+  const cycle = await runAutonomyCycle(env, { source: "test-cycle" });
+  assert.equal(cycle.status, "completed");
+  assert.equal(cycle.inference.mode, "cloudflare-account-scoped");
+  assert.equal(cycle.actionsApplied, 1);
+  assert.equal(cycle.applied[0].workflowID, workflow.id);
+
+  const read = await handleOperationalRequest(new Request(`https://kairos.example/api/workflows/${workflow.id}`), env, {});
+  const updated = (await read.json()).workflow;
+  assert.equal(updated.state, "active");
+  assert.equal(updated.tasks[0].state, "completed");
+  assert.equal(updated.tasks[0].executionEvidence.externalActionTaken, false);
+  assert.equal(updated.tasks[1].state, "ready");
+  assert.equal(updated.progress, 50);
+
+  const second = await runAutonomyCycle(env, { source: "duplicate-test-cycle" });
+  assert.equal(second.status, "deferred");
+});
+
+test("bounded autonomy cannot bypass a pending approval even when inference requests advancement", async () => {
+  const env = memoryEnv({
+    KAIROS_AUTONOMY_ENABLED: "true",
+    KAIROS_AUTONOMY_MIN_INTERVAL_MS: "60000",
+    AI: {
+      async run(_model, input) {
+        const state = JSON.parse(input.messages[1].content);
+        return { response: JSON.stringify({
+          summary: "Evaluate the approval-gated workflow.",
+          decisions: [{ workflowID: state.candidateWorkflows[0].id, action: "advance-internal", rationale: "Attempt advancement.", confidence: 0.9 }],
+          recommendations: [],
+          verification: [],
+        }) };
+      },
+    },
+  });
+  const created = await handleOperationalRequest(new Request("https://kairos.example/api/workflows", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "Approval-gated autonomy boundary",
+      objective: "Prove Kairos cannot bypass approval.",
+      approvalRequired: true,
+      tasks: [{ title: "Observe authoritative current state" }],
+    }),
+  }), env, {});
+  const workflow = (await created.json()).workflow;
+  const cycle = await runAutonomyCycle(env, { source: "approval-boundary-test" });
+  assert.equal(cycle.status, "completed");
+  assert.equal(cycle.actionsApplied, 0);
+  const read = await handleOperationalRequest(new Request(`https://kairos.example/api/workflows/${workflow.id}`), env, {});
+  const updated = (await read.json()).workflow;
+  assert.equal(updated.approvalStatus, "pending");
+  assert.equal(updated.state, "ready");
+  assert.equal(updated.tasks[0].state, "ready");
+});
+
 test("routed UI lazy-loads every specialized action instead of the generic hub form", async () => {
   const path = fileURLToPath(new URL("../../../web/kairos-dashboard/scripts/workspace-runtime.js", import.meta.url));
   const source = await readFile(path, "utf8");
@@ -184,9 +272,9 @@ test("routed UI lazy-loads every specialized action instead of the generic hub f
   assert.match(source, /import\(`\.\/\$\{definition\.module\}`\)/);
 });
 
-function memoryEnv() {
+function memoryEnv(overrides = {}) {
   const namespace = new MemoryNamespace();
-  return { KAIROS_PROJECTS: namespace };
+  return { KAIROS_PROJECTS: namespace, ...overrides };
 }
 
 function patchWorkflow(env, id, body) {

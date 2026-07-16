@@ -1,6 +1,7 @@
 name = "mmg-ios"
-main = "src/kairos-production-entry-v35.js"
+main = "src/kairos-production-entry-v36.js"
 # Validated delegation ancestry (comments only; never active):
+# main = "src/kairos-production-entry-v35.js"
 # main = "src/kairos-production-entry-v34.js"
 # main = "src/kairos-production-entry-v33.js"
 # main = "src/kairos-production-entry-v32.js"
@@ -33,6 +34,9 @@ binding = "ASSETS"
 run_worker_first = true
 not_found_handling = "single-page-application"
 
+[ai]
+binding = "AI"
+
 [triggers]
 crons = ["0 15 * * *", "0 2 * * *"]
 
@@ -48,3 +52,9 @@ new_sqlite_classes = ["KairosProject"]
 SHOPIFY_STORE_DOMAIN = "07kd8e-qw.myshopify.com"
 SHOPIFY_API_VERSION = "2026-07"
 MMG_STOREFRONT_ORIGIN = "https://themindsetmediagroup.com"
+KAIROS_WORKERS_AI_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8"
+KAIROS_AUTONOMY_ENABLED = "true"
+KAIROS_AUTONOMY_MAX_WORKFLOWS_PER_CYCLE = "3"
+KAIROS_AUTONOMY_MIN_INTERVAL_MS = "900000"
+KAIROS_INFERENCE_MAX_REQUESTS_PER_MINUTE = "6"
+KAIROS_INFERENCE_MAX_REQUESTS_PER_DAY = "200"

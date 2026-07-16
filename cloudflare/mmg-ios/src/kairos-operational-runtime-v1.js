@@ -1,7 +1,7 @@
 import { analyzeNativeObjective } from "./kairos-native-kernel-v1.js";
-import { intelligenceConfigured, parseStrictJSON, runKairosIntelligence } from "./kairos-intelligence-v1.js";
+import { inferenceRuntime, intelligenceConfigured, parseStrictJSON, runKairosIntelligence } from "./kairos-intelligence-v1.js";
 
-export const KAIROS_OPERATIONAL_RUNTIME_BUILD = "kairos-operational-runtime-20260715-1";
+export const KAIROS_OPERATIONAL_RUNTIME_BUILD = "kairos-operational-runtime-20260715-2";
 const LEDGER_NAME = "kairos-operational-ledger-v1";
 const VALID_STATES = new Set(["ready", "active", "blocked", "completed", "cancelled"]);
 const VALID_PRIORITIES = new Set(["critical", "high", "normal", "low"]);
@@ -201,30 +201,33 @@ async function buildIntelligentPlan(env, definition, objective, analysis) {
     summary: `Route ${definition.title} through ${definition.owner} using the constitutional observe-to-improve lifecycle.`,
     tasks: domainTaskSeeds(definition, objective),
     verification: ["Read back the authoritative result.", "Preserve evidence and a recommended next action."],
-    fallbackReason: "private-intelligence-not-configured",
+    fallbackReason: "enhanced-intelligence-not-configured",
   };
   if (!intelligenceConfigured(env)) return fallback;
   try {
     const result = await runKairosIntelligence(env, {
       temperature: 0.1,
       maxTokens: 2600,
-      system: "You are the private Kairos objective-planning runtime. Return strict JSON only with keys summary, tasks, verification. tasks is an array of 3-8 objects with title and description. Follow the MMG/Kairos lifecycle Observe, Understand, Decide, Execute, Verify, Preserve, Improve. Kairos orchestrates; domain services execute. Never claim an external action occurred without evidence. Preserve approvals for publishing, communications, spend, billing, destructive actions, and permission changes.",
+      purpose: "operational-planning",
+      system: "You are the Kairos enhanced objective-planning runtime. Return strict JSON only with keys summary, tasks, verification. tasks is an array of 3-8 objects with title and description. Follow the MMG/Kairos lifecycle Observe, Understand, Decide, Execute, Verify, Preserve, Improve. Kairos orchestrates; domain services execute. Never claim an external action occurred without evidence. Preserve approvals for publishing, communications, spend, billing, destructive actions, and permission changes.",
       user: JSON.stringify({ action: definition.title, owner: definition.owner, center: definition.center, objective, nativeAnalysis: analysis, routes: definition.apiRoutes }),
     });
     const parsed = parseStrictJSON(result.text);
     const tasks = Array.isArray(parsed?.tasks) ? parsed.tasks.slice(0, 8).map(item => ({ title: clean(item?.title, 240), description: clean(item?.description, 2000) })).filter(item => item.title) : [];
-    if (!tasks.length) throw new Error("Kairos private intelligence returned no executable tasks.");
+    if (!tasks.length) throw new Error("Kairos enhanced intelligence returned no executable tasks.");
     return {
-      mode: "kairos-private-runtime",
+      mode: result.runtime,
       configured: true,
       model: result.model,
+      provider: result.provider,
+      privacy: result.privacy,
       usage: result.usage,
       summary: clean(parsed?.summary, 3000) || `Execute ${definition.title}.`,
       tasks,
       verification: Array.isArray(parsed?.verification) ? parsed.verification.slice(0, 8).map(item => clean(item, 800)).filter(Boolean) : [],
     };
   } catch (failure) {
-    return { ...fallback, configured: true, fallbackReason: clean(failure?.code || failure?.message || "private-intelligence-failed", 300) };
+    return { ...fallback, configured: true, fallbackReason: clean(failure?.code || failure?.message || "enhanced-intelligence-failed", 300) };
   }
 }
 
@@ -339,10 +342,12 @@ async function updateTaskEndpoint(request, workflowID, taskID, env) {
 }
 
 async function systemRegistry(request, env, delegate) {
-  const [workflows, workItems, receipts, health, capabilities, readiness] = await Promise.all([
+  const [workflows, workItems, receipts, autonomyCycles, autonomyDecisions, health, capabilities, readiness] = await Promise.all([
     ledgerList(env, "workflows", 500),
     ledgerList(env, "work-items", 500),
     ledgerList(env, "execution-receipts", 100),
+    ledgerList(env, "autonomy-cycles", 50),
+    ledgerList(env, "autonomy-decisions", 100),
     delegateJSON(request, delegate, "/api/health"),
     delegateJSON(request, delegate, "/api/capabilities"),
     delegateJSON(request, delegate, "/api/readiness-registry"),
@@ -354,20 +359,34 @@ async function systemRegistry(request, env, delegate) {
     persistence: "durable-operational-ledger",
     status: value.module || ["website", "health"].includes(id) ? "wired" : "needs-attention",
   }));
+  const enhancedInference = inferenceRuntime(env);
   return json({
     status: env?.KAIROS_PROJECTS ? "ready" : "needs-attention",
     build: KAIROS_OPERATIONAL_RUNTIME_BUILD,
     sourceOfTruth: "KAIROS_PROJECTS durable operational ledger",
     intelligence: {
       nativeObjectiveAnalysis: "operational",
-      privateRuntime: intelligenceConfigured(env) ? "configured" : "needs-configuration",
+      enhancedRuntime: enhancedInference.configured ? "operational" : "needs-configuration",
+      privateRuntime: enhancedInference.mode,
+      provider: enhancedInference.provider,
+      model: enhancedInference.model,
+      privacy: enhancedInference.privacy,
+      selfHosted: enhancedInference.selfHosted,
       deterministicFallback: "operational",
+    },
+    autonomy: {
+      status: String(env?.KAIROS_AUTONOMY_ENABLED || "").toLowerCase() === "true" ? "operational" : "disabled",
+      mode: "bounded-supervised-autonomy",
+      lastCycle: autonomyCycles[0] || null,
+      decisionsPreserved: autonomyDecisions.length,
     },
     counts: {
       actions: actions.length,
       workflows: workflows.length,
       workItems: workItems.length,
       executionReceipts: receipts.length,
+      autonomyCycles: autonomyCycles.length,
+      autonomyDecisions: autonomyDecisions.length,
     },
     actions,
     runtime: compactEvidence(health),
@@ -537,20 +556,20 @@ function ledgerStub(env) {
   return env.KAIROS_PROJECTS.get(env.KAIROS_PROJECTS.idFromName(LEDGER_NAME));
 }
 
-async function ledgerUpsert(env, collection, id, value) {
+export async function ledgerUpsert(env, collection, id, value) {
   const response = await ledgerStub(env).fetch(new Request("https://kairos.internal/ledger/upsert", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ collection, id, value }) }));
   if (!response.ok) throw new Error(`Kairos could not persist ${collection}/${id}.`);
   return value;
 }
 
-async function ledgerGet(env, collection, id) {
+export async function ledgerGet(env, collection, id) {
   const response = await ledgerStub(env).fetch(new Request(`https://kairos.internal/ledger/get?collection=${encodeURIComponent(collection)}&id=${encodeURIComponent(id)}`));
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`Kairos could not read ${collection}/${id}.`);
   return (await response.json()).value || null;
 }
 
-async function ledgerList(env, collection, limit = 250) {
+export async function ledgerList(env, collection, limit = 250) {
   if (!env?.KAIROS_PROJECTS) return [];
   const response = await ledgerStub(env).fetch(new Request(`https://kairos.internal/ledger/list?collection=${encodeURIComponent(collection)}&limit=${limit}`));
   if (!response.ok) throw new Error(`Kairos could not list ${collection}.`);
