@@ -1,8 +1,10 @@
 import runtime, { KairosProject } from "./kairos-production-entry-v40.js";
 import { KAIROS_HOMEPAGE_PRESERVE_PLANNER_BUILD } from "./kairos-homepage-preserve-planner-v1.js";
+import renderedTextPlanner, { KAIROS_RENDERED_HOMEPAGE_TEXT_PLANNER_BUILD } from "./kairos-rendered-homepage-text-planner-v1.js";
 import templateTextExecutor, { KAIROS_HOMEPAGE_TEMPLATE_TEXT_EXECUTOR_BUILD } from "./kairos-homepage-template-text-executor-v1.js";
 
-const BUILD = "kairos-production-entry-20260716-98";
+const BUILD = "kairos-production-entry-20260716-99";
+const PLAN_ROUTE = "/api/shopify/staging/plan/jobs";
 const EXECUTE_ROUTE = "/api/shopify/staging/execute/jobs";
 
 export { KairosProject };
@@ -11,6 +13,12 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     try {
+      if (request.method === "POST" && url.pathname === PLAN_ROUTE) {
+        const payload = await safeJSON(request.clone());
+        if (isPublishedFrameworkRequest(payload)) {
+          return stamp(await renderedTextPlanner.fetch(request, env, ctx), "preserve-published-framework");
+        }
+      }
       if (request.method === "POST" && url.pathname === EXECUTE_ROUTE) {
         const payload = await safeJSON(request.clone());
         if (isPublishedFrameworkPlan(payload)) {
@@ -29,6 +37,13 @@ export default {
   },
 };
 
+function isPublishedFrameworkRequest(payload) {
+  const mode = String(payload?.homepageMode || payload?.requestType || payload?.intent || "").trim().toLowerCase();
+  return payload?.preservePublishedFramework === true
+    || payload?.preserveExistingDesign === true
+    || ["homepage-preserve-design", "preserve-published-framework", "preserve-current-design", "preserve-design"].includes(mode);
+}
+
 function isPublishedFrameworkPlan(payload) {
   const envelope = payload?.plan || {};
   const plan = envelope?.plan || {};
@@ -44,13 +59,18 @@ async function addHealth(response) {
   body.homepagePreserveDesign = {
     status: "operational",
     plannerBuild: KAIROS_HOMEPAGE_PRESERVE_PLANNER_BUILD,
+    renderedTextPlannerBuild: KAIROS_RENDERED_HOMEPAGE_TEXT_PLANNER_BUILD,
     executorBuild: KAIROS_HOMEPAGE_TEMPLATE_TEXT_EXECUTOR_BUILD,
-    contract: "published-main-template-to-text-only-staging-preview",
+    contract: "published-main-template-to-rendered-text-only-staging-preview",
     sourceOfTruth: "published-main-theme",
     mutableFiles: ["templates/index.json"],
-    mutableValues: "existing-customer-facing-string-settings-only",
+    mutableValues: "existing-rendered-customer-facing-string-settings-only",
+    renderedTextRequirement: "at-least-one-active-primary-copy-delta",
+    hiddenTextSuccess: "prohibited",
+    disabledSectionTextSuccess: "prohibited",
+    unorderedSectionOrBlockTextSuccess: "prohibited",
     input: "one-objective",
-    stagingExecution: "automatic-after-source-bound-plan",
+    stagingExecution: "automatic-after-rendered-source-bound-plan",
     preserved: [
       "section IDs and types",
       "block IDs and types",
@@ -78,6 +98,8 @@ async function addHealth(response) {
     homepagePreserveDesignExecution: "operational",
     homepagePublishedFrameworkSource: "operational",
     homepageTemplateTextOnlyMutation: "operational",
+    homepageRenderedTextDelta: "required",
+    homepageHiddenTextNoOp: "prohibited",
     homepageCanonicalRebuildFallback: "prohibited",
     oneButtonHomepagePreview: "operational",
     completedWorkTimelineArchive: "operational",
@@ -92,11 +114,14 @@ function stamp(response, mode) {
   const headers = new Headers(response.headers);
   headers.set("X-Kairos-Production-Entry", BUILD);
   headers.set("X-Kairos-Homepage-Preserve-Planner", KAIROS_HOMEPAGE_PRESERVE_PLANNER_BUILD);
+  headers.set("X-Kairos-Rendered-Homepage-Text-Planner", KAIROS_RENDERED_HOMEPAGE_TEXT_PLANNER_BUILD);
   headers.set("X-Kairos-Homepage-Template-Text-Executor", KAIROS_HOMEPAGE_TEMPLATE_TEXT_EXECUTOR_BUILD);
   if (mode === "preserve-current-design" || mode === "preserve-published-framework") {
     headers.set("X-Kairos-Homepage-Mode", "preserve-published-framework");
     headers.set("X-Kairos-Homepage-Source", "published-main-theme");
-    headers.set("X-Kairos-Mutation-Scope", "templates-index-json-existing-string-settings-only");
+    headers.set("X-Kairos-Mutation-Scope", "templates-index-json-existing-rendered-string-settings-only");
+    headers.set("X-Kairos-Rendered-Text-Delta-Required", "true");
+    headers.set("X-Kairos-Hidden-Text-Noop", "prohibited");
     headers.set("X-Kairos-Canonical-Rebuild-Fallback", "prohibited");
   }
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
