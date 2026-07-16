@@ -1,4 +1,4 @@
-const BUILD = "kairos-workspace-runtime-20260716-2";
+const BUILD = "kairos-workspace-runtime-20260716-3";
 
 export const WORKSPACE_REGISTRY = Object.freeze({
   "knowledge-library": workspace("knowledge-operations.js", "kairos:knowledge-library:open", ["knowledge-operations.css"]),
@@ -67,7 +67,7 @@ export async function openDomainWorkspace(actionID, detail = {}) {
   setHost(host, "loading", `Loading ${label(actionID)} domain workspace…`);
   try {
     await Promise.all(definition.styles.map(loadStyle));
-    await import(`./${definition.module}`);
+    await import(`./${definition.module}?v=${BUILD}`);
     if (token !== activation) return false;
     window.dispatchEvent(new CustomEvent(definition.event, { detail: { ...detail, source: "routed-command-center", actionID } }));
     await nextPaint();
@@ -93,7 +93,10 @@ function workspace(module, event, styles) {
 function loadStyle(filename) {
   const href = `/styles/${filename}`;
   const existing = [...document.querySelectorAll('link[rel="stylesheet"]')].find(link => new URL(link.href, location.href).pathname === href);
-  if (existing) return Promise.resolve();
+  if (existing) {
+    existing.href = `${href}?v=${BUILD}`;
+    return Promise.resolve();
+  }
   return new Promise((resolve, reject) => {
     const link = document.createElement("link");
     link.rel = "stylesheet";
