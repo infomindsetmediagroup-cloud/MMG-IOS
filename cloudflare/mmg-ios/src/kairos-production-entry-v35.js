@@ -1,8 +1,8 @@
 import runtime,{KairosProject} from './kairos-production-entry-v34.js';
-import contentOnlyPlanner from './kairos-content-only-shopify-planner-v1.js';
+import contentOnlyPlanner from './kairos-content-only-shopify-planner-v2.js';
 import liquidContentExecutor from './kairos-liquid-content-only-executor-v1.js';
 
-const BUILD='kairos-production-entry-20260715-83';
+const BUILD='kairos-production-entry-20260715-84';
 const PLAN_ROUTE='/api/shopify/staging/plan/jobs';
 const EXECUTE_ROUTE='/api/shopify/staging/execute/jobs';
 
