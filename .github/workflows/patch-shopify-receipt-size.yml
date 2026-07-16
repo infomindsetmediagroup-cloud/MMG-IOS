@@ -31,8 +31,8 @@ jobs:
           from pathlib import Path
           path = Path('cloudflare/mmg-ios/src/kairos-compact-homepage-utils-v1.js')
           text = path.read_text()
-          old = 'if (!Number.isFinite(actualBytes) || actualBytes !== expectedBytes) {'
-          new = 'if (!jobResult && (!Number.isFinite(actualBytes) || actualBytes !== expectedBytes)) {'
+          old = 'if (hasReportedSize && (!Number.isFinite(actualBytes) || actualBytes !== expectedBytes)) {'
+          new = 'if (!jobResult && hasReportedSize && (!Number.isFinite(actualBytes) || actualBytes !== expectedBytes)) {'
           old_count = text.count(old)
           new_count = text.count(new)
           if new_count == 1 and old_count == 0:
@@ -44,7 +44,7 @@ jobs:
               raise SystemExit(f'Unsafe source state: old={old_count}, new={new_count}')
           PY
           git diff --check
-          grep -F 'if (!jobResult && (!Number.isFinite(actualBytes) || actualBytes !== expectedBytes)) {' cloudflare/mmg-ios/src/kairos-compact-homepage-utils-v1.js
+          grep -F 'if (!jobResult && hasReportedSize && (!Number.isFinite(actualBytes) || actualBytes !== expectedBytes)) {' cloudflare/mmg-ios/src/kairos-compact-homepage-utils-v1.js
 
       - name: Commit repair to main
         shell: bash
