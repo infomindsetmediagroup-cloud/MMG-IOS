@@ -77,7 +77,7 @@ jobs:
               -H 'Cache-Control: no-cache' \
               "${KAIROS_PRODUCTION_URL}/center/content/website?deployment=${nonce}" \
               --output dashboard.html || true
-            if node -e 'const fs=require("fs");let h={};try{h=JSON.parse(fs.readFileSync("health.json","utf8"))}catch{};const x=fs.existsSync("dashboard.html")?fs.readFileSync("dashboard.html","utf8"):"";const ok=["ready","ok","operational"].includes(String(h.status||"").toLowerCase())&&x.includes("id=\"kairos-hub\"")&&x.includes("scripts/command-hub.js")&&x.includes("scripts/website-stage-three-recovery.js");process.exit(ok?0:1)'; then
+            if node -e 'const fs=require("fs");let h={};try{h=JSON.parse(fs.readFileSync("health.json","utf8"))}catch{};const x=fs.existsSync("dashboard.html")?fs.readFileSync("dashboard.html","utf8"):"";const ok=["ready","ok","operational"].includes(String(h.status||"").toLowerCase())&&h.enhancedInference?.status==="operational"&&h.enhancedInference?.provider==="cloudflare-workers-ai"&&h.autonomy?.status==="operational"&&x.includes("id=\"kairos-hub\"")&&x.includes("scripts/command-hub.js")&&x.includes("scripts/website-stage-three-recovery.js");process.exit(ok?0:1)'; then
               echo "Kairos is live on Cloudflare."
               exit 0
             fi
@@ -85,6 +85,44 @@ jobs:
           done
           echo "Kairos failed live verification." >&2
           exit 1
+
+      - name: Verify enhanced intelligence and bounded autonomous operation
+        env:
+          KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --location --max-time 180 \
+            -H 'Cache-Control: no-cache' \
+            "${KAIROS_PRODUCTION_URL}/api/inference/health?deployment=${GITHUB_SHA}" \
+            --output inference-health.json
+          curl --fail-with-body --silent --show-error --location --max-time 180 \
+            -H 'Content-Type: application/json' -H 'Cache-Control: no-cache' \
+            --data "{\"source\":\"deployment:${GITHUB_SHA}\"}" \
+            "${KAIROS_PRODUCTION_URL}/api/autonomy/run" \
+            --output autonomy-cycle.json
+          curl --fail-with-body --silent --show-error --location --max-time 60 \
+            -H 'Cache-Control: no-cache' \
+            "${KAIROS_PRODUCTION_URL}/api/autonomy/status?deployment=${GITHUB_SHA}" \
+            --output autonomy-status.json
+          node <<'NODE'
+          const fs=require('fs');
+          const inference=JSON.parse(fs.readFileSync('inference-health.json','utf8'));
+          const requested=JSON.parse(fs.readFileSync('autonomy-cycle.json','utf8'));
+          const autonomy=JSON.parse(fs.readFileSync('autonomy-status.json','utf8'));
+          const cycle=requested.status==='completed'?requested:autonomy.lastCycle;
+          const checks={
+            inferenceReady:inference.status==='ready'&&inference.reachable===true,
+            accountScoped:inference.mode==='cloudflare-account-scoped'&&inference.provider==='cloudflare-workers-ai',
+            qwenModel:inference.model==='@cf/qwen/qwen3-30b-a3b-fp8',
+            privacy:inference.privacy==='customer-content-isolated-no-training',
+            autonomyOperational:autonomy.status==='operational'&&autonomy.enabled===true,
+            cycleCompleted:cycle?.status==='completed',
+            intelligentDecision:cycle?.inference?.mode==='cloudflare-account-scoped',
+            boundedExternalEffects:cycle?.safeguards?.approvalRequired?.includes('external-publication')&&cycle?.safeguards?.prohibited?.includes('bypass-approval')
+          };
+          console.log(JSON.stringify({checks,inference:{status:inference.status,mode:inference.mode,provider:inference.provider,model:inference.model,privacy:inference.privacy},cycle:{id:cycle?.id,status:cycle?.status,actionsApplied:cycle?.actionsApplied,decisionsPreserved:cycle?.decisionsPreserved}},null,2));
+          if(Object.values(checks).some(value=>value!==true))process.exit(1);
+          NODE
 
       - name: Publish deployment receipt
         if: always()

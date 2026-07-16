@@ -1,8 +1,30 @@
-# Kairos Private Inference Engine
+# Kairos Enhanced Inference
 
-This package deploys the MMG-owned text-generation runtime. It does not use OpenAI or any hosted model API.
+Kairos supports two explicitly labeled inference tiers. Production uses Cloudflare account-scoped Qwen inference by default; this package remains the optional MMG-owned self-hosted upgrade. Neither tier permits OpenAI endpoints or OpenAI models.
 
-## Runtime
+## Production account-scoped tier
+
+The active Worker binds Cloudflare Workers AI as `AI` and runs `@cf/qwen/qwen3-30b-a3b-fp8`. No model-provider key is stored in Kairos. Cloudflare identifies prompts and outputs as customer content, does not expose that content to other customers, and does not use it to train or improve models without explicit consent.
+
+This tier is reported as `cloudflare-account-scoped`, not as self-hosted hardware. The Worker enforces per-minute and per-day inference budgets and preserves the deterministic native engine as a fallback.
+
+The relevant `wrangler.toml` contract is:
+
+```toml
+[ai]
+binding = "AI"
+
+[vars]
+KAIROS_WORKERS_AI_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8"
+KAIROS_INFERENCE_MAX_REQUESTS_PER_MINUTE = "6"
+KAIROS_INFERENCE_MAX_REQUESTS_PER_DAY = "200"
+```
+
+## Optional MMG-owned self-hosted tier
+
+The files in this directory deploy the MMG-owned vLLM runtime. When its HTTPS endpoint and token are present, Kairos selects it ahead of the account-scoped tier.
+
+## Self-hosted runtime
 
 - Model: `Qwen/Qwen3.6-35B-A3B`
 - Server: vLLM
