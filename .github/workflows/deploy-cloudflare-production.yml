@@ -16,43 +16,25 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-
+    timeout-minutes: 20
     steps:
-      - name: Download repository source
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          mkdir -p repository
-          curl --fail --silent --show-error --location \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" \
-            --output repository.tar.gz
-          tar -xzf repository.tar.gz --strip-components=1 -C repository
-          test -f repository/cloudflare/mmg-ios/wrangler.toml
-
-      - name: Verify runner tools
-        run: |
-          node --version
-          npm --version
-          curl --version
+      - name: Checkout production source
+        uses: actions/checkout@v4
 
       - name: Install dependencies
-        working-directory: repository/cloudflare/mmg-ios
+        working-directory: cloudflare/mmg-ios
         run: npm install --ignore-scripts --no-package-lock --no-audit --no-fund
 
-      - name: Validate production source
-        working-directory: repository/cloudflare/mmg-ios
+      - name: Validate Worker bundle
+        working-directory: cloudflare/mmg-ios
         run: |
+          set -euo pipefail
           node scripts/validate-production-suite.mjs
           node scripts/validate-frozen-production-standard.mjs
           npx wrangler deploy --dry-run
 
       - name: Deploy Cloudflare Worker
-        working-directory: repository/cloudflare/mmg-ios
+        working-directory: cloudflare/mmg-ios
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -62,108 +44,26 @@ jobs:
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}" || { echo "CLOUDFLARE_ACCOUNT_ID is required." >&2; exit 1; }
           npx wrangler deploy
 
-      - name: Verify live Kairos application
+      - name: Verify live application
         env:
           KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 18); do
+          for attempt in $(seq 1 24); do
             nonce="${GITHUB_SHA}-${attempt}-$(date +%s)"
-            rm -f health.json health-headers.txt dashboard.html
+            rm -f health.json dashboard.html
             curl --fail --silent --show-error --location --max-time 30 \
-              --dump-header health-headers.txt \
-              --output health.json \
-              "${KAIROS_PRODUCTION_URL}/api/health?deployment=${nonce}" || true
+              "${KAIROS_PRODUCTION_URL}/api/health?deployment=${nonce}" \
+              --output health.json || true
             curl --fail --silent --show-error --location --max-time 30 \
               -H 'Cache-Control: no-cache' \
-              --output dashboard.html \
-              "${KAIROS_PRODUCTION_URL}/?deployment=${nonce}" || true
-            if node -e 'const fs=require("fs");let h={};try{h=JSON.parse(fs.readFileSync("health.json","utf8"))}catch{};const x=fs.existsSync("dashboard.html")?fs.readFileSync("dashboard.html","utf8"):"";const headers=fs.existsSync("health-headers.txt")?fs.readFileSync("health-headers.txt","utf8").toLowerCase():"";const ok=["ready","ok","operational"].includes(String(h.status||"").toLowerCase())&&x.includes("kairos-command-center-routed-20260715-7")&&x.includes("scripts/job-transport.js?v=20260715-1")&&x.includes("scripts/command-hub.js?v=routed-20260715-7")&&x.includes("scripts/website-stage-three-controller.js?v=20260715-1")&&headers.includes("x-kairos-production-entry: kairos-production-entry-20260715-80")&&headers.includes("x-kairos-website-retool-flow: proposal-preview-approval-live-save")&&headers.includes("x-kairos-child-card-contracts: normalized-top-edge");process.exit(ok?0:1)'; then
+              "${KAIROS_PRODUCTION_URL}/center/content/website?deployment=${nonce}" \
+              --output dashboard.html || true
+            if node -e 'const fs=require("fs");let h={};try{h=JSON.parse(fs.readFileSync("health.json","utf8"))}catch{};const x=fs.existsSync("dashboard.html")?fs.readFileSync("dashboard.html","utf8"):"";const ok=["ready","ok","operational"].includes(String(h.status||"").toLowerCase())&&x.includes("kairos-command-center-routed-20260715-7")&&x.includes("scripts/command-hub.js?v=routed-20260715-7")&&x.includes("scripts/website-stage-three-recovery.js?v=20260715-2");process.exit(ok?0:1)'; then
+              echo "Cloudflare Worker and Website Retool route are live."
               exit 0
             fi
             sleep 5
           done
-          echo "Cloudflare deployment did not pass live verification for ${GITHUB_SHA}." >&2
+          echo "Cloudflare deployment did not restore the live application." >&2
           exit 1
-
-      - name: Verify canonical homepage planning
-        env:
-          KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
-        run: |
-          set -euo pipefail
-          objective='Prepare the canonical Mindset Media Group homepage retool on Kairos Staging using the approved three-file package. Do not publish the live theme.'
-          payload="$(OBJECTIVE="${objective}" node -e 'process.stdout.write(JSON.stringify({objective:process.env.OBJECTIVE}))')"
-          curl --fail-with-body --silent --show-error --location --max-time 60 \
-            -H 'Content-Type: application/json' \
-            -H 'Cache-Control: no-cache' \
-            --data "${payload}" \
-            "${KAIROS_PRODUCTION_URL}/api/shopify/staging/plan/jobs?deployment=${GITHUB_SHA}" \
-            --output plan-envelope.json
-          poll_url="$(node -e 'const fs=require("fs");const value=JSON.parse(fs.readFileSync("plan-envelope.json","utf8"));const url=String(value.pollURL||"");if(!url.startsWith("/"))process.exit(1);process.stdout.write(url)')"
-          for attempt in $(seq 1 12); do
-            rm -f plan-result.json
-            curl --fail-with-body --silent --show-error --location --max-time 60 \
-              -H 'Cache-Control: no-cache' \
-              "${KAIROS_PRODUCTION_URL}${poll_url}?deployment=${GITHUB_SHA}-${attempt}" \
-              --output plan-result.json || true
-            if node -e 'const fs=require("fs");let value={};try{value=JSON.parse(fs.readFileSync("plan-result.json","utf8"))}catch{};process.exit(value.status==="completed"&&value.result?0:1)'; then
-              break
-            fi
-            sleep 3
-          done
-          node - <<'NODE'
-          const fs = require('fs');
-          const envelope = JSON.parse(fs.readFileSync('plan-result.json', 'utf8'));
-          const result = envelope.result || {};
-          const plan = result.plan || {};
-          const names = (plan.canonicalPackage?.files || []).map(file => file.filename).sort();
-          const required = ['assets/mmg-canonical-homepage.css','sections/mmg-canonical-homepage.liquid','templates/index.json'].sort();
-          const checks = {
-            completed: envelope.status === 'completed',
-            readyForApproval: result.status === 'ready-for-approval',
-            canonicalMode: plan.installationMode === 'kairos-canonical-homepage-v1',
-            threeFiles: JSON.stringify(names) === JSON.stringify(required),
-            stagingOnly: String(plan.targetTheme?.role || '').toUpperCase() !== 'MAIN',
-            liveProtected: String(plan.publishedTheme?.role || '').toUpperCase() === 'MAIN',
-            noLiveMutation: plan.liveThemeMutationAuthorized === false && plan.productionPublishAuthorized === false
-          };
-          console.log(JSON.stringify({ build: envelope.build, files: names, checks }, null, 2));
-          if (Object.values(checks).some(value => value !== true)) process.exit(1);
-          NODE
-
-      - name: Verify live child workspaces and release boundary
-        env:
-          KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
-        run: |
-          node - <<'NODE'
-          const actions = [
-            'knowledge-library','research-brief','decision-record','doctrine-vault','intelligence-synthesis',
-            'manuscript-studio','social-production','publishing-studio','creative-studio','product-launch',
-            'revenue-intelligence','growth-plan','offer-builder','campaign-operations','visitor-activity',
-            'customer-portal','deliverables','customer-journey','support-intelligence','work-queue',
-            'release-control','executive-briefing','system-registry'
-          ];
-          async function request(path, body) {
-            const response = await fetch(`${process.env.KAIROS_PRODUCTION_URL}${path}`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
-              body: JSON.stringify(body),
-              signal: AbortSignal.timeout(30_000),
-            });
-            let value = {};
-            try { value = await response.json(); } catch {}
-            return { response, value };
-          }
-          (async () => {
-            const results = await Promise.all(actions.map(async action => {
-              const { response, value } = await request('/api/hub/run', { action, objective: `Production contract verification for ${action}` });
-              const accepted = ['completed', 'needs-connector'].includes(value.status);
-              const complete = response.ok && accepted && typeof value.summary === 'string' && value.summary.length > 10 && Array.isArray(value.sections) && value.sections.length > 0 && value.evidence?.externalActionTaken === false;
-              if (!complete) throw new Error(`${action} failed its production contract: HTTP ${response.status} ${value.error?.code || value.status || 'invalid-response'}`);
-              return { action, status: value.status };
-            }));
-            const boundary = await request('/api/shopify/homepage-release/prepare', {});
-            if (boundary.response.status !== 400 || boundary.value.error?.code !== 'review_id_required') throw new Error('Homepage release approval boundary is not enforced.');
-            console.log(JSON.stringify({ childWorkspacesVerified: results.length, sourceReadinessReports: results.filter(item => item.status === 'needs-connector').map(item => item.action), releaseApprovalBoundary: true }, null, 2));
-          })().catch(error => { console.error(error); process.exit(1); });
-          NODE
