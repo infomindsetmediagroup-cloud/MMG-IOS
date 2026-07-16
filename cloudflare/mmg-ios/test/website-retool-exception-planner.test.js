@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { classifyWebsiteRetoolCandidate } from "../src/kairos-website-retool-exception-planner-v1.js";
+import {
+  classifyWebsiteRetoolCandidate,
+  collectVerifiedThemeSchemes,
+} from "../src/kairos-website-retool-exception-planner-v1.js";
 
 const headerSetting = (key, valueType = "string") => ({
   key,
@@ -49,4 +52,25 @@ test("verified native visibility controls remain classifiable on their owning gr
   });
   assert.equal(paymentVisibility?.proposedValue, false);
   assert.ok(paymentVisibility?.confidence >= 0.95);
+});
+
+test("only active verified theme schemes become selectable color values", () => {
+  const report = {
+    settings: {
+      candidateSettings: [
+        { path: ["current", "color_schemes", "scheme-3", "settings", "background"], valuePreview: "#242833" },
+        { path: ["current", "color_schemes", "scheme-4", "settings", "background"], valuePreview: "#1CCBF5" },
+        { path: ["presets", "Rise", "color_schemes", "scheme-4", "settings", "background"], valuePreview: "#121212" },
+      ],
+    },
+  };
+  assert.deepEqual(collectVerifiedThemeSchemes(report), [
+    { value: "scheme-3", background: "#242833", source: "config/settings_data.json/current/color_schemes" },
+    { value: "scheme-4", background: "#1ccbf5", source: "config/settings_data.json/current/color_schemes" },
+  ]);
+
+  const candidate = classifyWebsiteRetoolCandidate("sections/header-group.json", headerSetting("color_scheme"));
+  assert.equal(candidate?.proposedValue, null);
+  assert.equal(candidate?.requiresVerifiedThemeScheme, true);
+  assert.match(candidate?.rationale || "", /will not infer/i);
 });
