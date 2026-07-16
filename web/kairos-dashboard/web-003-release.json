@@ -5,6 +5,8 @@
   "runtime": "mmg-ios",
   "executionPath": "/web-003.html",
   "target": "Kairos Staging",
+  "fullRetoolEntry": "explicit-staging-only",
+  "contentOnlyDefault": true,
   "publishedThemeMutation": false,
   "workflow": [
     "inspect",

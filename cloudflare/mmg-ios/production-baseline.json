@@ -1,5 +1,5 @@
 {
-  "baseline": "kairos-production-standard-20260716-27",
+  "baseline": "kairos-production-standard-20260716-28",
   "status": "frozen",
   "productionUrl": "https://mmg-ios.info-mindsetmediagroup.workers.dev",
   "worker": {
@@ -11,7 +11,7 @@
     "durableObjectClass": "KairosProject"
   },
   "dashboard": {
-    "build": "kairos-command-hub-routed-20260716-4",
+    "build": "kairos-command-hub-routed-20260716-5",
     "workspaceRuntime": "kairos-workspace-runtime-20260716-2",
     "workflowRuntime": "kairos-workflow-runtime-ui-20260716-3",
     "operationalRuntime": "kairos-operational-runtime-20260716-3",
@@ -33,7 +33,7 @@
     "oneHundredReservedForBlueprintCompletion": true
   },
   "approvedExpansion": {
-    "scope": "Operational Command Center with 25 canonical domain workspaces, durable workflows and receipts, verified native analysis and internal deliverables, Cloudflare account-scoped Qwen inference with an optional MMG self-hosted vLLM upgrade path, and event-driven bounded autonomous queue operation under constitutional approval gates",
+    "scope": "Operational Command Center with 25 canonical domain workspaces, durable workflows and receipts, verified native analysis and internal deliverables, Cloudflare account-scoped Qwen inference with an optional MMG self-hosted vLLM upgrade path, event-driven bounded autonomous queue operation under constitutional approval gates, and an explicit staging-only Website Retool handoff with source-hash-bound header exception review",
     "activeEdge": "src/kairos-production-entry-v36.js",
     "preservesPriorEdge": "src/kairos-production-entry-v35.js",
     "automaticExternalExecution": false,
@@ -54,7 +54,9 @@
     "durableOperationalLedgerRequired": true,
     "domainWorkspaceRoutingRequired": true,
     "falseCompletionTemplatesRetired": true,
-    "privateIntelligenceConfigurationReportedHonestly": true
+    "privateIntelligenceConfigurationReportedHonestly": true,
+    "explicitFullRetoolStagingHandoffRequired": true,
+    "unsafeLogoLayoutMutationProhibited": true
   },
   "governance": {
     "newCapabilityWorkFrozen": true,
