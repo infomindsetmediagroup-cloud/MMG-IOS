@@ -1,6 +1,6 @@
 import { inspectWebsiteRetoolSchema } from "./kairos-website-retool-schema-inspector-v1.js";
 
-const BUILD = "kairos-website-retool-exception-planner-20260716-2";
+const BUILD = "kairos-website-retool-exception-planner-20260716-3";
 const LOGO_ASSET_KEYS = new Set(["logo", "logo_image", "header_logo", "custom_logo"]);
 const ALLOWED_CATEGORIES = new Set([
   "header-branding",
@@ -13,12 +13,16 @@ const ALLOWED_CATEGORIES = new Set([
 
 export async function prepareWebsiteRetoolExceptions(request, env) {
   const report = await inspectWebsiteRetoolSchema(request, env);
+  const verifiedThemeSchemes = collectVerifiedThemeSchemes(report);
   const candidates = [];
   for (const file of report.inventory || []) {
     for (const setting of file.candidateSettings || []) {
       if (!ALLOWED_CATEGORIES.has(setting.category)) continue;
       const decision = classifyWebsiteRetoolCandidate(file.filename, setting);
       if (!decision) continue;
+      const allowedValues = decision.requiresVerifiedThemeScheme
+        ? verifiedThemeSchemes.map(scheme => ({ ...scheme }))
+        : undefined;
       candidates.push({
         filename: file.filename,
         sourceSha256: file.sha256,
@@ -32,6 +36,7 @@ export async function prepareWebsiteRetoolExceptions(request, env) {
         confidence: decision.confidence,
         requiresExecutiveApproval: decision.confidence < 0.95,
         rationale: decision.rationale,
+        ...(allowedValues?.length ? { allowedValues } : {}),
       });
     }
   }
@@ -46,6 +51,7 @@ export async function prepareWebsiteRetoolExceptions(request, env) {
     publishedTheme: report.publishedTheme,
     highConfidence,
     executiveReview,
+    verifiedThemeSchemes,
     liquidEvidence: [...(report.header || []), ...(report.footer || [])]
       .filter(file => file.format === "liquid")
       .map(file => ({ filename: file.filename, sha256: file.sha256, signals: file.liquidSignals })),
@@ -82,12 +88,34 @@ export function classifyWebsiteRetoolCandidate(filename, setting) {
     return decision("set footer attribution", "© 2026 Mindset Media Group. Powered by Kairos.", 0.97, "Existing footer attribution field matches the authorized footer text change.");
   }
   if (/(color_scheme|background)/.test(key) && headerGroupSetting) {
-    return decision("use existing approved dark MMG blue scheme", null, 0.72, "The exact existing approved scheme value must be selected from verified theme settings before execution.");
+    return {
+      ...decision("select a verified active theme color scheme", null, 0.72, "The exact active theme scheme must be selected from the verified color values before execution. Kairos will not infer a scheme from its name."),
+      requiresVerifiedThemeScheme: true,
+    };
   }
   if (/(center|alignment|spacing)/.test(key) && headerGroupSetting) {
     return decision("remove unused center header spacing", null, 0.65, "Layout exception is authorized, but the exact theme-specific value requires executive review and rendered verification.");
   }
   return null;
+}
+
+export function collectVerifiedThemeSchemes(report) {
+  const candidates = Array.isArray(report?.settings?.candidateSettings) ? report.settings.candidateSettings : [];
+  const schemes = candidates
+    .filter(item => Array.isArray(item?.path)
+      && item.path.length === 5
+      && item.path[0] === "current"
+      && item.path[1] === "color_schemes"
+      && item.path[3] === "settings"
+      && item.path[4] === "background"
+      && /^scheme-[a-z0-9_-]+$/i.test(String(item.path[2] || ""))
+      && /^#[0-9a-f]{6}$/i.test(String(item.valuePreview || "")))
+    .map(item => ({
+      value: String(item.path[2]),
+      background: String(item.valuePreview).toLowerCase(),
+      source: "config/settings_data.json/current/color_schemes",
+    }));
+  return [...new Map(schemes.map(scheme => [scheme.value, scheme])).values()];
 }
 
 function decision(authorizedChange, proposedValue, confidence, rationale) {

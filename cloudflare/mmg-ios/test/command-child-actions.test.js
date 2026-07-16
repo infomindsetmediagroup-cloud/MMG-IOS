@@ -6,7 +6,7 @@ import { KairosProject } from "../src/kairos-native-publishing-worker-v1.js";
 import { handleOperationalRequest, KAIROS_ACTION_CONTRACTS, mirrorOperationalResponse } from "../src/kairos-operational-runtime-v1.js";
 import { handleAutonomyRequest, runAutonomyCycle } from "../src/kairos-autonomy-runtime-v1.js";
 import { normalizeNativeTaskOutput } from "../src/kairos-native-task-execution-v1.js";
-import productionRuntime from "../src/kairos-production-entry-v36.js";
+import productionRuntime from "../src/kairos-production-entry-v37.js";
 
 const REQUIRED_ACTIONS = [
   "knowledge-library",

@@ -1,19 +1,28 @@
 {
   "release": "WEB-003",
-  "status": "active",
-  "activatedAt": "2026-07-13T14:45:00Z",
+  "status": "composite-production-ready",
+  "activatedAt": "2026-07-16T16:00:00Z",
   "runtime": "mmg-ios",
   "executionPath": "/web-003.html",
   "target": "Kairos Staging",
   "fullRetoolEntry": "explicit-staging-only",
+  "package": "native-shopify-header-plus-canonical-homepage",
+  "sourceHashBound": true,
+  "verifiedThemeValueSelection": true,
+  "combinedPreviewApproval": true,
+  "fileLevelLiveRelease": true,
+  "completeRollback": true,
   "contentOnlyDefault": true,
   "publishedThemeMutation": false,
   "workflow": [
     "inspect",
     "plan",
     "approve",
-    "execute",
-    "verify",
+    "select-native-header-values",
+    "execute-composite-package",
+    "verify-combined-readback",
+    "approve-rendered-preview",
+    "apply-file-level-release",
     "preserve-rollback"
   ]
 }

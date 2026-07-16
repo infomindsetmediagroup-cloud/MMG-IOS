@@ -66,7 +66,7 @@ jobs:
           KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
         run: |
           set -euo pipefail
-          expected_entry="$(node -e 'const fs=require("fs");const x=fs.readFileSync("repository/cloudflare/mmg-ios/src/kairos-production-entry-v36.js","utf8").match(/const BUILD\s*=\s*"([^"]+)"/);if(!x)process.exit(1);process.stdout.write(x[1])')"
+          expected_entry="$(node -e 'const fs=require("fs");const root="repository/cloudflare/mmg-ios";const manifest=JSON.parse(fs.readFileSync(`${root}/production-baseline.json`,"utf8"));const x=fs.readFileSync(`${root}/${manifest.worker.entry}`,"utf8").match(/const BUILD\s*=\s*"([^"]+)"/);if(!x)process.exit(1);process.stdout.write(x[1])')"
           expected_autonomy="$(node -e 'const fs=require("fs");const x=fs.readFileSync("repository/cloudflare/mmg-ios/src/kairos-autonomy-runtime-v1.js","utf8").match(/KAIROS_AUTONOMY_BUILD\s*=\s*"([^"]+)"/);if(!x)process.exit(1);process.stdout.write(x[1])')"
           export EXPECTED_ENTRY="${expected_entry}" EXPECTED_AUTONOMY="${expected_autonomy}"
           for attempt in $(seq 1 36); do
