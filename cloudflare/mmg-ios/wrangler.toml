@@ -1,6 +1,7 @@
 name = "mmg-ios"
-main = "src/kairos-production-entry-v39.js"
+main = "src/kairos-production-entry-v40.js"
 # Validated delegation ancestry (comments only; never active):
+# main = "src/kairos-production-entry-v39.js"
 # main = "src/kairos-production-entry-v38.js"
 # main = "src/kairos-production-entry-v37.js"
 # main = "src/kairos-production-entry-v36.js"
