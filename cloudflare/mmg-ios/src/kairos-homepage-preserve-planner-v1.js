@@ -1,13 +1,21 @@
-import { httpError, inspectStagingSource, parseShopifyJson } from "./kairos-compact-homepage-utils-v1.js";
+import {
+  applyCompactPatch,
+  buildEditableMap,
+  hashText,
+  httpError,
+  inspectStagingSource,
+  inspectThemeFiles,
+  parseShopifyJson,
+  semanticHash,
+  validateHomepageDocument,
+} from "./kairos-compact-homepage-utils-v1.js";
 import { parseStrictJSON, runKairosIntelligence } from "./kairos-intelligence-v1.js";
 
-export const KAIROS_HOMEPAGE_PRESERVE_PLANNER_BUILD = "kairos-homepage-preserve-planner-20260716-1";
+export const KAIROS_HOMEPAGE_PRESERVE_PLANNER_BUILD = "kairos-homepage-preserve-planner-20260716-2";
 
-const HOMEPAGE_FILE = "templates/index.json";
-const SECTION_FILE = "sections/mmg-canonical-homepage.liquid";
-const CSS_FILE = "assets/mmg-canonical-homepage.css";
-const BLOCK_TAGS = new Set(["address","article","aside","blockquote","button","div","figcaption","figure","footer","form","h1","h2","h3","h4","h5","h6","header","li","main","nav","p","section","td","th"]);
-const BLOCKED_TAGS = new Set(["script","style","svg","template","noscript","code","pre"]);
+const TEMPLATE_FILE = "templates/index.json";
+const TEXT_KEY = /(heading|title|text|description|subheading|caption|label|eyebrow|kicker|copy|content|quote|announcement|button.*label|cta.*label)/i;
+const NON_TEXT_KEY = /(url|link(?!.*label)|href|image|video|color|font|size|width|height|alignment|position|id$|handle|product|collection|menu|icon|animation|spacing|padding|margin|opacity|scheme|style|layout|desktop|mobile|enabled|show_|hide_)/i;
 
 export default {
   async fetch(request, env) {
@@ -24,239 +32,335 @@ async function createPlan(request, env) {
     if (objective.length < 3) throw httpError(400, "objective_required", "Tell Kairos what you want changed on the homepage.");
     if (objective.length > 12000) throw httpError(413, "objective_too_long", "Homepage objective exceeds 12,000 characters.");
 
-    const sourceBody = await inspectStagingSource(null, request, env, KAIROS_HOMEPAGE_PRESERVE_PLANNER_BUILD, [HOMEPAGE_FILE, SECTION_FILE, CSS_FILE]);
-    const evidence = sourceBody?.evidence || {};
-    validateBoundary(evidence.stagingTheme, evidence.mainTheme);
-    const files = new Map((Array.isArray(evidence.files) ? evidence.files : []).filter(file => file?.readable && typeof file?.content === "string").map(file => [file.filename, file]));
-    const template = files.get(HOMEPAGE_FILE);
-    const section = files.get(SECTION_FILE);
-    const css = files.get(CSS_FILE);
-    if (!template?.content || !section?.content || !css?.content) throw httpError(409, "homepage_source_unavailable", "The verified homepage template, Liquid section, and stylesheet must all be readable from Kairos Staging.");
+    const stagingInspection = await inspectStagingSource(null, request, env, KAIROS_HOMEPAGE_PRESERVE_PLANNER_BUILD, [TEMPLATE_FILE]);
+    const stagingEvidence = stagingInspection?.evidence || {};
+    validateBoundary(stagingEvidence.stagingTheme, stagingEvidence.mainTheme);
 
-    const homepage = parseShopifyJson(template.content, "Current Kairos Staging homepage");
-    const canonicalActive = Object.values(homepage.sections || {}).some(value => String(value?.type || "") === "mmg-canonical-homepage");
-    if (!canonicalActive) throw httpError(409, "canonical_homepage_not_active", "Kairos Staging is not using the canonical MMG homepage section.");
+    const mainInspection = await inspectThemeFiles(env, stagingEvidence.mainTheme.gid, [TEMPLATE_FILE]);
+    const mainFile = fileByName(mainInspection.files, TEMPLATE_FILE);
+    const stagingFile = fileByName(stagingEvidence.files, TEMPLATE_FILE);
+    if (!mainFile?.content || !stagingFile?.content) {
+      throw httpError(409, "homepage_template_unavailable", "Kairos must be able to read the published MAIN homepage and Kairos Staging homepage templates.");
+    }
 
-    const sourceTokens = tokenize(section.content);
-    const inventory = buildGroups(sourceTokens).map((group, index) => ({ id: index + 1, text: group.text })).filter(item => item.text.length >= 2).slice(0, 180);
-    if (!inventory.length) throw httpError(409, "homepage_visible_text_missing", "Kairos found no editable visible homepage copy in the current design.");
+    const publishedDocument = parseShopifyJson(mainFile.content, "Published MAIN homepage");
+    const stagingDocument = parseShopifyJson(stagingFile.content, "Kairos Staging homepage");
+    validateHomepageDocument(structuredClone(publishedDocument), publishedDocument);
+    validateHomepageDocument(structuredClone(stagingDocument), stagingDocument);
+
+    const editableMap = buildEditableMap(publishedDocument);
+    const inventory = buildTextInventory(editableMap);
+    if (!inventory.length) {
+      throw httpError(409, "published_homepage_text_settings_missing", "The published homepage exposes no safe customer-facing text settings. Kairos will not rebuild the framework to force a change.");
+    }
 
     const generated = await runKairosIntelligence(env, {
-      purpose: "homepage-preserve-design-copy-plan",
-      temperature: 0.15,
+      purpose: "published-homepage-template-text-plan",
+      temperature: 0.1,
       maxTokens: 4096,
-      seed: 1911,
+      seed: 1912,
       system: [
         "You are Kairos, the governed MMG homepage copy editor.",
-        "Return strict JSON only, without markdown or commentary.",
-        "Rewrite only customer-facing visible copy needed to satisfy the objective.",
-        "The current HTML, Liquid, classes, colors, typography, pills, cards, spacing, section order, links, template, stylesheet, and layout are immutable.",
-        "Every replacement.before value must be copied exactly from the supplied visible-text inventory.",
+        "Return strict JSON only, with no markdown or commentary.",
+        "The published MAIN Shopify homepage is the immutable framework source of truth.",
+        "Change only existing customer-facing string settings supplied in the inventory.",
+        "Never add, remove, reorder, rename, or replace sections, blocks, templates, Liquid files, stylesheets, assets, links, classes, colors, typography, spacing, cards, pills, layout, animation, or responsive behavior.",
+        "Every operation must copy scope, sectionId, blockId, key, and before exactly from one inventory item.",
+        "If before contains HTML or Liquid tokens, after must preserve the exact same token sequence.",
         "Do not invent testimonials, metrics, awards, prices, guarantees, partnerships, product availability, or factual claims.",
-        "Return only useful changes.",
-        "Schema: {\"summary\":\"...\",\"replacements\":[{\"before\":\"exact existing text\",\"after\":\"new visible text\",\"reason\":\"brief reason\"}]}.",
+        "Return only useful copy changes required by the objective.",
+        "Schema: {\"summary\":\"...\",\"operations\":[{\"scope\":\"section|block\",\"sectionId\":\"exact\",\"blockId\":\"exact or empty\",\"key\":\"exact\",\"before\":\"exact current string\",\"after\":\"new string\",\"reason\":\"brief reason\"}]}.",
       ].join("\n"),
       user: JSON.stringify({
         objective,
-        immutableDesignContract: {
-          preserveColors: true,
-          preserveTypography: true,
-          preservePillsCardsAndSpacing: true,
-          preserveSectionOrderAndLayout: true,
-          preserveMarkupLiquidTemplateAndStylesheet: true,
-          stagingOnly: true,
+        sourceOfTruth: "published-main-theme",
+        immutableContract: {
+          templateStructure: true,
+          sectionIDsTypesAndOrder: true,
+          blockIDsTypesAndOrder: true,
+          LiquidCSSAssetsAndClasses: true,
+          colorsTypographySpacingCardsPillsAndLayout: true,
+          linksAndResponsiveBehavior: true,
+          onlyExistingStringSettingsMayChange: true,
+          targetIsNonLiveStaging: true,
         },
-        visibleTextInventory: inventory,
+        textSettingInventory: inventory,
       }),
     });
 
     const proposal = parseStrictJSON(generated.text);
-    const requested = normalizeReplacements(proposal?.replacements);
-    if (!requested.length) throw httpError(409, "safe_homepage_replacements_missing", "Kairos did not produce safe homepage copy changes for this objective.");
+    const normalized = normalizeOperations(proposal?.operations, inventory);
+    if (!normalized.length) {
+      throw httpError(409, "safe_template_text_changes_missing", "Kairos produced no source-bound text changes that preserve the published homepage framework exactly.");
+    }
 
-    const tokens = tokenize(section.content);
-    const applied = applyExactReplacements(tokens, requested);
-    if (!applied.length) throw httpError(409, "safe_homepage_replacements_unmatched", "Kairos could not bind the generated copy to exact visible text in the current homepage.");
-    const replacementSource = tokens.join("");
-    const beforeSignature = markupSignature(section.content);
-    const afterSignature = markupSignature(replacementSource);
-    if (beforeSignature !== afterSignature) throw httpError(409, "preserve_design_structure_change_detected", "The preserve-design plan changed Liquid or markup structure.");
-
-    const sourceHashes = { [HOMEPAGE_FILE]: template.sha256 || null, [SECTION_FILE]: section.sha256 || null, [CSS_FILE]: css.sha256 || null };
-    const now = new Date().toISOString();
-    const liquidContentPatch = {
-      filename: SECTION_FILE,
-      originalSource: section.content,
-      replacementSource,
-      beforeSignature,
-      afterSignature,
-      visibleTextReplacementCount: applied.filter(item => !item.alreadyPresent).length,
-      verifiedAlreadyPresentCount: applied.filter(item => item.alreadyPresent).length,
-      replacements: applied,
-      unmatched: [],
-      inventory,
-      nodeDistributionPreserved: true,
-      styledTextNodesPreserved: true,
-      literalOnly: false,
-      intelligentPreserveDesign: true,
-      fuzzyMatchingUsed: false,
-      defaultReplacementMapUsed: false,
+    const patch = {
+      order: [],
+      operations: normalized.map(item => ({
+        scope: item.scope,
+        sectionId: item.sectionId,
+        blockId: item.blockId,
+        key: item.key,
+        valueJson: JSON.stringify(item.after),
+      })),
     };
-    const summary = String(proposal?.summary || `Kairos prepared ${applied.length} design-preserving homepage copy update${applied.length === 1 ? "" : "s"}.`).trim();
+    const candidateDocument = applyCompactPatch(publishedDocument, patch);
+    validateHomepageDocument(candidateDocument, publishedDocument);
+    assertOnlyApprovedTextChanged(publishedDocument, candidateDocument, normalized);
+
+    const candidateSource = serializeLikeSource(mainFile.content, candidateDocument);
+    const publishedSemanticHash = await semanticHash(publishedDocument);
+    const candidateSemanticHash = await semanticHash(candidateDocument);
+    const expectedCandidateSha256 = await hashText(candidateSource);
+    const publishedStructureSignature = structureSignature(publishedDocument);
+    const candidateStructureSignature = structureSignature(candidateDocument);
+    if (publishedStructureSignature !== candidateStructureSignature) {
+      throw httpError(409, "published_framework_structure_changed", "The proposed homepage copy changed the published framework structure.");
+    }
+
+    const sourceHashes = {
+      "published:templates/index.json": mainFile.sha256,
+      "staging:templates/index.json": stagingFile.sha256,
+    };
+    const now = new Date().toISOString();
+    const summary = String(proposal?.summary || `Kairos prepared ${normalized.length} text-only homepage update${normalized.length === 1 ? "" : "s"} against the published framework.`).trim();
     const result = {
       actionID: crypto.randomUUID(),
       planID: crypto.randomUUID(),
       actionType: "shopify.staging.plan",
       requestType: "homepage-preserve-design",
-      homepageMode: "preserve-current-design",
+      homepageMode: "preserve-published-framework",
       status: "ready-for-approval",
       readOnly: true,
       build: KAIROS_HOMEPAGE_PRESERVE_PLANNER_BUILD,
-      kernel: "homepage-preserve-design-plan-v1",
+      kernel: "published-homepage-template-text-plan-v1",
       startedAt: now,
       completedAt: now,
       objective,
       summary,
       plan: {
         summary,
-        strategy: "Rewrite only exact visible homepage text groups while preserving the current design system and all Shopify structure.",
-        changes: applied.map(item => ({ filename: SECTION_FILE, changeType: item.alreadyPresent ? "verify" : "modify", purpose: item.alreadyPresent ? `Verify approved copy already present: “${item.after}”.` : `Replace “${item.before}” with “${item.after}”.`, expectedOutcome: "Updated customer-facing copy inside the existing design." })),
-        risks: ["Replacement copy may wrap naturally inside the existing responsive design."],
-        acceptanceCriteria: ["Only visible homepage copy changes.", "Every source phrase matches one exact visible-text group.", "Liquid and HTML token signatures remain identical.", "Styled text-node distribution remains present.", `${HOMEPAGE_FILE} remains unchanged.`, `${CSS_FILE} remains unchanged.`, "The live MAIN theme remains unchanged."],
-        rollbackPlan: [`Restore only the original ${SECTION_FILE} source on Kairos Staging.`],
-        installationMode: "existing-liquid-visible-text",
-        liquidContentPatch,
+        strategy: "Clone the currently published MAIN homepage template into Kairos Staging and change only approved existing customer-facing string settings.",
+        changes: normalized.map(item => ({
+          filename: TEMPLATE_FILE,
+          changeType: "modify-setting",
+          purpose: `Replace the existing ${item.scope} setting ${item.sectionId}/${item.blockId || "section"}/${item.key}.`,
+          expectedOutcome: item.reason || "Updated customer-facing homepage copy inside the existing published framework.",
+        })),
+        risks: ["Longer copy may wrap differently inside the unchanged responsive framework."],
+        acceptanceCriteria: [
+          "The published MAIN homepage template is the source of truth.",
+          "Only existing string settings change.",
+          "Section IDs, section types, block IDs, block types, and order remain identical.",
+          "No Liquid, CSS, asset, class, color, typography, spacing, card, pill, layout, link, animation, or responsive behavior changes.",
+          "Only templates/index.json may be written to Kairos Staging.",
+          "The live MAIN theme remains unchanged.",
+        ],
+        rollbackPlan: ["Restore the exact pre-execution Kairos Staging templates/index.json source."],
+        installationMode: "published-main-template-text-settings-v1",
+        templateTextPatch: {
+          filename: TEMPLATE_FILE,
+          publishedSource: mainFile.content,
+          candidateSource,
+          operations: normalized,
+          publishedSha256: mainFile.sha256,
+          stagingBeforeSha256: stagingFile.sha256,
+          expectedCandidateSha256,
+          publishedSemanticHash,
+          candidateSemanticHash,
+          publishedStructureSignature,
+          candidateStructureSignature,
+          onlyExistingStringSettingsChanged: true,
+          publishedFrameworkPreserved: true,
+        },
         canonicalPackage: null,
-        targetTheme: evidence.stagingTheme,
-        publishedTheme: evidence.mainTheme,
+        targetTheme: stagingEvidence.stagingTheme,
+        publishedTheme: stagingEvidence.mainTheme,
+        sourceTheme: stagingEvidence.mainTheme,
         sourceHashes,
-        mutationScope: "intelligent-preserve-design-copy",
+        mutationScope: "published-main-template-text-settings-only",
         executable: true,
         preserveExistingDesign: true,
+        preservePublishedFramework: true,
+        templateTextOnly: true,
         structuralMutationAuthorized: false,
         styleMutationAuthorized: false,
+        liquidMutationAuthorized: false,
+        assetMutationAuthorized: false,
         productionPublishAuthorized: false,
         liveThemeMutationAuthorized: false,
-        literalOnly: false,
-        intelligentCopyGeneration: true,
-        fuzzyMatchingAuthorized: false,
       },
       evidence: {
-        sourceInspectionActionID: sourceBody.actionID || "",
-        stagingTheme: evidence.stagingTheme,
-        mainTheme: evidence.mainTheme,
+        stagingInspectionActionID: stagingInspection.actionID || "",
+        stagingTheme: stagingEvidence.stagingTheme,
+        mainTheme: stagingEvidence.mainTheme,
+        sourceTheme: stagingEvidence.mainTheme,
+        sourceOfTruth: "published-main-theme",
         planningEngine: KAIROS_HOMEPAGE_PRESERVE_PLANNER_BUILD,
         intelligenceRuntime: generated.runtime,
         intelligenceModel: generated.model,
         privacy: generated.privacy,
         modelReasoningStored: false,
-        markupSignaturePreserved: true,
-        nodeDistributionPreserved: true,
-        templateUnchanged: true,
-        stylesheetUnchanged: true,
-        replacementCount: applied.length,
+        publishedTemplateSha256: mainFile.sha256,
+        stagingTemplateSha256: stagingFile.sha256,
+        publishedFrameworkPreserved: true,
+        onlyExistingStringSettingsChanged: true,
+        templateOnly: true,
+        liquidFilesChanged: 0,
+        stylesheetsChanged: 0,
+        assetsChanged: 0,
+        replacementCount: normalized.length,
       },
     };
 
     const jobID = crypto.randomUUID();
     const completed = { jobID, status: "completed", build: KAIROS_HOMEPAGE_PRESERVE_PLANNER_BUILD, submittedAt: now, updatedAt: now, completedAt: now, summary, result };
-    await caches.default.put(jobRequest(request, jobID), new Response(JSON.stringify(completed), { status: 200, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=3600", "X-MMG-Runtime": KAIROS_HOMEPAGE_PRESERVE_PLANNER_BUILD } }));
+    await caches.default.put(jobRequest(request, jobID), new Response(JSON.stringify(completed), {
+      status: 200,
+      headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=3600", "X-MMG-Runtime": KAIROS_HOMEPAGE_PRESERVE_PLANNER_BUILD },
+    }));
     return json({ jobID, status: "completed", build: KAIROS_HOMEPAGE_PRESERVE_PLANNER_BUILD, pollURL: `/api/shopify/staging/plan/jobs/${jobID}`, summary, result }, 202);
   } catch (error) {
     const status = Number.isInteger(error?.status) ? error.status : Number(error?.statusCode || 500);
-    return json({ status: "needs-attention", build: KAIROS_HOMEPAGE_PRESERVE_PLANNER_BUILD, summary: "Kairos could not prepare the preserve-design homepage update.", error: { status, code: typeof error?.code === "string" ? error.code : "homepage_preserve_plan_failed", message: error instanceof Error ? error.message : "Preserve-design homepage planning failed." } }, status);
+    return json({
+      status: "needs-attention",
+      build: KAIROS_HOMEPAGE_PRESERVE_PLANNER_BUILD,
+      summary: "Kairos could not prepare the published-framework homepage text update.",
+      error: { status, code: typeof error?.code === "string" ? error.code : "homepage_preserve_plan_failed", message: error instanceof Error ? error.message : "Published-framework homepage planning failed." },
+    }, status);
   }
 }
 
-function normalizeReplacements(value) {
+function buildTextInventory(editableMap) {
+  const inventory = [];
+  for (const section of editableMap.sections || []) {
+    collectSettings(inventory, "section", section.sectionId, "", section.settings);
+    for (const block of section.blocks || []) collectSettings(inventory, "block", section.sectionId, block.blockId, block.settings);
+  }
+  return inventory.slice(0, 240);
+}
+
+function collectSettings(inventory, scope, sectionId, blockId, settings) {
+  for (const [key, value] of Object.entries(settings || {})) {
+    if (!isEditableTextSetting(key, value)) continue;
+    inventory.push({
+      scope,
+      sectionId,
+      blockId,
+      key,
+      before: value,
+      tokenSignature: tokenSignature(value),
+      location: `${scope}:${sectionId}:${blockId || "section"}:${key}`,
+    });
+  }
+}
+
+function isEditableTextSetting(key, value) {
+  if (typeof value !== "string") return false;
+  if (!value.trim() || value.length > 5000) return false;
+  if (NON_TEXT_KEY.test(key)) return false;
+  if (TEXT_KEY.test(key)) return true;
+  return /[A-Za-z]{3}/.test(value) && !/^https?:\/\//i.test(value) && !/^shopify:\/\//i.test(value) && !/^#(?:[0-9a-f]{3}){1,2}$/i.test(value);
+}
+
+function normalizeOperations(value, inventory) {
   if (!Array.isArray(value)) return [];
-  const seen = new Set();
-  return value.map(item => ({ before: clean(item?.before), after: clean(item?.after), reason: clean(item?.reason).slice(0, 300) })).filter(item => item.before && item.after && item.before !== item.after && item.after.length <= 900 && !seen.has(item.before) && seen.add(item.before)).slice(0, 80);
-}
-
-function applyExactReplacements(tokens, replacements) {
-  const groups = buildGroups(tokens);
+  const byLocation = new Map(inventory.map(item => [item.location, item]));
   const used = new Set();
-  const applied = [];
-  for (const requested of replacements) {
-    const matches = groups.map((group, index) => ({ group, index })).filter(item => !used.has(item.index) && item.group.normalized === normalizeVisible(requested.before));
-    if (matches.length !== 1) continue;
-    const match = matches[0];
-    const alreadyPresent = match.group.normalized === normalizeVisible(requested.after);
-    if (!alreadyPresent) writeGroupPreservingNodes(tokens, match.group, requested.after);
-    used.add(match.index);
-    applied.push({ requestedBefore: requested.before, before: match.group.text, matchedText: match.group.text, after: requested.after, reason: requested.reason, confidence: 1, unique: true, nodeCount: match.group.textIndexes.length, nodeDistributionPreserved: true, alreadyPresent, literalMatch: true, intelligentPreserveDesign: true });
+  const normalized = [];
+  for (const item of value) {
+    const scope = String(item?.scope || "").trim();
+    const sectionId = String(item?.sectionId || "").trim();
+    const blockId = String(item?.blockId || "").trim();
+    const key = String(item?.key || "").trim();
+    const before = String(item?.before ?? "");
+    const after = String(item?.after ?? "");
+    const location = `${scope}:${sectionId}:${blockId || "section"}:${key}`;
+    const source = byLocation.get(location);
+    if (!source || used.has(location)) continue;
+    if (before !== source.before || !after.trim() || after === before || after.length > 5000) continue;
+    if (tokenSignature(after) !== source.tokenSignature) continue;
+    used.add(location);
+    normalized.push({ scope, sectionId, blockId, key, before, after, reason: String(item?.reason || "").trim().slice(0, 300), location });
   }
-  return applied;
+  return normalized.slice(0, 120);
 }
 
-function tokenize(source) { return String(source || "").split(/({{[\s\S]*?}}|{%[\s\S]*?%}|<[^>]+>)/g); }
-
-function buildGroups(tokens) {
-  const groups = [];
-  let current = [];
-  let blocked = 0;
-  const flush = () => {
-    const textIndexes = current.filter(index => isVisibleText(tokens[index]));
-    const text = textIndexes.map(index => decodeEntities(tokens[index])).join(" ").replace(/\s+/g, " ").trim();
-    if (text) groups.push({ text, normalized: normalizeVisible(text), textIndexes });
-    current = [];
-  };
-  for (let index = 0; index < tokens.length; index += 1) {
-    const token = tokens[index];
-    if (!token) continue;
-    if (token.startsWith("{{") || token.startsWith("{%")) { current.push(index); continue; }
-    if (token.startsWith("<")) {
-      const close = token.match(/^<\s*\/\s*([a-z0-9:-]+)/i);
-      const open = token.match(/^<\s*([a-z0-9:-]+)/i);
-      const tag = String(close?.[1] || open?.[1] || "").toLowerCase();
-      if (close && BLOCKED_TAGS.has(tag)) blocked = Math.max(0, blocked - 1);
-      if (blocked === 0 && BLOCK_TAGS.has(tag)) flush();
-      current.push(index);
-      if (open && !close && !/\/\s*>$/.test(token) && BLOCKED_TAGS.has(tag)) blocked += 1;
-      if (blocked === 0 && close && BLOCK_TAGS.has(tag)) flush();
-      continue;
+function assertOnlyApprovedTextChanged(before, after, operations) {
+  const allowed = new Set(operations.map(item => item.location));
+  const beforeMap = settingsMap(buildEditableMap(before));
+  const afterMap = settingsMap(buildEditableMap(after));
+  if (beforeMap.size !== afterMap.size) throw httpError(409, "homepage_setting_map_changed", "The homepage setting map changed.");
+  for (const [location, previous] of beforeMap) {
+    if (!afterMap.has(location)) throw httpError(409, "homepage_setting_removed", `The homepage setting disappeared: ${location}.`);
+    const next = afterMap.get(location);
+    if (deepEqual(previous, next)) continue;
+    if (!allowed.has(location) || typeof previous !== "string" || typeof next !== "string") {
+      throw httpError(409, "non_text_homepage_change_detected", `A non-approved homepage setting changed: ${location}.`);
     }
-    if (blocked === 0) current.push(index);
   }
-  flush();
-  return groups;
 }
 
-function isVisibleText(token) { const value = String(token || ""); return Boolean(value.trim()) && !value.startsWith("<") && !value.startsWith("{{") && !value.startsWith("{%"); }
+function settingsMap(editableMap) {
+  const map = new Map();
+  for (const section of editableMap.sections || []) {
+    for (const [key, value] of Object.entries(section.settings || {})) map.set(`section:${section.sectionId}:section:${key}`, value);
+    for (const block of section.blocks || []) for (const [key, value] of Object.entries(block.settings || {})) map.set(`block:${section.sectionId}:${block.blockId}:${key}`, value);
+  }
+  return map;
+}
 
-function writeGroupPreservingNodes(tokens, group, replacement) {
-  const indexes = group.textIndexes;
-  const originals = indexes.map(index => tokens[index]);
-  const weights = originals.map(token => Math.max(1, normalizeVisible(token).split(" ").filter(Boolean).length));
-  const parts = distribute(String(replacement || "").trim(), weights);
-  indexes.forEach((tokenIndex, index) => {
-    const original = originals[index];
-    tokens[tokenIndex] = `${original.match(/^\s*/)?.[0] || ""}${parts[index] || ""}${original.match(/\s*$/)?.[0] || ""}`;
+function structureSignature(document) {
+  return JSON.stringify({
+    topLevelKeys: Object.keys(document || {}).sort(),
+    order: Array.isArray(document?.order) ? [...document.order] : [],
+    sections: Object.entries(document?.sections || {}).map(([sectionId, section]) => ({
+      sectionId,
+      type: section?.type || "",
+      disabled: section?.disabled === true,
+      settingKeys: Object.keys(section?.settings || {}).sort(),
+      blocks: Object.entries(section?.blocks || {}).map(([blockId, block]) => ({ blockId, type: block?.type || "", settingKeys: Object.keys(block?.settings || {}).sort() })),
+      blockOrder: Array.isArray(section?.block_order) ? [...section.block_order] : [],
+    })),
   });
 }
 
-function distribute(replacement, weights) {
-  if (weights.length <= 1) return [replacement];
-  const words = replacement.split(/\s+/).filter(Boolean);
-  if (words.length < weights.length) return weights.map((_, index) => index === 0 ? replacement : "");
-  const total = weights.reduce((sum, value) => sum + value, 0) || weights.length;
-  const counts = weights.map(weight => Math.max(1, Math.floor(words.length * weight / total)));
-  let assigned = counts.reduce((sum, value) => sum + value, 0);
-  while (assigned > words.length) {
-    let changed = false;
-    for (let index = counts.length - 1; index >= 0 && assigned > words.length; index -= 1) if (counts[index] > 1) { counts[index] -= 1; assigned -= 1; changed = true; }
-    if (!changed) break;
+function serializeLikeSource(source, document) {
+  const text = String(source || "").replace(/^\uFEFF/, "");
+  const trimmed = text.trimStart();
+  let prefix = "";
+  if (trimmed.startsWith("/*")) {
+    const offset = text.length - trimmed.length;
+    const end = text.indexOf("*/", offset + 2);
+    if (end >= 0) prefix = `${text.slice(0, end + 2).trimEnd()}\n`;
   }
-  while (assigned < words.length) { counts[counts.length - 1] += 1; assigned += 1; }
-  let cursor = 0;
-  return counts.map(count => { const part = words.slice(cursor, cursor + count).join(" "); cursor += count; return part; });
+  return `${prefix}${JSON.stringify(document, null, 2)}\n`;
 }
 
-function markupSignature(source) { return (String(source || "").match(/{{[\s\S]*?}}|{%[\s\S]*?%}|<[^>]+>/g) || []).join("\u001f"); }
-function normalizeVisible(value) { return decodeEntities(String(value || "")).replace(/\s+/g, " ").trim().toLowerCase(); }
-function decodeEntities(value) { return String(value || "").replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&quot;/gi, "\"").replace(/&#39;|&apos;/gi, "'").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">"); }
-function clean(value) { return String(value || "").replace(/\s+/g, " ").trim(); }
-function validateBoundary(stagingTheme, mainTheme) { if (!stagingTheme?.gid || String(stagingTheme.role || "").toUpperCase() === "MAIN") throw httpError(409, "verified_staging_required", "A verified non-live Kairos Staging theme is required."); if (!mainTheme?.gid || String(mainTheme.role || "").toUpperCase() !== "MAIN") throw httpError(409, "main_theme_verification_failed", "The live MAIN theme could not be verified."); }
+function tokenSignature(value) {
+  return (String(value || "").match(/{{[\s\S]*?}}|{%[\s\S]*?%}|<\/?[a-z0-9:-]+(?:\s[^>]*)?>/gi) || []).join("\u001f");
+}
+
+function fileByName(files, filename) {
+  return (Array.isArray(files) ? files : []).find(file => file?.filename === filename && file?.readable && typeof file?.content === "string") || null;
+}
+function validateBoundary(stagingTheme, mainTheme) {
+  if (!stagingTheme?.gid || String(stagingTheme.role || "").toUpperCase() === "MAIN") throw httpError(409, "verified_staging_required", "A verified non-live Kairos Staging theme is required.");
+  if (!mainTheme?.gid || String(mainTheme.role || "").toUpperCase() !== "MAIN") throw httpError(409, "main_theme_verification_failed", "The published MAIN theme could not be verified.");
+}
+function deepEqual(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
 function jobRequest(request, jobID) { return new Request(new URL(`/_kairos/standalone-execution-jobs/${jobID}`, request.url).toString(), { method: "GET" }); }
-function json(value, status = 200) { return new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-MMG-Runtime": KAIROS_HOMEPAGE_PRESERVE_PLANNER_BUILD, "X-Kairos-Homepage-Mode": "preserve-current-design", "X-Kairos-Design-Preservation": "template-css-markup-node-distribution", "X-Content-Type-Options": "nosniff" } }); }
+function json(value, status = 200) {
+  return new Response(JSON.stringify(value), {
+    status,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-MMG-Runtime": KAIROS_HOMEPAGE_PRESERVE_PLANNER_BUILD,
+      "X-Kairos-Homepage-Mode": "preserve-published-framework",
+      "X-Kairos-Homepage-Source": "published-main-theme",
+      "X-Kairos-Mutation-Scope": "templates-index-json-existing-string-settings-only",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+}
