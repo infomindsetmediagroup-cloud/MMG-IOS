@@ -1,9 +1,9 @@
 {
-  "status": "passed",
-  "validatedCommit": "98112dea0685952972fb931733b33d78a55b75a1",
+  "status": "failed",
+  "validatedCommit": "720967694a61cfae95a2b9fabe6568b6df426e8e",
   "branch": "fix/rendered-homepage-text-guarantee",
-  "workflowRunID": "29541548565",
-  "workflowRunURL": "https://github.com/infomindsetmediagroup-cloud/MMG-IOS/actions/runs/29541548565",
+  "workflowRunID": "29541684940",
+  "workflowRunURL": "https://github.com/infomindsetmediagroup-cloud/MMG-IOS/actions/runs/29541684940",
   "checks": [
     "javascript-syntax",
     "active-ordered-section-filter",
@@ -14,5 +14,5 @@
     "frozen-production-standard",
     "wrangler-deploy-dry-run"
   ],
-  "completedAt": "2026-07-16T23:11:11.189Z"
+  "completedAt": "2026-07-16T23:14:28.310Z"
 }
