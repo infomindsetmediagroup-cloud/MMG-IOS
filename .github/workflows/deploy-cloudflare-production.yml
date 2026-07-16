@@ -38,17 +38,31 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CONFIGURED_PRODUCTION_URL: ${{ vars.KAIROS_PRODUCTION_URL }}
         run: |
           set -euo pipefail
           test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo "CLOUDFLARE_API_TOKEN is required." >&2; exit 1; }
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}" || { echo "CLOUDFLARE_ACCOUNT_ID is required." >&2; exit 1; }
-          npx wrangler deploy
+
+          npx wrangler deploy 2>&1 | tee wrangler-deploy.log
+
+          deployed_url="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' wrangler-deploy.log | tail -1 || true)"
+          production_url="${CONFIGURED_PRODUCTION_URL:-${deployed_url}}"
+          production_url="${production_url%/}"
+
+          test -n "${production_url}" || {
+            echo "Wrangler did not report a workers.dev URL and KAIROS_PRODUCTION_URL is not configured." >&2
+            exit 1
+          }
+
+          echo "KAIROS_PRODUCTION_URL=${production_url}" >> "$GITHUB_ENV"
+          echo "Cloudflare production URL: ${production_url}"
 
       - name: Verify live application
-        env:
-          KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
         run: |
           set -euo pipefail
+          test -n "${KAIROS_PRODUCTION_URL:-}" || { echo "KAIROS_PRODUCTION_URL was not resolved during deployment." >&2; exit 1; }
+
           for attempt in $(seq 1 24); do
             nonce="${GITHUB_SHA}-${attempt}-$(date +%s)"
             rm -f health.json dashboard.html
@@ -60,10 +74,10 @@ jobs:
               "${KAIROS_PRODUCTION_URL}/center/content/website?deployment=${nonce}" \
               --output dashboard.html || true
             if node -e 'const fs=require("fs");let h={};try{h=JSON.parse(fs.readFileSync("health.json","utf8"))}catch{};const x=fs.existsSync("dashboard.html")?fs.readFileSync("dashboard.html","utf8"):"";const ok=["ready","ok","operational"].includes(String(h.status||"").toLowerCase())&&x.includes("kairos-command-center-routed-20260715-7")&&x.includes("scripts/command-hub.js?v=routed-20260715-7")&&x.includes("scripts/website-stage-three-recovery.js?v=20260715-2");process.exit(ok?0:1)'; then
-              echo "Cloudflare Worker and Website Retool route are live."
+              echo "Cloudflare Worker and Website Retool route are live at ${KAIROS_PRODUCTION_URL}."
               exit 0
             fi
             sleep 5
           done
-          echo "Cloudflare deployment did not restore the live application." >&2
+          echo "Cloudflare deployment did not restore the live application at ${KAIROS_PRODUCTION_URL}." >&2
           exit 1
