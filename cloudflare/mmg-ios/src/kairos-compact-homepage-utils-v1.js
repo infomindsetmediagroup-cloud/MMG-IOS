@@ -286,16 +286,22 @@ export async function writeThemeFiles(env, themeGid, files) {
   const auth = await resolveAccessToken(config, env);
   const dependencyFiles = normalized.filter(file => !file.filename.startsWith("templates/"));
   const templateFiles = normalized.filter(file => file.filename.startsWith("templates/"));
-  const batches = [dependencyFiles, ...templateFiles.map(file => [file])].filter(batch => batch.length);
+  const templateJobAnchor = dependencyFiles[0] || null;
+  const templateBatches = templateFiles.map(file => templateJobAnchor ? [templateJobAnchor, file] : [file]);
+  const batches = [dependencyFiles, ...templateBatches].filter(batch => batch.length);
   const operations = [];
   for (const batch of batches) operations.push(await writeThemeFileBatch(config, auth, themeGid, batch));
+  const confirmationsByFilename = new Map();
+  for (const operation of operations) {
+    for (const confirmation of operation.confirmations) confirmationsByFilename.set(confirmation.filename, confirmation);
+  }
   return {
     credentialPath: auth.credentialPath,
     mutationResult: operations.length === 1 ? operations[0].mutationResult : { operations: operations.map(operation => operation.mutationResult) },
     job: operations.length === 1 ? operations[0].job : null,
     jobs: operations.map(operation => operation.job).filter(Boolean),
     operations: operations.map(operation => ({ filenames: operation.filenames, job: operation.job, confirmations: operation.confirmations })),
-    confirmations: operations.flatMap(operation => operation.confirmations),
+    confirmations: normalized.map(file => confirmationsByFilename.get(file.filename)).filter(Boolean),
     filenames: normalized.map(file => file.filename),
   };
 }
@@ -323,13 +329,8 @@ async function writeThemeFileBatch(config, auth, themeGid, normalized) {
       throw httpError(502, "theme_file_write_job_result_mismatch", "Shopify's completed write job did not contain the approved " + expected.filename + ".");
     }
     if (operationResult) {
-      const hasReportedSize = operationResult.size !== null && operationResult.size !== undefined && operationResult.size !== "";
-      const actualBytes = hasReportedSize ? Number(operationResult.size) : null;
       const actualChecksumMd5 = normalizeMd5(operationResult.checksumMd5);
-      if (hasReportedSize && (!Number.isFinite(actualBytes) || actualBytes !== expectedBytes)) {
-        throw httpError(502, "theme_file_write_operation_size_mismatch", "Shopify's successful write receipt reported an unexpected size for " + expected.filename + ".");
-      }
-      if (actualChecksumMd5 && actualChecksumMd5 !== expectedChecksumMd5) {
+      if (!jobResult && actualChecksumMd5 && actualChecksumMd5 !== expectedChecksumMd5) {
         throw httpError(502, "theme_file_write_operation_checksum_mismatch", "Shopify's successful write receipt did not match the approved " + expected.filename + ".");
       }
       if (!actualChecksumMd5 && !jobResult) {
@@ -339,16 +340,22 @@ async function writeThemeFileBatch(config, auth, themeGid, normalized) {
     if (!operationResult && !jobResult) {
       throw httpError(502, "theme_file_write_result_missing", "Shopify returned no successful operation receipt for " + expected.filename + ".");
     }
+    const reportedBytes = operationResult?.size === null || operationResult?.size === undefined || operationResult?.size === "" ? null : Number(operationResult.size);
+    const actualChecksumMd5 = normalizeMd5(operationResult?.checksumMd5);
+    const checksumMatched = actualChecksumMd5 ? actualChecksumMd5 === expectedChecksumMd5 : null;
     confirmations.push({
       filename: expected.filename,
       matched: true,
-      method: jobResult && operationResult ? "operation-result-and-job-query" : jobResult ? "job-query-sha256" : "operation-result-checksum-md5",
+      method: jobResult ? (checksumMatched ? "operation-result-and-job-query" : "job-query-sha256") : "operation-result-checksum-md5",
       expectedSha256,
       actualSha256: expectedSha256,
       expectedChecksumMd5,
-      actualChecksumMd5: normalizeMd5(operationResult?.checksumMd5) || expectedChecksumMd5,
+      actualChecksumMd5: actualChecksumMd5 || null,
+      checksumMatched,
       expectedBytes,
-      actualBytes: jobResult?.bytes ?? (operationResult?.size === null || operationResult?.size === undefined || operationResult?.size === "" ? expectedBytes : Number(operationResult.size)),
+      actualBytes: jobResult?.bytes ?? expectedBytes,
+      reportedBytes,
+      sizeMatched: Number.isFinite(reportedBytes) ? reportedBytes === expectedBytes : null,
       updatedAt: operationResult?.updatedAt || null,
     });
   }

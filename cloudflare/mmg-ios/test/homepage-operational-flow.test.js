@@ -63,10 +63,14 @@ test("Website Retool completes proposal, staging preview, approval, live save, v
     assert.equal(execution.evidence.verificationSource, "shopify-successful-operation-results");
     assert.equal(execution.evidence.operationConfirmations.length, 3);
     assert.equal(execution.evidence.operationConfirmations.every(item => item.matched), true);
-    assert.equal(execution.evidence.operationConfirmations.find(item => item.filename === "templates/index.json").actualBytes > 0, true);
+    const templateConfirmation = execution.evidence.operationConfirmations.find(item => item.filename === "templates/index.json");
+    assert.equal(templateConfirmation.actualBytes, templateConfirmation.expectedBytes);
+    assert.equal(templateConfirmation.sizeMatched, false);
+    assert.equal(templateConfirmation.checksumMatched, true);
+    assert.equal(templateConfirmation.method, "operation-result-checksum-md5");
     assert.deepEqual(shopify.writeBatches, [
       ["sections/mmg-canonical-homepage.liquid", "assets/mmg-canonical-homepage.css"],
-      ["templates/index.json"],
+      ["sections/mmg-canonical-homepage.liquid", "templates/index.json"],
     ]);
     assert.notDeepEqual(shopify.themeFiles(STAGING_ID), shopify.themeFiles(MAIN_ID));
 
@@ -246,7 +250,7 @@ class MultiThemeShopify {
         return Response.json({ data: { themeFilesUpsert: { job: { id, done: false }, upsertedThemeFiles: [], userErrors: [] } } });
       }
       this.applyFiles(variables.themeId, variables.files || []);
-      return Response.json({ data: { themeFilesUpsert: { job: null, upsertedThemeFiles: (variables.files || []).map(file => ({ filename: file.filename, checksumMd5: md5Text(file.body.value), size: file.filename === "templates/index.json" ? null : new TextEncoder().encode(file.body.value).length, updatedAt: new Date().toISOString() })), userErrors: [] } } });
+      return Response.json({ data: { themeFilesUpsert: { job: null, upsertedThemeFiles: (variables.files || []).map(file => ({ filename: file.filename, checksumMd5: md5Text(file.body.value), size: new TextEncoder().encode(file.body.value).length + (file.filename === "templates/index.json" ? 338 : 0), updatedAt: new Date().toISOString() })), userErrors: [] } } });
     }
     if (query.includes("mutation KairosThemeFilesDelete")) {
       const files = this.files.get(variables.themeId);
