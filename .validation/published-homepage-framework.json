@@ -1,14 +1,23 @@
 {
   "status": "passed",
-  "validatedCommit": "f477fe549afb35f34c49033bd7eb4f2492ae75ec",
+  "validatedCommit": "e67c2ad8b9f07200fb13d5267f998c9985ba1648",
+  "productionCommit": "d808620da182a00fe17b3b04648051e67ebe7291",
+  "productionBuild": "kairos-production-entry-20260716-98",
   "branch": "validate/published-homepage-framework",
-  "workflowRunID": "29540654166",
-  "workflowRunURL": "https://github.com/infomindsetmediagroup-cloud/MMG-IOS/actions/runs/29540654166",
+  "workflowRunID": "29540799587",
+  "workflowRunURL": "https://github.com/infomindsetmediagroup-cloud/MMG-IOS/actions/runs/29540799587",
   "checks": [
     "javascript-syntax",
     "production-validation-suite",
     "frozen-production-standard",
-    "wrangler-deploy-dry-run"
+    "wrangler-deploy-dry-run",
+    "live-v41-health",
+    "live-dashboard-build-17",
+    "published-main-source",
+    "templates-index-json-only",
+    "existing-string-settings-only",
+    "canonical-rebuild-fallback-prohibited",
+    "safe-routing-no-shopify-mutation"
   ],
-  "completedAt": "2026-07-16T22:50:19.142Z"
+  "completedAt": "2026-07-16T22:53:36.958Z"
 }
