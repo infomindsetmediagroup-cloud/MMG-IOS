@@ -55,6 +55,10 @@ test("Website Retool completes proposal, staging preview, approval, live save, v
     assert.equal(shopify.writeJobPolls, 2);
     assert.equal(shopify.staleReadbacks, 1);
     assert.equal(execution.evidence.readBackAttempts, 2);
+    assert.deepEqual(shopify.writeBatches, [
+      ["sections/mmg-canonical-homepage.liquid", "assets/mmg-canonical-homepage.css"],
+      ["templates/index.json"],
+    ]);
     assert.notDeepEqual(shopify.themeFiles(STAGING_ID), shopify.themeFiles(MAIN_ID));
 
     const visual = await jsonBody(await request("/api/shopify/staging/visual-verification", {
@@ -161,6 +165,7 @@ class MultiThemeShopify {
     this.staleReadbacks = 0;
     this.jobs = new Map();
     this.pendingWrites = [];
+    this.writeBatches = [];
     this.nextJobID = 1;
     const source = JSON.stringify(homepage, null, 2) + "\n";
     this.themes = new Map([
@@ -217,9 +222,14 @@ class MultiThemeShopify {
         job.done = true;
         this.completedWriteJobs += 1;
       }
-      return Response.json({ data: { job: { id: job.id, done: job.done } } });
+      const nodes = job.done ? (variables.filenames || []).filter(filename => job.files.some(file => file.filename === filename)).map(filename => {
+        const file = job.files.find(item => item.filename === filename);
+        return { filename, contentType: "TEXT", body: { content: file.body.value } };
+      }) : [];
+      return Response.json({ data: { job: { id: job.id, done: job.done, query: job.done ? { theme: { files: { nodes, userErrors: [] } } } : null } } });
     }
     if (query.includes("mutation KairosThemeFilesUpsert")) {
+      this.writeBatches.push((variables.files || []).map(file => file.filename));
       if (this.deferredWrites > 0) {
         this.deferredWrites -= 1;
         const id = `gid://shopify/Job/${this.nextJobID++}`;
