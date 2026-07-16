@@ -121,11 +121,27 @@ jobs:
             echo "Kairos enhanced inference did not become ready after six probes." >&2
             exit 1
           fi
+          curl --fail-with-body --silent --show-error --location --max-time 60 \
+            -H 'Content-Type: application/json' -H 'Cache-Control: no-cache' -H 'X-Kairos-Autonomy-Dispatch: manual' \
+            --data "{\"title\":\"Deployment native execution ${GITHUB_SHA}\",\"objective\":\"Prove that Kairos produces a grounded native analysis artifact and verifies durable read-back before task completion.\",\"center\":\"operations\",\"priority\":\"high\",\"source\":\"verified-production-deployment\",\"tasks\":[{\"title\":\"Observe authoritative deployment workflow\",\"description\":\"Read this durable workflow and produce a grounded internal deployment verification artifact.\",\"stage\":\"observe\",\"executionClass\":\"native-analysis\"}]}" \
+            "${KAIROS_PRODUCTION_URL}/api/workflows" \
+            --output native-validation-workflow.json
+          workflow_id="$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync("native-validation-workflow.json","utf8")).workflow.id)')"
           curl --fail-with-body --silent --show-error --location --max-time 180 \
             -H 'Content-Type: application/json' -H 'Cache-Control: no-cache' \
-            --data "{\"source\":\"deployment:${GITHUB_SHA}\"}" \
+            --data "{\"source\":\"deployment:${GITHUB_SHA}\",\"workflowID\":\"${workflow_id}\"}" \
             "${KAIROS_PRODUCTION_URL}/api/autonomy/run" \
             --output autonomy-cycle.json
+          artifact_id="$(node -e 'const x=JSON.parse(require("fs").readFileSync("autonomy-cycle.json","utf8"));process.stdout.write(x.applied?.[0]?.artifactID||"")')"
+          test -n "${artifact_id}"
+          curl --fail-with-body --silent --show-error --location --max-time 60 \
+            -H 'Cache-Control: no-cache' \
+            "${KAIROS_PRODUCTION_URL}/api/autonomy/artifacts/${artifact_id}?deployment=${GITHUB_SHA}" \
+            --output native-validation-artifact.json
+          curl --fail-with-body --silent --show-error --location --max-time 60 \
+            -H 'Cache-Control: no-cache' \
+            "${KAIROS_PRODUCTION_URL}/api/workflows/${workflow_id}?deployment=${GITHUB_SHA}" \
+            --output native-validation-readback.json
           curl --fail-with-body --silent --show-error --location --max-time 60 \
             -H 'Cache-Control: no-cache' \
             "${KAIROS_PRODUCTION_URL}/api/autonomy/status?deployment=${GITHUB_SHA}" \
@@ -135,7 +151,10 @@ jobs:
           const inference=JSON.parse(fs.readFileSync('inference-health.json','utf8'));
           const requested=JSON.parse(fs.readFileSync('autonomy-cycle.json','utf8'));
           const autonomy=JSON.parse(fs.readFileSync('autonomy-status.json','utf8'));
+          const artifact=JSON.parse(fs.readFileSync('native-validation-artifact.json','utf8')).artifact;
+          const workflow=JSON.parse(fs.readFileSync('native-validation-readback.json','utf8')).workflow;
           const cycle=requested.status==='completed'?requested:autonomy.lastCycle;
+          const task=workflow?.tasks?.[0];
           const checks={
             inferenceReady:inference.status==='ready'&&inference.reachable===true,
             accountScoped:inference.mode==='cloudflare-account-scoped'&&inference.provider==='cloudflare-workers-ai',
@@ -144,9 +163,14 @@ jobs:
             autonomyOperational:autonomy.status==='operational'&&autonomy.enabled===true,
             cycleCompleted:cycle?.status==='completed',
             intelligentDecision:cycle?.inference?.mode==='cloudflare-account-scoped',
+            nativeActionApplied:cycle?.actionsApplied===1&&cycle?.applied?.[0]?.artifactReadbackVerified===true&&cycle?.applied?.[0]?.atomicCommitVerified===true,
+            artifactVerified:artifact?.status==='verified'&&typeof artifact?.contentHash==='string'&&artifact.contentHash.length===64&&artifact?.safeguards?.durableReadbackRequired===true,
+            reasoningPrivate:artifact?.safeguards?.modelReasoningStored===false,
+            workflowReadback:workflow?.state==='completed'&&task?.state==='completed'&&task?.nativeOutput?.artifactID===artifact?.id,
+            noExternalEffect:artifact?.safeguards?.externalActionTaken===false&&cycle?.applied?.[0]?.externalActionTaken===false,
             boundedExternalEffects:cycle?.safeguards?.approvalRequired?.includes('external-publication')&&cycle?.safeguards?.prohibited?.includes('bypass-approval')
           };
-          console.log(JSON.stringify({checks,inference:{status:inference.status,mode:inference.mode,provider:inference.provider,model:inference.model,privacy:inference.privacy},cycle:{id:cycle?.id,status:cycle?.status,actionsApplied:cycle?.actionsApplied,decisionsPreserved:cycle?.decisionsPreserved}},null,2));
+          console.log(JSON.stringify({checks,inference:{status:inference.status,mode:inference.mode,provider:inference.provider,model:inference.model,privacy:inference.privacy},cycle:{id:cycle?.id,status:cycle?.status,actionsApplied:cycle?.actionsApplied,decisionsPreserved:cycle?.decisionsPreserved},artifact:{id:artifact?.id,status:artifact?.status,contentHash:artifact?.contentHash},workflow:{id:workflow?.id,state:workflow?.state,progress:workflow?.progress}},null,2));
           if(Object.values(checks).some(value=>value!==true))process.exit(1);
           NODE
 

@@ -1,0 +1,89 @@
+.workflow-error,
+.workflow-notice {
+  padding: 12px;
+  border: 1px solid #6f3340;
+  border-radius: 12px;
+  background: #261117;
+  color: #ffd7dd;
+}
+
+.workflow-notice {
+  border-color: #256b67;
+  background: #0b2928;
+  color: #c8fff1;
+}
+
+.workflow-task-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 7px;
+}
+
+.workflow-task-labels span {
+  padding: 4px 7px;
+  border: 1px solid #28536e;
+  border-radius: 999px;
+  color: #93cce9;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.workflow-native-output {
+  grid-column: 1 / -1;
+  padding: 12px;
+  border: 1px solid #24516a;
+  border-radius: 12px;
+  background: #091923;
+}
+
+.workflow-native-output summary {
+  cursor: pointer;
+  color: #9edfff;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.workflow-native-output h4 { margin: 13px 0 4px; }
+.workflow-native-output > p { color: #9cb3c2; }
+
+.workflow-deliverable {
+  margin: 12px 0;
+  padding: 13px;
+  border-left: 3px solid #39d69e;
+  background: #061017;
+  color: #e6f6f3;
+  white-space: pre-wrap;
+}
+
+.workflow-native-output dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.workflow-native-output dl div {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.workflow-native-output dt {
+  color: #7291a5;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.workflow-native-output dd {
+  margin: 0;
+  color: #b9cad4;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 800px) {
+  .workflow-native-output dl div { grid-template-columns: 1fr; }
+}

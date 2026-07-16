@@ -1,7 +1,7 @@
 import { analyzeNativeObjective } from "./kairos-native-kernel-v1.js";
 import { inferenceRuntime, intelligenceConfigured, parseStrictJSON, runKairosIntelligence } from "./kairos-intelligence-v1.js";
 
-export const KAIROS_OPERATIONAL_RUNTIME_BUILD = "kairos-operational-runtime-20260715-2";
+export const KAIROS_OPERATIONAL_RUNTIME_BUILD = "kairos-operational-runtime-20260716-3";
 const LEDGER_NAME = "kairos-operational-ledger-v1";
 const VALID_STATES = new Set(["ready", "active", "blocked", "completed", "cancelled"]);
 const VALID_PRIORITIES = new Set(["critical", "high", "normal", "low"]);
@@ -112,6 +112,8 @@ async function runCommand(request, env) {
   const checkpointDecision = action === "executive-briefing" && Boolean(payload?.decision);
   const completedOnWrite = decision || checkpointDecision;
   const tasks = buildTasks(definition, objective, intelligence, now, completedOnWrite);
+  const taskApprovalRequired = tasks.some(task => task.approvalRequired);
+  const approvalRequired = Boolean((definition.approvalRequired || taskApprovalRequired) && !completedOnWrite);
   const workflow = {
     id: workflowID,
     build: KAIROS_OPERATIONAL_RUNTIME_BUILD,
@@ -126,8 +128,8 @@ async function runCommand(request, env) {
     completedAt: completedOnWrite ? now : null,
     owner: definition.owner,
     source: `command-center/${action}`,
-    approvalRequired: Boolean(definition.approvalRequired && !completedOnWrite),
-    approvalStatus: definition.approvalRequired && !completedOnWrite ? "pending" : "not-required",
+    approvalRequired,
+    approvalStatus: approvalRequired ? "pending" : "not-required",
     tasks,
     progress: completedOnWrite ? 100 : 0,
     nextAction: completedOnWrite ? "Review the durable execution receipt" : tasks[0]?.title || "Open the domain workspace",
@@ -209,11 +211,17 @@ async function buildIntelligentPlan(env, definition, objective, analysis) {
       temperature: 0.1,
       maxTokens: 2600,
       purpose: "operational-planning",
-      system: "You are the Kairos enhanced objective-planning runtime. Return strict JSON only with keys summary, tasks, verification. tasks is an array of 3-8 objects with title and description. Follow the MMG/Kairos lifecycle Observe, Understand, Decide, Execute, Verify, Preserve, Improve. Kairos orchestrates; domain services execute. Never claim an external action occurred without evidence. Preserve approvals for publishing, communications, spend, billing, destructive actions, and permission changes.",
+      system: "You are the Kairos enhanced objective-planning runtime. Return strict JSON only with keys summary, tasks, verification. tasks is an array of 3-8 objects with title, description, stage, executionClass, and approvalRequired. stage must be observe, understand, decide, execute, verify, preserve, or improve. executionClass must be native-analysis, internal-domain-deliverable, or high-impact-domain-action. Follow the MMG/Kairos lifecycle Observe, Understand, Decide, Execute, Verify, Preserve, Improve. Kairos may execute safe internal deliverables; external effects remain domain-service actions behind approval. Never claim an external action occurred without evidence. Preserve approvals for publishing, communications, spend, billing, destructive actions, permission changes, and live mutations.",
       user: JSON.stringify({ action: definition.title, owner: definition.owner, center: definition.center, objective, nativeAnalysis: analysis, routes: definition.apiRoutes }),
     });
     const parsed = parseStrictJSON(result.text);
-    const tasks = Array.isArray(parsed?.tasks) ? parsed.tasks.slice(0, 8).map(item => ({ title: clean(item?.title, 240), description: clean(item?.description, 2000) })).filter(item => item.title) : [];
+    const tasks = Array.isArray(parsed?.tasks) ? parsed.tasks.slice(0, 8).map(item => ({
+      title: clean(item?.title, 240),
+      description: clean(item?.description, 2000),
+      stage: normalizeTaskStage(item?.stage || item?.title),
+      executionClass: normalizeExecutionClass(item?.executionClass),
+      approvalRequired: Boolean(item?.approvalRequired),
+    })).filter(item => item.title) : [];
     if (!tasks.length) throw new Error("Kairos enhanced intelligence returned no executable tasks.");
     return {
       mode: result.runtime,
@@ -279,6 +287,18 @@ async function updateWorkflowEndpoint(request, id, env) {
     workflow.approvalStatus = "approved";
     workflow.approvedAt = now;
     workflow.approvedBy = clean(payload?.actor || "Executive", 120);
+    for (const task of workflow.tasks || []) {
+      if (task.approvalRequired && task.approvalStatus !== "approved") {
+        task.approvalStatus = "approved";
+        task.approvedAt = now;
+        task.approvedBy = workflow.approvedBy;
+        task.updatedAt = now;
+      }
+    }
+    if (workflow.state === "ready") {
+      workflow.state = "active";
+      workflow.startedAt ||= now;
+    }
   } else if (command === "start") {
     if (workflow.approvalRequired && workflow.approvalStatus !== "approved") return error(409, "workflow_approval_required", "This workflow requires approval before it can start.");
     workflow.state = "active";
@@ -314,7 +334,19 @@ async function createTaskEndpoint(request, workflowID, env) {
   if (!title) return error(400, "task_title_required", "Enter a task title.");
   const now = new Date().toISOString();
   workflow.tasks ||= [];
-  workflow.tasks.push({ id: `task-${crypto.randomUUID()}`, title, description: clean(payload?.description, 2000), state: "ready", owner: clean(payload?.owner || "Kairos", 120), createdAt: now, updatedAt: now, completedAt: null });
+  workflow.tasks.push(taskRecord({
+    title,
+    description: clean(payload?.description, 2000),
+    stage: payload?.stage,
+    executionClass: payload?.executionClass,
+    approvalRequired: payload?.approvalRequired,
+    owner: payload?.owner,
+  }, now, false, workflow.tasks.length));
+  const createdTask = workflow.tasks[workflow.tasks.length - 1];
+  if (createdTask.approvalRequired && createdTask.approvalStatus !== "approved") {
+    workflow.approvalRequired = true;
+    workflow.approvalStatus = "pending";
+  }
   workflow.updatedAt = now;
   refreshWorkflow(workflow);
   await ledgerUpsert(env, "workflows", workflowID, workflow);
@@ -342,12 +374,13 @@ async function updateTaskEndpoint(request, workflowID, taskID, env) {
 }
 
 async function systemRegistry(request, env, delegate) {
-  const [workflows, workItems, receipts, autonomyCycles, autonomyDecisions, health, capabilities, readiness] = await Promise.all([
+  const [workflows, workItems, receipts, autonomyCycles, autonomyDecisions, nativeArtifacts, health, capabilities, readiness] = await Promise.all([
     ledgerList(env, "workflows", 500),
     ledgerList(env, "work-items", 500),
     ledgerList(env, "execution-receipts", 100),
     ledgerList(env, "autonomy-cycles", 50),
     ledgerList(env, "autonomy-decisions", 100),
+    ledgerList(env, "native-task-artifacts", 200),
     delegateJSON(request, delegate, "/api/health"),
     delegateJSON(request, delegate, "/api/capabilities"),
     delegateJSON(request, delegate, "/api/readiness-registry"),
@@ -365,18 +398,21 @@ async function systemRegistry(request, env, delegate) {
     build: KAIROS_OPERATIONAL_RUNTIME_BUILD,
     sourceOfTruth: "KAIROS_PROJECTS durable operational ledger",
     intelligence: {
-      nativeObjectiveAnalysis: "operational",
+      nativeObjectiveAnalysis: "operational-with-verified-artifacts",
+      nativeTaskExecution: "operational-with-durable-readback",
       enhancedRuntime: enhancedInference.configured ? "operational" : "needs-configuration",
-      privateRuntime: enhancedInference.mode,
+      inferenceMode: enhancedInference.mode,
       provider: enhancedInference.provider,
       model: enhancedInference.model,
       privacy: enhancedInference.privacy,
       selfHosted: enhancedInference.selfHosted,
+      selfHostedPrivateRuntime: enhancedInference.selfHosted ? "operational" : "not-configured-optional-upgrade",
       deterministicFallback: "operational",
     },
     autonomy: {
       status: String(env?.KAIROS_AUTONOMY_ENABLED || "").toLowerCase() === "true" ? "operational" : "disabled",
-      mode: "bounded-supervised-autonomy",
+      mode: "verified-native-intelligent-autonomy",
+      schedule: "event-driven plus 15-minute recovery cycle",
       lastCycle: autonomyCycles[0] || null,
       decisionsPreserved: autonomyDecisions.length,
     },
@@ -387,6 +423,7 @@ async function systemRegistry(request, env, delegate) {
       executionReceipts: receipts.length,
       autonomyCycles: autonomyCycles.length,
       autonomyDecisions: autonomyDecisions.length,
+      nativeTaskArtifacts: nativeArtifacts.length,
     },
     actions,
     runtime: compactEvidence(health),
@@ -411,6 +448,8 @@ function newWorkflow(payload = {}) {
   if (!title || !objective) throw Object.assign(new Error("Enter a workflow title and objective."), { statusCode: 400, code: "workflow_input_required" });
   const now = new Date().toISOString();
   const sourceTasks = Array.isArray(payload?.tasks) && payload.tasks.length ? payload.tasks : domainTaskSeeds({ title, owner: payload?.owner || "Kairos" }, objective);
+  const tasks = sourceTasks.slice(0, 50).map((item, index) => taskRecord(item, now, false, index));
+  const approvalRequired = Boolean(payload?.approvalRequired || tasks.some(task => task.approvalRequired));
   const workflow = {
     id: `workflow-${crypto.randomUUID()}`,
     build: KAIROS_OPERATIONAL_RUNTIME_BUILD,
@@ -425,9 +464,9 @@ function newWorkflow(payload = {}) {
     completedAt: null,
     owner: clean(payload?.owner || "Kairos", 120),
     source: clean(payload?.source || "command-center", 160),
-    approvalRequired: Boolean(payload?.approvalRequired),
-    approvalStatus: payload?.approvalRequired ? "pending" : "not-required",
-    tasks: sourceTasks.slice(0, 50).map(item => taskRecord(item, now, false)),
+    approvalRequired,
+    approvalStatus: approvalRequired ? "pending" : "not-required",
+    tasks,
     progress: 0,
     nextAction: "Start workflow",
     safeguards: canonicalSafeguards(),
@@ -438,14 +477,21 @@ function newWorkflow(payload = {}) {
 
 function buildTasks(definition, objective, intelligence, now, completed) {
   const source = Array.isArray(intelligence?.tasks) && intelligence.tasks.length ? intelligence.tasks : domainTaskSeeds(definition, objective);
-  return source.slice(0, 12).map(item => taskRecord(item, now, completed));
+  return source.slice(0, 12).map((item, index) => taskRecord(item, now, completed, index));
 }
 
-function taskRecord(item, now, completed) {
+function taskRecord(item, now, completed, index = 0) {
+  const stage = normalizeTaskStage(item?.stage || item?.title, index);
+  const executionClass = normalizeExecutionClass(item?.executionClass, stage);
+  const approvalRequired = Boolean(item?.approvalRequired || executionClass === "high-impact-domain-action");
   return {
     id: `task-${crypto.randomUUID()}`,
     title: clean(item?.title, 240) || "Execute governed task",
     description: clean(item?.description, 2000),
+    stage,
+    executionClass,
+    approvalRequired,
+    approvalStatus: approvalRequired ? "pending" : "not-required",
     state: completed ? "completed" : "ready",
     owner: clean(item?.owner || "Kairos", 120),
     createdAt: now,
@@ -456,13 +502,13 @@ function taskRecord(item, now, completed) {
 
 function domainTaskSeeds(definition, objective) {
   return [
-    { title: "Observe authoritative current state", description: `Gather the current records, doctrine, permissions, dependencies, and source evidence for: ${objective}` },
-    { title: "Understand objective and completion evidence", description: `Confirm scope, constraints, success criteria, owner, and the exact durable outcome for ${definition.title}.` },
-    { title: "Decide governed execution path", description: `Route the work through ${definition.owner} and its canonical domain services without moving business logic into the presentation layer.` },
-    { title: "Execute through the domain workspace", description: `Use ${definition.title} and its registered APIs to perform the bounded work. High-impact effects remain approval-gated.` },
-    { title: "Verify authoritative result", description: "Read back the resulting source-of-truth record and validate completeness, quality, security, and evidence." },
-    { title: "Preserve deliverable and receipt", description: "Persist the work item, workflow, domain record, evidence, decision context, and recommended next action." },
-    { title: "Improve reusable capability", description: "Capture the reusable lesson, template, or workflow refinement without silently changing constitutional authority." },
+    { title: "Observe authoritative current state", stage: "observe", executionClass: "native-analysis", description: `Gather the current records, doctrine, permissions, dependencies, and source evidence for: ${objective}` },
+    { title: "Understand objective and completion evidence", stage: "understand", executionClass: "native-analysis", description: `Confirm scope, constraints, success criteria, owner, and the exact durable outcome for ${definition.title}.` },
+    { title: "Decide governed execution path", stage: "decide", executionClass: "native-analysis", description: `Route the work through ${definition.owner} and its canonical domain services without moving business logic into the presentation layer.` },
+    { title: "Execute through the domain workspace", stage: "execute", executionClass: "internal-domain-deliverable", description: `Produce the bounded internal ${definition.title} deliverable. High-impact external effects remain approval-gated domain-service actions.` },
+    { title: "Verify authoritative result", stage: "verify", executionClass: "native-analysis", description: "Read back the resulting source-of-truth record and validate completeness, quality, security, and evidence." },
+    { title: "Preserve deliverable and receipt", stage: "preserve", executionClass: "native-analysis", description: "Persist the work item, workflow, domain record, evidence, decision context, and recommended next action." },
+    { title: "Improve reusable capability", stage: "improve", executionClass: "native-analysis", description: "Capture the reusable lesson, template, or workflow refinement without silently changing constitutional authority." },
   ];
 }
 
@@ -513,6 +559,16 @@ function contract(title, center, owner, module, event, apiRoutes, approvalRequir
 
 function defaultObjective(definition) { return `Inspect and operate ${definition.title} using current authoritative records.`; }
 function normalizePriority(value) { return VALID_PRIORITIES.has(value) ? value : "normal"; }
+function normalizeTaskStage(value, index = 0) {
+  const text = String(value || "").trim().toLowerCase();
+  for (const stage of ["observe", "understand", "decide", "execute", "verify", "preserve", "improve"]) if (text === stage || text.startsWith(`${stage} `)) return stage;
+  return ["observe", "understand", "decide", "execute", "verify", "preserve", "improve"][index] || "unclassified";
+}
+function normalizeExecutionClass(value, stage = "unclassified") {
+  const normalized = clean(value, 80).toLowerCase();
+  if (["native-analysis", "internal-domain-deliverable", "high-impact-domain-action"].includes(normalized)) return normalized;
+  return stage === "execute" ? "internal-domain-deliverable" : "native-analysis";
+}
 function shortTitle(value) { const text = clean(value, 180); return text.length < 90 ? text : `${text.slice(0, 87)}…`; }
 function commandContext(payload) { return Object.fromEntries(Object.entries(payload || {}).filter(([key]) => key !== "action" && key !== "objective").map(([key, value]) => [key, typeof value === "string" ? clean(value, 12000) : value])); }
 function section(name, content) { return { name, status: "completed", content: String(content || "") }; }
@@ -560,6 +616,18 @@ export async function ledgerUpsert(env, collection, id, value) {
   const response = await ledgerStub(env).fetch(new Request("https://kairos.internal/ledger/upsert", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ collection, id, value }) }));
   if (!response.ok) throw new Error(`Kairos could not persist ${collection}/${id}.`);
   return value;
+}
+
+export async function ledgerBatchUpsert(env, records) {
+  const normalized = Array.isArray(records) ? records.filter(record => record?.collection && record?.id && record?.value) : [];
+  if (!normalized.length) throw new Error("Kairos requires one or more records for atomic persistence.");
+  const response = await ledgerStub(env).fetch(new Request("https://kairos.internal/ledger/batch-upsert", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ records: normalized }),
+  }));
+  if (!response.ok) throw new Error("Kairos could not atomically persist the native execution records.");
+  return response.json();
 }
 
 export async function ledgerGet(env, collection, id) {
