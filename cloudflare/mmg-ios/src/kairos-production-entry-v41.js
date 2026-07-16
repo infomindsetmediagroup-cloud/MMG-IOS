@@ -3,7 +3,7 @@ import { KAIROS_HOMEPAGE_PRESERVE_PLANNER_BUILD } from "./kairos-homepage-preser
 import renderedTextPlanner, { KAIROS_RENDERED_HOMEPAGE_TEXT_PLANNER_BUILD } from "./kairos-rendered-homepage-text-planner-v1.js";
 import templateTextExecutor, { KAIROS_HOMEPAGE_TEMPLATE_TEXT_EXECUTOR_BUILD } from "./kairos-homepage-template-text-executor-v1.js";
 
-const BUILD = "kairos-production-entry-20260716-99";
+const BUILD = "kairos-production-entry-20260716-98";
 const PLAN_ROUTE = "/api/shopify/staging/plan/jobs";
 const EXECUTE_ROUTE = "/api/shopify/staging/execute/jobs";
 
@@ -61,10 +61,12 @@ async function addHealth(response) {
     plannerBuild: KAIROS_HOMEPAGE_PRESERVE_PLANNER_BUILD,
     renderedTextPlannerBuild: KAIROS_RENDERED_HOMEPAGE_TEXT_PLANNER_BUILD,
     executorBuild: KAIROS_HOMEPAGE_TEMPLATE_TEXT_EXECUTOR_BUILD,
-    contract: "published-main-template-to-rendered-text-only-staging-preview",
+    contract: "published-main-template-to-text-only-staging-preview",
+    renderedTextContract: "active-ordered-primary-copy-delta-required",
     sourceOfTruth: "published-main-theme",
     mutableFiles: ["templates/index.json"],
-    mutableValues: "existing-rendered-customer-facing-string-settings-only",
+    mutableValues: "existing-customer-facing-string-settings-only",
+    renderedMutableValues: "active-ordered-customer-facing-string-settings-only",
     renderedTextRequirement: "at-least-one-active-primary-copy-delta",
     hiddenTextSuccess: "prohibited",
     disabledSectionTextSuccess: "prohibited",
