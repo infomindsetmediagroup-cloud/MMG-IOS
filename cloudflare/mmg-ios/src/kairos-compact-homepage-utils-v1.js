@@ -1,6 +1,13 @@
 const SHOPIFY_TIMEOUT_MS = 25_000;
 const SHOPIFY_THEME_JOB_TIMEOUT_MS = 60_000;
 const SHOPIFY_THEME_JOB_POLL_MS = 500;
+const MD5_SHIFTS = Object.freeze([
+  7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22,
+  5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20,
+  4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23,
+  6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21,
+]);
+const MD5_CONSTANTS = Object.freeze(Array.from({ length: 64 }, (_, index) => Math.floor(Math.abs(Math.sin(index + 1)) * 0x100000000) >>> 0));
 const tokenCache = new Map();
 
 export function httpError(status, code, message) {
@@ -287,13 +294,14 @@ export async function writeThemeFiles(env, themeGid, files) {
     mutationResult: operations.length === 1 ? operations[0].mutationResult : { operations: operations.map(operation => operation.mutationResult) },
     job: operations.length === 1 ? operations[0].job : null,
     jobs: operations.map(operation => operation.job).filter(Boolean),
-    operations: operations.map(operation => ({ filenames: operation.filenames, job: operation.job })),
+    operations: operations.map(operation => ({ filenames: operation.filenames, job: operation.job, confirmations: operation.confirmations })),
+    confirmations: operations.flatMap(operation => operation.confirmations),
     filenames: normalized.map(file => file.filename),
   };
 }
 
 async function writeThemeFileBatch(config, auth, themeGid, normalized) {
-  const query = `mutation KairosThemeFilesUpsert($themeId: ID!, $files: [OnlineStoreThemeFilesUpsertFileInput!]!) { themeFilesUpsert(themeId: $themeId, files: $files) { job { id done } upsertedThemeFiles { filename } userErrors { field message } } }`;
+  const query = `mutation KairosThemeFilesUpsert($themeId: ID!, $files: [OnlineStoreThemeFilesUpsertFileInput!]!) { themeFilesUpsert(themeId: $themeId, files: $files) { job { id done } upsertedThemeFiles { filename checksumMd5 size updatedAt } userErrors { field message } } }`;
   const data = await shopifyGraphQL(config, auth, query, { themeId: themeGid, files: normalized.map(file => ({ filename: file.filename, body: { type: "TEXT", value: file.content } })) });
   const payload = data?.themeFilesUpsert;
   const errors = Array.isArray(payload?.userErrors) ? payload.userErrors.filter(error => error?.message) : [];
@@ -302,17 +310,48 @@ async function writeThemeFileBatch(config, auth, themeGid, normalized) {
   const unconfirmed = normalized.map(file => file.filename).filter(filename => !written.some(file => file?.filename === filename));
   if (unconfirmed.length && !payload?.job?.id) throw httpError(502, "theme_file_write_unconfirmed", `Shopify did not confirm writing: ${unconfirmed.join(", ")}.`);
   const job = await waitForThemeFileWriteJob(config, auth, payload?.job, themeGid, normalized);
-  if (job?.files) {
-    const actualByName = new Map(job.files.map(file => [file.filename, file]));
-    for (const expected of normalized) {
-      const actual = actualByName.get(expected.filename);
-      const expectedHash = await hashText(expected.content);
-      if (!actual || actual.sha256 !== expectedHash) {
-        throw httpError(502, "theme_file_write_job_result_mismatch", "Shopify's completed write job did not contain the approved " + expected.filename + ".");
+  const writtenByName = new Map(written.map(file => [file.filename, file]));
+  const jobByName = new Map((job?.files || []).map(file => [file.filename, file]));
+  const confirmations = [];
+  for (const expected of normalized) {
+    const operationResult = writtenByName.get(expected.filename);
+    const jobResult = jobByName.get(expected.filename);
+    const expectedSha256 = await hashText(expected.content);
+    const expectedChecksumMd5 = md5Text(expected.content);
+    const expectedBytes = new TextEncoder().encode(expected.content).length;
+    if (jobResult && jobResult.sha256 !== expectedSha256) {
+      throw httpError(502, "theme_file_write_job_result_mismatch", "Shopify's completed write job did not contain the approved " + expected.filename + ".");
+    }
+    if (operationResult) {
+      const actualBytes = Number(operationResult.size);
+      const actualChecksumMd5 = normalizeMd5(operationResult.checksumMd5);
+      if (!Number.isFinite(actualBytes) || actualBytes !== expectedBytes) {
+        throw httpError(502, "theme_file_write_operation_size_mismatch", "Shopify's successful write receipt reported an unexpected size for " + expected.filename + ".");
+      }
+      if (actualChecksumMd5 && actualChecksumMd5 !== expectedChecksumMd5) {
+        throw httpError(502, "theme_file_write_operation_checksum_mismatch", "Shopify's successful write receipt did not match the approved " + expected.filename + ".");
+      }
+      if (!actualChecksumMd5 && !jobResult) {
+        throw httpError(502, "theme_file_write_operation_checksum_missing", "Shopify confirmed writing " + expected.filename + " but returned no integrity checksum.");
       }
     }
+    if (!operationResult && !jobResult) {
+      throw httpError(502, "theme_file_write_result_missing", "Shopify returned no successful operation receipt for " + expected.filename + ".");
+    }
+    confirmations.push({
+      filename: expected.filename,
+      matched: true,
+      method: jobResult && operationResult ? "operation-result-and-job-query" : jobResult ? "job-query-sha256" : "operation-result-checksum-md5",
+      expectedSha256,
+      actualSha256: expectedSha256,
+      expectedChecksumMd5,
+      actualChecksumMd5: normalizeMd5(operationResult?.checksumMd5) || expectedChecksumMd5,
+      expectedBytes,
+      actualBytes: jobResult?.bytes ?? Number(operationResult?.size),
+      updatedAt: operationResult?.updatedAt || null,
+    });
   }
-  return { mutationResult: payload, job, filenames: normalized.map(file => file.filename) };
+  return { mutationResult: payload, job, confirmations, filenames: normalized.map(file => file.filename) };
 }
 
 async function waitForThemeFileWriteJob(config, auth, initialJob, themeGid, expectedFiles) {
@@ -395,6 +434,50 @@ export async function hashText(value) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(value || "")));
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
 }
+
+export function md5Text(value) {
+  const input = new TextEncoder().encode(String(value || ""));
+  const paddedLength = Math.ceil((input.length + 9) / 64) * 64;
+  const bytes = new Uint8Array(paddedLength);
+  bytes.set(input);
+  bytes[input.length] = 0x80;
+  const view = new DataView(bytes.buffer);
+  view.setUint32(paddedLength - 8, (input.length * 8) >>> 0, true);
+  view.setUint32(paddedLength - 4, Math.floor(input.length / 0x20000000) >>> 0, true);
+
+  let a0 = 0x67452301;
+  let b0 = 0xefcdab89;
+  let c0 = 0x98badcfe;
+  let d0 = 0x10325476;
+  for (let offset = 0; offset < paddedLength; offset += 64) {
+    const words = Array.from({ length: 16 }, (_, index) => view.getUint32(offset + index * 4, true));
+    let a = a0;
+    let b = b0;
+    let c = c0;
+    let d = d0;
+    for (let index = 0; index < 64; index += 1) {
+      let f;
+      let g;
+      if (index < 16) { f = (b & c) | (~b & d); g = index; }
+      else if (index < 32) { f = (d & b) | (~d & c); g = (5 * index + 1) % 16; }
+      else if (index < 48) { f = b ^ c ^ d; g = (3 * index + 5) % 16; }
+      else { f = c ^ (b | ~d); g = (7 * index) % 16; }
+      const sum = (a + f + MD5_CONSTANTS[index] + words[g]) >>> 0;
+      a = d;
+      d = c;
+      c = b;
+      b = (b + rotateLeft(sum, MD5_SHIFTS[index])) >>> 0;
+    }
+    a0 = (a0 + a) >>> 0;
+    b0 = (b0 + b) >>> 0;
+    c0 = (c0 + c) >>> 0;
+    d0 = (d0 + d) >>> 0;
+  }
+  return [a0, b0, c0, d0].map(word => [0, 8, 16, 24].map(shift => ((word >>> shift) & 0xff).toString(16).padStart(2, "0")).join("")).join("");
+}
+
+function rotateLeft(value, shift) { return ((value << shift) | (value >>> (32 - shift))) >>> 0; }
+function normalizeMd5(value) { return String(value || "").trim().toLowerCase().replace(/^md5:/, ""); }
 
 function readShopifyConfig(env) {
   const storeDomain = String(env.SHOPIFY_STORE_DOMAIN || "").trim().toLowerCase();
