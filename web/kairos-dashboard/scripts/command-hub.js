@@ -1,5 +1,5 @@
-import{cleanupDomainWorkspace,isDomainWorkspace,openDomainWorkspace}from"./workspace-runtime.js";
-const BUILD="kairos-command-hub-routed-20260715-3";
+import{cleanupDomainWorkspace,isDomainWorkspace,openDomainWorkspace}from"./workspace-runtime.js?v=20260716-2";
+const BUILD="kairos-command-hub-routed-20260716-4";
 const HEADER_ASSET="https://cdn.shopify.com/s/files/1/0754/4337/2186/files/kairos-app-header.png?v=1783815598";
 const WEBSITE_STATE_KEY="kairos.website.operational-flow.v2";
 const root=document.querySelector("#kairos-hub");

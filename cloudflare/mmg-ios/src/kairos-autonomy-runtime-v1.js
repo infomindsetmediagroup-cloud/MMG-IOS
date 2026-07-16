@@ -1,18 +1,21 @@
 import { inferenceRuntime, parseStrictJSON, runKairosIntelligence } from "./kairos-intelligence-v1.js";
-import { ledgerGet, ledgerList, ledgerUpsert } from "./kairos-operational-runtime-v1.js";
+import { ledgerBatchUpsert, ledgerGet, ledgerList, ledgerUpsert } from "./kairos-operational-runtime-v1.js";
+import { classifyNativeTask, executeNativeTask, KAIROS_NATIVE_TASK_EXECUTION_BUILD } from "./kairos-native-task-execution-v1.js";
 
-export const KAIROS_AUTONOMY_BUILD = "kairos-autonomy-runtime-20260715-1";
+export const KAIROS_AUTONOMY_BUILD = "kairos-autonomy-runtime-20260716-2";
 const CONTROL_OBJECT = "kairos-intelligence-control-v1";
 const OPEN_STATES = new Set(["ready", "active"]);
 const TERMINAL_TASK_STATES = new Set(["completed", "cancelled"]);
 
 export const KAIROS_AUTONOMY_POLICY = Object.freeze({
-  mode: "bounded-supervised-autonomy",
+  mode: "verified-native-intelligent-autonomy",
   automaticCapabilities: Object.freeze([
     "read-authoritative-state",
     "prioritize-durable-work",
     "start-eligible-internal-workflows",
-    "complete-evidence-backed-analysis-steps",
+    "produce-grounded-native-analysis-deliverables",
+    "execute-safe-internal-domain-deliverables",
+    "verify-durable-artifact-readback-before-completion",
     "preserve-decisions-and-receipts",
   ]),
   approvalRequired: Object.freeze([
@@ -42,10 +45,22 @@ export async function handleAutonomyRequest(request, env, delegate) {
     const decisions = await ledgerList(env, "autonomy-decisions", 100);
     return json({ status: "ready", build: KAIROS_AUTONOMY_BUILD, decisions });
   }
+  if (url.pathname === "/api/autonomy/artifacts" && request.method === "GET") {
+    const artifacts = await ledgerList(env, "native-task-artifacts", 200);
+    return json({ status: "ready", build: KAIROS_AUTONOMY_BUILD, nativeExecutionBuild: KAIROS_NATIVE_TASK_EXECUTION_BUILD, artifacts });
+  }
+  const artifactMatch = url.pathname.match(/^\/api\/autonomy\/artifacts\/([^/]+)$/);
+  if (artifactMatch && request.method === "GET") {
+    const artifact = await ledgerGet(env, "native-task-artifacts", decodeURIComponent(artifactMatch[1]));
+    return artifact ? json({ status: "ready", build: KAIROS_AUTONOMY_BUILD, artifact }) : json({ status: "not-found", error: { code: "native_artifact_not_found", message: "Native execution artifact not found." } }, 404);
+  }
   if (url.pathname === "/api/autonomy/run" && request.method === "POST") {
     const payload = await safeBody(request);
+    const targetWorkflowID = clean(payload?.workflowID, 220) || null;
     const cycle = await runAutonomyCycle(env, {
       source: clean(payload?.source || "manual-bounded-cycle", 160),
+      targetWorkflowID,
+      claimScope: targetWorkflowID ? `workflow-${targetWorkflowID}` : null,
       delegate,
     });
     return json(cycle, cycle.status === "disabled" ? 503 : cycle.status === "failed" ? 502 : cycle.status === "deferred" ? 202 : 200);
@@ -62,24 +77,45 @@ export async function runAutonomyCycle(env, options = {}) {
   }
 
   const source = clean(options.source || "scheduled", 160);
-  const claim = await claimCycle(env, source);
+  const targetWorkflowID = clean(options.targetWorkflowID, 220) || null;
+  const claimScope = clean(options.claimScope, 220) || (targetWorkflowID ? `workflow-${targetWorkflowID}` : "operational-cycle");
+  const claim = await claimCycle(env, source, claimScope, options.minimumIntervalMs);
   if (claim.status !== "claimed") return { status: "deferred", build: KAIROS_AUTONOMY_BUILD, source, claim, policy: KAIROS_AUTONOMY_POLICY };
 
   const cycleID = `autonomy-${crypto.randomUUID()}`;
   const startedAt = new Date().toISOString();
   try {
-    const snapshot = await gatherSnapshot(env, options.delegate);
-    const plan = await buildDecisionPlan(env, snapshot);
+    const snapshot = await gatherSnapshot(env, options.delegate, targetWorkflowID);
+    const plan = snapshot.candidates.length ? await buildDecisionPlan(env, snapshot) : emptyDecisionPlan(targetWorkflowID);
     const applied = [];
     const preserved = [];
     const maximum = Math.max(1, Math.min(10, Number(env.KAIROS_AUTONOMY_MAX_WORKFLOWS_PER_CYCLE || 3)));
+    let nativeTaskBudget = Math.max(1, Math.min(5, Number(env.KAIROS_AUTONOMY_MAX_NATIVE_TASKS_PER_CYCLE || 5)));
+    const perWorkflowMaximum = Math.max(1, Math.min(5, Number(env.KAIROS_AUTONOMY_MAX_TASKS_PER_WORKFLOW_PER_CYCLE || 5)));
 
-    for (const decision of plan.decisions.slice(0, maximum)) {
-      const workflow = snapshot.workflowRecords.get(decision.workflowID);
+    for (const initialDecision of plan.decisions.slice(0, maximum)) {
+      const workflow = snapshot.workflowRecords.get(initialDecision.workflowID);
       if (!workflow) continue;
-      const result = await applyDecision(env, workflow, decision, cycleID, startedAt);
-      preserved.push(result.decision);
-      if (result.applied) applied.push(result.applied);
+      const executionClaim = await claimCycle(env, source, `execution-${workflow.id}`, 60_000);
+      if (executionClaim.status !== "claimed") continue;
+      const workItem = workflow.workItemID ? snapshot.workItemRecords.get(workflow.workItemID) || null : null;
+      let decision = initialDecision;
+      let workflowTasksApplied = 0;
+      while (decision && nativeTaskBudget > 0 && workflowTasksApplied < perWorkflowMaximum) {
+        const result = await applyDecision(env, workflow, workItem, decision, cycleID, new Date().toISOString(), snapshot.publicSnapshot);
+        preserved.push(result.decision);
+        if (!result.applied) break;
+        applied.push(result.applied);
+        nativeTaskBudget -= 1;
+        workflowTasksApplied += 1;
+        decision = continuationDecision(workflow, workItem, result.applied);
+        if (decision && decision.action !== "execute-native") {
+          const boundary = await applyDecision(env, workflow, workItem, decision, cycleID, new Date().toISOString(), snapshot.publicSnapshot);
+          preserved.push(boundary.decision);
+          break;
+        }
+      }
+      if (nativeTaskBudget <= 0) break;
     }
 
     const completedAt = new Date().toISOString();
@@ -93,6 +129,7 @@ export async function runAutonomyCycle(env, options = {}) {
       completedAt,
       updatedAt: completedAt,
       inference: plan.inference,
+      nativeExecutionBuild: KAIROS_NATIVE_TASK_EXECUTION_BUILD,
       summary: plan.summary,
       snapshot: snapshot.publicSnapshot,
       candidateWorkflows: snapshot.candidates.length,
@@ -125,9 +162,10 @@ export async function runAutonomyCycle(env, options = {}) {
 }
 
 async function autonomyStatus(env) {
-  const [cycles, decisions] = await Promise.all([
+  const [cycles, decisions, artifacts] = await Promise.all([
     ledgerList(env, "autonomy-cycles", 50),
     ledgerList(env, "autonomy-decisions", 100),
+    ledgerList(env, "native-task-artifacts", 200),
   ]);
   const enabled = autonomyEnabled(env);
   return json({
@@ -135,46 +173,69 @@ async function autonomyStatus(env) {
     build: KAIROS_AUTONOMY_BUILD,
     enabled,
     mode: KAIROS_AUTONOMY_POLICY.mode,
-    schedule: "Cloudflare Cron Trigger · twice daily",
+    schedule: "event-driven execution · 15-minute recovery cycle",
     intelligence: inferenceRuntime(env),
     policy: KAIROS_AUTONOMY_POLICY,
-    counts: { cycles: cycles.length, decisions: decisions.length },
+    nativeExecutionBuild: KAIROS_NATIVE_TASK_EXECUTION_BUILD,
+    counts: { cycles: cycles.length, decisions: decisions.length, verifiedNativeArtifacts: artifacts.filter(value => value?.status === "verified").length },
     lastCycle: cycles[0] || null,
   }, enabled ? 200 : 503);
 }
 
-async function gatherSnapshot(env, delegate) {
-  const [workflows, workItems, receipts, readiness, health] = await Promise.all([
+async function gatherSnapshot(env, delegate, targetWorkflowID = null) {
+  const [workflows, workItems, receipts, artifacts, readiness, health] = await Promise.all([
     ledgerList(env, "workflows", 500),
     ledgerList(env, "work-items", 500),
     ledgerList(env, "execution-receipts", 100),
+    ledgerList(env, "native-task-artifacts", 200),
     delegateJSON(delegate, "/api/readiness-registry"),
     delegateJSON(delegate, "/api/health"),
   ]);
+  const workItemRecords = new Map(workItems.filter(value => value?.id).map(value => [value.id, value]));
   const candidates = workflows
     .filter(workflow => workflow?.id && OPEN_STATES.has(workflow.state))
+    .filter(workflow => !targetWorkflowID || workflow.id === targetWorkflowID)
     .sort(compareWorkflows)
     .slice(0, 30)
-    .map(workflow => ({
-      id: workflow.id,
-      title: clean(workflow.title, 240),
-      objective: clean(workflow.objective, 1000),
-      state: workflow.state,
-      priority: workflow.priority || "normal",
-      owner: workflow.owner || "Kairos",
-      approvalRequired: Boolean(workflow.approvalRequired),
-      approvalStatus: workflow.approvalStatus || "not-required",
-      progress: Number(workflow.progress || 0),
-      tasks: (workflow.tasks || []).map(task => ({ id: task.id, title: clean(task.title, 240), state: task.state })),
-    }));
+    .map(workflow => {
+      const workItem = workflow.workItemID ? workItemRecords.get(workflow.workItemID) || null : null;
+      return {
+        id: workflow.id,
+        title: clean(workflow.title, 240),
+        objective: clean(workflow.objective, 1000),
+        state: workflow.state,
+        priority: workflow.priority || "normal",
+        owner: workflow.owner || "Kairos",
+        action: workItem?.action || null,
+        approvalRequired: Boolean(workflow.approvalRequired),
+        approvalStatus: workflow.approvalStatus || "not-required",
+        progress: Number(workflow.progress || 0),
+        tasks: (workflow.tasks || []).map(task => {
+          const classification = classifyNativeTask(workflow, task, workItem);
+          return {
+            id: task.id,
+            title: clean(task.title, 240),
+            description: clean(task.description, 1000),
+            state: task.state,
+            stage: classification.stage,
+            executionClass: classification.executionClass,
+            automaticEligible: classification.automaticEligible,
+            approvalRequired: classification.approvalRequired,
+            eligibilityReason: classification.reason,
+          };
+        }),
+      };
+    });
   return {
     candidates,
     workflowRecords: new Map(workflows.filter(value => value?.id).map(value => [value.id, value])),
+    workItemRecords,
     publicSnapshot: {
       capturedAt: new Date().toISOString(),
       workflows: workflows.length,
       workItems: workItems.length,
       recentExecutionReceipts: receipts.length,
+      verifiedNativeArtifacts: artifacts.filter(value => value?.status === "verified").length,
       readyWorkflows: workflows.filter(value => value.state === "ready").length,
       activeWorkflows: workflows.filter(value => value.state === "active").length,
       pendingApprovals: workflows.filter(value => value.approvalRequired && value.approvalStatus !== "approved" && !["completed", "cancelled"].includes(value.state)).length,
@@ -186,20 +247,26 @@ async function gatherSnapshot(env, delegate) {
 
 async function buildDecisionPlan(env, snapshot) {
   const fallback = deterministicPlan(snapshot, "deterministic-policy-fallback");
+  const hasAutomaticWork = snapshot.candidates.some(workflow => workflow.tasks.find(task => !TERMINAL_TASK_STATES.has(task.state))?.automaticEligible);
+  if (!hasAutomaticWork) return deterministicPlan(snapshot, "enhanced-inference-not-required-for-approval-or-hold");
   const runtime = inferenceRuntime(env);
   if (!runtime.configured) return fallback;
   try {
     const generated = await runKairosIntelligence(env, {
       purpose: "autonomy-cycle",
       temperature: 0.1,
-      maxTokens: 2200,
-      system: "You are Kairos, the bounded MMG operating intelligence. Return strict JSON only with keys summary, decisions, recommendations, verification. Each decision must contain workflowID, action, rationale, confidence. action must be advance-internal, request-approval, or hold. You may advance only evidence-backed internal Observe, Understand, or Decide tasks. Never authorize external publication, customer communication, spending, billing, destructive changes, permissions, access changes, or live storefront mutations. Never claim an execution occurred without authoritative evidence.",
+      maxTokens: 2400,
+      system: "You are Kairos, the verified native MMG operating intelligence. Return strict JSON only with keys summary, decisions, recommendations, verification. Each decision must contain workflowID, action, rationale, confidence. action must be execute-native, request-approval, or hold. Choose execute-native only when the candidate's next open task has automaticEligible true. Native execution must produce and durably verify a grounded internal deliverable before the task can complete. Never authorize external publication, customer communication, spending, billing, destructive changes, permissions, access changes, or live storefront mutations. Never claim an execution occurred without an authoritative artifact and read-back receipt.",
       user: JSON.stringify({ policy: KAIROS_AUTONOMY_POLICY, operatingState: snapshot.publicSnapshot, candidateWorkflows: snapshot.candidates }),
     });
     const parsed = parseStrictJSON(generated.text);
     const byID = new Map(snapshot.candidates.map(value => [value.id, value]));
     const decisions = Array.isArray(parsed?.decisions) ? parsed.decisions.map(value => normalizeDecision(value, byID)).filter(Boolean) : [];
     if (!decisions.length && snapshot.candidates.length) throw new Error("Enhanced inference returned no valid bounded decisions.");
+    const decided = new Set(decisions.map(value => value.workflowID));
+    for (const candidate of snapshot.candidates) {
+      if (!decided.has(candidate.id)) decisions.push(deterministicDecision(candidate));
+    }
     return {
       summary: clean(parsed?.summary, 3000) || "Kairos evaluated the durable operating queue.",
       decisions,
@@ -213,20 +280,12 @@ async function buildDecisionPlan(env, snapshot) {
 }
 
 function deterministicPlan(snapshot, fallbackReason) {
-  const decisions = snapshot.candidates.map(workflow => {
-    if (workflow.approvalRequired && workflow.approvalStatus !== "approved") {
-      return { workflowID: workflow.id, action: "request-approval", rationale: "The workflow has a constitutional approval gate that Kairos cannot bypass.", confidence: 1 };
-    }
-    const task = workflow.tasks.find(value => !TERMINAL_TASK_STATES.has(value.state) && internalAnalysisTitle(value.title));
-    return task
-      ? { workflowID: workflow.id, action: "advance-internal", rationale: `Advance the evidence-backed internal analysis step: ${task.title}.`, confidence: 0.9 }
-      : { workflowID: workflow.id, action: "hold", rationale: "No eligible internal analysis step remains; domain execution or verified evidence is required.", confidence: 0.98 };
-  });
+  const decisions = snapshot.candidates.map(deterministicDecision);
   return {
     summary: "Kairos evaluated the durable queue with its constitutional bounded-autonomy policy.",
     decisions,
     recommendations: ["Present pending approvals and domain-execution requirements in the Work Queue."],
-    verification: ["Every automatic transition must have a durable decision and execution receipt."],
+    verification: ["Every automatic transition must have a verified native artifact, durable read-back, decision, and execution receipt."],
     inference: { status: "fallback", mode: "deterministic-native", provider: "kairos-native", model: null, privacy: "local-deterministic-processing", fallbackReason },
   };
 }
@@ -236,9 +295,12 @@ function normalizeDecision(value, candidates) {
   const workflow = candidates.get(workflowID);
   if (!workflow) return null;
   let action = clean(value?.action, 60).toLowerCase().replaceAll("_", "-");
-  if (!new Set(["advance-internal", "request-approval", "hold"]).has(action)) action = "hold";
+  if (action === "advance-internal") action = "execute-native";
+  if (!new Set(["execute-native", "request-approval", "hold"]).has(action)) action = "hold";
+  const nextTask = workflow.tasks.find(task => !TERMINAL_TASK_STATES.has(task.state));
   if (workflow.approvalRequired && workflow.approvalStatus !== "approved") action = "request-approval";
-  if (action === "advance-internal" && !workflow.tasks.some(task => !TERMINAL_TASK_STATES.has(task.state) && internalAnalysisTitle(task.title))) action = "hold";
+  else if (nextTask?.automaticEligible) action = "execute-native";
+  else if (action === "execute-native") action = nextTask?.approvalRequired ? "request-approval" : "hold";
   return {
     workflowID,
     action,
@@ -247,7 +309,40 @@ function normalizeDecision(value, candidates) {
   };
 }
 
-async function applyDecision(env, workflow, decision, cycleID, decidedAt) {
+function deterministicDecision(workflow) {
+  if (workflow.approvalRequired && workflow.approvalStatus !== "approved") {
+    return { workflowID: workflow.id, action: "request-approval", rationale: "The workflow has a constitutional approval gate that Kairos cannot bypass.", confidence: 1 };
+  }
+  const task = workflow.tasks.find(value => !TERMINAL_TASK_STATES.has(value.state));
+  return task?.automaticEligible
+    ? { workflowID: workflow.id, action: "execute-native", rationale: `Produce and verify the grounded native deliverable for: ${task.title}.`, confidence: 0.9 }
+    : task?.approvalRequired
+      ? { workflowID: workflow.id, action: "request-approval", rationale: `${task.title} crosses an approval boundary: ${task.eligibilityReason}.`, confidence: 1 }
+      : { workflowID: workflow.id, action: "hold", rationale: "The next task is not eligible for verified native execution; domain evidence or a classified execution path is required.", confidence: 0.98 };
+}
+
+function continuationDecision(workflow, workItem, applied) {
+  const task = (workflow.tasks || []).find(value => !TERMINAL_TASK_STATES.has(value.state));
+  if (!task || workflow.state === "completed") return null;
+  const classification = classifyNativeTask(workflow, task, workItem);
+  return classification.automaticEligible
+    ? { workflowID: workflow.id, action: "execute-native", rationale: `Continue the governed lifecycle after verified read-back of ${applied.artifactID}; produce ${task.title}.`, confidence: 1 }
+    : classification.approvalRequired
+      ? { workflowID: workflow.id, action: "request-approval", rationale: `${task.title} reached the constitutional boundary: ${classification.reason}.`, confidence: 1 }
+      : { workflowID: workflow.id, action: "hold", rationale: `${task.title} is not eligible for native automatic execution: ${classification.reason}.`, confidence: 1 };
+}
+
+function emptyDecisionPlan(targetWorkflowID) {
+  return {
+    summary: targetWorkflowID ? "The targeted workflow has no open native-eligible work." : "The operating queue has no open native-eligible work.",
+    decisions: [],
+    recommendations: [],
+    verification: ["No workflow or task state was changed."],
+    inference: { status: "not-required", mode: "deterministic-native", provider: "kairos-native", model: null, privacy: "local-deterministic-processing", fallbackReason: null },
+  };
+}
+
+async function applyDecision(env, workflow, workItem, decision, cycleID, decidedAt, operatingSnapshot) {
   const decisionID = `autonomy-decision-${crypto.randomUUID()}`;
   const preserved = {
     id: decisionID,
@@ -264,53 +359,158 @@ async function applyDecision(env, workflow, decision, cycleID, decidedAt) {
   };
 
   let applied = null;
-  if (decision.action === "advance-internal" && (!workflow.approvalRequired || workflow.approvalStatus === "approved")) {
-    const task = (workflow.tasks || []).find(value => !TERMINAL_TASK_STATES.has(value.state) && internalAnalysisTitle(value.title));
-    if (task) {
-      const completedAt = new Date().toISOString();
-      if (workflow.state === "ready") {
-        workflow.state = "active";
-        workflow.startedAt ||= completedAt;
+  const task = (workflow.tasks || []).find(value => !TERMINAL_TASK_STATES.has(value.state));
+  if (decision.action === "execute-native" && task && (!workflow.approvalRequired || workflow.approvalStatus === "approved")) {
+    try {
+      const execution = await executeNativeTask(env, { workflow, task, workItem, cycleID, decisionID, operatingSnapshot });
+      if (execution.status !== "verified") {
+        preserved.status = "blocked";
+        preserved.blockedReason = execution.reason;
+        preserved.classification = execution.classification;
+      } else {
+        const artifact = execution.artifact;
+        const completedAt = new Date().toISOString();
+        if (workflow.state === "ready") {
+          workflow.state = "active";
+          workflow.startedAt ||= completedAt;
+        }
+        task.state = "completed";
+        task.completedAt = completedAt;
+        task.updatedAt = completedAt;
+        task.stage = artifact.stage;
+        task.executionClass = artifact.executionClass;
+        task.nativeOutput = {
+          artifactID: artifact.id,
+          status: artifact.status,
+          stage: artifact.stage,
+          summary: artifact.summary,
+          deliverable: artifact.deliverable,
+          findings: artifact.findings,
+          evidenceReferences: artifact.evidenceReferences,
+          verification: artifact.verification,
+          nextAction: artifact.nextAction,
+          contentHash: artifact.contentHash,
+        };
+        task.executionEvidence = {
+          source: cycleID,
+          decisionID,
+          artifactID: artifact.id,
+          contentHash: artifact.contentHash,
+          kind: "verified-native-task-execution",
+          rationale: decision.rationale,
+          authoritativeStateRead: true,
+          artifactReadbackVerified: true,
+          externalActionTaken: false,
+          liveMutationPerformed: false,
+          recordedAt: completedAt,
+        };
+        workflow.updatedAt = completedAt;
+        refreshWorkflow(workflow);
+        if (workflow.progress === 100) {
+          workflow.state = "completed";
+          workflow.completedAt = completedAt;
+          workflow.nextAction = "Review verified native deliverables and execution receipts";
+        }
+        let workItemUpdate = null;
+        if (workItem?.id) {
+          const artifactIDs = [...new Set([...(Array.isArray(workItem.nativeArtifactIDs) ? workItem.nativeArtifactIDs : []), artifact.id])];
+          const completed = workflow.state === "completed";
+          workItemUpdate = {
+            ...workItem,
+            state: completed ? "completed" : "active",
+            status: completed ? "completed" : "active",
+            operation: completed ? "autonomous-native-execution-completed" : "autonomous-native-execution",
+            nativeArtifactIDs: artifactIDs,
+            latestNativeOutput: task.nativeOutput,
+            completedAt: completed ? completedAt : workItem.completedAt || null,
+            updatedAt: completedAt,
+            nextAction: artifact.nextAction || workflow.nextAction,
+            evidence: {
+              ...(workItem.evidence || {}),
+              lastNativeArtifactID: artifact.id,
+              nativeArtifactReadbackVerified: true,
+              externalActionTaken: false,
+              inventedData: false,
+            },
+          };
+        }
+
+        const receiptID = `receipt-${crypto.randomUUID()}`;
+        const receipt = {
+          id: receiptID,
+          cycleID,
+          decisionID,
+          workflowID: workflow.id,
+          workItemID: workItem?.id || null,
+          taskID: task.id,
+          artifactID: artifact.id,
+          contentHash: artifact.contentHash,
+          status: "completed",
+          operation: `verified-native-${artifact.stage}`,
+          artifactReadbackVerified: true,
+          externalActionTaken: false,
+          liveMutationPerformed: false,
+          evidence: task.executionEvidence,
+          createdAt: completedAt,
+          updatedAt: completedAt,
+        };
+        preserved.status = "applied";
+        preserved.appliedAt = completedAt;
+        preserved.taskID = task.id;
+        preserved.artifactID = artifact.id;
+        preserved.receiptID = receiptID;
+        preserved.updatedAt = completedAt;
+
+        await ledgerBatchUpsert(env, [
+          { collection: "workflows", id: workflow.id, value: workflow },
+          ...(workItemUpdate ? [{ collection: "work-items", id: workItem.id, value: workItemUpdate }] : []),
+          { collection: "execution-receipts", id: receiptID, value: receipt },
+          { collection: "autonomy-decisions", id: decisionID, value: preserved },
+        ]);
+        const [workflowReadback, workItemReadback, receiptReadback, decisionReadback] = await Promise.all([
+          ledgerGet(env, "workflows", workflow.id),
+          workItemUpdate ? ledgerGet(env, "work-items", workItem.id) : Promise.resolve(null),
+          ledgerGet(env, "execution-receipts", receiptID),
+          ledgerGet(env, "autonomy-decisions", decisionID),
+        ]);
+        const verifiedTask = workflowReadback?.tasks?.find(value => value.id === task.id);
+        if (verifiedTask?.state !== "completed" || verifiedTask?.nativeOutput?.artifactID !== artifact.id) throw new Error("Kairos could not read back the completed native workflow task.");
+        if (workItemUpdate && workItemReadback?.evidence?.nativeArtifactReadbackVerified !== true) throw new Error("Kairos could not verify the native work-item read-back.");
+        if (receiptReadback?.artifactID !== artifact.id || receiptReadback?.artifactReadbackVerified !== true) throw new Error("Kairos could not verify the native execution receipt.");
+        if (decisionReadback?.status !== "applied" || decisionReadback?.artifactID !== artifact.id) throw new Error("Kairos could not verify the native execution decision.");
+        if (workItemUpdate) Object.assign(workItem, workItemUpdate);
+
+        applied = {
+          workflowID: workflow.id,
+          workItemID: workItem?.id || null,
+          taskID: task.id,
+          taskTitle: task.title,
+          stage: artifact.stage,
+          artifactID: artifact.id,
+          contentHash: artifact.contentHash,
+          receiptID,
+          state: workflow.state,
+          progress: workflow.progress,
+          artifactReadbackVerified: true,
+          atomicCommitVerified: true,
+          externalActionTaken: false,
+        };
       }
-      task.state = "completed";
-      task.completedAt = completedAt;
-      task.updatedAt = completedAt;
-      task.executionEvidence = {
-        source: cycleID,
-        decisionID,
-        kind: "bounded-internal-analysis",
-        rationale: decision.rationale,
-        authoritativeStateRead: true,
-        externalActionTaken: false,
-        recordedAt: completedAt,
-      };
-      workflow.updatedAt = completedAt;
-      refreshWorkflow(workflow);
-      await ledgerUpsert(env, "workflows", workflow.id, workflow);
-      if (workflow.workItemID) {
-        const workItem = await ledgerGet(env, "work-items", workflow.workItemID);
-        if (workItem) await ledgerUpsert(env, "work-items", workItem.id, { ...workItem, state: "active", status: "active", operation: "autonomous-internal-analysis", updatedAt: completedAt });
+    } catch (error) {
+      preserved.status = "blocked";
+      preserved.blockedReason = clean(error?.code || error?.message || "verified-native-task-execution-failed", 1200);
+      if (task.state === "completed" && !applied) {
+        const blockedAt = new Date().toISOString();
+        task.state = "blocked";
+        task.completedAt = null;
+        task.updatedAt = blockedAt;
+        task.blockedReason = preserved.blockedReason;
+        workflow.state = "blocked";
+        workflow.blockedReason = preserved.blockedReason;
+        workflow.updatedAt = blockedAt;
+        refreshWorkflow(workflow);
+        await ledgerUpsert(env, "workflows", workflow.id, workflow);
       }
-      const receiptID = `receipt-${crypto.randomUUID()}`;
-      const receipt = {
-        id: receiptID,
-        cycleID,
-        decisionID,
-        workflowID: workflow.id,
-        taskID: task.id,
-        status: "completed",
-        operation: "bounded-internal-analysis",
-        externalActionTaken: false,
-        evidence: task.executionEvidence,
-        createdAt: completedAt,
-        updatedAt: completedAt,
-      };
-      await ledgerUpsert(env, "execution-receipts", receiptID, receipt);
-      preserved.status = "applied";
-      preserved.appliedAt = completedAt;
-      preserved.taskID = task.id;
-      preserved.receiptID = receiptID;
-      applied = { workflowID: workflow.id, taskID: task.id, taskTitle: task.title, receiptID, state: workflow.state, progress: workflow.progress };
     }
   }
   await ledgerUpsert(env, "autonomy-decisions", decisionID, preserved);
@@ -327,12 +527,12 @@ function refreshWorkflow(workflow) {
   workflow.nextAction = next?.title || "Review completion evidence";
 }
 
-async function claimCycle(env, source) {
-  const minimumIntervalMs = Math.max(60_000, Math.min(24 * 60 * 60 * 1000, Number(env.KAIROS_AUTONOMY_MIN_INTERVAL_MS || 15 * 60 * 1000)));
+async function claimCycle(env, source, scope = "operational-cycle", requestedMinimumIntervalMs = null) {
+  const minimumIntervalMs = Math.max(60_000, Math.min(24 * 60 * 60 * 1000, Number(requestedMinimumIntervalMs || env.KAIROS_AUTONOMY_MIN_INTERVAL_MS || 15 * 60 * 1000)));
   const response = await controlStub(env).fetch(new Request("https://kairos.internal/control/autonomy/claim", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ scope: "operational-cycle", source, minimumIntervalMs }),
+    body: JSON.stringify({ scope, source, minimumIntervalMs }),
   }));
   const body = await safeResponseJSON(response);
   if (response.status === 409) return body;
@@ -346,10 +546,6 @@ function controlStub(env) {
 
 function autonomyEnabled(env) {
   return String(env?.KAIROS_AUTONOMY_ENABLED || "").trim().toLowerCase() === "true";
-}
-
-function internalAnalysisTitle(value) {
-  return /^(observe|understand|decide)\b/i.test(String(value || "").trim());
 }
 
 function compareWorkflows(left, right) {

@@ -1,4 +1,4 @@
-const BUILD = "kairos-workspace-runtime-20260715-1";
+const BUILD = "kairos-workspace-runtime-20260716-2";
 
 export const WORKSPACE_REGISTRY = Object.freeze({
   "knowledge-library": workspace("knowledge-operations.js", "kairos:knowledge-library:open", ["knowledge-operations.css"]),
@@ -20,7 +20,7 @@ export const WORKSPACE_REGISTRY = Object.freeze({
   "deliverables": workspace("deliverables.js", "kairos:deliverables:open", ["deliverables.css"]),
   "customer-journey": workspace("customer-journeys.js", "kairos:customer-journeys:open", ["customer-journeys.css"]),
   "support-intelligence": workspace("support-intelligence.js", "kairos:support-intelligence:open", ["support-intelligence.css"]),
-  "work-queue": workspace("workflow-runtime.js", "kairos:workflow-runtime:open", ["workflow-runtime.css"]),
+  "work-queue": workspace("workflow-runtime.js", "kairos:workflow-runtime:open", ["workflow-runtime.css", "workflow-native-output.css"]),
   "release-control": workspace("shopify-release-control.js", "kairos:release-control:open", ["shopify-release-control.css"]),
   "executive-briefing": workspace("executive-briefing.js", "kairos:executive-briefing:open", ["executive-briefing.css"]),
   "system-registry": workspace("system-registry.js", "kairos:system-registry:open", ["system-registry.css"]),

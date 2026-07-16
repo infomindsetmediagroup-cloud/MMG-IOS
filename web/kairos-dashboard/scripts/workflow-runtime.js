@@ -1,5 +1,5 @@
-const BUILD = "kairos-workflow-runtime-ui-20260714-2";
-const state = { open: false, loading: false, workflows: [], selected: null, error: "", filter: "all" };
+const BUILD = "kairos-workflow-runtime-ui-20260716-3";
+const state = { open: false, loading: false, workflows: [], selected: null, error: "", notice: "", filter: "all" };
 
 start();
 
@@ -69,15 +69,37 @@ async function openWorkflow(id) {
 
 async function workflowCommand(command) {
   if (!state.selected) return;
-  state.loading = true; state.error = ""; render();
+  state.loading = true; state.error = ""; state.notice = ""; render();
   try {
     const { response, body } = await request(`/api/workflows/${encodeURIComponent(state.selected.id)}`, {
       method: "PATCH", headers: headers(), body: JSON.stringify({ command, actor: "Executive" }),
     });
     if (!response.ok) throw new Error(body?.error?.message || "Kairos could not update the workflow.");
     state.selected = body.workflow;
+    if (command === "approve") state.notice = "Approved. Kairos started the targeted native execution cycle; refresh or use Run Kairos Now to read the latest verified artifacts.";
     await loadQueue();
   } catch (error) { state.error = error.message || "Kairos could not update the workflow."; }
+  finally { state.loading = false; render(); }
+}
+
+async function runKairos() {
+  if (!state.selected) return;
+  const workflowID = state.selected.id;
+  state.loading = true; state.error = ""; state.notice = "Kairos is analyzing authoritative records and producing verified native deliverables…"; render();
+  try {
+    const { response, body } = await request("/api/autonomy/run", {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({ source: "work-queue-targeted-cycle", workflowID }),
+    });
+    if (!response.ok && response.status !== 202) throw new Error(body?.error?.message || "Kairos could not run the targeted workflow cycle.");
+    const read = await request(`/api/workflows/${encodeURIComponent(workflowID)}`);
+    if (read.response.ok) state.selected = read.body.workflow;
+    state.notice = body.status === "deferred"
+      ? "A Kairos cycle for this workflow is already running or was just completed. The durable result will appear on refresh."
+      : `Kairos preserved ${Number(body.actionsApplied || 0)} verified native task artifact${Number(body.actionsApplied || 0) === 1 ? "" : "s"} in cycle ${body.id || "complete"}.`;
+    await loadQueue();
+  } catch (error) { state.error = error.message || "Kairos could not run the targeted workflow cycle."; }
   finally { state.loading = false; render(); }
 }
 
@@ -122,7 +144,7 @@ function render() {
     root.className = "workflow-runtime workspace";
     hub.appendChild(root);
   }
-  root.innerHTML = `<header class="workflow-head"><div><p class="eyebrow">Operations · Work Queue</p><h2>Workflow Runtime</h2><p>Create work, break it into tasks, run it, verify it, and close it.</p></div><button type="button" data-close-workflow>Close</button></header>${state.error ? `<p class="workflow-error">${escapeHTML(state.error)}</p>` : ""}<div class="workflow-filter-bar">${filterButton("all","All Work")}${filterButton("active","In Progress")}${filterButton("finished","Done 24h")}${filterButton("pending","Not Started")}</div><div class="workflow-layout"><section class="workflow-create"><h3>New Workflow</h3><form data-workflow-form><label>Title<input name="title" maxlength="180" required placeholder="Example: Finish tonight’s TikTok package"></label><label>Objective<textarea name="objective" maxlength="4000" required placeholder="Describe the finished outcome."></textarea></label><div class="workflow-fields"><label>Center<select name="center"><option value="content">Content</option><option value="business">Business</option><option value="customers">Customers</option><option value="knowledge">Knowledge</option><option value="operations">Operations</option></select></label><label>Priority<select name="priority"><option value="high">High</option><option value="normal" selected>Normal</option><option value="critical">Critical</option><option value="low">Low</option></select></label></div><label class="workflow-check"><input type="checkbox" name="approvalRequired"> Require executive approval before start</label><button class="primary" type="submit">Create Workflow</button></form></section><section class="workflow-queue"><div class="workflow-section-head"><div><h3>${escapeHTML(filterTitle())}</h3><small>${filteredWorkflows().length} workflow${filteredWorkflows().length===1?"":"s"}</small></div><button type="button" data-refresh-workflows>Refresh</button></div>${state.loading ? `<p class="workflow-loading">Kairos is updating the queue…</p>` : queueMarkup()}</section></div>${state.selected ? detailMarkup(state.selected) : ""}`;
+  root.innerHTML = `<header class="workflow-head"><div><p class="eyebrow">Operations · Work Queue</p><h2>Workflow Runtime</h2><p>Create work, let Kairos produce verified native deliverables, inspect the evidence, and stop at constitutional approval gates.</p></div><button type="button" data-close-workflow>Close</button></header>${state.error ? `<p class="workflow-error">${escapeHTML(state.error)}</p>` : ""}${state.notice ? `<p class="workflow-notice">${escapeHTML(state.notice)}</p>` : ""}<div class="workflow-filter-bar">${filterButton("all","All Work")}${filterButton("active","In Progress")}${filterButton("finished","Done 24h")}${filterButton("pending","Not Started")}</div><div class="workflow-layout"><section class="workflow-create"><h3>New Workflow</h3><form data-workflow-form><label>Title<input name="title" maxlength="180" required placeholder="Example: Finish tonight’s TikTok package"></label><label>Objective<textarea name="objective" maxlength="4000" required placeholder="Describe the finished outcome."></textarea></label><div class="workflow-fields"><label>Center<select name="center"><option value="content">Content</option><option value="business">Business</option><option value="customers">Customers</option><option value="knowledge">Knowledge</option><option value="operations">Operations</option></select></label><label>Priority<select name="priority"><option value="high">High</option><option value="normal" selected>Normal</option><option value="critical">Critical</option><option value="low">Low</option></select></label></div><label class="workflow-check"><input type="checkbox" name="approvalRequired"> Require executive approval before start</label><button class="primary" type="submit">Create Workflow</button></form></section><section class="workflow-queue"><div class="workflow-section-head"><div><h3>${escapeHTML(filterTitle())}</h3><small>${filteredWorkflows().length} workflow${filteredWorkflows().length===1?"":"s"}</small></div><button type="button" data-refresh-workflows>Refresh</button></div>${state.loading ? `<p class="workflow-loading">Kairos is updating the queue…</p>` : queueMarkup()}</section></div>${state.selected ? detailMarkup(state.selected) : ""}`;
   bind();
 }
 
@@ -139,7 +161,15 @@ function queueMarkup() {
 
 function detailMarkup(workflow) {
   const canStart = workflow.state === "ready" && (!workflow.approvalRequired || workflow.approvalStatus === "approved");
-  return `<section class="workflow-detail"><header><div><p class="eyebrow">${escapeHTML(workflow.center)} · ${escapeHTML(workflow.priority)} priority</p><h3>${escapeHTML(workflow.title)}</h3><p>${escapeHTML(workflow.objective)}</p></div><div class="workflow-progress"><strong>${Number(workflow.progress || 0)}%</strong><span>${escapeHTML(workflow.state)}</span></div></header><div class="workflow-meter"><span style="width:${Number(workflow.progress || 0)}%"></span></div><div class="workflow-actions">${workflow.approvalRequired && workflow.approvalStatus !== "approved" ? `<button type="button" data-workflow-command="approve">Approve</button>` : ""}${canStart ? `<button class="primary" type="button" data-workflow-command="start">Start</button>` : ""}${workflow.state === "blocked" ? `<button type="button" data-workflow-command="resume">Resume</button>` : ""}${workflow.state === "active" ? `<button type="button" data-workflow-command="block">Block</button>` : ""}${workflow.progress === 100 && workflow.state !== "completed" ? `<button class="primary" type="button" data-workflow-command="complete">Complete</button>` : ""}${!["completed","cancelled"].includes(workflow.state) ? `<button type="button" data-workflow-command="cancel">Cancel</button>` : ""}</div><div class="workflow-tasks">${workflow.tasks.map(task => `<article><div><strong>${escapeHTML(task.title)}</strong><p>${escapeHTML(task.description || "")}</p></div><select data-task-state="${escapeHTML(task.id)}"><option value="ready" ${task.state === "ready" ? "selected" : ""}>Ready</option><option value="active" ${task.state === "active" ? "selected" : ""}>Active</option><option value="blocked" ${task.state === "blocked" ? "selected" : ""}>Blocked</option><option value="completed" ${task.state === "completed" ? "selected" : ""}>Completed</option><option value="cancelled" ${task.state === "cancelled" ? "selected" : ""}>Cancelled</option></select></article>`).join("")}</div><form class="workflow-add-task" data-task-form><input name="title" maxlength="240" required placeholder="Add another task"><input name="description" maxlength="2000" placeholder="Task description"><button type="submit">Add Task</button></form></section>`;
+  const canRun = !["completed","cancelled"].includes(workflow.state) && (!workflow.approvalRequired || workflow.approvalStatus === "approved");
+  return `<section class="workflow-detail"><header><div><p class="eyebrow">${escapeHTML(workflow.center)} · ${escapeHTML(workflow.priority)} priority</p><h3>${escapeHTML(workflow.title)}</h3><p>${escapeHTML(workflow.objective)}</p></div><div class="workflow-progress"><strong>${Number(workflow.progress || 0)}%</strong><span>${escapeHTML(workflow.state)}</span></div></header><div class="workflow-meter"><span style="width:${Number(workflow.progress || 0)}%"></span></div><div class="workflow-actions">${workflow.approvalRequired && workflow.approvalStatus !== "approved" ? `<button type="button" data-workflow-command="approve">Approve & Start Kairos</button>` : ""}${canStart ? `<button class="primary" type="button" data-workflow-command="start">Start</button>` : ""}${canRun ? `<button class="primary" type="button" data-run-kairos>Run Kairos Now</button>` : ""}${workflow.state === "blocked" ? `<button type="button" data-workflow-command="resume">Resume</button>` : ""}${workflow.state === "active" ? `<button type="button" data-workflow-command="block">Block</button>` : ""}${workflow.progress === 100 && workflow.state !== "completed" ? `<button class="primary" type="button" data-workflow-command="complete">Complete</button>` : ""}${!["completed","cancelled"].includes(workflow.state) ? `<button type="button" data-workflow-command="cancel">Cancel</button>` : ""}</div><div class="workflow-tasks">${workflow.tasks.map(taskMarkup).join("")}</div><form class="workflow-add-task" data-task-form><input name="title" maxlength="240" required placeholder="Add another task"><input name="description" maxlength="2000" placeholder="Task description"><button type="submit">Add Task</button></form></section>`;
+}
+
+function taskMarkup(task) {
+  const output = task.nativeOutput;
+  const evidence = Array.isArray(output?.evidenceReferences) ? output.evidenceReferences : [];
+  const verification = Array.isArray(output?.verification) ? output.verification : [];
+  return `<article><div class="workflow-task-copy"><div class="workflow-task-labels"><span>${escapeHTML(task.stage || "unclassified")}</span><span>${escapeHTML(task.executionClass || "native-analysis")}</span></div><strong>${escapeHTML(task.title)}</strong><p>${escapeHTML(task.description || "")}</p></div><select data-task-state="${escapeHTML(task.id)}"><option value="ready" ${task.state === "ready" ? "selected" : ""}>Ready</option><option value="active" ${task.state === "active" ? "selected" : ""}>Active</option><option value="blocked" ${task.state === "blocked" ? "selected" : ""}>Blocked</option><option value="completed" ${task.state === "completed" ? "selected" : ""}>Completed</option><option value="cancelled" ${task.state === "cancelled" ? "selected" : ""}>Cancelled</option></select>${output ? `<details class="workflow-native-output" open><summary>Verified Kairos deliverable · ${escapeHTML(output.artifactID || "artifact")}</summary><h4>${escapeHTML(output.deliverable?.title || task.title)}</h4><p>${escapeHTML(output.summary || "")}</p><div class="workflow-deliverable">${escapeHTML(output.deliverable?.content || "")}</div><dl><div><dt>Evidence</dt><dd>${evidence.map(escapeHTML).join(" · ") || "No reference"}</dd></div><div><dt>Verification</dt><dd>${verification.map(escapeHTML).join(" · ") || "No verification"}</dd></div><div><dt>Read-back hash</dt><dd>${escapeHTML(output.contentHash || "")}</dd></div><div><dt>Next action</dt><dd>${escapeHTML(output.nextAction || "Review the preserved artifact.")}</dd></div></dl></details>` : ""}</article>`;
 }
 
 function bind() {
@@ -150,6 +180,7 @@ function bind() {
   document.querySelectorAll("[data-workflow-filter]").forEach(button=>button.addEventListener("click",()=>{state.filter=normalizeFilter(button.dataset.workflowFilter);state.selected=null;render();}));
   document.querySelectorAll("[data-open-workflow]").forEach(button => button.addEventListener("click", () => openWorkflow(button.dataset.openWorkflow)));
   document.querySelectorAll("[data-workflow-command]").forEach(button => button.addEventListener("click", () => workflowCommand(button.dataset.workflowCommand)));
+  document.querySelector("[data-run-kairos]")?.addEventListener("click", runKairos);
   document.querySelectorAll("[data-task-state]").forEach(select => select.addEventListener("change", () => setTask(select.dataset.taskState, select.value)));
 }
 

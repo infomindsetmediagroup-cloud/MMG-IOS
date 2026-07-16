@@ -4,7 +4,8 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { KairosProject } from "../src/kairos-native-publishing-worker-v1.js";
 import { handleOperationalRequest, KAIROS_ACTION_CONTRACTS, mirrorOperationalResponse } from "../src/kairos-operational-runtime-v1.js";
-import { runAutonomyCycle } from "../src/kairos-autonomy-runtime-v1.js";
+import { handleAutonomyRequest, runAutonomyCycle } from "../src/kairos-autonomy-runtime-v1.js";
+import productionRuntime from "../src/kairos-production-entry-v36.js";
 
 const REQUIRED_ACTIONS = [
   "knowledge-library",
@@ -176,19 +177,38 @@ test("successful domain mutations are mirrored into durable receipts and workflo
   assert.equal(body.counts.workflows, 1);
 });
 
-test("bounded autonomy uses enhanced inference and advances one evidence-backed internal task", async () => {
+test("approved bounded autonomy completes a verified three-task native sequence", async () => {
   const env = memoryEnv({
     KAIROS_AUTONOMY_ENABLED: "true",
     KAIROS_AUTONOMY_MIN_INTERVAL_MS: "60000",
     AI: {
       async run(model, input) {
         assert.equal(model, "@cf/qwen/qwen3-30b-a3b-fp8");
+        const system = input.messages[0].content;
         const state = JSON.parse(input.messages[1].content);
+        if (system.includes("verified native MMG operating intelligence")) {
+          return { response: JSON.stringify({
+            summary: "Execute the highest-priority safe native workflow sequence.",
+            decisions: [{ workflowID: state.candidateWorkflows[0].id, action: "execute-native", rationale: "The authoritative queue snapshot classifies the next task as automatic and internal.", confidence: 0.97 }],
+            recommendations: ["Keep external effects approval-gated."],
+            verification: ["Read back every artifact, workflow mutation, decision, and durable receipt."],
+          }) };
+        }
+        assert.match(system, /native internal analysis and execution engine/i);
+        const evidenceReference = `workflow:${state.workflow.id}`;
         return { response: JSON.stringify({
-          summary: "Advance the highest-priority internal analysis step.",
-          decisions: [{ workflowID: state.candidateWorkflows[0].id, action: "advance-internal", rationale: "The authoritative queue snapshot supports the Observe step.", confidence: 0.97 }],
-          recommendations: ["Keep external effects approval-gated."],
-          verification: ["Read back the workflow and durable receipt."],
+          status: "completed",
+          summary: `Kairos completed the ${state.task.stage} task from the authoritative durable workflow record.`,
+          deliverable: {
+            title: `${state.task.stage} verified deliverable`,
+            type: state.task.executionClass,
+            content: `This usable internal deliverable records the verified ${state.task.stage} result for ${state.workflow.title}. It is grounded only in the supplied workflow evidence and reports no external action or live mutation.`,
+          },
+          findings: [{ claim: `The ${state.task.stage} task can be completed as a bounded internal deliverable.`, evidenceReference, confidence: 0.98 }],
+          evidenceReferences: [evidenceReference],
+          verification: ["Persist the artifact, verify its SHA-256 content hash, and read the exact record back before completing the task."],
+          nextAction: "Continue to the next governed lifecycle task.",
+          blockedReason: "",
         }) };
       },
     },
@@ -200,30 +220,164 @@ test("bounded autonomy uses enhanced inference and advances one evidence-backed 
       title: "Autonomous internal operations",
       objective: "Observe the durable queue and prepare the next governed decision.",
       priority: "high",
+      approvalRequired: true,
       tasks: [
         { title: "Observe authoritative current state", description: "Read durable records." },
-        { title: "Execute through the domain workspace", description: "Remain bounded." },
+        { title: "Understand objective and completion evidence", description: "Interpret the durable objective." },
+        { title: "Decide governed execution path", description: "Choose the bounded internal route." },
       ],
     }),
   }), env, {});
-  const workflow = (await created.json()).workflow;
+  let workflow = (await created.json()).workflow;
+  assert.equal(workflow.approvalStatus, "pending");
+  const approved = await patchWorkflow(env, workflow.id, { command: "approve", actor: "Executive" });
+  workflow = (await approved.json()).workflow;
+  assert.equal(workflow.approvalStatus, "approved");
+  assert.equal(workflow.state, "active");
 
   const cycle = await runAutonomyCycle(env, { source: "test-cycle" });
   assert.equal(cycle.status, "completed");
   assert.equal(cycle.inference.mode, "cloudflare-account-scoped");
-  assert.equal(cycle.actionsApplied, 1);
+  assert.equal(cycle.actionsApplied, 3);
   assert.equal(cycle.applied[0].workflowID, workflow.id);
+  assert.equal(cycle.applied[2].stage, "decide");
+  assert.equal(cycle.applied[2].artifactReadbackVerified, true);
+  assert.equal(cycle.applied[2].atomicCommitVerified, true);
 
   const read = await handleOperationalRequest(new Request(`https://kairos.example/api/workflows/${workflow.id}`), env, {});
   const updated = (await read.json()).workflow;
-  assert.equal(updated.state, "active");
+  assert.equal(updated.state, "completed");
   assert.equal(updated.tasks[0].state, "completed");
   assert.equal(updated.tasks[0].executionEvidence.externalActionTaken, false);
-  assert.equal(updated.tasks[1].state, "ready");
-  assert.equal(updated.progress, 50);
+  assert.equal(updated.tasks[2].state, "completed");
+  assert.match(updated.tasks[2].nativeOutput.deliverable.content, /usable internal deliverable/i);
+  assert.equal(updated.tasks[2].executionEvidence.artifactReadbackVerified, true);
+  assert.equal(updated.progress, 100);
+
+  const artifactResponse = await handleAutonomyRequest(new Request(`https://kairos.example/api/autonomy/artifacts/${updated.tasks[2].nativeOutput.artifactID}`), env);
+  assert.equal(artifactResponse.status, 200);
+  const artifact = (await artifactResponse.json()).artifact;
+  assert.equal(artifact.status, "verified");
+  assert.equal(artifact.safeguards.modelReasoningStored, false);
+  assert.equal(artifact.safeguards.externalActionTaken, false);
 
   const second = await runAutonomyCycle(env, { source: "duplicate-test-cycle" });
   assert.equal(second.status, "deferred");
+});
+
+test("production approval dispatches an event-driven cycle that executes the third safe task", async () => {
+  const env = memoryEnv({
+    KAIROS_AUTONOMY_ENABLED: "true",
+    AI: { async run(_model, input) {
+      const system = input.messages[0].content;
+      const state = JSON.parse(input.messages[1].content);
+      if (system.includes("verified native MMG operating intelligence")) return { response: JSON.stringify({
+        summary: "Execute the approved safe workflow.",
+        decisions: [{ workflowID: state.candidateWorkflows[0].id, action: "execute-native", rationale: "Approval is preserved and the next task is automatic eligible.", confidence: 0.99 }],
+        recommendations: [], verification: ["Verify every durable artifact read-back."],
+      }) };
+      const evidenceReference = `workflow:${state.workflow.id}`;
+      return { response: JSON.stringify({
+        status: "completed",
+        summary: `Kairos produced the approved ${state.task.stage} result from durable workflow evidence.`,
+        deliverable: { title: `Approved ${state.task.stage} artifact`, type: state.task.executionClass, content: `This verified internal artifact completes the approved ${state.task.stage} task using only the supplied durable workflow evidence. It records no external action and performs no live mutation.` },
+        findings: [{ claim: "The safe approved task is grounded and complete.", evidenceReference, confidence: 0.99 }],
+        evidenceReferences: [evidenceReference],
+        verification: ["The artifact, task, decision, receipt, and workflow must all be read back before completion."],
+        nextAction: "Continue the approved safe lifecycle.", blockedReason: "",
+      }) };
+    } },
+  });
+  const pending = [];
+  const ctx = { waitUntil(value) { pending.push(Promise.resolve(value)); } };
+  const createdResponse = await productionRuntime.fetch(new Request("https://kairos.example/api/workflows", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "Event-driven approval regression",
+      objective: "Execute all three approved safe native analysis tasks.",
+      approvalRequired: true,
+      tasks: [
+        { title: "Observe authoritative current state", stage: "observe" },
+        { title: "Understand objective and evidence", stage: "understand" },
+        { title: "Decide governed path", stage: "decide" },
+      ],
+    }),
+  }), env, ctx);
+  let workflow = (await createdResponse.json()).workflow;
+  await Promise.all(pending.splice(0));
+  assert.equal(workflow.approvalStatus, "pending");
+
+  const approvedResponse = await productionRuntime.fetch(new Request(`https://kairos.example/api/workflows/${workflow.id}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ command: "approve", actor: "Executive" }),
+  }), env, ctx);
+  assert.equal(approvedResponse.status, 200);
+  await Promise.all(pending.splice(0));
+
+  const read = await productionRuntime.fetch(new Request(`https://kairos.example/api/workflows/${workflow.id}`), env, ctx);
+  workflow = (await read.json()).workflow;
+  assert.equal(workflow.state, "completed");
+  assert.equal(workflow.tasks[2].state, "completed");
+  assert.equal(workflow.tasks[2].executionEvidence.artifactReadbackVerified, true);
+  assert.match(workflow.tasks[2].nativeOutput.deliverable.content, /verified internal artifact/i);
+});
+
+test("native task completion is blocked when enhanced inference cites invented evidence", async () => {
+  const env = memoryEnv({
+    KAIROS_AUTONOMY_ENABLED: "true",
+    AI: {
+      async run(_model, input) {
+        const system = input.messages[0].content;
+        const state = JSON.parse(input.messages[1].content);
+        if (system.includes("verified native MMG operating intelligence")) return { response: JSON.stringify({
+          summary: "Attempt the safe task.",
+          decisions: [{ workflowID: state.candidateWorkflows[0].id, action: "execute-native", rationale: "Attempt grounded execution.", confidence: 0.9 }],
+          recommendations: [], verification: [],
+        }) };
+        return { response: JSON.stringify({
+          status: "completed",
+          summary: "This output claims completion but is not grounded in the supplied catalog.",
+          deliverable: { title: "Ungrounded output", type: "native-analysis", content: "This deliberately long output has enough text to pass the length requirement, but its evidence reference is invented and therefore must never complete the task." },
+          findings: [{ claim: "Invented claim", evidenceReference: "external:invented", confidence: 1 }],
+          evidenceReferences: ["external:invented"],
+          verification: ["Pretend verification"], nextAction: "None", blockedReason: "",
+        }) };
+      },
+    },
+  });
+  const created = await handleOperationalRequest(new Request("https://kairos.example/api/workflows", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Evidence gate", objective: "Reject unsupported analysis.", tasks: [{ title: "Observe authoritative current state" }] }),
+  }), env, {});
+  const workflow = (await created.json()).workflow;
+  const cycle = await runAutonomyCycle(env, { source: "invalid-evidence-test" });
+  assert.equal(cycle.status, "completed");
+  assert.equal(cycle.actionsApplied, 0);
+  const read = await handleOperationalRequest(new Request(`https://kairos.example/api/workflows/${workflow.id}`), env, {});
+  assert.equal((await read.json()).workflow.tasks[0].state, "ready");
+  const decisions = await handleAutonomyRequest(new Request("https://kairos.example/api/autonomy/decisions"), env);
+  const latest = (await decisions.json()).decisions[0];
+  assert.equal(latest.status, "blocked");
+  assert.match(latest.blockedReason, /grounded-evidence-reference/i);
+});
+
+test("high-impact execution remains approval-gated and produces no native completion artifact", async () => {
+  const env = memoryEnv({ KAIROS_AUTONOMY_ENABLED: "true" });
+  const created = await handleOperationalRequest(new Request("https://kairos.example/api/workflows", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "Public release boundary",
+      objective: "Publish the approved release to the live storefront.",
+      tasks: [{ title: "Deploy and publish the live release", stage: "execute", executionClass: "high-impact-domain-action" }],
+    }),
+  }), env, {});
+  const workflow = (await created.json()).workflow;
+  const cycle = await runAutonomyCycle(env, { source: "high-impact-boundary-test" });
+  assert.equal(cycle.status, "completed");
+  assert.equal(cycle.actionsApplied, 0);
+  const read = await handleOperationalRequest(new Request(`https://kairos.example/api/workflows/${workflow.id}`), env, {});
+  const updated = (await read.json()).workflow;
+  assert.equal(updated.tasks[0].state, "ready");
+  assert.equal(updated.tasks[0].nativeOutput, undefined);
 });
 
 test("bounded autonomy cannot bypass a pending approval even when inference requests advancement", async () => {
@@ -235,7 +389,7 @@ test("bounded autonomy cannot bypass a pending approval even when inference requ
         const state = JSON.parse(input.messages[1].content);
         return { response: JSON.stringify({
           summary: "Evaluate the approval-gated workflow.",
-          decisions: [{ workflowID: state.candidateWorkflows[0].id, action: "advance-internal", rationale: "Attempt advancement.", confidence: 0.9 }],
+          decisions: [{ workflowID: state.candidateWorkflows[0].id, action: "execute-native", rationale: "Attempt advancement.", confidence: 0.9 }],
           recommendations: [],
           verification: [],
         }) };

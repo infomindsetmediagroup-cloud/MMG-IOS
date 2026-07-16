@@ -19,7 +19,7 @@ import {
   runKairosIntelligence,
 } from "./kairos-intelligence-v1.js";
 
-const BUILD = "kairos-native-publishing-20260712-2";
+const BUILD = "kairos-native-publishing-20260716-3";
 const KAIROS_SELF_HOSTED_INFERENCE_VERSION = "kairos-private-runtime-v1";
 const ARTIFACT_CACHE_SECONDS = 60 * 60;
 const MAX_COVER_BYTES = 8 * 1024 * 1024;
@@ -183,6 +183,7 @@ export class KairosProject {
       if (url.pathname === "/control/inference/claim" && request.method === "POST") return this.claimInference(request);
       if (url.pathname === "/control/autonomy/claim" && request.method === "POST") return this.claimAutonomy(request);
       if (url.pathname === "/ledger/upsert" && request.method === "POST") return this.ledgerUpsert(request);
+      if (url.pathname === "/ledger/batch-upsert" && request.method === "POST") return this.ledgerBatchUpsert(request);
       if (url.pathname === "/ledger/get" && request.method === "GET") return this.ledgerGet(url);
       if (url.pathname === "/ledger/list" && request.method === "GET") return this.ledgerList(url);
       if (url.pathname === "/ledger/delete" && request.method === "DELETE") return this.ledgerDelete(url);
@@ -214,6 +215,37 @@ export class KairosProject {
       [indexKey]: index.slice(0, 1000),
     });
     return json({ status: "persisted", collection, id, value: { ...value, id } });
+  }
+
+  async ledgerBatchUpsert(request) {
+    const payload = await safeRequestJSON(request);
+    const records = Array.isArray(payload?.records) ? payload.records.slice(0, 25) : [];
+    if (!records.length) throw engineError(400, "ledger_records_required", "Kairos requires one or more durable records.");
+    const now = new Date().toISOString();
+    const writes = {};
+    const indexCache = new Map();
+    const persisted = [];
+    for (const record of records) {
+      const collection = ledgerToken(record?.collection, "collection");
+      const id = ledgerToken(record?.id || record?.value?.id, "record id");
+      const value = record?.value;
+      if (!value || typeof value !== "object" || Array.isArray(value)) throw engineError(400, "ledger_value_required", "Every Kairos batch record requires an object value.");
+      const indexKey = `ledger:index:${collection}`;
+      let index = indexCache.get(indexKey);
+      if (!index) {
+        const existing = await this.state.storage.get(indexKey);
+        index = Array.isArray(existing) ? existing : [];
+      }
+      index = index.filter(entry => entry?.id !== id);
+      const updatedAt = String(value.updatedAt || value.createdAt || now);
+      index.unshift({ id, updatedAt });
+      indexCache.set(indexKey, index.slice(0, 1000));
+      writes[`ledger:${collection}:${id}`] = { ...value, id };
+      persisted.push({ collection, id });
+    }
+    for (const [indexKey, index] of indexCache) writes[indexKey] = index;
+    await this.state.storage.put(writes);
+    return json({ status: "persisted", atomic: true, records: persisted });
   }
 
   async ledgerGet(url) {

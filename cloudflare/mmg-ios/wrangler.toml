@@ -38,7 +38,7 @@ not_found_handling = "single-page-application"
 binding = "AI"
 
 [triggers]
-crons = ["0 15 * * *", "0 2 * * *"]
+crons = ["*/15 * * * *"]
 
 [[durable_objects.bindings]]
 name = "KAIROS_PROJECTS"
@@ -55,6 +55,8 @@ MMG_STOREFRONT_ORIGIN = "https://themindsetmediagroup.com"
 KAIROS_WORKERS_AI_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8"
 KAIROS_AUTONOMY_ENABLED = "true"
 KAIROS_AUTONOMY_MAX_WORKFLOWS_PER_CYCLE = "3"
+KAIROS_AUTONOMY_MAX_NATIVE_TASKS_PER_CYCLE = "5"
+KAIROS_AUTONOMY_MAX_TASKS_PER_WORKFLOW_PER_CYCLE = "5"
 KAIROS_AUTONOMY_MIN_INTERVAL_MS = "900000"
 KAIROS_INFERENCE_MAX_REQUESTS_PER_MINUTE = "6"
 KAIROS_INFERENCE_MAX_REQUESTS_PER_DAY = "200"

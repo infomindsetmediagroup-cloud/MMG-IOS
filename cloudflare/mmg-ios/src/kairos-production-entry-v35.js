@@ -2,9 +2,9 @@ import runtime,{KairosProject} from './kairos-production-entry-v34.js';
 import contentOnlyPlanner from './kairos-content-only-shopify-planner-v2.js';
 import liquidContentExecutor from './kairos-liquid-content-only-executor-v1.js';
 import{handleOperationalRequest,mirrorOperationalResponse,KAIROS_OPERATIONAL_RUNTIME_BUILD}from'./kairos-operational-runtime-v1.js';
-import{intelligenceConfigured}from'./kairos-intelligence-v1.js';
+import{inferenceRuntime}from'./kairos-intelligence-v1.js';
 
-const BUILD='kairos-production-entry-20260715-89';
+const BUILD='kairos-production-entry-20260716-91';
 const PLAN_ROUTE='/api/shopify/staging/plan/jobs';
 const EXECUTE_ROUTE='/api/shopify/staging/execute/jobs';
 const CONTENT_ONLY_DECLARATIONS=new Set(['content-only','copy-only','text-only','literal-replacement']);
@@ -34,7 +34,7 @@ export default{
       const response=classification.intent==='full-retool'
         ?await runtime.fetch(withIntentHeaders(request,classification),env,ctx)
         :await contentOnlyPlanner.fetch(withIntentHeaders(request,classification),env,ctx);
-      preserveOperationalResponse(request,response,env,ctx);
+      await preserveOperationalResponse(request,response,env,ctx);
       return stamp(response,classification);
     }
     if(request.method==='POST'&&url.pathname===EXECUTE_ROUTE){
@@ -42,16 +42,16 @@ export default{
       try{payload=await request.clone().json();}catch{}
       if(isContentOnlyExecution(payload)){
         const response=await executeFreshContentOnlyPlan(request,payload,env,ctx);
-        preserveOperationalResponse(request,response,env,ctx);
+        await preserveOperationalResponse(request,response,env,ctx);
         return stamp(response,{intent:'content-only',reason:'approved-content-only-plan'});
       }
       const response=await runtime.fetch(request,env,ctx);
-      preserveOperationalResponse(request,response,env,ctx);
+      await preserveOperationalResponse(request,response,env,ctx);
       return stamp(response,{intent:'full-retool',reason:'approved-structural-plan'});
     }
     let response=await runtime.fetch(request,env,ctx);
     if(request.method==='GET'&&(url.pathname==='/api/health'||url.pathname==='/api/capabilities'))response=await operationalHealth(response,env);
-    preserveOperationalResponse(request,response,env,ctx);
+    await preserveOperationalResponse(request,response,env,ctx);
     return stamp(response,{intent:'passthrough',reason:'non-website-plan-route'});
   },
   async scheduled(controller,env,ctx){if(typeof runtime.scheduled==='function')return runtime.scheduled(controller,env,ctx);}
@@ -95,19 +95,20 @@ async function executeFreshContentOnlyPlan(request,payload,env,ctx){
   return liquidContentExecutor.fetch(executeRequest,env,ctx);
 }
 
-function preserveOperationalResponse(request,response,env,ctx){
-  const work=mirrorOperationalResponse(request,response,env).catch(()=>{});
-  if(typeof ctx?.waitUntil==='function')ctx.waitUntil(work);
+async function preserveOperationalResponse(request,response,env,ctx){
+  try{await mirrorOperationalResponse(request,response,env);}catch{}
 }
 
 async function operationalHealth(response,env){
   let body={};
   try{body=await response.clone().json();}catch{return response;}
+  const enhancedInference=inferenceRuntime(env);
   body.operationalRuntime={
     build:KAIROS_OPERATIONAL_RUNTIME_BUILD,
     orchestration:'domain-routed',
     persistence:env?.KAIROS_PROJECTS?'durable-object':'needs-configuration',
-    privateIntelligence:intelligenceConfigured(env)?'configured':'needs-configuration',
+    enhancedInference:enhancedInference.configured?enhancedInference.mode:'needs-configuration',
+    selfHostedPrivateInference:enhancedInference.selfHosted?'configured':'optional-not-configured',
     deterministicNativeFallback:'operational'
   };
   body.capabilities={
