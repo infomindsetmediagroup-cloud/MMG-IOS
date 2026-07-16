@@ -1,10 +1,10 @@
 {
-  "baseline": "kairos-production-standard-20260715-22",
+  "baseline": "kairos-production-standard-20260715-23",
   "status": "frozen",
   "productionUrl": "https://mmg-ios.info-mindsetmediagroup.workers.dev",
   "worker": {
     "name": "mmg-ios",
-    "entry": "src/kairos-production-entry-v34.js",
+    "entry": "src/kairos-production-entry-v35.js",
     "compatibilityDate": "2026-07-11",
     "assetsDirectory": "../../web/kairos-dashboard",
     "durableObjectBinding": "KAIROS_PROJECTS",
@@ -27,9 +27,9 @@
     "oneHundredReservedForBlueprintCompletion": true
   },
   "approvedExpansion": {
-    "scope": "Operational Website Retool flow with objective intent classification, fail-closed content-only mutation permissions, explicit full-retool routing, dependency-ordered Shopify writes, authoritative verification, rendered staging verification, approvals, live read-back, and rollback receipts",
-    "activeEdge": "src/kairos-production-entry-v34.js",
-    "preservesPriorEdge": "src/kairos-production-entry-v33.js",
+    "scope": "Operational Website Retool flow with objective intent classification, content-only Liquid visible-text planning and single-file execution, fail-closed structural and style protections, explicit full-retool routing, authoritative Shopify read-back, rendered staging verification, approvals, live read-back, and rollback receipts",
+    "activeEdge": "src/kairos-production-entry-v35.js",
+    "preservesPriorEdge": "src/kairos-production-entry-v34.js",
     "automaticExecution": false,
     "explicitPreviewApprovalRequired": true,
     "explicitLiveApplicationRequired": true,
