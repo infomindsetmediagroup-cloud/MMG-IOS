@@ -91,10 +91,36 @@ jobs:
           KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
         run: |
           set -euo pipefail
-          curl --fail-with-body --silent --show-error --location --max-time 180 \
-            -H 'Cache-Control: no-cache' \
-            "${KAIROS_PRODUCTION_URL}/api/inference/health?deployment=${GITHUB_SHA}" \
-            --output inference-health.json
+          inference_code=""
+          for attempt in $(seq 1 6); do
+            inference_code="$(curl --silent --show-error --location --max-time 180 \
+              -H 'Cache-Control: no-cache' \
+              "${KAIROS_PRODUCTION_URL}/api/inference/health?deployment=${GITHUB_SHA}-${attempt}" \
+              --output inference-health.json \
+              --write-out '%{http_code}' || true)"
+            if [ "${inference_code}" = "200" ]; then
+              break
+            fi
+            ATTEMPT="${attempt}" HTTP_CODE="${inference_code}" node -e '
+              const fs=require("fs");
+              let body={};
+              try{body=JSON.parse(fs.readFileSync("inference-health.json","utf8"))}catch{}
+              console.error(JSON.stringify({
+                attempt:Number(process.env.ATTEMPT),
+                httpStatus:Number(process.env.HTTP_CODE||0),
+                status:body.status||"unknown",
+                mode:body.mode||null,
+                provider:body.provider||null,
+                model:body.model||null,
+                error:body.error||null,
+              }));
+            '
+            sleep 10
+          done
+          if [ "${inference_code}" != "200" ]; then
+            echo "Kairos enhanced inference did not become ready after six probes." >&2
+            exit 1
+          fi
           curl --fail-with-body --silent --show-error --location --max-time 180 \
             -H 'Content-Type: application/json' -H 'Cache-Control: no-cache' \
             --data "{\"source\":\"deployment:${GITHUB_SHA}\"}" \
