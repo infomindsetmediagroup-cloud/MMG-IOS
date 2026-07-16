@@ -1,7 +1,7 @@
 import { inferenceRuntime, parseStrictJSON, runKairosIntelligence } from "./kairos-intelligence-v1.js";
 import { ledgerGet, ledgerList, ledgerUpsert } from "./kairos-operational-runtime-v1.js";
 
-export const KAIROS_NATIVE_TASK_EXECUTION_BUILD = "kairos-native-task-execution-20260716-2";
+export const KAIROS_NATIVE_TASK_EXECUTION_BUILD = "kairos-native-task-execution-20260716-3";
 
 const SAFE_STAGES = new Set(["observe", "understand", "decide", "verify", "preserve", "improve"]);
 const HIGH_IMPACT_ACTIONS = new Set(["website", "release-control"]);
@@ -91,7 +91,7 @@ export async function executeNativeTask(env, input) {
     return blocked(clean(error?.code || error?.message || "native-task-inference-failed", 500), classification);
   }
 
-  const normalized = normalizeOutput(parsed, evidenceCatalog, classification);
+  const normalized = normalizeNativeTaskOutput(parsed, evidenceCatalog, classification);
   if (normalized.status !== "completed") return blocked(normalized.blockedReason, classification, normalized);
 
   const createdAt = new Date().toISOString();
@@ -114,6 +114,7 @@ export async function executeNativeTask(env, input) {
     evidenceReferences: normalized.evidenceReferences,
     verification: normalized.verification,
     nextAction: normalized.nextAction,
+    normalization: normalized.normalization,
     inference: {
       mode: generated.runtime,
       provider: generated.provider,
@@ -122,6 +123,7 @@ export async function executeNativeTask(env, input) {
     },
     safeguards: {
       evidenceCatalogEnforced: true,
+      structuredOutputNormalization: true,
       durableReadbackRequired: true,
       externalActionTaken: false,
       liveMutationPerformed: false,
@@ -147,16 +149,11 @@ export async function executeNativeTask(env, input) {
   return { status: "verified", classification, artifact: readback };
 }
 
-function normalizeOutput(value, catalog, classification) {
+export function normalizeNativeTaskOutput(value, catalog, classification) {
   if (String(value?.status || "").toLowerCase() === "blocked") {
     return { status: "blocked", blockedReason: clean(value?.blockedReason || value?.summary || "Authoritative evidence is insufficient.", 1200) };
   }
   const summary = clean(value?.summary, 3000);
-  const deliverable = {
-    title: clean(value?.deliverable?.title || `${titleCase(classification.stage)} task deliverable`, 240),
-    type: clean(value?.deliverable?.type || classification.executionClass, 80),
-    content: clean(value?.deliverable?.content, 16000),
-  };
   const allowed = new Set(catalog.map(item => item.id));
   const directReferences = Array.isArray(value?.evidenceReferences) ? value.evidenceReferences.map(item => clean(item, 240)).filter(item => allowed.has(item)) : [];
   const findings = Array.isArray(value?.findings) ? value.findings.slice(0, 12).map(item => ({
@@ -167,13 +164,65 @@ function normalizeOutput(value, catalog, classification) {
   const evidenceReferences = [...new Set([...directReferences, ...findings.map(item => item.evidenceReference)])];
   const verification = normalizeVerification(value?.verification);
   const nextAction = clean(value?.nextAction, 2000);
+  const directDeliverable = directDeliverableContent(value);
+  const reconstructed = directDeliverable.content.length < 80 && summary.length >= 20 && evidenceReferences.length > 0 && verification.length > 0;
+  const deliverable = {
+    title: clean(value?.deliverable?.title || `${titleCase(classification.stage)} task deliverable`, 240),
+    type: clean(value?.deliverable?.type || classification.executionClass, 80),
+    content: reconstructed
+      ? buildGroundedDeliverableContent(summary, findings, evidenceReferences, verification, classification)
+      : directDeliverable.content,
+  };
   const failures = [];
   if (summary.length < 20) failures.push("summary");
   if (deliverable.content.length < 80) failures.push("deliverable");
   if (!evidenceReferences.length) failures.push("grounded-evidence-reference");
   if (!verification.length) failures.push("verification");
   if (failures.length) return { status: "blocked", blockedReason: `Native output failed required evidence gates: ${failures.join(", ")}.` };
-  return { status: "completed", summary, deliverable, findings, evidenceReferences, verification, nextAction, blockedReason: "" };
+  return {
+    status: "completed",
+    summary,
+    deliverable,
+    findings,
+    evidenceReferences,
+    verification,
+    nextAction,
+    blockedReason: "",
+    normalization: {
+      deliverableSource: reconstructed ? "grounded-structured-fields" : directDeliverable.source,
+      deliverableReconstructed: reconstructed,
+      evidenceCatalogEnforced: true,
+    },
+  };
+}
+
+function directDeliverableContent(value) {
+  const candidates = [
+    ["deliverable.content", value?.deliverable?.content],
+    ["deliverable.body", value?.deliverable?.body],
+    ["deliverable.text", value?.deliverable?.text],
+    ["deliverable", typeof value?.deliverable === "string" ? value.deliverable : ""],
+    ["output.content", value?.output?.content],
+    ["output", typeof value?.output === "string" ? value.output : ""],
+    ["result.content", value?.result?.content],
+    ["result", typeof value?.result === "string" ? value.result : ""],
+  ];
+  for (const [source, candidate] of candidates) {
+    const content = clean(candidate, 16000);
+    if (content) return { content, source };
+  }
+  return { content: "", source: "missing" };
+}
+
+function buildGroundedDeliverableContent(summary, findings, evidenceReferences, verification, classification) {
+  const sections = [
+    `${titleCase(classification.stage)} result`,
+    summary,
+  ];
+  if (findings.length) sections.push(`Grounded findings:\n${findings.map(item => `- ${item.claim} [${item.evidenceReference}]`).join("\n")}`);
+  sections.push(`Evidence references: ${evidenceReferences.join(", ")}`);
+  sections.push(`Verification:\n${verification.map(item => `- ${item}`).join("\n")}`);
+  return clean(sections.join("\n\n"), 16000);
 }
 
 function normalizeVerification(value) {
