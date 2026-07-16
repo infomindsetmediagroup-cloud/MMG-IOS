@@ -1,17 +1,17 @@
 {
-  "baseline": "kairos-production-standard-20260716-29",
+  "baseline": "kairos-production-standard-20260716-30",
   "status": "frozen",
   "productionUrl": "https://mmg-ios.info-mindsetmediagroup.workers.dev",
   "worker": {
     "name": "mmg-ios",
-    "entry": "src/kairos-production-entry-v36.js",
+    "entry": "src/kairos-production-entry-v37.js",
     "compatibilityDate": "2026-07-11",
     "assetsDirectory": "../../web/kairos-dashboard",
     "durableObjectBinding": "KAIROS_PROJECTS",
     "durableObjectClass": "KairosProject"
   },
   "dashboard": {
-    "build": "kairos-command-hub-routed-20260716-5",
+    "build": "kairos-command-hub-routed-20260716-6",
     "workspaceRuntime": "kairos-workspace-runtime-20260716-2",
     "workflowRuntime": "kairos-workflow-runtime-ui-20260716-3",
     "operationalRuntime": "kairos-operational-runtime-20260716-3",
@@ -33,9 +33,9 @@
     "oneHundredReservedForBlueprintCompletion": true
   },
   "approvedExpansion": {
-    "scope": "Operational Command Center with 25 canonical domain workspaces, durable workflows and receipts, verified native analysis and internal deliverables with grounded structured-output normalization, Cloudflare account-scoped Qwen inference with an optional MMG self-hosted vLLM upgrade path, event-driven bounded autonomous queue operation under constitutional approval gates, and an explicit staging-only Website Retool handoff with source-hash-bound header exception review",
-    "activeEdge": "src/kairos-production-entry-v36.js",
-    "preservesPriorEdge": "src/kairos-production-entry-v35.js",
+    "scope": "Operational Command Center with 25 canonical domain workspaces, durable workflows and receipts, verified native analysis and internal deliverables with grounded structured-output normalization, Cloudflare account-scoped Qwen inference with an optional MMG self-hosted vLLM upgrade path, event-driven bounded autonomous queue operation under constitutional approval gates, and WEB-003 composite website production that binds the native Shopify header and canonical homepage into one staging preview, file-level release, read-back verification, and rollback package",
+    "activeEdge": "src/kairos-production-entry-v37.js",
+    "preservesPriorEdge": "src/kairos-production-entry-v36.js",
     "automaticExternalExecution": false,
     "boundedInternalAutomaticExecution": true,
     "eventDrivenAutonomousExecution": true,
@@ -57,7 +57,10 @@
     "privateIntelligenceConfigurationReportedHonestly": true,
     "explicitFullRetoolStagingHandoffRequired": true,
     "unsafeLogoLayoutMutationProhibited": true,
-    "groundedStructuredOutputNormalizationRequired": true
+    "groundedStructuredOutputNormalizationRequired": true,
+    "web003CompositeWebsiteProductionRequired": true,
+    "nativeHeaderExactValueSelectionRequired": true,
+    "compositeWebsiteRollbackRequired": true
   },
   "governance": {
     "newCapabilityWorkFrozen": true,
