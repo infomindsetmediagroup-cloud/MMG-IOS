@@ -5,7 +5,7 @@ import {
   writeThemeFile,
 } from './kairos-compact-homepage-utils-v1.js';
 
-const BUILD='kairos-liquid-content-only-executor-20260715-1';
+const BUILD='kairos-liquid-content-only-executor-20260715-2';
 const SECTION_FILE='sections/mmg-canonical-homepage.liquid';
 const TEMPLATE_FILE='templates/index.json';
 const CSS_FILE='assets/mmg-canonical-homepage.css';
@@ -29,6 +29,9 @@ async function executeLiquidContentPlan(request,env){
     if(plan.installationMode!=='existing-liquid-visible-text')throw httpError(409,'liquid_content_mode_invalid','The approved content-only Liquid mode is missing.');
     const patch=plan.liquidContentPatch;
     if(!patch||patch.filename!==SECTION_FILE||typeof patch.replacementSource!=='string')throw httpError(409,'liquid_content_patch_missing','The approved Liquid text replacement package is missing.');
+    if(patch.nodeDistributionPreserved!==true||!Array.isArray(patch.replacements)||patch.replacements.some(item=>item?.nodeDistributionPreserved!==true)){
+      throw httpError(409,'styled_text_node_distribution_missing','This proposal predates the canonical node-preserving content-only package. Generate a new proposal before building the preview.');
+    }
     if(markupSignature(patch.originalSource)!==patch.beforeSignature||markupSignature(patch.replacementSource)!==patch.afterSignature||patch.beforeSignature!==patch.afterSignature){
       throw httpError(409,'liquid_markup_signature_mismatch','The approved content-only package changed Liquid or markup structure.');
     }
@@ -67,11 +70,11 @@ async function executeLiquidContentPlan(request,env){
 
     const completedAt=new Date().toISOString();
     const result={
-      actionID:crypto.randomUUID(),actionType:'shopify.staging.execute',status:'completed',build:BUILD,kernel:'liquid-content-only-v1',completedAt,
-      summary:'Kairos replaced and verified only the visible homepage copy on Kairos Staging.',objective:planEnvelope.objective,
-      execution:{operation:'themeFileUpsert',engine:'liquid-content-only-v1',targetTheme:stagingTheme,publishedTheme:mainTheme,publishedThemeChanged:false,productionPublishAuthorized:false,filesWritten:[{filename:SECTION_FILE,beforeSha256,afterSha256:actualSha256}],contentOnly:true,structurePreserved:true,templateUnchanged:true,stylesheetUnchanged:true},
-      verification:[{filename:SECTION_FILE,expectedSha256,actualSha256,matched:true,markupSignatureMatched:true,structurePreserved:true},{filename:TEMPLATE_FILE,matched:true,unchanged:true},{filename:CSS_FILE,matched:true,unchanged:true}],
-      evidence:{credentialPath:write.credentialPath,mutationResult:write.mutationResult,sourceInspectionActionID:sourceBody.actionID,readBackInspectionActionID:verifyBody.actionID,visibleTextReplacementCount:patch.visibleTextReplacementCount||0},
+      actionID:crypto.randomUUID(),actionType:'shopify.staging.execute',status:'completed',build:BUILD,kernel:'liquid-content-only-v2',completedAt,
+      summary:'Kairos replaced and verified only the visible homepage copy on Kairos Staging while preserving every styled text node.',objective:planEnvelope.objective,
+      execution:{operation:'themeFileUpsert',engine:'liquid-content-only-v2',targetTheme:stagingTheme,publishedTheme:mainTheme,publishedThemeChanged:false,productionPublishAuthorized:false,filesWritten:[{filename:SECTION_FILE,beforeSha256,afterSha256:actualSha256}],contentOnly:true,structurePreserved:true,nodeDistributionPreserved:true,templateUnchanged:true,stylesheetUnchanged:true},
+      verification:[{filename:SECTION_FILE,expectedSha256,actualSha256,matched:true,markupSignatureMatched:true,structurePreserved:true,nodeDistributionPreserved:true},{filename:TEMPLATE_FILE,matched:true,unchanged:true},{filename:CSS_FILE,matched:true,unchanged:true}],
+      evidence:{credentialPath:write.credentialPath,mutationResult:write.mutationResult,sourceInspectionActionID:sourceBody.actionID,readBackInspectionActionID:verifyBody.actionID,visibleTextReplacementCount:patch.visibleTextReplacementCount||0,nodeDistributionPreserved:true},
       rollback:{required:false,authorized:false,targetThemeID:stagingTheme.gid,files:[{filename:SECTION_FILE,existed:true,sha256:beforeSha256,content:section.content}],instruction:'Rollback restores only the original canonical homepage Liquid section.'}
     };
     const jobID=crypto.randomUUID();
@@ -80,7 +83,7 @@ async function executeLiquidContentPlan(request,env){
     return json({jobID,status:'completed',build:BUILD,pollURL:`/api/shopify/staging/execute/jobs/${jobID}`,summary:result.summary,result},202);
   }catch(error){
     const status=Number.isInteger(error?.status)?error.status:500;
-    return json({status:'needs-attention',build:BUILD,summary:'Kairos could not complete the Liquid content-only staging execution.',error:{status,code:error?.code||'liquid_content_execution_failed',message:error instanceof Error?error.message:'Liquid content execution failed.'}},status);
+    return json({status:'needs-attention',build:BUILD,summary:'Kairos could not complete the node-preserving content-only staging execution.',error:{status,code:error?.code||'liquid_content_execution_failed',message:error instanceof Error?error.message:'Liquid content execution failed.'}},status);
   }
 }
 
@@ -94,4 +97,4 @@ function validateBoundary(stagingTheme,mainTheme){
 }
 function markupSignature(source){return(String(source||'').match(/{{[\s\S]*?}}|{%[\s\S]*?%}|<[^>]+>/g)||[]).join('\u001f');}
 function jobRequest(request,jobID){return new Request(new URL(`/_kairos/standalone-execution-jobs/${jobID}`,request.url).toString(),{method:'GET'});}
-function json(value,status=200){return new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-MMG-Runtime':BUILD,'X-Kairos-Website-Intent':'content-only','X-Content-Type-Options':'nosniff'}});}
+function json(value,status=200){return new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-MMG-Runtime':BUILD,'X-Kairos-Website-Intent':'content-only','X-Kairos-Node-Distribution-Preserved':'true','X-Content-Type-Options':'nosniff'}});}
