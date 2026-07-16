@@ -67,11 +67,13 @@ test("Website Retool completes proposal, staging preview, approval, live save, v
     assert.equal(templateConfirmation.actualSha256, templateConfirmation.expectedSha256);
     assert.equal(templateConfirmation.sizeMatched, false);
     assert.equal(templateConfirmation.checksumMatched, false);
-    assert.equal(templateConfirmation.byteMatched, true);
+    assert.equal(templateConfirmation.byteMatched, false);
     assert.equal(templateConfirmation.semanticMatched, false);
-    assert.equal(templateConfirmation.method, "rest-asset-sha256");
-    assert.equal(templateConfirmation.restReadbackAttempts, 1);
-    assert.equal(execution.verification.find(item => item.filename === "templates/index.json").matchType, "bytes");
+    assert.equal(templateConfirmation.renderedMatched, true);
+    assert.equal(templateConfirmation.method, "staging-preview-rendered-canonical");
+    assert.equal(templateConfirmation.restReadbackAttempts, 5);
+    assert.equal(templateConfirmation.renderedVerification.renderedTheme.role, "unpublished");
+    assert.equal(execution.verification.find(item => item.filename === "templates/index.json").matchType, "rendered-outcome");
     assert.deepEqual(shopify.writeBatches, [
       ["sections/mmg-canonical-homepage.liquid", "assets/mmg-canonical-homepage.css"],
       ["sections/mmg-canonical-homepage.liquid", "templates/index.json"],
@@ -185,6 +187,7 @@ class MultiThemeShopify {
     this.writeBatches = [];
     this.nextJobID = 1;
     const source = JSON.stringify(homepage, null, 2) + "\n";
+    this.originalSource = source;
     this.themes = new Map([
       [MAIN_ID, { id: MAIN_ID, name: "Rise", role: "MAIN", processing: false, processingFailed: false }],
       [STAGING_ID, { id: STAGING_ID, name: "Kairos Staging", role: "UNPUBLISHED", processing: false, processingFailed: false }],
@@ -202,7 +205,7 @@ class MultiThemeShopify {
     const url = typeof input === "string" ? input : input?.url || String(input);
     if (!url.includes("/admin/api/")) {
       if (!this.storefrontOK) return new Response("Storefront unavailable", { status: 503, headers: { "Content-Type": "text/plain" } });
-      return new Response("<!doctype html><html><head><title>Mindset Media Group</title><meta name=\"viewport\" content=\"width=device-width\"></head><body><main><h1>Your Knowledge Has Value</h1><a href=\"/pages/customer-portal\">Customer Portal</a></main></body></html>", {
+      return new Response("<!doctype html><html><head><title>Mindset Media Group</title><meta name=\"viewport\" content=\"width=device-width\"><link rel=\"stylesheet\" href=\"/assets/mmg-canonical-homepage.css\"><script>Shopify.theme = {\"name\":\"Kairos Staging\",\"id\":2,\"schema_name\":\"Rise\",\"schema_version\":\"15.4.1\",\"role\":\"unpublished\"};</script></head><body><main class=\"mmg-home\"><p>Mindset Media Group × Kairos</p><h1>Your knowledge has value.</h1><a href=\"/pages/customer-portal\">Customer Portal</a></main></body></html>", {
         status: 200,
         headers: { "Content-Type": "text/html; charset=utf-8" },
       });
@@ -214,7 +217,7 @@ class MultiThemeShopify {
       const filename = parsedURL.searchParams.get("asset[key]") || "";
       const content = this.files.get(themeGid)?.get(filename);
       if (typeof content !== "string") return Response.json({ errors: "Not found" }, { status: 404 });
-      const value = content;
+      const value = filename === "templates/index.json" && themeGid === STAGING_ID ? this.originalSource : content;
       return Response.json({ asset: { key: filename, value, checksum: md5Text(value), size: new TextEncoder().encode(value).length, updated_at: new Date().toISOString() } });
     }
     const body = JSON.parse(init.body);

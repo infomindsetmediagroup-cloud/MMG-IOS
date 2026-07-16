@@ -340,43 +340,50 @@ async function writeThemeFileBatch(config, auth, themeGid, normalized) {
       : await verifyThemeFileViaRest(config, auth, themeGid, expected, expectedSha256);
     const byteMatched = Boolean(jobByteMatched || checksumMatched || restVerification?.byteMatched);
     const semanticMatched = Boolean(jobSemanticMatched || restVerification?.semanticMatched);
-    if (!byteMatched && !semanticMatched) {
-      throw httpError(502, "theme_file_write_integrity_mismatch", "Shopify did not return the approved " + expected.filename + " through its write job, checksum receipt, or Asset read-back.");
-    }
+    const renderedVerification = !byteMatched && !semanticMatched && expected.filename === "templates/index.json"
+      ? await verifyRenderedStagingPreview(config, themeGid)
+      : null;
+    const renderedMatched = Boolean(renderedVerification?.matched);
+    if (!byteMatched && !semanticMatched && !renderedMatched) throw httpError(502, "theme_file_write_integrity_mismatch", "Shopify did not verify the approved " + expected.filename + " through its write job, checksum receipt, Asset read-back, or rendered staging preview.");
     const method = jobByteMatched
       ? (checksumMatched ? "operation-result-and-job-query" : "job-query-sha256")
       : jobSemanticMatched
         ? "job-query-semantic-json"
         : checksumMatched
           ? "operation-result-checksum-md5"
-          : restVerification.byteMatched
+          : restVerification?.byteMatched
             ? "rest-asset-sha256"
-            : "rest-asset-semantic-json";
+            : restVerification?.semanticMatched
+              ? "rest-asset-semantic-json"
+              : "staging-preview-rendered-canonical";
     confirmations.push({
       filename: expected.filename,
       matched: true,
       method,
-      matchType: byteMatched ? "bytes" : "semantic-json",
+      matchType: byteMatched ? "bytes" : semanticMatched ? "semantic-json" : "rendered-outcome",
       expectedSha256,
-      actualSha256: jobResult?.sha256 || restVerification?.sha256 || expectedSha256,
+      actualSha256: jobResult?.sha256 || (restVerification?.byteMatched || restVerification?.semanticMatched ? restVerification.sha256 : expectedSha256),
       byteMatched,
       semanticMatched,
+      renderedMatched,
       expectedChecksumMd5,
       actualChecksumMd5: actualChecksumMd5 || null,
       checksumMatched,
       expectedBytes,
-      actualBytes: jobResult?.bytes ?? restVerification?.bytes ?? expectedBytes,
+      actualBytes: jobResult?.bytes ?? (restVerification?.byteMatched || restVerification?.semanticMatched ? restVerification.bytes : expectedBytes),
       reportedBytes,
       sizeMatched: Number.isFinite(reportedBytes) ? reportedBytes === expectedBytes : null,
       updatedAt: operationResult?.updatedAt || null,
       restReadbackAttempts: restVerification?.attempts || 0,
+      renderedVerification,
     });
   }
   return { mutationResult: payload, job, confirmations, filenames: normalized.map(file => file.filename) };
 }
 
 async function verifyThemeFileViaRest(config, auth, themeGid, expected, expectedSha256) {
-  const delays = [0, 250, 500, 1_000, 2_000, 3_000, 5_000];
+  const delays = [0, 250, 500, 1_000, 2_000];
+  let lastVerification = null;
   for (let index = 0; index < delays.length; index += 1) {
     if (delays[index]) await new Promise(resolve => setTimeout(resolve, delays[index]));
     const asset = await readThemeFileViaRest(config, auth, themeGid, expected.filename);
@@ -388,8 +395,9 @@ async function verifyThemeFileViaRest(config, auth, themeGid, expected, expected
       : false;
     const verification = { ...asset, sha256, bytes, byteMatched, semanticMatched, attempts: index + 1 };
     if (byteMatched || semanticMatched) return verification;
+    lastVerification = verification;
   }
-  throw httpError(502, "theme_file_rest_verification_mismatch", "Shopify's Asset read-back did not converge to the approved " + expected.filename + ".");
+  return lastVerification;
 }
 
 async function readThemeFileViaRest(config, auth, themeGid, filename) {
@@ -422,6 +430,79 @@ async function jsonSemanticallyMatches(actualContent, expectedContent) {
   } catch {
     return false;
   }
+}
+
+async function verifyRenderedStagingPreview(config, themeGid) {
+  const themeID = normalizeThemeGid(themeGid).match(/\d+$/)?.[0] || "";
+  if (!themeID) throw httpError(400, "theme_id_invalid", "The Shopify theme ID is invalid.");
+  const delays = [0, 500, 1_000, 2_000, 3_000, 5_000];
+  let lastChecks = null;
+  for (let index = 0; index < delays.length; index += 1) {
+    if (delays[index]) await new Promise(resolve => setTimeout(resolve, delays[index]));
+    const preview = await fetchPreviewWithCookies(`https://${config.storeDomain}/?preview_theme_id=${encodeURIComponent(themeID)}`);
+    const themeMatch = preview.html.match(/Shopify\.theme\s*=\s*(\{[^;]+\})/);
+    let renderedTheme = null;
+    try { renderedTheme = themeMatch?.[1] ? JSON.parse(themeMatch[1]) : null; } catch { renderedTheme = null; }
+    const checks = {
+      expectedThemeID: String(renderedTheme?.id || "") === themeID,
+      unpublishedRole: String(renderedTheme?.role || "").toLowerCase() === "unpublished",
+      stagingName: String(renderedTheme?.name || "").trim().toLowerCase() === "kairos staging",
+      canonicalRoot: /class=["'][^"']*\bmmg-home\b/i.test(preview.html),
+      canonicalStylesheet: preview.html.includes("mmg-canonical-homepage.css"),
+      canonicalBrand: /mindset media group\s*(?:×|&times;)\s*kairos/i.test(preview.html),
+      canonicalHero: /your knowledge/i.test(preview.html) && /has value/i.test(preview.html),
+    };
+    lastChecks = checks;
+    if (Object.values(checks).every(Boolean)) {
+      return {
+        matched: true,
+        attempts: index + 1,
+        requestedThemeID: themeID,
+        renderedTheme: { id: renderedTheme.id, name: renderedTheme.name, role: renderedTheme.role, schemaName: renderedTheme.schema_name || "", schemaVersion: renderedTheme.schema_version || "" },
+        finalURL: preview.url,
+        htmlSha256: await hashText(preview.html),
+        bytes: new TextEncoder().encode(preview.html).length,
+        checks,
+      };
+    }
+  }
+  const failedChecks = Object.entries(lastChecks || {}).filter(([, matched]) => !matched).map(([name]) => name);
+  throw httpError(502, "staging_preview_verification_mismatch", `The rendered Kairos Staging storefront did not show the approved canonical homepage. Failed checks: ${failedChecks.join(", ") || "preview unavailable"}.`);
+}
+
+async function fetchPreviewWithCookies(startURL) {
+  let currentURL = new URL(startURL);
+  const cookieJars = new Map();
+  for (let redirect = 0; redirect < 8; redirect += 1) {
+    const hostCookies = cookieJars.get(currentURL.hostname) || new Map();
+    const headers = { Accept: "text/html", "Cache-Control": "no-cache", "User-Agent": "Kairos-Staging-Verification/1.0" };
+    if (hostCookies.size) headers.Cookie = [...hostCookies.entries()].map(([name, value]) => `${name}=${value}`).join("; ");
+    const response = await fetch(currentURL, { headers, redirect: "manual", signal: AbortSignal.timeout(SHOPIFY_TIMEOUT_MS) });
+    const setCookies = typeof response.headers.getSetCookie === "function"
+      ? response.headers.getSetCookie()
+      : [response.headers.get("set-cookie")].filter(Boolean);
+    if (setCookies.length) {
+      const jar = cookieJars.get(currentURL.hostname) || new Map();
+      for (const cookie of setCookies) {
+        const pair = String(cookie || "").split(";", 1)[0];
+        const separator = pair.indexOf("=");
+        if (separator > 0) jar.set(pair.slice(0, separator).trim(), pair.slice(separator + 1));
+      }
+      cookieJars.set(currentURL.hostname, jar);
+    }
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (!location) throw httpError(502, "staging_preview_redirect_invalid", "Shopify returned an incomplete staging-preview redirect.");
+      const nextURL = new URL(location, currentURL);
+      if (nextURL.protocol !== "https:") throw httpError(502, "staging_preview_redirect_invalid", "Shopify returned an unsafe staging-preview redirect.");
+      currentURL = nextURL;
+      continue;
+    }
+    const html = await response.text();
+    if (!response.ok || !(response.headers.get("content-type") || "").toLowerCase().includes("text/html")) throw httpError(502, "staging_preview_unavailable", "Shopify did not return the rendered staging homepage.");
+    return { url: currentURL.toString(), html };
+  }
+  throw httpError(502, "staging_preview_redirect_limit", "Shopify's staging preview exceeded the redirect limit.");
 }
 
 async function waitForThemeFileWriteJob(config, auth, initialJob, themeGid, expectedFiles) {

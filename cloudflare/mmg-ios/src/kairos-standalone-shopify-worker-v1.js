@@ -17,7 +17,7 @@ import {
   buildCanonicalHomepagePackage,
 } from "./kairos-canonical-homepage-package-v1.js";
 
-const BUILD = "kairos-standalone-shopify-20260715-8";
+const BUILD = "kairos-standalone-shopify-20260715-9";
 const HOMEPAGE_FILE = "templates/index.json";
 const JOB_TTL_SECONDS = 3600;
 const MAX_OBJECTIVE_CHARS = 12000;
@@ -331,7 +331,7 @@ async function executeCanonicalPlan(request, env, planEnvelope, approval, starte
   const confirmations = new Map(write.confirmations.map(item => [item.filename, item]));
   const verification = expectedManifest.map(expected => {
     const confirmation = confirmations.get(expected.filename);
-    if (!confirmation?.matched || (!confirmation.byteMatched && !confirmation.semanticMatched)) {
+    if (!confirmation?.matched || (!confirmation.byteMatched && !confirmation.semanticMatched && !confirmation.renderedMatched)) {
       throw httpError(502, "staging_operation_receipt_mismatch", "Shopify's successful operation receipt did not match the approved " + expected.filename + ".");
     }
     return {
@@ -344,6 +344,7 @@ async function executeCanonicalPlan(request, env, planEnvelope, approval, starte
       verificationSource: confirmation.method,
       matchType: confirmation.matchType,
       semanticMatched: confirmation.semanticMatched,
+      renderedMatched: confirmation.renderedMatched,
     };
   });
 
