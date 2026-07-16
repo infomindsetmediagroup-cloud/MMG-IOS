@@ -1,3 +1,4 @@
+// Production verification trigger: prove structural Website Retool routing against the live Worker.
 import runtime, { KairosProject } from "./kairos-production-entry-v38.js";
 
 const BUILD = "kairos-production-entry-20260716-96";
