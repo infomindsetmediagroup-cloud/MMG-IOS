@@ -2,7 +2,7 @@ import runtime,{KairosProject} from './kairos-production-entry-v34.js';
 import contentOnlyPlanner from './kairos-content-only-shopify-planner-v2.js';
 import liquidContentExecutor from './kairos-liquid-content-only-executor-v1.js';
 
-const BUILD='kairos-production-entry-20260715-85';
+const BUILD='kairos-production-entry-20260715-86';
 const PLAN_ROUTE='/api/shopify/staging/plan/jobs';
 const EXECUTE_ROUTE='/api/shopify/staging/execute/jobs';
 
@@ -47,7 +47,9 @@ async function executeFreshContentOnlyPlan(request,payload,env,ctx){
 
   const freshPlan=planBody.result;
   const freshPatch=freshPlan?.plan?.liquidContentPatch;
-  if(freshPlan?.plan?.installationMode!=='existing-liquid-visible-text'||!freshPlan?.plan?.executable||!freshPatch?.nodeDistributionPreserved||!freshPatch?.styledTextNodesPreserved){
+  const replacements=Array.isArray(freshPatch?.replacements)?freshPatch.replacements:[];
+  const nodePreservationVerified=freshPatch?.nodeDistributionPreserved===true&&replacements.length>0&&replacements.every(item=>item?.nodeDistributionPreserved===true);
+  if(freshPlan?.plan?.installationMode!=='existing-liquid-visible-text'||!freshPlan?.plan?.executable||!nodePreservationVerified){
     return jsonError(409,'styled_text_nodes_not_preserved','Kairos refused to build the preview because the refreshed package did not preserve styled text nodes.');
   }
 
