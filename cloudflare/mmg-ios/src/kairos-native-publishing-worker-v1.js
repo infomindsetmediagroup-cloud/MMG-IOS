@@ -173,6 +173,10 @@ export class KairosProject {
   async fetch(request) {
     const url = new URL(request.url);
     try {
+      if (url.pathname === "/ledger/upsert" && request.method === "POST") return this.ledgerUpsert(request);
+      if (url.pathname === "/ledger/get" && request.method === "GET") return this.ledgerGet(url);
+      if (url.pathname === "/ledger/list" && request.method === "GET") return this.ledgerList(url);
+      if (url.pathname === "/ledger/delete" && request.method === "DELETE") return this.ledgerDelete(url);
       if (url.pathname === "/create" && request.method === "POST") return this.create(request);
       if (url.pathname === "/status" && request.method === "GET") return this.status();
       if (url.pathname === "/cover-approval" && request.method === "POST") return this.approveCover(request);
@@ -182,6 +186,57 @@ export class KairosProject {
     } catch (error) {
       return failure(error);
     }
+  }
+
+  async ledgerUpsert(request) {
+    const payload = await safeRequestJSON(request);
+    const collection = ledgerToken(payload?.collection, "collection");
+    const id = ledgerToken(payload?.id || payload?.value?.id, "record id");
+    const value = payload?.value;
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw engineError(400, "ledger_value_required", "Kairos requires an object value for durable persistence.");
+    const key = `ledger:${collection}:${id}`;
+    const indexKey = `ledger:index:${collection}`;
+    const existingIndex = await this.state.storage.get(indexKey);
+    const index = Array.isArray(existingIndex) ? existingIndex.filter(entry => entry?.id !== id) : [];
+    const updatedAt = String(value.updatedAt || value.createdAt || new Date().toISOString());
+    index.unshift({ id, updatedAt });
+    await this.state.storage.put({
+      [key]: { ...value, id },
+      [indexKey]: index.slice(0, 1000),
+    });
+    return json({ status: "persisted", collection, id, value: { ...value, id } });
+  }
+
+  async ledgerGet(url) {
+    const collection = ledgerToken(url.searchParams.get("collection"), "collection");
+    const id = ledgerToken(url.searchParams.get("id"), "record id");
+    const value = await this.state.storage.get(`ledger:${collection}:${id}`);
+    if (!value) return json({ status: "not-found", collection, id }, 404);
+    return json({ status: "ready", collection, id, value });
+  }
+
+  async ledgerList(url) {
+    const collection = ledgerToken(url.searchParams.get("collection"), "collection");
+    const limit = Math.max(1, Math.min(500, Number(url.searchParams.get("limit") || 250)));
+    const index = await this.state.storage.get(`ledger:index:${collection}`);
+    const entries = Array.isArray(index) ? index.slice(0, limit) : [];
+    const values = [];
+    for (const entry of entries) {
+      const value = await this.state.storage.get(`ledger:${collection}:${entry.id}`);
+      if (value) values.push(value);
+    }
+    return json({ status: "ready", collection, values });
+  }
+
+  async ledgerDelete(url) {
+    const collection = ledgerToken(url.searchParams.get("collection"), "collection");
+    const id = ledgerToken(url.searchParams.get("id"), "record id");
+    const indexKey = `ledger:index:${collection}`;
+    const existingIndex = await this.state.storage.get(indexKey);
+    const index = Array.isArray(existingIndex) ? existingIndex.filter(entry => entry?.id !== id) : [];
+    await this.state.storage.delete?.(`ledger:${collection}:${id}`);
+    await this.state.storage.put(indexKey, index);
+    return json({ status: "deleted", collection, id });
   }
 
   async alarm() {
@@ -737,6 +792,12 @@ function updateStageLedger(stages, active, status) {
 
 function isPublicationObjective(objective) { return /\b(book|manuscript|author|chapter|kdp|paperback|ebook|publication|publish)\b/i.test(objective); }
 function nativeInferenceState(env) { return intelligenceConfigured(env) ? "configured" : "deterministic-fallback"; }
+
+function ledgerToken(value, label) {
+  const token = String(value || "").trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9._:-]{0,159}$/.test(token)) throw engineError(400, "ledger_key_invalid", `Kairos requires a valid ${label}.`);
+  return token;
+}
 function inferenceRequestId(job, unit) { return `${job.projectId}:${String(unit).replace(/[^A-Za-z0-9_.:-]/g, "-")}`.slice(0, 128); }
 function inferenceBookContext(analysis) {
   return {

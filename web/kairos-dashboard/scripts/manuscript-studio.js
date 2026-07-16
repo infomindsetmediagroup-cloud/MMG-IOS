@@ -23,12 +23,24 @@ window.addEventListener("kairos:manuscript:restore", event => {
   render();
 });
 
+window.addEventListener("kairos:manuscript-studio:open", event => {
+  const detail = event.detail || {};
+  state.title = String(detail.title || state.title || "");
+  state.manuscript = String(detail.manuscript || state.manuscript || "");
+  state.projectId = detail.projectId || state.projectId || activeProjectId();
+  state.error = "";
+  state.open = true;
+  render();
+});
+
 function mount(){
-  const button=document.createElement("button");
-  button.className="manuscript-launch";
-  button.textContent="Open Manuscript Studio";
-  button.onclick=()=>{state.open=true;state.projectId=state.projectId||activeProjectId();render();};
-  document.body.appendChild(button);
+  if(!location.pathname.startsWith("/center/")){
+    const button=document.createElement("button");
+    button.className="manuscript-launch";
+    button.textContent="Open Manuscript Studio";
+    button.onclick=()=>{state.open=true;state.projectId=state.projectId||activeProjectId();render();};
+    document.body.appendChild(button);
+  }
   render();
 }
 
