@@ -12,8 +12,8 @@ const requiredAll = (source, markers, label) => markers.forEach(marker => requir
 const paths = {
   manifest: join(root, "production-baseline.json"),
   wrangler: join(root, "wrangler.toml"),
-  entry: join(root, "src/kairos-production-entry-v38.js"),
-  priorEntry: join(root, "src/kairos-production-entry-v37.js"),
+  entry: join(root, "src/kairos-production-entry-v39.js"),
+  priorEntry: join(root, "src/kairos-production-entry-v38.js"),
   childRuntime: join(root, "src/kairos-child-action-runtime-v1.js"),
   operational: join(root, "src/kairos-operational-runtime-v1.js"),
   autonomy: join(root, "src/kairos-autonomy-runtime-v1.js"),
@@ -21,6 +21,7 @@ const paths = {
   intelligence: join(root, "src/kairos-intelligence-v1.js"),
   web003: join(root, "src/kairos-web003-composite-runtime-v1.js"),
   index: join(repo, "web/kairos-dashboard/index.html"),
+  websiteGuard: join(repo, "web/kairos-dashboard/scripts/website-structural-intent-guard.js"),
   bridge: join(repo, "web/kairos-dashboard/scripts/child-action-bridge.js"),
   hub: join(repo, "web/kairos-dashboard/scripts/command-hub.js"),
   workspace: join(repo, "web/kairos-dashboard/scripts/workspace-runtime.js"),
@@ -38,15 +39,18 @@ const nativeTask = read(paths.nativeTask);
 const intelligence = read(paths.intelligence);
 const web003 = read(paths.web003);
 const index = read(paths.index);
+const websiteGuard = read(paths.websiteGuard);
 const bridge = read(paths.bridge);
 const hub = read(paths.hub);
 const workspace = read(paths.workspace);
 
 assert.equal(manifest.status, "frozen");
-assert.equal(manifest.baseline, "kairos-production-standard-20260716-31");
-assert.equal(manifest.worker.entry, "src/kairos-production-entry-v38.js");
+assert.equal(manifest.baseline, "kairos-production-standard-20260716-32");
+assert.equal(manifest.worker.entry, "src/kairos-production-entry-v39.js");
 assert.equal(manifest.dashboard.childActionRuntime, "kairos-child-action-runtime-20260716-1");
 assert.equal(manifest.dashboard.childActionBridge, "kairos-child-action-bridge-20260716-1");
+assert.equal(manifest.dashboard.websiteIntentGate, "kairos-website-intent-gate-20260716-1");
+assert.equal(manifest.dashboard.websiteStructuralIntentGuard, "kairos-website-structural-intent-guard-20260716-1");
 for (const flag of [
   "synchronousChildActionExecution",
   "childActionObjectiveBridgeRequired",
@@ -54,6 +58,10 @@ for (const flag of [
   "childActionDomainEvidenceRequired",
   "childActionDurableReadbackRequired",
   "childActionResultPersistenceRequired",
+  "structuralHomepageAutoRoutingRequired",
+  "contentOnlyStructuralFallbackProhibited",
+  "websitePlanRequestCanonicalizationRequired",
+  "staleContentOnlySessionRecoveryRequired",
   "boundedInternalAutomaticExecution",
   "eventDrivenAutonomousExecution",
   "verifiedNativeTaskArtifactsRequired",
@@ -67,7 +75,7 @@ assert.equal(manifest.approvedExpansion.automaticExternalExecution, false);
 assert.equal(manifest.approvedExpansion.modelReasoningPersisted, false);
 
 const activeEntries = wrangler.split(/\r?\n/).filter(line => /^main\s*=/.test(line.trim()));
-assert.deepEqual(activeEntries, ['main = "src/kairos-production-entry-v38.js"']);
+assert.deepEqual(activeEntries, ['main = "src/kairos-production-entry-v39.js"']);
 requiredAll(wrangler, [
   '[ai]', 'binding = "AI"', 'name = "KAIROS_PROJECTS"',
   'KAIROS_AUTONOMY_ENABLED = "true"',
@@ -76,6 +84,26 @@ requiredAll(wrangler, [
 ], "Wrangler");
 
 requiredAll(entry, [
+  'kairos-production-entry-v38.js',
+  'kairos-production-entry-20260716-96',
+  'kairos-website-intent-gate-20260716-1',
+  'canonicalizeWebsitePlanRequest',
+  'classifyWebsiteIntent',
+  'structural-objective-overrides-content-only-default',
+  'requestType: "full-retool"',
+  'fullRetoolConfirmed: true',
+  'structuralMutationAuthorized: true',
+  'styleMutationAuthorized: true',
+  'contentOnlyLocked: false',
+  'structuralObjectiveDetected: true',
+  'full-retool-before-delegation',
+  'contentOnlyStructuralFallback: "prohibited"',
+], "Production entry v39");
+const structuralBranch = entry.indexOf('if (structural)');
+const contentOnlyBranch = entry.indexOf('if (literalReplacement)');
+assert.ok(structuralBranch >= 0 && contentOnlyBranch > structuralBranch, "Structural intent must be evaluated before content-only routing");
+
+requiredAll(priorEntry, [
   'kairos-production-entry-v37.js',
   'handleChildActionRequest',
   'KAIROS_CHILD_ACTION_RUNTIME_BUILD',
@@ -84,7 +112,7 @@ requiredAll(entry, [
   'queuedAcknowledgementOnly',
   'childWorkspaceObjectiveBridge',
   'websiteRetool: "separate-approval-pipeline"',
-], "Production entry v38");
+], "Preserved production entry v38");
 requiredAll(childRuntime, [
   'kairos-child-action-runtime-20260716-1',
   'const EXECUTE_ROUTE = "/api/hub/execute"',
@@ -104,10 +132,34 @@ requiredAll(childRuntime, [
 assert.ok(!childRuntime.includes('"/api/hub/run"'), "Direct execution regressed to the queued-only endpoint");
 
 requiredAll(index, [
-  'kairos-command-center-operational-20260716-13',
+  'kairos-command-center-operational-20260716-14',
+  '/scripts/website-structural-intent-guard.js?v=20260716-1',
   '/scripts/command-hub.js?v=operational-20260716-12',
   '/scripts/child-action-bridge.js?v=operational-20260716-1',
 ], "Command Center index");
+assert.ok(
+  index.indexOf('/scripts/website-structural-intent-guard.js?v=20260716-1') < index.indexOf('/scripts/command-hub.js?v=operational-20260716-12'),
+  "Website structural intent guard must load before Command Hub",
+);
+requiredAll(websiteGuard, [
+  'kairos-website-structural-intent-guard-20260716-1',
+  'normalizePersistedWebsiteState',
+  'installWebsiteFetchGuard',
+  'installWebsiteControlGuard',
+  'requestType: "full-retool"',
+  'fullRetoolConfirmed: true',
+  'structuralMutationAuthorized: true',
+  'styleMutationAuthorized: true',
+  'contentOnlyLocked: false',
+  'structuralObjectiveDetected: true',
+  'state.mode = "input"',
+  'state.plan = null',
+  'event.target.value = "full-retool"',
+], "Website structural intent browser guard");
+for (const forbidden of ["MutationObserver", "setInterval(", "scrollIntoView", "scrollTo(", "scrollBy("]) {
+  assert.ok(!websiteGuard.includes(forbidden), `Website intent guard contains prohibited behavior: ${forbidden}`);
+}
+
 requiredAll(bridge, [
   'kairos-child-action-bridge-20260716-1',
   'Kairos Direct Execution',
@@ -129,7 +181,6 @@ requiredAll(autonomy, ["runAutonomyCycle", "executeNativeTask", "verified-native
 requiredAll(nativeTask, ["executeNativeTask", "normalizeNativeTaskOutput", "native-task-artifacts", "evidenceCatalogEnforced: true", "durableReadbackRequired: true", "crypto.subtle.digest"], "Native task runtime");
 requiredAll(intelligence, ['openai: "prohibited"', 'openAIModels: "prohibited"', 'cloudflare-account-scoped', '@cf/qwen/qwen3-30b-a3b-fp8', 'customer-content-isolated-no-training'], "Intelligence policy");
 
-requiredAll(priorEntry, ["kairos-production-entry-v36.js", "handleWeb003CompositeRequest", "KAIROS_WEB003_COMPOSITE_BUILD"], "Preserved website edge");
 requiredAll(web003, ["buildCompositePlan", "mergeCompositeExecution", "websiteRetoolExceptions", "nativeThemeDecision", "web-003-composite", "rollbackCanonicalExecution"], "WEB-003 runtime");
 requiredAll(hub, [
   '/api/shopify/staging/plan/jobs', '/api/shopify/staging/execute/jobs',
@@ -143,8 +194,11 @@ console.log(`KAIROS_FROZEN_STANDARD=${JSON.stringify({
   status: "passed",
   baseline: manifest.baseline,
   workerEntry: manifest.worker.entry,
-  childActionRuntime: manifest.dashboard.childActionRuntime,
-  childActionBridge: manifest.dashboard.childActionBridge,
+  websiteIntentGate: manifest.dashboard.websiteIntentGate,
+  websiteStructuralIntentGuard: manifest.dashboard.websiteStructuralIntentGuard,
+  structuralHomepageAutoRouting: true,
+  contentOnlyStructuralFallback: "prohibited",
+  staleContentOnlySessionRecovery: "required",
   objectiveToVerifiedDeliverable: true,
   queuedAcknowledgementOnly: "retired",
   websiteApprovalPipeline: "preserved",
