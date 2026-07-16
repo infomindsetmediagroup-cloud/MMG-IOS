@@ -10,6 +10,7 @@ import {
 } from "../src/kairos-canonical-homepage-package-v1.js";
 import { KAIROS_PROVIDER_POLICY, intelligenceConfigured } from "../src/kairos-intelligence-v1.js";
 import shopifyWorker from "../src/kairos-standalone-shopify-worker-v1.js";
+import { md5Text } from "../src/kairos-compact-homepage-utils-v1.js";
 
 const OBJECTIVE = "Install the canonical MMG homepage on Kairos Staging and verify the complete package.";
 
@@ -195,7 +196,7 @@ class MockShopify {
     }
     if (query.includes("mutation KairosThemeFilesUpsert")) {
       for (const file of variables.files || []) this.files.set(file.filename, file.body.value);
-      return Response.json({ data: { themeFilesUpsert: { upsertedThemeFiles: (variables.files || []).map(file => ({ filename: file.filename })), userErrors: [] } } });
+      return Response.json({ data: { themeFilesUpsert: { upsertedThemeFiles: (variables.files || []).map(file => ({ filename: file.filename, checksumMd5: md5Text(file.body.value), size: new TextEncoder().encode(file.body.value).length, updatedAt: new Date().toISOString() })), userErrors: [] } } });
     }
     if (query.includes("mutation KairosThemeFilesDelete")) {
       for (const filename of variables.files || []) this.files.delete(filename);

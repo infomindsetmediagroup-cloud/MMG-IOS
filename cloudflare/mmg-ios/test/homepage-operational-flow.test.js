@@ -1,16 +1,22 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import productionRuntime from "../src/kairos-production-entry.js";
+import { md5Text } from "../src/kairos-compact-homepage-utils-v1.js";
 
 const ORIGIN = "https://kairos.example";
 const OBJECTIVE = "Retool the MMG homepage, build a staging preview, and apply the approved result.";
 const MAIN_ID = "gid://shopify/OnlineStoreTheme/1";
 const STAGING_ID = "gid://shopify/OnlineStoreTheme/2";
 
+test("Shopify operation-result MD5 verification matches standard vectors", () => {
+  assert.equal(md5Text(""), "d41d8cd98f00b204e9800998ecf8427e");
+  assert.equal(md5Text("abc"), "900150983cd24fb0d6963f7d28e17f72");
+});
+
 test("Website Retool completes proposal, staging preview, approval, live save, verification, and rollback", async () => {
   const originalFetch = globalThis.fetch;
   const originalCaches = globalThis.caches;
-  const shopify = new MultiThemeShopify(uneditableHomepage(), { deferredWrites: 1, staleReadsAfterJob: 1 });
+  const shopify = new MultiThemeShopify(uneditableHomepage(), { deferredWrites: 1 });
   globalThis.fetch = shopify.fetch.bind(shopify);
   globalThis.caches = { default: new MemoryCache() };
   const env = {
@@ -53,8 +59,10 @@ test("Website Retool completes proposal, staging preview, approval, live save, v
     assert.equal(execution.execution.filesWritten.length, 3);
     assert.equal(shopify.completedWriteJobs, 1);
     assert.equal(shopify.writeJobPolls, 2);
-    assert.equal(shopify.staleReadbacks, 1);
-    assert.equal(execution.evidence.readBackAttempts, 2);
+    assert.equal(shopify.staleReadbacks, 0);
+    assert.equal(execution.evidence.verificationSource, "shopify-successful-operation-results");
+    assert.equal(execution.evidence.operationConfirmations.length, 3);
+    assert.equal(execution.evidence.operationConfirmations.every(item => item.matched), true);
     assert.deepEqual(shopify.writeBatches, [
       ["sections/mmg-canonical-homepage.liquid", "assets/mmg-canonical-homepage.css"],
       ["templates/index.json"],
@@ -237,7 +245,7 @@ class MultiThemeShopify {
         return Response.json({ data: { themeFilesUpsert: { job: { id, done: false }, upsertedThemeFiles: [], userErrors: [] } } });
       }
       this.applyFiles(variables.themeId, variables.files || []);
-      return Response.json({ data: { themeFilesUpsert: { job: null, upsertedThemeFiles: (variables.files || []).map(file => ({ filename: file.filename })), userErrors: [] } } });
+      return Response.json({ data: { themeFilesUpsert: { job: null, upsertedThemeFiles: (variables.files || []).map(file => ({ filename: file.filename, checksumMd5: md5Text(file.body.value), size: new TextEncoder().encode(file.body.value).length, updatedAt: new Date().toISOString() })), userErrors: [] } } });
     }
     if (query.includes("mutation KairosThemeFilesDelete")) {
       const files = this.files.get(variables.themeId);
