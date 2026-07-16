@@ -2,7 +2,7 @@ import { inferenceRuntime, parseStrictJSON, runKairosIntelligence } from "./kair
 import { ledgerBatchUpsert, ledgerGet, ledgerList, ledgerUpsert } from "./kairos-operational-runtime-v1.js";
 import { classifyNativeTask, executeNativeTask, KAIROS_NATIVE_TASK_EXECUTION_BUILD } from "./kairos-native-task-execution-v1.js";
 
-export const KAIROS_AUTONOMY_BUILD = "kairos-autonomy-runtime-20260716-2";
+export const KAIROS_AUTONOMY_BUILD = "kairos-autonomy-runtime-20260716-3";
 const CONTROL_OBJECT = "kairos-intelligence-control-v1";
 const OPEN_STATES = new Set(["ready", "active"]);
 const TERMINAL_TASK_STATES = new Set(["completed", "cancelled"]);
@@ -305,7 +305,7 @@ function normalizeDecision(value, candidates) {
     workflowID,
     action,
     rationale: clean(value?.rationale, 1600) || "Kairos applied the bounded-autonomy policy.",
-    confidence: Math.max(0, Math.min(1, Number(value?.confidence || 0.5))),
+    confidence: normalizedConfidence(value?.confidence, 0.5),
   };
 }
 
@@ -569,7 +569,13 @@ function compact(value) {
 }
 
 function normalizeStrings(value, limit, maximum) {
-  return Array.isArray(value) ? value.slice(0, limit).map(item => clean(typeof item === "string" ? item : item?.rationale || item?.summary, maximum)).filter(Boolean) : [];
+  const values = value == null ? [] : Array.isArray(value) ? value : [value];
+  return values.slice(0, limit).map(item => clean(typeof item === "string" ? item : item?.rationale || item?.summary || item?.message || item?.result, maximum)).filter(Boolean);
+}
+
+function normalizedConfidence(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, Math.min(1, number)) : fallback;
 }
 
 function clean(value, maximum) { return String(value ?? "").replace(/\u0000/g, "").trim().slice(0, maximum); }

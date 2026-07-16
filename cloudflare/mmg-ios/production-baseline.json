@@ -1,5 +1,5 @@
 {
-  "baseline": "kairos-production-standard-20260716-26",
+  "baseline": "kairos-production-standard-20260716-27",
   "status": "frozen",
   "productionUrl": "https://mmg-ios.info-mindsetmediagroup.workers.dev",
   "worker": {
@@ -15,8 +15,8 @@
     "workspaceRuntime": "kairos-workspace-runtime-20260716-2",
     "workflowRuntime": "kairos-workflow-runtime-ui-20260716-3",
     "operationalRuntime": "kairos-operational-runtime-20260716-3",
-    "autonomyRuntime": "kairos-autonomy-runtime-20260716-2",
-    "nativeTaskExecutionRuntime": "kairos-native-task-execution-20260716-1",
+    "autonomyRuntime": "kairos-autonomy-runtime-20260716-3",
+    "nativeTaskExecutionRuntime": "kairos-native-task-execution-20260716-2",
     "systemRegistry": "kairos-system-registry-ui-20260716-3",
     "commandCenterLayout": "kairos-command-center-layout-20260714-9",
     "chromeHamburgerController": "kairos-chrome-hamburger-controller-20260714-3",

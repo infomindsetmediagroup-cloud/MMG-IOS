@@ -2,7 +2,7 @@ import runtime, { KairosProject } from "./kairos-production-entry-v35.js";
 import { handleAutonomyRequest, KAIROS_AUTONOMY_BUILD, KAIROS_AUTONOMY_POLICY, runAutonomyCycle } from "./kairos-autonomy-runtime-v1.js";
 import { inferenceRuntime } from "./kairos-intelligence-v1.js";
 
-const BUILD = "kairos-production-entry-20260716-92";
+const BUILD = "kairos-production-entry-20260716-93";
 
 export { KairosProject };
 

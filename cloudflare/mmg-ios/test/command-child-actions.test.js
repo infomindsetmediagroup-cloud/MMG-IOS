@@ -196,6 +196,11 @@ test("approved bounded autonomy completes a verified three-task native sequence"
         }
         assert.match(system, /native internal analysis and execution engine/i);
         const evidenceReference = `workflow:${state.workflow.id}`;
+        const verification = state.task.stage === "observe"
+          ? "Persist the artifact and verify its SHA-256 content hash before completing the task."
+          : state.task.stage === "understand"
+            ? { status: "verified", checks: [{ check: "Durable read-back", result: "Require an exact artifact read-back before task completion." }] }
+            : [{ check: "Atomic completion", result: "Read back the artifact, workflow, decision, and receipt." }];
         return { response: JSON.stringify({
           status: "completed",
           summary: `Kairos completed the ${state.task.stage} task from the authoritative durable workflow record.`,
@@ -206,7 +211,7 @@ test("approved bounded autonomy completes a verified three-task native sequence"
           },
           findings: [{ claim: `The ${state.task.stage} task can be completed as a bounded internal deliverable.`, evidenceReference, confidence: 0.98 }],
           evidenceReferences: [evidenceReference],
-          verification: ["Persist the artifact, verify its SHA-256 content hash, and read the exact record back before completing the task."],
+          verification,
           nextAction: "Continue to the next governed lifecycle task.",
           blockedReason: "",
         }) };
@@ -249,7 +254,10 @@ test("approved bounded autonomy completes a verified three-task native sequence"
   assert.equal(updated.state, "completed");
   assert.equal(updated.tasks[0].state, "completed");
   assert.equal(updated.tasks[0].executionEvidence.externalActionTaken, false);
+  assert.match(updated.tasks[0].nativeOutput.verification[0], /SHA-256/i);
+  assert.ok(updated.tasks[1].nativeOutput.verification.some(value => /Durable read-back/i.test(value)));
   assert.equal(updated.tasks[2].state, "completed");
+  assert.ok(updated.tasks[2].nativeOutput.verification.some(value => /Atomic completion/i.test(value)));
   assert.match(updated.tasks[2].nativeOutput.deliverable.content, /usable internal deliverable/i);
   assert.equal(updated.tasks[2].executionEvidence.artifactReadbackVerified, true);
   assert.equal(updated.progress, 100);
