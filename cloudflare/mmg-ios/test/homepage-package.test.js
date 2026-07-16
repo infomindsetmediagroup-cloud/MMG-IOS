@@ -86,7 +86,12 @@ test("Cloudflare account binding runs Qwen intelligence and proves health withou
     AI: {
       async run(model, input) {
         calls.push({ model, input });
-        return { response: input.max_tokens === 24 ? "READY" : '{"summary":"ready"}', usage: { completion_tokens: 8 } };
+        const content = input.max_tokens === 256 ? "READY" : '{"summary":"ready"}';
+        return {
+          response: "",
+          choices: [{ message: { role: "assistant", content, reasoning_content: "Kairos verified the request." }, finish_reason: "stop" }],
+          usage: { completion_tokens: 8 },
+        };
       },
     },
     KAIROS_WORKERS_AI_MODEL: "@cf/qwen/qwen3-30b-a3b-fp8",
@@ -98,6 +103,8 @@ test("Cloudflare account binding runs Qwen intelligence and proves health withou
   const health = await probeKairosIntelligence(env);
   assert.equal(health.status, "ready");
   assert.equal(health.reachable, true);
+  assert.equal(health.outputSignal, "final-response");
+  assert.equal(calls.some(call => call.input.max_tokens === 256), true);
   assert.equal(calls.every(call => call.model === "@cf/qwen/qwen3-30b-a3b-fp8"), true);
 });
 

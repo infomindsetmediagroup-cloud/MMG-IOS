@@ -73,17 +73,19 @@ export async function probeKairosIntelligence(env) {
         { role: "user", content: "Confirm runtime readiness." },
       ],
       temperature: 0,
-      max_tokens: 24,
+      max_tokens: 256,
       seed: 1729,
     });
     const text = extractGeneratedText(result);
-    if (!text) throw gatewayError("Kairos account-scoped inference returned an empty health response.", "kairos_inference_empty", 502);
+    const reasoningSignal = extractReasoningSignal(result);
+    if (!text && !reasoningSignal) throw gatewayError("Kairos account-scoped inference returned an empty health response.", "kairos_inference_empty", 502);
     const health = {
       status: "ready",
       reachable: true,
       ...runtime,
       latencyMs: Date.now() - started,
       checkedAt: new Date().toISOString(),
+      outputSignal: text ? "final-response" : "reasoning-response",
       providerPolicy: KAIROS_PROVIDER_POLICY,
     };
     await writeCachedHealth(env, runtime.mode, health);
@@ -258,10 +260,24 @@ function controlStub(env) {
 
 function extractGeneratedText(result) {
   if (typeof result === "string") return result.trim();
-  if (typeof result?.response === "string") return result.response.trim();
-  if (result?.response && typeof result.response === "object") return JSON.stringify(result.response);
+  const response = typeof result?.response === "string" ? result.response.trim() : "";
+  if (response) return response;
   const choice = result?.choices?.[0]?.message?.content ?? result?.choices?.[0]?.text;
-  return typeof choice === "string" ? choice.trim() : "";
+  if (typeof choice === "string" && choice.trim()) return choice.trim();
+  if (Array.isArray(choice)) {
+    const combined = choice.map(part => typeof part === "string" ? part : part?.text || part?.content || "").join("").trim();
+    if (combined) return combined;
+  }
+  if (result?.response && typeof result.response === "object") return JSON.stringify(result.response);
+  return "";
+}
+
+function extractReasoningSignal(result) {
+  const reasoning = result?.reasoning
+    ?? result?.reasoning_content
+    ?? result?.choices?.[0]?.message?.reasoning
+    ?? result?.choices?.[0]?.message?.reasoning_content;
+  return typeof reasoning === "string" ? reasoning.trim() : "";
 }
 
 async function timedFetch(url, init, timeoutMs) {
