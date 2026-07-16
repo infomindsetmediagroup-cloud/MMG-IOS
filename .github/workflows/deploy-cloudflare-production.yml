@@ -51,18 +51,16 @@ jobs:
           node scripts/validate-frozen-production-standard.mjs
           npx wrangler deploy --dry-run
 
-      - name: Deploy or await connected Cloudflare rollout
+      - name: Deploy Cloudflare Worker
         working-directory: repository/cloudflare/mmg-ios
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
-          if [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
-            npx wrangler deploy
-          else
-            echo "Direct deploy credentials are incomplete; verifying the connected Cloudflare rollout instead."
-          fi
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo "CLOUDFLARE_API_TOKEN is required." >&2; exit 1; }
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}" || { echo "CLOUDFLARE_ACCOUNT_ID is required." >&2; exit 1; }
+          npx wrangler deploy
 
       - name: Verify live Kairos application
         env:
@@ -80,11 +78,12 @@ jobs:
               -H 'Cache-Control: no-cache' \
               --output dashboard.html \
               "${KAIROS_PRODUCTION_URL}/?deployment=${nonce}" || true
-            if node -e 'const fs=require("fs");let h={};try{h=JSON.parse(fs.readFileSync("health.json","utf8"))}catch{};const x=fs.existsSync("dashboard.html")?fs.readFileSync("dashboard.html","utf8"):"";const headers=fs.existsSync("health-headers.txt")?fs.readFileSync("health-headers.txt","utf8").toLowerCase():"";const ok=["ready","ok","operational"].includes(String(h.status||"").toLowerCase())&&x.includes("scripts/job-transport.js?v=20260715-1")&&x.includes("scripts/command-hub.js?v=routed-20260715-4")&&headers.includes("x-kairos-production-entry: kairos-production-entry-20260715-80")&&headers.includes("x-kairos-website-retool-flow: proposal-preview-approval-live-save")&&headers.includes("x-kairos-child-card-contracts: normalized-top-edge");process.exit(ok?0:1)'; then
+            if node -e 'const fs=require("fs");let h={};try{h=JSON.parse(fs.readFileSync("health.json","utf8"))}catch{};const x=fs.existsSync("dashboard.html")?fs.readFileSync("dashboard.html","utf8"):"";const headers=fs.existsSync("health-headers.txt")?fs.readFileSync("health-headers.txt","utf8").toLowerCase():"";const ok=["ready","ok","operational"].includes(String(h.status||"").toLowerCase())&&x.includes("kairos-command-center-routed-20260715-7")&&x.includes("scripts/job-transport.js?v=20260715-1")&&x.includes("scripts/command-hub.js?v=routed-20260715-7")&&x.includes("scripts/website-stage-three-controller.js?v=20260715-1")&&headers.includes("x-kairos-production-entry: kairos-production-entry-20260715-80")&&headers.includes("x-kairos-website-retool-flow: proposal-preview-approval-live-save")&&headers.includes("x-kairos-child-card-contracts: normalized-top-edge");process.exit(ok?0:1)'; then
               exit 0
             fi
             sleep 5
           done
+          echo "Cloudflare deployment did not pass live verification for ${GITHUB_SHA}." >&2
           exit 1
 
       - name: Verify canonical homepage planning
