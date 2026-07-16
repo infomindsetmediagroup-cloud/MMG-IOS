@@ -1,6 +1,6 @@
 const BUILD = "kairos-homepage-quick-action-20260716-2";
 const ROUTE = "/center/content/website";
-const STATE_KEY = "kairos.homepage.quick-action.v2";
+const STATE_KEY = "kairos.homepage.quick-action.v3";
 const state = loadState();
 
 mount();
@@ -33,7 +33,7 @@ function inputMarkup() {
     <div class="homepage-quick-hero">
       <p class="eyebrow">Homepage Text Redo</p>
       <h2>Keep my homepage. Change the words.</h2>
-      <p>Kairos reads the currently published Shopify homepage as the framework source, copies that exact template into non-live staging, changes only existing customer-facing text settings, and returns the preview.</p>
+      <p>Kairos reads the currently published Shopify homepage as the framework source, targets active rendered homepage copy, copies that exact template into non-live staging, and returns the preview.</p>
     </div>
     <div class="homepage-design-lock">
       <strong>Published framework locked</strong>
@@ -43,15 +43,15 @@ function inputMarkup() {
     <textarea class="objective" id="homepage-quick-objective" maxlength="12000" placeholder="Example: Keep the entire homepage exactly as it is, but rewrite the visible copy so visitors understand that MMG helps creators turn knowledge into professional digital products.">${escapeHTML(state.objective)}</textarea>
     ${state.error ? `<p class="homepage-quick-error">${escapeHTML(state.error)}</p>` : ""}
     <button class="primary homepage-quick-build" type="button" data-homepage-quick-build>Rewrite Text & Build Preview</button>
-    <small class="homepage-quick-boundary">Preserve mode may write only templates/index.json on Kairos Staging. If the published framework cannot be preserved exactly, Kairos must stop instead of rebuilding it.</small>
+    <small class="homepage-quick-boundary">Preserve mode may write only templates/index.json on Kairos Staging. A successful preview must contain at least one verified change to active rendered homepage copy.</small>
   </section>`;
 }
 
 function workingMarkup() {
   const copy = {
-    planning: ["Reading the published homepage", "Kairos is using the current live MAIN homepage as the framework source and locating only its existing customer-facing text settings."],
-    executing: ["Rewriting text inside the published framework", "Kairos is copying the published template to staging and changing only approved string settings. Liquid, CSS, assets, sections, blocks, order, colors, and layout are locked."],
-    verifying: ["Preparing the real Shopify preview", "Kairos is verifying that the staging preview uses the published framework and that only templates/index.json text settings changed."],
+    planning: ["Reading the rendered homepage copy", "Kairos is using the current live MAIN homepage as the framework source and locating active ordered sections and blocks that actually render customer-facing text."],
+    executing: ["Rewriting visible text inside the published framework", "Kairos is copying the published template to staging and changing only verified rendered string settings. Liquid, CSS, assets, sections, blocks, order, colors, and layout are locked."],
+    verifying: ["Preparing the real Shopify preview", "Kairos is verifying that the staging preview uses the published framework and contains at least one active rendered text replacement."],
     publishing: ["Applying and verifying the approved text update", "Kairos is saving only the exact approved homepage template and preserving rollback evidence."],
   }[state.mode] || ["Working", "Kairos is completing the homepage text job."];
   return `<section class="homepage-quick-action homepage-quick-working">
@@ -70,8 +70,8 @@ function previewMarkup() {
   return `<section class="homepage-quick-action">
     <div class="homepage-quick-success">
       <p class="eyebrow">Homepage text preview ready</p>
-      <h2>Your published framework is preserved.</h2>
-      <p>${escapeHTML(state.execution?.summary || "Kairos updated only existing homepage text settings inside the published framework.")}</p>
+      <h2>Your framework is preserved and rendered copy changed.</h2>
+      <p>${escapeHTML(state.execution?.summary || "Kairos updated active rendered homepage text inside the published framework.")}</p>
     </div>
     <div class="homepage-preview-links">
       <a href="${escapeAttribute(preview.mobileURL || preview.url || "#")}" target="_blank" rel="noopener">Open Mobile Preview ↗</a>
@@ -79,7 +79,7 @@ function previewMarkup() {
     </div>
     <div class="homepage-preview-evidence">
       <strong>${passed}/${checks.length || passed} rendered checks passed</strong>
-      <span>Published MAIN framework source · templates/index.json only · existing string settings only · Liquid/CSS/assets untouched · staging only</span>
+      <span>Published MAIN framework source · active rendered copy changed · templates/index.json only · Liquid/CSS/assets untouched · staging only</span>
     </div>
     ${state.error ? `<p class="homepage-quick-error">${escapeHTML(state.error)}</p>` : ""}
     <label class="homepage-quick-confirm"><input type="checkbox" data-homepage-preview-reviewed><span>I reviewed this exact staging preview and want Kairos to prepare only this text update for live application.</span></label>
@@ -143,6 +143,9 @@ async function buildPreview() {
       sourceOfTruth: "published-main-theme",
       preserveExistingDesign: true,
       preservePublishedFramework: true,
+      renderedTextRequired: true,
+      activeOrderedSectionsOnly: true,
+      activeOrderedBlocksOnly: true,
       templateTextOnly: true,
       fullRetoolConfirmed: false,
       structuralMutationAuthorized: false,
@@ -154,6 +157,7 @@ async function buildPreview() {
     });
     const plan = await pollJob(submittedPlan, "plan");
     if (plan?.plan?.installationMode !== "published-main-template-text-settings-v1") throw new Error("Kairos did not return the published-framework text-only plan. Nothing was changed.");
+    if (!Array.isArray(plan?.plan?.templateTextPatch?.operations) || plan.plan.templateTextPatch.operations.length < 1) throw new Error("Kairos did not produce a verified rendered homepage text change. Nothing was changed.");
     state.mode = "executing";
     render();
     const approval = {
@@ -170,6 +174,7 @@ async function buildPreview() {
     const submittedExecution = await submitJob("/api/shopify/staging/execute/jobs", { plan, approval });
     state.execution = await pollJob(submittedExecution, "execute");
     if (state.execution?.execution?.publishedFrameworkPreserved !== true || state.execution?.execution?.templateTextOnly !== true) throw new Error("Kairos did not verify published-framework preservation. Nothing will be previewed.");
+    if (Number(state.execution?.evidence?.textSettingReplacementCount || 0) < 1) throw new Error("Kairos did not verify an active rendered homepage text replacement. Nothing will be previewed.");
     state.mode = "verifying";
     render();
     state.verification = await requestJSON("/api/shopify/staging/visual-verification", { execution: state.execution.execution, result: state.execution, requestType: "homepage", path: "/" });
@@ -232,7 +237,7 @@ async function requestJSON(url, payload) { const { response, body } = await fetc
 async function fetchJSON(url, init = {}) { const response = await fetch(url, { cache: "no-store", ...init }); const text = await response.text(); let body = {}; try { body = text ? JSON.parse(text) : {}; } catch { body = { summary: text }; } return { response, body }; }
 function freshState() { return { mode: "input", objective: "", execution: null, verification: null, release: null, error: "" }; }
 function loadState() { try { const value = JSON.parse(sessionStorage.getItem(STATE_KEY) || "null"); if (!value || typeof value !== "object") return freshState(); const restored = { ...freshState(), ...value }; if (["planning", "executing", "verifying", "publishing"].includes(restored.mode)) restored.mode = "input"; return restored; } catch { return freshState(); } }
-function saveState() { try { sessionStorage.setItem(STATE_KEY, JSON.stringify({ mode: state.mode, objective: state.objective, verification: state.verification ? { reviewID: state.verification.reviewID, preview: state.verification.preview, automatedChecks: state.verification.automatedChecks } : null, release: state.release, execution: state.execution ? { summary: state.execution.summary, status: state.execution.status, execution: state.execution.execution } : null, error: state.error })); } catch {} }
+function saveState() { try { sessionStorage.setItem(STATE_KEY, JSON.stringify({ mode: state.mode, objective: state.objective, verification: state.verification ? { reviewID: state.verification.reviewID, preview: state.verification.preview, automatedChecks: state.verification.automatedChecks } : null, release: state.release, execution: state.execution ? { summary: state.execution.summary, status: state.execution.status, execution: state.execution.execution, evidence: state.execution.evidence } : null, error: state.error })); } catch {} }
 function escapeAttribute(value) { return escapeHTML(value).replace(/`/g, "&#96;"); }
 function escapeHTML(value) { return String(value ?? "").replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]); }
 window.KairosHomepageQuickAction = { build: BUILD, mount, reset: startOver };
