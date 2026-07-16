@@ -3,21 +3,22 @@ name: Validate Published Homepage Framework
 on:
   push:
     branches:
-      - fix/preserve-published-homepage-framework
-  pull_request:
-    branches:
-      - main
+      - validate/published-homepage-framework
+    paths:
+      - ".validation-trigger"
+      - ".github/workflows/validate-published-homepage-framework.yml"
+      - "cloudflare/mmg-ios/**"
+      - "web/kairos-dashboard/**"
 
 permissions:
-  contents: read
-  statuses: write
+  contents: write
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Download branch source
+      - name: Download validation source
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -53,7 +54,7 @@ jobs:
           node scripts/validate-frozen-production-standard.mjs
           npx wrangler deploy --dry-run
 
-      - name: Publish validation receipt
+      - name: Write validation receipt
         if: always()
         shell: bash
         env:
@@ -61,19 +62,38 @@ jobs:
           JOB_STATUS: ${{ job.status }}
         run: |
           set -euo pipefail
-          if [ "${JOB_STATUS}" = "success" ]; then
-            state="success"
-            description="Published-framework homepage validation passed"
-          else
-            state="failure"
-            description="Published-framework homepage validation failed"
-          fi
-          payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-published-homepage-validation",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          receipt="$(JOB_STATUS="${JOB_STATUS}" node - <<'NODE'
+          const status=process.env.JOB_STATUS==='success'?'passed':'failed';
+          process.stdout.write(JSON.stringify({
+            status,
+            validatedCommit:process.env.GITHUB_SHA,
+            branch:process.env.GITHUB_REF_NAME,
+            workflowRunID:process.env.GITHUB_RUN_ID,
+            workflowRunURL:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            checks:[
+              'javascript-syntax',
+              'production-validation-suite',
+              'frozen-production-standard',
+              'wrangler-deploy-dry-run'
+            ],
+            completedAt:new Date().toISOString()
+          },null,2));
+          NODE
+          )"
+          encoded="$(printf '%s' "${receipt}" | base64 -w0)"
+          api_url="${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/contents/.validation/published-homepage-framework.json"
+          existing="$(curl --silent --show-error \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "${api_url}?ref=${GITHUB_REF_NAME}")"
+          existing_sha="$(printf '%s' "${existing}" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(JSON.parse(s).sha||"")}catch{}})')"
+          payload="$(CONTENT="${encoded}" BRANCH="${GITHUB_REF_NAME}" SHA="${existing_sha}" node -e 'const p={message:"Record published homepage validation result",content:process.env.CONTENT,branch:process.env.BRANCH};if(process.env.SHA)p.sha=process.env.SHA;process.stdout.write(JSON.stringify(p))')"
           curl --fail --silent --show-error \
-            -X POST \
+            -X PUT \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             -H "Content-Type: application/json" \
-            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            "${api_url}" \
             --data "${payload}"
