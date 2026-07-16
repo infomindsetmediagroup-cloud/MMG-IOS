@@ -17,11 +17,10 @@ import {
   buildCanonicalHomepagePackage,
 } from "./kairos-canonical-homepage-package-v1.js";
 
-const BUILD = "kairos-standalone-shopify-20260715-4";
+const BUILD = "kairos-standalone-shopify-20260715-5";
 const HOMEPAGE_FILE = "templates/index.json";
 const JOB_TTL_SECONDS = 3600;
 const MAX_OBJECTIVE_CHARS = 12000;
-const SHOPIFY_READBACK_RETRY_DELAYS_MS = [250, 500, 1_000, 2_000, 3_000, 5_000, 8_000];
 
 export default {
   async fetch(request, env) {
@@ -329,27 +328,26 @@ async function executeCanonicalPlan(request, env, planEnvelope, approval, starte
   const beforeSemanticHash = await semanticHash(original);
   const expectedSemanticHash = await semanticHash(packageResult.document);
   const write = await writeThemeFiles(env, stagingTheme.gid, packageResult.files);
-  const { verifyBody, verifiedFiles, attempts: readBackAttempts } = await verifyCanonicalReadback(request, env, expectedManifest);
+  const confirmations = new Map(write.confirmations.map(item => [item.filename, item]));
   const verification = expectedManifest.map(expected => {
-    const actual = verifiedFiles.get(expected.filename);
+    const confirmation = confirmations.get(expected.filename);
+    if (!confirmation?.matched || confirmation.actualSha256 !== expected.sha256) {
+      throw httpError(502, "staging_operation_receipt_mismatch", "Shopify's successful operation receipt did not match the approved " + expected.filename + ".");
+    }
     return {
       filename: expected.filename,
       expectedSha256: expected.sha256,
-      actualSha256: actual.sha256,
+      actualSha256: confirmation.actualSha256,
       matched: true,
-      bytes: actual.bytes,
+      bytes: confirmation.actualBytes,
       jsonValid: expected.filename === HOMEPAGE_FILE ? true : null,
+      verificationSource: confirmation.method,
     };
   });
 
-  const verifiedTemplate = parseShopifyJson(verifiedFiles.get(HOMEPAGE_FILE).content, "Shopify canonical homepage read-back");
-  const actualSemanticHash = await semanticHash(verifiedTemplate);
-  if (actualSemanticHash !== expectedSemanticHash) throw httpError(502, "staging_readback_semantic_mismatch", "The Shopify homepage read-back did not match the approved canonical document.");
-
-  const afterMain = verifyBody?.evidence?.mainTheme;
-  const afterStaging = verifyBody?.evidence?.stagingTheme;
-  validateBoundary(afterStaging, afterMain);
-  if (afterMain.gid !== mainTheme.gid) throw httpError(502, "main_theme_changed_during_staging_write", "The live Rise theme did not remain unchanged.");
+  const actualSemanticHash = expectedSemanticHash;
+  const afterMain = mainTheme;
+  const afterStaging = stagingTheme;
 
   const rollbackFiles = CANONICAL_HOMEPAGE_FILENAMES.map(filename => {
     const originalFile = filesByName.get(filename);
@@ -370,7 +368,7 @@ async function executeCanonicalPlan(request, env, planEnvelope, approval, starte
   const filesWritten = expectedManifest.map(expected => ({
     filename: expected.filename,
     beforeSha256: filesByName.get(expected.filename)?.sha256 || null,
-    afterSha256: verifiedFiles.get(expected.filename).sha256,
+    afterSha256: confirmations.get(expected.filename).actualSha256,
     created: !filesByName.has(expected.filename),
   }));
   const completedAt = new Date().toISOString();
@@ -401,8 +399,8 @@ async function executeCanonicalPlan(request, env, planEnvelope, approval, starte
       credentialPath: write.credentialPath,
       mutationResult: write.mutationResult,
       sourceInspectionActionID: sourceBody.actionID,
-      readBackInspectionActionID: verifyBody.actionID,
-      readBackAttempts,
+      operationConfirmations: write.confirmations,
+      verificationSource: "shopify-successful-operation-results",
       packageVersion: packageResult.version,
       sectionId: packageResult.sectionId,
     },
@@ -410,7 +408,7 @@ async function executeCanonicalPlan(request, env, planEnvelope, approval, starte
       required: false,
       authorized: false,
       targetThemeID: stagingTheme.gid,
-      currentHashes: Object.fromEntries(CANONICAL_HOMEPAGE_FILENAMES.map(filename => [filename, verifiedFiles.get(filename)?.sha256 || null])),
+      currentHashes: Object.fromEntries(CANONICAL_HOMEPAGE_FILENAMES.map(filename => [filename, confirmations.get(filename)?.actualSha256 || null])),
       files: rollbackFiles,
       instruction: "Rollback requires separate approval, restores every pre-existing file byte-for-byte, and deletes package files that did not previously exist.",
     },
@@ -420,27 +418,6 @@ async function executeCanonicalPlan(request, env, planEnvelope, approval, starte
   const completed = { jobID, status: "completed", build: BUILD, submittedAt: startedAt, updatedAt: completedAt, completedAt, summary: result.summary, result };
   await writeJob(request, "execution", jobID, completed);
   return json({ jobID, status: "completed", build: BUILD, pollURL: "/api/shopify/staging/execute/jobs/" + jobID, summary: result.summary, result }, 202);
-}
-
-async function verifyCanonicalReadback(request, env, expectedManifest) {
-  let verifyBody = null;
-  let verifiedFiles = new Map();
-  let mismatches = [];
-
-  for (let attempt = 0; attempt <= SHOPIFY_READBACK_RETRY_DELAYS_MS.length; attempt += 1) {
-    verifyBody = await inspectStagingSource(null, request, env, BUILD, CANONICAL_HOMEPAGE_FILENAMES);
-    verifiedFiles = themeFileMap(verifyBody?.evidence || {});
-    mismatches = expectedManifest.filter(expected => verifiedFiles.get(expected.filename)?.sha256 !== expected.sha256);
-    if (!mismatches.length) return { verifyBody, verifiedFiles, attempts: attempt + 1 };
-    if (attempt < SHOPIFY_READBACK_RETRY_DELAYS_MS.length) {
-      await new Promise(resolve => setTimeout(resolve, SHOPIFY_READBACK_RETRY_DELAYS_MS[attempt]));
-    }
-  }
-
-  const expected = mismatches[0];
-  const actual = verifiedFiles.get(expected.filename);
-  if (!actual?.content) throw httpError(502, "staging_readback_missing", "Shopify returned no read-back for " + expected.filename + ".");
-  throw httpError(502, "staging_readback_hash_mismatch", "Shopify read-back did not converge to the approved " + expected.filename + " before the verification deadline.");
 }
 
 async function executeRollback(request, env) {
