@@ -1,0 +1,19 @@
+{
+  "status": "failed",
+  "productionCommit": "3c346d1521dccc919718835e081613d8ed0abe2d",
+  "productionBuild": "kairos-production-entry-20260716-98",
+  "renderedPlannerBuild": "kairos-rendered-homepage-text-planner-20260716-1",
+  "workflowRunID": "29542003794",
+  "workflowRunURL": "https://github.com/infomindsetmediagroup-cloud/MMG-IOS/actions/runs/29542003794",
+  "checks": [
+    "live-health-rendered-planner",
+    "active-ordered-primary-copy-delta-required",
+    "hidden-disabled-unordered-noop-prohibited",
+    "browser-state-v3",
+    "executor-replacement-count-required",
+    "published-main-framework-preserved",
+    "canonical-rebuild-fallback-prohibited",
+    "safe-routing-no-shopify-mutation"
+  ],
+  "completedAt": "2026-07-16T23:22:16.237Z"
+}
