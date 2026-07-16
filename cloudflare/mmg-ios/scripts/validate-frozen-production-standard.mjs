@@ -8,15 +8,15 @@ const repo = resolve(root, "../..");
 const read = path => readFileSync(path, "utf8");
 const required = (source, marker, label) => assert.ok(source.includes(marker), `${label} missing: ${marker}`);
 const requiredAll = (source, markers, label) => markers.forEach(marker => required(source, marker, label));
-const prohibited = ["MutationObserver", "setInterval(", "scrollIntoView", "scrollTo(", "scrollBy("];
+const prohibitedUI = ["MutationObserver", "setInterval(", "scrollIntoView", "scrollTo(", "scrollBy("];
 
 const paths = {
   manifest: join(root, "production-baseline.json"),
   wrangler: join(root, "wrangler.toml"),
-  entry: join(root, "src/kairos-production-entry-v40.js"),
-  priorEntry: join(root, "src/kairos-production-entry-v39.js"),
+  entry: join(root, "src/kairos-production-entry-v41.js"),
+  priorEntry: join(root, "src/kairos-production-entry-v40.js"),
   preservePlanner: join(root, "src/kairos-homepage-preserve-planner-v1.js"),
-  liquidExecutor: join(root, "src/kairos-liquid-content-only-executor-v1.js"),
+  templateTextExecutor: join(root, "src/kairos-homepage-template-text-executor-v1.js"),
   childRuntime: join(root, "src/kairos-child-action-runtime-v1.js"),
   operational: join(root, "src/kairos-operational-runtime-v1.js"),
   autonomy: join(root, "src/kairos-autonomy-runtime-v1.js"),
@@ -39,12 +39,13 @@ const manifest = JSON.parse(read(paths.manifest));
 const sources = Object.fromEntries(Object.entries(paths).filter(([name]) => name !== "manifest").map(([name, path]) => [name, read(path)]));
 
 assert.equal(manifest.status, "frozen");
-assert.equal(manifest.baseline, "kairos-production-standard-20260716-33");
-assert.equal(manifest.worker.entry, "src/kairos-production-entry-v40.js");
+assert.equal(manifest.baseline, "kairos-production-standard-20260716-34");
+assert.equal(manifest.worker.entry, "src/kairos-production-entry-v41.js");
 assert.equal(manifest.dashboard.workspaceRuntime, "kairos-workspace-runtime-20260716-3");
 assert.equal(manifest.dashboard.workflowRuntime, "kairos-workflow-runtime-ui-20260716-4");
-assert.equal(manifest.dashboard.homepageQuickAction, "kairos-homepage-quick-action-20260716-1");
-assert.equal(manifest.dashboard.homepagePreservePlanner, "kairos-homepage-preserve-planner-20260716-1");
+assert.equal(manifest.dashboard.homepageQuickAction, "kairos-homepage-quick-action-20260716-2");
+assert.equal(manifest.dashboard.homepagePreservePlanner, "kairos-homepage-preserve-planner-20260716-2");
+assert.equal(manifest.dashboard.homepageTemplateTextExecutor, "kairos-homepage-template-text-executor-20260716-1");
 for (const flag of [
   "synchronousChildActionExecution",
   "childActionObjectiveBridgeRequired",
@@ -58,11 +59,20 @@ for (const flag of [
   "homepagePreserveDesignExecutionRequired",
   "oneButtonHomepagePreviewRequired",
   "automaticStagingPreviewExecution",
-  "designTokenPreservationRequired",
-  "homepageTemplatePreservationRequired",
-  "homepageStylesheetPreservationRequired",
-  "homepageMarkupSignaturePreservationRequired",
-  "homepageStyledTextNodeDistributionRequired",
+  "homepagePublishedMainSourceRequired",
+  "homepagePublishedFrameworkPreservationRequired",
+  "homepageStagingTemplateRebasedFromPublishedMainRequired",
+  "homepageTemplateTextSettingsOnlyRequired",
+  "homepageSingleMutableFileRequired",
+  "homepageSectionIdentityPreservationRequired",
+  "homepageBlockIdentityPreservationRequired",
+  "homepageSectionAndBlockOrderPreservationRequired",
+  "homepageLiquidMutationProhibitedInPreserveMode",
+  "homepageStylesheetMutationProhibitedInPreserveMode",
+  "homepageAssetMutationProhibitedInPreserveMode",
+  "homepageClassAndDesignTokenMutationProhibitedInPreserveMode",
+  "homepageCanonicalPackageFallbackProhibited",
+  "homepageStopInsteadOfRebuildRequired",
   "structuralIntentOverridesContentOnlyLock",
   "websiteRetoolDefaultsToStructural",
   "literalContentOnlyIsolationRequired",
@@ -80,7 +90,7 @@ assert.equal(manifest.approvedExpansion.automaticExternalExecution, false);
 assert.equal(manifest.approvedExpansion.modelReasoningPersisted, false);
 
 const activeEntries = sources.wrangler.split(/\r?\n/).filter(line => /^main\s*=/.test(line.trim()));
-assert.deepEqual(activeEntries, ['main = "src/kairos-production-entry-v40.js"']);
+assert.deepEqual(activeEntries, ['main = "src/kairos-production-entry-v41.js"']);
 requiredAll(sources.wrangler, [
   '[ai]', 'binding = "AI"', 'name = "KAIROS_PROJECTS"',
   'KAIROS_AUTONOMY_ENABLED = "true"',
@@ -89,103 +99,119 @@ requiredAll(sources.wrangler, [
 ], "Wrangler");
 
 requiredAll(sources.entry, [
+  './kairos-production-entry-v40.js',
+  './kairos-homepage-template-text-executor-v1.js',
+  'kairos-production-entry-20260716-98',
+  'published-main-template-text-settings-v1',
+  'published-main-template-to-text-only-staging-preview',
+  'sourceOfTruth: "published-main-theme"',
+  'mutableFiles: ["templates/index.json"]',
+  'existing-customer-facing-string-settings-only',
+  'canonicalPackageInstallation: "prohibited-in-preserve-mode"',
+  'structuralFallback: "stop-instead-of-rebuild"',
+  'X-Kairos-Canonical-Rebuild-Fallback',
+], "Production entry v41");
+requiredAll(sources.priorEntry, [
   './kairos-production-entry-v39.js',
   './kairos-homepage-preserve-planner-v1.js',
-  './kairos-liquid-content-only-executor-v1.js',
   'kairos-production-entry-20260716-97',
-  'homepagePreserveDesign',
-  'oneButtonHomepagePreview',
-  'completedWorkTimelineArchive',
-  'objective-to-node-preserving-homepage-preview',
-  'X-Kairos-Homepage-Mode',
-  'template-css-markup-node-distribution',
-], "Production entry v40");
-requiredAll(sources.priorEntry, [
-  'kairos-production-entry-v38.js',
-  'structural-objective-overrode-content-only-lock',
-  'structuralIntentOverridesContentOnlyLock',
-  'websiteRetoolDefaultsToStructural',
-], "Preserved production entry v39");
+], "Preserved production entry v40");
 
 requiredAll(sources.preservePlanner, [
-  'kairos-homepage-preserve-planner-20260716-1',
+  'kairos-homepage-preserve-planner-20260716-2',
+  'inspectThemeFiles',
+  'applyCompactPatch',
+  'buildEditableMap',
+  'validateHomepageDocument',
   'runKairosIntelligence',
   'parseStrictJSON',
-  'visibleTextInventory',
-  'preserveExistingDesign',
-  'markupSignature',
-  'nodeDistributionPreserved',
-  'templateUnchanged',
-  'stylesheetUnchanged',
-  'existing-liquid-visible-text',
-  'intelligent-preserve-design-copy',
-  'The current HTML, Liquid, classes, colors, typography, pills, cards, spacing, section order, links, template, stylesheet, and layout are immutable.',
-], "Preserve-design homepage planner");
-requiredAll(sources.liquidExecutor, [
-  'existing-liquid-visible-text',
-  'nodeDistributionPreserved',
-  'liquid_markup_signature_mismatch',
-  'non_content_file_changed',
-  'templateUnchanged:true',
-  'stylesheetUnchanged:true',
+  'sourceOfTruth: "published-main-theme"',
+  'published-main-template-text-settings-v1',
+  'published-main-template-text-settings-only',
+  'canonicalPackage: null',
+  'preservePublishedFramework: true',
+  'templateTextOnly: true',
+  'structuralMutationAuthorized: false',
+  'styleMutationAuthorized: false',
+  'liquidMutationAuthorized: false',
+  'assetMutationAuthorized: false',
+  'onlyExistingStringSettingsChanged: true',
+  'publishedFrameworkPreserved: true',
+  'Kairos will not rebuild the framework to force a change.',
+], "Published-framework homepage planner");
+for (const forbidden of ["mmg-canonical-homepage", "existing-liquid-visible-text", "nodeDistributionPreserved", "markupSignature(section.content)"]) {
+  assert.ok(!sources.preservePlanner.includes(forbidden), `Published-framework planner contains obsolete rebuild/Liquid behavior: ${forbidden}`);
+}
+
+requiredAll(sources.templateTextExecutor, [
+  'kairos-homepage-template-text-executor-20260716-1',
+  'published-main-template-text-settings-v1',
+  'inspectThemeFiles',
+  'validateHomepageDocument',
+  'assertOperationsBoundToPublishedSource',
+  'published_homepage_changed',
+  'staging_homepage_changed',
   'writeThemeFile',
-], "Node-preserving Shopify executor");
+  'filesWritten: context.noWrite ? [] : [{ filename: TEMPLATE_FILE',
+  'templateTextOnly: true',
+  'publishedFrameworkPreserved: true',
+  'liquidFilesWritten: []',
+  'stylesheetsWritten: []',
+  'assetsWritten: []',
+  'classesChanged: false',
+  'designTokensChanged: false',
+  'sourceOfTruth: "published-main-theme"',
+], "Published-framework template text executor");
+for (const forbidden of ["mmg-canonical-homepage", "SECTION_FILE", "CSS_FILE", "existing-liquid-visible-text"]) {
+  assert.ok(!sources.templateTextExecutor.includes(forbidden), `Template text executor contains prohibited canonical rebuild behavior: ${forbidden}`);
+}
 
 requiredAll(sources.index, [
-  'kairos-command-center-operational-20260716-16',
+  'kairos-command-center-operational-20260716-17',
   '/styles/homepage-quick-action.css?v=operational-20260716-1',
-  '/scripts/homepage-quick-action.js?v=operational-20260716-1',
+  '/scripts/homepage-quick-action.js?v=operational-20260716-2',
   '/scripts/website-intent-router.js?v=operational-20260716-2',
   '/scripts/child-action-bridge.js?v=operational-20260716-1',
 ], "Command Center index");
 requiredAll(sources.homepageQuick, [
-  'kairos-homepage-quick-action-20260716-1',
-  'Homepage Quick Action',
-  'Current design locked',
-  'Build My Homepage Preview',
-  'homepage-preserve-design',
-  'preserve-current-design',
-  'preserveExistingDesign:true',
+  'kairos-homepage-quick-action-20260716-2',
+  'kairos.homepage.quick-action.v2',
+  'Homepage Text Redo',
+  'Keep my homepage. Change the words.',
+  'Published framework locked',
+  'Rewrite Text & Build Preview',
+  'homepageMode: "preserve-published-framework"',
+  'sourceOfTruth: "published-main-theme"',
+  'preservePublishedFramework: true',
+  'templateTextOnly: true',
+  'canonicalPackageAuthorized: false',
+  'liquidMutationAuthorized: false',
+  'assetMutationAuthorized: false',
+  'published-main-template-text-settings-v1',
   '/api/shopify/staging/plan/jobs',
   '/api/shopify/staging/execute/jobs',
   '/api/shopify/staging/visual-verification',
   '/api/shopify/staging/visual-approval',
   '/api/shopify/homepage-release/prepare',
   '/api/shopify/homepage-release/publish',
-  'Template unchanged',
-  'explicit approval',
 ], "Homepage quick action");
 requiredAll(sources.homepageQuickCSS, [
-  '.homepage-quick-action',
-  '.homepage-design-lock',
-  '.homepage-preview-links',
-  '@media(max-width:620px)',
-  '@media(prefers-reduced-motion:reduce)',
+  '.homepage-quick-action', '.homepage-design-lock', '.homepage-preview-links',
+  '@media(max-width:620px)', '@media(prefers-reduced-motion:reduce)',
 ], "Homepage quick action CSS");
-for (const marker of prohibited) assert.ok(!sources.homepageQuick.includes(marker), `Homepage quick action contains prohibited behavior: ${marker}`);
+for (const marker of prohibitedUI) assert.ok(!sources.homepageQuick.includes(marker), `Homepage quick action contains prohibited behavior: ${marker}`);
 
 requiredAll(sources.workflow, [
-  'kairos-workflow-runtime-ui-20260716-4',
-  'Work Timeline',
-  'Current Work',
-  'Completed Timeline',
-  'Recent days',
-  'Previous weeks',
-  'Earlier months',
-  'workflow-archive-tier',
-  'state.filter==="archive"',
-  '!["completed","cancelled"].includes(item.state)',
-  'data-open-workflow',
-  'Open verified deliverable',
+  'kairos-workflow-runtime-ui-20260716-4', 'Work Timeline', 'Current Work', 'Completed Timeline',
+  'Recent days', 'Previous weeks', 'Earlier months', 'workflow-archive-tier',
+  'state.filter==="archive"', '!["completed","cancelled"].includes(item.state)',
+  'data-open-workflow', 'Open verified deliverable',
 ], "Work timeline runtime");
 requiredAll(sources.workflowCSS, [
-  '.workflow-archive',
-  '.workflow-archive-tier',
-  '.workflow-archive-group',
-  '.workflow-filter.active',
-  '@media(max-width:800px)',
+  '.workflow-archive', '.workflow-archive-tier', '.workflow-archive-group',
+  '.workflow-filter.active', '@media(max-width:800px)',
 ], "Work timeline CSS");
-for (const marker of prohibited) assert.ok(!sources.workflow.includes(marker), `Work timeline runtime contains prohibited behavior: ${marker}`);
+for (const marker of prohibitedUI) assert.ok(!sources.workflow.includes(marker), `Work timeline runtime contains prohibited behavior: ${marker}`);
 
 requiredAll(sources.workspace, [
   'kairos-workspace-runtime-20260716-3',
@@ -194,19 +220,14 @@ requiredAll(sources.workspace, [
   'await import(`./${definition.module}?v=${BUILD}`)',
 ], "Workspace registry");
 requiredAll(sources.websiteRouter, [
-  'kairos-website-intent-router-20260716-2',
-  'EXPLICIT_CONTENT_ONLY',
-  'isExplicitContentOnly',
-  'structuralObjective',
-  'requestType:"full-retool"',
+  'kairos-website-intent-router-20260716-2', 'EXPLICIT_CONTENT_ONLY',
+  'isExplicitContentOnly', 'structuralObjective', 'requestType:"full-retool"',
 ], "Website intent router");
 requiredAll(sources.bridge, [
-  'kairos-child-action-bridge-20260716-1',
-  'Execute & Return Deliverable',
-  'fetch("/api/hub/execute"',
-  'Open My Work',
+  'kairos-child-action-bridge-20260716-1', 'Execute & Return Deliverable',
+  'fetch("/api/hub/execute"', 'Open My Work',
 ], "Child action bridge");
-for (const marker of prohibited) {
+for (const marker of prohibitedUI) {
   assert.ok(!sources.websiteRouter.includes(marker), `Website intent router contains prohibited behavior: ${marker}`);
   assert.ok(!sources.bridge.includes(marker), `Child action bridge contains prohibited behavior: ${marker}`);
 }
@@ -225,15 +246,19 @@ console.log(`KAIROS_FROZEN_STANDARD=${JSON.stringify({
   baseline: manifest.baseline,
   workerEntry: manifest.worker.entry,
   homepagePreservePlanner: manifest.dashboard.homepagePreservePlanner,
+  homepageTemplateTextExecutor: manifest.dashboard.homepageTemplateTextExecutor,
   homepageQuickAction: manifest.dashboard.homepageQuickAction,
   workflowRuntime: manifest.dashboard.workflowRuntime,
   completedWorkTimelineArchive: true,
   workArchiveGrouping: "day-week-month",
   currentWorkExcludesCompleted: true,
-  homepagePreserveDesignExecution: true,
-  oneButtonHomepagePreview: true,
+  homepageSourceOfTruth: "published-main-theme",
+  homepageMutableFile: "templates/index.json",
+  homepageMutableValues: "existing-string-settings-only",
+  canonicalRebuildFallback: "prohibited",
+  liquidCSSAssetMutation: "prohibited-in-preserve-mode",
+  stopInsteadOfRebuild: true,
   stagingPreviewAutomatic: true,
-  templateStylesheetAndMarkupPreserved: true,
   previewApprovalRequired: true,
   liveApplicationApprovalRequired: true,
   objectiveToVerifiedDeliverable: true,
