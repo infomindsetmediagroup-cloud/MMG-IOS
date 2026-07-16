@@ -127,6 +127,33 @@ jobs:
             echo "Kairos enhanced inference did not become ready after six probes." >&2
             exit 1
           fi
+          stable_runtime_probes=0
+          for attempt in $(seq 1 36); do
+            runtime_code="$(curl --silent --show-error --location --max-time 60 \
+              -H 'Cache-Control: no-cache' -H 'Connection: close' \
+              "${KAIROS_PRODUCTION_URL}/api/autonomy/status?deployment=${GITHUB_SHA}-runtime-${attempt}-$(date +%s)" \
+              --output autonomy-runtime-probe.json \
+              --write-out '%{http_code}' || true)"
+            if [ "${runtime_code}" = "200" ] && node -e '
+              const fs=require("fs");
+              let body={};
+              try{body=JSON.parse(fs.readFileSync("autonomy-runtime-probe.json","utf8"))}catch{}
+              const exact=body.status==="operational"&&body.build===process.env.EXPECTED_AUTONOMY&&body.nativeExecutionBuild===process.env.EXPECTED_NATIVE;
+              process.exit(exact?0:1);
+            '; then
+              stable_runtime_probes=$((stable_runtime_probes + 1))
+            else
+              stable_runtime_probes=0
+            fi
+            if [ "${stable_runtime_probes}" -ge 4 ]; then
+              break
+            fi
+            sleep 5
+          done
+          if [ "${stable_runtime_probes}" -lt 4 ]; then
+            echo "Kairos exact autonomy and native-execution builds did not stabilize across four consecutive probes." >&2
+            exit 1
+          fi
           curl --fail-with-body --silent --show-error --location --max-time 60 \
             -H 'Content-Type: application/json' -H 'Cache-Control: no-cache' -H 'X-Kairos-Autonomy-Dispatch: manual' \
             --data "{\"title\":\"Deployment native execution ${GITHUB_SHA}\",\"objective\":\"Prove that Kairos produces a grounded native analysis artifact and verifies durable read-back before task completion.\",\"center\":\"operations\",\"priority\":\"high\",\"source\":\"verified-production-deployment\",\"tasks\":[{\"title\":\"Observe authoritative deployment workflow\",\"description\":\"Read this durable workflow and produce a grounded internal deployment verification artifact.\",\"stage\":\"observe\",\"executionClass\":\"native-analysis\"}]}" \
