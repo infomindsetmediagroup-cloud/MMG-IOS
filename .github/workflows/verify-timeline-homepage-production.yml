@@ -1,0 +1,128 @@
+name: Verify Timeline and Homepage Production
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/verify-timeline-homepage-production.yml"
+      - "cloudflare/mmg-ios/src/kairos-homepage-preserve-planner-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-v40.js"
+      - "cloudflare/mmg-ios/production-baseline.json"
+      - "cloudflare/mmg-ios/wrangler.toml"
+      - "web/kairos-dashboard/index.html"
+      - "web/kairos-dashboard/scripts/homepage-quick-action.js"
+      - "web/kairos-dashboard/scripts/workflow-runtime.js"
+      - "web/kairos-dashboard/scripts/workspace-runtime.js"
+      - "web/kairos-dashboard/styles/homepage-quick-action.css"
+      - "web/kairos-dashboard/styles/workflow-runtime.css"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: kairos-timeline-homepage-production
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+    steps:
+      - name: Verify live v40 health and dashboard assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          nonce="${GITHUB_SHA}-$(date +%s)"
+          curl --fail --silent --show-error --location --max-time 45 -H 'Cache-Control: no-cache' \
+            "${KAIROS_PRODUCTION_URL}/api/health?timeline-homepage=${nonce}" --output health.json
+          curl --fail --silent --show-error --location --max-time 45 -H 'Cache-Control: no-cache' \
+            "${KAIROS_PRODUCTION_URL}/center/content/website?timeline-homepage=${nonce}" --output website.html
+          curl --fail --silent --show-error --location --max-time 45 -H 'Cache-Control: no-cache' \
+            "${KAIROS_PRODUCTION_URL}/scripts/homepage-quick-action.js?v=${nonce}" --output homepage-quick.js
+          curl --fail --silent --show-error --location --max-time 45 -H 'Cache-Control: no-cache' \
+            "${KAIROS_PRODUCTION_URL}/scripts/workflow-runtime.js?v=${nonce}" --output workflow-runtime.js
+          curl --fail --silent --show-error --location --max-time 45 -H 'Cache-Control: no-cache' \
+            "${KAIROS_PRODUCTION_URL}/scripts/workspace-runtime.js?v=${nonce}" --output workspace-runtime.js
+          node <<'NODE'
+          const fs=require('fs');
+          const health=JSON.parse(fs.readFileSync('health.json','utf8'));
+          const website=fs.readFileSync('website.html','utf8');
+          const quick=fs.readFileSync('homepage-quick.js','utf8');
+          const work=fs.readFileSync('workflow-runtime.js','utf8');
+          const workspace=fs.readFileSync('workspace-runtime.js','utf8');
+          const checks={
+            productionBuild:health.build==='kairos-production-entry-20260716-97',
+            preserveRuntime:health.homepagePreserveDesign?.status==='operational',
+            preserveContract:health.homepagePreserveDesign?.contract==='objective-to-node-preserving-homepage-preview',
+            oneButtonCapability:health.capabilities?.oneButtonHomepagePreview==='operational',
+            timelineCapability:health.capabilities?.completedWorkTimelineArchive==='dashboard-bound',
+            commandCenterBuild:website.includes('kairos-command-center-operational-20260716-16'),
+            quickScriptBound:website.includes('/scripts/homepage-quick-action.js?v=operational-20260716-1'),
+            quickStyleBound:website.includes('/styles/homepage-quick-action.css?v=operational-20260716-1'),
+            quickAction:quick.includes('Build My Homepage Preview')&&quick.includes('preserve-current-design')&&quick.includes('/api/shopify/staging/visual-verification'),
+            workTimeline:work.includes('Work Timeline')&&work.includes('Completed Timeline')&&work.includes('Recent days')&&work.includes('Previous weeks')&&work.includes('Earlier months'),
+            completedExcluded:work.includes('!["completed","cancelled"].includes(item.state)'),
+            clickableArchive:work.includes('data-open-workflow')&&work.includes('Open verified deliverable'),
+            lazyRuntime:workspace.includes('kairos-workspace-runtime-20260716-3')&&workspace.includes('workflow-runtime.js'),
+          };
+          console.log(JSON.stringify({checks},null,2));
+          if(Object.values(checks).some(value=>value!==true))process.exit(1);
+          NODE
+
+      - name: Verify preserve-design planner routing without Shopify mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          http_code="$(curl --silent --show-error --location --max-time 45 \
+            -D planner-headers.txt \
+            -H 'Content-Type: application/json' \
+            -H 'Cache-Control: no-cache' \
+            --data '{"objective":"x","requestType":"homepage-preserve-design","homepageMode":"preserve-current-design","preserveExistingDesign":true}' \
+            "${KAIROS_PRODUCTION_URL}/api/shopify/staging/plan/jobs" \
+            --output planner-body.json \
+            --write-out '%{http_code}')"
+          HTTP_CODE="${http_code}" node <<'NODE'
+          const fs=require('fs');
+          const body=JSON.parse(fs.readFileSync('planner-body.json','utf8'));
+          const headers=fs.readFileSync('planner-headers.txt','utf8');
+          const checks={
+            safeValidation:Number(process.env.HTTP_CODE)===400,
+            objectiveGuard:body?.error?.code==='objective_required',
+            plannerBuild:body?.build==='kairos-homepage-preserve-planner-20260716-1',
+            productionHeader:/x-kairos-production-entry:\s*kairos-production-entry-20260716-97/i.test(headers),
+            preserveModeHeader:/x-kairos-homepage-mode:\s*preserve-current-design/i.test(headers),
+            designHeader:/x-kairos-design-preservation:\s*template-css-markup-node-distribution/i.test(headers),
+          };
+          console.log(JSON.stringify({httpStatus:Number(process.env.HTTP_CODE),checks},null,2));
+          if(Object.values(checks).some(value=>value!==true))process.exit(1);
+          NODE
+
+      - name: Publish production verification receipt
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          if [ "${JOB_STATUS}" = "success" ]; then
+            state="success"
+            description="Timeline archive and one-button homepage production checks passed"
+          else
+            state="failure"
+            description="Timeline archive or homepage production verification failed"
+          fi
+          payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-timeline-homepage-production",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          curl --fail --silent --show-error \
+            -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "${payload}"
