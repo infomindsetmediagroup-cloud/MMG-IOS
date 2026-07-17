@@ -1,10 +1,15 @@
 import deterministicCopyPlanner, { KAIROS_HOMEPAGE_DETERMINISTIC_COPY_PLANNER_BUILD } from "./kairos-homepage-deterministic-copy-planner-v1.js";
+import deterministicMarkupPlanner, { KAIROS_HOMEPAGE_DETERMINISTIC_MARKUP_COPY_PLANNER_BUILD } from "./kairos-homepage-deterministic-markup-copy-planner-v1.js";
 import { prepareWebsiteRetoolExceptions } from "./kairos-website-retool-exception-planner-v1.js";
 import { buildCompositePlan } from "./kairos-web003-composite-runtime-v1.js";
 
-export const KAIROS_WEB003_DETERMINISTIC_FIRST_BUILD = "kairos-web003-deterministic-first-runtime-20260717-1";
+export const KAIROS_WEB003_DETERMINISTIC_FIRST_BUILD = "kairos-web003-deterministic-first-runtime-20260717-2";
 
 const PLAN_ROUTE = "/api/shopify/staging/plan/jobs";
+const PLAIN_TEXT_FALLBACK_CODES = new Set([
+  "deterministic_visible_copy_missing",
+  "deterministic_visible_copy_delta_missing",
+]);
 
 export async function handleDeterministicFirstWeb003Request(request, env, ctx) {
   const url = new URL(request.url);
@@ -27,12 +32,8 @@ export async function handleDeterministicFirstWeb003Request(request, env, ctx) {
       structuralMutationAuthorized: false,
       styleMutationAuthorized: false,
     };
-    const textResponse = await deterministicCopyPlanner.fetch(makeRequest(request, textPayload), env, ctx);
-    const textBody = await safeJSON(textResponse.clone());
-    if (!textResponse.ok || !textBody?.result?.planID) {
-      throw httpError(textResponse.status || 502, textBody?.error?.code || "deterministic_copy_plan_failed", textBody?.error?.message || "Kairos could not prepare deterministic homepage copy replacements.");
-    }
-    const textResult = textBody.result;
+    const planned = await deterministicTextPlan(makeRequest(request, textPayload), env, ctx);
+    const textResult = planned.result;
     textResult.objective = String(payload?.objective || "").trim();
     const visibleChanges = Array.isArray(textResult?.plan?.changes) ? textResult.plan.changes.filter(change => change?.changeType !== "no-change") : [];
     if (!visibleChanges.length) throw httpError(409, "deterministic_visible_copy_delta_missing", "Kairos did not produce a visible homepage copy change, so it will not build an unchanged preview.");
@@ -44,26 +45,30 @@ export async function handleDeterministicFirstWeb003Request(request, env, ctx) {
 
     const result = buildCompositePlan(textResult, exceptionPlan);
     result.build = KAIROS_WEB003_DETERMINISTIC_FIRST_BUILD;
-    result.kernel = "deterministic-source-bound-copy-plus-native-theme-plan-v1";
+    result.kernel = "deterministic-source-bound-copy-plus-native-theme-plan-v2";
     result.objective = String(payload?.objective || "").trim();
     result.summary = "Kairos prepared verified visible homepage copy replacements plus bounded native Shopify header and footer settings for staging approval.";
     result.plan.summary = result.summary;
-    result.plan.strategy = "Apply approved MMG copy to active published homepage text settings first, then layer only explicitly selected native header/footer settings onto the same non-live staging theme.";
+    result.plan.strategy = planned.source === "embedded-template-markup"
+      ? "Rewrite visible heading and paragraph nodes inside the active published homepage HTML or Liquid setting, then layer only explicitly selected native header/footer settings onto the same non-live staging theme."
+      : "Rewrite active plain published homepage text settings, then layer only explicitly selected native header/footer settings onto the same non-live staging theme.";
     result.plan.sourceBoundCopyComposite = true;
     result.plan.deterministicFirst = true;
+    result.plan.deterministicTextSource = planned.source;
     result.plan.canonicalPackage = null;
     result.plan.preserveExistingDesign = true;
     result.plan.preservePublishedFramework = true;
     result.plan.visibleTextDeltaRequired = true;
     result.plan.structuralMutationAuthorized = false;
     result.plan.styleMutationAuthorized = true;
-    result.plan.mutationScope = "deterministic-visible-copy-plus-selected-native-header-footer-settings";
+    result.plan.mutationScope = `deterministic-${planned.source}-copy-plus-selected-native-header-footer-settings`;
     result.plan.compositePackage = {
       ...(result.plan.compositePackage || {}),
       canonicalFiles: [],
       sourceBoundCopyFiles: [...new Set(visibleChanges.map(change => change.filename).filter(Boolean))],
       sourceBoundCopyRequired: true,
       deterministicFirst: true,
+      deterministicTextSource: planned.source,
       canonicalHomepageInstallation: false,
       stagingOnly: true,
     };
@@ -71,8 +76,11 @@ export async function handleDeterministicFirstWeb003Request(request, env, ctx) {
       ...(result.evidence || {}),
       sourceBoundCopyComposite: true,
       deterministicFirst: true,
-      deterministicPlannerBuild: KAIROS_HOMEPAGE_DETERMINISTIC_COPY_PLANNER_BUILD,
-      visibleTextChangeCount: visibleChanges.length,
+      deterministicTextSource: planned.source,
+      deterministicPlannerBuild: planned.build,
+      plainTextPlannerBuild: KAIROS_HOMEPAGE_DETERMINISTIC_COPY_PLANNER_BUILD,
+      embeddedMarkupPlannerBuild: KAIROS_HOMEPAGE_DETERMINISTIC_MARKUP_COPY_PLANNER_BUILD,
+      visibleTextChangeCount: Number(textResult?.evidence?.visibleTextReplacementCount || textResult?.evidence?.replacementCount || visibleChanges.length),
       canonicalHomepageInstallation: false,
       modelPlanningRequired: false,
     };
@@ -86,6 +94,25 @@ export async function handleDeterministicFirstWeb003Request(request, env, ctx) {
       safeguards: { liveThemeChanged: false, stagingOnly: true, unchangedPreviewProhibited: true },
     }, Number(error?.status || 500));
   }
+}
+
+async function deterministicTextPlan(request, env, ctx) {
+  const plainResponse = await deterministicCopyPlanner.fetch(request.clone(), env, ctx);
+  const plainBody = await safeJSON(plainResponse.clone());
+  if (plainResponse.ok && plainBody?.result?.planID) {
+    return { result: plainBody.result, source: "plain-template-settings", build: KAIROS_HOMEPAGE_DETERMINISTIC_COPY_PLANNER_BUILD };
+  }
+  const plainCode = String(plainBody?.error?.code || "");
+  if (!PLAIN_TEXT_FALLBACK_CODES.has(plainCode)) {
+    throw httpError(plainResponse.status || 502, plainCode || "deterministic_copy_plan_failed", plainBody?.error?.message || "Kairos could not prepare deterministic homepage copy replacements.");
+  }
+
+  const markupResponse = await deterministicMarkupPlanner.fetch(request, env, ctx);
+  const markupBody = await safeJSON(markupResponse.clone());
+  if (!markupResponse.ok || !markupBody?.result?.planID) {
+    throw httpError(markupResponse.status || 502, markupBody?.error?.code || "deterministic_markup_copy_plan_failed", markupBody?.error?.message || "Kairos could not prepare deterministic embedded homepage copy replacements.");
+  }
+  return { result: markupBody.result, source: "embedded-template-markup", build: KAIROS_HOMEPAGE_DETERMINISTIC_MARKUP_COPY_PLANNER_BUILD };
 }
 
 function isExplicitCompositeRetool(payload) {
