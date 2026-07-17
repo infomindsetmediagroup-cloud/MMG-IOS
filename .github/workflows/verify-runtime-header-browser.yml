@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/verify-runtime-header-browser.yml"
+      - ".github/scripts/verify-runtime-header-browser.cjs"
       - "web/kairos-dashboard/index.html"
       - "web/kairos-dashboard/scripts/command-hub.js"
   workflow_dispatch: {}
@@ -24,6 +25,8 @@ jobs:
     env:
       KAIROS_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev/center/content/website
     steps:
+      - uses: actions/checkout@v4
+
       - name: Wait for inline runtime probe to reach Cloudflare
         shell: bash
         run: |
@@ -34,7 +37,6 @@ jobs:
               "${KAIROS_URL}?browser-gate=${GITHUB_SHA}-${attempt}-$(date +%s)" \
               --output command-center.html || true
             if grep -q 'header-inline=' command-center.html 2>/dev/null; then
-              echo "Inline runtime probe is live."
               exit 0
             fi
             sleep 5
@@ -46,82 +48,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir browser-check
-          cd browser-check
+          mkdir -p /tmp/kairos-browser-check
+          cd /tmp/kairos-browser-check
           npm init -y >/dev/null
           npm install --no-save playwright@1.54.1 >/dev/null
           npx playwright install --with-deps chromium >/dev/null
 
       - name: Prove visible header becomes Online
         shell: bash
-        run: |
-          set -euo pipefail
-          cd browser-check
-          cat > verify.cjs <<'NODE'
-          const fs = require('fs');
-          const { chromium } = require('playwright');
-          (async () => {
-            const browser = await chromium.launch({ headless: true });
-            const page = await browser.newPage();
-            const consoleMessages = [];
-            const requestFailures = [];
-            const badResponses = [];
-            page.on('console', message => consoleMessages.push({ type: message.type(), text: message.text() }));
-            page.on('pageerror', error => consoleMessages.push({ type: 'pageerror', text: error.message }));
-            page.on('requestfailed', request => requestFailures.push({ url: request.url(), failure: request.failure()?.errorText || 'unknown' }));
-            page.on('response', response => {
-              if (response.status() >= 400) badResponses.push({ status: response.status(), url: response.url() });
-            });
-            const url = `${process.env.KAIROS_URL}?browser-runtime=${process.env.GITHUB_SHA}-${Date.now()}`;
-            try {
-              await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-              await page.waitForTimeout(3000);
-              await page.locator('[data-runtime-label]').waitFor({ state: 'visible', timeout: 15000 });
-              await page.waitForFunction(() => document.querySelector('[data-runtime-label]')?.textContent?.trim() === 'Online', null, { timeout: 30000 });
-              const label = await page.locator('[data-runtime-label]').textContent();
-              const health = await page.evaluate(async () => {
-                const response = await fetch(`/api/health?browser-readback=${Date.now()}`, { cache: 'no-store' });
-                return { ok: response.ok, body: await response.json() };
-              });
-              if (!health.ok || !['ready', 'ok', 'operational'].includes(String(health.body?.status || '').toLowerCase())) {
-                throw new Error(`Browser health readback was not operational: ${JSON.stringify(health)}`);
-              }
-              if (label?.trim() !== 'Online') throw new Error(`Visible runtime label was ${JSON.stringify(label)}.`);
-              const diagnostic = { status: 'passed', visibleLabel: label.trim(), healthStatus: health.body.status, consoleMessages, requestFailures, badResponses };
-              fs.writeFileSync('diagnostics.json', JSON.stringify(diagnostic, null, 2));
-              console.log(JSON.stringify(diagnostic));
-            } catch (error) {
-              const html = await page.content().catch(() => '');
-              const diagnostic = {
-                status: 'failed',
-                error: error?.message || String(error),
-                pageURL: page.url(),
-                title: await page.title().catch(() => ''),
-                bodyText: await page.locator('body').innerText().catch(() => ''),
-                html: html.slice(0, 24000),
-                consoleMessages,
-                requestFailures,
-                badResponses,
-              };
-              fs.writeFileSync('diagnostics.json', JSON.stringify(diagnostic, null, 2));
-              console.error(JSON.stringify({ status: diagnostic.status, error: diagnostic.error, consoleMessages, requestFailures, badResponses }));
-              throw error;
-            } finally {
-              await browser.close();
-            }
-          })().catch(error => {
-            console.error(error);
-            process.exit(1);
-          });
-          NODE
-          KAIROS_URL="${KAIROS_URL}" GITHUB_SHA="${GITHUB_SHA}" node verify.cjs
+        env:
+          NODE_PATH: /tmp/kairos-browser-check/node_modules
+          DIAGNOSTIC_PATH: runtime-header-browser-diagnostics.json
+        run: node .github/scripts/verify-runtime-header-browser.cjs
 
       - name: Upload browser diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: runtime-header-browser-diagnostics
-          path: browser-check/diagnostics.json
+          path: runtime-header-browser-diagnostics.json
           if-no-files-found: warn
           retention-days: 1
 
