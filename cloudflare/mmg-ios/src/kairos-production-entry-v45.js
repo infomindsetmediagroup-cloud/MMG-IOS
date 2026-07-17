@@ -59,7 +59,7 @@ async function diagnosticPlan(request, env, ctx) {
   const result = body.result;
   const plan = result.plan || {};
   const sourceOperations = Array.isArray(plan?.templateTextPatch?.operations) ? plan.templateTextPatch.operations : [];
-  const visibleOperations = sourceOperations.flatMap(operation => {
+  const templateOperations = sourceOperations.flatMap(operation => {
     const location = operation.location || `${operation.scope}:${operation.sectionId}:${operation.blockId || "section"}:${operation.key}`;
     if (Array.isArray(operation.visibleReplacements) && operation.visibleReplacements.length) {
       return operation.visibleReplacements.map(replacement => ({
@@ -78,6 +78,16 @@ async function diagnosticPlan(request, env, ctx) {
       kind: "plain-setting",
     }];
   });
+  const liquidOperations = (Array.isArray(plan?.liquidTextPatches) ? plan.liquidTextPatches : []).flatMap(patch =>
+    (Array.isArray(patch?.replacements) ? patch.replacements : []).map(replacement => ({
+      location: `${patch.filename}#${replacement.id || "visible-text"}`,
+      before: replacement.before,
+      after: replacement.after,
+      reason: replacement.reason || "",
+      kind: replacement.kind || (replacement.primary ? "visible-primary" : "visible-text"),
+    })),
+  );
+  const visibleOperations = [...templateOperations, ...liquidOperations];
   const nativeCandidates = [
     ...(Array.isArray(plan?.websiteRetoolExceptions?.highConfidence) ? plan.websiteRetoolExceptions.highConfidence : []),
     ...(Array.isArray(plan?.websiteRetoolExceptions?.executiveReview) ? plan.websiteRetoolExceptions.executiveReview : []),
@@ -95,6 +105,7 @@ async function diagnosticPlan(request, env, ctx) {
     operationCount: visibleOperations.length,
     operations: visibleOperations.slice(0, 8),
     sourceSettingOperationCount: sourceOperations.length,
+    liquidPatchCount: Array.isArray(plan?.liquidTextPatches) ? plan.liquidTextPatches.length : 0,
     nativeCandidateCount: nativeCandidates.length,
     nativeCandidates: nativeCandidates.slice(0, 12).map(candidate => ({
       filename: candidate.filename,
