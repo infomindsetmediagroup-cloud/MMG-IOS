@@ -1,4 +1,4 @@
-self-contained-command-center-recovery=2026-07-17T06:08:00Z
+self-contained-command-center-recovery=2026-07-17T06:25:00Z
 build=kairos-command-center-inline-20260717-1
-verification=consolidated-mobile-playwright-input
+verification=deterministic-live-dom-input
 workflow=kairos-command-center-recovery
