@@ -10,6 +10,7 @@ const read = path => readFileSync(path, "utf8");
 const wrangler = read(join(workerRoot, "wrangler.toml"));
 const entry = read(join(workerRoot, "src/kairos-production-entry-autonomous-v1.js"));
 const controller = read(join(workerRoot, "src/kairos-autonomous-prompt-controller-v1.js"));
+const bindingRepair = read(join(workerRoot, "src/kairos-homepage-prompt-binding-repair-v1.js"));
 const index = read(join(repoRoot, "web/kairos-dashboard/index.html"));
 const hub = read(join(repoRoot, "web/kairos-dashboard/scripts/command-hub.js"));
 
@@ -20,6 +21,7 @@ assert.match(wrangler, /KAIROS_WORKERS_AI_MODEL\s*=\s*"@cf\/qwen\/qwen3-30b-a3b-
 
 assert.ok(entry.includes('./kairos-production-entry.js'), "The autonomous entry must wrap the Tuesday production entry.");
 assert.ok(entry.includes('./kairos-autonomous-prompt-controller-v1.js'));
+assert.ok(entry.includes('./kairos-homepage-prompt-binding-repair-v1.js'));
 assert.ok(entry.includes('tuesday-command-center-6f96b10d'));
 
 for (const marker of [
@@ -38,6 +40,17 @@ for (const marker of [
   'browserSurfaceChanged: false',
 ]) assert.ok(controller.includes(marker), `Missing autonomous controller contract: ${marker}`);
 
+for (const marker of [
+  'kairos-homepage-prompt-binding-repair-20260717-1',
+  'verified-id-to-exact-source-text',
+  'The server already owns the authoritative old text',
+  'buildExplicitObjective',
+  'Replace “${item.before}” with “${item.after}”.',
+  'currentDesignFrozen: true',
+  'nonLiveStagingOnly: true',
+  'X-Kairos-Prompt-Binding',
+]) assert.ok(bindingRepair.includes(marker), `Missing prompt-binding repair contract: ${marker}`);
+
 assert.ok(index.includes('content="kairos-command-hub-recovery-20260714-1"'));
 assert.ok(index.includes('./scripts/command-hub.js?v=recovery-20260714-1'));
 assert.ok(!index.includes('command-hub-canonical-v3'));
@@ -53,8 +66,10 @@ assert.ok(hub.includes('4 · Deliver'));
 console.log(JSON.stringify({
   status: "passed",
   contract: "kairos-autonomous-prompt-controller-20260717-1",
+  promptBindingRepair: "kairos-homepage-prompt-binding-repair-20260717-1",
   visualBaseline: "tuesday-command-center-6f96b10d",
   browserFilesChanged: false,
   websiteMode: "text-only-source-bound-staging",
+  broadPromptBinding: "verified-inventory-id-to-authoritative-source-text",
   childPromptExecution: "autonomous-workflow",
 }, null, 2));
