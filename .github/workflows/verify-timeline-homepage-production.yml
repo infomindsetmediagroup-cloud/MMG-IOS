@@ -8,9 +8,11 @@ on:
       - ".github/workflows/verify-timeline-homepage-production.yml"
       - "cloudflare/mmg-ios/src/kairos-homepage-preserve-planner-v1.js"
       - "cloudflare/mmg-ios/src/kairos-rendered-homepage-text-planner-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-homepage-template-markup-text-planner-v1.js"
       - "cloudflare/mmg-ios/src/kairos-homepage-template-text-executor-v1.js"
       - "cloudflare/mmg-ios/src/kairos-homepage-liquid-text-fallback-v1.js"
-      - "cloudflare/mmg-ios/src/kairos-production-entry-v42.js"
+      - "cloudflare/mmg-ios/src/kairos-homepage-instance-liquid-fallback-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-v43.js"
       - "cloudflare/mmg-ios/production-baseline.json"
       - "cloudflare/mmg-ios/scripts/validate-frozen-production-standard.mjs"
       - "cloudflare/mmg-ios/wrangler.toml"
@@ -37,7 +39,7 @@ jobs:
     env:
       KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
     steps:
-      - name: Verify live v42 health and dashboard assets
+      - name: Verify live v43 health and dashboard assets
         shell: bash
         run: |
           set -euo pipefail
@@ -45,11 +47,11 @@ jobs:
           for attempt in $(seq 1 20); do
             curl --fail --silent --show-error --location --max-time 45 -H 'Cache-Control: no-cache' \
               "${KAIROS_PRODUCTION_URL}/api/health?timeline-homepage=${nonce}-${attempt}" --output health.json || true
-            if node -e "const fs=require('fs');try{const h=JSON.parse(fs.readFileSync('health.json','utf8'));process.exit(h.build==='kairos-production-entry-20260716-99'?0:1)}catch{process.exit(1)}"; then
+            if node -e "const fs=require('fs');try{const h=JSON.parse(fs.readFileSync('health.json','utf8'));process.exit(h.build==='kairos-production-entry-20260717-100'?0:1)}catch{process.exit(1)}"; then
               break
             fi
             if [ "${attempt}" = "20" ]; then
-              echo "v42 did not become live within the verification window"
+              echo "v43 did not become live within the verification window"
               cat health.json || true
               exit 1
             fi
@@ -73,28 +75,34 @@ jobs:
           const preserve=health.homepagePreserveDesign||{};
           const sourceOrder=Array.isArray(preserve.sourceOrder)?preserve.sourceOrder:[];
           const checks={
-            productionBuild:health.build==='kairos-production-entry-20260716-99',
+            productionBuild:health.build==='kairos-production-entry-20260717-100',
             preserveRuntime:preserve.status==='operational',
-            preserveContract:preserve.contract==='published-main-template-settings-then-node-preserving-liquid-text',
+            preserveContract:preserve.contract==='published-main-four-source-visible-text-preservation',
             preserveSource:preserve.sourceOfTruth==='published-main-theme',
-            templateSettingsFirst:sourceOrder[0]==='active rendered template settings',
-            liquidFallbackSecond:sourceOrder[1]==='homepage-specific literal Liquid text',
-            liquidFallbackBuild:preserve.liquidFallbackBuild==='kairos-homepage-liquid-text-fallback-20260716-1',
-            liquidFallbackMode:preserve.liquidFallback==='literal-text-nodes-only',
-            liquidMarkupBlocked:preserve.liquidMarkupMutation==='prohibited',
+            templateSettingsFirst:sourceOrder[0]==='active rendered template text settings',
+            embeddedTemplateSecond:sourceOrder[1]==='active embedded template HTML or Liquid text nodes',
+            homepageLiquidThird:sourceOrder[2]==='homepage-specific section Liquid literal text',
+            instanceCloneFourth:sourceOrder[3]==='homepage-instance isolated shared-section clone',
+            instanceFallbackBuild:preserve.instanceFallbackBuild==='kairos-homepage-instance-liquid-fallback-20260717-1',
+            sharedSectionHandling:preserve.sharedSectionHandling==='clone-and-bind-homepage-instance-only',
+            originalSharedImmutable:preserve.originalSharedSectionFiles==='immutable',
+            selectedInstanceOnly:preserve.homepageTemplateMutation==='selected-section-type-reference-only-when-isolation-required',
+            literalCloneTextOnly:preserve.cloneMarkupMutation==='literal-text-nodes-only',
             designMutationBlocked:preserve.CSSAssetClassDesignTokenMutation==='prohibited',
             canonicalFallbackBlocked:preserve.canonicalPackageInstallation==='prohibited-in-preserve-mode',
             oneButtonCapability:health.capabilities?.oneButtonHomepagePreview==='operational',
-            liquidCapability:health.capabilities?.homepageLiquidLiteralTextFallback==='operational',
+            instanceIsolationCapability:health.capabilities?.homepageSharedSectionInstanceIsolation==='operational',
+            originalProtectionCapability:health.capabilities?.homepageOriginalSharedSectionProtection==='required',
+            cloneReadbackCapability:health.capabilities?.homepageInstanceCloneReadback==='required',
             visibleDeltaCapability:health.capabilities?.homepageVisibleTextDelta==='required',
             rebuildFallbackCapability:health.capabilities?.homepageCanonicalRebuildFallback==='prohibited',
             timelineCapability:health.capabilities?.completedWorkTimelineArchive==='operational',
-            commandCenterBuild:website.includes('kairos-command-center-operational-20260716-18'),
-            quickScriptBound:website.includes('/scripts/homepage-quick-action.js?v=operational-20260716-3'),
+            commandCenterBuild:website.includes('kairos-command-center-operational-20260717-19'),
+            quickScriptBound:website.includes('/scripts/homepage-quick-action.js?v=operational-20260717-4'),
             quickStyleBound:website.includes('/styles/homepage-quick-action.css?v=operational-20260716-1'),
-            quickAction:quick.includes('Keep my homepage. Change the words.')&&quick.includes('preserve-published-framework')&&quick.includes('published-main-template-text-settings-v1')&&quick.includes('published-main-liquid-visible-text-v1')&&quick.includes('literalLiquidTextFallbackAuthorized: true')&&quick.includes('/api/shopify/staging/visual-verification'),
+            quickAction:quick.includes('Keep my homepage. Change the words.')&&quick.includes('published-main-homepage-instance-liquid-text-v1')&&quick.includes('homepageInstanceIsolationAuthorized: true')&&quick.includes('originalSharedSectionsImmutable: true')&&quick.includes('/api/shopify/staging/visual-verification'),
             quickActionSafeBoundaries:quick.includes('canonicalPackageAuthorized: false')&&quick.includes('liquidStructureMutationAuthorized: false')&&quick.includes('assetMutationAuthorized: false'),
-            stateMigration:quick.includes('kairos.homepage.quick-action.v4')&&quick.includes('kairos.homepage.quick-action.v3'),
+            stateMigration:quick.includes('kairos.homepage.quick-action.v5')&&quick.includes('kairos.homepage.quick-action.v4'),
             workTimeline:work.includes('Work Timeline')&&work.includes('Completed Timeline')&&work.includes('Recent days')&&work.includes('Previous weeks')&&work.includes('Earlier months'),
             completedExcluded:work.includes('!["completed","cancelled"].includes(item.state)'),
             clickableArchive:work.includes('data-open-workflow')&&work.includes('Open verified deliverable'),
@@ -104,7 +112,7 @@ jobs:
           if(Object.values(checks).some(value=>value!==true))process.exit(1);
           NODE
 
-      - name: Verify dual-source planner routing without Shopify mutation
+      - name: Verify four-source routing without Shopify mutation
         shell: bash
         run: |
           set -euo pipefail
@@ -112,7 +120,7 @@ jobs:
             -D planner-headers.txt \
             -H 'Content-Type: application/json' \
             -H 'Cache-Control: no-cache' \
-            --data '{"objective":"x","requestType":"homepage-preserve-design","homepageMode":"preserve-published-framework","sourceOfTruth":"published-main-theme","preserveExistingDesign":true,"preservePublishedFramework":true,"templateTextPreferred":true,"literalLiquidTextFallbackAuthorized":true,"canonicalPackageAuthorized":false}' \
+            --data '{"objective":"x","requestType":"homepage-preserve-design","homepageMode":"preserve-published-framework","sourceOfTruth":"published-main-theme","preserveExistingDesign":true,"preservePublishedFramework":true,"templateTextPreferred":true,"literalLiquidTextFallbackAuthorized":true,"homepageInstanceIsolationAuthorized":true,"originalSharedSectionsImmutable":true,"canonicalPackageAuthorized":false}' \
             "${KAIROS_PRODUCTION_URL}/api/shopify/staging/plan/jobs" \
             --output planner-body.json \
             --write-out '%{http_code}')"
@@ -123,10 +131,12 @@ jobs:
           const checks={
             safeValidation:Number(process.env.HTTP_CODE)===400,
             objectiveGuard:body?.error?.code==='objective_required',
-            productionHeader:/x-kairos-production-entry:\s*kairos-production-entry-20260716-99/i.test(headers),
+            productionHeader:/x-kairos-production-entry:\s*kairos-production-entry-20260717-100/i.test(headers),
             preserveModeHeader:/x-kairos-homepage-mode:\s*preserve-published-framework/i.test(headers),
             publishedSourceHeader:/x-kairos-homepage-source:\s*published-main-theme/i.test(headers),
-            liquidFallbackHeader:/x-kairos-homepage-liquid-fallback:\s*kairos-homepage-liquid-text-fallback-20260716-1/i.test(headers),
+            instanceFallbackHeader:/x-kairos-homepage-instance-fallback:\s*kairos-homepage-instance-liquid-fallback-20260717-1/i.test(headers),
+            sharedHandlingHeader:/x-kairos-shared-section-handling:\s*homepage-instance-clone/i.test(headers),
+            originalImmutableHeader:/x-kairos-original-shared-sections:\s*immutable/i.test(headers),
             fallbackBlockedHeader:/x-kairos-canonical-rebuild-fallback:\s*prohibited/i.test(headers),
           };
           console.log(JSON.stringify({httpStatus:Number(process.env.HTTP_CODE),body,checks},null,2));
@@ -151,6 +161,8 @@ jobs:
             "activeOrderedBlocksOnly": true,
             "templateTextPreferred": true,
             "literalLiquidTextFallbackAuthorized": true,
+            "homepageInstanceIsolationAuthorized": true,
+            "originalSharedSectionsImmutable": true,
             "structuralMutationAuthorized": false,
             "styleMutationAuthorized": false,
             "liquidStructureMutationAuthorized": false,
@@ -158,7 +170,7 @@ jobs:
             "canonicalPackageAuthorized": false
           }
           JSON
-          http_code="$(curl --silent --show-error --location --max-time 180 \
+          http_code="$(curl --silent --show-error --location --max-time 240 \
             -D real-plan-headers.txt \
             -H 'Content-Type: application/json' \
             -H 'Cache-Control: no-cache' \
@@ -176,11 +188,13 @@ jobs:
           const mode=String(plan.installationMode||'');
           const templateCount=Array.isArray(plan?.templateTextPatch?.operations)?plan.templateTextPatch.operations.length:0;
           const liquidCount=Array.isArray(plan?.liquidTextPatches)?plan.liquidTextPatches.reduce((sum,patch)=>sum+(Array.isArray(patch?.replacements)?patch.replacements.length:0),0):0;
-          const count=templateCount+liquidCount;
+          const instanceCount=Array.isArray(plan?.instancePatches)?plan.instancePatches.reduce((sum,patch)=>sum+(Array.isArray(patch?.replacements)?patch.replacements.length:0),0):0;
+          const count=templateCount+liquidCount+instanceCount;
+          const governedModes=['published-main-template-text-settings-v1','published-main-liquid-visible-text-v1','published-main-homepage-instance-liquid-text-v1'];
           const checks={
             accepted:Number(process.env.HTTP_CODE)===202,
             completed:body?.status==='completed'&&result?.status==='ready-for-approval',
-            governedMode:['published-main-template-text-settings-v1','published-main-liquid-visible-text-v1'].includes(mode),
+            governedMode:governedModes.includes(mode),
             visibleReplacementPlanned:count>0,
             readOnly:result?.readOnly===true,
             publishedSource:result?.evidence?.sourceOfTruth==='published-main-theme',
@@ -189,10 +203,11 @@ jobs:
             frameworkPreserved:plan?.preservePublishedFramework===true,
             canonicalPackageBlocked:plan?.canonicalPackage===null,
             noProductionAuthorization:plan?.productionPublishAuthorized===false&&plan?.liveThemeMutationAuthorized===false,
-            productionHeader:/x-kairos-production-entry:\s*kairos-production-entry-20260716-99/i.test(headers),
-            textSourceHeader:/x-kairos-homepage-text-source:\s*(template-settings|liquid-literal-text)/i.test(headers),
+            instanceIsolationSafe:mode!=='published-main-homepage-instance-liquid-text-v1'||(plan?.homepageInstanceIsolation===true&&plan?.originalSharedSectionsImmutable===true&&Array.isArray(plan?.instancePatches)&&plan.instancePatches.every(patch=>patch?.originalSharedSourceChanged===false&&patch?.homepageInstanceIsolated===true)),
+            productionHeader:/x-kairos-production-entry:\s*kairos-production-entry-20260717-100/i.test(headers),
+            textSourceHeader:/x-kairos-homepage-text-source:\s*(template-settings|embedded-template-markup|homepage-specific-liquid-text|homepage-instance-clone)/i.test(headers),
           };
-          console.log(JSON.stringify({httpStatus:Number(process.env.HTTP_CODE),mode,templateCount,liquidCount,summary:result?.summary,checks},null,2));
+          console.log(JSON.stringify({httpStatus:Number(process.env.HTTP_CODE),mode,templateCount,liquidCount,instanceCount,summary:result?.summary,checks},null,2));
           if(Object.values(checks).some(value=>value!==true)){
             console.error(JSON.stringify(body,null,2));
             process.exit(1);
@@ -221,10 +236,10 @@ jobs:
           set -euo pipefail
           if [ "${JOB_STATUS}" = "success" ]; then
             state="success"
-            description="v42 live plan, Liquid fallback, and timeline checks passed"
+            description="v43 homepage instance isolation and timeline checks passed"
           else
             state="failure"
-            description="v42 homepage plan or production verification failed"
+            description="v43 homepage instance isolation or production verification failed"
           fi
           payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-timeline-homepage-production",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
           curl --fail --silent --show-error \
