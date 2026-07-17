@@ -1,4 +1,4 @@
-deployment-trigger: 2026-07-16T18:58:06-07:00
+deployment-trigger: 2026-07-16T19:17:00-07:00
 workflow: diagnose-production-validation.yml
-purpose: deploy the structured homepage planner repair through the verified GitHub Actions to Wrangler to Cloudflare production path
-source-commit: bd472bbc58cb9373b84658afacc7379aaf09bc8c
+purpose: deploy the independent runtime status controller so the Command Center header reports live Cloudflare health without waiting on workflow or readiness telemetry
+source-commit: 72ebdde02b7aa15fba412da1d03d644477e19672
