@@ -23,30 +23,68 @@ jobs:
     timeout-minutes: 8
     env:
       APP_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev/center/content/website
+      CSS_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev/styles/command-hub.css
+      JS_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev/scripts/command-hub.js
     steps:
-      - name: Verify exact Command Center app shell
+      - name: Verify app shell and static assets
         shell: bash
         run: |
           set -euo pipefail
           for attempt in $(seq 1 48); do
             nonce="${GITHUB_SHA}-${attempt}-$(date +%s)"
-            rm -f headers.txt dashboard.html
-            code="$(curl --silent --show-error --location --max-time 30 \
+            rm -f shell-headers.txt css-headers.txt js-headers.txt dashboard.html command-hub.css command-hub.js
+
+            shell_code="$(curl --silent --show-error --location --max-time 30 \
               -H 'Cache-Control: no-cache' \
-              -D headers.txt \
+              -D shell-headers.txt \
               "${APP_URL}?route-verification=${nonce}" \
               --output dashboard.html \
               --write-out '%{http_code}' || true)"
-            route="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-command-center-route:/{gsub(/\r/,"",$2);print $2}' headers.txt | tail -1)"
-            if [ "${code}" = "200" ] && [ "${route}" = "direct-assets-spa" ] && grep -q 'id="kairos-hub"' dashboard.html && grep -q 'scripts/command-hub.js' dashboard.html; then
-              echo "Command Center route is live and serving the dashboard shell directly."
+            css_code="$(curl --silent --show-error --location --max-time 30 \
+              -H 'Cache-Control: no-cache' \
+              -D css-headers.txt \
+              "${CSS_URL}?route-verification=${nonce}" \
+              --output command-hub.css \
+              --write-out '%{http_code}' || true)"
+            js_code="$(curl --silent --show-error --location --max-time 30 \
+              -H 'Cache-Control: no-cache' \
+              -D js-headers.txt \
+              "${JS_URL}?route-verification=${nonce}" \
+              --output command-hub.js \
+              --write-out '%{http_code}' || true)"
+
+            shell_route="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-command-center-route:/{gsub(/\r/,"",$2);print $2}' shell-headers.txt | tail -1)"
+            css_route="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-command-center-route:/{gsub(/\r/,"",$2);print $2}' css-headers.txt | tail -1)"
+            js_route="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-command-center-route:/{gsub(/\r/,"",$2);print $2}' js-headers.txt | tail -1)"
+            css_type="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{sub(/\r$/,"");sub(/^[^:]+:[[:space:]]*/,"");print}' css-headers.txt | tail -1)"
+            js_type="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{sub(/\r$/,"");sub(/^[^:]+:[[:space:]]*/,"");print}' js-headers.txt | tail -1)"
+
+            if [ "${shell_code}" = "200" ] \
+              && [ "${css_code}" = "200" ] \
+              && [ "${js_code}" = "200" ] \
+              && [ "${shell_route}" = "direct-assets-root-shell" ] \
+              && [ "${css_route}" = "direct-assets-static" ] \
+              && [ "${js_route}" = "direct-assets-static" ] \
+              && [[ "${css_type}" == text/css* ]] \
+              && [[ "${js_type}" == *javascript* ]] \
+              && grep -q 'id="kairos-hub"' dashboard.html \
+              && grep -q '/styles/command-hub.css' dashboard.html \
+              && grep -q '\.hub-shell' command-hub.css \
+              && grep -q 'const BUILD="kairos-command-hub' command-hub.js \
+              && ! grep -qi '<html' command-hub.css \
+              && ! grep -qi '<html' command-hub.js; then
+              echo "Command Center shell, CSS, and JavaScript are live through direct asset routing."
               exit 0
             fi
             sleep 5
           done
-          echo "Command Center route did not become healthy." >&2
-          cat headers.txt >&2 || true
-          head -c 1000 dashboard.html >&2 || true
+
+          echo "Command Center shell or static assets did not become healthy." >&2
+          printf 'shell_code=%s css_code=%s js_code=%s shell_route=%s css_route=%s js_route=%s css_type=%s js_type=%s\n' \
+            "${shell_code:-}" "${css_code:-}" "${js_code:-}" "${shell_route:-}" "${css_route:-}" "${js_route:-}" "${css_type:-}" "${js_type:-}" >&2
+          cat shell-headers.txt >&2 || true
+          cat css-headers.txt >&2 || true
+          cat js-headers.txt >&2 || true
           exit 1
 
       - name: Publish route verification receipt
@@ -59,10 +97,10 @@ jobs:
           set -euo pipefail
           if [ "${JOB_STATUS}" = "success" ]; then
             state="success"
-            description="Command Center app shell opens through direct asset routing"
+            description="Command Center shell, CSS, and JavaScript assets verified"
           else
             state="failure"
-            description="Command Center app shell route verification failed"
+            description="Command Center shell or static asset verification failed"
           fi
           payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-command-center-route",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
           curl --fail --silent --show-error -X POST \
