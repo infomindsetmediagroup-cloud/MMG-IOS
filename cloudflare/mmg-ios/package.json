@@ -8,11 +8,11 @@
     "dev": "wrangler dev",
     "test": "node --test test/*.test.js",
     "validate:loading": "node scripts/validate-app-loading-baseline.mjs",
-    "validate:renderer": "node scripts/validate-stable-renderer-v2.mjs",
+    "validate:renderer": "node scripts/validate-canonical-instruction-wiring.mjs",
     "validate:autonomy": "node scripts/validate-autonomy-controls.mjs",
     "validate:operations": "node scripts/validate-operational-routes.mjs",
-    "validate:visual-preservation": "node scripts/validate-server-visual-preservation.mjs",
-    "validate:production": "node scripts/validate-app-loading-baseline.mjs && node scripts/validate-stable-renderer-v2.mjs && node scripts/validate-autonomy-controls.mjs && node scripts/validate-operational-routes.mjs && node scripts/validate-server-visual-preservation.mjs"
+    "validate:website-boundary": "node scripts/validate-canonical-instruction-wiring.mjs",
+    "validate:production": "node scripts/validate-app-loading-baseline.mjs && node scripts/validate-canonical-instruction-wiring.mjs && node scripts/validate-autonomy-controls.mjs && node scripts/validate-operational-routes.mjs"
   },
   "dependencies": {
     "fflate": "^0.8.2",
