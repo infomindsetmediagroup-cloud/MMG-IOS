@@ -1,4 +1,4 @@
-deployment-trigger: 2026-07-16T21:32:00-07:00
+deployment-trigger: 2026-07-16T21:58:00-07:00
 workflow: diagnose-production-validation.yml
-purpose: deploy production entry v45 with deterministic homepage-specific Liquid copy changes before bounded native header and footer staging changes
-source-commit: 82da59418f8aee0950887913b021ed9ab8325a4f
+purpose: deploy production entry v45 with deterministic homepage copy delta and bounded native header/footer staging changes
+source-commit: 95f78dc629b61958958df72f332d20a17e34901e
