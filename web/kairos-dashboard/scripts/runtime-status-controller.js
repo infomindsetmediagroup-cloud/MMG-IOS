@@ -1,50 +1,73 @@
-const BUILD = "kairos-runtime-status-controller-20260717-1";
+const BUILD = "kairos-runtime-status-controller-20260717-2";
 const HEALTH_URL = "/api/health";
-const REQUEST_TIMEOUT_MS = 8000;
+const REQUEST_TIMEOUT_MS = 7000;
 const ONLINE_STATES = new Set(["ready", "ok", "operational"]);
-let lastKnownOnline = false;
+let runtimeState = "checking";
+let lastLatency = null;
 let retryTimer = null;
+let running = false;
 
 start();
 
 function start() {
   updateClock();
+  installHeaderAuthority();
+  enforceStatus();
   probeHealth();
   window.addEventListener("online", probeHealth);
   window.addEventListener("focus", probeHealth);
+  window.addEventListener("pageshow", probeHealth);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) probeHealth();
+  });
+}
+
+function installHeaderAuthority() {
+  const root = document.querySelector("#kairos-hub");
+  if (!root) {
+    setTimeout(installHeaderAuthority, 50);
+    return;
+  }
+  const observer = new MutationObserver(() => enforceStatus());
+  observer.observe(root, { childList: true, subtree: true });
 }
 
 async function probeHealth() {
+  if (running) return;
+  running = true;
   clearTimeout(retryTimer);
   const started = performance.now();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const response = await fetch(`${HEALTH_URL}?header-status=${Date.now()}`, {
+    const response = await fetch(`${HEALTH_URL}?runtime-header=${Date.now()}`, {
       cache: "no-store",
+      credentials: "same-origin",
       headers: { "Cache-Control": "no-cache", "X-MMG-Client-Build": BUILD },
       signal: controller.signal,
     });
     const body = await response.json().catch(() => ({}));
-    const online = response.ok && ONLINE_STATES.has(String(body?.status || "").toLowerCase());
-    lastKnownOnline = online;
-    renderStatus(online, Math.max(1, Math.round(performance.now() - started)));
-    scheduleNext(online ? 30000 : 5000);
+    runtimeState = response.ok && ONLINE_STATES.has(String(body?.status || "").toLowerCase()) ? "online" : "offline";
+    lastLatency = Math.max(1, Math.round(performance.now() - started));
+    enforceStatus();
+    scheduleNext(runtimeState === "online" ? 30000 : 5000);
   } catch {
-    renderStatus(lastKnownOnline, null, true);
-    scheduleNext(lastKnownOnline ? 15000 : 3000);
+    runtimeState = "offline";
+    lastLatency = null;
+    enforceStatus();
+    scheduleNext(3000);
   } finally {
     clearTimeout(timeout);
+    running = false;
   }
 }
 
-function renderStatus(online, latency, reconnecting = false) {
-  const root = document.querySelector("#kairos-hub");
-  if (!root) {
-    scheduleNext(250);
-    return;
-  }
+function enforceStatus() {
   updateClock();
+  const root = document.querySelector("#kairos-hub");
+  if (!root) return;
+  const online = runtimeState === "online";
+  const checking = runtimeState === "checking";
   const dot = root.querySelector("[data-runtime-dot]");
   const label = root.querySelector("[data-runtime-label]");
   const signal = root.querySelector("[data-runtime-signal]");
@@ -53,16 +76,16 @@ function renderStatus(online, latency, reconnecting = false) {
   const detail = root.querySelector("[data-runtime-detail]");
   const wave = root.querySelector("[data-runtime-wave]");
 
-  if (dot) dot.className = `state-dot ${online ? "" : reconnecting ? "checking" : "offline"}`.trim();
-  if (label) label.textContent = online ? "Systems online" : reconnecting ? "Reconnecting" : "Attention required";
-  if (signal) signal.textContent = online ? "Live" : reconnecting ? "Reconnecting" : "Runtime unavailable";
+  if (dot) dot.className = `state-dot ${online ? "" : checking ? "checking" : "offline"}`.trim();
+  if (label) label.textContent = online ? "Online" : checking ? "Checking" : "Offline";
+  if (signal) signal.textContent = online ? "Live" : checking ? "Checking runtime" : "Runtime unavailable";
   if (card) card.dataset.state = online ? "live" : "limited";
-  if (value) value.textContent = online ? "Online" : reconnecting ? "Connecting" : "Unavailable";
-  if (detail) detail.textContent = latency ? `${latency} ms response` : reconnecting ? "Retrying health check" : "No response";
+  if (value) value.textContent = online ? "Online" : checking ? "Checking" : "Unavailable";
+  if (detail) detail.textContent = lastLatency ? `${lastLatency} ms response` : checking ? "Verifying live health" : "No health response";
   wave?.classList.toggle("active", online);
 
   window.dispatchEvent(new CustomEvent("kairos:runtime-status", {
-    detail: { online, latency, reconnecting, build: BUILD },
+    detail: { online, checking, latency: lastLatency, build: BUILD },
   }));
 }
 
