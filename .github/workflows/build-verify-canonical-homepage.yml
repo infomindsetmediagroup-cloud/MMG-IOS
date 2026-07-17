@@ -40,15 +40,20 @@ jobs:
         run: |
           set -euo pipefail
           npm init -y >/dev/null
-          npm install --no-save --no-audit --no-fund playwright
-          npx playwright install --with-deps chromium
+          npm install --no-save --no-audit --no-fund playwright >/dev/null
+          npx playwright install --with-deps chromium >/dev/null 2>&1
+          echo "Playwright Chromium is ready."
 
       - name: Build, repair, and verify canonical Shopify staging homepage
         shell: bash
         run: |
-          set -euo pipefail
-          node repository/.github/scripts/run-canonical-homepage-release.mjs
-          echo "--- REVIEW RECEIPT ---"
-          cat artifacts/canonical-homepage/review-receipt.json
+          set -o pipefail
+          node repository/.github/scripts/run-canonical-homepage-release.mjs 2>&1 | tee artifacts/canonical-homepage/release.log
+          status=${PIPESTATUS[0]}
+          if [ -f artifacts/canonical-homepage/review-receipt.json ]; then
+            echo "--- REVIEW RECEIPT ---"
+            cat artifacts/canonical-homepage/review-receipt.json
+          fi
           echo "--- EVIDENCE FILES ---"
           find artifacts/canonical-homepage -maxdepth 2 -type f -printf '%p %s bytes\n' | sort
+          exit "${status}"
