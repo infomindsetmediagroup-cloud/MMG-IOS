@@ -29,8 +29,15 @@ import {
   KAIROS_ZERO_NEURON_CHILD_ROUTER_BUILD,
 } from "./kairos-zero-neuron-child-router-v1.js";
 import { KAIROS_INTERNAL_DOCTRINE_REGISTRY_BUILD } from "./kairos-internal-doctrine-registry-v1.js";
+import {
+  applyWebsiteGovernanceToPlanResponse,
+  buildPrivateGovernedPlanningRequest,
+  governWebsitePlanningRequest,
+  handleWebsiteGovernanceStatus,
+  KAIROS_WEBSITE_PLANNING_GOVERNANCE_BUILD,
+} from "./kairos-website-planning-governance-v1.js";
 
-const BUILD = "kairos-production-entry-autonomous-20260717-7";
+const BUILD = "kairos-production-entry-autonomous-20260717-8";
 const PLAN_PATH = "/api/shopify/staging/plan/jobs";
 
 export { KairosProject };
@@ -40,13 +47,27 @@ export default {
     const internalEnv = workersAIBlockedEnv(env);
 
     try {
-      const url = new URL(request.url);
-      let baselineRefresh = null;
+      const governanceStatus = handleWebsiteGovernanceStatus(request);
+      if (governanceStatus) return stamp(governanceStatus, null, null);
 
-      if (request.method === "POST" && url.pathname === PLAN_PATH) {
-        const payload = await safeRequestJSON(request.clone());
-        const requestType = String(payload?.requestType || "homepage").trim().toLowerCase();
-        if (requestType === "homepage") baselineRefresh = await restoreApprovedHomepageBaseline(internalEnv);
+      const url = new URL(request.url);
+      const isPlanningRequest = request.method === "POST" && url.pathname === PLAN_PATH;
+      let baselineRefresh = null;
+      let governedPlanning = { request, context: null, payload: null, originalObjective: "" };
+      let deterministicPlanningRequest = request;
+      let privatePlanningRequest = request;
+
+      if (isPlanningRequest) {
+        const rawPayload = await safeRequestJSON(request.clone());
+        const declaredRequest = rawPayload?.requestType || rawPayload?.pageType || rawPayload?.resourceType
+          ? request
+          : rebuildJSONRequest(request, { ...rawPayload, requestType: "homepage" });
+        governedPlanning = await governWebsitePlanningRequest(declaredRequest);
+        deterministicPlanningRequest = governedPlanning.request;
+        privatePlanningRequest = buildPrivateGovernedPlanningRequest(declaredRequest, governedPlanning);
+        if (governedPlanning.context?.pageType === "homepage") {
+          baselineRefresh = await restoreApprovedHomepageBaseline(internalEnv);
+        }
       }
 
       const baselineInternalDelegate = delegatedRequest => baselineRuntime.fetch(delegatedRequest, internalEnv, ctx);
@@ -63,33 +84,53 @@ export default {
         ctx,
         baselineInternalDelegate,
       );
-      if (zeroNeuronChild) return stamp(zeroNeuronChild, baselineRefresh);
+      if (zeroNeuronChild) return stamp(zeroNeuronChild, baselineRefresh, governedPlanning.context);
 
       const directExecution = await handleDirectHomepageExecution(request, internalEnv, ctx);
-      if (directExecution) return stamp(directExecution, baselineRefresh);
+      if (directExecution) return stamp(directExecution, baselineRefresh, governedPlanning.context);
 
-      const directPlan = await handleDirectHomepagePlan(request, internalEnv, ctx);
-      if (directPlan) return stamp(directPlan, baselineRefresh);
+      const directPlan = await handleDirectHomepagePlan(deterministicPlanningRequest, internalEnv, ctx);
+      if (directPlan) {
+        const governedResponse = await applyWebsiteGovernanceToPlanResponse(request, directPlan, governedPlanning.context);
+        return stamp(governedResponse, baselineRefresh, governedPlanning.context);
+      }
 
       const neuronFreePlan = await handleNeuronFreeHomepagePlan(
-        request,
+        deterministicPlanningRequest,
         internalEnv,
         ctx,
         autonomousDelegate,
       );
-      if (neuronFreePlan) return stamp(neuronFreePlan, baselineRefresh);
+      if (neuronFreePlan) {
+        const governedResponse = await applyWebsiteGovernanceToPlanResponse(request, neuronFreePlan, governedPlanning.context);
+        return stamp(governedResponse, baselineRefresh, governedPlanning.context);
+      }
 
       const bindingRepair = await handleHomepagePromptBindingRepair(
-        request,
+        deterministicPlanningRequest,
         internalEnv,
         ctx,
         autonomousDelegate,
       );
-      if (bindingRepair) return stamp(bindingRepair, baselineRefresh);
+      if (bindingRepair) {
+        const governedResponse = await applyWebsiteGovernanceToPlanResponse(request, bindingRepair, governedPlanning.context);
+        return stamp(governedResponse, baselineRefresh, governedPlanning.context);
+      }
 
-      const handled = await autonomousDelegate(request);
-      if (handled) return stamp(handled, baselineRefresh);
-      return stamp(await baselineRuntime.fetch(request, internalEnv, ctx), baselineRefresh);
+      const routedRequest = isPlanningRequest ? privatePlanningRequest : request;
+      const handled = await autonomousDelegate(routedRequest);
+      if (handled) {
+        const governedResponse = isPlanningRequest
+          ? await applyWebsiteGovernanceToPlanResponse(request, handled, governedPlanning.context)
+          : handled;
+        return stamp(governedResponse, baselineRefresh, governedPlanning.context);
+      }
+
+      const baselineResponse = await baselineRuntime.fetch(routedRequest, internalEnv, ctx);
+      const governedResponse = isPlanningRequest
+        ? await applyWebsiteGovernanceToPlanResponse(request, baselineResponse, governedPlanning.context)
+        : baselineResponse;
+      return stamp(governedResponse, baselineRefresh, governedPlanning.context);
     } catch (error) {
       return json({
         status: "failed",
@@ -97,6 +138,7 @@ export default {
         controller: KAIROS_AUTONOMOUS_PROMPT_CONTROLLER_BUILD,
         zeroNeuronChildRouter: KAIROS_ZERO_NEURON_CHILD_ROUTER_BUILD,
         doctrineRegistry: KAIROS_INTERNAL_DOCTRINE_REGISTRY_BUILD,
+        websitePlanningGovernance: KAIROS_WEBSITE_PLANNING_GOVERNANCE_BUILD,
         directHomepagePlan: KAIROS_DIRECT_HOMEPAGE_PLAN_BUILD,
         directHomepageExecution: KAIROS_DIRECT_HOMEPAGE_EXECUTION_BUILD,
         neuronFreeHomepage: KAIROS_NEURON_FREE_HOMEPAGE_BUILD,
@@ -115,6 +157,10 @@ export default {
           neuronsConsumed: 0,
           childRetrievalMode: "deterministic-internal",
           generativeInferenceMode: "kairos-private-runtime-only",
+          websiteDoctrineInheritedAutomatically: true,
+          websiteLinkDestinationsMutableByTextPlan: false,
+          websiteDesignMutationAuthorizedByCopyObjective: false,
+          homepageHeroOnlyCompletionAccepted: false,
           labeledHomepagePromptsRequireWorkersAI: false,
           labeledHomepagePromptsUseSecondBindingPass: false,
           approvedDirectPackagesUseApprovalTimeRebinding: false,
@@ -143,12 +189,13 @@ function workersAIBlockedEnv(env) {
   });
 }
 
-function stamp(response, baselineRefresh = null) {
+function stamp(response, baselineRefresh = null, governanceContext = null) {
   const headers = new Headers(response.headers);
   headers.set("X-MMG-Autonomous-Entry", BUILD);
   headers.set("X-Kairos-Prompt-Controller", KAIROS_AUTONOMOUS_PROMPT_CONTROLLER_BUILD);
   headers.set("X-Kairos-Zero-Neuron-Child-Router", KAIROS_ZERO_NEURON_CHILD_ROUTER_BUILD);
   headers.set("X-Kairos-Doctrine-Registry", KAIROS_INTERNAL_DOCTRINE_REGISTRY_BUILD);
+  headers.set("X-Kairos-Website-Governance", KAIROS_WEBSITE_PLANNING_GOVERNANCE_BUILD);
   headers.set("X-Kairos-Direct-Homepage-Plan", KAIROS_DIRECT_HOMEPAGE_PLAN_BUILD);
   headers.set("X-Kairos-Direct-Homepage-Execution", KAIROS_DIRECT_HOMEPAGE_EXECUTION_BUILD);
   headers.set("X-Kairos-Neuron-Free-Homepage", KAIROS_NEURON_FREE_HOMEPAGE_BUILD);
@@ -157,6 +204,8 @@ function stamp(response, baselineRefresh = null) {
   headers.set("X-Kairos-Workers-AI-Available", "false");
   headers.set("X-Kairos-Workers-AI-Used", "false");
   headers.set("X-Kairos-Neurons-Consumed", "0");
+  headers.set("X-Kairos-Website-Doctrine-Inherited", governanceContext?.applied ? "true" : "false");
+  if (governanceContext?.pageType) headers.set("X-Kairos-Website-Page-Type", governanceContext.pageType);
   headers.set("X-Kairos-Visual-Baseline", "tuesday-command-center-6f96b10d");
   if (baselineRefresh?.targetTheme?.gid) {
     headers.set("X-Kairos-Staging-Refreshed", "full-main-theme-duplicate");
@@ -164,6 +213,17 @@ function stamp(response, baselineRefresh = null) {
   }
   if (headers.get("Content-Type")?.includes("text/html")) headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
+function rebuildJSONRequest(request, payload) {
+  const headers = new Headers(request.headers);
+  headers.set("Content-Type", "application/json; charset=utf-8");
+  return new Request(request.url, {
+    method: request.method,
+    headers,
+    body: JSON.stringify(payload),
+    redirect: request.redirect,
+  });
 }
 
 function json(value, status = 200) {
@@ -176,6 +236,7 @@ function json(value, status = 200) {
       "X-Kairos-Prompt-Controller": KAIROS_AUTONOMOUS_PROMPT_CONTROLLER_BUILD,
       "X-Kairos-Zero-Neuron-Child-Router": KAIROS_ZERO_NEURON_CHILD_ROUTER_BUILD,
       "X-Kairos-Doctrine-Registry": KAIROS_INTERNAL_DOCTRINE_REGISTRY_BUILD,
+      "X-Kairos-Website-Governance": KAIROS_WEBSITE_PLANNING_GOVERNANCE_BUILD,
       "X-Kairos-Direct-Homepage-Plan": KAIROS_DIRECT_HOMEPAGE_PLAN_BUILD,
       "X-Kairos-Direct-Homepage-Execution": KAIROS_DIRECT_HOMEPAGE_EXECUTION_BUILD,
       "X-Kairos-Neuron-Free-Homepage": KAIROS_NEURON_FREE_HOMEPAGE_BUILD,
