@@ -1,4 +1,5 @@
 name: Verify Runtime Header Browser
+# revision 3 — verify the decoupled header served by Cloudflare
 
 on:
   push:
@@ -8,6 +9,7 @@ on:
       - ".github/scripts/verify-runtime-header-browser.cjs"
       - "web/kairos-dashboard/index.html"
       - "web/kairos-dashboard/scripts/command-hub.js"
+      - "web/kairos-dashboard/scripts/runtime-status-controller.js"
   workflow_dispatch: {}
 
 permissions:
@@ -27,7 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Wait for inline runtime probe to reach Cloudflare
+      - name: Wait for decoupled runtime header to reach Cloudflare
         shell: bash
         run: |
           set -euo pipefail
@@ -36,12 +38,13 @@ jobs:
               -H 'Cache-Control: no-cache' \
               "${KAIROS_URL}?browser-gate=${GITHUB_SHA}-${attempt}-$(date +%s)" \
               --output command-center.html || true
-            if grep -q 'header-inline=' command-center.html 2>/dev/null; then
+            if grep -q 'id="kairos-runtime-header"' command-center.html 2>/dev/null; then
+              echo "Decoupled runtime header is live on Cloudflare."
               exit 0
             fi
             sleep 5
           done
-          echo "The repaired Command Center HTML did not reach Cloudflare." >&2
+          echo "The decoupled runtime header did not reach Cloudflare." >&2
           exit 1
 
       - name: Install browser verifier
