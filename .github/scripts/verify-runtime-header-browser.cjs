@@ -3,6 +3,7 @@ const { chromium } = require('playwright');
 
 const outputPath = process.env.DIAGNOSTIC_PATH || 'runtime-header-browser-diagnostics.json';
 const write = value => fs.writeFileSync(outputPath, JSON.stringify(value, null, 2));
+const visibleHeaderSelector = '#kairos-runtime-header [data-runtime-label]';
 
 (async () => {
   const browser = await chromium.launch({ headless: true });
@@ -21,10 +22,10 @@ const write = value => fs.writeFileSync(outputPath, JSON.stringify(value, null, 
   const url = `${process.env.KAIROS_URL}?browser-runtime=${process.env.GITHUB_SHA}-${Date.now()}`;
   try {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.waitForTimeout(3000);
-    await page.locator('[data-runtime-label]').waitFor({ state: 'visible', timeout: 15000 });
-    await page.waitForFunction(() => document.querySelector('[data-runtime-label]')?.textContent?.trim() === 'Online', null, { timeout: 30000 });
-    const label = await page.locator('[data-runtime-label]').textContent();
+    await page.waitForTimeout(1000);
+    await page.locator(visibleHeaderSelector).waitFor({ state: 'visible', timeout: 15000 });
+    await page.waitForFunction(selector => document.querySelector(selector)?.textContent?.trim() === 'Online', visibleHeaderSelector, { timeout: 30000 });
+    const label = await page.locator(visibleHeaderSelector).textContent();
     const health = await page.evaluate(async () => {
       const response = await fetch(`/api/health?browser-readback=${Date.now()}`, { cache: 'no-store' });
       return { ok: response.ok, body: await response.json() };
