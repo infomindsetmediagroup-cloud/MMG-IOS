@@ -1,14 +1,12 @@
-name: Verify Kairos Child Actions
+name: Verify Kairos Command Center Recovery
 
 on:
   push:
     branches:
       - main
     paths:
-      - "cloudflare/mmg-ios/src/kairos-child-action-runtime-v1.js"
-      - "cloudflare/mmg-ios/src/kairos-production-entry-v38.js"
-      - "web/kairos-dashboard/scripts/child-action-bridge.js"
-      - "web/kairos-dashboard/index.html"
+      - "cloudflare/mmg-ios/**"
+      - "web/kairos-dashboard/**"
       - ".github/workflows/verify-child-action-production.yml"
   workflow_dispatch: {}
 
@@ -17,103 +15,180 @@ permissions:
   statuses: write
 
 concurrency:
-  group: kairos-child-action-production
+  group: kairos-command-center-recovery
   cancel-in-progress: true
 
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     env:
-      KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+      APP_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev/center/content/website
     steps:
-      - name: Verify deployed child-action runtime
+      - name: Check out canonical source
+        uses: actions/checkout@v4
+
+      - name: Install Worker dependencies
+        working-directory: cloudflare/mmg-ios
+        run: npm install --ignore-scripts --no-package-lock --no-audit --no-fund
+
+      - name: Validate recovery Worker bundle
+        working-directory: cloudflare/mmg-ios
+        run: npx wrangler deploy --dry-run
+
+      - name: Deploy self-contained Command Center
+        working-directory: cloudflare/mmg-ios
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo "CLOUDFLARE_API_TOKEN is required." >&2; exit 1; }
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}" || { echo "CLOUDFLARE_ACCOUNT_ID is required." >&2; exit 1; }
+          npx wrangler deploy
+
+      - name: Wait for exact self-contained shell
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 24); do
-            curl --silent --show-error --location --max-time 30 \
+          for attempt in $(seq 1 48); do
+            nonce="${GITHUB_SHA}-${attempt}-$(date +%s)"
+            rm -f headers.txt dashboard.html
+            code="$(curl --silent --show-error --location --max-time 30 \
               -H 'Cache-Control: no-cache' \
-              "${KAIROS_PRODUCTION_URL}/api/health?child-smoke=${GITHUB_SHA}-${attempt}-$(date +%s)" \
-              --output health.json || true
-            curl --silent --show-error --location --max-time 30 \
-              -H 'Cache-Control: no-cache' \
-              "${KAIROS_PRODUCTION_URL}/center/knowledge/research-brief?child-smoke=${GITHUB_SHA}-${attempt}" \
-              --output dashboard.html || true
-            if node -e '
-              const fs=require("fs");
-              let h={};try{h=JSON.parse(fs.readFileSync("health.json","utf8"))}catch{}
-              const page=fs.existsSync("dashboard.html")?fs.readFileSync("dashboard.html","utf8"):"";
-              const ok=["ready","ok","operational"].includes(String(h.status||"").toLowerCase())
-                &&h.build==="kairos-production-entry-20260716-95"
-                &&h.childActionExecution?.status==="operational"
-                &&h.childActionExecution?.contract==="objective-to-verified-deliverable"
-                &&h.capabilities?.queuedAcknowledgementOnly==="retired"
-                &&page.includes("id=\"kairos-hub\"")
-                &&page.includes("scripts/child-action-bridge.js");
-              process.exit(ok?0:1);
-            '; then
+              -D headers.txt \
+              "${APP_URL}?recovery=${nonce}" \
+              --output dashboard.html \
+              --write-out '%{http_code}' || true)"
+            route="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-command-center-route:/{gsub(/\r/,"",$2);print $2}' headers.txt | tail -1)"
+            type="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{sub(/\r$/ ,"");sub(/^[^:]+:[[:space:]]*/,"");print}' headers.txt | tail -1)"
+
+            if [ "${code}" = "200" ] \
+              && [ "${route}" = "direct-assets-root-shell" ] \
+              && [[ "${type}" == text/html* ]] \
+              && grep -q 'kairos-command-center-inline-20260717-1' dashboard.html \
+              && grep -q 'id="kairos-hub"' dashboard.html \
+              && grep -q 'Website Retool' dashboard.html \
+              && grep -q 'website-objective' dashboard.html; then
+              echo "Exact self-contained Command Center shell is live."
               break
             fi
-            if [ "${attempt}" -eq 24 ]; then
-              echo "The deployed child-action runtime did not become ready." >&2
-              cat health.json >&2 || true
+
+            if [ "${attempt}" = "48" ]; then
+              echo "The self-contained Command Center shell did not become live." >&2
+              printf 'http=%s route=%s type=%s\n' "${code:-}" "${route:-}" "${type:-}" >&2
+              head -c 1600 dashboard.html >&2 || true
               exit 1
             fi
             sleep 5
           done
 
-      - name: Execute real child objective and verify deliverable
+      - name: Install mobile browser harness
+        run: |
+          set -euo pipefail
+          npm init -y >/dev/null 2>&1
+          npm install playwright@1.52.0 --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Prove app opens and Website Retool accepts input
         shell: bash
         run: |
           set -euo pipefail
-          success="false"
-          for attempt in 1 2 3; do
-            objective="Produce a concise internal research brief proving the Kairos child-action objective-to-deliverable runtime is operational. Include the execution contract, durable evidence, read-back verification, and safety boundaries. Verification attempt ${attempt}."
-            http_code="$(curl --silent --show-error --location --max-time 300 \
-              -D child-headers.txt \
-              -H 'Content-Type: application/json' \
-              -H 'Cache-Control: no-cache' \
-              --data "$(OBJECTIVE="${objective}" node -e 'process.stdout.write(JSON.stringify({action:"research-brief",objective:process.env.OBJECTIVE,executionMode:"direct-objective-to-deliverable"}))')" \
-              "${KAIROS_PRODUCTION_URL}/api/hub/execute" \
-              --output child-result.json \
-              --write-out '%{http_code}' || true)"
-            if HTTP_CODE="${http_code}" node <<'NODE'
-          const fs=require('fs');
-          let result={};
-          try{result=JSON.parse(fs.readFileSync('child-result.json','utf8'))}catch{}
-          const headers=fs.existsSync('child-headers.txt')?fs.readFileSync('child-headers.txt','utf8'):'';
-          const deliverable=(result.deliverables||[])[0]||{};
-          const checks={
-            httpOK:Number(process.env.HTTP_CODE)===200,
-            completed:result.status==='completed',
-            runtime:result.build==='kairos-child-action-runtime-20260716-1',
-            kernel:result.kernel==='kairos-child-objective-to-deliverable-v1',
-            identifiers:Boolean(result.resultID&&result.workflowID&&result.workItemID),
-            workflowCompleted:result.workflow?.state==='completed'&&result.workflow?.progress===100,
-            sectionContent:Array.isArray(result.sections)&&result.sections.some(section=>String(section?.content||'').length>=80),
-            deliverableContent:String(deliverable.content||'').length>=80,
-            artifact:Boolean(deliverable.artifactID)&&typeof deliverable.contentHash==='string'&&deliverable.contentHash.length===64,
-            persistent:result.evidence?.persistent===true,
-            readback:result.evidence?.artifactReadbackVerified===true,
-            noExternal:result.evidence?.externalActionTaken===false,
-            noLiveMutation:result.evidence?.liveMutationPerformed===false,
-            responseHeader:/x-kairos-child-action-runtime:\s*kairos-child-action-runtime-20260716-1/i.test(headers),
-          };
-          console.log(JSON.stringify({checks,summary:result.summary||null,resultID:result.resultID||null,workflowID:result.workflowID||null,workItemID:result.workItemID||null,error:result.error||null},null,2));
-          process.exit(Object.values(checks).every(Boolean)?0:1);
-          NODE
-            then
-              success="true"
-              break
-            fi
-            echo "Child action attempt ${attempt} did not reach verified completion." >&2
-            cat child-result.json >&2 || true
-            sleep 10
-          done
-          test "${success}" = "true" || { echo "Kairos child-action production verification failed." >&2; exit 1; }
+          node <<'NODE'
+          const { chromium } = require('playwright');
 
-      - name: Publish child-action verification receipt
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            const context = await browser.newContext({
+              viewport: { width: 390, height: 844 },
+              isMobile: true,
+              hasTouch: true,
+              userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148',
+            });
+            const page = await context.newPage();
+            const consoleErrors = [];
+            const pageErrors = [];
+            const failedRequests = [];
+
+            page.on('console', message => {
+              if (message.type() === 'error') consoleErrors.push(message.text());
+            });
+            page.on('pageerror', error => pageErrors.push(String(error?.stack || error)));
+            page.on('requestfailed', request => failedRequests.push({
+              url: request.url(),
+              error: request.failure()?.errorText || 'failed',
+            }));
+
+            const response = await page.goto(`${process.env.APP_URL}?browser-proof=${Date.now()}`, {
+              waitUntil: 'domcontentloaded',
+              timeout: 60000,
+            });
+
+            await page.waitForSelector('html[data-kairos-boot="ready"]', { timeout: 15000 });
+            await page.waitForSelector('#website-objective', { state: 'visible', timeout: 15000 });
+
+            const objective = 'Verify the functioning Website Retool input without submitting a Shopify mutation.';
+            await page.fill('#website-objective', objective);
+
+            const inputValue = await page.inputValue('#website-objective');
+            const planningButton = page.locator('[data-website-plan]');
+            const buttonVisible = await planningButton.isVisible();
+            const buttonEnabled = await planningButton.isEnabled();
+            const hubText = await page.locator('#kairos-hub').innerText();
+            const build = await page.locator('#kairos-hub').getAttribute('data-self-contained-build');
+            const header = page.locator('.app-header-image');
+            const headerBox = await header.boundingBox();
+            const bodyFont = await page.evaluate(() => getComputedStyle(document.body).fontFamily);
+
+            const receipt = {
+              httpStatus: response?.status() || 0,
+              title: await page.title(),
+              loadingScreenPresent: hubText.includes('Loading Kairos Command Center'),
+              build,
+              objectiveValue: inputValue,
+              buttonVisible,
+              buttonEnabled,
+              headerWidth: headerBox?.width || 0,
+              headerHeight: headerBox?.height || 0,
+              bodyFont,
+              consoleErrors,
+              pageErrors,
+              failedRequests: failedRequests.slice(0, 20),
+            };
+
+            console.log(`KAIROS_COMMAND_CENTER_BROWSER_RECEIPT=${JSON.stringify(receipt)}`);
+            await page.screenshot({ path: 'kairos-command-center-recovery.png', fullPage: true });
+            await browser.close();
+
+            const passed = response?.ok()
+              && receipt.loadingScreenPresent === false
+              && build === 'kairos-command-center-inline-20260717-1'
+              && inputValue === objective
+              && buttonVisible
+              && buttonEnabled
+              && receipt.headerWidth > 0
+              && receipt.headerWidth <= 390
+              && receipt.headerHeight > 0
+              && receipt.headerHeight <= 180
+              && !/Times New Roman|serif/i.test(bodyFont || '')
+              && pageErrors.length === 0;
+
+            if (!passed) process.exit(1);
+          })().catch(error => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Upload rendered mobile proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kairos-command-center-mobile-proof
+          path: kairos-command-center-recovery.png
+          if-no-files-found: ignore
+
+      - name: Publish Command Center recovery receipt
         if: always()
         shell: bash
         env:
@@ -123,21 +198,20 @@ jobs:
           set -euo pipefail
           if [ "${JOB_STATUS}" = "success" ]; then
             state="success"
-            description="Kairos child action returned a verified durable deliverable"
+            description="Command Center opened and Website Retool accepted input"
           else
             state="failure"
-            description="Kairos child-action production verification failed"
+            description="Command Center mobile browser proof failed"
           fi
           payload="$(STATE="${state}" DESCRIPTION="${description}" node -e '
             process.stdout.write(JSON.stringify({
-              state:process.env.STATE,
-              description:process.env.DESCRIPTION,
-              context:"kairos-child-action-production",
-              target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+              state: process.env.STATE,
+              description: process.env.DESCRIPTION,
+              context: "kairos-command-center-recovery",
+              target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
             }));
           ')"
-          curl --fail --show-error --silent \
-            -X POST \
+          curl --fail --silent --show-error -X POST \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
