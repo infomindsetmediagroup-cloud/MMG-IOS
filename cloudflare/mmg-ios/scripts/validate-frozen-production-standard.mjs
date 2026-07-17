@@ -13,8 +13,8 @@ const prohibitedUI = ["MutationObserver", "setInterval(", "scrollIntoView", "scr
 const paths = {
   manifest: join(root, "production-baseline.json"),
   wrangler: join(root, "wrangler.toml"),
-  entry: join(root, "src/kairos-production-entry-v43.js"),
-  priorEntry: join(root, "src/kairos-production-entry-v42.js"),
+  entry: join(root, "src/kairos-production-entry-v44.js"),
+  priorEntry: join(root, "src/kairos-production-entry-v43.js"),
   preservePlanner: join(root, "src/kairos-homepage-preserve-planner-v1.js"),
   renderedPlanner: join(root, "src/kairos-rendered-homepage-text-planner-v1.js"),
   markupPlanner: join(root, "src/kairos-homepage-template-markup-text-planner-v1.js"),
@@ -28,6 +28,7 @@ const paths = {
   nativeTask: join(root, "src/kairos-native-task-execution-v1.js"),
   intelligence: join(root, "src/kairos-intelligence-v1.js"),
   web003: join(root, "src/kairos-web003-composite-runtime-v1.js"),
+  sourceComposite: join(root, "src/kairos-web003-source-bound-composite-runtime-v1.js"),
   index: join(repo, "web/kairos-dashboard/index.html"),
   reset: join(repo, "web/kairos-dashboard/scripts/homepage-session-reset-v5.js"),
   quick: join(repo, "web/kairos-dashboard/scripts/homepage-quick-action-v5.js"),
@@ -45,9 +46,9 @@ const manifest = JSON.parse(read(paths.manifest));
 const sources = Object.fromEntries(Object.entries(paths).filter(([name]) => name !== "manifest").map(([name, path]) => [name, read(path)]));
 
 assert.equal(manifest.status, "frozen");
-assert.equal(manifest.baseline, "kairos-production-standard-20260717-39");
-assert.equal(manifest.worker.entry, "src/kairos-production-entry-v43.js");
-assert.equal(manifest.worker.build, "kairos-production-entry-20260717-101");
+assert.equal(manifest.baseline, "kairos-production-standard-20260717-40");
+assert.equal(manifest.worker.entry, "src/kairos-production-entry-v44.js");
+assert.equal(manifest.worker.build, "kairos-production-entry-20260717-102");
 assert.equal(manifest.dashboard.commandCenterDocument, "kairos-command-center-operational-20260717-20");
 assert.equal(manifest.dashboard.homepageQuickAction, "kairos-homepage-quick-action-20260717-4");
 assert.equal(manifest.dashboard.homepageQuickActionAsset, "scripts/homepage-quick-action-v5.js");
@@ -57,6 +58,7 @@ assert.equal(manifest.dashboard.homepageTemplateMarkupTextPlanner, "kairos-homep
 assert.equal(manifest.dashboard.homepageLiquidTextFallback, "kairos-homepage-liquid-text-fallback-20260716-1");
 assert.equal(manifest.dashboard.homepageInstanceLiquidFallback, "kairos-homepage-instance-liquid-fallback-20260717-1");
 assert.equal(manifest.dashboard.homepageInstanceLiquidExecutor, "kairos-homepage-instance-liquid-executor-20260717-2");
+assert.equal(manifest.dashboard.web003SourceBoundComposite, "kairos-web003-source-bound-composite-runtime-20260717-1");
 
 for (const flag of [
   "synchronousChildActionExecution", "childActionObjectiveBridgeRequired", "queuedAcknowledgementOnlyRetired",
@@ -80,35 +82,31 @@ for (const flag of [
   "homepageStaleSessionMigrationRequired", "boundedInternalAutomaticExecution", "eventDrivenAutonomousExecution",
   "verifiedNativeTaskArtifactsRequired", "nativeTaskReadbackBeforeCompletion", "explicitPreviewApprovalRequired",
   "explicitLiveApplicationRequired", "finalLiveApprovalRequired", "web003CompositeWebsiteProductionRequired",
-  "compositeWebsiteRollbackRequired"
+  "compositeWebsiteRollbackRequired", "sourceBoundCopyCompositeRequired",
+  "sourceBoundCopyDeltaBeforeNativeThemeRequired", "canonicalNoOpCompositePreviewProhibited"
 ]) assert.equal(manifest.approvedExpansion[flag], true, `Frozen baseline flag is not enabled: ${flag}`);
 assert.equal(manifest.approvedExpansion.automaticExternalExecution, false);
 assert.equal(manifest.approvedExpansion.modelReasoningPersisted, false);
 
 const activeEntries = sources.wrangler.split(/\r?\n/).filter(line => /^main\s*=/.test(line.trim()));
-assert.deepEqual(activeEntries, ['main = "src/kairos-production-entry-v43.js"']);
+assert.deepEqual(activeEntries, ['main = "src/kairos-production-entry-v44.js"']);
 requireAll(sources.wrangler, [
   '[ai]', 'binding = "AI"', 'name = "KAIROS_PROJECTS"', 'KAIROS_AUTONOMY_ENABLED = "true"',
   'KAIROS_WORKERS_AI_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8"', 'crons = ["*/15 * * * *"]'
 ], "Wrangler");
 
 requireAll(sources.entry, [
+  './kairos-production-entry-v43.js', './kairos-web003-source-bound-composite-runtime-v1.js',
+  'kairos-production-entry-20260717-102', 'handleSourceBoundWeb003Request',
+  'sourceBoundCopyComposite: "operational"', 'canonicalNoOpPreview: "prohibited"',
+  'X-Kairos-Source-Bound-WEB-003'
+], "Production entry v44");
+requireAll(sources.priorEntry, [
   './kairos-production-entry-v42.js', './kairos-rendered-homepage-text-planner-v1.js',
   './kairos-homepage-template-markup-text-planner-v1.js', './kairos-homepage-liquid-text-fallback-v1.js',
   './kairos-homepage-instance-liquid-fallback-v1.js', './kairos-homepage-instance-liquid-executor-v2.js',
-  'kairos-production-entry-20260717-101', 'homepage_liquid_scope_unsafe',
-  'published-main-homepage-instance-liquid-text-v1', 'published-main-four-source-visible-text-preservation',
-  'homepage-instance isolated shared-section clone', 'homepageSharedSectionInstanceIsolation: "operational"',
-  'homepageOriginalSharedSectionProtection: "required"', 'homepageTemplateSemanticReadback: "required"',
-  'instanceExecutorBuild', 'canonical-json-semantics', 'exact-bytes-and-sha256',
-  'X-Kairos-Homepage-Instance-Fallback', 'X-Kairos-Homepage-Instance-Executor',
-  'X-Kairos-Template-Readback', 'X-Kairos-Clone-Readback',
-  'X-Kairos-Original-Shared-Sections', 'X-Kairos-Canonical-Rebuild-Fallback'
-], "Production entry v43");
-requireAll(sources.priorEntry, [
-  './kairos-production-entry-v41.js', './kairos-rendered-homepage-text-planner-v1.js',
-  './kairos-homepage-liquid-text-fallback-v1.js', 'kairos-production-entry-20260716-99'
-], "Preserved production entry v42");
+  'kairos-production-entry-20260717-101', 'published-main-four-source-visible-text-preservation'
+], "Preserved production entry v43");
 
 requireAll(sources.preservePlanner, [
   'kairos-homepage-preserve-planner-20260716-2', 'sourceOfTruth: "published-main-theme"',
@@ -206,6 +204,13 @@ requireAll(sources.autonomy, ['runAutonomyCycle', 'executeNativeTask', 'artifact
 requireAll(sources.nativeTask, ['executeNativeTask', 'native-task-artifacts', 'durableReadbackRequired: true', 'crypto.subtle.digest'], "Native task runtime");
 requireAll(sources.intelligence, ['openai: "prohibited"', 'openAIModels: "prohibited"', 'cloudflare-account-scoped', '@cf/qwen/qwen3-30b-a3b-fp8'], "Intelligence policy");
 requireAll(sources.web003, ['buildCompositePlan', 'mergeCompositeExecution', 'web-003-composite', 'rollbackCanonicalExecution'], "WEB-003 runtime");
+requireAll(sources.sourceComposite, [
+  'kairos-web003-source-bound-composite-runtime-20260717-1', 'createSourceBoundTextPlan',
+  'sourceBoundCopyComposite = true', 'canonicalHomepageInstallation: false',
+  'source_bound_visible_copy_delta_missing', 'executeWebsiteRetoolExceptions',
+  'published-main-template-text-settings-v1', 'published-main-liquid-visible-text-v1',
+  'published-main-homepage-instance-liquid-text-v1', 'canonicalHomepageInstalled: false'
+], "Source-bound copy and native theme composite");
 requireAll(sources.hub, ['/api/shopify/staging/plan/jobs', '/api/shopify/staging/execute/jobs', '/api/shopify/staging/visual-verification', '/api/shopify/homepage-release/publish'], "Command Hub");
 
 console.log(`KAIROS_FROZEN_STANDARD=${JSON.stringify({
@@ -218,11 +223,13 @@ console.log(`KAIROS_FROZEN_STANDARD=${JSON.stringify({
   homepageTextSourceOrder: ["template-settings", "embedded-template-markup", "homepage-specific-liquid", "homepage-instance-clone"],
   instancePlanner: manifest.dashboard.homepageInstanceLiquidFallback,
   instanceExecutor: manifest.dashboard.homepageInstanceLiquidExecutor,
+  sourceBoundComposite: manifest.dashboard.web003SourceBoundComposite,
   originalSharedSections: "immutable",
   templateReadback: "canonical-json-semantics",
   cloneReadback: "exact-bytes-and-sha256",
   selectedHomepageInstanceIsolation: true,
   visibleTextDeltaRequired: true,
+  canonicalNoOpCompositePreview: "prohibited",
   publishedFrameworkPreserved: true,
   stagingOnlyBeforeApproval: true,
   canonicalRebuildFallback: "prohibited",
