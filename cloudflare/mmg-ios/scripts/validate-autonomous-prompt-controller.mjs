@@ -8,6 +8,7 @@ const repoRoot = resolve(workerRoot, "../..");
 const read = path => readFileSync(path, "utf8");
 
 const wrangler = read(join(workerRoot, "wrangler.toml"));
+const activeEntry = read(join(workerRoot, "src/kairos-production-entry-immutable-v1.js"));
 const entry = read(join(workerRoot, "src/kairos-production-entry-autonomous-v1.js"));
 const controller = read(join(workerRoot, "src/kairos-autonomous-prompt-controller-v1.js"));
 const fullThemeBaseline = read(join(workerRoot, "src/kairos-approved-baseline-restore-v1.js"));
@@ -20,7 +21,8 @@ const homepageContinuation = read(join(workerRoot, "src/kairos-homepage-continua
 const index = read(join(repoRoot, "web/kairos-dashboard/index.html"));
 const hub = read(join(repoRoot, "web/kairos-dashboard/scripts/command-hub.js"));
 
-assert.match(wrangler, /^main\s*=\s*"src\/kairos-production-entry-autonomous-v1\.js"$/m);
+assert.match(wrangler, /^main\s*=\s*"src\/kairos-production-entry-immutable-v1\.js"$/m);
+assert.ok(activeEntry.includes('./kairos-production-entry-autonomous-v1.js'), "The immutable production entry must wrap the autonomous runtime.");
 
 assert.ok(entry.includes('./kairos-production-entry.js'), "The autonomous entry must wrap the Tuesday production entry.");
 assert.ok(entry.includes('./kairos-autonomous-prompt-controller-v1.js'));
