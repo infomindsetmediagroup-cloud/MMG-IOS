@@ -1,4 +1,4 @@
-deployment-trigger: 2026-07-16T22:05:00-07:00
-workflow: diagnose-production-validation.yml
-purpose: deploy production entry v45 with direct Command Center asset serving for all /center routes
-source-commit: 80991eb091da150e1d7ed20cdf3ab7a0649302f1
+deployment-trigger: 2026-07-17T09:30:00-07:00
+workflow: deploy-cloudflare-production.yml
+purpose: deploy and live-verify stable single-renderer Command Center
+source-commit: 259528a4e38b4f673c235ef26ff2a4f0442005ae
