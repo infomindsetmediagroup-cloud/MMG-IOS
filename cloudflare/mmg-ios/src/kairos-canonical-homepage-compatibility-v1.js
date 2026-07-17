@@ -13,6 +13,8 @@ export const KAIROS_CANONICAL_HOMEPAGE_COMPATIBILITY_BUILD = "kairos-canonical-h
 
 const BUILD_PATH = "/api/shopify/staging/canonical-homepage/build";
 const JS_FILE = "assets/mmg-canonical-homepage.js";
+const READ_BACK_ATTEMPTS = 10;
+const READ_BACK_DELAY_MS = 450;
 
 const COMPATIBLE_JS_SOURCE = String.raw`(() => {
   const root = document.querySelector('[data-mmg-canonical-homepage]');
@@ -74,17 +76,15 @@ export async function handleCanonicalHomepageBuildWithCompatibility(request, env
   let verifiedHash = expectedSourceHash;
   let verifiedBytes = new TextEncoder().encode(COMPATIBLE_JS_SOURCE).length;
   let normalizedByShopify = false;
+  let readBackAttempts = 0;
 
   try {
     await writeThemeFiles(env, themeGid, [{ filename: JS_FILE, content: COMPATIBLE_JS_SOURCE }]);
-    const readBack = await inspectStagingSource(null, request, env, KAIROS_CANONICAL_HOMEPAGE_COMPATIBILITY_BUILD, [JS_FILE]);
-    const actual = (readBack?.evidence?.files || []).find((file) => file.filename === JS_FILE);
-    if (!actual || normalizeThemeText(actual.content) !== normalizeThemeText(COMPATIBLE_JS_SOURCE)) {
-      throw httpError(502, "canonical_homepage_compatibility_readback_mismatch", "Shopify changed executable content in the theme-heading compatibility repair.");
-    }
-    verifiedHash = actual.sha256;
-    verifiedBytes = actual.bytes;
-    normalizedByShopify = actual.content !== COMPATIBLE_JS_SOURCE || actual.sha256 !== expectedSourceHash;
+    const actual = await waitForCompatibleScript(request, env);
+    readBackAttempts = actual.attempt;
+    verifiedHash = actual.file.sha256;
+    verifiedBytes = actual.file.bytes;
+    normalizedByShopify = actual.file.content !== COMPATIBLE_JS_SOURCE || actual.file.sha256 !== expectedSourceHash;
   } catch (error) {
     await writeThemeFiles(env, themeGid, [{ filename: JS_FILE, content: beforeFile.content }]);
     throw error;
@@ -101,8 +101,9 @@ export async function handleCanonicalHomepageBuildWithCompatibility(request, env
         changed: file.beforeSha256 !== verifiedHash,
         compatibilityIntermediateSha256: beforeFile.sha256,
         expectedSourceSha256: expectedSourceHash,
-        readBackVerification: "canonical-text",
+        readBackVerification: "canonical-text-with-retry",
         normalizedByShopify,
+        readBackAttempts,
       }
     : file);
   body.verification = {
@@ -111,6 +112,7 @@ export async function handleCanonicalHomepageBuildWithCompatibility(request, env
     compatibilityExactReadBack: !normalizedByShopify,
     compatibilityCanonicalTextReadBack: true,
     compatibilityNormalizedByShopify: normalizedByShopify,
+    compatibilityReadBackAttempts: readBackAttempts,
   };
 
   const headers = new Headers(response.headers);
@@ -119,10 +121,43 @@ export async function handleCanonicalHomepageBuildWithCompatibility(request, env
   return new Response(JSON.stringify(body), { status: response.status, statusText: response.statusText, headers });
 }
 
+async function waitForCompatibleScript(request, env) {
+  let lastFile = null;
+  let lastError = null;
+  for (let attempt = 1; attempt <= READ_BACK_ATTEMPTS; attempt += 1) {
+    try {
+      const readBack = await inspectStagingSource(null, request, env, KAIROS_CANONICAL_HOMEPAGE_COMPATIBILITY_BUILD, [JS_FILE]);
+      const actual = (readBack?.evidence?.files || []).find((file) => file.filename === JS_FILE);
+      if (actual) {
+        lastFile = actual;
+        if (normalizeThemeText(actual.content) === normalizeThemeText(COMPATIBLE_JS_SOURCE)) {
+          return { file: actual, attempt };
+        }
+      }
+    } catch (error) {
+      lastError = error;
+    }
+    if (attempt < READ_BACK_ATTEMPTS) await delay(READ_BACK_DELAY_MS);
+  }
+
+  const expectedHash = await hashText(normalizeThemeText(COMPATIBLE_JS_SOURCE));
+  const actualHash = lastFile ? await hashText(normalizeThemeText(lastFile.content)) : "unavailable";
+  const detail = lastError instanceof Error ? ` Last read error: ${lastError.message}` : "";
+  throw httpError(
+    502,
+    "canonical_homepage_compatibility_readback_mismatch",
+    `Shopify did not expose the current theme-heading compatibility script after ${READ_BACK_ATTEMPTS} read-back attempts. Expected canonical hash ${expectedHash}; observed ${actualHash}.${detail}`,
+  );
+}
+
 function normalizeThemeText(value) {
   return String(value || "")
     .replace(/^\uFEFF/, "")
     .replace(/\r\n?/g, "\n")
     .replace(/[\t ]+$/gm, "")
     .replace(/\n+$/, "");
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
