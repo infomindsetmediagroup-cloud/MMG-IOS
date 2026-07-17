@@ -1,0 +1,3 @@
+trigger=pull-request-visible-recovery-proof
+build=kairos-command-center-inline-20260717-1
+assertions=opens,styled,input,button
