@@ -8,11 +8,13 @@ const workerRoot = resolve(here, "..");
 const repoRoot = resolve(workerRoot, "../..");
 const sourceRoot = join(workerRoot, "src");
 const entryPath = join(sourceRoot, "kairos-production-entry.js");
+const activeEntryPath = join(sourceRoot, "kairos-production-entry-autonomous-v1.js");
+const controllerPath = join(sourceRoot, "kairos-autonomous-prompt-controller-v1.js");
 const guardedEntryPath = join(sourceRoot, "kairos-production-entry-v2.js");
 const wranglerPath = join(workerRoot, "wrangler.toml");
 
 const requiredFiles = [
-  entryPath,
+  entryPath, activeEntryPath, controllerPath,
   join(sourceRoot, "kairos-production-entry-v1.js"), guardedEntryPath,
   join(sourceRoot, "kairos-executive-briefing-v1.js"),
   join(sourceRoot, "kairos-approved-work-dispatcher-v1.js"),
@@ -40,7 +42,7 @@ assert.deepEqual(staleRuntimeFiles, [], `Obsolete production wrappers remain: ${
 assert.ok(!existsSync(join(sourceRoot, "kairos-deterministic-homepage-v2.js")), "Unused duplicate homepage planner remains in the production source tree.");
 
 const wrangler = readFileSync(wranglerPath, "utf8");
-assert.match(wrangler, /^main\s*=\s*"src\/kairos-production-entry\.js"/m, "Wrangler must point to the canonical production entry.");
+assert.match(wrangler, /^main\s*=\s*"src\/kairos-production-entry-autonomous-v1\.js"/m, "Wrangler must point to the autonomous wrapper over the frozen Tuesday entry.");
 assert.match(wrangler, /crons\s*=\s*\["0 15 \* \* \*", "0 2 \* \* \*"\]/, "Morning and evening schedules must remain configured.");
 
 const source = readFileSync(entryPath, "utf8");
@@ -49,8 +51,18 @@ for (const route of [
   "/api/shopify/website-intelligence/run", "/api/shopify/website-intelligence/latest",
   "/api/executive-briefing/build", "/api/executive-briefing/latest", "/api/executive-briefing/decide",
 ]) assert.ok(source.includes(route), `Canonical runtime is missing route: ${route}`);
-assert.ok(source.includes("visual_replacement_forbidden"), "Patch-only homepage replacement guard is missing.");
+assert.ok(source.includes("visual_replacement_forbidden"), "Frozen baseline patch-only guard is missing.");
 assert.ok(source.includes("scheduled(controller, env, ctx)"), "Scheduled website intelligence handler is missing.");
+
+const activeEntry = readFileSync(activeEntryPath, "utf8");
+assert.ok(activeEntry.includes('./kairos-production-entry.js'), "Autonomous runtime must wrap the frozen Tuesday entry.");
+assert.ok(activeEntry.includes('./kairos-autonomous-prompt-controller-v1.js'), "Autonomous prompt controller is not wired.");
+assert.ok(activeEntry.includes('tuesday-command-center-6f96b10d'), "Frozen visual baseline identity is missing.");
+
+const controller = readFileSync(controllerPath, "utf8");
+for (const marker of ["autonomous-text-only-v1", "browserSurfaceChanged: false", "styleMutationAuthorized: false", "liveThemeMutationAuthorized: false"]) {
+  assert.ok(controller.includes(marker), `Autonomous controller safeguard is missing: ${marker}`);
+}
 
 const guardedSource = readFileSync(guardedEntryPath, "utf8");
 for (const route of [
@@ -72,6 +84,8 @@ for (const asset of [
   "scripts/executive-briefing.js", "styles/executive-briefing.css",
   "scripts/social-production.js", "styles/social-production.css",
 ]) assert.ok(dashboardIndex.includes(asset), `Command Center asset missing: ${asset}`);
+assert.ok(dashboardIndex.includes('content="kairos-command-hub-recovery-20260714-1"'), "Tuesday loader marker changed.");
+assert.ok(dashboardIndex.includes('./scripts/command-hub.js?v=recovery-20260714-1'), "Tuesday Command Hub loader changed.");
 
 const commandHub = readFileSync(join(repoRoot, "web/kairos-dashboard/scripts/command-hub.js"), "utf8");
 for (const center of ["knowledge", "content", "business", "customers", "operations"]) assert.ok(commandHub.includes(`id: "${center}"`), `Command Center parent is missing: ${center}`);
@@ -108,19 +122,19 @@ const websiteProduction = readFileSync(join(repoRoot, "web/kairos-dashboard/web-
 assert.ok(!websiteProduction.includes("PRESERVE_PROMPT"), "Website Production still contains a prefilled homepage prompt.");
 assert.ok(!websiteProduction.includes("placeholder:j.placeholder"), "Website Production still assigns predetermined prompt placeholders.");
 
-const runtimeModule = await import(`${pathToFileURL(entryPath).href}?validation=${Date.now()}`);
-assert.equal(typeof runtimeModule.default?.fetch, "function", "Canonical runtime must export fetch().");
-assert.equal(typeof runtimeModule.default?.scheduled, "function", "Canonical runtime must export scheduled().");
-assert.equal(typeof runtimeModule.KairosProject, "function", "Canonical runtime must export KairosProject.");
+const runtimeModule = await import(`${pathToFileURL(activeEntryPath).href}?validation=${Date.now()}`);
+assert.equal(typeof runtimeModule.default?.fetch, "function", "Active autonomous runtime must export fetch().");
+assert.equal(typeof runtimeModule.default?.scheduled, "function", "Active autonomous runtime must export scheduled().");
+assert.equal(typeof runtimeModule.KairosProject, "function", "Active autonomous runtime must export KairosProject.");
 
 console.log(JSON.stringify({
   status: "ready",
-  baseline: "kairos-production-baseline-20260713-5",
+  baseline: "tuesday-command-center-6f96b10d",
+  browserSurfaceChanged: false,
+  autonomousPromptController: true,
+  textOnlyShopifyExecution: true,
   integratedHeaderStatusStrip: true,
   integratedHamburgerNavigation: true,
-  legacyMetricCardsRemoved: true,
-  dynamicMorningEveningBriefing: true,
-  fixedStorePerformanceGrid: true,
   commandCenterParents: 5,
   childCardsPerParent: 5,
   totalEntryPoints: 25,
