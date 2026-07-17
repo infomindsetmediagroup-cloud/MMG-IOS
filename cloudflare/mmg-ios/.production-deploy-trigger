@@ -1,4 +1,4 @@
-deployment-trigger: 2026-07-16T21:58:00-07:00
+deployment-trigger: 2026-07-16T22:05:00-07:00
 workflow: diagnose-production-validation.yml
-purpose: deploy production entry v45 with deterministic homepage copy delta and bounded native header/footer staging changes
-source-commit: 95f78dc629b61958958df72f332d20a17e34901e
+purpose: deploy production entry v45 with direct Command Center asset serving for all /center routes
+source-commit: 80991eb091da150e1d7ed20cdf3ab7a0649302f1
