@@ -1,6 +1,12 @@
 import baseRuntime, { KairosProject } from "./kairos-production-entry-v2.js";
 import { handleChildActionRequest } from "./kairos-child-action-runtime-v1.js";
 import { handleAutonomyRequest, runAutonomyCycle } from "./kairos-autonomy-runtime-v1.js";
+import {
+  handleOperationalRequest,
+  mirrorOperationalResponse,
+  KAIROS_OPERATIONAL_RUNTIME_BUILD,
+} from "./kairos-operational-runtime-v1.js";
+import { inferenceRuntime } from "./kairos-intelligence-v1.js";
 import { auditHomepageLinks } from "./kairos-link-lifecycle-engine-v1.js";
 import {
   executeHomepageLinkRepair,
@@ -28,7 +34,7 @@ import {
 } from "./kairos-executive-briefing-v1.js";
 import { handleHomepageReleaseRequest } from "./shopify-homepage-release-v1.js";
 
-const BUILD = "kairos-production-baseline-20260717-6";
+const BUILD = "kairos-production-baseline-20260717-7";
 const STAGING_PLAN_PATH = "/api/shopify/staging/plan/jobs";
 const CHILD_EXECUTE_PATH = "/api/hub/execute";
 const AUTONOMY_PREFIX = "/api/autonomy/";
@@ -81,7 +87,32 @@ export default {
       }
     }
 
-    return handleStableRequest(request, env, ctx);
+    try {
+      const operational = await handleOperationalRequest(
+        request,
+        env,
+        ctx,
+        delegatedRequest => handleStableRequest(delegatedRequest, env, ctx),
+      );
+      if (operational) return stamp(operational, {
+        "X-Kairos-Operational-Runtime": KAIROS_OPERATIONAL_RUNTIME_BUILD,
+        "X-Kairos-Operational-Persistence": env?.KAIROS_PROJECTS ? "durable-object" : "unavailable",
+      });
+    } catch (error) {
+      return failure("operational_runtime_failed", error, 502, {
+        browserShellAvailable: true,
+        failureContainedToOperationalRequest: true,
+        durableStatePreserved: true,
+        liveThemeChanged: false,
+      });
+    }
+
+    let response = await handleStableRequest(request, env, ctx);
+    if (request.method === "GET" && ["/api/health", "/api/capabilities"].includes(url.pathname)) {
+      response = await addOperationalHealth(response, env);
+    }
+    try { await mirrorOperationalResponse(request, response, env); } catch {}
+    return stamp(response);
   },
 
   async scheduled(controller, env, ctx) {
@@ -205,6 +236,42 @@ async function handleStableRequest(request, env, ctx) {
   return stamp(await baseRuntime.fetch(request, env, ctx));
 }
 
+async function addOperationalHealth(response, env) {
+  let body;
+  try { body = await response.clone().json(); }
+  catch { return response; }
+  const enhancedInference = inferenceRuntime(env);
+  body.build = BUILD;
+  body.operationalRuntime = {
+    status: env?.KAIROS_PROJECTS ? "operational" : "needs-configuration",
+    build: KAIROS_OPERATIONAL_RUNTIME_BUILD,
+    orchestration: "durable-domain-routed",
+    persistence: env?.KAIROS_PROJECTS ? "durable-object" : "unavailable",
+    executionReceiptMirroring: "operational",
+    childActionContracts: "operational",
+    enhancedInference: enhancedInference.configured ? enhancedInference.mode : "needs-configuration",
+    deterministicNativeFallback: "operational",
+  };
+  body.capabilities = {
+    ...(body.capabilities || {}),
+    durableOperationalLedger: env?.KAIROS_PROJECTS ? "operational" : "needs-configuration",
+    durableWorkItems: env?.KAIROS_PROJECTS ? "operational" : "needs-configuration",
+    durableWorkflowRecords: env?.KAIROS_PROJECTS ? "operational" : "needs-configuration",
+    executionReceiptMirroring: "operational",
+    systemRegistry: "operational",
+    childCardActionContracts: "operational",
+  };
+  const headers = new Headers(response.headers);
+  headers.set("Content-Type", "application/json; charset=utf-8");
+  headers.set("Cache-Control", "no-store");
+  headers.set("X-Kairos-Operational-Runtime", KAIROS_OPERATIONAL_RUNTIME_BUILD);
+  return new Response(JSON.stringify(body), {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 async function handleLinkAudit(env) {
   try {
     const origin = String(env.MMG_STOREFRONT_ORIGIN || "").trim();
@@ -294,7 +361,7 @@ async function safeJSON(response) {
 function stamp(response, additionalHeaders = {}) {
   const headers = new Headers(response.headers);
   headers.set("X-MMG-Runtime", BUILD);
-  headers.set("X-Kairos-Production-Baseline", "reconciled-v6");
+  headers.set("X-Kairos-Production-Baseline", "reconciled-v7");
   headers.set("X-Kairos-Website-Workflow", "staging-preview-approval-release");
   for (const [name, value] of Object.entries(additionalHeaders)) headers.set(name, value);
   if (headers.get("Content-Type")?.includes("text/html")) {
@@ -314,7 +381,7 @@ function json(value, status = 200, additionalHeaders = {}) {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store",
       "X-MMG-Runtime": BUILD,
-      "X-Kairos-Production-Baseline": "reconciled-v6",
+      "X-Kairos-Production-Baseline": "reconciled-v7",
       "X-Content-Type-Options": "nosniff",
       ...additionalHeaders,
     },
