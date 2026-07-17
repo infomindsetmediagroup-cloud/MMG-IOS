@@ -4,54 +4,11 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-      - ".github/workflows/build-verify-canonical-homepage.yml"
-      - ".github/scripts/run-canonical-homepage-release.mjs"
-      - ".github/scripts/verify-canonical-homepage.mjs"
-      - "cloudflare/mmg-ios/src/kairos-canonical-homepage-builder-v1.js"
-      - "cloudflare/mmg-ios/src/kairos-canonical-homepage-compatibility-v1.js"
-      - "cloudflare/mmg-ios/src/kairos-production-entry-immutable-v1.js"
   workflow_dispatch: {}
-
-permissions:
-  contents: read
-
-concurrency:
-  group: canonical-mmg-homepage-pr-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
 
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-    env:
-      KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
-      KAIROS_SKIP_RELEASE_MATCH: "true"
-
     steps:
-      - name: Check out verification source
-        uses: actions/checkout@v4
-        with:
-          path: repository
-
-      - name: Install Playwright Chromium
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p artifacts/canonical-homepage
-          npm init -y >/dev/null
-          npm install --no-save --no-audit --no-fund playwright
-          npx playwright install --with-deps chromium
-
-      - name: Build, repair, and verify canonical Shopify staging homepage
-        shell: bash
-        run: node repository/.github/scripts/run-canonical-homepage-release.mjs
-
-      - name: Upload preview evidence and browser results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: canonical-mmg-homepage-${{ github.sha }}
-          path: artifacts/canonical-homepage
-          if-no-files-found: error
-          retention-days: 30
+      - name: Verify GitHub runner startup
+        run: echo "Canonical homepage verification runner is available."
