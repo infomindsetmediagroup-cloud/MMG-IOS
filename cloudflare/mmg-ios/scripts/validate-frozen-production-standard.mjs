@@ -12,8 +12,9 @@ const requireAll = (source, markers, label) => markers.forEach(marker => assert.
 const paths = {
   manifest: join(root, "production-baseline.json"),
   wrangler: join(root, "wrangler.toml"),
-  entry: join(root, "src/kairos-production-entry-v45.js"),
-  priorEntry: join(root, "src/kairos-production-entry-v44.js"),
+  entry: join(root, "src/kairos-production-entry-v46.js"),
+  deterministicEntry: join(root, "src/kairos-production-entry-v45.js"),
+  sourceBoundEntry: join(root, "src/kairos-production-entry-v44.js"),
   deterministicFirst: join(root, "src/kairos-web003-deterministic-first-runtime-v1.js"),
   composite: join(root, "src/kairos-web003-source-bound-composite-runtime-v1.js"),
   deterministic: join(root, "src/kairos-homepage-deterministic-copy-planner-v1.js"),
@@ -31,9 +32,10 @@ const manifest = JSON.parse(read(paths.manifest));
 const sources = Object.fromEntries(Object.entries(paths).filter(([name]) => name !== "manifest").map(([name, path]) => [name, read(path)]));
 
 assert.equal(manifest.status, "frozen");
-assert.equal(manifest.baseline, "kairos-production-standard-20260717-45");
-assert.equal(manifest.worker.entry, "src/kairos-production-entry-v45.js");
-assert.equal(manifest.worker.build, "kairos-production-entry-20260717-103");
+assert.equal(manifest.baseline, "kairos-production-standard-20260717-46");
+assert.equal(manifest.worker.entry, "src/kairos-production-entry-v46.js");
+assert.equal(manifest.worker.build, "kairos-production-entry-20260717-104");
+assert.equal(manifest.dashboard.selfContainedCommandCenter, "kairos-command-center-inline-20260717-1");
 assert.equal(manifest.dashboard.web003SourceBoundComposite, "kairos-web003-source-bound-composite-runtime-20260717-3");
 assert.equal(manifest.dashboard.web003DeterministicFirst, "kairos-web003-deterministic-first-runtime-20260717-3");
 assert.equal(manifest.dashboard.homepageDeterministicCopyPlanner, "kairos-homepage-deterministic-copy-planner-20260717-1");
@@ -60,27 +62,42 @@ for (const flag of [
   "explicitLiveApplicationRequired",
   "finalLiveApprovalRequired",
   "liveReadbackVerificationRequired",
-  "rollbackReceiptRequired"
+  "rollbackReceiptRequired",
+  "rootAppShellDirectAssetsRequired",
+  "rootAppNoStoreRequired"
 ]) assert.equal(manifest.approvedExpansion[flag], true, `Required production doctrine is disabled: ${flag}`);
 assert.equal(manifest.approvedExpansion.automaticExternalExecution, false);
 assert.equal(manifest.approvedExpansion.modelReasoningPersisted, false);
+assert.equal(manifest.approvedExpansion.activeEdge, "src/kairos-production-entry-v46.js");
+assert.equal(manifest.approvedExpansion.preservesPriorEdge, "src/kairos-production-entry-v45.js");
+assert.equal(manifest.approvedExpansion.preservesSourceBoundEdge, "src/kairos-production-entry-v44.js");
 
 const activeEntries = sources.wrangler.split(/\r?\n/).filter(line => /^main\s*=/.test(line.trim()));
-assert.deepEqual(activeEntries, ['main = "src/kairos-production-entry-v45.js"']);
+assert.deepEqual(activeEntries, ['main = "src/kairos-production-entry-v46.js"']);
 requireAll(sources.wrangler, [
   '[assets]', 'run_worker_first = true', '[ai]', 'binding = "AI"',
   'SHOPIFY_STORE_DOMAIN = "07kd8e-qw.myshopify.com"',
   'MMG_STOREFRONT_ORIGIN = "https://themindsetmediagroup.com"'
 ], "Wrangler");
 requireAll(sources.entry, [
+  './kairos-production-entry-v45.js',
+  'kairos-production-entry-20260717-104',
+  'ROOT_SHELL_PATHS',
+  'new Set(["/", "/index.html"])',
+  'serveRootShell',
+  'direct-assets-root-shell',
+  'no-store, no-cache, must-revalidate',
+  'X-Kairos-App-Entry'
+], "Production entry v46");
+requireAll(sources.deterministicEntry, [
   './kairos-production-entry-v44.js', './kairos-web003-deterministic-first-runtime-v1.js',
   'kairos-production-entry-20260717-103', 'handleDeterministicFirstWeb003Request',
   'modelFormattedCopyPlanDependency: "retired-for-combined-retool"',
   'X-Kairos-Deterministic-WEB-003',
   '/api/website/diagnostics/deterministic-plan',
   'liquidTextPatches'
-], "Production entry v45");
-requireAll(sources.priorEntry, [
+], "Preserved production entry v45");
+requireAll(sources.sourceBoundEntry, [
   './kairos-production-entry-v43.js', './kairos-web003-source-bound-composite-runtime-v1.js',
   'kairos-production-entry-20260717-102', 'handleSourceBoundWeb003Request'
 ], "Preserved production entry v44");
@@ -191,7 +208,12 @@ requireAll(sources.nativeExceptions, [
   'targetThemeID',
   'sourceSha256'
 ], "Native theme exception executor");
-requireAll(sources.dashboard, ['id="kairos-hub"', '/scripts/command-hub.js', '/scripts/website-intent-router.js'], "Dashboard");
+requireAll(sources.dashboard, [
+  'id="kairos-hub"',
+  'kairos-command-center-inline-20260717-1',
+  '/scripts/command-hub.js',
+  '/scripts/website-intent-router.js'
+], "Dashboard");
 requireAll(sources.hub, [
   '/api/shopify/staging/plan/jobs',
   '/api/shopify/staging/execute/jobs',
@@ -204,6 +226,7 @@ console.log(`KAIROS_FROZEN_STANDARD=${JSON.stringify({
   baseline: manifest.baseline,
   workerEntry: manifest.worker.entry,
   workerBuild: manifest.worker.build,
+  rootShell: manifest.dashboard.selfContainedCommandCenter,
   deterministicFirst: manifest.dashboard.web003DeterministicFirst,
   deterministicTextSources: ["plain-template-settings", "embedded-template-markup", "homepage-specific-liquid"],
   deterministicPlainCopyPlanner: manifest.dashboard.homepageDeterministicCopyPlanner,
@@ -212,6 +235,7 @@ console.log(`KAIROS_FROZEN_STANDARD=${JSON.stringify({
   modelPlanningRequiredForCombinedRetool: false,
   canonicalNoOpPreview: "prohibited",
   visibleCopyDeltaRequired: true,
+  rootAppDirectAssetShell: true,
   stagingOnlyBeforeApproval: true,
   liveApprovalRequired: true
 })}`);
