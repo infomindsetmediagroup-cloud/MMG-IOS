@@ -4,6 +4,7 @@ import { handleProductPublication } from "./kairos-product-publication-v1.js";
 import { handleProductMedia } from "./kairos-product-media-v1.js";
 import { handleProductLaunchControl } from "./kairos-product-launch-control-v1.js";
 import { handleProductionRegistry, handleRegistryObjectRequest } from "./kairos-production-registry-v1.js";
+import { handleReadinessRegistry } from "./kairos-readiness-registry-v1.js";
 import { handleManuscriptSourceObjectRequest } from "./kairos-manuscript-source-v1.js";
 import { handleManuscriptProjectSetupObjectRequest } from "./kairos-manuscript-project-setup-v1.js";
 import { handleManuscriptEditorialObjectRequest } from "./kairos-manuscript-editorial-workbench-v1.js";
@@ -72,6 +73,8 @@ export default {
       });
     }
 
+    const readiness = await handleReadinessRegistry(request);
+    if (readiness) return readiness;
     const registry = await handleProductionRegistry(request, env);
     if (registry) return registry;
     const productLaunch = await handleProductLaunchControl(request, env);
