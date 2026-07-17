@@ -7,6 +7,7 @@ on:
     paths:
       - "cloudflare/mmg-ios/**"
       - "web/kairos-dashboard/**"
+      - ".github/scripts/verify-canonical-homepage.mjs"
       - ".github/workflows/deploy-cloudflare-production.yml"
   workflow_dispatch: {}
 
@@ -21,11 +22,13 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 35
     environment: production
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CLOUDFLARE_TOKEN || vars.CLOUDFLARE_API_TOKEN || vars.CLOUDFLARE_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+      KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+      STATUS_CONTEXT: kairos-canonical-homepage-verification
 
     steps:
       - name: Download repository archive
@@ -34,7 +37,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          mkdir -p repository
+          mkdir -p repository artifacts/canonical-homepage
           curl --fail --show-error --silent --location \
             --connect-timeout 15 \
             --max-time 60 \
@@ -127,11 +130,17 @@ jobs:
 
       - name: Verify deployed production baseline
         shell: bash
-        env:
-          KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 18); do
+          expected_entry="$(node -e '
+            const fs = require("node:fs");
+            const source = fs.readFileSync("repository/cloudflare/mmg-ios/src/kairos-production-entry-immutable-v1.js", "utf8");
+            const match = source.match(/const BUILD = "([^"]+)"/);
+            if (!match) process.exit(1);
+            process.stdout.write(match[1]);
+          ')"
+
+          for attempt in $(seq 1 24); do
             headers_file="$(mktemp)"
             if health_json="$(curl --fail --show-error --silent --location --max-time 30 -D "${headers_file}" "${KAIROS_PRODUCTION_URL}/api/health?deployment=${GITHUB_SHA}")" \
               && website_page="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/web-003.html?deployment=${GITHUB_SHA}")" \
@@ -140,7 +149,8 @@ jobs:
               && creation_script="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/scripts/creation-engine.js?deployment=${GITHUB_SHA}")" \
               && briefing_json="$(curl --fail --show-error --silent --location --max-time 30 -X POST "${KAIROS_PRODUCTION_URL}/api/executive-briefing/build?deployment=${GITHUB_SHA}")"; then
               runtime_header="$(awk 'BEGIN{IGNORECASE=1} /^x-mmg-runtime:/ {gsub(/\r/, ""); sub(/^[^:]+:[[:space:]]*/, ""); print; exit}' "${headers_file}")"
-              if HEALTH_JSON="${health_json}" WEBSITE_PAGE="${website_page}" COMMAND_CENTER="${command_center}" BRIEFING_UI="${briefing_ui}" CREATION_SCRIPT="${creation_script}" BRIEFING_JSON="${briefing_json}" RUNTIME_HEADER="${runtime_header}" node <<'NODE'
+              entry_header="$(awk 'BEGIN{IGNORECASE=1} /^x-mmg-production-entry:/ {gsub(/\r/, ""); sub(/^[^:]+:[[:space:]]*/, ""); print; exit}' "${headers_file}")"
+              if HEALTH_JSON="${health_json}" WEBSITE_PAGE="${website_page}" COMMAND_CENTER="${command_center}" BRIEFING_UI="${briefing_ui}" CREATION_SCRIPT="${creation_script}" BRIEFING_JSON="${briefing_json}" RUNTIME_HEADER="${runtime_header}" ENTRY_HEADER="${entry_header}" EXPECTED_ENTRY="${expected_entry}" node <<'NODE'
           const health = JSON.parse(process.env.HEALTH_JSON || "{}");
           const page = process.env.WEBSITE_PAGE || "";
           const commandCenter = process.env.COMMAND_CENTER || "";
@@ -148,8 +158,11 @@ jobs:
           const script = process.env.CREATION_SCRIPT || "";
           const briefing = JSON.parse(process.env.BRIEFING_JSON || "{}");
           const runtime = process.env.RUNTIME_HEADER || "";
+          const entry = process.env.ENTRY_HEADER || "";
+          const expectedEntry = process.env.EXPECTED_ENTRY || "";
           const checks = {
             canonicalRuntime: runtime === "kairos-production-baseline-20260713-2",
+            matchingProductionEntry: entry === expectedEntry,
             healthy: ["ready", "ok", "operational"].includes(health.status),
             noExternalOpenAI: health.openaiAPIUsed === false,
             noExternalInference: health.nativeIntelligence?.externalInferenceAPI === false,
@@ -166,6 +179,8 @@ jobs:
           };
           console.log(JSON.stringify({
             runtime,
+            entry,
+            expectedEntry,
             healthStatus: health.status,
             healthBuild: health.build,
             launchMode: health.launchMode,
@@ -186,11 +201,161 @@ jobs:
               fi
             fi
             rm -f "${headers_file}"
-            echo "Kairos production has not exposed the reconciled baseline yet (attempt ${attempt}/18)."
+            echo "Kairos production has not exposed the reconciled release yet (attempt ${attempt}/24)."
             sleep 5
           done
           echo "::error::Kairos production did not pass the reconciled baseline contract."
           exit 1
+
+      - name: Publish pending canonical homepage status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          payload="$(node -e 'process.stdout.write(JSON.stringify({state:"pending",description:"Installing and browser-testing canonical MMG homepage",context:process.env.STATUS_CONTEXT,target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          curl --fail --show-error --silent -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "${payload}"
+
+      - name: Install Playwright Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm init -y >/dev/null
+          npm install --no-save --no-audit --no-fund playwright
+          npx playwright install --with-deps chromium
+
+      - name: Install canonical homepage in Kairos Staging
+        id: homepage_build
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload="$(node -e 'process.stdout.write(JSON.stringify({confirmation:"BUILD_CANONICAL_MMG_HOMEPAGE_STAGING",mode:"build",sourceCommit:process.env.GITHUB_SHA}))')"
+          curl --fail-with-body --show-error --silent --max-time 120 \
+            -X POST \
+            -H "Content-Type: application/json" \
+            "${KAIROS_PRODUCTION_URL}/api/shopify/staging/canonical-homepage/build" \
+            --data "${payload}" \
+            --output artifacts/canonical-homepage/build-result.json
+          PREVIEW_URL="$(node -e 'const body=require("./artifacts/canonical-homepage/build-result.json"); if(body.status!=="completed"||!body.preview?.url||body.production?.publishedThemeChanged!==false){console.error(JSON.stringify(body));process.exit(1)} process.stdout.write(body.preview.url)')"
+          echo "preview_url=${PREVIEW_URL}" >> "${GITHUB_OUTPUT}"
+          echo "MMG_PREVIEW_URL=${PREVIEW_URL}" >> "${GITHUB_ENV}"
+
+      - name: Run first Playwright verification pass
+        id: homepage_first_pass
+        continue-on-error: true
+        shell: bash
+        env:
+          MMG_VERIFICATION_OUTPUT: artifacts/canonical-homepage/pass-1
+          MMG_VERIFICATION_ATTEMPT: "1"
+        run: node repository/.github/scripts/verify-canonical-homepage.mjs
+
+      - name: Repair canonical staging bundle after failed first pass
+        if: steps.homepage_first_pass.outcome == 'failure'
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload="$(node -e 'process.stdout.write(JSON.stringify({confirmation:"BUILD_CANONICAL_MMG_HOMEPAGE_STAGING",mode:"repair",sourceCommit:process.env.GITHUB_SHA,reason:"Playwright verification failed; restore the exact canonical bundle and verify Shopify read-back again."}))')"
+          curl --fail-with-body --show-error --silent --max-time 120 \
+            -X POST \
+            -H "Content-Type: application/json" \
+            "${KAIROS_PRODUCTION_URL}/api/shopify/staging/canonical-homepage/build" \
+            --data "${payload}" \
+            --output artifacts/canonical-homepage/repair-result.json
+          node -e 'const body=require("./artifacts/canonical-homepage/repair-result.json"); if(body.status!=="completed"||body.mode!=="repair"||body.verification?.exactReadBack!==true||body.production?.publishedThemeChanged!==false){console.error(JSON.stringify(body));process.exit(1)}'
+
+      - name: Run final Playwright verification pass
+        id: homepage_final_pass
+        shell: bash
+        env:
+          MMG_VERIFICATION_OUTPUT: artifacts/canonical-homepage/final
+          MMG_VERIFICATION_ATTEMPT: "2"
+        run: node repository/.github/scripts/verify-canonical-homepage.mjs
+
+      - name: Create canonical homepage review receipt
+        if: always()
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const buildPath = 'artifacts/canonical-homepage/build-result.json';
+          const repairPath = 'artifacts/canonical-homepage/repair-result.json';
+          const firstPath = 'artifacts/canonical-homepage/pass-1/verification-report.json';
+          const finalPath = 'artifacts/canonical-homepage/final/verification-report.json';
+          const read = (path, fallback) => fs.existsSync(path) ? JSON.parse(fs.readFileSync(path, 'utf8')) : fallback;
+          const build = read(buildPath, { status: 'not-produced', preview: null, files: [], production: null });
+          const first = read(firstPath, { passed: false, failures: ['First verification report was not produced.'] });
+          const final = read(finalPath, { passed: false, failures: ['Final verification report was not produced.'] });
+          const repair = read(repairPath, null);
+          const receipt = {
+            sourceCommit: process.env.GITHUB_SHA,
+            buildStatus: build.status,
+            preview: build.preview,
+            files: build.files,
+            production: build.production,
+            firstPass: first,
+            repairPerformed: Boolean(repair),
+            repair,
+            verification: final,
+            generatedAt: new Date().toISOString(),
+          };
+          fs.mkdirSync('artifacts/canonical-homepage', { recursive: true });
+          fs.writeFileSync('artifacts/canonical-homepage/review-receipt.json', JSON.stringify(receipt, null, 2));
+          const lines = [
+            '# Canonical MMG Homepage Review Receipt',
+            '',
+            `- Source commit: ${receipt.sourceCommit}`,
+            `- Preview: ${receipt.preview?.url || 'unavailable'}`,
+            `- First browser pass: ${first.passed ? 'PASS' : 'FAIL'}`,
+            `- Repair performed: ${receipt.repairPerformed ? 'YES' : 'NO'}`,
+            `- Final browser verification: ${final.passed ? 'PASS' : 'FAIL'}`,
+            `- Published MAIN changed: ${receipt.production?.publishedThemeChanged === true ? 'YES' : 'NO'}`,
+            '',
+            '## Shopify source changes',
+            '',
+            ...(receipt.files || []).map((file) => `- ${file.filename}: ${file.beforeSha256 || 'new'} → ${file.afterSha256} (${file.afterBytes} bytes)`),
+          ];
+          fs.writeFileSync('artifacts/canonical-homepage/review-receipt.md', `${lines.join('\n')}\n`);
+          NODE
+
+      - name: Upload canonical homepage evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: canonical-mmg-homepage-${{ github.sha }}
+          path: artifacts/canonical-homepage
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish canonical homepage verification status
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FINAL_OUTCOME: ${{ steps.homepage_final_pass.outcome }}
+        run: |
+          set -euo pipefail
+          if [ "${FINAL_OUTCOME}" = "success" ]; then
+            state="success"
+            description="Canonical MMG homepage preview passed Playwright verification"
+          else
+            state="failure"
+            description="Canonical MMG homepage preview failed browser verification"
+          fi
+          target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          payload="$(STATE="${state}" DESCRIPTION="${description}" TARGET_URL="${target_url}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:process.env.STATUS_CONTEXT,target_url:process.env.TARGET_URL}))')"
+          curl --fail --show-error --silent -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "${payload}"
 
       - name: Publish Kairos deployment receipt
         if: always()
@@ -202,10 +367,10 @@ jobs:
           set -euo pipefail
           if [ "${DEPLOY_JOB_STATUS}" = "success" ]; then
             state="success"
-            description="Kairos reconciled production baseline verified"
+            description="Kairos release and canonical homepage verification passed"
           else
             state="failure"
-            description="Kairos production baseline failed verification"
+            description="Kairos release or canonical homepage verification failed"
           fi
           target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           payload="$(STATE="${state}" DESCRIPTION="${description}" TARGET_URL="${target_url}" node -e '
