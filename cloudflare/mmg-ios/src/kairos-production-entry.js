@@ -1,6 +1,6 @@
-import enhancedRuntime, { KairosProject } from "./kairos-production-entry-v45.js";
+import enhancedRuntime, { KairosProject } from "./kairos-production-entry-v38.js";
 
-const BUILD = "kairos-tuesday-shell-enhanced-runtime-20260717-1";
+const BUILD = "kairos-tuesday-shell-enhanced-v38-runtime-20260717-1";
 const TUESDAY_SHELL_BUILD = "kairos-command-hub-recovery-20260714-1";
 const API_PREFIX = "/api/";
 const CENTER_PREFIX = "/center/";
@@ -18,11 +18,11 @@ export default {
       if (assetResponse) return stamp(assetResponse, "tuesday-browser-shell");
     }
 
-    // All operational APIs use the complete enhanced runtime chain. A runtime
-    // failure is contained to this request and can never prevent / from loading.
+    // Operational APIs use the enhanced v38 runtime: autonomy, native task
+    // execution, direct child-card execution, and composite website production.
     try {
       const response = await enhancedRuntime.fetch(request, env, ctx);
-      return stamp(response, "enhanced-api-runtime");
+      return stamp(response, "enhanced-v38-api-runtime");
     } catch (error) {
       return apiFailure(error);
     }
