@@ -13,6 +13,8 @@ const controller = read(join(workerRoot, "src/kairos-autonomous-prompt-controlle
 const fullThemeBaseline = read(join(workerRoot, "src/kairos-approved-baseline-restore-v1.js"));
 const directPlan = read(join(workerRoot, "src/kairos-direct-homepage-plan-v1.js"));
 const directExecution = read(join(workerRoot, "src/kairos-direct-homepage-execution-v1.js"));
+const zeroNeuronRouter = read(join(workerRoot, "src/kairos-zero-neuron-child-router-v1.js"));
+const doctrineRegistry = read(join(workerRoot, "src/kairos-internal-doctrine-registry-v1.js"));
 const index = read(join(repoRoot, "web/kairos-dashboard/index.html"));
 const hub = read(join(repoRoot, "web/kairos-dashboard/scripts/command-hub.js"));
 
@@ -23,15 +25,61 @@ assert.ok(entry.includes('./kairos-autonomous-prompt-controller-v1.js'));
 assert.ok(entry.includes('./kairos-approved-baseline-restore-v1.js'));
 assert.ok(entry.includes('./kairos-direct-homepage-plan-v1.js'));
 assert.ok(entry.includes('./kairos-direct-homepage-execution-v1.js'));
-assert.ok(entry.includes('restoreApprovedHomepageBaseline(env)'));
+assert.ok(entry.includes('./kairos-zero-neuron-child-router-v1.js'));
+assert.ok(entry.includes('./kairos-internal-doctrine-registry-v1.js'));
+assert.ok(entry.includes('restoreApprovedHomepageBaseline(internalEnv)'));
+assert.ok(entry.includes('handleZeroNeuronChildRequest'));
 assert.ok(entry.includes('handleDirectHomepageExecution'));
 assert.ok(entry.includes('handleDirectHomepagePlan'));
+assert.ok(entry.indexOf('handleZeroNeuronChildRequest') < entry.indexOf('handleDirectHomepageExecution'), "Zero-neuron internal routing must run before generic request execution.");
 assert.ok(entry.indexOf('handleDirectHomepageExecution') < entry.indexOf('handleDirectHomepagePlan'), "Approved direct execution must run before all generic planners and executors.");
 assert.ok(entry.indexOf('handleDirectHomepagePlan') < entry.indexOf('handleNeuronFreeHomepagePlan'), "Direct plan must run before legacy binders.");
+assert.ok(entry.includes('workersAIBlockedEnv'));
+assert.ok(entry.includes('if (property === "AI") return undefined'));
+assert.ok(entry.includes('if (property === "AI") return false'));
+assert.ok(entry.includes('workersAIAvailableToRequests: false'));
+assert.ok(entry.includes('workersAIUsed: false'));
+assert.ok(entry.includes('neuronsConsumed: 0'));
+assert.ok(entry.includes('childRetrievalMode: "deterministic-internal"'));
+assert.ok(entry.includes('generativeInferenceMode: "kairos-private-runtime-only"'));
 assert.ok(entry.includes('labeledHomepagePromptsRequireWorkersAI: false'));
 assert.ok(entry.includes('labeledHomepagePromptsUseSecondBindingPass: false'));
 assert.ok(entry.includes('approvedDirectPackagesUseApprovalTimeRebinding: false'));
 assert.ok(entry.includes('tuesday-command-center-6f96b10d'));
+
+for (const marker of [
+  'kairos-zero-neuron-child-router-20260717-1',
+  '/api/internal-intelligence/status',
+  'workersAIEnabledForChildRequests: false',
+  'workersAIUsed: false',
+  'neuronsConsumed: 0',
+  'deterministic-internal',
+  'private Kairos runtime only for genuinely generative work',
+  'doctrine-vault',
+  'knowledge-library',
+  'system-registry',
+  'release-control',
+  'executive-briefing',
+  'findInternalDoctrines',
+  'domainResultReturnedDirectly: true',
+  'X-Kairos-Workers-AI-Used',
+  'X-Kairos-Neurons-Consumed',
+]) assert.ok(zeroNeuronRouter.includes(marker), `Missing zero-neuron child router contract: ${marker}`);
+
+assert.ok(!zeroNeuronRouter.includes('env.AI.run'), "Zero-neuron child router must never call Workers AI.");
+assert.ok(!zeroNeuronRouter.includes('runKairosIntelligence'), "Retrieval/control child actions must not call private inference either.");
+
+for (const marker of [
+  'kairos-internal-doctrine-registry-20260717-1',
+  'MMG Website Experience Objective',
+  'MMG Homepage Journey Map',
+  'MMG/Kairos Experience-First Doctrine',
+  'MMG Door Opener Doctrine',
+  'Never change a URL, link destination, product reference, collection reference, navigation item, or customer pathway unless that exact destination change is included in an approved link plan.',
+  'Copy curation does not authorize changes to layout, styling, typography, colors, assets, spacing, sections, blocks, templates, Liquid, CSS, JavaScript, or responsive behavior.',
+  'findInternalDoctrines',
+  'resolveInternalDoctrine',
+]) assert.ok(doctrineRegistry.includes(marker), `Missing internal doctrine registry contract: ${marker}`);
 
 for (const marker of [
   'kairos-autonomous-prompt-controller-20260717-1',
@@ -118,11 +166,17 @@ assert.ok(hub.includes('4 · Deliver'));
 
 console.log(JSON.stringify({
   status: "passed",
+  zeroNeuronChildRouter: "kairos-zero-neuron-child-router-20260717-1",
+  doctrineRegistry: "kairos-internal-doctrine-registry-20260717-1",
   directHomepagePlan: "kairos-direct-homepage-plan-20260717-1",
   directHomepageExecution: "kairos-direct-homepage-execution-20260717-1",
   fullThemeBaseline: "kairos-full-theme-main-baseline-20260717-1",
   visualBaseline: "tuesday-command-center-6f96b10d",
   browserFilesChanged: false,
+  workersAIAvailableToRequestRuntime: false,
+  childRetrievalNeuronUsage: 0,
+  doctrineVaultNeuronUsage: 0,
+  generativeInference: "kairos-private-runtime-only",
   websiteMode: "fresh-main-duplicate-plus-direct-approved-package-execution",
   dirtyStagingReuse: false,
   labeledHomepagePromptWorkersAIRequired: false,
