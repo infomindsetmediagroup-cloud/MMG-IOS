@@ -9,7 +9,7 @@ import {
   KAIROS_CANONICAL_HOMEPAGE_COMPATIBILITY_BUILD,
 } from "./kairos-canonical-homepage-compatibility-v1.js";
 
-const BUILD = "kairos-production-entry-immutable-20260717-7";
+const BUILD = "kairos-production-entry-immutable-20260717-8";
 
 export { KairosProject };
 
