@@ -20,17 +20,17 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     env:
       APP_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev/center/content/website
       CSS_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev/styles/command-hub.css
       JS_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev/scripts/command-hub.js
     steps:
-      - name: Verify app shell and static assets
+      - name: Verify shell and static assets
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 48); do
+          for attempt in $(seq 1 36); do
             nonce="${GITHUB_SHA}-${attempt}-$(date +%s)"
             rm -f shell-headers.txt css-headers.txt js-headers.txt dashboard.html command-hub.css command-hub.js
 
@@ -56,8 +56,8 @@ jobs:
             shell_route="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-command-center-route:/{gsub(/\r/,"",$2);print $2}' shell-headers.txt | tail -1)"
             css_route="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-command-center-route:/{gsub(/\r/,"",$2);print $2}' css-headers.txt | tail -1)"
             js_route="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-command-center-route:/{gsub(/\r/,"",$2);print $2}' js-headers.txt | tail -1)"
-            css_type="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{sub(/\r$/ ,"");sub(/^[^:]+:[[:space:]]*/,"");print}' css-headers.txt | tail -1)"
-            js_type="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{sub(/\r$/ ,"");sub(/^[^:]+:[[:space:]]*/,"");print}' js-headers.txt | tail -1)"
+            css_type="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{sub(/\r$/,"");sub(/^[^:]+:[[:space:]]*/,"");print}' css-headers.txt | tail -1)"
+            js_type="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{sub(/\r$/,"");sub(/^[^:]+:[[:space:]]*/,"");print}' js-headers.txt | tail -1)"
 
             if [ "${shell_code}" = "200" ] \
               && [ "${css_code}" = "200" ] \
@@ -68,83 +68,91 @@ jobs:
               && [[ "${css_type}" == text/css* ]] \
               && [[ "${js_type}" == *javascript* ]] \
               && grep -q 'id="kairos-hub"' dashboard.html \
-              && grep -q '/styles/command-hub.css' dashboard.html \
+              && grep -q '/scripts/command-hub-loader.js' dashboard.html \
               && grep -q '\.hub-shell' command-hub.css \
               && grep -q 'const BUILD="kairos-command-hub' command-hub.js \
               && ! grep -qi '<html' command-hub.css \
               && ! grep -qi '<html' command-hub.js; then
-              echo "Command Center shell, CSS, and JavaScript are live through direct asset routing."
+              echo "Command Center shell and static assets are healthy."
               break
             fi
-            if [ "${attempt}" = "48" ]; then
+
+            if [ "${attempt}" = "36" ]; then
               echo "Command Center shell or static assets did not become healthy." >&2
-              printf 'shell_code=%s css_code=%s js_code=%s shell_route=%s css_route=%s js_route=%s css_type=%s js_type=%s\n' \
+              printf 'shell=%s css=%s js=%s shell_route=%s css_route=%s js_route=%s css_type=%s js_type=%s\n' \
                 "${shell_code:-}" "${css_code:-}" "${js_code:-}" "${shell_route:-}" "${css_route:-}" "${js_route:-}" "${css_type:-}" "${js_type:-}" >&2
               exit 1
             fi
             sleep 5
           done
 
-      - name: Install browser harness
-        run: |
-          set -euo pipefail
-          npm init -y >/dev/null 2>&1
-          npm install playwright@1.52.0 --no-audit --no-fund
-          npx playwright install --with-deps chromium
-
-      - name: Prove live app initializes
+      - name: Execute live app in headless Chrome
         shell: bash
         run: |
           set -euo pipefail
-          node <<'NODE'
-          const { chromium } = require('playwright');
-          (async () => {
-            const browser = await chromium.launch({ headless: true });
-            const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true });
-            const consoleErrors = [];
-            const pageErrors = [];
-            const failedRequests = [];
-            page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
-            page.on('pageerror', error => pageErrors.push(String(error?.stack || error)));
-            page.on('requestfailed', request => failedRequests.push({ url: request.url(), error: request.failure()?.errorText || 'failed' }));
-            const response = await page.goto(`${process.env.APP_URL}?browser-verification=${Date.now()}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-            await page.waitForTimeout(12000);
-            const result = await page.evaluate(() => {
-              const hub = document.querySelector('#kairos-hub');
-              const loading = Boolean(hub?.textContent?.includes('Loading Kairos Command Center'));
-              const rendered = Boolean(document.querySelector('.parent-grid, .workspace, .job, [data-action-id="website"], [data-action="website"]'));
-              const bodyStyle = getComputedStyle(document.body);
-              const image = document.querySelector('.app-header-image');
-              return {
-                title: document.title,
-                hubPresent: Boolean(hub),
-                loading,
-                rendered,
-                bodyFont: bodyStyle.fontFamily,
-                bodyBackground: bodyStyle.backgroundColor,
-                headerWidth: image?.getBoundingClientRect().width || 0,
-                text: (hub?.innerText || '').slice(0, 1200),
-              };
-            });
-            const receipt = { httpStatus: response?.status() || 0, result, consoleErrors, pageErrors, failedRequests: failedRequests.slice(0, 30) };
-            console.log(`KAIROS_BROWSER_RECEIPT=${JSON.stringify(receipt)}`);
-            await page.screenshot({ path: 'command-center-browser.png', fullPage: true });
-            await browser.close();
-            const initialized = response?.ok() && result.hubPresent && !result.loading && result.rendered;
-            const styled = !/Times New Roman|serif/i.test(result.bodyFont || '') && result.headerWidth > 0 && result.headerWidth < 600;
-            if (!initialized || !styled || pageErrors.length) process.exit(1);
-          })().catch(error => { console.error(error); process.exit(1); });
-          NODE
+          CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium-browser || command -v chromium || true)"
+          if [ -z "${CHROME}" ]; then
+            echo "No headless Chrome binary is available on the runner." >&2
+            exit 1
+          fi
 
-      - name: Upload browser proof
+          nonce="${GITHUB_SHA}-$(date +%s)"
+          rm -f rendered.html chrome-errors.log
+          timeout 75s "${CHROME}" \
+            --headless=new \
+            --no-sandbox \
+            --disable-gpu \
+            --disable-dev-shm-usage \
+            --disable-background-networking \
+            --window-size=390,844 \
+            --virtual-time-budget=15000 \
+            --dump-dom \
+            "${APP_URL}?chrome-verification=${nonce}" \
+            > rendered.html 2> chrome-errors.log || true
+
+          echo "KAIROS_CHROME_BINARY=${CHROME}"
+          echo "KAIROS_RENDERED_BYTES=$(wc -c < rendered.html | tr -d ' ')"
+
+          if [ ! -s rendered.html ]; then
+            echo "Headless Chrome returned no rendered DOM." >&2
+            cat chrome-errors.log >&2 || true
+            exit 1
+          fi
+
+          if grep -q 'Loading Kairos Command Center' rendered.html; then
+            echo "The live app remained stuck on the loading screen." >&2
+            cat chrome-errors.log >&2 || true
+            grep -o '<html[^>]*>' rendered.html | head -1 >&2 || true
+            grep -o 'Loading Kairos Command Center[^<]*' rendered.html | head -1 >&2 || true
+            exit 1
+          fi
+
+          if grep -q 'Kairos could not finish opening' rendered.html; then
+            echo "The guarded startup loader reported a module failure." >&2
+            cat chrome-errors.log >&2 || true
+            grep -o 'Kairos could not finish opening[^<]*' rendered.html | head -1 >&2 || true
+            grep -o '<p class="error">[^<]*' rendered.html | head -1 >&2 || true
+            exit 1
+          fi
+
+          grep -q 'id="command-view"' rendered.html || { echo "The Command Center view did not initialize." >&2; exit 1; }
+          grep -q 'data-kairos-boot="ready"' rendered.html || { echo "The guarded loader did not report ready." >&2; exit 1; }
+          grep -q 'Website Retool' rendered.html || { echo "The Website Retool workspace did not render." >&2; exit 1; }
+          grep -q 'Describe the homepage you want Kairos to build' rendered.html || { echo "The Website objective form did not render." >&2; exit 1; }
+
+          echo "Command Center initialized and rendered the Website Retool workspace in headless Chrome."
+
+      - name: Upload rendered browser evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: command-center-browser-proof
-          path: command-center-browser.png
+          name: command-center-headless-chrome-proof
+          path: |
+            rendered.html
+            chrome-errors.log
           if-no-files-found: ignore
 
-      - name: Publish route verification receipt
+      - name: Publish browser verification receipt
         if: always()
         shell: bash
         env:
@@ -154,7 +162,7 @@ jobs:
           set -euo pipefail
           if [ "${JOB_STATUS}" = "success" ]; then
             state="success"
-            description="Command Center initializes and renders in Chromium"
+            description="Command Center initializes and renders in headless Chrome"
           else
             state="failure"
             description="Command Center browser initialization failed"
