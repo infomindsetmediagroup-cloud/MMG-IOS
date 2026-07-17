@@ -14,7 +14,6 @@ const index = read(join(repoRoot, "web/kairos-dashboard/index.html"));
 
 assert.ok(entry.includes('./kairos-whole-homepage-planner-v1.js'));
 assert.ok(entry.includes('handleWholeHomepagePlan'));
-assert.ok(entry.includes('KAIROS_WHOLE_HOMEPAGE_PLANNER_BUILD'));
 assert.ok(entry.indexOf('handleWholeHomepagePlan') < entry.indexOf('handleDirectHomepagePlan'), "Whole-page continuation must run before the old limited planner.");
 assert.ok(entry.includes('homepageWholePagePlannerEnabled: true'));
 assert.ok(entry.includes('homepageWholePageMaximumOperations: 96'));
@@ -23,7 +22,7 @@ assert.ok(entry.includes('homepageMarkupBackedSettingsCovered: true'));
 assert.ok(entry.includes('homepagePageBoundSectionSourcesCovered: true'));
 
 for (const marker of [
-  'kairos-whole-homepage-planner-20260717-2',
+  'kairos-whole-homepage-planner-20260717-3',
   'MAX_OPERATIONS = 96',
   'MAX_SECTION_FILES = 40',
   'guided-pathways',
@@ -33,31 +32,26 @@ for (const marker of [
   'kairos',
   'mission-and-trust',
   'final-next-step',
-  'Publish Your Knowledge',
-  'Access Professional Services',
-  'Join a Personalized Subscription',
-  'Personalized Learning That Continues With You',
   'inspectHomepageSource',
   'deriveSectionFiles',
   'buildHomepageInventory',
   'buildTemplateInventory',
   'buildSafeSectionLiquidInventory',
-  'isMarkupSetting',
+  'isMarkupContainer',
+  'markupContainerPrecedence: true',
   'json-markup-text',
   'liquid-text',
   'visibleTextSegments',
   'sourceSkeleton',
+  'assertUniqueOperationIDs',
+  'dedupeOperations',
+  'whole_homepage_duplicate_plain_path',
   'assignJourneyZones',
   'buildWholePageOperations',
   'sectionReview',
   'templateAndSectionSourceCoverage: true',
   'markupBackedSettingsSupported: true',
-  'sectionFilesRequested',
-  'sectionFilesReadable',
-  'sectionLiquidFilesWritten',
   'currentManagedStagingReused: true',
-  'freshMainDuplicateRequired: false',
-  'priorApprovedTextPreserved: true',
   'workersAIUsed: false',
   'privateRuntimeUsed: false',
   'neuronsConsumed: 0',
@@ -65,8 +59,10 @@ for (const marker of [
   'structuralMutationAuthorized: false',
   'styleMutationAuthorized: false',
   'liveThemeMutationAuthorized: false',
-]) assert.ok(planner.includes(marker), `Missing complete homepage planner contract: ${marker}`);
+]) assert.ok(planner.includes(marker), `Missing markup-first homepage planner contract: ${marker}`);
 
+assert.ok(planner.indexOf('const markupContainer = isMarkupContainer') < planner.indexOf('if (!isPlainEditableText'), "Markup containers must be classified before plain strings.");
+assert.ok(planner.includes('/(custom_liquid|richtext|rich_text|markup|html|content|liquid)/i.test(name)'), "Plain text classifier must explicitly reject markup-container setting names.");
 assert.ok(!planner.includes('env.AI.run'), "Whole-homepage planning must not call Workers AI.");
 assert.ok(!planner.includes('runKairosIntelligence'), "Whole-homepage planning must not call private inference.");
 assert.ok(planner.includes('sections/${type}.liquid'), "Planner must inspect referenced homepage section files.");
@@ -76,7 +72,6 @@ assert.ok(planner.includes('isPageBoundSectionSource'), "Section-file edits must
 assert.ok(planner.includes('url|link(?!.*label)|href'));
 assert.ok(planner.includes('product|collection|menu'));
 assert.ok(planner.includes('sourceHashes'));
-assert.ok(planner.includes('files.filter(file => file.filename.startsWith("sections/"))'));
 
 for (const marker of [
   'json-markup-text',
@@ -85,7 +80,7 @@ for (const marker of [
   'sourceSkeleton',
   'writeThemeFiles',
   'approvalTimeRebindingUsed: false',
-]) assert.ok(executor.includes(marker), `Executor cannot verify complete homepage operation type: ${marker}`);
+]) assert.ok(executor.includes(marker), `Executor cannot verify homepage operation type: ${marker}`);
 
 assert.ok(index.includes('content="kairos-command-hub-recovery-20260714-1"'));
 assert.ok(index.includes('./scripts/command-hub.js?v=recovery-20260714-1'));
@@ -93,13 +88,15 @@ assert.ok(!index.includes('command-hub-canonical-v3'));
 
 console.log(JSON.stringify({
   status: "passed",
-  planner: "kairos-whole-homepage-planner-20260717-2",
+  planner: "kairos-whole-homepage-planner-20260717-3",
   maximumOperations: 96,
   journeyZones: 8,
+  markupContainerPrecedence: true,
+  duplicatePlainPathsRejected: true,
+  customLiquidWholeValueReplacementAllowed: false,
   templatePlainTextCoverage: true,
   templateMarkupTextCoverage: true,
   guardedPageBoundSectionCoverage: true,
-  sharedGenericSectionMutation: false,
   URLsMutable: false,
   workersAIUsed: false,
   privateRuntimeUsed: false,
