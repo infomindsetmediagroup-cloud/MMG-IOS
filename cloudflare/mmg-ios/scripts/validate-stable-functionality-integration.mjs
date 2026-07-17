@@ -12,6 +12,10 @@ const requireAll = (source, markers, label) => markers.forEach(marker => assert.
 const paths = {
   entry: join(workerRoot, "src/kairos-production-entry.js"),
   base: join(workerRoot, "src/kairos-production-entry-v2.js"),
+  childRuntime: join(workerRoot, "src/kairos-child-action-runtime-v1.js"),
+  nativeExecution: join(workerRoot, "src/kairos-native-task-execution-v1.js"),
+  autonomy: join(workerRoot, "src/kairos-autonomy-runtime-v1.js"),
+  intelligence: join(workerRoot, "src/kairos-intelligence-v1.js"),
   wrangler: join(workerRoot, "wrangler.toml"),
   dashboard: join(repoRoot, "web/kairos-dashboard/index.html"),
   commandHub: join(repoRoot, "web/kairos-dashboard/scripts/command-hub.js"),
@@ -24,7 +28,11 @@ const source = Object.fromEntries(Object.entries(paths).map(([name, path]) => [n
 
 requireAll(source.entry, [
   './kairos-production-entry-v2.js',
-  'kairos-production-baseline-20260715-4',
+  './kairos-child-action-runtime-v1.js',
+  'kairos-production-baseline-20260717-5',
+  '/api/hub/execute',
+  'direct-objective-to-deliverable',
+  'failureContainedToChildRequest: true',
   '/api/shopify/link-intelligence/audit',
   '/api/shopify/link-intelligence/repair/prepare',
   '/api/shopify/link-intelligence/repair/execute',
@@ -43,6 +51,33 @@ requireAll(source.entry, [
   '/api/shopify/homepage-release/',
   '/api/shopify/staging/plan/jobs',
 ], "Stable operational entry");
+
+requireAll(source.childRuntime, [
+  'kairos-child-action-runtime-20260716-1',
+  'const EXECUTE_ROUTE = "/api/hub/execute"',
+  'direct-objective-to-deliverable',
+  'verified-native-task-execution',
+  'storage: "durable-object"',
+  'runAutonomyCycle',
+], "Direct child-card runtime");
+
+requireAll(source.nativeExecution, [
+  'executeNativeTask',
+  'durableReadbackRequired: true',
+  'status: "verified"',
+  'externalActionTaken: false',
+], "Native task execution");
+
+requireAll(source.autonomy, [
+  'verified-native-intelligent-autonomy',
+  'runAutonomyCycle',
+], "Bounded autonomy engine");
+
+requireAll(source.intelligence, [
+  'cloudflare-account-scoped',
+  'STRUCTURED_OUTPUT_ATTEMPTS = 3',
+  'customer-content-isolated-no-training',
+], "Enhanced inference engine");
 
 requireAll(source.wrangler, [
   'main = "src/kairos-production-entry.js"',
@@ -84,9 +119,16 @@ requireAll(source.workflow, [
 
 console.log(JSON.stringify({
   status: "passed",
-  contract: "kairos-stable-functionality-behind-tuesday-loader-20260717-1",
+  contract: "kairos-child-card-execution-behind-tuesday-loader-20260717-1",
   loadingBaseline: "kairos-command-hub-recovery-20260714-1",
   activeEntry: "src/kairos-production-entry.js",
+  directChildCardExecution: true,
+  objectiveToDeliverable: true,
+  durableWorkflowAndArtifactReadback: true,
+  nativeExecution: true,
+  boundedAutonomyPerChildRequest: true,
+  enhancedInference: true,
+  browserFailureIsolation: true,
   websiteLinkLifecycle: true,
   websiteSchemaInspection: true,
   websiteExceptionPlanningExecutionRollback: true,
@@ -94,6 +136,4 @@ console.log(JSON.stringify({
   executiveBriefing: true,
   homepageReleaseControl: true,
   stagingPlanning: true,
-  restoredDashboardModules: true,
-  deeperRuntimePromotionDeferredUntilSeparatelyDeployable: true,
 }, null, 2));
