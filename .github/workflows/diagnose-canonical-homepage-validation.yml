@@ -9,6 +9,7 @@ on:
       - "cloudflare/mmg-ios/src/kairos-canonical-homepage-*.js"
       - "cloudflare/mmg-ios/src/kairos-production-entry-immutable-v1.js"
       - "cloudflare/mmg-ios/scripts/validate-production-baseline.mjs"
+  workflow_dispatch: {}
 
 permissions:
   contents: read
