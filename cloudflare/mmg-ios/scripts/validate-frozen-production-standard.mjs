@@ -13,10 +13,11 @@ const prohibitedUI = ["MutationObserver", "setInterval(", "scrollIntoView", "scr
 const paths = {
   manifest: join(root, "production-baseline.json"),
   wrangler: join(root, "wrangler.toml"),
-  entry: join(root, "src/kairos-production-entry-v42.js"),
-  priorEntry: join(root, "src/kairos-production-entry-v41.js"),
+  entry: join(root, "src/kairos-production-entry-v43.js"),
+  priorEntry: join(root, "src/kairos-production-entry-v42.js"),
   preservePlanner: join(root, "src/kairos-homepage-preserve-planner-v1.js"),
   renderedPlanner: join(root, "src/kairos-rendered-homepage-text-planner-v1.js"),
+  markupPlanner: join(root, "src/kairos-homepage-template-markup-text-planner-v1.js"),
   templateExecutor: join(root, "src/kairos-homepage-template-text-executor-v1.js"),
   liquidFallback: join(root, "src/kairos-homepage-liquid-text-fallback-v1.js"),
   childRuntime: join(root, "src/kairos-child-action-runtime-v1.js"),
@@ -26,6 +27,7 @@ const paths = {
   intelligence: join(root, "src/kairos-intelligence-v1.js"),
   web003: join(root, "src/kairos-web003-composite-runtime-v1.js"),
   index: join(repo, "web/kairos-dashboard/index.html"),
+  reset: join(repo, "web/kairos-dashboard/scripts/homepage-session-reset-v5.js"),
   quick: join(repo, "web/kairos-dashboard/scripts/homepage-quick-action.js"),
   quickCSS: join(repo, "web/kairos-dashboard/styles/homepage-quick-action.css"),
   bridge: join(repo, "web/kairos-dashboard/scripts/child-action-bridge.js"),
@@ -40,11 +42,13 @@ const manifest = JSON.parse(read(paths.manifest));
 const sources = Object.fromEntries(Object.entries(paths).filter(([name]) => name !== "manifest").map(([name, path]) => [name, read(path)]));
 
 assert.equal(manifest.status, "frozen");
-assert.equal(manifest.baseline, "kairos-production-standard-20260716-35");
-assert.equal(manifest.worker.entry, "src/kairos-production-entry-v42.js");
+assert.equal(manifest.baseline, "kairos-production-standard-20260717-36");
+assert.equal(manifest.worker.entry, "src/kairos-production-entry-v43.js");
 assert.equal(manifest.dashboard.homepageQuickAction, "kairos-homepage-quick-action-20260716-3");
+assert.equal(manifest.dashboard.homepageSessionReset, "kairos-homepage-session-reset-20260717-1");
 assert.equal(manifest.dashboard.homepagePreservePlanner, "kairos-homepage-preserve-planner-20260716-2");
 assert.equal(manifest.dashboard.homepageRenderedTextPlanner, "kairos-rendered-homepage-text-planner-20260716-1");
+assert.equal(manifest.dashboard.homepageTemplateMarkupTextPlanner, "kairos-homepage-template-markup-text-planner-20260717-1");
 assert.equal(manifest.dashboard.homepageTemplateTextExecutor, "kairos-homepage-template-text-executor-20260716-1");
 assert.equal(manifest.dashboard.homepageLiquidTextFallback, "kairos-homepage-liquid-text-fallback-20260716-1");
 for (const flag of [
@@ -53,41 +57,42 @@ for (const flag of [
   "currentWorkExcludesCompleted", "workArchiveDayWeekMonthGroupingRequired", "workArchiveItemsRemainClickable",
   "homepagePreserveDesignExecutionRequired", "oneButtonHomepagePreviewRequired", "automaticStagingPreviewExecution",
   "homepagePublishedMainSourceRequired", "homepagePublishedFrameworkPreservationRequired", "homepageTemplateSettingsFirstRequired",
-  "homepageLiteralLiquidTextFallbackRequired", "homepageHomepageSpecificLiquidScopeRequired", "homepageVisibleTextDeltaRequired",
-  "homepageHiddenTextSuccessProhibited", "homepageLiquidMarkupSignaturePreservationRequired",
-  "homepageLiquidTextNodeDistributionPreservationRequired", "homepageLiquidLogicMutationProhibited",
+  "homepageEmbeddedTemplateMarkupTextRequired", "homepageLiteralLiquidTextFallbackRequired", "homepageHomepageSpecificLiquidScopeRequired",
+  "homepageVisibleTextDeltaRequired", "homepageHiddenTextSuccessProhibited", "homepageMarkupSignaturePreservationRequired",
+  "homepageTextNodeDistributionPreservationRequired", "homepageLiquidLogicMutationProhibited",
   "homepageStylesheetMutationProhibitedInPreserveMode", "homepageAssetMutationProhibitedInPreserveMode",
   "homepageClassAndDesignTokenMutationProhibitedInPreserveMode", "homepageSectionIdentityPreservationRequired",
   "homepageBlockIdentityPreservationRequired", "homepageSectionAndBlockOrderPreservationRequired",
   "homepageCanonicalPackageFallbackProhibited", "homepageMultiFileStagingRollbackRequired",
-  "homepageStopInsteadOfUnsafeMutationRequired", "boundedInternalAutomaticExecution", "eventDrivenAutonomousExecution",
-  "verifiedNativeTaskArtifactsRequired", "nativeTaskReadbackBeforeCompletion", "explicitPreviewApprovalRequired",
-  "explicitLiveApplicationRequired", "finalLiveApprovalRequired", "web003CompositeWebsiteProductionRequired",
-  "compositeWebsiteRollbackRequired"
+  "homepageStopInsteadOfUnsafeMutationRequired", "homepageStaleSessionMigrationRequired",
+  "boundedInternalAutomaticExecution", "eventDrivenAutonomousExecution", "verifiedNativeTaskArtifactsRequired",
+  "nativeTaskReadbackBeforeCompletion", "explicitPreviewApprovalRequired", "explicitLiveApplicationRequired",
+  "finalLiveApprovalRequired", "web003CompositeWebsiteProductionRequired", "compositeWebsiteRollbackRequired"
 ]) assert.equal(manifest.approvedExpansion[flag], true, `Frozen baseline flag is not enabled: ${flag}`);
 assert.equal(manifest.approvedExpansion.automaticExternalExecution, false);
 assert.equal(manifest.approvedExpansion.modelReasoningPersisted, false);
 
 const activeEntries = sources.wrangler.split(/\r?\n/).filter(line => /^main\s*=/.test(line.trim()));
-assert.deepEqual(activeEntries, ['main = "src/kairos-production-entry-v42.js"']);
+assert.deepEqual(activeEntries, ['main = "src/kairos-production-entry-v43.js"']);
 requireAll(sources.wrangler, [
   '[ai]', 'binding = "AI"', 'name = "KAIROS_PROJECTS"', 'KAIROS_AUTONOMY_ENABLED = "true"',
   'KAIROS_WORKERS_AI_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8"', 'crons = ["*/15 * * * *"]'
 ], "Wrangler");
 
 requireAll(sources.entry, [
-  './kairos-production-entry-v41.js', './kairos-rendered-homepage-text-planner-v1.js',
-  './kairos-homepage-liquid-text-fallback-v1.js', 'kairos-production-entry-20260716-99',
-  'rendered_homepage_text_delta_missing', 'published_homepage_text_settings_missing',
-  'safe_template_text_changes_missing', 'published-main-liquid-visible-text-v1',
-  'published-main-template-settings-then-node-preserving-liquid-text',
-  'homepageLiquidLiteralTextFallback: "operational"', 'X-Kairos-Homepage-Liquid-Fallback',
-  'X-Kairos-Canonical-Rebuild-Fallback', 'published-main-theme'
-], "Production entry v42");
+  './kairos-production-entry-v42.js', './kairos-rendered-homepage-text-planner-v1.js',
+  './kairos-homepage-template-markup-text-planner-v1.js', './kairos-homepage-liquid-text-fallback-v1.js',
+  'kairos-production-entry-20260717-100', 'embedded_template_markup_text_missing',
+  'safe_embedded_markup_text_changes_missing', 'embedded_markup_text_patch_empty',
+  'published-main-three-source-visible-text-preservation',
+  'homepageEmbeddedTemplateMarkupTextMutation: "operational"',
+  'X-Kairos-Homepage-Template-Markup-Planner', 'X-Kairos-Canonical-Rebuild-Fallback',
+  'published-main-theme'
+], "Production entry v43");
 requireAll(sources.priorEntry, [
-  './kairos-production-entry-v40.js', './kairos-homepage-template-text-executor-v1.js',
-  'kairos-production-entry-20260716-98', 'published-main-template-text-settings-v1'
-], "Preserved production entry v41");
+  './kairos-production-entry-v41.js', './kairos-rendered-homepage-text-planner-v1.js',
+  './kairos-homepage-liquid-text-fallback-v1.js', 'kairos-production-entry-20260716-99'
+], "Preserved production entry v42");
 
 requireAll(sources.preservePlanner, [
   'kairos-homepage-preserve-planner-20260716-2', 'sourceOfTruth: "published-main-theme"',
@@ -98,33 +103,44 @@ requireAll(sources.renderedPlanner, [
   'kairos-rendered-homepage-text-planner-20260716-1', 'activeOrderedSectionsOnly: true',
   'activeOrderedBlocksOnly: true', 'rendered_homepage_text_delta_missing'
 ], "Rendered text gate");
+requireAll(sources.markupPlanner, [
+  'kairos-homepage-template-markup-text-planner-20260717-1',
+  'activeEmbeddedMarkupSettings', 'embedded_template_markup_text_missing',
+  'safe_embedded_markup_text_changes_missing', 'published-main-template-text-settings-v1',
+  'embeddedMarkupTextOnly: true', 'visibleTextReplacementCount',
+  'markupSignature', 'nodeDistributionPreserved: true',
+  'canonicalPackage: null', 'productionPublishAuthorized: false',
+  'liveThemeMutationAuthorized: false'
+], "Embedded template markup planner");
 requireAll(sources.templateExecutor, [
   'kairos-homepage-template-text-executor-20260716-1', 'published-main-template-text-settings-v1',
   'writeThemeFile', 'publishedFrameworkPreserved: true', 'templateTextOnly: true',
   'liquidFilesWritten: []', 'stylesheetsWritten: []', 'assetsWritten: []'
 ], "Template text executor");
-
 requireAll(sources.liquidFallback, [
   'kairos-homepage-liquid-text-fallback-20260716-1', 'published-main-liquid-visible-text-v1',
   'sourceOfTruth: "published-main-theme"', 'homepage_liquid_scope_unsafe',
   'homepage-specific Liquid section', 'writeThemeFiles', 'markupSignature',
   'nodeDistributionPreserved: true', 'liquidStructureMutationAuthorized: false',
   'canonicalPackage: null', 'visibleTextReplacementCount', 'publishedFrameworkPreserved: true',
-  'stylesheetsWritten: []', 'assetsWritten: []', 'classesChanged: false', 'designTokensChanged: false',
-  'Rollback restores the exact pre-execution Kairos Staging template and Liquid section files.'
+  'stylesheetsWritten: []', 'assetsWritten: []', 'classesChanged: false', 'designTokensChanged: false'
 ], "Liquid text fallback");
 assert.ok(!sources.liquidFallback.includes('writeThemeFiles(env, evidence.mainTheme.gid'), "Liquid fallback must never write to MAIN");
-assert.ok(!sources.liquidFallback.includes('productionPublishAuthorized: true'), "Liquid fallback must not authorize production publishing");
+assert.ok(!sources.markupPlanner.includes('writeThemeFile('), "Embedded markup planner must remain read-only");
 
 requireAll(sources.index, [
-  'kairos-command-center-operational-20260716-18',
-  '/scripts/homepage-quick-action.js?v=operational-20260716-3',
+  'kairos-command-center-operational-20260717-19',
+  '/scripts/homepage-session-reset-v5.js?v=operational-20260717-1',
+  '/scripts/homepage-quick-action.js?v=operational-20260717-4',
   '/scripts/website-intent-router.js?v=operational-20260716-2',
   '/scripts/child-action-bridge.js?v=operational-20260716-1'
 ], "Command Center index");
+requireAll(sources.reset, [
+  'kairos-homepage-session-reset-20260717-1', 'kairos.homepage.session-migration.v5',
+  'kairos.homepage.quick-action.v4', 'sessionStorage.removeItem'
+], "Homepage session reset");
 requireAll(sources.quick, [
-  'kairos-homepage-quick-action-20260716-3', 'kairos.homepage.quick-action.v4',
-  'kairos.homepage.quick-action.v3', 'Keep my homepage. Change the words.',
+  'kairos-homepage-quick-action-20260716-3', 'Keep my homepage. Change the words.',
   'literalLiquidTextFallbackAuthorized: true', 'published-main-template-text-settings-v1',
   'published-main-liquid-visible-text-v1', 'templateTextOnly', 'liquidTextOnly',
   'visibleTextReplacementCount', 'textSettingReplacementCount',
@@ -156,8 +172,8 @@ console.log(`KAIROS_FROZEN_STANDARD=${JSON.stringify({
   status: "passed",
   baseline: manifest.baseline,
   workerEntry: manifest.worker.entry,
-  homepageQuickAction: manifest.dashboard.homepageQuickAction,
-  homepageTextSourceOrder: ["template-settings", "homepage-specific-liquid-literal-text"],
+  homepageTextSourceOrder: ["template-settings", "embedded-template-markup", "homepage-specific-liquid-literal-text"],
+  embeddedTemplateMarkupPlanner: manifest.dashboard.homepageTemplateMarkupTextPlanner,
   liquidFallback: manifest.dashboard.homepageLiquidTextFallback,
   visibleTextDeltaRequired: true,
   publishedFrameworkPreserved: true,
