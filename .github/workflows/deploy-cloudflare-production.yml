@@ -111,9 +111,32 @@ jobs:
         run: npm install --no-package-lock --no-audit --no-fund
 
       - name: Validate reconciled production baseline
+        id: production_validation
         shell: bash
         working-directory: repository/cloudflare/mmg-ios
-        run: npm run validate:production
+        run: |
+          set +e
+          npm run validate:production > validation.log 2>&1
+          status=$?
+          cat validation.log
+          echo "exit_code=${status}" >> "${GITHUB_OUTPUT}"
+          exit 0
+
+      - name: Upload failed production validation transcript
+        if: steps.production_validation.outputs.exit_code != '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: kairos-production-validation-${{ github.sha }}
+          path: repository/cloudflare/mmg-ios/validation.log
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce production validation result
+        if: steps.production_validation.outputs.exit_code != '0'
+        shell: bash
+        run: |
+          echo "::error::Kairos production validation failed. The complete transcript is attached to this run."
+          exit 1
 
       - name: Validate canonical Cloudflare Worker bundle
         shell: bash
