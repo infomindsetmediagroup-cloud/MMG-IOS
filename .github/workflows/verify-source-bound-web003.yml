@@ -12,6 +12,8 @@ on:
       - "cloudflare/mmg-ios/src/kairos-production-entry-v44.js"
       - "cloudflare/mmg-ios/src/kairos-web003-source-bound-composite-runtime-v1.js"
       - "cloudflare/mmg-ios/src/kairos-homepage-deterministic-copy-planner-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-homepage-deterministic-markup-copy-planner-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-homepage-deterministic-liquid-copy-planner-v1.js"
   workflow_dispatch: {}
 
 permissions:
@@ -28,7 +30,7 @@ jobs:
     timeout-minutes: 15
     env:
       KAIROS_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
-      EXPECTED_DETERMINISTIC_BUILD: kairos-web003-deterministic-first-runtime-20260717-1
+      EXPECTED_DETERMINISTIC_BUILD: kairos-web003-deterministic-first-runtime-20260717-3
     steps:
       - uses: actions/checkout@v4
 
