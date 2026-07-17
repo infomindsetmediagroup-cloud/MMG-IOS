@@ -6,9 +6,9 @@ on:
     paths:
       - "cloudflare/mmg-ios/**"
       - "web/kairos-dashboard/**"
+      - "docs/KAIROS_ENTERPRISE_WEBSITE_BUILD_INSTRUCTIONS.md"
+      - "docs/CANONICAL_COMMAND_WIRING_20260717.md"
       - ".github/workflows/deploy-cloudflare-production.yml"
-  schedule:
-    - cron: "10 17 17 7 *"
   workflow_dispatch: {}
 
 permissions:
@@ -57,11 +57,11 @@ jobs:
         working-directory: cloudflare/mmg-ios
         run: npm install --no-package-lock --no-audit --no-fund
 
-      - name: Enforce loading baseline
+      - name: Enforce resilient loading contract
         working-directory: cloudflare/mmg-ios
         run: npm run validate:loading
 
-      - name: Validate production functionality
+      - name: Validate canonical instruction wiring
         working-directory: cloudflare/mmg-ios
         run: npm run validate:production
 
@@ -80,39 +80,49 @@ jobs:
           for attempt in $(seq 1 24); do
             nonce="${GITHUB_SHA}-${attempt}-$(date +%s)"
             if root_html="$(curl --fail --silent --show-error --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}/?proof=${nonce}")" \
-              && renderer_js="$(curl --fail --silent --show-error --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}/scripts/command-hub-stable-v2.js?proof=${nonce}")" \
+              && renderer_js="$(curl --fail --silent --show-error --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}/scripts/command-hub-canonical-v3.js?proof=${nonce}")" \
+              && action_js="$(curl --fail --silent --show-error --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}/scripts/canonical-action-executor-v1.js?proof=${nonce}")" \
+              && website_js="$(curl --fail --silent --show-error --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}/scripts/canonical-website-workspace-v1.js?proof=${nonce}")" \
               && contracts_json="$(curl --fail --silent --show-error --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}/api/hub/contracts?proof=${nonce}")" \
               && health_json="$(curl --fail --silent --show-error --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}/api/health?proof=${nonce}")" \
-              && ROOT_HTML="${root_html}" RENDERER_JS="${renderer_js}" CONTRACTS_JSON="${contracts_json}" HEALTH_JSON="${health_json}" node <<'NODE'
+              && ROOT_HTML="${root_html}" RENDERER_JS="${renderer_js}" ACTION_JS="${action_js}" WEBSITE_JS="${website_js}" CONTRACTS_JSON="${contracts_json}" HEALTH_JSON="${health_json}" node <<'NODE'
           const root=process.env.ROOT_HTML||"";
           const renderer=process.env.RENDERER_JS||"";
+          const action=process.env.ACTION_JS||"";
+          const website=process.env.WEBSITE_JS||"";
           const contracts=JSON.parse(process.env.CONTRACTS_JSON||"{}");
           const health=JSON.parse(process.env.HEALTH_JSON||"{}");
-          const actions=contracts.actions&&typeof contracts.actions==="object"?Object.keys(contracts.actions):[];
+          const entries=contracts.actions&&typeof contracts.actions==="object"?Object.entries(contracts.actions):[];
           const rootMarker=root.includes('kairos-command-hub-recovery-20260714-1');
           const mount=root.includes('id="kairos-hub"');
-          const stableRenderer=root.includes('./scripts/command-hub-stable-v2.js?v=20260717-1');
-          const obsoleteRenderer=!root.includes('./scripts/command-hub.js?v=recovery-20260714-1')
-            && !root.includes('prebreak-functionality-recovery.js')
-            && !root.includes('authoritative-command-center-reconcile.js');
-          const rendererBuild=renderer.includes('kairos-command-hub-stable-v2-20260717-1');
-          const noFloatingStatus=!renderer.includes('app-header-status');
-          const visualMutationDisabled=renderer.includes('styleMutationAuthorized: false')
-            && renderer.includes('visualMutationAuthorized: false')
-            && !renderer.includes('styleMutationAuthorized: true');
-          const currentContracts=actions.length===25;
+          const canonicalRenderer=root.includes('./scripts/command-hub-canonical-v3.js?v=20260717-2');
+          const obsoleteRenderer=!root.includes('command-hub-stable-v2.js')&&!root.includes('command-hub.js?v=recovery');
+          const rendererBuild=renderer.includes('kairos-command-hub-canonical-v3-20260717-2');
+          const embeddedRegistry=renderer.includes('const fallback=');
+          const noStaticOptionalImport=!/^\s*import\s/m.test(renderer);
+          const builtInExecutor=action.includes('postJSON("/api/hub/execute"')&&action.includes('canonicalInstructionsRequired:true');
+          const websiteInstructions=website.includes('kairos-enterprise-website-build-instructions@2026.07.15-v1')
+            && website.includes('requestType:"full-retool"')
+            && website.includes('structuralMutationAuthorized:true')
+            && website.includes('styleMutationAuthorized:true')
+            && website.includes('visualMutationAuthorized:true')
+            && website.includes('liveThemeMutationAuthorized:false');
+          const currentContracts=entries.length===25;
+          const contractsBound=entries.every(([,value])=>value&&value.moduleRequiredForExecution===false&&value.instructionSet);
+          const wiring=health.canonicalInstructionWiring||{};
           const healthy=["ready","ok","operational"].includes(String(health.status||"").toLowerCase());
-          const passed=rootMarker&&mount&&stableRenderer&&obsoleteRenderer&&rendererBuild&&noFloatingStatus&&visualMutationDisabled&&currentContracts&&healthy;
-          console.log(JSON.stringify({rootMarker,mount,stableRenderer,obsoleteRenderer,rendererBuild,noFloatingStatus,visualMutationDisabled,contractCount:actions.length,health:health.status},null,2));
+          const wiringReady=wiring.status==="operational"&&wiring.optionalWorkspaceModulesRequired===false;
+          const passed=rootMarker&&mount&&canonicalRenderer&&obsoleteRenderer&&rendererBuild&&embeddedRegistry&&noStaticOptionalImport&&builtInExecutor&&websiteInstructions&&currentContracts&&contractsBound&&healthy&&wiringReady;
+          console.log(JSON.stringify({rootMarker,mount,canonicalRenderer,obsoleteRenderer,rendererBuild,embeddedRegistry,noStaticOptionalImport,builtInExecutor,websiteInstructions,contractCount:entries.length,contractsBound,health:health.status,wiringReady},null,2));
           process.exit(passed?0:1);
           NODE
             then
-              echo "Kairos stable loader, single renderer, live child registry, and health endpoint verified."
+              echo "Kairos canonical instruction wiring, resilient shell, 25 child executors, and live health verified."
               exit 0
             fi
             sleep 5
           done
-          echo "::error::Kairos did not satisfy the stable single-renderer loading contract after deployment."
+          echo "::error::Kairos did not satisfy the canonical instruction-bound production contract after deployment."
           exit 1
 
       - name: Publish deployment receipt
@@ -125,10 +135,10 @@ jobs:
           set -euo pipefail
           if [ "${JOB_STATUS}" = "success" ]; then
             state="success"
-            description="Kairos single renderer opened with current child contracts"
+            description="Kairos canonical instructions and child executors verified live"
           else
             state="failure"
-            description="Kairos stable renderer or production validation failed"
+            description="Kairos canonical wiring or production validation failed"
           fi
           payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-cloudflare-production",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
           curl --fail --silent --show-error -X POST \
