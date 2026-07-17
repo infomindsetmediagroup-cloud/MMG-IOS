@@ -1,0 +1,10 @@
+file:///home/runner/work/MMG-IOS/MMG-IOS/repository/.github/scripts/run-canonical-homepage-release.mjs:101
+    throw new Error(`Canonical homepage ${mode} request failed (${response.status}): ${JSON.stringify(body)}`);
+          ^
+
+Error: Canonical homepage repair request failed (502): {"status":"failed","build":"kairos-production-entry-immutable-20260717-7","canonicalHomepage":"kairos-canonical-homepage-builder-20260717-2","canonicalHomepageCompatibility":"kairos-canonical-homepage-compatibility-20260717-1","immutableExecution":"kairos-immutable-approved-file-execution-20260717-1","error":{"code":"canonical_homepage_readback_mismatch","message":"Shopify did not preserve the canonical source for assets/mmg-canonical-homepage.js."},"safeguards":{"liveThemeChanged":false,"canonicalHomepageStagingOnly":true,"immutableApprovedCandidateRequired":true,"approvalTimeTextReconstruction":false,"exactSourceHashRequired":true,"authorizedDiffRequired":true,"exactShopifyReadBackRequired":true,"workersAIUsed":false,"neuronsConsumed":0}}
+    at requestBuild (file:///home/runner/work/MMG-IOS/MMG-IOS/repository/.github/scripts/run-canonical-homepage-release.mjs:101:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async file:///home/runner/work/MMG-IOS/MMG-IOS/repository/.github/scripts/run-canonical-homepage-release.mjs:35:12
+
+Node.js v22.23.1
