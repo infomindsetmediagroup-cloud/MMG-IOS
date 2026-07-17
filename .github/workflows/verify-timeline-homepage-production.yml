@@ -1,5 +1,5 @@
 name: Verify Timeline and Homepage Production
-# v43 verification revision 3
+# v43 verification revision 4
 
 on:
   push:
@@ -12,6 +12,7 @@ on:
       - "cloudflare/mmg-ios/src/kairos-homepage-template-text-executor-v1.js"
       - "cloudflare/mmg-ios/src/kairos-homepage-liquid-text-fallback-v1.js"
       - "cloudflare/mmg-ios/src/kairos-homepage-instance-liquid-fallback-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-homepage-instance-liquid-executor-v2.js"
       - "cloudflare/mmg-ios/src/kairos-production-entry-v43.js"
       - "cloudflare/mmg-ios/production-baseline.json"
       - "cloudflare/mmg-ios/scripts/validate-frozen-production-standard.mjs"
@@ -38,7 +39,7 @@ jobs:
     env:
       KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
     steps:
-      - name: Wait for v43 and verify four-source dashboard
+      - name: Wait for build 101 and verify four-source dashboard
         shell: bash
         run: |
           set -euo pipefail
@@ -46,11 +47,11 @@ jobs:
           for attempt in $(seq 1 20); do
             curl --silent --show-error --location --max-time 45 -H 'Cache-Control: no-cache' \
               "${KAIROS_PRODUCTION_URL}/api/health?v43=${nonce}-${attempt}" --output health.json || true
-            if node -e "const fs=require('fs');try{const h=JSON.parse(fs.readFileSync('health.json','utf8'));process.exit(h.build==='kairos-production-entry-20260717-100'?0:1)}catch{process.exit(1)}"; then
+            if node -e "const fs=require('fs');try{const h=JSON.parse(fs.readFileSync('health.json','utf8'));process.exit(h.build==='kairos-production-entry-20260717-101'?0:1)}catch{process.exit(1)}"; then
               break
             fi
             if [ "${attempt}" = "20" ]; then
-              echo "v43 did not become live"
+              echo "build 101 did not become live"
               cat health.json || true
               exit 1
             fi
@@ -71,7 +72,7 @@ jobs:
           const p=health.homepagePreserveDesign||{};
           const order=Array.isArray(p.sourceOrder)?p.sourceOrder:[];
           const checks={
-            build:health.build==='kairos-production-entry-20260717-100',
+            build:health.build==='kairos-production-entry-20260717-101',
             contract:p.contract==='published-main-four-source-visible-text-preservation',
             source1:order[0]==='active rendered template text settings',
             source2:order[1]==='active embedded template HTML or Liquid text nodes',
@@ -79,13 +80,17 @@ jobs:
             source4:order[3]==='homepage-instance isolated shared-section clone',
             embeddedPlanner:p.templateMarkupPlannerBuild==='kairos-homepage-template-markup-text-planner-20260717-1',
             instancePlanner:p.instanceFallbackBuild==='kairos-homepage-instance-liquid-fallback-20260717-1',
+            instanceExecutor:p.instanceExecutorBuild==='kairos-homepage-instance-liquid-executor-20260717-2',
             sharedHandling:p.sharedSectionHandling==='clone-and-bind-homepage-instance-only',
             originalsImmutable:p.originalSharedSectionFiles==='immutable',
+            templateReadback:p.templateReadbackVerification==='canonical-json-semantics',
+            cloneReadback:p.cloneReadbackVerification==='exact-bytes-and-sha256',
             embeddedCapability:health.capabilities?.homepageEmbeddedTemplateMarkupTextMutation==='operational',
             liquidCapability:health.capabilities?.homepageLiquidLiteralTextFallback==='operational',
             instanceCapability:health.capabilities?.homepageSharedSectionInstanceIsolation==='operational',
             originalProtection:health.capabilities?.homepageOriginalSharedSectionProtection==='required',
-            cloneReadback:health.capabilities?.homepageInstanceCloneReadback==='required',
+            cloneReadbackRequired:health.capabilities?.homepageInstanceCloneReadback==='required',
+            templateReadbackRequired:health.capabilities?.homepageTemplateSemanticReadback==='required',
             canonicalFallback:health.capabilities?.homepageCanonicalRebuildFallback==='prohibited',
             dashboard:website.includes('kairos-command-center-operational-20260717-19'),
             resetBound:website.includes('/scripts/homepage-session-reset-v5.js?v=operational-20260717-1'),
@@ -139,9 +144,12 @@ jobs:
             noLiveAuthorization:plan?.productionPublishAuthorized===false&&plan?.liveThemeMutationAuthorized===false,
             instanceIsolation:!instanceMode||(plan?.homepageInstanceIsolation===true&&plan?.originalSharedSectionsImmutable===true),
             originalsUnchanged:!instanceMode||(plan?.instancePatches||[]).every(p=>p?.originalSharedSourceChanged===false&&p?.homepageInstanceIsolated===true),
-            productionHeader:/x-kairos-production-entry:\s*kairos-production-entry-20260717-100/i.test(headers),
+            productionHeader:/x-kairos-production-entry:\s*kairos-production-entry-20260717-101/i.test(headers),
             sourceHeader:/x-kairos-homepage-text-source:\s*(template-settings|embedded-template-markup|homepage-specific-liquid-text|homepage-instance-clone)/i.test(headers),
-            instanceHeader:/x-kairos-homepage-instance-fallback:\s*kairos-homepage-instance-liquid-fallback-20260717-1/i.test(headers),
+            plannerHeader:/x-kairos-homepage-instance-fallback:\s*kairos-homepage-instance-liquid-fallback-20260717-1/i.test(headers),
+            executorHeader:/x-kairos-homepage-instance-executor:\s*kairos-homepage-instance-liquid-executor-20260717-2/i.test(headers),
+            templateReadbackHeader:/x-kairos-template-readback:\s*canonical-json-semantics/i.test(headers),
+            cloneReadbackHeader:/x-kairos-clone-readback:\s*exact-bytes-and-sha256/i.test(headers),
             originalHeader:/x-kairos-original-shared-sections:\s*immutable/i.test(headers)
           };
           const failed=Object.entries(checks).filter(([,value])=>value!==true).map(([key])=>key);
@@ -162,10 +170,10 @@ jobs:
           set -euo pipefail
           if [ "${JOB_STATUS}" = "success" ]; then
             state="success"
-            description="v43 four-source homepage plan and isolation checks passed"
+            description="build 101 four-source homepage checks passed"
           else
             state="failure"
-            description="v43 homepage instance-isolation verification failed"
+            description="build 101 homepage instance verification failed"
           fi
           payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-v43-homepage-production",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
           curl --fail --silent --show-error -X POST \
