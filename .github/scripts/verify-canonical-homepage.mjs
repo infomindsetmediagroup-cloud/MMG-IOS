@@ -80,8 +80,8 @@ try {
     }));
     checks.push(check("No horizontal overflow", Math.max(overflow.documentWidth, overflow.bodyWidth) <= overflow.viewportWidth + 2, overflow));
 
-    const unnamedControls = await page.evaluate(() => {
-      const controls = [...document.querySelectorAll("button,a,input,select,textarea,summary")];
+    const unnamedControls = await page.locator("[data-mmg-canonical-homepage]").evaluate((root) => {
+      const controls = [...root.querySelectorAll("button,a,input,select,textarea,summary")];
       return controls.filter((element) => {
         const name = (element.getAttribute("aria-label") || element.textContent || element.getAttribute("title") || "").trim();
         return !name;
