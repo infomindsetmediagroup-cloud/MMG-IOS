@@ -23,12 +23,19 @@ const childBridge = read(childBridgePath);
 
 assert.ok(index.includes('content="kairos-command-hub-recovery-20260714-1"'), "The proven Tuesday loader marker changed.");
 assert.ok(index.includes('./scripts/command-hub.js?v=recovery-20260714-1'), "The proven Tuesday Command Center boot module changed.");
-assert.ok(index.includes('./scripts/prebreak-functionality-recovery.js?v=20260717-1'), "The pre-break recovery controller is not loaded.");
+assert.ok(index.includes('./scripts/prebreak-functionality-recovery.js?v=20260717-2'), "The current pre-break recovery controller is not loaded.");
 assert.ok(index.indexOf('prebreak-functionality-recovery.js') < index.indexOf('command-hub.js?v=recovery-20260714-1'), "The recovery controller must load before the Command Center runtime.");
 assert.ok(!index.includes('website-intent-router.js'), "The obsolete forced-full-retool browser router must not load.");
 
 for (const marker of [
-  'kairos-prebreak-functionality-recovery-20260717-1',
+  'kairos-prebreak-functionality-recovery-20260717-2',
+  'kairos.website.operational-flow.v2',
+  'kairos.website.visual-preservation-migration.v2',
+  'published-main-template-text-settings-v1',
+  'invalidateStaleWebsiteState()',
+  'unsafe-pre-preservation-plan-invalidated',
+  'pre-preservation-execution-state-invalidated',
+  'staleUnsafeWebsitePlans: "invalidated"',
   '.app-header-status{display:none!important}',
   'document.querySelectorAll(".app-header-status").forEach(node => node.remove())',
   './child-action-bridge.js?v=',
@@ -79,12 +86,13 @@ assert.ok(childBridge.includes('kairos-child-action-bridge-20260716-1'), "The cu
 
 console.log(JSON.stringify({
   status: "passed",
-  contract: "kairos-loader-safe-prebreak-recovery-20260717-1",
+  contract: "kairos-loader-safe-prebreak-recovery-20260717-2",
   loadingBaseline: "kairos-command-hub-recovery-20260714-1",
   floatingHeaderStatus: "removed",
   childRegistry: "current-5x5",
   childExecutionBridge: "active",
   websiteVisualMutation: "prohibited-by-default",
+  staleUnsafeWebsitePlans: "invalidated",
   colorsTypographyPillsButtons: "preserved",
   nativeThemeStyling: "keep-current",
 }, null, 2));
