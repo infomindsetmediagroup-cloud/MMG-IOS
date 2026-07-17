@@ -187,3 +187,5 @@ function json(value, status = 200) {
     },
   });
 }
+
+// Verification trigger: exact homepage-specific Liquid before-and-after contract.
