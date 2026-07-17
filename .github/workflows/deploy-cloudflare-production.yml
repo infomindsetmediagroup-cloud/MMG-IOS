@@ -8,7 +8,7 @@ on:
       - "web/kairos-dashboard/**"
       - ".github/workflows/deploy-cloudflare-production.yml"
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "0 17 17 7 *"
   workflow_dispatch: {}
 
 permissions:
