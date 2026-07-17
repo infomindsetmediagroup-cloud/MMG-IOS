@@ -73,3 +73,5 @@ function jsonError(status, code, message) {
     },
   });
 }
+
+// Verification trigger: exact deterministic-first homepage copy contract.
