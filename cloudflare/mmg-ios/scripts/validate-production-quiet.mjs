@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+const BUILD = "kairos-production-validation-orchestrator-20260717-1";
 const here = dirname(fileURLToPath(import.meta.url));
 const validators = [
   "validate-production-baseline.mjs",
@@ -32,7 +33,7 @@ for (const validator of validators) {
   });
 
   if (result.status !== 0) {
-    console.error(`[validate:production] FAILED: ${validator}`);
+    console.error(`[validate:production] ${BUILD} FAILED: ${validator}`);
     if (result.stdout?.trim()) console.error(result.stdout.trim());
     if (result.stderr?.trim()) console.error(result.stderr.trim());
     process.exit(result.status || 1);
@@ -42,6 +43,7 @@ for (const validator of validators) {
 
 console.log(JSON.stringify({
   status: "ready",
+  build: BUILD,
   validatorsPassed: completed.length,
   validators: completed,
 }, null, 2));
