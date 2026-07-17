@@ -16,6 +16,7 @@ const directExecution = read(join(workerRoot, "src/kairos-direct-homepage-execut
 const zeroNeuronRouter = read(join(workerRoot, "src/kairos-zero-neuron-child-router-v1.js"));
 const doctrineRegistry = read(join(workerRoot, "src/kairos-internal-doctrine-registry-v1.js"));
 const websiteGovernance = read(join(workerRoot, "src/kairos-website-planning-governance-v1.js"));
+const homepageContinuation = read(join(workerRoot, "src/kairos-homepage-continuation-v1.js"));
 const index = read(join(repoRoot, "web/kairos-dashboard/index.html"));
 const hub = read(join(repoRoot, "web/kairos-dashboard/scripts/command-hub.js"));
 
@@ -29,19 +30,30 @@ assert.ok(entry.includes('./kairos-direct-homepage-execution-v1.js'));
 assert.ok(entry.includes('./kairos-zero-neuron-child-router-v1.js'));
 assert.ok(entry.includes('./kairos-internal-doctrine-registry-v1.js'));
 assert.ok(entry.includes('./kairos-website-planning-governance-v1.js'));
+assert.ok(entry.includes('./kairos-homepage-continuation-v1.js'));
 assert.ok(entry.includes('restoreApprovedHomepageBaseline(internalEnv)'));
 assert.ok(entry.includes('governWebsitePlanningRequest'));
 assert.ok(entry.includes('buildPrivateGovernedPlanningRequest'));
 assert.ok(entry.includes('applyWebsiteGovernanceToPlanResponse'));
 assert.ok(entry.includes('handleWebsiteGovernanceStatus'));
+assert.ok(entry.includes('buildDeterministicHomepageContinuationRequest'));
+assert.ok(entry.includes('applyHomepageContinuationMetadata'));
 assert.ok(entry.includes('handleZeroNeuronChildRequest'));
 assert.ok(entry.includes('handleDirectHomepageExecution'));
 assert.ok(entry.includes('handleDirectHomepagePlan'));
 assert.ok(entry.indexOf('governWebsitePlanningRequest') < entry.indexOf('handleDirectHomepagePlan'), "Website doctrine must be resolved before planning begins.");
+assert.ok(entry.indexOf('buildDeterministicHomepageContinuationRequest') < entry.indexOf('handleDirectHomepagePlan'), "Continuation routing must run before planning.");
 assert.ok(entry.indexOf('handleZeroNeuronChildRequest') < entry.indexOf('handleDirectHomepageExecution'), "Zero-neuron internal routing must run before generic request execution.");
 assert.ok(entry.indexOf('handleDirectHomepageExecution') < entry.indexOf('handleDirectHomepagePlan'), "Approved direct execution must run before all generic planners and executors.");
 assert.ok(entry.indexOf('handleDirectHomepagePlan') < entry.indexOf('handleNeuronFreeHomepagePlan'), "Direct plan must run before legacy binders.");
 assert.ok(entry.includes('requestType: "homepage"'), "Existing Website Retool must remain homepage by default unless a future planner declares another page type.");
+assert.ok(entry.includes('&& !continuation.active'), "Continuation planning must not duplicate MAIN again.");
+assert.ok(entry.includes('homepageContinuationPrivateRuntimeRequired: false'));
+assert.ok(entry.includes('homepageContinuationDuplicatesMain: false'));
+assert.ok(entry.includes('homepageContinuationPreservesApprovedStaging: true'));
+assert.ok(entry.includes('X-Kairos-Managed-Staging-Reused'));
+assert.ok(entry.includes('X-Kairos-Main-Duplicated'));
+assert.ok(entry.includes('X-Kairos-Private-Runtime-Used'));
 assert.ok(entry.includes('workersAIBlockedEnv'));
 assert.ok(entry.includes('if (property === "AI") return undefined'));
 assert.ok(entry.includes('if (property === "AI") return false'));
@@ -59,6 +71,28 @@ assert.ok(entry.includes('labeledHomepagePromptsRequireWorkersAI: false'));
 assert.ok(entry.includes('labeledHomepagePromptsUseSecondBindingPass: false'));
 assert.ok(entry.includes('approvedDirectPackagesUseApprovalTimeRebinding: false'));
 assert.ok(entry.includes('tuesday-command-center-6f96b10d'));
+
+for (const marker of [
+  'kairos-homepage-continuation-20260717-1',
+  'DETERMINISTIC HOMEPAGE CONTINUATION — TEXT ONLY',
+  'preserveManagedStaging: true',
+  'duplicateMainBeforePlanning: false',
+  'currentManagedStagingReused: true',
+  'freshMainDuplicateRequired: false',
+  'priorApprovedTextPreserved: true',
+  'deterministicContinuation: true',
+  'privateRuntimeUsed: false',
+  'workersAIUsed: false',
+  'neuronsConsumed: 0',
+  'Products and services heading',
+  'personalized subscriptions',
+  'X-Kairos-Managed-Staging-Reused',
+  'X-Kairos-Main-Duplicated',
+  'X-Kairos-Private-Runtime-Used',
+]) assert.ok(homepageContinuation.includes(marker), `Missing deterministic continuation contract: ${marker}`);
+
+assert.ok(!homepageContinuation.includes('env.AI.run'), "Homepage continuation must not call Workers AI.");
+assert.ok(!homepageContinuation.includes('runKairosIntelligence'), "Homepage continuation must not call the private runtime.");
 
 for (const marker of [
   'kairos-zero-neuron-child-router-20260717-1',
@@ -211,6 +245,7 @@ assert.ok(hub.includes('4 · Deliver'));
 
 console.log(JSON.stringify({
   status: "passed",
+  homepageContinuation: "kairos-homepage-continuation-20260717-1",
   websitePlanningGovernance: "kairos-website-planning-governance-20260717-1",
   zeroNeuronChildRouter: "kairos-zero-neuron-child-router-20260717-1",
   doctrineRegistry: "kairos-internal-doctrine-registry-20260717-1",
@@ -221,6 +256,10 @@ console.log(JSON.stringify({
   browserFilesChanged: false,
   websiteDoctrineInheritedAutomatically: true,
   websiteGovernanceNeuronUsage: 0,
+  homepageContinuationPrivateRuntimeRequired: false,
+  homepageContinuationNeuronUsage: 0,
+  homepageContinuationDuplicatesMain: false,
+  homepageContinuationPreservesApprovedStaging: true,
   homepageHeroOnlyCompletionAccepted: false,
   websiteLinkDestinationsMutableByTextPlan: false,
   websiteDesignMutationAuthorizedByCopyObjective: false,
@@ -229,8 +268,7 @@ console.log(JSON.stringify({
   childRetrievalNeuronUsage: 0,
   doctrineVaultNeuronUsage: 0,
   generativeInference: "kairos-private-runtime-only",
-  websiteMode: "fresh-main-duplicate-plus-direct-approved-package-execution",
-  dirtyStagingReuse: false,
+  websiteMode: "fresh-main-initialization-plus-managed-staging-continuation-plus-direct-approved-package-execution",
   labeledHomepagePromptWorkersAIRequired: false,
   labeledHomepagePromptNeuronUsage: 0,
   labeledHomepagePromptSecondBindingPass: false,
