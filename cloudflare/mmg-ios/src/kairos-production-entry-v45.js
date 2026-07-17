@@ -215,3 +215,5 @@ function jsonError(status, code, message) {
     },
   });
 }
+
+// Deployment trigger only: serve the dependency-free Command Center recovery shell from Cloudflare Assets.
