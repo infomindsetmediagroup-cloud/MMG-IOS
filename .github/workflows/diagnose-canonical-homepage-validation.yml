@@ -1,0 +1,98 @@
+name: Diagnose Canonical Homepage Validation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/diagnose-canonical-homepage-validation.yml"
+      - "cloudflare/mmg-ios/src/kairos-canonical-homepage-*.js"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-immutable-v1.js"
+      - "cloudflare/mmg-ios/scripts/validate-production-baseline.mjs"
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download repository archive
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p repository diagnostics
+          curl --fail --show-error --silent --location \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" \
+            --output repository.tar.gz
+          tar -xzf repository.tar.gz --strip-components=1 -C repository
+
+      - name: Install worker dependencies
+        working-directory: repository/cloudflare/mmg-ios
+        run: npm install --no-package-lock --no-audit --no-fund
+
+      - name: Capture complete validation transcript
+        id: validation
+        continue-on-error: true
+        shell: bash
+        working-directory: repository/cloudflare/mmg-ios
+        run: |
+          set +e
+          npm run validate:production > ../../../diagnostics/validation.log 2>&1
+          status=$?
+          echo "exit_code=${status}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "# Validation diagnostic"
+            echo
+            echo "- Commit: ${GITHUB_SHA}"
+            echo "- Exit code: ${status}"
+            echo
+            echo '```text'
+            tail -n 160 ../../../diagnostics/validation.log
+            echo '```'
+          } > ../../../diagnostics/validation-tail.md
+          exit 0
+
+      - name: Upload complete diagnostic transcript
+        uses: actions/upload-artifact@v4
+        with:
+          name: canonical-homepage-validation-${{ github.sha }}
+          path: diagnostics
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Publish diagnostic status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXIT_CODE: ${{ steps.validation.outputs.exit_code }}
+        run: |
+          set -euo pipefail
+          if [ "${EXIT_CODE}" = "0" ]; then
+            state="success"
+            description="Canonical homepage production validation passed"
+          else
+            state="failure"
+            description="Validation transcript captured for canonical homepage repair"
+          fi
+          payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-validation-diagnostics",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          curl --fail --show-error --silent -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "${payload}"
+
+      - name: Enforce validation result
+        shell: bash
+        env:
+          EXIT_CODE: ${{ steps.validation.outputs.exit_code }}
+        run: test "${EXIT_CODE}" = "0"
