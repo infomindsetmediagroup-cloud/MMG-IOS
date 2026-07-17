@@ -1,0 +1,114 @@
+name: Verify Runtime Header Browser
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/verify-runtime-header-browser.yml"
+      - "web/kairos-dashboard/index.html"
+      - "web/kairos-dashboard/scripts/command-hub.js"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: kairos-runtime-header-browser
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      KAIROS_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev/center/content/website
+    steps:
+      - name: Wait for inline runtime probe to reach Cloudflare
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 36); do
+            curl --fail --silent --show-error --location --max-time 30 \
+              -H 'Cache-Control: no-cache' \
+              "${KAIROS_URL}?browser-gate=${GITHUB_SHA}-${attempt}-$(date +%s)" \
+              --output command-center.html || true
+            if grep -q 'header-inline=' command-center.html 2>/dev/null; then
+              echo "Inline runtime probe is live."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "The repaired Command Center HTML did not reach Cloudflare." >&2
+          exit 1
+
+      - name: Install browser verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir browser-check
+          cd browser-check
+          npm init -y >/dev/null
+          npm install --no-save playwright@1.54.1 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Prove visible header becomes Online
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd browser-check
+          cat > verify.cjs <<'NODE'
+          const { chromium } = require('playwright');
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            const page = await browser.newPage();
+            const consoleErrors = [];
+            page.on('console', message => {
+              if (message.type() === 'error') consoleErrors.push(message.text());
+            });
+            page.on('pageerror', error => consoleErrors.push(error.message));
+            const url = `${process.env.KAIROS_URL}?browser-runtime=${process.env.GITHUB_SHA}-${Date.now()}`;
+            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+            await page.locator('[data-runtime-label]').waitFor({ state: 'visible', timeout: 30000 });
+            await page.waitForFunction(() => document.querySelector('[data-runtime-label]')?.textContent?.trim() === 'Online', null, { timeout: 30000 });
+            const label = await page.locator('[data-runtime-label]').textContent();
+            const health = await page.evaluate(async () => {
+              const response = await fetch(`/api/health?browser-readback=${Date.now()}`, { cache: 'no-store' });
+              return { ok: response.ok, body: await response.json() };
+            });
+            if (!health.ok || !['ready', 'ok', 'operational'].includes(String(health.body?.status || '').toLowerCase())) {
+              throw new Error(`Browser health readback was not operational: ${JSON.stringify(health)}`);
+            }
+            if (label?.trim() !== 'Online') throw new Error(`Visible runtime label was ${JSON.stringify(label)}.`);
+            console.log(JSON.stringify({ status: 'passed', visibleLabel: label.trim(), healthStatus: health.body.status, consoleErrors }, null, 2));
+            await browser.close();
+          })().catch(error => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+          KAIROS_URL="${KAIROS_URL}" GITHUB_SHA="${GITHUB_SHA}" node verify.cjs
+
+      - name: Publish browser verification receipt
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          if [ "${JOB_STATUS}" = "success" ]; then
+            state="success"
+            description="Live browser header changed to Online"
+          else
+            state="failure"
+            description="Live browser runtime header verification failed"
+          fi
+          payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-runtime-header-browser",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          curl --fail --silent --show-error -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "${payload}"
