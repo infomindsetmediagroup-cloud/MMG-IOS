@@ -58,6 +58,7 @@ jobs:
           set -euo pipefail
           cd browser-check
           cat > verify.cjs <<'NODE'
+          const fs = require('fs');
           const { chromium } = require('playwright');
           (async () => {
             const browser = await chromium.launch({ headless: true });
@@ -86,19 +87,24 @@ jobs:
                 throw new Error(`Browser health readback was not operational: ${JSON.stringify(health)}`);
               }
               if (label?.trim() !== 'Online') throw new Error(`Visible runtime label was ${JSON.stringify(label)}.`);
-              console.log(JSON.stringify({ status: 'passed', visibleLabel: label.trim(), healthStatus: health.body.status, consoleMessages, requestFailures, badResponses }, null, 2));
+              const diagnostic = { status: 'passed', visibleLabel: label.trim(), healthStatus: health.body.status, consoleMessages, requestFailures, badResponses };
+              fs.writeFileSync('diagnostics.json', JSON.stringify(diagnostic, null, 2));
+              console.log(JSON.stringify(diagnostic));
             } catch (error) {
               const html = await page.content().catch(() => '');
-              console.error(JSON.stringify({
+              const diagnostic = {
+                status: 'failed',
                 error: error?.message || String(error),
                 pageURL: page.url(),
                 title: await page.title().catch(() => ''),
                 bodyText: await page.locator('body').innerText().catch(() => ''),
-                html: html.slice(0, 12000),
+                html: html.slice(0, 24000),
                 consoleMessages,
                 requestFailures,
                 badResponses,
-              }, null, 2));
+              };
+              fs.writeFileSync('diagnostics.json', JSON.stringify(diagnostic, null, 2));
+              console.error(JSON.stringify({ status: diagnostic.status, error: diagnostic.error, consoleMessages, requestFailures, badResponses }));
               throw error;
             } finally {
               await browser.close();
@@ -109,6 +115,15 @@ jobs:
           });
           NODE
           KAIROS_URL="${KAIROS_URL}" GITHUB_SHA="${GITHUB_SHA}" node verify.cjs
+
+      - name: Upload browser diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-header-browser-diagnostics
+          path: browser-check/diagnostics.json
+          if-no-files-found: warn
+          retention-days: 1
 
       - name: Publish browser verification receipt
         if: always()
