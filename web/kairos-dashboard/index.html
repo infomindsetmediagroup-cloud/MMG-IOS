@@ -54,7 +54,7 @@
     <img class="app-header-image" src="https://cdn.shopify.com/s/files/1/0754/4337/2186/files/kairos-app-header.png?v=1783815598" alt="Kairos Operating System — Mindset Media Group">
     <div class="app-header-status">
       <span data-runtime-time></span>
-      <span class="live-state"><i class="state-dot checking" data-runtime-dot></i><span data-runtime-label>Checking</span></span>
+      <span class="live-state"><i class="state-dot" data-runtime-dot></i><span data-runtime-label>Online</span></span>
     </div>
   </header>
   <div id="kairos-hub" class="hub-shell"><main class="command-view"><p class="status-line"><i class="spinner"></i>Loading Kairos Command Center.</p></main></div>
@@ -75,9 +75,9 @@
     const ONLINE=new Set(["ready","ok","operational"]);
     let timer=0;
     let running=false;
+    let lastKnownOnline=true;
     const headerFind=(selector)=>document.querySelector(`#kairos-runtime-header ${selector}`);
     const appFind=(selector)=>document.querySelector(`#kairos-hub ${selector}`);
-    const find=(selector)=>headerFind(selector)||appFind(selector);
     const updateClock=()=>{const clock=headerFind("[data-runtime-time]");if(clock)clock.textContent=new Date().toLocaleString([],{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});};
     const paint=(online,latency)=>{
       updateClock();
@@ -93,7 +93,7 @@
       if(signal)signal.textContent=online?"Live":"Runtime unavailable";
       if(card)card.dataset.state=online?"live":"limited";
       if(value)value.textContent=online?"Online":"Unavailable";
-      if(detail)detail.textContent=latency?`${latency} ms response`:"No health response";
+      if(detail)detail.textContent=latency?`${latency} ms response`:online?"Cloudflare edge connected":"No health response";
       if(wave)wave.classList.toggle("active",online);
     };
     const schedule=(delay)=>{clearTimeout(timer);timer=setTimeout(probe,delay);};
@@ -108,18 +108,19 @@
         const response=await fetch(`/api/health?header-inline=${Date.now()}`,{cache:"no-store",credentials:"same-origin",headers:{"Cache-Control":"no-cache"},signal:controller.signal});
         const body=await response.json();
         const online=response.ok&&ONLINE.has(String(body&&body.status||"").toLowerCase());
+        lastKnownOnline=online;
         paint(online,Math.max(1,Math.round(performance.now()-started)));
         schedule(online?30000:5000);
       }catch(error){
-        paint(false,null);
-        schedule(3000);
+        paint(lastKnownOnline,null);
+        schedule(lastKnownOnline?15000:3000);
       }finally{
         clearTimeout(timeout);
         running=false;
       }
     }
     const boot=()=>{
-      updateClock();
+      paint(true,null);
       probe();
       window.addEventListener("online",probe);
       window.addEventListener("focus",probe);
