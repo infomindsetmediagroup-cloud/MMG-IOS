@@ -1,11 +1,11 @@
 {
-  "baseline": "kairos-production-standard-20260717-45",
+  "baseline": "kairos-production-standard-20260717-46",
   "status": "frozen",
   "productionUrl": "https://mmg-ios.info-mindsetmediagroup.workers.dev",
   "worker": {
     "name": "mmg-ios",
-    "entry": "src/kairos-production-entry-v45.js",
-    "build": "kairos-production-entry-20260717-103",
+    "entry": "src/kairos-production-entry-v46.js",
+    "build": "kairos-production-entry-20260717-104",
     "compatibilityDate": "2026-07-11",
     "assetsDirectory": "../../web/kairos-dashboard",
     "durableObjectBinding": "KAIROS_PROJECTS",
@@ -14,6 +14,7 @@
   "dashboard": {
     "build": "kairos-command-hub-routed-20260716-6",
     "commandCenterDocument": "kairos-command-center-operational-20260717-20",
+    "selfContainedCommandCenter": "kairos-command-center-inline-20260717-1",
     "workspaceRuntime": "kairos-workspace-runtime-20260716-3",
     "workflowRuntime": "kairos-workflow-runtime-ui-20260716-4",
     "operationalRuntime": "kairos-operational-runtime-20260716-3",
@@ -55,8 +56,9 @@
   },
   "approvedExpansion": {
     "scope": "Operational Command Center with durable objective-to-deliverable execution and a one-objective homepage action. Combined homepage copy plus header/footer requests route directly to deterministic source-bound planning. Kairos checks active plain template settings, active embedded HTML or Liquid settings, and finally verified literal text nodes inside homepage-specific Liquid section files. The first source that exposes real visible copy produces bounded before-and-after replacements while preserving every HTML, Liquid, CSS, asset, class, link, structure, and text-node distribution contract. Kairos then layers only explicitly selected native Shopify header/footer settings on the same non-live staging theme. Model-formatted planning is not required for this combined path. The canonical homepage package is never installed for a rewrite-existing-homepage request. Exact source hashes, semantic or markup signatures, read-back verification, explicit preview approval, final live approval, and rollback evidence remain mandatory.",
-    "activeEdge": "src/kairos-production-entry-v45.js",
-    "preservesPriorEdge": "src/kairos-production-entry-v44.js",
+    "activeEdge": "src/kairos-production-entry-v46.js",
+    "preservesPriorEdge": "src/kairos-production-entry-v45.js",
+    "preservesSourceBoundEdge": "src/kairos-production-entry-v44.js",
     "automaticExternalExecution": false,
     "boundedInternalAutomaticExecution": true,
     "eventDrivenAutonomousExecution": true,
@@ -140,6 +142,8 @@
     "durableOperationalLedgerRequired": true,
     "domainWorkspaceRoutingRequired": true,
     "falseCompletionTemplatesRetired": true,
+    "rootAppShellDirectAssetsRequired": true,
+    "rootAppNoStoreRequired": true,
     "privateIntelligenceConfigurationReportedHonestly": true,
     "explicitFullRetoolStagingHandoffRequired": true,
     "unsafeLogoLayoutMutationProhibited": true,
