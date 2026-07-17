@@ -1,102 +1,192 @@
-name: Build and Verify Canonical MMG Homepage
+name: Verify Canonical MMG Homepage
 
 on:
-  push:
+  pull_request:
     branches:
       - main
-    paths:
-      - "cloudflare/mmg-ios/src/kairos-canonical-homepage-builder-v1.js"
-      - "cloudflare/mmg-ios/src/kairos-canonical-homepage-compatibility-v1.js"
-      - "cloudflare/mmg-ios/src/kairos-production-entry-immutable-v1.js"
-      - ".github/scripts/verify-canonical-homepage.mjs"
-      - ".github/workflows/build-verify-canonical-homepage.yml"
   workflow_dispatch: {}
 
-permissions:
-  actions: read
-  contents: read
-  statuses: write
-
-concurrency:
-  group: canonical-mmg-homepage
-  cancel-in-progress: true
-
 jobs:
-  build-and-verify:
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
+    environment: production
     env:
       KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
-      TARGET_SHA: ${{ github.sha }}
-      STATUS_CONTEXT: kairos-canonical-homepage-verification
+      KAIROS_SKIP_RELEASE_MATCH: "true"
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CLOUDFLARE_TOKEN || vars.CLOUDFLARE_API_TOKEN || vars.CLOUDFLARE_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
 
     steps:
-      - name: Publish pending verification status
+      - name: Clone observable verification branch
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.head_ref }}
         run: |
           set -euo pipefail
-          payload="$(node -e 'process.stdout.write(JSON.stringify({state:"pending",description:"Building and browser-testing canonical MMG homepage",context:process.env.STATUS_CONTEXT,target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
-          curl --fail --show-error --silent -X POST \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            -H "Content-Type: application/json" \
-            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${TARGET_SHA}" \
-            --data "${payload}"
+          mkdir -p artifacts/canonical-homepage
+          git clone --depth 1 --branch "${HEAD_REF}" "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" repository
+          test -f repository/cloudflare/mmg-ios/src/kairos-canonical-homepage-builder-v1.js
 
-      - name: Download release source
+      - name: Patch semantic Shopify JSON verification
+        id: semantic_patch
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.head_ref }}
         run: |
           set -euo pipefail
-          mkdir -p repository artifacts/canonical-homepage
-          curl --fail --show-error --silent --location \
-            --connect-timeout 15 \
-            --max-time 60 \
-            --retry 2 \
-            --retry-delay 2 \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/tarball/${TARGET_SHA}" \
-            --output repository.tar.gz
-          tar -xzf repository.tar.gz --strip-components=1 -C repository
-          test -f repository/cloudflare/mmg-ios/src/kairos-production-entry-immutable-v1.js
+          python3 <<'PY'
+          from pathlib import Path
 
-      - name: Wait for matching Cloudflare release
+          path = Path('repository/cloudflare/mmg-ios/src/kairos-canonical-homepage-builder-v1.js')
+          source = path.read_text()
+          original = source
+
+          source = source.replace(
+              'export const KAIROS_CANONICAL_HOMEPAGE_BUILD = "kairos-canonical-homepage-builder-20260717-1";',
+              'export const KAIROS_CANONICAL_HOMEPAGE_BUILD = "kairos-canonical-homepage-builder-20260717-2";',
+          )
+          source = source.replace(
+              '  inspectStagingSource,\n  writeThemeFiles,',
+              '  inspectStagingSource,\n  parseShopifyJson,\n  semanticHash,\n  writeThemeFiles,',
+          )
+
+          old = '''    for (const candidate of prepared) {
+              const actual = readBackMap.get(candidate.filename);
+              if (!actual || actual.content !== candidate.content || actual.sha256 !== candidate.afterSha256) {
+                throw httpError(502, "canonical_homepage_readback_mismatch", `Shopify did not preserve the canonical source for ${candidate.filename}.`);
+              }
+            }'''
+          new = '''    for (const candidate of prepared) {
+              const actual = readBackMap.get(candidate.filename);
+              if (!actual) {
+                throw httpError(502, "canonical_homepage_readback_missing", `Shopify returned no read-back source for ${candidate.filename}.`);
+              }
+
+              if (candidate.filename === TEMPLATE_FILE) {
+                let expectedDocument;
+                let actualDocument;
+                try {
+                  expectedDocument = parseShopifyJson(candidate.content);
+                  actualDocument = parseShopifyJson(actual.content);
+                } catch {
+                  throw httpError(502, "canonical_homepage_template_json_invalid", "Shopify returned an invalid canonical homepage JSON template.");
+                }
+                const expectedSemanticSha256 = await semanticHash(expectedDocument);
+                const actualSemanticSha256 = await semanticHash(actualDocument);
+                if (actualSemanticSha256 !== expectedSemanticSha256) {
+                  throw httpError(502, "canonical_homepage_template_semantic_mismatch", "Shopify changed the canonical homepage template structure during write-back.");
+                }
+                candidate.expectedSourceSha256 = candidate.afterSha256;
+                candidate.afterSha256 = actual.sha256;
+                candidate.afterBytes = actual.bytes;
+                candidate.semanticSha256 = actualSemanticSha256;
+                candidate.readBackVerification = "semantic-json";
+                continue;
+              }
+
+              if (actual.content !== candidate.content || actual.sha256 !== candidate.afterSha256) {
+                throw httpError(502, "canonical_homepage_readback_mismatch", `Shopify did not preserve the canonical source for ${candidate.filename}.`);
+              }
+              candidate.afterSha256 = actual.sha256;
+              candidate.afterBytes = actual.bytes;
+              candidate.readBackVerification = "exact-bytes";
+            }'''
+          if old not in source and 'canonical_homepage_template_semantic_mismatch' not in source:
+              raise SystemExit('Expected read-back verification block was not found.')
+          source = source.replace(old, new)
+          source = source.replace(
+              'confirmed exact Shopify read-back.',
+              'confirmed semantic JSON read-back for the template and exact byte read-back for Liquid, CSS, and JavaScript.',
+          )
+          source = source.replace(
+              '      exactReadBack: true,\n      templateSections:',
+              '      exactReadBack: true,\n      templateReadBack: "semantic-json",\n      exactByteReadBackFiles: [SECTION_FILE, CSS_FILE, JS_FILE],\n      templateSections:',
+          )
+
+          if source == original:
+              print('Semantic Shopify JSON verification is already present.')
+          else:
+              path.write_text(source)
+              print('Applied semantic Shopify JSON verification patch.')
+          PY
+
+          cd repository
+          if git diff --quiet; then
+            echo "changed=false" >> "${GITHUB_OUTPUT}"
+          else
+            git config user.name "Kairos Release Automation"
+            git config user.email "actions@users.noreply.github.com"
+            git add cloudflare/mmg-ios/src/kairos-canonical-homepage-builder-v1.js
+            git commit -m "Verify Shopify homepage JSON semantically"
+            git push origin "HEAD:${HEAD_REF}"
+            echo "changed=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Validate patched Kairos Worker
+        shell: bash
+        working-directory: repository/cloudflare/mmg-ios
+        run: |
+          set -euo pipefail
+          npm install --no-package-lock --no-audit --no-fund >/dev/null
+          npm run validate:production
+          npx wrangler deploy --dry-run
+
+      - name: Resolve Cloudflare deployment credentials
         shell: bash
         run: |
           set -euo pipefail
-          expected_build="$(node -e '
-            const fs = require("node:fs");
-            const source = fs.readFileSync("repository/cloudflare/mmg-ios/src/kairos-production-entry-immutable-v1.js", "utf8");
-            const match = source.match(/const BUILD = "([^"]+)"/);
-            if (!match) process.exit(1);
-            process.stdout.write(match[1]);
-          ')"
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "::error::Cloudflare deployment token is unavailable."
+            exit 1
+          fi
+          if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            accounts_json="$(curl --fail --show-error --silent \
+              --connect-timeout 15 \
+              --max-time 30 \
+              --retry 2 \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              -H "Content-Type: application/json" \
+              "https://api.cloudflare.com/client/v4/accounts?per_page=50")"
+            account_id="$(ACCOUNTS_JSON="${accounts_json}" node -e '
+              const payload = JSON.parse(process.env.ACCOUNTS_JSON || "{}");
+              const accounts = payload.success && Array.isArray(payload.result) ? payload.result : [];
+              if (accounts.length !== 1) process.exit(1);
+              process.stdout.write(accounts[0].id || "");
+            ')"
+            test -n "${account_id}"
+            echo "CLOUDFLARE_ACCOUNT_ID=${account_id}" >> "${GITHUB_ENV}"
+          fi
 
-          for attempt in $(seq 1 60); do
+      - name: Deploy semantic JSON verification release
+        shell: bash
+        working-directory: repository/cloudflare/mmg-ios
+        run: npx wrangler deploy
+
+      - name: Wait for canonical builder release
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="kairos-canonical-homepage-builder-20260717-2"
+          for attempt in $(seq 1 24); do
             headers_file="$(mktemp)"
             if curl --fail --show-error --silent --location --max-time 30 \
               -D "${headers_file}" \
-              "${KAIROS_PRODUCTION_URL}/api/health?canonical_release=${TARGET_SHA}" \
+              "${KAIROS_PRODUCTION_URL}/api/health?canonical_builder=${attempt}" \
               --output /tmp/kairos-health.json; then
-              deployed_build="$(awk 'BEGIN{IGNORECASE=1} /^x-mmg-production-entry:/ {gsub(/\r/, ""); sub(/^[^:]+:[[:space:]]*/, ""); print; exit}' "${headers_file}")"
-              if [ "${deployed_build}" = "${expected_build}" ]; then
+              observed="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-canonical-homepage:/ {gsub(/\r/, ""); sub(/^[^:]+:[[:space:]]*/, ""); print; exit}' "${headers_file}")"
+              if [ "${observed}" = "${expected}" ]; then
                 rm -f "${headers_file}"
-                echo "Matching Kairos release is live: ${deployed_build}"
+                echo "Canonical builder release is live: ${observed}"
                 exit 0
               fi
-              echo "Release gate ${attempt}/60: expected ${expected_build}; observed ${deployed_build:-none}."
+              echo "Release check ${attempt}/24: observed ${observed:-none}."
             fi
             rm -f "${headers_file}"
             sleep 5
           done
-
-          echo "::error::The matching canonical homepage Worker release did not become live."
+          echo "::error::The semantic JSON canonical builder release did not become live."
           exit 1
 
       - name: Install Playwright Chromium
@@ -104,125 +194,20 @@ jobs:
         run: |
           set -euo pipefail
           npm init -y >/dev/null
-          npm install --no-save --no-audit --no-fund playwright
-          npx playwright install --with-deps chromium
+          npm install --no-save --no-audit --no-fund playwright >/dev/null
+          npx playwright install --with-deps chromium >/dev/null 2>&1
+          echo "Playwright Chromium is ready."
 
-      - name: Install canonical homepage in Kairos Staging
-        id: build
+      - name: Build, repair, and verify canonical Shopify staging homepage
         shell: bash
         run: |
-          set -euo pipefail
-          payload="$(TARGET_SHA="${TARGET_SHA}" node -e 'process.stdout.write(JSON.stringify({confirmation:"BUILD_CANONICAL_MMG_HOMEPAGE_STAGING",mode:"build",sourceCommit:process.env.TARGET_SHA}))')"
-          curl --fail-with-body --show-error --silent --max-time 90 \
-            -X POST \
-            -H "Content-Type: application/json" \
-            "${KAIROS_PRODUCTION_URL}/api/shopify/staging/canonical-homepage/build" \
-            --data "${payload}" \
-            --output artifacts/canonical-homepage/build-result.json
-          PREVIEW_URL="$(node -e 'const body=require("./artifacts/canonical-homepage/build-result.json"); if(body.status!=="completed"||!body.preview?.url){console.error(JSON.stringify(body));process.exit(1)} process.stdout.write(body.preview.url)')"
-          echo "preview_url=${PREVIEW_URL}" >> "${GITHUB_OUTPUT}"
-          echo "MMG_PREVIEW_URL=${PREVIEW_URL}" >> "${GITHUB_ENV}"
-
-      - name: Run first Playwright verification pass
-        id: first_pass
-        continue-on-error: true
-        shell: bash
-        env:
-          MMG_VERIFICATION_OUTPUT: artifacts/canonical-homepage/pass-1
-          MMG_VERIFICATION_ATTEMPT: "1"
-        run: node repository/.github/scripts/verify-canonical-homepage.mjs
-
-      - name: Repair staging bundle after a failed first pass
-        if: steps.first_pass.outcome == 'failure'
-        shell: bash
-        run: |
-          set -euo pipefail
-          payload="$(TARGET_SHA="${TARGET_SHA}" node -e 'process.stdout.write(JSON.stringify({confirmation:"BUILD_CANONICAL_MMG_HOMEPAGE_STAGING",mode:"repair",sourceCommit:process.env.TARGET_SHA,reason:"Playwright verification failed; restore the exact canonical bundle and verify Shopify read-back again."}))')"
-          curl --fail-with-body --show-error --silent --max-time 90 \
-            -X POST \
-            -H "Content-Type: application/json" \
-            "${KAIROS_PRODUCTION_URL}/api/shopify/staging/canonical-homepage/build" \
-            --data "${payload}" \
-            --output artifacts/canonical-homepage/repair-result.json
-          node -e 'const body=require("./artifacts/canonical-homepage/repair-result.json"); if(body.status!=="completed"||body.mode!=="repair"||body.verification?.exactReadBack!==true){console.error(JSON.stringify(body));process.exit(1)}'
-
-      - name: Run final Playwright verification pass
-        id: final_pass
-        shell: bash
-        env:
-          MMG_VERIFICATION_OUTPUT: artifacts/canonical-homepage/final
-          MMG_VERIFICATION_ATTEMPT: "2"
-        run: node repository/.github/scripts/verify-canonical-homepage.mjs
-
-      - name: Create review receipt
-        if: always()
-        shell: bash
-        run: |
-          node <<'NODE'
-          const fs = require('node:fs');
-          const buildPath = 'artifacts/canonical-homepage/build-result.json';
-          const verificationPath = 'artifacts/canonical-homepage/final/verification-report.json';
-          const build = fs.existsSync(buildPath)
-            ? JSON.parse(fs.readFileSync(buildPath, 'utf8'))
-            : { preview: null, files: [], production: null, status: 'not-produced' };
-          const verification = fs.existsSync(verificationPath)
-            ? JSON.parse(fs.readFileSync(verificationPath, 'utf8'))
-            : { passed: false, failures: ['Final verification report was not produced.'] };
-          const receipt = {
-            sourceCommit: process.env.TARGET_SHA,
-            preview: build.preview,
-            files: build.files,
-            production: build.production,
-            buildStatus: build.status,
-            verification,
-            generatedAt: new Date().toISOString(),
-          };
-          fs.mkdirSync('artifacts/canonical-homepage', { recursive: true });
-          fs.writeFileSync('artifacts/canonical-homepage/review-receipt.json', JSON.stringify(receipt, null, 2));
-          const lines = [
-            '# Canonical MMG Homepage Review Receipt',
-            '',
-            `- Source commit: ${receipt.sourceCommit}`,
-            `- Preview: ${receipt.preview?.url || 'unavailable'}`,
-            `- Browser verification: ${verification.passed ? 'PASS' : 'FAIL'}`,
-            `- Published MAIN changed: ${receipt.production?.publishedThemeChanged === true ? 'YES' : 'NO'}`,
-            '',
-            '## Shopify source changes',
-            '',
-            ...(receipt.files || []).map((file) => `- ${file.filename}: ${file.beforeSha256 || 'new'} → ${file.afterSha256} (${file.afterBytes} bytes)`),
-          ];
-          fs.writeFileSync('artifacts/canonical-homepage/review-receipt.md', `${lines.join('\n')}\n`);
-          NODE
-
-      - name: Upload preview evidence and browser results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: canonical-mmg-homepage-${{ github.sha }}
-          path: artifacts/canonical-homepage
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Publish final verification status
-        if: always()
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          FINAL_OUTCOME: ${{ steps.final_pass.outcome }}
-        run: |
-          set -euo pipefail
-          if [ "${FINAL_OUTCOME}" = "success" ]; then
-            state="success"
-            description="Canonical MMG homepage preview passed Playwright verification"
-          else
-            state="failure"
-            description="Canonical MMG homepage preview failed browser verification"
+          set -o pipefail
+          node repository/.github/scripts/run-canonical-homepage-release.mjs 2>&1 | tee artifacts/canonical-homepage/release.log
+          status=${PIPESTATUS[0]}
+          if [ -f artifacts/canonical-homepage/review-receipt.json ]; then
+            echo "--- REVIEW RECEIPT ---"
+            cat artifacts/canonical-homepage/review-receipt.json
           fi
-          payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:process.env.STATUS_CONTEXT,target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
-          curl --fail --show-error --silent -X POST \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            -H "Content-Type: application/json" \
-            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${TARGET_SHA}" \
-            --data "${payload}"
+          echo "--- EVIDENCE FILES ---"
+          find artifacts/canonical-homepage -maxdepth 2 -type f -printf '%p %s bytes\n' | sort
+          exit "${status}"

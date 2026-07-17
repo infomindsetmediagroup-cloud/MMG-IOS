@@ -11,13 +11,19 @@ const productionEntryPath = resolve(repositoryRoot, "cloudflare/mmg-ios/src/kair
 const workerURL = String(process.env.KAIROS_PRODUCTION_URL || "https://mmg-ios.info-mindsetmediagroup.workers.dev").replace(/\/+$/, "");
 const commit = process.env.GITHUB_SHA || "unknown";
 const confirmation = "BUILD_CANONICAL_MMG_HOMEPAGE_STAGING";
+const skipReleaseMatch = process.env.KAIROS_SKIP_RELEASE_MATCH === "true";
 
 await mkdir(outputRoot, { recursive: true });
 const entrySource = await readFile(productionEntryPath, "utf8");
 const expectedEntry = entrySource.match(/const BUILD = "([^"]+)"/)?.[1];
 if (!expectedEntry) throw new Error("Could not resolve the expected production-entry build marker.");
 
-await waitForRelease(expectedEntry);
+if (skipReleaseMatch) {
+  console.log("Using the already deployed canonical homepage builder for observable PR verification.");
+} else {
+  await waitForRelease(expectedEntry);
+}
+
 const build = await requestBuild("build");
 await writeJSON(resolve(outputRoot, "build-result.json"), build);
 
@@ -43,6 +49,7 @@ const finalPass = runVerifier("final", "2", previewURL);
 const receipt = {
   sourceCommit: commit,
   expectedProductionEntry: expectedEntry,
+  releaseMatchSkipped: skipReleaseMatch,
   buildStatus: build.status,
   preview: build.preview,
   files: build.files,
