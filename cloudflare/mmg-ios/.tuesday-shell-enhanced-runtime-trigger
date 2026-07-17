@@ -1,0 +1,4 @@
+build=kairos-tuesday-shell-enhanced-runtime-20260717-1
+loading_baseline=kairos-command-hub-recovery-20260714-1
+production_url=https://mmg-ios.info-mindsetmediagroup.workers.dev
+canonical_workflow=.github/workflows/deploy-cloudflare-production.yml
