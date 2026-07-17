@@ -46,7 +46,7 @@ import {
   KAIROS_WHOLE_HOMEPAGE_PLANNER_BUILD,
 } from "./kairos-whole-homepage-planner-v1.js";
 
-const BUILD = "kairos-production-entry-autonomous-20260717-10";
+const BUILD = "kairos-production-entry-autonomous-20260717-11";
 const PLAN_PATH = "/api/shopify/staging/plan/jobs";
 
 export { KairosProject };
@@ -90,15 +90,29 @@ export default {
       }
 
       const baselineInternalDelegate = delegatedRequest => baselineRuntime.fetch(delegatedRequest, internalEnv, ctx);
-      const autonomousDelegate = nextRequest => handleAutonomousPromptRequest(nextRequest, internalEnv, ctx, baselineInternalDelegate);
+      const autonomousDelegate = nextRequest => handleAutonomousPromptRequest(
+        nextRequest,
+        internalEnv,
+        ctx,
+        baselineInternalDelegate,
+      );
 
-      const zeroNeuronChild = await handleZeroNeuronChildRequest(request, internalEnv, ctx, baselineInternalDelegate);
+      const zeroNeuronChild = await handleZeroNeuronChildRequest(
+        request,
+        internalEnv,
+        ctx,
+        baselineInternalDelegate,
+      );
       if (zeroNeuronChild) return stamp(zeroNeuronChild, baselineRefresh, governedPlanning.context, continuation);
 
       const directExecution = await handleDirectHomepageExecution(request, internalEnv, ctx);
       if (directExecution) return stamp(directExecution, baselineRefresh, governedPlanning.context, continuation);
 
-      const wholeHomepagePlan = await handleWholeHomepagePlan(governedPlanning.request, internalEnv, continuation);
+      const wholeHomepagePlan = await handleWholeHomepagePlan(
+        deterministicPlanningRequest,
+        internalEnv,
+        continuation,
+      );
       if (wholeHomepagePlan) {
         const continuedResponse = await applyHomepageContinuationMetadata(request, wholeHomepagePlan, continuation);
         const governedResponse = await applyWebsiteGovernanceToPlanResponse(request, continuedResponse, governedPlanning.context);
@@ -112,14 +126,24 @@ export default {
         return stamp(governedResponse, baselineRefresh, governedPlanning.context, continuation);
       }
 
-      const neuronFreePlan = await handleNeuronFreeHomepagePlan(deterministicPlanningRequest, internalEnv, ctx, autonomousDelegate);
+      const neuronFreePlan = await handleNeuronFreeHomepagePlan(
+        deterministicPlanningRequest,
+        internalEnv,
+        ctx,
+        autonomousDelegate,
+      );
       if (neuronFreePlan) {
         const continuedResponse = await applyHomepageContinuationMetadata(request, neuronFreePlan, continuation);
         const governedResponse = await applyWebsiteGovernanceToPlanResponse(request, continuedResponse, governedPlanning.context);
         return stamp(governedResponse, baselineRefresh, governedPlanning.context, continuation);
       }
 
-      const bindingRepair = await handleHomepagePromptBindingRepair(deterministicPlanningRequest, internalEnv, ctx, autonomousDelegate);
+      const bindingRepair = await handleHomepagePromptBindingRepair(
+        deterministicPlanningRequest,
+        internalEnv,
+        ctx,
+        autonomousDelegate,
+      );
       if (bindingRepair) {
         const continuedResponse = await applyHomepageContinuationMetadata(request, bindingRepair, continuation);
         const governedResponse = await applyWebsiteGovernanceToPlanResponse(request, continuedResponse, governedPlanning.context);
@@ -173,8 +197,10 @@ export default {
           websiteDesignMutationAuthorizedByCopyObjective: false,
           homepageHeroOnlyCompletionAccepted: false,
           homepageWholePagePlannerEnabled: true,
-          homepageWholePageMaximumOperations: 64,
-          homepageTemplateOnlyMutation: true,
+          homepageWholePageMaximumOperations: 96,
+          homepageTemplateOnlyMutation: false,
+          homepageMarkupBackedSettingsCovered: true,
+          homepagePageBoundSectionSourcesCovered: true,
           homepageContinuationPrivateRuntimeRequired: false,
           homepageContinuationDuplicatesMain: false,
           homepageContinuationPreservesApprovedStaging: true,
