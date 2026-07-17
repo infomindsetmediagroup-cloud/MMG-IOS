@@ -1,7 +1,7 @@
 {
   "baseline": "kairos-production-standard-20260717-46",
   "status": "frozen",
-  "productionUrl": "https://mmg-ios.info-mindsetmediagroup.workers.dev",
+  "productionUrl": "https://kairos.themindsetmediagroup.com",
   "worker": {
     "name": "mmg-ios",
     "entry": "src/kairos-production-entry-v46.js",
