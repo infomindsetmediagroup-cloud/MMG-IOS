@@ -2,9 +2,11 @@ import runtime, { KairosProject } from "./kairos-production-entry-v42.js";
 import renderedTextPlanner from "./kairos-rendered-homepage-text-planner-v1.js";
 import templateMarkupPlanner, { KAIROS_HOMEPAGE_TEMPLATE_MARKUP_TEXT_PLANNER_BUILD } from "./kairos-homepage-template-markup-text-planner-v1.js";
 import liquidFallback, { KAIROS_HOMEPAGE_LIQUID_TEXT_FALLBACK_BUILD } from "./kairos-homepage-liquid-text-fallback-v1.js";
+import instanceFallback, { KAIROS_HOMEPAGE_INSTANCE_LIQUID_FALLBACK_BUILD } from "./kairos-homepage-instance-liquid-fallback-v1.js";
 
 const BUILD = "kairos-production-entry-20260717-100";
 const PLAN_ROUTE = "/api/shopify/staging/plan/jobs";
+const EXECUTE_ROUTE = "/api/shopify/staging/execute/jobs";
 const PRIMARY_FALLBACK_CODES = new Set([
   "rendered_homepage_text_delta_missing",
   "published_homepage_text_settings_missing",
@@ -14,6 +16,11 @@ const MARKUP_FALLBACK_CODES = new Set([
   "embedded_template_markup_text_missing",
   "safe_embedded_markup_text_changes_missing",
   "embedded_markup_text_patch_empty",
+]);
+const INSTANCE_FALLBACK_CODES = new Set([
+  "homepage_liquid_scope_unsafe",
+  "homepage_liquid_section_missing",
+  "homepage_liquid_visible_text_missing",
 ]);
 
 export { KairosProject };
@@ -33,7 +40,17 @@ export default {
           const embeddedBody = await safeJSON(embedded.clone());
           if (embedded.ok || !MARKUP_FALLBACK_CODES.has(String(embeddedBody?.error?.code || ""))) return stamp(embedded, "embedded-template-markup");
 
-          return stamp(await liquidFallback.fetch(request, env, ctx), "liquid-literal-text");
+          const liquid = await liquidFallback.fetch(request.clone(), env, ctx);
+          const liquidBody = await safeJSON(liquid.clone());
+          if (liquid.ok || !INSTANCE_FALLBACK_CODES.has(String(liquidBody?.error?.code || ""))) return stamp(liquid, "homepage-specific-liquid-text");
+
+          return stamp(await instanceFallback.fetch(request, env, ctx), "homepage-instance-clone");
+        }
+      }
+      if (request.method === "POST" && url.pathname === EXECUTE_ROUTE) {
+        const payload = await safeJSON(request.clone());
+        if (payload?.plan?.plan?.installationMode === "published-main-homepage-instance-liquid-text-v1") {
+          return stamp(await instanceFallback.fetch(request, env, ctx), "homepage-instance-clone");
         }
       }
       let response = await runtime.fetch(request, env, ctx);
@@ -62,16 +79,22 @@ async function addHealth(response) {
   body.homepagePreserveDesign = {
     ...(body.homepagePreserveDesign || {}),
     status: "operational",
-    contract: "published-main-three-source-visible-text-preservation",
+    contract: "published-main-four-source-visible-text-preservation",
     sourceOrder: [
       "active rendered template text settings",
       "active embedded template HTML or Liquid text nodes",
       "homepage-specific section Liquid literal text",
+      "homepage-instance isolated shared-section clone",
     ],
     templateMarkupPlannerBuild: KAIROS_HOMEPAGE_TEMPLATE_MARKUP_TEXT_PLANNER_BUILD,
     liquidFallbackBuild: KAIROS_HOMEPAGE_LIQUID_TEXT_FALLBACK_BUILD,
+    instanceFallbackBuild: KAIROS_HOMEPAGE_INSTANCE_LIQUID_FALLBACK_BUILD,
     sourceOfTruth: "published-main-theme",
     visibleTextDeltaRequired: true,
+    sharedSectionHandling: "clone-and-bind-homepage-instance-only",
+    originalSharedSectionFiles: "immutable",
+    homepageTemplateMutation: "selected-section-type-reference-only-when-isolation-required",
+    cloneMarkupMutation: "literal-text-nodes-only",
     markupAndLiquidTokenMutation: "prohibited",
     CSSAssetClassDesignTokenMutation: "prohibited",
     canonicalPackageInstallation: "prohibited-in-preserve-mode",
@@ -82,6 +105,9 @@ async function addHealth(response) {
     homepageTemplateTextMutation: "operational",
     homepageEmbeddedTemplateMarkupTextMutation: "operational",
     homepageLiquidLiteralTextFallback: "operational",
+    homepageSharedSectionInstanceIsolation: "operational",
+    homepageOriginalSharedSectionProtection: "required",
+    homepageInstanceCloneReadback: "required",
     homepageVisibleTextDelta: "required",
     homepageCanonicalRebuildFallback: "prohibited",
   };
@@ -96,9 +122,12 @@ function stamp(response, source) {
   headers.set("X-Kairos-Production-Entry", BUILD);
   headers.set("X-Kairos-Homepage-Template-Markup-Planner", KAIROS_HOMEPAGE_TEMPLATE_MARKUP_TEXT_PLANNER_BUILD);
   headers.set("X-Kairos-Homepage-Liquid-Fallback", KAIROS_HOMEPAGE_LIQUID_TEXT_FALLBACK_BUILD);
+  headers.set("X-Kairos-Homepage-Instance-Fallback", KAIROS_HOMEPAGE_INSTANCE_LIQUID_FALLBACK_BUILD);
   headers.set("X-Kairos-Homepage-Text-Source", source);
   headers.set("X-Kairos-Homepage-Mode", "preserve-published-framework");
   headers.set("X-Kairos-Homepage-Source", "published-main-theme");
+  headers.set("X-Kairos-Shared-Section-Handling", "homepage-instance-clone");
+  headers.set("X-Kairos-Original-Shared-Sections", "immutable");
   headers.set("X-Kairos-Canonical-Rebuild-Fallback", "prohibited");
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
