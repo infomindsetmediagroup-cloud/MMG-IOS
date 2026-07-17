@@ -218,3 +218,4 @@ function jsonError(status, code, message) {
 
 // Deployment trigger only: serve the dependency-free Command Center recovery shell from Cloudflare Assets.
 // Isolated recovery trigger: deploy the self-contained shell and prove Website Retool input in Chromium.
+// Corrected recovery workflow trigger: run mobile browser proof against the live app.
