@@ -1,4 +1,5 @@
 import baseRuntime, { KairosProject } from "./kairos-production-entry-v2.js";
+import { handleChildActionRequest } from "./kairos-child-action-runtime-v1.js";
 import { auditHomepageLinks } from "./kairos-link-lifecycle-engine-v1.js";
 import {
   executeHomepageLinkRepair,
@@ -26,8 +27,9 @@ import {
 } from "./kairos-executive-briefing-v1.js";
 import { handleHomepageReleaseRequest } from "./shopify-homepage-release-v1.js";
 
-const BUILD = "kairos-production-baseline-20260715-4";
+const BUILD = "kairos-production-baseline-20260717-5";
 const STAGING_PLAN_PATH = "/api/shopify/staging/plan/jobs";
+const CHILD_EXECUTE_PATH = "/api/hub/execute";
 
 export { KairosProject };
 
@@ -35,106 +37,28 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
-    if (request.method === "GET" && url.pathname === "/api/shopify/link-intelligence/audit") {
-      return handleLinkAudit(env);
+    if (request.method === "POST" && url.pathname === CHILD_EXECUTE_PATH) {
+      try {
+        const response = await handleChildActionRequest(
+          request,
+          env,
+          ctx,
+          delegatedRequest => handleStableRequest(delegatedRequest, env, ctx),
+        );
+        if (response) return stamp(response, {
+          "X-Kairos-Child-Action": "direct-objective-to-deliverable",
+          "X-Kairos-Child-Action-Runtime": "kairos-child-action-runtime-20260716-1",
+        });
+      } catch (error) {
+        return failure("child_action_execution_failed", error, 502, {
+          browserShellAvailable: true,
+          failureContainedToChildRequest: true,
+          liveThemeChanged: false,
+        });
+      }
     }
 
-    if (request.method === "POST" && url.pathname === "/api/shopify/link-intelligence/repair/prepare") {
-      return guarded("link_repair_prepare_failed", async () => ({
-        plan: await prepareHomepageLinkRepair(request, env),
-      }));
-    }
-
-    if (request.method === "POST" && url.pathname === "/api/shopify/link-intelligence/repair/execute") {
-      return guarded("link_repair_execute_failed", async () => ({
-        result: await executeHomepageLinkRepair(request, env, await safeJSON(request.clone())),
-      }));
-    }
-
-    if (request.method === "POST" && url.pathname === "/api/shopify/link-intelligence/review/prepare") {
-      return guarded("lifecycle_review_prepare_failed", async () => ({
-        review: await prepareLifecycleReview(request, env),
-      }));
-    }
-
-    if (request.method === "POST" && url.pathname === "/api/shopify/link-intelligence/review/decide") {
-      return guarded("lifecycle_review_decision_failed", async () => ({
-        review: await decideLifecycleReview(request, await safeJSON(request.clone())),
-      }));
-    }
-
-    if (request.method === "POST" && url.pathname === "/api/shopify/link-intelligence/review/execute") {
-      return guarded("lifecycle_review_execute_failed", async () => ({
-        result: await executeApprovedLifecycleReview(request, env, await safeJSON(request.clone())),
-      }));
-    }
-
-    if (request.method === "GET" && url.pathname === "/api/shopify/website-retool/schema-inspection") {
-      return guarded("website_retool_schema_inspection_failed", async () => ({
-        report: await inspectWebsiteRetoolSchema(request, env),
-      }));
-    }
-
-    if (request.method === "POST" && url.pathname === "/api/shopify/website-retool/exceptions/prepare") {
-      return guarded("website_retool_exception_plan_failed", async () => ({
-        plan: await prepareWebsiteRetoolExceptions(request, env),
-      }));
-    }
-
-    if (request.method === "POST" && url.pathname === "/api/shopify/website-retool/exceptions/execute") {
-      return guarded("website_retool_exception_execution_failed", async () => ({
-        result: await executeWebsiteRetoolExceptions(request, env, await safeJSON(request.clone())),
-      }));
-    }
-
-    if (request.method === "POST" && url.pathname === "/api/shopify/website-retool/exceptions/rollback") {
-      return guarded("website_retool_exception_rollback_failed", async () => ({
-        result: await rollbackWebsiteRetoolExceptions(request, env, await safeJSON(request.clone())),
-      }));
-    }
-
-    if (request.method === "POST" && url.pathname === "/api/shopify/website-intelligence/run") {
-      return guarded("website_intelligence_run_failed", async () => ({
-        report: await runWebsiteIntelligenceSupervisor(request, env, "manual"),
-      }), 502);
-    }
-
-    if (request.method === "GET" && url.pathname === "/api/shopify/website-intelligence/latest") {
-      const report = await readLatestWebsiteIntelligenceReport(request);
-      return report
-        ? json({ status: "completed", build: BUILD, report })
-        : json({ status: "not-ready", build: BUILD, message: "No website review has been completed yet." }, 404);
-    }
-
-    if (request.method === "POST" && url.pathname === "/api/executive-briefing/build") {
-      return guarded("executive_briefing_build_failed", async () => ({
-        briefing: await buildExecutiveBriefing(request, env, "manual"),
-      }), 502);
-    }
-
-    if (request.method === "GET" && url.pathname === "/api/executive-briefing/latest") {
-      const briefing = await readLatestExecutiveBriefing(request);
-      return briefing
-        ? json({ status: "completed", build: BUILD, briefing })
-        : json({ status: "not-ready", build: BUILD, message: "No executive briefing has been prepared yet." }, 404);
-    }
-
-    if (request.method === "POST" && url.pathname === "/api/executive-briefing/decide") {
-      return guarded("executive_briefing_decision_failed", async () => ({
-        briefing: await decideExecutiveBriefingItem(request, await safeJSON(request.clone())),
-      }));
-    }
-
-    if (url.pathname.startsWith("/api/shopify/homepage-release/")) {
-      const response = await handleHomepageReleaseRequest(request, env);
-      if (response) return stamp(response);
-    }
-
-    if (request.method === "POST" && url.pathname === STAGING_PLAN_PATH) {
-      return handleStagingPlan(request, env, ctx);
-    }
-
-    return stamp(await baseRuntime.fetch(request, env, ctx));
+    return handleStableRequest(request, env, ctx);
   },
 
   async scheduled(controller, env, ctx) {
@@ -145,6 +69,111 @@ export default {
     })().catch(() => null));
   },
 };
+
+async function handleStableRequest(request, env, ctx) {
+  const url = new URL(request.url);
+
+  if (request.method === "GET" && url.pathname === "/api/shopify/link-intelligence/audit") {
+    return handleLinkAudit(env);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/shopify/link-intelligence/repair/prepare") {
+    return guarded("link_repair_prepare_failed", async () => ({
+      plan: await prepareHomepageLinkRepair(request, env),
+    }));
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/shopify/link-intelligence/repair/execute") {
+    return guarded("link_repair_execute_failed", async () => ({
+      result: await executeHomepageLinkRepair(request, env, await safeJSON(request.clone())),
+    }));
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/shopify/link-intelligence/review/prepare") {
+    return guarded("lifecycle_review_prepare_failed", async () => ({
+      review: await prepareLifecycleReview(request, env),
+    }));
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/shopify/link-intelligence/review/decide") {
+    return guarded("lifecycle_review_decision_failed", async () => ({
+      review: await decideLifecycleReview(request, await safeJSON(request.clone())),
+    }));
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/shopify/link-intelligence/review/execute") {
+    return guarded("lifecycle_review_execute_failed", async () => ({
+      result: await executeApprovedLifecycleReview(request, env, await safeJSON(request.clone())),
+    }));
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/shopify/website-retool/schema-inspection") {
+    return guarded("website_retool_schema_inspection_failed", async () => ({
+      report: await inspectWebsiteRetoolSchema(request, env),
+    }));
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/shopify/website-retool/exceptions/prepare") {
+    return guarded("website_retool_exception_plan_failed", async () => ({
+      plan: await prepareWebsiteRetoolExceptions(request, env),
+    }));
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/shopify/website-retool/exceptions/execute") {
+    return guarded("website_retool_exception_execution_failed", async () => ({
+      result: await executeWebsiteRetoolExceptions(request, env, await safeJSON(request.clone())),
+    }));
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/shopify/website-retool/exceptions/rollback") {
+    return guarded("website_retool_exception_rollback_failed", async () => ({
+      result: await rollbackWebsiteRetoolExceptions(request, env, await safeJSON(request.clone())),
+    }));
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/shopify/website-intelligence/run") {
+    return guarded("website_intelligence_run_failed", async () => ({
+      report: await runWebsiteIntelligenceSupervisor(request, env, "manual"),
+    }), 502);
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/shopify/website-intelligence/latest") {
+    const report = await readLatestWebsiteIntelligenceReport(request);
+    return report
+      ? json({ status: "completed", build: BUILD, report })
+      : json({ status: "not-ready", build: BUILD, message: "No website review has been completed yet." }, 404);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/executive-briefing/build") {
+    return guarded("executive_briefing_build_failed", async () => ({
+      briefing: await buildExecutiveBriefing(request, env, "manual"),
+    }), 502);
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/executive-briefing/latest") {
+    const briefing = await readLatestExecutiveBriefing(request);
+    return briefing
+      ? json({ status: "completed", build: BUILD, briefing })
+      : json({ status: "not-ready", build: BUILD, message: "No executive briefing has been prepared yet." }, 404);
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/executive-briefing/decide") {
+    return guarded("executive_briefing_decision_failed", async () => ({
+      briefing: await decideExecutiveBriefingItem(request, await safeJSON(request.clone())),
+    }));
+  }
+
+  if (url.pathname.startsWith("/api/shopify/homepage-release/")) {
+    const response = await handleHomepageReleaseRequest(request, env);
+    if (response) return stamp(response);
+  }
+
+  if (request.method === "POST" && url.pathname === STAGING_PLAN_PATH) {
+    return handleStagingPlan(request, env, ctx);
+  }
+
+  return stamp(await baseRuntime.fetch(request, env, ctx));
+}
 
 async function handleLinkAudit(env) {
   try {
@@ -232,11 +261,12 @@ async function safeJSON(response) {
   catch { return {}; }
 }
 
-function stamp(response) {
+function stamp(response, additionalHeaders = {}) {
   const headers = new Headers(response.headers);
   headers.set("X-MMG-Runtime", BUILD);
-  headers.set("X-Kairos-Production-Baseline", "reconciled-v4");
+  headers.set("X-Kairos-Production-Baseline", "reconciled-v5");
   headers.set("X-Kairos-Website-Workflow", "staging-preview-approval-release");
+  for (const [name, value] of Object.entries(additionalHeaders)) headers.set(name, value);
   if (headers.get("Content-Type")?.includes("text/html")) {
     headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
   }
@@ -254,7 +284,7 @@ function json(value, status = 200, additionalHeaders = {}) {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store",
       "X-MMG-Runtime": BUILD,
-      "X-Kairos-Production-Baseline": "reconciled-v2",
+      "X-Kairos-Production-Baseline": "reconciled-v5",
       "X-Content-Type-Options": "nosniff",
       ...additionalHeaders,
     },
