@@ -1,11 +1,16 @@
 name: Build and Verify Canonical MMG Homepage
 
 on:
-  workflow_run:
-    workflows:
-      - Deploy Cloudflare Production
-    types:
-      - completed
+  push:
+    branches:
+      - main
+    paths:
+      - "cloudflare/mmg-ios/src/kairos-canonical-homepage-builder-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-canonical-homepage-compatibility-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-immutable-v1.js"
+      - ".github/scripts/verify-canonical-homepage.mjs"
+      - ".github/workflows/build-verify-canonical-homepage.yml"
+  workflow_dispatch: {}
 
 permissions:
   actions: read
@@ -14,46 +19,19 @@ permissions:
 
 concurrency:
   group: canonical-mmg-homepage
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build-and-verify:
-    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     env:
       KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
-      TARGET_SHA: ${{ github.event.workflow_run.head_sha }}
+      TARGET_SHA: ${{ github.sha }}
       STATUS_CONTEXT: kairos-canonical-homepage-verification
 
     steps:
-      - name: Determine whether this deployment contains the canonical homepage build
-        id: scope
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          commit_json="$(curl --fail --show-error --silent \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/commits/${TARGET_SHA}")"
-          should_run="$(COMMIT_JSON="${commit_json}" node -e '
-            const payload = JSON.parse(process.env.COMMIT_JSON || "{}");
-            const files = Array.isArray(payload.files) ? payload.files.map((file) => file.filename) : [];
-            const watched = new Set([
-              "cloudflare/mmg-ios/src/kairos-canonical-homepage-builder-v1.js",
-              "cloudflare/mmg-ios/src/kairos-production-entry-immutable-v1.js",
-              ".github/scripts/verify-canonical-homepage.mjs",
-              ".github/workflows/build-verify-canonical-homepage.yml"
-            ]);
-            process.stdout.write(files.some((file) => watched.has(file)) ? "true" : "false");
-          ')"
-          echo "run=${should_run}" >> "${GITHUB_OUTPUT}"
-
       - name: Publish pending verification status
-        if: steps.scope.outputs.run == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -68,8 +46,7 @@ jobs:
             "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${TARGET_SHA}" \
             --data "${payload}"
 
-      - name: Download deployed repository source
-        if: steps.scope.outputs.run == 'true'
+      - name: Download release source
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -77,15 +54,52 @@ jobs:
           set -euo pipefail
           mkdir -p repository artifacts/canonical-homepage
           curl --fail --show-error --silent --location \
+            --connect-timeout 15 \
+            --max-time 60 \
+            --retry 2 \
+            --retry-delay 2 \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/tarball/${TARGET_SHA}" \
             --output repository.tar.gz
           tar -xzf repository.tar.gz --strip-components=1 -C repository
+          test -f repository/cloudflare/mmg-ios/src/kairos-production-entry-immutable-v1.js
+
+      - name: Wait for matching Cloudflare release
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_build="$(node -e '
+            const fs = require("node:fs");
+            const source = fs.readFileSync("repository/cloudflare/mmg-ios/src/kairos-production-entry-immutable-v1.js", "utf8");
+            const match = source.match(/const BUILD = "([^"]+)"/);
+            if (!match) process.exit(1);
+            process.stdout.write(match[1]);
+          ')"
+
+          for attempt in $(seq 1 60); do
+            headers_file="$(mktemp)"
+            if curl --fail --show-error --silent --location --max-time 30 \
+              -D "${headers_file}" \
+              "${KAIROS_PRODUCTION_URL}/api/health?canonical_release=${TARGET_SHA}" \
+              --output /tmp/kairos-health.json; then
+              deployed_build="$(awk 'BEGIN{IGNORECASE=1} /^x-mmg-production-entry:/ {gsub(/\r/, ""); sub(/^[^:]+:[[:space:]]*/, ""); print; exit}' "${headers_file}")"
+              if [ "${deployed_build}" = "${expected_build}" ]; then
+                rm -f "${headers_file}"
+                echo "Matching Kairos release is live: ${deployed_build}"
+                exit 0
+              fi
+              echo "Release gate ${attempt}/60: expected ${expected_build}; observed ${deployed_build:-none}."
+            fi
+            rm -f "${headers_file}"
+            sleep 5
+          done
+
+          echo "::error::The matching canonical homepage Worker release did not become live."
+          exit 1
 
       - name: Install Playwright Chromium
-        if: steps.scope.outputs.run == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -94,7 +108,6 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: Install canonical homepage in Kairos Staging
-        if: steps.scope.outputs.run == 'true'
         id: build
         shell: bash
         run: |
@@ -111,7 +124,6 @@ jobs:
           echo "MMG_PREVIEW_URL=${PREVIEW_URL}" >> "${GITHUB_ENV}"
 
       - name: Run first Playwright verification pass
-        if: steps.scope.outputs.run == 'true'
         id: first_pass
         continue-on-error: true
         shell: bash
@@ -121,7 +133,7 @@ jobs:
         run: node repository/.github/scripts/verify-canonical-homepage.mjs
 
       - name: Repair staging bundle after a failed first pass
-        if: steps.scope.outputs.run == 'true' && steps.first_pass.outcome == 'failure'
+        if: steps.first_pass.outcome == 'failure'
         shell: bash
         run: |
           set -euo pipefail
@@ -135,7 +147,6 @@ jobs:
           node -e 'const body=require("./artifacts/canonical-homepage/repair-result.json"); if(body.status!=="completed"||body.mode!=="repair"||body.verification?.exactReadBack!==true){console.error(JSON.stringify(body));process.exit(1)}'
 
       - name: Run final Playwright verification pass
-        if: steps.scope.outputs.run == 'true'
         id: final_pass
         shell: bash
         env:
@@ -144,22 +155,29 @@ jobs:
         run: node repository/.github/scripts/verify-canonical-homepage.mjs
 
       - name: Create review receipt
-        if: always() && steps.scope.outputs.run == 'true'
+        if: always()
         shell: bash
         run: |
           node <<'NODE'
           const fs = require('node:fs');
-          const build = JSON.parse(fs.readFileSync('artifacts/canonical-homepage/build-result.json', 'utf8'));
+          const buildPath = 'artifacts/canonical-homepage/build-result.json';
           const verificationPath = 'artifacts/canonical-homepage/final/verification-report.json';
-          const verification = fs.existsSync(verificationPath) ? JSON.parse(fs.readFileSync(verificationPath, 'utf8')) : { passed: false, failures: ['Final verification report was not produced.'] };
+          const build = fs.existsSync(buildPath)
+            ? JSON.parse(fs.readFileSync(buildPath, 'utf8'))
+            : { preview: null, files: [], production: null, status: 'not-produced' };
+          const verification = fs.existsSync(verificationPath)
+            ? JSON.parse(fs.readFileSync(verificationPath, 'utf8'))
+            : { passed: false, failures: ['Final verification report was not produced.'] };
           const receipt = {
             sourceCommit: process.env.TARGET_SHA,
             preview: build.preview,
             files: build.files,
             production: build.production,
+            buildStatus: build.status,
             verification,
             generatedAt: new Date().toISOString(),
           };
+          fs.mkdirSync('artifacts/canonical-homepage', { recursive: true });
           fs.writeFileSync('artifacts/canonical-homepage/review-receipt.json', JSON.stringify(receipt, null, 2));
           const lines = [
             '# Canonical MMG Homepage Review Receipt',
@@ -177,16 +195,16 @@ jobs:
           NODE
 
       - name: Upload preview evidence and browser results
-        if: always() && steps.scope.outputs.run == 'true'
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: canonical-mmg-homepage-${{ github.event.workflow_run.head_sha }}
+          name: canonical-mmg-homepage-${{ github.sha }}
           path: artifacts/canonical-homepage
           if-no-files-found: error
           retention-days: 30
 
       - name: Publish final verification status
-        if: always() && steps.scope.outputs.run == 'true'
+        if: always()
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
