@@ -10,26 +10,27 @@ const read = path => readFileSync(path, "utf8");
 const wrangler = read(join(workerRoot, "wrangler.toml"));
 const entry = read(join(workerRoot, "src/kairos-production-entry-autonomous-v1.js"));
 const controller = read(join(workerRoot, "src/kairos-autonomous-prompt-controller-v1.js"));
-const bindingRepair = read(join(workerRoot, "src/kairos-homepage-prompt-binding-repair-v1.js"));
 const fullThemeBaseline = read(join(workerRoot, "src/kairos-approved-baseline-restore-v1.js"));
-const neuronFree = read(join(workerRoot, "src/kairos-neuron-free-homepage-planner-v1.js"));
 const directPlan = read(join(workerRoot, "src/kairos-direct-homepage-plan-v1.js"));
+const directExecution = read(join(workerRoot, "src/kairos-direct-homepage-execution-v1.js"));
 const index = read(join(repoRoot, "web/kairos-dashboard/index.html"));
 const hub = read(join(repoRoot, "web/kairos-dashboard/scripts/command-hub.js"));
 
 assert.match(wrangler, /^main\s*=\s*"src\/kairos-production-entry-autonomous-v1\.js"$/m);
-assert.match(wrangler, /^\[ai\]$/m);
-assert.match(wrangler, /^binding\s*=\s*"AI"$/m);
 
 assert.ok(entry.includes('./kairos-production-entry.js'), "The autonomous entry must wrap the Tuesday production entry.");
 assert.ok(entry.includes('./kairos-autonomous-prompt-controller-v1.js'));
 assert.ok(entry.includes('./kairos-approved-baseline-restore-v1.js'));
 assert.ok(entry.includes('./kairos-direct-homepage-plan-v1.js'));
+assert.ok(entry.includes('./kairos-direct-homepage-execution-v1.js'));
 assert.ok(entry.includes('restoreApprovedHomepageBaseline(env)'));
+assert.ok(entry.includes('handleDirectHomepageExecution'));
 assert.ok(entry.includes('handleDirectHomepagePlan'));
+assert.ok(entry.indexOf('handleDirectHomepageExecution') < entry.indexOf('handleDirectHomepagePlan'), "Approved direct execution must run before all generic planners and executors.");
 assert.ok(entry.indexOf('handleDirectHomepagePlan') < entry.indexOf('handleNeuronFreeHomepagePlan'), "Direct plan must run before legacy binders.");
 assert.ok(entry.includes('labeledHomepagePromptsRequireWorkersAI: false'));
 assert.ok(entry.includes('labeledHomepagePromptsUseSecondBindingPass: false'));
+assert.ok(entry.includes('approvedDirectPackagesUseApprovalTimeRebinding: false'));
 assert.ok(entry.includes('tuesday-command-center-6f96b10d'));
 
 for (const marker of [
@@ -75,10 +76,32 @@ for (const marker of [
   'X-Kairos-Second-Binding-Pass',
 ]) assert.ok(directPlan.includes(marker), `Missing direct homepage plan contract: ${marker}`);
 
+for (const marker of [
+  'kairos-direct-homepage-execution-20260717-1',
+  'direct-homepage-execution-v1',
+  'approvedDirectPackage: true',
+  'approvalTimeRebindingUsed: false',
+  'approvedPackageExecutedDirectly: true',
+  'approvalTimeInventoryRebuildUsed: false',
+  'sourceHashesVerified: true',
+  'candidateHashesVerified: true',
+  'structuralSignaturesVerified: true',
+  'rebuildApprovedCandidate',
+  'writeThemeFiles',
+  '/_kairos/autonomous-execution-jobs/',
+  'X-Kairos-Approval-Time-Rebinding',
+  'workersAIUsed: false',
+  'neuronsConsumed: 0',
+]) assert.ok(directExecution.includes(marker), `Missing direct homepage execution contract: ${marker}`);
+
 assert.ok(!directPlan.includes('env.AI.run'), "Direct homepage plan must not call Workers AI.");
 assert.ok(!directPlan.includes('runKairosIntelligence'), "Direct homepage plan must not call any inference runtime.");
 assert.ok(!directPlan.includes('buildExplicitObjective'), "Direct homepage plan must not convert operations back into prose.");
 assert.ok(!directPlan.includes('delegate('), "Direct homepage plan must not pass labeled fields through a second binder.");
+assert.ok(!directExecution.includes('buildHomepageInventory'), "Approved direct execution must not rebuild the text inventory.");
+assert.ok(!directExecution.includes('normalizeOperations'), "Approved direct execution must not rebind approved operations.");
+assert.ok(!directExecution.includes('env.AI.run'), "Approved direct execution must not call Workers AI.");
+assert.ok(!directExecution.includes('runKairosIntelligence'), "Approved direct execution must not call any inference runtime.");
 assert.ok(!fullThemeBaseline.includes('await writeThemeFile(config, auth, stagingTheme.id, filename, source)'), "Legacy one-file staging restore remains active.");
 
 assert.ok(index.includes('content="kairos-command-hub-recovery-20260714-1"'));
@@ -96,13 +119,16 @@ assert.ok(hub.includes('4 · Deliver'));
 console.log(JSON.stringify({
   status: "passed",
   directHomepagePlan: "kairos-direct-homepage-plan-20260717-1",
+  directHomepageExecution: "kairos-direct-homepage-execution-20260717-1",
   fullThemeBaseline: "kairos-full-theme-main-baseline-20260717-1",
   visualBaseline: "tuesday-command-center-6f96b10d",
   browserFilesChanged: false,
-  websiteMode: "fresh-main-duplicate-plus-direct-source-bound-text-plan",
+  websiteMode: "fresh-main-duplicate-plus-direct-approved-package-execution",
   dirtyStagingReuse: false,
   labeledHomepagePromptWorkersAIRequired: false,
   labeledHomepagePromptNeuronUsage: 0,
   labeledHomepagePromptSecondBindingPass: false,
-  executionBoundary: "existing-verified-text-only-executor",
+  approvalTimeInventoryRebuild: false,
+  approvalTimeOperationRebinding: false,
+  executionBoundary: "exact-source-hash-plus-candidate-hash-plus-structural-signature",
 }, null, 2));
