@@ -1,5 +1,8 @@
-const BUILD = "kairos-prebreak-functionality-recovery-20260717-1";
+const BUILD = "kairos-prebreak-functionality-recovery-20260717-2";
 const CHILD_BRIDGE_BUILD = "kairos-child-action-bridge-20260716-1";
+const WEBSITE_STATE_KEY = "kairos.website.operational-flow.v2";
+const WEBSITE_MIGRATION_KEY = "kairos.website.visual-preservation-migration.v2";
+const PRESERVE_INSTALLATION_MODE = "published-main-template-text-settings-v1";
 const PRESERVE_DIRECTIVE = `KAIROS IMMUTABLE VISUAL-PRESERVATION CONTRACT:
 - Preserve the current Shopify theme's visual design exactly unless a separate explicit visual-redesign approval is supplied.
 - Do not change colors, color schemes, gradients, typography, border radii, pills, buttons, badges, card styling, shadows, spacing tokens, design tokens, CSS, or global theme settings.
@@ -8,10 +11,67 @@ const PRESERVE_DIRECTIVE = `KAIROS IMMUTABLE VISUAL-PRESERVATION CONTRACT:
 - Keep the current native Shopify header and footer visual settings unchanged.
 - Any proposed visual mutation is unauthorized and must be excluded from the staging package.`;
 
+invalidateStaleWebsiteState();
 installImmediateStyles();
 installFetchGuard();
 installDOMGuard();
 installCurrentChildRuntime();
+
+function invalidateStaleWebsiteState() {
+  try {
+    const raw = sessionStorage.getItem(WEBSITE_STATE_KEY);
+    if (!raw) {
+      sessionStorage.setItem(WEBSITE_MIGRATION_KEY, BUILD);
+      return;
+    }
+    const stored = JSON.parse(raw);
+    if (!stored || typeof stored !== "object") {
+      sessionStorage.removeItem(WEBSITE_STATE_KEY);
+      sessionStorage.setItem(WEBSITE_MIGRATION_KEY, BUILD);
+      return;
+    }
+
+    const plan = stored?.plan?.plan || {};
+    const installationMode = String(plan?.installationMode || "");
+    const changes = Array.isArray(plan?.changes) ? plan.changes : [];
+    const selectedChanges = stored?.websiteRetool?.selectedChanges || stored?.execution?.websiteRetool?.selectedChanges;
+    const unsafeChange = changes.some(change => {
+      const filename = String(change?.filename || "").toLowerCase();
+      const type = String(change?.changeType || "").toLowerCase();
+      return /\.(css|scss|sass|less)$/.test(filename)
+        || filename === "config/settings_data.json"
+        || /style|color|scheme|font|typography|spacing|pill|button|card|layout|asset|css/.test(type);
+    });
+    const unsafePlan = Boolean(stored?.plan) && (
+      installationMode !== PRESERVE_INSTALLATION_MODE
+      || plan?.styleMutationAuthorized === true
+      || plan?.visualMutationAuthorized === true
+      || plan?.cssMutationAuthorized === true
+      || plan?.assetMutationAuthorized === true
+      || plan?.canonicalPackage
+      || unsafeChange
+      || (Array.isArray(selectedChanges) && selectedChanges.length > 0)
+    );
+
+    if (unsafePlan || ["executing", "previewing", "preview", "release", "publishing", "complete"].includes(String(stored.mode || ""))) {
+      sessionStorage.setItem(WEBSITE_STATE_KEY, JSON.stringify({
+        mode: "input",
+        objective: String(stored.objective || stored?.plan?.objective || ""),
+        requestType: "content-only",
+        plan: null,
+        execution: null,
+        verification: null,
+        release: null,
+        migratedBy: BUILD,
+        migrationReason: unsafePlan ? "unsafe-pre-preservation-plan-invalidated" : "pre-preservation-execution-state-invalidated",
+      }));
+    }
+    sessionStorage.setItem(WEBSITE_MIGRATION_KEY, BUILD);
+  } catch {
+    sessionStorage.removeItem(WEBSITE_STATE_KEY);
+    sessionStorage.setItem(WEBSITE_MIGRATION_KEY, BUILD);
+  }
+}
 
 function installImmediateStyles() {
   if (document.querySelector("#kairos-prebreak-recovery-styles")) return;
@@ -179,5 +239,6 @@ window.KairosPrebreakFunctionalityRecovery = {
   build: BUILD,
   childBridge: CHILD_BRIDGE_BUILD,
   visualPreservation: "enforced",
+  staleUnsafeWebsitePlans: "invalidated",
   loaderMutation: false,
 };
