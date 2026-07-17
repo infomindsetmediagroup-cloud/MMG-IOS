@@ -1,56 +1,123 @@
 name: Command Center Browser Proof
 
 on:
-  pull_request:
+  push:
     branches: [main]
-    types: [opened, synchronize, reopened]
     paths:
       - "cloudflare/mmg-ios/**"
       - "web/kairos-dashboard/**"
       - ".github/workflows/command-center-browser-proof.yml"
+  workflow_dispatch: {}
 
 permissions:
   contents: read
+  statuses: write
+
+concurrency:
+  group: command-center-production-browser-proof
+  cancel-in-progress: true
 
 jobs:
   proof:
     runs-on: ubuntu-22.04
-    timeout-minutes: 5
+    timeout-minutes: 15
+    env:
+      APP_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev/center/content/website
     steps:
-      - name: Check out pull request source
+      - name: Check out production source
         uses: actions/checkout@v4
+
+      - name: Install Worker dependencies
+        working-directory: cloudflare/mmg-ios
+        run: npm install --ignore-scripts --no-package-lock --no-audit --no-fund
+
+      - name: Validate Worker bundle
+        working-directory: cloudflare/mmg-ios
+        run: npx wrangler deploy --dry-run
+
+      - name: Deploy self-contained app
+        working-directory: cloudflare/mmg-ios
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          npx wrangler deploy
+
+      - name: Wait for exact live shell
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 48); do
+            nonce="${GITHUB_SHA}-${attempt}-$(date +%s)"
+            rm -f headers.txt app.html
+            code="$(curl --silent --show-error --location --max-time 30 \
+              -H 'Cache-Control: no-cache' \
+              -D headers.txt \
+              "${APP_URL}?proof=${nonce}" \
+              --output app.html \
+              --write-out '%{http_code}' || true)"
+            route="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-command-center-route:/{gsub(/\r/,"",$2);print $2}' headers.txt | tail -1)"
+            if [ "${code}" = "200" ] \
+              && [ "${route}" = "direct-assets-root-shell" ] \
+              && grep -q 'kairos-command-center-inline-20260717-1' app.html \
+              && grep -q 'id="website-objective"' app.html; then
+              echo "Exact self-contained app shell is live."
+              break
+            fi
+            if [ "${attempt}" = "48" ]; then
+              echo "Exact self-contained app shell did not become live." >&2
+              exit 1
+            fi
+            sleep 5
+          done
 
       - name: Install DOM harness
         run: npm install jsdom@26.1.0 --no-audit --no-fund --no-save
 
-      - name: Execute self-contained Command Center
+      - name: Execute live self-contained Command Center
         shell: bash
         run: |
           set -euo pipefail
           node <<'NODE'
-          const fs = require('fs');
           const { JSDOM, VirtualConsole } = require('jsdom');
-          const html = fs.readFileSync('web/kairos-dashboard/index.html', 'utf8');
-          const errors = [];
-          const virtualConsole = new VirtualConsole();
-          virtualConsole.on('jsdomError', error => errors.push(String(error?.message || error)));
-          virtualConsole.on('error', message => errors.push(String(message)));
-
-          const dom = new JSDOM(html, {
-            url: 'https://mmg-ios.info-mindsetmediagroup.workers.dev/center/content/website',
-            runScripts: 'dangerously',
-            pretendToBeVisual: true,
-            virtualConsole,
-          });
-
-          setTimeout(() => {
+          (async () => {
+            const response = await fetch(`${process.env.APP_URL}?dom-proof=${Date.now()}`, {
+              headers: { 'Cache-Control': 'no-cache' },
+            });
+            const html = await response.text();
+            const errors = [];
+            const virtualConsole = new VirtualConsole();
+            virtualConsole.on('jsdomError', error => errors.push(String(error?.message || error)));
+            virtualConsole.on('error', message => errors.push(String(message)));
+            const dom = new JSDOM(html, {
+              url: process.env.APP_URL,
+              runScripts: 'dangerously',
+              pretendToBeVisual: true,
+              virtualConsole,
+              beforeParse(window) {
+                window.fetch = async () => ({
+                  ok: true,
+                  status: 200,
+                  text: async () => JSON.stringify({ status: 'operational' }),
+                  json: async () => ({ status: 'operational' }),
+                });
+              },
+            });
+            await new Promise(resolve => setTimeout(resolve, 500));
             const { document } = dom.window;
             const hub = document.querySelector('#kairos-hub');
             const input = document.querySelector('#website-objective');
             const button = document.querySelector('[data-website-plan]');
             const value = 'Verified functioning Website Retool input.';
-            if (input) input.value = value;
+            if (input) {
+              input.value = value;
+              input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+            }
+            const inlineCSS = [...document.querySelectorAll('style')].map(node => node.textContent || '').join('\n');
             const receipt = {
+              httpStatus: response.status,
               boot: document.documentElement.dataset.kairosBoot || null,
               build: hub?.dataset?.selfContainedBuild || null,
               loading: Boolean(hub?.textContent?.includes('Loading Kairos Command Center')),
@@ -59,18 +126,45 @@ jobs:
               objectiveValue: input?.value || null,
               buttonPresent: Boolean(button),
               buttonEnabled: Boolean(button && !button.disabled),
+              criticalCSS: inlineCSS.includes('.app-header-image') && inlineCSS.includes('max-height:180px') && inlineCSS.includes('font:15px/1.5 Inter'),
               errors,
             };
             console.log(`KAIROS_BROWSER_RECEIPT=${JSON.stringify(receipt)}`);
             dom.window.close();
-            const passed = receipt.boot === 'ready'
+            const passed = response.ok
+              && receipt.boot === 'ready'
               && receipt.build === 'kairos-command-center-inline-20260717-1'
               && !receipt.loading
               && receipt.commandView
               && receipt.websiteRetool
               && receipt.objectiveValue === value
               && receipt.buttonPresent
-              && receipt.buttonEnabled;
+              && receipt.buttonEnabled
+              && receipt.criticalCSS;
             process.exit(passed ? 0 : 1);
-          }, 250);
+          })().catch(error => { console.error(error); process.exit(1); });
           NODE
+
+      - name: Publish proof receipt
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${JOB_STATUS}" = "success" ]; then
+            state="success"
+            description="Live Command Center opened and Website Retool accepted input"
+          else
+            state="failure"
+            description="Live Command Center browser proof failed"
+          fi
+          payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-command-center-browser-proof",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          curl --fail --silent --show-error -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "${payload}"
