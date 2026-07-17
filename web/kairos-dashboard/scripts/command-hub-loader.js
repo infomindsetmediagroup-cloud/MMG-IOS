@@ -1,5 +1,5 @@
-// Live browser initialization proof trigger: 2026-07-17T05:20Z
-const BUILD = "kairos-command-hub-loader-20260717-3";
+// Production headless-Chrome gate trigger: 2026-07-17T05:28Z
+const BUILD = "kairos-command-hub-loader-20260717-4";
 const HUB_SELECTOR = "#kairos-hub";
 const LOADING_TEXT = "Loading Kairos Command Center";
 const MODULE_URL = "/scripts/command-hub.js?v=operational-20260717-13";
