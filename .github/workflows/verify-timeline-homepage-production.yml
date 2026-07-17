@@ -1,4 +1,5 @@
 name: Verify Timeline and Homepage Production
+# v43 verification revision 2
 
 on:
   push:
@@ -84,8 +85,9 @@ jobs:
             resetScript:reset.includes('kairos-homepage.session-migration.v5')&&reset.includes('kairos.homepage.quick-action.v4'),
             quickAction:quick.includes('Keep my homepage. Change the words.')&&quick.includes('literalLiquidTextFallbackAuthorized: true')
           };
-          console.log(JSON.stringify({health:{build:health.build,homepagePreserveDesign:p,capabilities:health.capabilities},checks},null,2));
-          if(Object.values(checks).some(value=>value!==true)) process.exit(1);
+          const failed=Object.entries(checks).filter(([,value])=>value!==true).map(([key])=>key);
+          console.log(JSON.stringify({failed,checks},null,2));
+          if(failed.length) process.exit(1);
           NODE
 
       - name: Prove the real homepage produces a safe visible-text plan
@@ -128,8 +130,9 @@ jobs:
             productionHeader:/x-kairos-production-entry:\s*kairos-production-entry-20260717-100/i.test(headers),
             sourceHeader:/x-kairos-homepage-text-source:\s*(template-settings|embedded-template-markup|liquid-literal-text)/i.test(headers)
           };
-          console.log(JSON.stringify({httpStatus:Number(process.env.HTTP_CODE),mode,templateCount,liquidCount,summary:result?.summary,checks},null,2));
-          if(Object.values(checks).some(value=>value!==true)){
+          const failed=Object.entries(checks).filter(([,value])=>value!==true).map(([key])=>key);
+          console.log(JSON.stringify({failed,httpStatus:Number(process.env.HTTP_CODE),mode,templateCount,liquidCount,summary:result?.summary,checks},null,2));
+          if(failed.length){
             console.error(JSON.stringify(body,null,2));
             process.exit(1);
           }
