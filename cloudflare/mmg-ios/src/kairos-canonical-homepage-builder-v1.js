@@ -17,6 +17,8 @@ const SECTION_FILE = "sections/mmg-canonical-homepage.liquid";
 const CSS_FILE = "assets/mmg-canonical-homepage.css";
 const JS_FILE = "assets/mmg-canonical-homepage.js";
 const MANAGED_FILES = [TEMPLATE_FILE, SECTION_FILE, CSS_FILE, JS_FILE];
+const READ_BACK_ATTEMPTS = 10;
+const READ_BACK_DELAY_MS = 450;
 
 const TEMPLATE_SOURCE = JSON.stringify({
   sections: {
@@ -274,7 +276,7 @@ export async function handleCanonicalHomepageBuild(request, env) {
   await writeThemeFiles(env, evidence.stagingTheme.gid, prepared.map(({ filename, content }) => ({ filename, content })));
 
   try {
-    const readBack = await inspectStagingSource(null, request, env, KAIROS_CANONICAL_HOMEPAGE_BUILD, MANAGED_FILES);
+    const readBack = await waitForCanonicalReadBack(request, env, prepared);
     const readBackMap = new Map((readBack?.evidence?.files || []).map((file) => [file.filename, file]));
     for (const candidate of prepared) {
       const actual = readBackMap.get(candidate.filename);
@@ -355,6 +357,55 @@ export async function handleCanonicalHomepageBuild(request, env) {
       rollbackOnReadBackFailure: true,
     },
   }, 200);
+}
+
+async function waitForCanonicalReadBack(request, env, prepared) {
+  let lastError = null;
+  let lastObserved = [];
+  for (let attempt = 1; attempt <= READ_BACK_ATTEMPTS; attempt += 1) {
+    try {
+      const readBack = await inspectStagingSource(null, request, env, KAIROS_CANONICAL_HOMEPAGE_BUILD, MANAGED_FILES);
+      const readBackMap = new Map((readBack?.evidence?.files || []).map((file) => [file.filename, file]));
+      const observed = [];
+      let matched = true;
+      for (const candidate of prepared) {
+        const actual = readBackMap.get(candidate.filename);
+        if (!actual) {
+          matched = false;
+          observed.push(`${candidate.filename}:missing`);
+          break;
+        }
+        if (candidate.filename === TEMPLATE_FILE) {
+          const expectedDocument = parseShopifyJson(candidate.content);
+          const actualDocument = parseShopifyJson(actual.content);
+          const expectedSemanticSha256 = await semanticHash(expectedDocument);
+          const actualSemanticSha256 = await semanticHash(actualDocument);
+          observed.push(`${candidate.filename}:${actualSemanticSha256}`);
+          if (actualSemanticSha256 !== expectedSemanticSha256) {
+            matched = false;
+            break;
+          }
+          continue;
+        }
+        observed.push(`${candidate.filename}:${actual.sha256}`);
+        if (actual.content !== candidate.content || actual.sha256 !== candidate.afterSha256) {
+          matched = false;
+          break;
+        }
+      }
+      lastObserved = observed;
+      if (matched) return readBack;
+    } catch (error) {
+      lastError = error;
+    }
+    if (attempt < READ_BACK_ATTEMPTS) await delay(READ_BACK_DELAY_MS);
+  }
+  const detail = lastError instanceof Error ? ` Last read error: ${lastError.message}` : '';
+  throw httpError(502, 'canonical_homepage_readback_mismatch', `Shopify did not expose the current canonical homepage revision after ${READ_BACK_ATTEMPTS} read-back attempts. Observed ${lastObserved.join(', ') || 'no readable files'}.${detail}`);
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function restorePreviousFiles(env, themeGid, prepared, beforeMap) {
