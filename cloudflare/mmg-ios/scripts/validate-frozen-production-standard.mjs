@@ -30,7 +30,8 @@ const paths = {
   web003: join(root, "src/kairos-web003-composite-runtime-v1.js"),
   index: join(repo, "web/kairos-dashboard/index.html"),
   reset: join(repo, "web/kairos-dashboard/scripts/homepage-session-reset-v5.js"),
-  quick: join(repo, "web/kairos-dashboard/scripts/homepage-quick-action.js"),
+  quick: join(repo, "web/kairos-dashboard/scripts/homepage-quick-action-v5.js"),
+  quickLegacy: join(repo, "web/kairos-dashboard/scripts/homepage-quick-action.js"),
   quickCSS: join(repo, "web/kairos-dashboard/styles/homepage-quick-action.css"),
   bridge: join(repo, "web/kairos-dashboard/scripts/child-action-bridge.js"),
   websiteRouter: join(repo, "web/kairos-dashboard/scripts/website-intent-router.js"),
@@ -44,10 +45,13 @@ const manifest = JSON.parse(read(paths.manifest));
 const sources = Object.fromEntries(Object.entries(paths).filter(([name]) => name !== "manifest").map(([name, path]) => [name, read(path)]));
 
 assert.equal(manifest.status, "frozen");
-assert.equal(manifest.baseline, "kairos-production-standard-20260717-38");
+assert.equal(manifest.baseline, "kairos-production-standard-20260717-39");
 assert.equal(manifest.worker.entry, "src/kairos-production-entry-v43.js");
 assert.equal(manifest.worker.build, "kairos-production-entry-20260717-101");
+assert.equal(manifest.dashboard.commandCenterDocument, "kairos-command-center-operational-20260717-20");
 assert.equal(manifest.dashboard.homepageQuickAction, "kairos-homepage-quick-action-20260717-4");
+assert.equal(manifest.dashboard.homepageQuickActionAsset, "scripts/homepage-quick-action-v5.js");
+assert.equal(manifest.dashboard.homepageQuickActionAssetBinding, "/scripts/homepage-quick-action-v5.js?v=operational-20260717-5");
 assert.equal(manifest.dashboard.homepageSessionReset, "kairos-homepage-session-reset-20260717-1");
 assert.equal(manifest.dashboard.homepageTemplateMarkupTextPlanner, "kairos-homepage-template-markup-text-planner-20260717-1");
 assert.equal(manifest.dashboard.homepageLiquidTextFallback, "kairos-homepage-liquid-text-fallback-20260716-1");
@@ -65,6 +69,7 @@ for (const flag of [
   "homepageSelectedInstanceTypeReferenceOnlyRequired", "homepageDeterministicCloneFilenameRequired",
   "homepageInstanceCloneReadbackRequired", "homepageInstanceExecutorRequired",
   "homepageTemplateSemanticReadbackRequired", "homepageCloneExactReadbackRequired",
+  "homepageQuickActionImmutableAssetRequired", "homepageQuickActionAssetPathVerificationRequired",
   "homepageVisibleTextDeltaRequired", "homepageHiddenTextSuccessProhibited",
   "homepageMarkupSignaturePreservationRequired", "homepageTextNodeDistributionPreservationRequired",
   "homepageLiquidLogicMutationProhibited", "homepageStylesheetMutationProhibitedInPreserveMode",
@@ -159,16 +164,18 @@ assert.ok(!sources.instanceExecutor.includes('writeThemeFiles(env, evidence.main
 assert.ok(!sources.instanceExecutor.includes('productionPublishAuthorized: true'), "Instance executor must not authorize production publishing");
 
 requireAll(sources.index, [
-  'kairos-command-center-operational-20260717-19',
+  'kairos-command-center-operational-20260717-20',
   '/scripts/homepage-session-reset-v5.js?v=operational-20260717-1',
-  '/scripts/homepage-quick-action.js?v=operational-20260717-4',
+  '/scripts/homepage-quick-action-v5.js?v=operational-20260717-5',
   '/scripts/website-intent-router.js?v=operational-20260716-2',
   '/scripts/child-action-bridge.js?v=operational-20260716-1'
 ], "Command Center index");
+assert.ok(!sources.index.includes('/scripts/homepage-quick-action.js?v='), "Retired homepage Quick Action asset path is still bound");
 requireAll(sources.reset, [
   'kairos-homepage-session-reset-20260717-1', 'kairos.homepage.session-migration.v5',
   'kairos.homepage.quick-action.v4', 'sessionStorage.removeItem'
 ], "Homepage session reset");
+assert.equal(sources.quick, sources.quickLegacy, "Immutable Quick Action asset must match the verified source exactly");
 requireAll(sources.quick, [
   'kairos-homepage-quick-action-20260717-4', 'kairos.homepage.quick-action.v5',
   'kairos.homepage.quick-action.v4', 'Keep my homepage. Change the words.',
@@ -180,7 +187,7 @@ requireAll(sources.quick, [
   '/api/shopify/staging/plan/jobs', '/api/shopify/staging/execute/jobs',
   '/api/shopify/staging/visual-verification', '/api/shopify/staging/visual-approval',
   '/api/shopify/homepage-release/prepare', '/api/shopify/homepage-release/publish'
-], "Homepage Quick Action");
+], "Homepage Quick Action immutable asset");
 requireAll(sources.quickCSS, ['.homepage-quick-action', '.homepage-design-lock', '.homepage-preview-links', '@media(max-width:620px)'], "Homepage Quick Action CSS");
 for (const marker of prohibitedUI) assert.ok(!sources.quick.includes(marker), `Homepage Quick Action contains prohibited behavior: ${marker}`);
 
@@ -206,6 +213,8 @@ console.log(`KAIROS_FROZEN_STANDARD=${JSON.stringify({
   baseline: manifest.baseline,
   workerEntry: manifest.worker.entry,
   workerBuild: manifest.worker.build,
+  homepageQuickActionAsset: manifest.dashboard.homepageQuickActionAsset,
+  homepageQuickActionAssetBinding: manifest.dashboard.homepageQuickActionAssetBinding,
   homepageTextSourceOrder: ["template-settings", "embedded-template-markup", "homepage-specific-liquid", "homepage-instance-clone"],
   instancePlanner: manifest.dashboard.homepageInstanceLiquidFallback,
   instanceExecutor: manifest.dashboard.homepageInstanceLiquidExecutor,
