@@ -1,4 +1,4 @@
-deployment-trigger: 2026-07-16T19:42:00-07:00
+deployment-trigger: 2026-07-16T19:59:00-07:00
 workflow: diagnose-production-validation.yml
-purpose: deploy the current main branch with the visible runtime header fully decoupled from the Command Center mount and protected from the stale Connecting overwrite
-source-commit: 2762d39e9f610feda35a444e9232daff2fd76b7d
+purpose: deploy the current main branch with the visible runtime header server-rendered Online and permitted to downgrade only when live Cloudflare health fails
+source-commit: 64d17cb2792ff0ac97872cad497dbcf6bacca4bb
