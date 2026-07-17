@@ -28,12 +28,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail-with-body --silent --show-error --location --max-time 300 \
+          http_code="$(curl --silent --show-error --location --max-time 300 \
             -H 'Content-Type: application/json' \
             -H 'Cache-Control: no-cache' \
             --data @- \
             "${KAIROS_URL}/api/shopify/staging/plan/jobs?source-bound=${GITHUB_SHA}-$(date +%s)" \
-            --output source-bound-plan.json <<'JSON'
+            --output source-bound-plan.json \
+            --write-out '%{http_code}' <<'JSON' || true
           {
             "objective": "Rewrite the existing published Mindset Media Group homepage customer-facing copy so visitors immediately understand the knowledge, publishing, creator education, and digital-product ecosystem. Preserve the existing homepage structure and design. Also prepare bounded native Shopify header and footer color options for explicit staging approval. Do not publish anything live.",
             "requestType": "full-retool",
@@ -44,15 +45,19 @@ jobs:
             "contentOnlyLocked": false
           }
           JSON
-          node <<'NODE'
+          )"
+          HTTP_CODE="${http_code}" node <<'NODE'
           const fs = require('fs');
-          const body = JSON.parse(fs.readFileSync('source-bound-plan.json', 'utf8'));
+          const raw = fs.existsSync('source-bound-plan.json') ? fs.readFileSync('source-bound-plan.json', 'utf8') : '';
+          let body = {};
+          try { body = raw ? JSON.parse(raw) : {}; } catch {}
           const result = body.result || {};
           const plan = result.plan || {};
           const changes = Array.isArray(plan.changes)
             ? plan.changes.filter(change => !['no-change', 'native-theme-exception-candidate'].includes(change?.changeType))
             : [];
           const checks = {
+            httpSuccess: ['200', '202'].includes(process.env.HTTP_CODE),
             completed: body.status === 'completed',
             sourceBoundComposite: plan.sourceBoundCopyComposite === true,
             visibleCopyChanges: changes.length > 0,
@@ -62,7 +67,16 @@ jobs:
             nativeThemeInspectionPresent: Boolean(plan.websiteRetoolExceptions),
             stagingOnly: plan?.compositePackage?.stagingOnly === true,
           };
-          console.log(JSON.stringify({ checks, changeCount: changes.length, changes: changes.slice(0, 8) }, null, 2));
+          console.log(JSON.stringify({
+            httpCode: Number(process.env.HTTP_CODE || 0),
+            status: body.status || null,
+            build: body.build || null,
+            error: body.error || null,
+            safeguards: body.safeguards || null,
+            checks,
+            changeCount: changes.length,
+            changes: changes.slice(0, 8),
+          }, null, 2));
           if (Object.values(checks).some(value => value !== true)) process.exit(1);
           NODE
 
