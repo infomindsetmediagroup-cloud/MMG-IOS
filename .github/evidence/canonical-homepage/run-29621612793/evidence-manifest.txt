@@ -1,0 +1,8 @@
+artifacts/canonical-homepage/build-result.json 4492 bytes
+artifacts/canonical-homepage/evidence-manifest.txt 0 bytes
+artifacts/canonical-homepage/pass-1/canonical-homepage-desktop.png 621583 bytes
+artifacts/canonical-homepage/pass-1/canonical-homepage-mobile.png 283612 bytes
+artifacts/canonical-homepage/pass-1/verification-report.json 7570 bytes
+artifacts/canonical-homepage/pass-1/verification-summary.md 2297 bytes
+artifacts/canonical-homepage/release-error.log 1393 bytes
+artifacts/canonical-homepage/release.log 7659 bytes
