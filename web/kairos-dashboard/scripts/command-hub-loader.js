@@ -1,4 +1,4 @@
-const BUILD = "kairos-command-hub-loader-20260717-1";
+const BUILD = "kairos-command-hub-loader-20260717-2";
 const HUB_SELECTOR = "#kairos-hub";
 const LOADING_TEXT = "Loading Kairos Command Center";
 const MODULE_URL = "/scripts/command-hub.js?v=operational-20260717-13";
@@ -13,7 +13,7 @@ window.addEventListener("unhandledrejection", event => {
   startupErrors.push(String(message));
 });
 
-boot();
+await boot();
 
 async function boot() {
   const hub = document.querySelector(HUB_SELECTOR);
@@ -28,6 +28,7 @@ async function boot() {
     renderFailure(hub, message);
     document.documentElement.dataset.kairosBoot = "failed";
     window.KairosCommandHubLoader = { build: BUILD, status: "failed", errors: startupErrors };
+    throw error;
   }
 }
 
