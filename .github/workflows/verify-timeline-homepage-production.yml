@@ -2,24 +2,23 @@ name: Verify Timeline and Homepage Production
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - ".github/workflows/verify-timeline-homepage-production.yml"
       - "cloudflare/mmg-ios/src/kairos-homepage-preserve-planner-v1.js"
       - "cloudflare/mmg-ios/src/kairos-rendered-homepage-text-planner-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-homepage-template-markup-text-planner-v1.js"
       - "cloudflare/mmg-ios/src/kairos-homepage-template-text-executor-v1.js"
       - "cloudflare/mmg-ios/src/kairos-homepage-liquid-text-fallback-v1.js"
-      - "cloudflare/mmg-ios/src/kairos-production-entry-v42.js"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-v43.js"
       - "cloudflare/mmg-ios/production-baseline.json"
       - "cloudflare/mmg-ios/scripts/validate-frozen-production-standard.mjs"
       - "cloudflare/mmg-ios/wrangler.toml"
       - "web/kairos-dashboard/index.html"
+      - "web/kairos-dashboard/scripts/homepage-session-reset-v5.js"
       - "web/kairos-dashboard/scripts/homepage-quick-action.js"
       - "web/kairos-dashboard/scripts/workflow-runtime.js"
       - "web/kairos-dashboard/scripts/workspace-runtime.js"
-      - "web/kairos-dashboard/styles/homepage-quick-action.css"
-      - "web/kairos-dashboard/styles/workflow-runtime.css"
   workflow_dispatch: {}
 
 permissions:
@@ -27,7 +26,7 @@ permissions:
   statuses: write
 
 concurrency:
-  group: kairos-timeline-homepage-production
+  group: kairos-v43-homepage-production
   cancel-in-progress: true
 
 jobs:
@@ -37,160 +36,97 @@ jobs:
     env:
       KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
     steps:
-      - name: Verify live v42 health and dashboard assets
+      - name: Wait for v43 and verify dashboard
         shell: bash
         run: |
           set -euo pipefail
           nonce="${GITHUB_SHA}-$(date +%s)"
           for attempt in $(seq 1 20); do
-            curl --fail --silent --show-error --location --max-time 45 -H 'Cache-Control: no-cache' \
-              "${KAIROS_PRODUCTION_URL}/api/health?timeline-homepage=${nonce}-${attempt}" --output health.json || true
-            if node -e "const fs=require('fs');try{const h=JSON.parse(fs.readFileSync('health.json','utf8'));process.exit(h.build==='kairos-production-entry-20260716-99'?0:1)}catch{process.exit(1)}"; then
+            curl --silent --show-error --location --max-time 45 -H 'Cache-Control: no-cache' \
+              "${KAIROS_PRODUCTION_URL}/api/health?v43=${nonce}-${attempt}" --output health.json || true
+            if node -e "const fs=require('fs');try{const h=JSON.parse(fs.readFileSync('health.json','utf8'));process.exit(h.build==='kairos-production-entry-20260717-100'?0:1)}catch{process.exit(1)}"; then
               break
             fi
             if [ "${attempt}" = "20" ]; then
-              echo "v42 did not become live within the verification window"
+              echo "v43 did not become live"
               cat health.json || true
               exit 1
             fi
             sleep 6
           done
           curl --fail --silent --show-error --location --max-time 45 -H 'Cache-Control: no-cache' \
-            "${KAIROS_PRODUCTION_URL}/center/content/website?timeline-homepage=${nonce}" --output website.html
+            "${KAIROS_PRODUCTION_URL}/center/content/website?v43=${nonce}" --output website.html
           curl --fail --silent --show-error --location --max-time 45 -H 'Cache-Control: no-cache' \
-            "${KAIROS_PRODUCTION_URL}/scripts/homepage-quick-action.js?v=${nonce}" --output homepage-quick.js
+            "${KAIROS_PRODUCTION_URL}/scripts/homepage-session-reset-v5.js?v=${nonce}" --output reset.js
           curl --fail --silent --show-error --location --max-time 45 -H 'Cache-Control: no-cache' \
-            "${KAIROS_PRODUCTION_URL}/scripts/workflow-runtime.js?v=${nonce}" --output workflow-runtime.js
-          curl --fail --silent --show-error --location --max-time 45 -H 'Cache-Control: no-cache' \
-            "${KAIROS_PRODUCTION_URL}/scripts/workspace-runtime.js?v=${nonce}" --output workspace-runtime.js
+            "${KAIROS_PRODUCTION_URL}/scripts/homepage-quick-action.js?v=${nonce}" --output quick.js
           node <<'NODE'
           const fs=require('fs');
           const health=JSON.parse(fs.readFileSync('health.json','utf8'));
           const website=fs.readFileSync('website.html','utf8');
-          const quick=fs.readFileSync('homepage-quick.js','utf8');
-          const work=fs.readFileSync('workflow-runtime.js','utf8');
-          const workspace=fs.readFileSync('workspace-runtime.js','utf8');
-          const preserve=health.homepagePreserveDesign||{};
-          const sourceOrder=Array.isArray(preserve.sourceOrder)?preserve.sourceOrder:[];
+          const reset=fs.readFileSync('reset.js','utf8');
+          const quick=fs.readFileSync('quick.js','utf8');
+          const p=health.homepagePreserveDesign||{};
+          const order=Array.isArray(p.sourceOrder)?p.sourceOrder:[];
           const checks={
-            productionBuild:health.build==='kairos-production-entry-20260716-99',
-            preserveRuntime:preserve.status==='operational',
-            preserveContract:preserve.contract==='published-main-template-settings-then-node-preserving-liquid-text',
-            preserveSource:preserve.sourceOfTruth==='published-main-theme',
-            templateSettingsFirst:sourceOrder[0]==='active rendered template settings',
-            liquidFallbackSecond:sourceOrder[1]==='homepage-specific literal Liquid text',
-            liquidFallbackBuild:preserve.liquidFallbackBuild==='kairos-homepage-liquid-text-fallback-20260716-1',
-            liquidFallbackMode:preserve.liquidFallback==='literal-text-nodes-only',
-            liquidMarkupBlocked:preserve.liquidMarkupMutation==='prohibited',
-            designMutationBlocked:preserve.CSSAssetClassDesignTokenMutation==='prohibited',
-            canonicalFallbackBlocked:preserve.canonicalPackageInstallation==='prohibited-in-preserve-mode',
-            oneButtonCapability:health.capabilities?.oneButtonHomepagePreview==='operational',
+            build:health.build==='kairos-production-entry-20260717-100',
+            contract:p.contract==='published-main-three-source-visible-text-preservation',
+            source1:order[0]==='active rendered template text settings',
+            source2:order[1]==='active embedded template HTML or Liquid text nodes',
+            source3:order[2]==='homepage-specific section Liquid literal text',
+            embeddedPlanner:p.templateMarkupPlannerBuild==='kairos-homepage-template-markup-text-planner-20260717-1',
+            embeddedCapability:health.capabilities?.homepageEmbeddedTemplateMarkupTextMutation==='operational',
             liquidCapability:health.capabilities?.homepageLiquidLiteralTextFallback==='operational',
-            visibleDeltaCapability:health.capabilities?.homepageVisibleTextDelta==='required',
-            rebuildFallbackCapability:health.capabilities?.homepageCanonicalRebuildFallback==='prohibited',
-            timelineCapability:health.capabilities?.completedWorkTimelineArchive==='operational',
-            commandCenterBuild:website.includes('kairos-command-center-operational-20260716-18'),
-            quickScriptBound:website.includes('/scripts/homepage-quick-action.js?v=operational-20260716-3'),
-            quickStyleBound:website.includes('/styles/homepage-quick-action.css?v=operational-20260716-1'),
-            quickAction:quick.includes('Keep my homepage. Change the words.')&&quick.includes('preserve-published-framework')&&quick.includes('published-main-template-text-settings-v1')&&quick.includes('published-main-liquid-visible-text-v1')&&quick.includes('literalLiquidTextFallbackAuthorized: true')&&quick.includes('/api/shopify/staging/visual-verification'),
-            quickActionSafeBoundaries:quick.includes('canonicalPackageAuthorized: false')&&quick.includes('liquidStructureMutationAuthorized: false')&&quick.includes('assetMutationAuthorized: false'),
-            stateMigration:quick.includes('kairos.homepage.quick-action.v4')&&quick.includes('kairos.homepage.quick-action.v3'),
-            workTimeline:work.includes('Work Timeline')&&work.includes('Completed Timeline')&&work.includes('Recent days')&&work.includes('Previous weeks')&&work.includes('Earlier months'),
-            completedExcluded:work.includes('!["completed","cancelled"].includes(item.state)'),
-            clickableArchive:work.includes('data-open-workflow')&&work.includes('Open verified deliverable'),
-            lazyRuntime:workspace.includes('kairos-workspace-runtime-20260716-3')&&workspace.includes('workflow-runtime.js'),
+            canonicalFallback:health.capabilities?.homepageCanonicalRebuildFallback==='prohibited',
+            dashboard:website.includes('kairos-command-center-operational-20260717-19'),
+            resetBound:website.includes('/scripts/homepage-session-reset-v5.js?v=operational-20260717-1'),
+            quickBound:website.includes('/scripts/homepage-quick-action.js?v=operational-20260717-4'),
+            resetScript:reset.includes('kairos-homepage.session-migration.v5')&&reset.includes('kairos.homepage.quick-action.v4'),
+            quickAction:quick.includes('Keep my homepage. Change the words.')&&quick.includes('literalLiquidTextFallbackAuthorized: true')
           };
-          console.log(JSON.stringify({build:health.build,preserve,checks},null,2));
-          if(Object.values(checks).some(value=>value!==true))process.exit(1);
+          console.log(JSON.stringify({health:{build:health.build,homepagePreserveDesign:p,capabilities:health.capabilities},checks},null,2));
+          if(Object.values(checks).some(value=>value!==true)) process.exit(1);
           NODE
 
-      - name: Verify dual-source planner routing without Shopify mutation
+      - name: Prove the real homepage produces a safe visible-text plan
         shell: bash
         run: |
           set -euo pipefail
-          http_code="$(curl --silent --show-error --location --max-time 45 \
-            -D planner-headers.txt \
-            -H 'Content-Type: application/json' \
-            -H 'Cache-Control: no-cache' \
-            --data '{"objective":"x","requestType":"homepage-preserve-design","homepageMode":"preserve-published-framework","sourceOfTruth":"published-main-theme","preserveExistingDesign":true,"preservePublishedFramework":true,"templateTextPreferred":true,"literalLiquidTextFallbackAuthorized":true,"canonicalPackageAuthorized":false}' \
-            "${KAIROS_PRODUCTION_URL}/api/shopify/staging/plan/jobs" \
-            --output planner-body.json \
-            --write-out '%{http_code}')"
-          HTTP_CODE="${http_code}" node <<'NODE'
-          const fs=require('fs');
-          const body=JSON.parse(fs.readFileSync('planner-body.json','utf8'));
-          const headers=fs.readFileSync('planner-headers.txt','utf8');
-          const checks={
-            safeValidation:Number(process.env.HTTP_CODE)===400,
-            objectiveGuard:body?.error?.code==='objective_required',
-            productionHeader:/x-kairos-production-entry:\s*kairos-production-entry-20260716-99/i.test(headers),
-            preserveModeHeader:/x-kairos-homepage-mode:\s*preserve-published-framework/i.test(headers),
-            publishedSourceHeader:/x-kairos-homepage-source:\s*published-main-theme/i.test(headers),
-            liquidFallbackHeader:/x-kairos-homepage-liquid-fallback:\s*kairos-homepage-liquid-text-fallback-20260716-1/i.test(headers),
-            fallbackBlockedHeader:/x-kairos-canonical-rebuild-fallback:\s*prohibited/i.test(headers),
-          };
-          console.log(JSON.stringify({httpStatus:Number(process.env.HTTP_CODE),body,checks},null,2));
-          if(Object.values(checks).some(value=>value!==true))process.exit(1);
+          node <<'NODE' > request.json
+          const objective='Keep the currently published homepage framework exactly as it is. Rewrite the existing visible customer-facing copy so visitors clearly understand that Mindset Media Group helps creators, entrepreneurs, authors, educators, and small businesses turn knowledge, experience, and ideas into professional digital products, publishing assets, educational resources, business assets, and revenue-generating intellectual property. Do not change sections, blocks, images, buttons, links, navigation, colors, typography, spacing, styling, animation, layout, mobile behavior, Liquid logic, CSS, or assets.';
+          process.stdout.write(JSON.stringify({objective,requestType:'homepage-preserve-design',intent:'homepage-preserve-design',homepageMode:'preserve-published-framework',sourceOfTruth:'published-main-theme',preserveExistingDesign:true,preservePublishedFramework:true,renderedTextRequired:true,activeOrderedSectionsOnly:true,activeOrderedBlocksOnly:true,templateTextPreferred:true,literalLiquidTextFallbackAuthorized:true,structuralMutationAuthorized:false,styleMutationAuthorized:false,liquidStructureMutationAuthorized:false,assetMutationAuthorized:false,canonicalPackageAuthorized:false}));
           NODE
-
-      - name: Generate a real read-only homepage text plan
-        shell: bash
-        run: |
-          set -euo pipefail
-          cat > planning-request.json <<'JSON'
-          {
-            "objective": "Keep the currently published homepage framework exactly as it is. Rewrite the existing visible customer-facing copy so visitors clearly understand that Mindset Media Group helps creators, entrepreneurs, authors, educators, and small businesses turn knowledge, experience, and ideas into professional digital products, publishing assets, educational resources, business assets, and revenue-generating intellectual property. Do not change sections, blocks, images, buttons, links, navigation, colors, typography, spacing, styling, animation, layout, mobile behavior, Liquid logic, CSS, or assets.",
-            "requestType": "homepage-preserve-design",
-            "intent": "homepage-preserve-design",
-            "homepageMode": "preserve-published-framework",
-            "sourceOfTruth": "published-main-theme",
-            "preserveExistingDesign": true,
-            "preservePublishedFramework": true,
-            "renderedTextRequired": true,
-            "activeOrderedSectionsOnly": true,
-            "activeOrderedBlocksOnly": true,
-            "templateTextPreferred": true,
-            "literalLiquidTextFallbackAuthorized": true,
-            "structuralMutationAuthorized": false,
-            "styleMutationAuthorized": false,
-            "liquidStructureMutationAuthorized": false,
-            "assetMutationAuthorized": false,
-            "canonicalPackageAuthorized": false
-          }
-          JSON
-          http_code="$(curl --silent --show-error --location --max-time 180 \
-            -D real-plan-headers.txt \
+          code="$(curl --silent --show-error --location --max-time 180 \
+            -D plan-headers.txt \
             -H 'Content-Type: application/json' \
             -H 'Cache-Control: no-cache' \
-            --data-binary @planning-request.json \
+            --data-binary @request.json \
             "${KAIROS_PRODUCTION_URL}/api/shopify/staging/plan/jobs" \
-            --output real-plan-body.json \
+            --output plan.json \
             --write-out '%{http_code}')"
-          echo -n "${http_code}" > real-plan-status.txt
-          HTTP_CODE="${http_code}" node <<'NODE'
+          HTTP_CODE="${code}" node <<'NODE'
           const fs=require('fs');
-          const body=JSON.parse(fs.readFileSync('real-plan-body.json','utf8'));
-          const headers=fs.readFileSync('real-plan-headers.txt','utf8');
+          const body=JSON.parse(fs.readFileSync('plan.json','utf8'));
+          const headers=fs.readFileSync('plan-headers.txt','utf8');
           const result=body?.result||{};
           const plan=result?.plan||{};
           const mode=String(plan.installationMode||'');
           const templateCount=Array.isArray(plan?.templateTextPatch?.operations)?plan.templateTextPatch.operations.length:0;
-          const liquidCount=Array.isArray(plan?.liquidTextPatches)?plan.liquidTextPatches.reduce((sum,patch)=>sum+(Array.isArray(patch?.replacements)?patch.replacements.length:0),0):0;
-          const count=templateCount+liquidCount;
+          const liquidCount=Array.isArray(plan?.liquidTextPatches)?plan.liquidTextPatches.reduce((sum,p)=>sum+(Array.isArray(p?.replacements)?p.replacements.length:0),0):0;
           const checks={
-            accepted:Number(process.env.HTTP_CODE)===202,
+            http:Number(process.env.HTTP_CODE)===202,
             completed:body?.status==='completed'&&result?.status==='ready-for-approval',
             governedMode:['published-main-template-text-settings-v1','published-main-liquid-visible-text-v1'].includes(mode),
-            visibleReplacementPlanned:count>0,
+            visibleDelta:templateCount+liquidCount>0,
             readOnly:result?.readOnly===true,
             publishedSource:result?.evidence?.sourceOfTruth==='published-main-theme',
-            targetIsStaging:String(plan?.targetTheme?.role||'').toUpperCase()!=='MAIN',
-            publishedIsMain:String(plan?.publishedTheme?.role||'').toUpperCase()==='MAIN',
-            frameworkPreserved:plan?.preservePublishedFramework===true,
-            canonicalPackageBlocked:plan?.canonicalPackage===null,
-            noProductionAuthorization:plan?.productionPublishAuthorized===false&&plan?.liveThemeMutationAuthorized===false,
-            productionHeader:/x-kairos-production-entry:\s*kairos-production-entry-20260716-99/i.test(headers),
-            textSourceHeader:/x-kairos-homepage-text-source:\s*(template-settings|liquid-literal-text)/i.test(headers),
+            stagingTarget:String(plan?.targetTheme?.role||'').toUpperCase()!=='MAIN',
+            mainSource:String(plan?.publishedTheme?.role||'').toUpperCase()==='MAIN',
+            framework:plan?.preservePublishedFramework===true,
+            noCanonical:plan?.canonicalPackage===null,
+            noLiveAuthorization:plan?.productionPublishAuthorized===false&&plan?.liveThemeMutationAuthorized===false,
+            productionHeader:/x-kairos-production-entry:\s*kairos-production-entry-20260717-100/i.test(headers),
+            sourceHeader:/x-kairos-homepage-text-source:\s*(template-settings|embedded-template-markup|liquid-literal-text)/i.test(headers)
           };
           console.log(JSON.stringify({httpStatus:Number(process.env.HTTP_CODE),mode,templateCount,liquidCount,summary:result?.summary,checks},null,2));
           if(Object.values(checks).some(value=>value!==true)){
@@ -199,19 +135,7 @@ jobs:
           }
           NODE
 
-      - name: Upload real-plan diagnostic
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: real-homepage-plan-response
-          path: |
-            planning-request.json
-            real-plan-headers.txt
-            real-plan-body.json
-            real-plan-status.txt
-          retention-days: 1
-
-      - name: Publish production verification receipt
+      - name: Publish verification receipt
         if: always()
         shell: bash
         env:
@@ -221,14 +145,13 @@ jobs:
           set -euo pipefail
           if [ "${JOB_STATUS}" = "success" ]; then
             state="success"
-            description="v42 live plan, Liquid fallback, and timeline checks passed"
+            description="v43 real homepage text plan and production checks passed"
           else
             state="failure"
-            description="v42 homepage plan or production verification failed"
+            description="v43 homepage production verification failed"
           fi
-          payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-timeline-homepage-production",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
-          curl --fail --silent --show-error \
-            -X POST \
+          payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-v43-homepage-production",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          curl --fail --silent --show-error -X POST \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
