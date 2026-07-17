@@ -41,8 +41,12 @@ import {
   buildDeterministicHomepageContinuationRequest,
   KAIROS_HOMEPAGE_CONTINUATION_BUILD,
 } from "./kairos-homepage-continuation-v1.js";
+import {
+  handleWholeHomepagePlan,
+  KAIROS_WHOLE_HOMEPAGE_PLANNER_BUILD,
+} from "./kairos-whole-homepage-planner-v1.js";
 
-const BUILD = "kairos-production-entry-autonomous-20260717-9";
+const BUILD = "kairos-production-entry-autonomous-20260717-10";
 const PLAN_PATH = "/api/shopify/staging/plan/jobs";
 
 export { KairosProject };
@@ -104,6 +108,17 @@ export default {
       const directExecution = await handleDirectHomepageExecution(request, internalEnv, ctx);
       if (directExecution) return stamp(directExecution, baselineRefresh, governedPlanning.context, continuation);
 
+      const wholeHomepagePlan = await handleWholeHomepagePlan(
+        governedPlanning.request,
+        internalEnv,
+        continuation,
+      );
+      if (wholeHomepagePlan) {
+        const continuedResponse = await applyHomepageContinuationMetadata(request, wholeHomepagePlan, continuation);
+        const governedResponse = await applyWebsiteGovernanceToPlanResponse(request, continuedResponse, governedPlanning.context);
+        return stamp(governedResponse, baselineRefresh, governedPlanning.context, continuation);
+      }
+
       const directPlan = await handleDirectHomepagePlan(deterministicPlanningRequest, internalEnv, ctx);
       if (directPlan) {
         const continuedResponse = await applyHomepageContinuationMetadata(request, directPlan, continuation);
@@ -158,6 +173,7 @@ export default {
         doctrineRegistry: KAIROS_INTERNAL_DOCTRINE_REGISTRY_BUILD,
         websitePlanningGovernance: KAIROS_WEBSITE_PLANNING_GOVERNANCE_BUILD,
         homepageContinuation: KAIROS_HOMEPAGE_CONTINUATION_BUILD,
+        wholeHomepagePlanner: KAIROS_WHOLE_HOMEPAGE_PLANNER_BUILD,
         directHomepagePlan: KAIROS_DIRECT_HOMEPAGE_PLAN_BUILD,
         directHomepageExecution: KAIROS_DIRECT_HOMEPAGE_EXECUTION_BUILD,
         neuronFreeHomepage: KAIROS_NEURON_FREE_HOMEPAGE_BUILD,
@@ -180,6 +196,9 @@ export default {
           websiteLinkDestinationsMutableByTextPlan: false,
           websiteDesignMutationAuthorizedByCopyObjective: false,
           homepageHeroOnlyCompletionAccepted: false,
+          homepageWholePagePlannerEnabled: true,
+          homepageWholePageMaximumOperations: 64,
+          homepageTemplateOnlyMutation: true,
           homepageContinuationPrivateRuntimeRequired: false,
           homepageContinuationDuplicatesMain: false,
           homepageContinuationPreservesApprovedStaging: true,
@@ -219,6 +238,7 @@ function stamp(response, baselineRefresh = null, governanceContext = null, conti
   headers.set("X-Kairos-Doctrine-Registry", KAIROS_INTERNAL_DOCTRINE_REGISTRY_BUILD);
   headers.set("X-Kairos-Website-Governance", KAIROS_WEBSITE_PLANNING_GOVERNANCE_BUILD);
   headers.set("X-Kairos-Homepage-Continuation", KAIROS_HOMEPAGE_CONTINUATION_BUILD);
+  headers.set("X-Kairos-Whole-Homepage-Planner", KAIROS_WHOLE_HOMEPAGE_PLANNER_BUILD);
   headers.set("X-Kairos-Direct-Homepage-Plan", KAIROS_DIRECT_HOMEPAGE_PLAN_BUILD);
   headers.set("X-Kairos-Direct-Homepage-Execution", KAIROS_DIRECT_HOMEPAGE_EXECUTION_BUILD);
   headers.set("X-Kairos-Neuron-Free-Homepage", KAIROS_NEURON_FREE_HOMEPAGE_BUILD);
@@ -267,6 +287,7 @@ function json(value, status = 200) {
       "X-Kairos-Doctrine-Registry": KAIROS_INTERNAL_DOCTRINE_REGISTRY_BUILD,
       "X-Kairos-Website-Governance": KAIROS_WEBSITE_PLANNING_GOVERNANCE_BUILD,
       "X-Kairos-Homepage-Continuation": KAIROS_HOMEPAGE_CONTINUATION_BUILD,
+      "X-Kairos-Whole-Homepage-Planner": KAIROS_WHOLE_HOMEPAGE_PLANNER_BUILD,
       "X-Kairos-Direct-Homepage-Plan": KAIROS_DIRECT_HOMEPAGE_PLAN_BUILD,
       "X-Kairos-Direct-Homepage-Execution": KAIROS_DIRECT_HOMEPAGE_EXECUTION_BUILD,
       "X-Kairos-Neuron-Free-Homepage": KAIROS_NEURON_FREE_HOMEPAGE_BUILD,
