@@ -1,5 +1,6 @@
 import baseRuntime, { KairosProject } from "./kairos-production-entry-v2.js";
 import { handleChildActionRequest } from "./kairos-child-action-runtime-v1.js";
+import { handleAutonomyRequest, runAutonomyCycle } from "./kairos-autonomy-runtime-v1.js";
 import { auditHomepageLinks } from "./kairos-link-lifecycle-engine-v1.js";
 import {
   executeHomepageLinkRepair,
@@ -27,15 +28,37 @@ import {
 } from "./kairos-executive-briefing-v1.js";
 import { handleHomepageReleaseRequest } from "./shopify-homepage-release-v1.js";
 
-const BUILD = "kairos-production-baseline-20260717-5";
+const BUILD = "kairos-production-baseline-20260717-6";
 const STAGING_PLAN_PATH = "/api/shopify/staging/plan/jobs";
 const CHILD_EXECUTE_PATH = "/api/hub/execute";
+const AUTONOMY_PREFIX = "/api/autonomy/";
 
 export { KairosProject };
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    if (url.pathname.startsWith(AUTONOMY_PREFIX)) {
+      try {
+        const response = await handleAutonomyRequest(
+          request,
+          env,
+          delegatedRequest => handleStableRequest(delegatedRequest, env, ctx),
+        );
+        if (response) return stamp(response, {
+          "X-Kairos-Autonomy": "bounded-native-controls",
+          "X-Kairos-Autonomy-Runtime": "kairos-autonomy-runtime-20260716-3",
+        });
+      } catch (error) {
+        return failure("autonomy_control_failed", error, 502, {
+          browserShellAvailable: true,
+          failureContainedToAutonomyRequest: true,
+          approvalGatesPreserved: true,
+          liveThemeChanged: false,
+        });
+      }
+    }
 
     if (request.method === "POST" && url.pathname === CHILD_EXECUTE_PATH) {
       try {
@@ -62,11 +85,18 @@ export default {
   },
 
   async scheduled(controller, env, ctx) {
+    const source = `scheduled:${String(controller?.cron || "cloudflare-cron")}`;
     const request = new Request("https://kairos.internal/api/shopify/website-intelligence/run", { method: "POST" });
-    ctx.waitUntil((async () => {
-      await runWebsiteIntelligenceSupervisor(request, env, `scheduled:${controller.cron}`);
-      await buildExecutiveBriefing(request, env, `scheduled:${controller.cron}`);
-    })().catch(() => null));
+    const work = Promise.allSettled([
+      runWebsiteIntelligenceSupervisor(request, env, source),
+      buildExecutiveBriefing(request, env, source),
+      runAutonomyCycle(env, {
+        source,
+        delegate: delegatedRequest => handleStableRequest(delegatedRequest, env, ctx),
+      }),
+    ]);
+    if (typeof ctx?.waitUntil === "function") ctx.waitUntil(work);
+    else await work;
   },
 };
 
@@ -264,7 +294,7 @@ async function safeJSON(response) {
 function stamp(response, additionalHeaders = {}) {
   const headers = new Headers(response.headers);
   headers.set("X-MMG-Runtime", BUILD);
-  headers.set("X-Kairos-Production-Baseline", "reconciled-v5");
+  headers.set("X-Kairos-Production-Baseline", "reconciled-v6");
   headers.set("X-Kairos-Website-Workflow", "staging-preview-approval-release");
   for (const [name, value] of Object.entries(additionalHeaders)) headers.set(name, value);
   if (headers.get("Content-Type")?.includes("text/html")) {
@@ -284,7 +314,7 @@ function json(value, status = 200, additionalHeaders = {}) {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store",
       "X-MMG-Runtime": BUILD,
-      "X-Kairos-Production-Baseline": "reconciled-v5",
+      "X-Kairos-Production-Baseline": "reconciled-v6",
       "X-Content-Type-Options": "nosniff",
       ...additionalHeaders,
     },
