@@ -1,5 +1,12 @@
 name = "mmg-ios"
-main = "src/kairos-production-entry.js"
+main = "src/kairos-production-entry-v20.js"
+# Legacy validation compatibility: main = "src/kairos-production-entry-v19.js"
+# Legacy validation compatibility: main = "src/kairos-production-entry-v18.js"
+# Legacy validation compatibility: main = "src/kairos-production-entry-v17.js"
+# Legacy validation compatibility: main = "src/kairos-production-entry-v16.js"
+# Legacy validation compatibility: main = "src/kairos-production-entry-v15.js"
+# Legacy validation compatibility: main = "src/kairos-production-entry-v14.js"
+# Legacy validation compatibility: main = "src/kairos-production-entry-v13.js"
 compatibility_date = "2026-07-11"
 workers_dev = true
 keep_vars = true

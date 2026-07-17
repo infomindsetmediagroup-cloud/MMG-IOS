@@ -1,5 +1,5 @@
-const BUILD = "kairos-workflow-runtime-ui-20260713-1";
-const state = { open: false, loading: false, workflows: [], selected: null, error: "" };
+const BUILD = "kairos-workflow-runtime-ui-20260714-2";
+const state = { open: false, loading: false, workflows: [], selected: null, error: "", filter: "all" };
 
 start();
 
@@ -16,8 +16,9 @@ function interceptWorkQueue(event) {
   openWorkspace();
 }
 
-async function openWorkspace() {
+async function openWorkspace(event) {
   state.open = true;
+  state.filter = normalizeFilter(event?.detail?.filter || "all");
   await loadQueue();
   render();
   setTimeout(() => document.querySelector("#workflow-runtime")?.scrollIntoView({ behavior: "smooth", block: "start" }), 20);
@@ -43,16 +44,13 @@ async function createWorkflow(event) {
       method: "POST",
       headers: headers(),
       body: JSON.stringify({
-        title: data.get("title"),
-        objective: data.get("objective"),
-        center: data.get("center"),
-        priority: data.get("priority"),
-        approvalRequired: data.get("approvalRequired") === "on",
-        source: "command-center-work-queue",
+        title: data.get("title"), objective: data.get("objective"), center: data.get("center"), priority: data.get("priority"),
+        approvalRequired: data.get("approvalRequired") === "on", source: "command-center-work-queue",
       }),
     });
     if (!response.ok) throw new Error(body?.error?.message || "Kairos could not create the workflow.");
     state.selected = body.workflow;
+    state.filter = "all";
     form.reset();
     await loadQueue();
   } catch (error) { state.error = error.message || "Kairos could not create the workflow."; }
@@ -124,13 +122,19 @@ function render() {
     root.className = "workflow-runtime workspace";
     hub.appendChild(root);
   }
-  root.innerHTML = `<header class="workflow-head"><div><p class="eyebrow">Operations · Work Queue</p><h2>Workflow Runtime</h2><p>Create work, break it into tasks, run it, verify it, and close it.</p></div><button type="button" data-close-workflow>Close</button></header>${state.error ? `<p class="workflow-error">${escapeHTML(state.error)}</p>` : ""}<div class="workflow-layout"><section class="workflow-create"><h3>New Workflow</h3><form data-workflow-form><label>Title<input name="title" maxlength="180" required placeholder="Example: Finish tonight’s TikTok package"></label><label>Objective<textarea name="objective" maxlength="4000" required placeholder="Describe the finished outcome."></textarea></label><div class="workflow-fields"><label>Center<select name="center"><option value="content">Content</option><option value="business">Business</option><option value="customers">Customers</option><option value="knowledge">Knowledge</option><option value="operations">Operations</option></select></label><label>Priority<select name="priority"><option value="high">High</option><option value="normal" selected>Normal</option><option value="critical">Critical</option><option value="low">Low</option></select></label></div><label class="workflow-check"><input type="checkbox" name="approvalRequired"> Require executive approval before start</label><button class="primary" type="submit">Create Workflow</button></form></section><section class="workflow-queue"><div class="workflow-section-head"><h3>Production Queue</h3><button type="button" data-refresh-workflows>Refresh</button></div>${state.loading ? `<p class="workflow-loading">Kairos is updating the queue…</p>` : queueMarkup()}</section></div>${state.selected ? detailMarkup(state.selected) : ""}`;
+  root.innerHTML = `<header class="workflow-head"><div><p class="eyebrow">Operations · Work Queue</p><h2>Workflow Runtime</h2><p>Create work, break it into tasks, run it, verify it, and close it.</p></div><button type="button" data-close-workflow>Close</button></header>${state.error ? `<p class="workflow-error">${escapeHTML(state.error)}</p>` : ""}<div class="workflow-filter-bar">${filterButton("all","All Work")}${filterButton("active","In Progress")}${filterButton("finished","Done 24h")}${filterButton("pending","Not Started")}</div><div class="workflow-layout"><section class="workflow-create"><h3>New Workflow</h3><form data-workflow-form><label>Title<input name="title" maxlength="180" required placeholder="Example: Finish tonight’s TikTok package"></label><label>Objective<textarea name="objective" maxlength="4000" required placeholder="Describe the finished outcome."></textarea></label><div class="workflow-fields"><label>Center<select name="center"><option value="content">Content</option><option value="business">Business</option><option value="customers">Customers</option><option value="knowledge">Knowledge</option><option value="operations">Operations</option></select></label><label>Priority<select name="priority"><option value="high">High</option><option value="normal" selected>Normal</option><option value="critical">Critical</option><option value="low">Low</option></select></label></div><label class="workflow-check"><input type="checkbox" name="approvalRequired"> Require executive approval before start</label><button class="primary" type="submit">Create Workflow</button></form></section><section class="workflow-queue"><div class="workflow-section-head"><div><h3>${escapeHTML(filterTitle())}</h3><small>${filteredWorkflows().length} workflow${filteredWorkflows().length===1?"":"s"}</small></div><button type="button" data-refresh-workflows>Refresh</button></div>${state.loading ? `<p class="workflow-loading">Kairos is updating the queue…</p>` : queueMarkup()}</section></div>${state.selected ? detailMarkup(state.selected) : ""}`;
   bind();
 }
 
+function filterButton(filter,label){return `<button type="button" class="workflow-filter ${state.filter===filter?"active":""}" data-workflow-filter="${filter}">${label}</button>`;}
+function normalizeFilter(filter){return ["all","active","finished","pending"].includes(filter)?filter:"all";}
+function filteredWorkflows(){const cutoff=Date.now()-24*60*60*1000;return state.workflows.filter(item=>state.filter==="all"?true:state.filter==="active"?item.state==="active":state.filter==="finished"?item.state==="completed"&&Date.parse(item.updatedAt||item.completedAt||0)>=cutoff:!["active","completed","cancelled"].includes(item.state));}
+function filterTitle(){return ({all:"Production Queue",active:"In Progress",finished:"Completed in the Last 24 Hours",pending:"Not Started"})[state.filter]||"Production Queue";}
+
 function queueMarkup() {
-  if (!state.workflows.length) return `<div class="workflow-empty"><strong>No active workflows yet.</strong><p>Create the first work package above.</p></div>`;
-  return `<div class="workflow-list">${state.workflows.map(item => `<button type="button" class="workflow-row" data-open-workflow="${escapeHTML(item.id)}"><span class="workflow-priority" data-priority="${escapeHTML(item.priority)}"></span><div><strong>${escapeHTML(item.title)}</strong><small>${escapeHTML(item.center)} · ${escapeHTML(item.state)} · ${item.completedTasks}/${item.taskCount} tasks</small></div><b>${Number(item.progress || 0)}%</b></button>`).join("")}</div>`;
+  const workflows=filteredWorkflows();
+  if (!workflows.length) return `<div class="workflow-empty"><strong>No ${escapeHTML(filterTitle().toLowerCase())} workflows.</strong><p>The counter will update when governed work enters this state.</p></div>`;
+  return `<div class="workflow-list">${workflows.map(item => `<button type="button" class="workflow-row" data-open-workflow="${escapeHTML(item.id)}"><span class="workflow-priority" data-priority="${escapeHTML(item.priority)}"></span><div><strong>${escapeHTML(item.title)}</strong><small>${escapeHTML(item.center)} · ${escapeHTML(item.state)} · ${item.completedTasks}/${item.taskCount} tasks</small></div><b>${Number(item.progress || 0)}%</b></button>`).join("")}</div>`;
 }
 
 function detailMarkup(workflow) {
@@ -143,6 +147,7 @@ function bind() {
   document.querySelector("[data-refresh-workflows]")?.addEventListener("click", loadQueue);
   document.querySelector("[data-workflow-form]")?.addEventListener("submit", createWorkflow);
   document.querySelector("[data-task-form]")?.addEventListener("submit", addTask);
+  document.querySelectorAll("[data-workflow-filter]").forEach(button=>button.addEventListener("click",()=>{state.filter=normalizeFilter(button.dataset.workflowFilter);state.selected=null;render();}));
   document.querySelectorAll("[data-open-workflow]").forEach(button => button.addEventListener("click", () => openWorkflow(button.dataset.openWorkflow)));
   document.querySelectorAll("[data-workflow-command]").forEach(button => button.addEventListener("click", () => workflowCommand(button.dataset.workflowCommand)));
   document.querySelectorAll("[data-task-state]").forEach(select => select.addEventListener("change", () => setTask(select.dataset.taskState, select.value)));

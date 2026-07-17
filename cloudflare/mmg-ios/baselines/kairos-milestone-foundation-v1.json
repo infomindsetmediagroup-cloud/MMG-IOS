@@ -1,0 +1,27 @@
+{
+  "baseline": "kairos-milestone-foundation-v1",
+  "status": "frozen",
+  "approvedAt": "2026-07-14",
+  "foundationCommit": "2a5b80e14320107ced52acc7599fd9cce6b6069b",
+  "commandCenterBuild": "kairos-command-hub-recovery-20260714-25",
+  "commandCenterIndexBlob": "3c21db6ec2a20c55c3c667bb8dcee0e79177eb29",
+  "productionService": "mmg-ios",
+  "productionUrl": "https://mmg-ios.info-mindsetmediagroup.workers.dev/",
+  "architecture": {
+    "operatingCenters": 5,
+    "capabilitiesPerCenter": 5,
+    "totalEntryPoints": 25
+  },
+  "experience": {
+    "mode": "executive-simple-mode",
+    "technicalCardsVisibleByDefault": false,
+    "systemCareControl": true,
+    "oneClickApproval": true,
+    "oneClickRemediation": true,
+    "floatingControls": false
+  },
+  "reconciliation": {
+    "githubCanonical": true,
+    "cloudflareRequiresExactCommitSuccessReceipt": true
+  }
+}
