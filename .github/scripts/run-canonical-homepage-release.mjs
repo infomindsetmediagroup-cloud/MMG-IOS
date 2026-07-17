@@ -1,10 +1,8 @@
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 
-const here = dirname(fileURLToPath(import.meta.url));
 const workspace = resolve(process.env.GITHUB_WORKSPACE || process.cwd());
 const repositoryRoot = resolve(workspace, "repository");
 const outputRoot = resolve(workspace, "artifacts/canonical-homepage");
@@ -123,19 +121,10 @@ function runVerifier(folder, attempt, previewURL) {
   const reportPath = resolve(output, "verification-report.json");
   let report = { passed: false, failures: [`Verifier exited ${result.status ?? "without status"} and produced no report.`] };
   if (existsSync(reportPath)) {
-    try { report = JSON.parse(requireText(reportPath)); }
+    try { report = JSON.parse(readFileSync(reportPath, "utf8")); }
     catch (error) { report = { passed: false, failures: [`Could not parse verification report: ${error.message}`] }; }
   }
   return { passed: result.status === 0 && report.passed === true, status: result.status, report };
-}
-
-function requireText(path) {
-  return Buffer.from(requireBytes(path)).toString("utf8");
-}
-
-function requireBytes(path) {
-  const fs = globalThis.process.getBuiltinModule("node:fs");
-  return fs.readFileSync(path);
 }
 
 async function writeJSON(path, value) {
