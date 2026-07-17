@@ -209,7 +209,7 @@ for (const marker of [
 for (const marker of [
   'kairos-direct-homepage-execution-20260717-1',
   'direct-homepage-execution-v1',
-  'approvedDirectPackage: true',
+  'directApprovedPackage: true',
   'approvalTimeRebindingUsed: false',
   'approvedPackageExecutedDirectly: true',
   'approvalTimeInventoryRebuildUsed: false',
