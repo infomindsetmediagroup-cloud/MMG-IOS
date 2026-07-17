@@ -1,0 +1,76 @@
+name: Diagnose Live Homepage Planning Response
+
+on:
+  push:
+    branches:
+      - fix/homepage-shared-section-instance-v2
+    paths:
+      - ".github/workflows/diagnose-live-homepage-plan.yml"
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+    steps:
+      - name: Print compact live planning diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE' > request.json
+          const objective='Keep the currently published homepage framework exactly as it is. Rewrite the existing visible customer-facing copy so visitors clearly understand that Mindset Media Group helps creators, entrepreneurs, authors, educators, and small businesses turn knowledge, experience, and ideas into professional digital products, publishing assets, educational resources, business assets, and revenue-generating intellectual property. Do not change sections, blocks, images, buttons, links, navigation, colors, typography, spacing, styling, animation, layout, mobile behavior, Liquid logic, CSS, or assets.';
+          process.stdout.write(JSON.stringify({objective,requestType:'homepage-preserve-design',intent:'homepage-preserve-design',homepageMode:'preserve-published-framework',sourceOfTruth:'published-main-theme',preserveExistingDesign:true,preservePublishedFramework:true,renderedTextRequired:true,activeOrderedSectionsOnly:true,activeOrderedBlocksOnly:true,templateTextPreferred:true,literalLiquidTextFallbackAuthorized:true,homepageInstanceIsolationAuthorized:true,originalSharedSectionsImmutable:true,structuralMutationAuthorized:false,styleMutationAuthorized:false,liquidStructureMutationAuthorized:false,assetMutationAuthorized:false,canonicalPackageAuthorized:false}));
+          NODE
+          code="$(curl --silent --show-error --location --max-time 180 \
+            -D headers.txt \
+            -H 'Content-Type: application/json' \
+            -H 'Cache-Control: no-cache' \
+            --data-binary @request.json \
+            "${KAIROS_PRODUCTION_URL}/api/shopify/staging/plan/jobs" \
+            --output body.json \
+            --write-out '%{http_code}')"
+          HTTP_CODE="${code}" node <<'NODE'
+          const fs=require('fs');
+          const body=JSON.parse(fs.readFileSync('body.json','utf8'));
+          const headers=fs.readFileSync('headers.txt','utf8');
+          const result=body?.result||{};
+          const plan=result?.plan||{};
+          const pick=name=>headers.split(/\r?\n/).find(line=>line.toLowerCase().startsWith(name.toLowerCase()+':'))?.split(':').slice(1).join(':').trim()||'';
+          const diagnostic={
+            http:Number(process.env.HTTP_CODE),
+            status:body?.status||'',
+            summary:body?.summary||result?.summary||'',
+            errorCode:body?.error?.code||result?.error?.code||'',
+            errorMessage:body?.error?.message||result?.error?.message||'',
+            build:body?.build||result?.build||'',
+            mode:plan?.installationMode||'',
+            sourceHeader:pick('x-kairos-homepage-text-source'),
+            entryHeader:pick('x-kairos-production-entry'),
+            plannerHeader:pick('x-kairos-homepage-instance-fallback'),
+            originalHeader:pick('x-kairos-original-shared-sections')
+          };
+          console.log('KAIROS_PLAN_DIAGNOSTIC='+JSON.stringify(diagnostic));
+          NODE
+
+      - name: Publish diagnostic receipt
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          if [ "${JOB_STATUS}" = "success" ]; then state="success"; description="Live homepage planning diagnostic captured"; else state="failure"; description="Live homepage planning diagnostic failed"; fi
+          payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-homepage-plan-diagnostic",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          curl --fail --silent --show-error -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "${payload}"
