@@ -4,11 +4,10 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "preinstall": "node scripts/validate-production-suite.mjs",
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
     "test": "node --test test/*.test.js",
-    "validate:production": "node scripts/validate-production-suite.mjs"
+    "validate:production": "node scripts/validate-production-baseline.mjs && node scripts/validate-workflow-runtime.mjs && node scripts/validate-objective-router.mjs && node scripts/validate-creative-studio.mjs && node scripts/validate-publishing-studio.mjs && node scripts/validate-product-launch-studio.mjs && node scripts/validate-revenue-intelligence.mjs && node scripts/validate-growth-plan.mjs && node scripts/validate-offer-builder.mjs && node scripts/validate-campaign-operations.mjs && node scripts/validate-visitor-activity.mjs && node scripts/validate-customer-journey.mjs && node scripts/validate-customer-portal.mjs && node scripts/validate-deliverables.mjs"
   },
   "dependencies": {
     "fflate": "^0.8.2",
