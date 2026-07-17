@@ -64,8 +64,8 @@ export function buildDeterministicHomepagePackage(document, objective) {
 
   const deduped = dedupeOperations(operations).slice(0, 18);
   if (!deduped.length) {
-    const error = new Error("The approved homepage baseline does not expose any safe editable text or markup-preserving content settings. Kairos will not replace or visually restructure the page.");
-    error.code = "approved_homepage_has_no_safe_content_settings";
+    const error = new Error("The current homepage does not expose safe content-only settings. Kairos must use the approved canonical homepage package on the non-live staging theme.");
+    error.code = "canonical_homepage_package_required";
     throw error;
   }
 
@@ -197,34 +197,48 @@ function addMarkupPreservingOperation(operations, sectionId, blockId, settings, 
   operations.push({ scope: blockId ? "block" : "section", sectionId, blockId, key, valueJson: JSON.stringify(after), verification: { mode: "markup-signature", beforeSignature: markupSignature(before), afterSignature: markupSignature(after) } });
 }
 
-function extractVisibleTextSegments(source) {
-  return String(source || "").split(/(<[^>]+>)/g)
-    .filter(part => part && !part.startsWith("<"))
-    .map(part => part.trim())
-    .filter(part => part && /[a-z]/i.test(part) && !/\{[{%]|[%}]\}/.test(part));
-}
-
 function replaceVisibleTextSegments(source, replacements) {
+  const values = Array.isArray(replacements) ? replacements.filter(Boolean) : [];
+  if (!values.length) return source;
   let index = 0;
-  return String(source || "").split(/(<[^>]+>)/g).map(part => {
-    if (!part || part.startsWith("<") || index >= replacements.length) return part;
-    const trimmed = part.trim();
-    if (!trimmed || !/[a-z]/i.test(trimmed) || /\{[{%]|[%}]\}/.test(trimmed)) return part;
-    const leading = part.match(/^\s*/)?.[0] || "";
-    const trailing = part.match(/\s*$/)?.[0] || "";
-    const replacement = replacements[index++];
-    return `${leading}${escapeMarkupText(replacement)}${trailing}`;
-  }).join("");
+  return String(source).replace(/(^|>)([^<>]+)(?=<|$)/g, (match, prefix, text) => {
+    if (!text.trim() || index >= values.length) return match;
+    const leading = text.match(/^\s*/)?.[0] || "";
+    const trailing = text.match(/\s*$/)?.[0] || "";
+    return `${prefix}${leading}${escapeMarkupText(values[index++])}${trailing}`;
+  });
 }
 
 function escapeMarkupText(value) {
-  return String(value || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 function markupSignature(source) {
-  return String(source || "").match(/<[^>]+>/g)?.join("") || "";
+  return String(source).match(/<[^>]+>/g)?.join("") || "";
 }
 
-function addFirstMatchingSetting(operations, sectionId, settings, keys, value) { if (!settings || typeof settings !== "object") return; const key = findSafeTextSettingKey(settings, keys); if (!key || settings[key] === value) return; operations.push({ scope: "section", sectionId, blockId: "", key, valueJson: JSON.stringify(value) }); }
-function addFirstMatchingBlockSetting(operations, sectionId, blockId, settings, keys, value) { if (!settings || typeof settings !== "object") return; const key = findSafeTextSettingKey(settings, keys); if (!key || settings[key] === value) return; operations.push({ scope: "block", sectionId, blockId, key, valueJson: JSON.stringify(value) }); }
-function dedupeOperations(operations) { const seen = new Set(); return operations.filter(operation => { const key = `${operation.scope}:${operation.sectionId}:${operation.blockId}:${operation.key}`; if (seen.has(key)) return false; seen.add(key); return true; }); }
+function extractVisibleTextSegments(source) {
+  return String(source).replace(/<!--([\s\S]*?)-->/g, "").split(/<[^>]+>/g).map(item => item.replace(/&[a-z0-9#]+;/gi, " ").trim()).filter(Boolean);
+}
+
+function addFirstMatchingSetting(operations, sectionId, settings, keys, value) {
+  const key = findSafeTextSettingKey(settings, keys);
+  if (!key || settings[key] === value) return;
+  operations.push({ scope: "section", sectionId, key, valueJson: JSON.stringify(value), verification: { mode: "plain-text" } });
+}
+
+function addFirstMatchingBlockSetting(operations, sectionId, blockId, settings, keys, value) {
+  const key = findSafeTextSettingKey(settings, keys);
+  if (!key || settings[key] === value) return;
+  operations.push({ scope: "block", sectionId, blockId, key, valueJson: JSON.stringify(value), verification: { mode: "plain-text" } });
+}
+
+function dedupeOperations(operations) {
+  const seen = new Set();
+  return operations.filter(operation => {
+    const key = [operation.scope, operation.sectionId, operation.blockId || "", operation.key].join(":");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}

@@ -1,0 +1,87 @@
+name: Cloudflare Production Scheduled Recovery
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: cloudflare-production
+  cancel-in-progress: true
+
+jobs:
+  deploy-current-main:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CLOUDFLARE_TOKEN || vars.CLOUDFLARE_API_TOKEN || vars.CLOUDFLARE_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+      KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Resolve Cloudflare credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            accounts_json="$(curl --fail --show-error --silent --retry 2 -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" "https://api.cloudflare.com/client/v4/accounts?per_page=50")"
+            account_id="$(ACCOUNTS_JSON="${accounts_json}" node -e 'const p=JSON.parse(process.env.ACCOUNTS_JSON||"{}");const a=Array.isArray(p.result)?p.result:[];if(!p.success||a.length!==1)process.exit(1);process.stdout.write(a[0].id||"")')"
+            echo "CLOUDFLARE_ACCOUNT_ID=${account_id}" >> "${GITHUB_ENV}"
+          fi
+
+      - name: Install and validate
+        working-directory: cloudflare/mmg-ios
+        run: |
+          npm install --ignore-scripts --no-package-lock --no-audit --no-fund
+          node scripts/validate-production-suite.mjs
+          node scripts/validate-frozen-production-standard.mjs
+          npx wrangler deploy --dry-run
+
+      - name: Deploy current main
+        working-directory: cloudflare/mmg-ios
+        run: npx wrangler deploy
+
+      - name: Verify direct canonical planning
+        shell: bash
+        run: |
+          set -euo pipefail
+          objective='Prepare the canonical Mindset Media Group homepage retool on Kairos Staging using the approved three-file package. Do not publish the live theme.'
+          payload="$(OBJECTIVE="${objective}" node -e 'process.stdout.write(JSON.stringify({objective:process.env.OBJECTIVE}))')"
+          curl --fail-with-body --show-error --silent --location --max-time 60 \
+            -H 'Content-Type: application/json' -H 'Cache-Control: no-cache' \
+            --data "${payload}" \
+            "${KAIROS_PRODUCTION_URL}/api/shopify/staging/plan/jobs?scheduled=${GITHUB_SHA}" \
+            -o plan-envelope.json
+          node <<'NODE'
+          const envelope=require('./plan-envelope.json');
+          const result=envelope.result||{};
+          const plan=result.plan||{};
+          const names=(plan.canonicalPackage?.files||[]).map(x=>x.filename).sort();
+          const required=['assets/mmg-canonical-homepage.css','sections/mmg-canonical-homepage.liquid','templates/index.json'].sort();
+          const checks={completed:envelope.status==='completed',readyForApproval:result.status==='ready-for-approval',canonicalMode:plan.installationMode==='kairos-canonical-homepage-v1',threeFiles:JSON.stringify(names)===JSON.stringify(required),stagingOnly:String(plan.targetTheme?.role||'').toUpperCase()!=='MAIN',liveProtected:String(plan.publishedTheme?.role||'').toUpperCase()==='MAIN',noLiveMutation:plan.liveThemeMutationAuthorized===false&&plan.productionPublishAuthorized===false};
+          console.log(JSON.stringify({build:envelope.build,files:names,checks},null,2));
+          if(Object.values(checks).some(v=>v!==true))process.exit(1);
+          NODE
+
+      - name: Publish deployment status
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          if [ "${JOB_STATUS}" = "success" ]; then state=success; description='Kairos scheduled recovery verified'; else state=failure; description='Kairos scheduled recovery failed'; fi
+          target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          payload="$(STATE="${state}" DESCRIPTION="${description}" TARGET_URL="${target_url}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-cloudflare-production",target_url:process.env.TARGET_URL}))')"
+          curl --fail --show-error --silent -X POST -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -H "Content-Type: application/json" "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${sha}" --data "${payload}"

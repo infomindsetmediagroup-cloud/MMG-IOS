@@ -5,18 +5,24 @@ window.addEventListener("kairos:website-visual-decision", event => {
   if (event.detail?.executiveDecision?.decision === "approved") sessionStorage.setItem("kairos.website.visual-review", JSON.stringify(event.detail));
 });
 
+window.addEventListener("kairos:release-control:open", () => openReleaseControl());
+
 document.addEventListener("click", event => {
   const button = event.target.closest?.('[data-child="release-control"]');
   if (!button) return;
   event.preventDefault();
   event.stopImmediatePropagation();
+  openReleaseControl();
+}, true);
+
+function openReleaseControl() {
   state.open = true;
   state.error = "";
   state.record = null;
   state.mode = "prepare";
   state.releaseKind = releaseKind(readVisualReview());
   render();
-}, true);
+}
 
 function render() {
   document.querySelector("#shopify-release-control-overlay")?.remove();

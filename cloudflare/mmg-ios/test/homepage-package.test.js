@@ -8,8 +8,9 @@ import {
   CANONICAL_HOMEPAGE_CSS_FILE,
   buildCanonicalHomepagePackage,
 } from "../src/kairos-canonical-homepage-package-v1.js";
-import { KAIROS_PROVIDER_POLICY, intelligenceConfigured } from "../src/kairos-intelligence-v1.js";
+import { KAIROS_PROVIDER_POLICY, inferenceRuntime, intelligenceConfigured, probeKairosIntelligence, runKairosIntelligence } from "../src/kairos-intelligence-v1.js";
 import shopifyWorker from "../src/kairos-standalone-shopify-worker-v1.js";
+import { md5Text } from "../src/kairos-compact-homepage-utils-v1.js";
 
 const OBJECTIVE = "Install the canonical MMG homepage on Kairos Staging and verify the complete package.";
 
@@ -68,12 +69,43 @@ test("canonical package generation is idempotent and preserves its approved sect
   assert.equal(Object.values(second.document.sections).filter(section => section.type === "mmg-canonical-homepage").length, 1);
 });
 
-test("Kairos inference policy rejects OpenAI endpoints and permits only the private Kairos target contract", () => {
+test("Kairos inference policy rejects OpenAI endpoints and permits private or account-scoped Qwen inference", () => {
   const token = "k".repeat(48);
   assert.equal(KAIROS_PROVIDER_POLICY.openai, "prohibited");
+  assert.equal(KAIROS_PROVIDER_POLICY.openAIModels, "prohibited");
   assert.equal(intelligenceConfigured({ KAIROS_INFERENCE_URL: "https://api.openai.com", KAIROS_INFERENCE_TOKEN: token }), false);
   assert.equal(intelligenceConfigured({ KAIROS_INFERENCE_URL: "https://company.openai.azure.com", KAIROS_INFERENCE_TOKEN: token }), false);
   assert.equal(intelligenceConfigured({ KAIROS_INFERENCE_URL: "https://gpu.kairos.internal", KAIROS_INFERENCE_TOKEN: token }), true);
+  assert.equal(intelligenceConfigured({ AI: { run() {} } }), true);
+  assert.equal(inferenceRuntime({ AI: { run() {} }, KAIROS_WORKERS_AI_MODEL: "@cf/openai/gpt-oss-120b" }).model, "@cf/qwen/qwen3-30b-a3b-fp8");
+});
+
+test("Cloudflare account binding runs Qwen intelligence and proves health without a provider secret", async () => {
+  const calls = [];
+  const env = {
+    AI: {
+      async run(model, input) {
+        calls.push({ model, input });
+        const content = input.max_tokens === 256 ? "READY" : '{"summary":"ready"}';
+        return {
+          response: "",
+          choices: [{ message: { role: "assistant", content, reasoning_content: "Kairos verified the request." }, finish_reason: "stop" }],
+          usage: { completion_tokens: 8 },
+        };
+      },
+    },
+    KAIROS_WORKERS_AI_MODEL: "@cf/qwen/qwen3-30b-a3b-fp8",
+  };
+  const generated = await runKairosIntelligence(env, { system: "Return JSON.", user: "Confirm readiness.", maxTokens: 64 });
+  assert.equal(generated.provider, "cloudflare-workers-ai");
+  assert.equal(generated.runtime, "cloudflare-account-scoped");
+  assert.equal(generated.privacy, "customer-content-isolated-no-training");
+  const health = await probeKairosIntelligence(env);
+  assert.equal(health.status, "ready");
+  assert.equal(health.reachable, true);
+  assert.equal(health.outputSignal, "final-response");
+  assert.equal(calls.some(call => call.input.max_tokens === 256), true);
+  assert.equal(calls.every(call => call.model === "@cf/qwen/qwen3-30b-a3b-fp8"), true);
 });
 
 test("website route plans, approves, installs, and verifies the canonical package when the current template has no editable text", async () => {
@@ -195,7 +227,7 @@ class MockShopify {
     }
     if (query.includes("mutation KairosThemeFilesUpsert")) {
       for (const file of variables.files || []) this.files.set(file.filename, file.body.value);
-      return Response.json({ data: { themeFilesUpsert: { upsertedThemeFiles: (variables.files || []).map(file => ({ filename: file.filename })), userErrors: [] } } });
+      return Response.json({ data: { themeFilesUpsert: { upsertedThemeFiles: (variables.files || []).map(file => ({ filename: file.filename, checksumMd5: md5Text(file.body.value), size: new TextEncoder().encode(file.body.value).length, updatedAt: new Date().toISOString() })), userErrors: [] } } });
     }
     if (query.includes("mutation KairosThemeFilesDelete")) {
       for (const filename of variables.files || []) this.files.delete(filename);

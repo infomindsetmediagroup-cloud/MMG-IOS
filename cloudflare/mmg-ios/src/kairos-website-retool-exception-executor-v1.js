@@ -6,7 +6,7 @@ import {
   writeThemeFile,
 } from "./kairos-compact-homepage-utils-v1.js";
 
-const BUILD = "kairos-website-retool-exception-executor-20260713-1";
+const BUILD = "kairos-website-retool-exception-executor-20260716-2";
 const MAX_FILES = 6;
 const MIN_AUTO_CONFIDENCE = 0.95;
 
@@ -66,17 +66,45 @@ export async function executeWebsiteRetoolExceptions(request, env, payload) {
     rollbackFiles.push({ filename, sourceSha256: source.sha256, content: source.content });
   }
 
-  for (const write of writes) await writeThemeFile(env, evidence.stagingTheme.gid, write.filename, write.content);
-
-  const readBack = await inspectStagingSource(null, request, env, BUILD, filenames);
+  let writeStarted = false;
+  let readBack;
   const verifiedFiles = [];
-  for (const write of writes) {
-    const actual = readBack?.evidence?.files?.find(file => file.filename === write.filename && file.readable);
-    if (!actual?.content) throw new Error(`Shopify returned no read-back for ${write.filename}.`);
-    const parsed = parseShopifyJson(actual.content, `${write.filename} after website retool exceptions`);
-    const actualSemanticHash = await semanticHash(parsed);
-    if (actualSemanticHash !== write.expectedSemanticHash) throw new Error(`Shopify read-back did not match the approved result for ${write.filename}.`);
-    verifiedFiles.push({ filename: write.filename, sha256: await hashText(actual.content), semanticHash: actualSemanticHash, verified: true });
+  try {
+    for (const write of writes) {
+      writeStarted = true;
+      await writeThemeFile(env, evidence.stagingTheme.gid, write.filename, write.content);
+    }
+
+    readBack = await inspectStagingSource(null, request, env, BUILD, filenames);
+    for (const write of writes) {
+      const actual = readBack?.evidence?.files?.find(file => file.filename === write.filename && file.readable);
+      if (!actual?.content) throw new Error(`Shopify returned no read-back for ${write.filename}.`);
+      const parsed = parseShopifyJson(actual.content, `${write.filename} after website retool exceptions`);
+      const actualSemanticHash = await semanticHash(parsed);
+      if (actualSemanticHash !== write.expectedSemanticHash) throw new Error(`Shopify read-back did not match the approved result for ${write.filename}.`);
+      const afterSha256 = await hashText(actual.content);
+      verifiedFiles.push({
+        filename: write.filename,
+        beforeSha256: rollbackFiles.find(file => file.filename === write.filename)?.sourceSha256 || null,
+        afterSha256,
+        semanticHash: actualSemanticHash,
+        verified: true,
+      });
+    }
+  } catch (error) {
+    if (writeStarted) {
+      const recovery = await restoreExceptionSnapshot(request, env, evidence.stagingTheme.gid, rollbackFiles).catch(recoveryError => ({
+        restored: false,
+        error: recoveryError instanceof Error ? recoveryError.message : "Website retool exception recovery failed.",
+      }));
+      const failure = new Error(recovery.restored
+        ? `${error instanceof Error ? error.message : "Website retool exception execution failed."} Kairos automatically restored the native-theme staging files.`
+        : `${error instanceof Error ? error.message : "Website retool exception execution failed."} Automatic staging recovery requires attention: ${recovery.error || "unknown recovery error"}`);
+      failure.code = recovery.restored ? "website_retool_exception_failed_auto_restored" : "website_retool_exception_recovery_required";
+      failure.recovery = recovery;
+      throw failure;
+    }
+    throw error;
   }
 
   return {
@@ -96,6 +124,7 @@ export async function executeWebsiteRetoolExceptions(request, env, payload) {
       required: false,
       authorized: false,
       targetThemeID: evidence.stagingTheme.gid,
+      currentHashes: Object.fromEntries(verifiedFiles.map(file => [file.filename, file.afterSha256])),
       files: rollbackFiles,
       instruction: "Rollback requires a separate approved request containing this exact rollback package.",
     },
@@ -123,6 +152,13 @@ export async function rollbackWebsiteRetoolExceptions(request, env, payload) {
   const inspection = await inspectStagingSource(null, request, env, BUILD, filenames);
   if (inspection?.evidence?.stagingTheme?.gid !== rollback.targetThemeID) throw new Error("Kairos Staging no longer matches the rollback package.");
   if (inspection?.evidence?.stagingTheme?.role === "MAIN") throw new Error("Rollback target is live. Operation blocked.");
+  const currentHashes = rollback?.currentHashes && typeof rollback.currentHashes === "object" ? rollback.currentHashes : null;
+  if (currentHashes) {
+    for (const filename of filenames) {
+      const current = inspection?.evidence?.files?.find(item => item.filename === filename && item.readable);
+      if (!current?.sha256 || currentHashes[filename] !== current.sha256) throw new Error(`Staging source changed after execution: ${filename}. Rollback was blocked.`);
+    }
+  }
 
   for (const file of files) {
     parseShopifyJson(file.content, `${file.filename} rollback source`);
@@ -159,10 +195,34 @@ function normalizeSelectedChanges(input, plan) {
   return selected.map(item => {
     const match = allowed.find(candidate => sameChange(candidate, item));
     if (!match) throw new Error("A selected website retool change is not present in the approved plan.");
-    if (match.proposedValue === null || match.proposedValue === undefined) throw new Error(`The approved value is unresolved for ${match.filename}/${match.key}.`);
+    const proposedValue = resolveProposedValue(match, item);
     if (Number(match.confidence) < MIN_AUTO_CONFIDENCE && item?.executiveDecision !== "approved") throw new Error(`Explicit executive approval is required for ${match.filename}/${match.key}.`);
-    return match;
+    return { ...match, proposedValue };
   });
+}
+
+function resolveProposedValue(candidate, selection) {
+  if (candidate.proposedValue !== null && candidate.proposedValue !== undefined) return candidate.proposedValue;
+  const allowedValues = Array.isArray(candidate.allowedValues) ? candidate.allowedValues : [];
+  const proposedValue = selection?.proposedValue;
+  const allowed = allowedValues.some(option => option?.value === proposedValue);
+  if (!allowed) throw new Error(`Select an exact verified theme value for ${candidate.filename}/${candidate.key}.`);
+  return proposedValue;
+}
+
+async function restoreExceptionSnapshot(request, env, targetThemeID, files) {
+  for (const file of files) await writeThemeFile(env, targetThemeID, file.filename, file.content);
+  const readBack = await inspectStagingSource(null, request, env, BUILD, files.map(file => file.filename));
+  const verification = [];
+  for (const file of files) {
+    const actual = readBack?.evidence?.files?.find(item => item.filename === file.filename && item.readable);
+    if (!actual?.content) throw new Error(`Shopify returned no recovery read-back for ${file.filename}.`);
+    const actualHash = await hashText(actual.content);
+    const expectedHash = await hashText(file.content);
+    if (actualHash !== expectedHash) throw new Error(`Automatic recovery read-back mismatch for ${file.filename}.`);
+    verification.push({ filename: file.filename, expectedHash, actualHash, verified: true });
+  }
+  return { restored: true, verification };
 }
 
 function sameChange(a, b) {

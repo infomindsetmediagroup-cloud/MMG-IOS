@@ -1,0 +1,88 @@
+name: Verify Deterministic Plan Diagnostic
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/verify-deterministic-plan-diagnostic.yml"
+      - ".github/verification-triggers/deterministic-plan.txt"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: kairos-deterministic-plan-diagnostic
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DIAGNOSTIC_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev/api/website/diagnostics/deterministic-plan
+    steps:
+      - name: Read exact live deterministic plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          http_code="$(curl --silent --show-error --location --max-time 300 \
+            -H 'Cache-Control: no-cache' \
+            "${DIAGNOSTIC_URL}?verification=${GITHUB_SHA}-$(date +%s)" \
+            --output diagnostic.json \
+            --write-out '%{http_code}' || true)"
+          HTTP_CODE="${http_code}" node <<'NODE'
+          const fs = require('fs');
+          const raw = fs.existsSync('diagnostic.json') ? fs.readFileSync('diagnostic.json', 'utf8') : '';
+          let body = {};
+          try { body = raw ? JSON.parse(raw) : {}; } catch {}
+          const checks = {
+            httpSuccess: process.env.HTTP_CODE === '200',
+            completed: body.status === 'completed',
+            deterministicFirst: body.deterministicFirst === true,
+            sourceBoundCopyComposite: body.sourceBoundCopyComposite === true,
+            canonicalPackageExcluded: body.canonicalPackageExcluded === true,
+            canonicalHomepageNotInstalled: body.canonicalHomepageInstallation === false,
+            stagingOnly: body.stagingOnly === true,
+            operationsPresent: Number(body.operationCount || 0) > 0 && Array.isArray(body.operations) && body.operations.length > 0,
+            liveThemeUnchanged: body.liveThemeChanged === false,
+          };
+          const receipt = {
+            httpCode: Number(process.env.HTTP_CODE || 0),
+            status: body.status || null,
+            build: body.build || null,
+            checks,
+            operationCount: body.operationCount || 0,
+            operations: body.operations || [],
+            nativeCandidateCount: body.nativeCandidateCount || 0,
+            nativeCandidates: body.nativeCandidates || [],
+            error: body.error || null,
+          };
+          console.log(`KAIROS_DETERMINISTIC_PLAN_RECEIPT=${JSON.stringify(receipt)}`);
+          if (Object.values(checks).some(value => value !== true)) process.exit(1);
+          NODE
+
+      - name: Publish diagnostic receipt
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          if [ "${JOB_STATUS}" = "success" ]; then
+            state="success"
+            description="Live deterministic homepage plan contains real copy operations"
+          else
+            state="failure"
+            description="Live deterministic homepage plan diagnostic failed"
+          fi
+          payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-deterministic-plan-diagnostic",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          curl --fail --silent --show-error -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "${payload}"

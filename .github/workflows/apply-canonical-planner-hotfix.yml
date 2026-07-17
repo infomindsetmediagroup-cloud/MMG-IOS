@@ -1,0 +1,68 @@
+name: Apply Canonical Planner Hotfix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/apply-canonical-planner-hotfix.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Make canonical package the governed homepage planning path
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('cloudflare/mmg-ios/src/kairos-standalone-shopify-worker-v1.js')
+          source = path.read_text()
+          source = source.replace(
+              'const BUILD = "kairos-standalone-shopify-20260712-2";',
+              'const BUILD = "kairos-standalone-shopify-20260715-3";'
+          )
+          old = '''    const document = parseShopifyJson(sourceFile.content, "Current Kairos Staging homepage");
+              let packageResult;
+              let installationMode = "existing-text-settings";
+              try {
+                packageResult = buildDeterministicHomepagePackage(document, objective);
+              } catch (error) {
+                if (error?.code !== "canonical_homepage_package_required") throw error;
+                packageResult = buildCanonicalHomepagePackage(document, objective);
+                installationMode = KAIROS_CANONICAL_HOMEPAGE_VERSION;
+              }
+              const targetFilenames = installationMode === KAIROS_CANONICAL_HOMEPAGE_VERSION ? CANONICAL_HOMEPAGE_FILENAMES : [HOMEPAGE_FILE];'''
+          new = '''    const document = parseShopifyJson(sourceFile.content, "Current Kairos Staging homepage");
+              const packageResult = buildCanonicalHomepagePackage(document, objective);
+              const installationMode = KAIROS_CANONICAL_HOMEPAGE_VERSION;
+              const targetFilenames = CANONICAL_HOMEPAGE_FILENAMES;'''
+          if old not in source:
+              raise SystemExit('Expected homepage planning branch was not found; refusing an unsafe edit.')
+          source = source.replace(old, new, 1)
+          path.write_text(source)
+          PY
+
+      - name: Assert canonical planning contract
+        shell: bash
+        run: |
+          grep -F 'const BUILD = "kairos-standalone-shopify-20260715-3";' cloudflare/mmg-ios/src/kairos-standalone-shopify-worker-v1.js
+          grep -F 'const packageResult = buildCanonicalHomepagePackage(document, objective);' cloudflare/mmg-ios/src/kairos-standalone-shopify-worker-v1.js
+          grep -F 'const installationMode = KAIROS_CANONICAL_HOMEPAGE_VERSION;' cloudflare/mmg-ios/src/kairos-standalone-shopify-worker-v1.js
+          grep -F 'const targetFilenames = CANONICAL_HOMEPAGE_FILENAMES;' cloudflare/mmg-ios/src/kairos-standalone-shopify-worker-v1.js
+
+      - name: Commit corrected planner
+        shell: bash
+        run: |
+          git config user.name "Kairos Release Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add cloudflare/mmg-ios/src/kairos-standalone-shopify-worker-v1.js
+          git commit -m "Route homepage retool directly to canonical staging package"
+          git push origin HEAD:main

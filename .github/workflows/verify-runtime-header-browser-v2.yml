@@ -1,0 +1,83 @@
+name: Verify Runtime Header Browser V2
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/verify-runtime-header-browser-v2.yml"
+      - ".github/scripts/verify-runtime-header-browser.cjs"
+      - "web/kairos-dashboard/index.html"
+      - "web/kairos-dashboard/scripts/command-hub.js"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      KAIROS_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev/center/content/website
+    steps:
+      - name: Publish pending browser receipt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          payload="$(node -e 'process.stdout.write(JSON.stringify({state:"pending",description:"Checking live browser runtime header",context:"kairos-runtime-header-browser-v2",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          curl --fail --silent --show-error -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "${payload}"
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Chromium verifier
+        run: |
+          npm install --no-save playwright@1.54.1
+          npx playwright install --with-deps chromium
+
+      - name: Verify visible Online status
+        env:
+          DIAGNOSTIC_PATH: runtime-header-browser-diagnostics.json
+        run: node .github/scripts/verify-runtime-header-browser.cjs
+
+      - name: Upload browser diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-header-browser-diagnostics-v2
+          path: runtime-header-browser-diagnostics.json
+          if-no-files-found: warn
+          retention-days: 1
+
+      - name: Publish final browser receipt
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          if [ "${JOB_STATUS}" = "success" ]; then
+            state="success"
+            description="Live browser header changed to Online"
+          else
+            state="failure"
+            description="Live browser runtime header verification failed"
+          fi
+          payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-runtime-header-browser-v2",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          curl --fail --silent --show-error -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "${payload}"

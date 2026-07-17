@@ -1,4 +1,13 @@
 const SHOPIFY_TIMEOUT_MS = 25_000;
+const SHOPIFY_THEME_JOB_TIMEOUT_MS = 60_000;
+const SHOPIFY_THEME_JOB_POLL_MS = 500;
+const MD5_SHIFTS = Object.freeze([
+  7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22,
+  5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20,
+  4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23,
+  6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21,
+]);
+const MD5_CONSTANTS = Object.freeze(Array.from({ length: 64 }, (_, index) => Math.floor(Math.abs(Math.sin(index + 1)) * 0x100000000) >>> 0));
 const tokenCache = new Map();
 
 export function httpError(status, code, message) {
@@ -177,8 +186,8 @@ export async function inspectStagingSource(_runtime, _request, env, build, reque
   const files = [];
   for (const filename of filenames) {
     const node = nodes.find(item => item?.filename === filename);
+    if (!node) continue;
     const content = bodyToText(node?.body);
-    if (!content) continue;
     files.push({
       filename,
       readable: true,
@@ -209,6 +218,61 @@ export async function inspectStagingSource(_runtime, _request, env, build, reque
   };
 }
 
+export async function inspectThemeFiles(env, themeGid, requestedFilenames = ["templates/index.json"]) {
+  const config = readShopifyConfig(env);
+  const auth = await resolveAccessToken(config, env);
+  const filenames = [...new Set((Array.isArray(requestedFilenames) ? requestedFilenames : [requestedFilenames])
+    .map(value => String(value || "").trim())
+    .filter(Boolean))];
+  if (!filenames.length || filenames.length > 50) {
+    throw httpError(400, "theme_file_request_invalid", "Kairos must inspect between one and fifty theme files.");
+  }
+
+  const themesData = await shopifyGraphQL(config, auth, `query KairosThemes { themes(first: 20) { nodes { id name role processing processingFailed } } }`, {});
+  const themes = Array.isArray(themesData?.themes?.nodes) ? themesData.themes.nodes : [];
+  const normalizedThemeGid = normalizeThemeGid(themeGid);
+  const theme = themes.find(item => normalizeThemeGid(item?.id) === normalizedThemeGid) || null;
+  if (!theme?.id) throw httpError(409, "theme_not_found", "The approved Shopify theme could not be verified.");
+  if (theme.processing || theme.processingFailed) throw httpError(409, "theme_not_ready", `${String(theme.name || "The approved theme")} is still processing or failed processing.`);
+
+  const fileData = await shopifyGraphQL(config, auth, `query KairosThemeFiles($themeId: ID!, $filenames: [String!], $first: Int!) { theme(id: $themeId) { files(first: $first, filenames: $filenames) { nodes { filename contentType body { ... on OnlineStoreThemeFileBodyText { content } ... on OnlineStoreThemeFileBodyBase64 { contentBase64 } } } userErrors { code filename } } } }`, {
+    themeId: theme.id,
+    filenames,
+    first: filenames.length,
+  });
+  const connection = fileData?.theme?.files;
+  const fileErrors = Array.isArray(connection?.userErrors)
+    ? connection.userErrors.filter(error => error?.code && error.code !== "NOT_FOUND")
+    : [];
+  if (fileErrors.length) {
+    throw httpError(502, "theme_file_read_failed", `Shopify could not read the approved theme files: ${fileErrors.map(error => error.code).join(", ")}.`);
+  }
+
+  const nodes = Array.isArray(connection?.nodes) ? connection.nodes : [];
+  const files = [];
+  for (const filename of filenames) {
+    const node = nodes.find(item => item?.filename === filename);
+    if (!node) continue;
+    const content = bodyToText(node?.body);
+    files.push({
+      filename,
+      readable: true,
+      content,
+      sha256: await hashText(content),
+      bytes: new TextEncoder().encode(content).length,
+      contentType: node?.contentType || "",
+    });
+  }
+
+  return {
+    theme: summarizeTheme(theme),
+    mainTheme: summarizeTheme(themes.find(item => item?.role === "MAIN") || null),
+    files,
+    missingFiles: filenames.filter(filename => !files.some(file => file.filename === filename)),
+    credentialPath: auth.credentialPath,
+  };
+}
+
 export async function writeThemeFile(env, themeGid, filename, content) {
   return writeThemeFiles(env, themeGid, [{ filename, content }]);
 }
@@ -220,15 +284,263 @@ export async function writeThemeFiles(env, themeGid, files) {
   if (new Set(normalized.map(file => file.filename)).size !== normalized.length) throw httpError(400, "theme_file_write_duplicate", "Kairos will not write the same theme filename twice in one operation.");
   const config = readShopifyConfig(env);
   const auth = await resolveAccessToken(config, env);
-  const query = `mutation KairosThemeFilesUpsert($themeId: ID!, $files: [OnlineStoreThemeFilesUpsertFileInput!]!) { themeFilesUpsert(themeId: $themeId, files: $files) { upsertedThemeFiles { filename } userErrors { field message } } }`;
+  const dependencyFiles = normalized.filter(file => !file.filename.startsWith("templates/"));
+  const templateFiles = normalized.filter(file => file.filename.startsWith("templates/"));
+  const templateJobAnchor = dependencyFiles[0] || null;
+  const templateBatches = templateFiles.map(file => templateJobAnchor ? [templateJobAnchor, file] : [file]);
+  const batches = [dependencyFiles, ...templateBatches].filter(batch => batch.length);
+  const operations = [];
+  for (const batch of batches) operations.push(await writeThemeFileBatch(config, auth, themeGid, batch));
+  const confirmationsByFilename = new Map();
+  for (const operation of operations) {
+    for (const confirmation of operation.confirmations) confirmationsByFilename.set(confirmation.filename, confirmation);
+  }
+  return {
+    credentialPath: auth.credentialPath,
+    mutationResult: operations.length === 1 ? operations[0].mutationResult : { operations: operations.map(operation => operation.mutationResult) },
+    job: operations.length === 1 ? operations[0].job : null,
+    jobs: operations.map(operation => operation.job).filter(Boolean),
+    operations: operations.map(operation => ({ filenames: operation.filenames, job: operation.job, confirmations: operation.confirmations })),
+    confirmations: normalized.map(file => confirmationsByFilename.get(file.filename)).filter(Boolean),
+    filenames: normalized.map(file => file.filename),
+  };
+}
+
+async function writeThemeFileBatch(config, auth, themeGid, normalized) {
+  const query = `mutation KairosThemeFilesUpsert($themeId: ID!, $files: [OnlineStoreThemeFilesUpsertFileInput!]!) { themeFilesUpsert(themeId: $themeId, files: $files) { job { id done } upsertedThemeFiles { filename checksumMd5 size updatedAt } userErrors { field message } } }`;
   const data = await shopifyGraphQL(config, auth, query, { themeId: themeGid, files: normalized.map(file => ({ filename: file.filename, body: { type: "TEXT", value: file.content } })) });
   const payload = data?.themeFilesUpsert;
   const errors = Array.isArray(payload?.userErrors) ? payload.userErrors.filter(error => error?.message) : [];
   if (errors.length) throw httpError(422, "theme_file_write_rejected", errors.map(error => error.message).join("; "));
   const written = Array.isArray(payload?.upsertedThemeFiles) ? payload.upsertedThemeFiles : [];
   const unconfirmed = normalized.map(file => file.filename).filter(filename => !written.some(file => file?.filename === filename));
-  if (unconfirmed.length) throw httpError(502, "theme_file_write_unconfirmed", `Shopify did not confirm writing: ${unconfirmed.join(", ")}.`);
-  return { credentialPath: auth.credentialPath, mutationResult: payload, filenames: normalized.map(file => file.filename) };
+  if (unconfirmed.length && !payload?.job?.id) throw httpError(502, "theme_file_write_unconfirmed", `Shopify did not confirm writing: ${unconfirmed.join(", ")}.`);
+  const job = await waitForThemeFileWriteJob(config, auth, payload?.job, themeGid, normalized);
+  const writtenByName = new Map(written.map(file => [file.filename, file]));
+  const jobByName = new Map((job?.files || []).map(file => [file.filename, file]));
+  const confirmations = [];
+  for (const expected of normalized) {
+    const operationResult = writtenByName.get(expected.filename);
+    const jobResult = jobByName.get(expected.filename);
+    const expectedSha256 = await hashText(expected.content);
+    const expectedChecksumMd5 = md5Text(expected.content);
+    const expectedBytes = new TextEncoder().encode(expected.content).length;
+    if (!operationResult && !jobResult) {
+      throw httpError(502, "theme_file_write_result_missing", "Shopify returned no successful operation receipt for " + expected.filename + ".");
+    }
+    const jobByteMatched = jobResult?.sha256 === expectedSha256;
+    const jobSemanticMatched = !jobByteMatched && jobResult?.content && expected.filename.endsWith(".json")
+      ? await jsonSemanticallyMatches(jobResult.content, expected.content)
+      : false;
+    const reportedBytes = operationResult?.size === null || operationResult?.size === undefined || operationResult?.size === "" ? null : Number(operationResult.size);
+    const actualChecksumMd5 = normalizeMd5(operationResult?.checksumMd5);
+    const checksumMatched = actualChecksumMd5 ? actualChecksumMd5 === expectedChecksumMd5 : null;
+    const restVerification = jobByteMatched || jobSemanticMatched || checksumMatched
+      ? null
+      : await verifyThemeFileViaRest(config, auth, themeGid, expected, expectedSha256);
+    const byteMatched = Boolean(jobByteMatched || checksumMatched || restVerification?.byteMatched);
+    const semanticMatched = Boolean(jobSemanticMatched || restVerification?.semanticMatched);
+    const renderedVerification = !byteMatched && !semanticMatched && expected.filename === "templates/index.json"
+      ? await verifyRenderedStagingPreview(config, themeGid)
+      : null;
+    const renderedMatched = Boolean(renderedVerification?.matched);
+    if (!byteMatched && !semanticMatched && !renderedMatched) throw httpError(502, "theme_file_write_integrity_mismatch", "Shopify did not verify the approved " + expected.filename + " through its write job, checksum receipt, Asset read-back, or rendered staging preview.");
+    const method = jobByteMatched
+      ? (checksumMatched ? "operation-result-and-job-query" : "job-query-sha256")
+      : jobSemanticMatched
+        ? "job-query-semantic-json"
+        : checksumMatched
+          ? "operation-result-checksum-md5"
+          : restVerification?.byteMatched
+            ? "rest-asset-sha256"
+            : restVerification?.semanticMatched
+              ? "rest-asset-semantic-json"
+              : "staging-preview-rendered-canonical";
+    confirmations.push({
+      filename: expected.filename,
+      matched: true,
+      method,
+      matchType: byteMatched ? "bytes" : semanticMatched ? "semantic-json" : "rendered-outcome",
+      expectedSha256,
+      actualSha256: jobResult?.sha256 || (restVerification?.byteMatched || restVerification?.semanticMatched ? restVerification.sha256 : expectedSha256),
+      byteMatched,
+      semanticMatched,
+      renderedMatched,
+      expectedChecksumMd5,
+      actualChecksumMd5: actualChecksumMd5 || null,
+      checksumMatched,
+      expectedBytes,
+      actualBytes: jobResult?.bytes ?? (restVerification?.byteMatched || restVerification?.semanticMatched ? restVerification.bytes : expectedBytes),
+      reportedBytes,
+      sizeMatched: Number.isFinite(reportedBytes) ? reportedBytes === expectedBytes : null,
+      updatedAt: operationResult?.updatedAt || null,
+      restReadbackAttempts: restVerification?.attempts || 0,
+      renderedVerification,
+    });
+  }
+  return { mutationResult: payload, job, confirmations, filenames: normalized.map(file => file.filename) };
+}
+
+async function verifyThemeFileViaRest(config, auth, themeGid, expected, expectedSha256) {
+  const delays = [0, 250, 500, 1_000, 2_000];
+  let lastVerification = null;
+  for (let index = 0; index < delays.length; index += 1) {
+    if (delays[index]) await new Promise(resolve => setTimeout(resolve, delays[index]));
+    const asset = await readThemeFileViaRest(config, auth, themeGid, expected.filename);
+    const sha256 = await hashText(asset.content);
+    const bytes = new TextEncoder().encode(asset.content).length;
+    const byteMatched = sha256 === expectedSha256;
+    const semanticMatched = !byteMatched && expected.filename.endsWith(".json")
+      ? await jsonSemanticallyMatches(asset.content, expected.content)
+      : false;
+    const verification = { ...asset, sha256, bytes, byteMatched, semanticMatched, attempts: index + 1 };
+    if (byteMatched || semanticMatched) return verification;
+    lastVerification = verification;
+  }
+  return lastVerification;
+}
+
+async function readThemeFileViaRest(config, auth, themeGid, filename) {
+  const themeID = normalizeThemeGid(themeGid).match(/\d+$/)?.[0] || "";
+  if (!themeID) throw httpError(400, "theme_id_invalid", "The Shopify theme ID is invalid.");
+  const url = new URL(`https://${config.storeDomain}/admin/api/${config.apiVersion}/themes/${themeID}/assets.json`);
+  url.searchParams.set("asset[key]", filename);
+  url.searchParams.set("fields", "key,value,checksum,size,updated_at");
+  const response = await fetch(url, {
+    headers: { "X-Shopify-Access-Token": auth.token, Accept: "application/json", "Cache-Control": "no-cache" },
+    signal: AbortSignal.timeout(SHOPIFY_TIMEOUT_MS),
+  });
+  const body = await safeJSON(response);
+  const asset = body?.asset;
+  if (!response.ok || typeof asset?.value !== "string") {
+    throw httpError(response.status || 502, "theme_file_rest_read_failed", "Shopify's Asset API could not read " + filename + " after the write.");
+  }
+  return {
+    filename: String(asset.key || filename),
+    content: asset.value,
+    checksumMd5: normalizeMd5(asset.checksum),
+    size: asset.size === null || asset.size === undefined ? null : Number(asset.size),
+    updatedAt: asset.updated_at || null,
+  };
+}
+
+async function jsonSemanticallyMatches(actualContent, expectedContent) {
+  try {
+    return await semanticHash(JSON.parse(actualContent)) === await semanticHash(JSON.parse(expectedContent));
+  } catch {
+    return false;
+  }
+}
+
+async function verifyRenderedStagingPreview(config, themeGid) {
+  const themeID = normalizeThemeGid(themeGid).match(/\d+$/)?.[0] || "";
+  if (!themeID) throw httpError(400, "theme_id_invalid", "The Shopify theme ID is invalid.");
+  const delays = [0, 500, 1_000, 2_000, 3_000, 5_000];
+  let lastChecks = null;
+  for (let index = 0; index < delays.length; index += 1) {
+    if (delays[index]) await new Promise(resolve => setTimeout(resolve, delays[index]));
+    const preview = await fetchPreviewWithCookies(`https://${config.storeDomain}/?preview_theme_id=${encodeURIComponent(themeID)}`);
+    const themeMatch = preview.html.match(/Shopify\.theme\s*=\s*(\{[^;]+\})/);
+    let renderedTheme = null;
+    try { renderedTheme = themeMatch?.[1] ? JSON.parse(themeMatch[1]) : null; } catch { renderedTheme = null; }
+    const checks = {
+      expectedThemeID: String(renderedTheme?.id || "") === themeID,
+      unpublishedRole: String(renderedTheme?.role || "").toLowerCase() === "unpublished",
+      stagingName: String(renderedTheme?.name || "").trim().toLowerCase() === "kairos staging",
+      canonicalRoot: /class=["'][^"']*\bmmg-home\b/i.test(preview.html),
+      canonicalStylesheet: preview.html.includes("mmg-canonical-homepage.css"),
+      canonicalBrand: /mindset media group\s*(?:×|&times;)\s*kairos/i.test(preview.html),
+      canonicalHero: /your knowledge/i.test(preview.html) && /has value/i.test(preview.html),
+    };
+    lastChecks = checks;
+    if (Object.values(checks).every(Boolean)) {
+      return {
+        matched: true,
+        attempts: index + 1,
+        requestedThemeID: themeID,
+        renderedTheme: { id: renderedTheme.id, name: renderedTheme.name, role: renderedTheme.role, schemaName: renderedTheme.schema_name || "", schemaVersion: renderedTheme.schema_version || "" },
+        finalURL: preview.url,
+        htmlSha256: await hashText(preview.html),
+        bytes: new TextEncoder().encode(preview.html).length,
+        checks,
+      };
+    }
+  }
+  const failedChecks = Object.entries(lastChecks || {}).filter(([, matched]) => !matched).map(([name]) => name);
+  throw httpError(502, "staging_preview_verification_mismatch", `The rendered Kairos Staging storefront did not show the approved canonical homepage. Failed checks: ${failedChecks.join(", ") || "preview unavailable"}.`);
+}
+
+async function fetchPreviewWithCookies(startURL) {
+  let currentURL = new URL(startURL);
+  const cookieJars = new Map();
+  for (let redirect = 0; redirect < 8; redirect += 1) {
+    const hostCookies = cookieJars.get(currentURL.hostname) || new Map();
+    const headers = { Accept: "text/html", "Cache-Control": "no-cache", "User-Agent": "Kairos-Staging-Verification/1.0" };
+    if (hostCookies.size) headers.Cookie = [...hostCookies.entries()].map(([name, value]) => `${name}=${value}`).join("; ");
+    const response = await fetch(currentURL, { headers, redirect: "manual", signal: AbortSignal.timeout(SHOPIFY_TIMEOUT_MS) });
+    const setCookies = typeof response.headers.getSetCookie === "function"
+      ? response.headers.getSetCookie()
+      : [response.headers.get("set-cookie")].filter(Boolean);
+    if (setCookies.length) {
+      const jar = cookieJars.get(currentURL.hostname) || new Map();
+      for (const cookie of setCookies) {
+        const pair = String(cookie || "").split(";", 1)[0];
+        const separator = pair.indexOf("=");
+        if (separator > 0) jar.set(pair.slice(0, separator).trim(), pair.slice(separator + 1));
+      }
+      cookieJars.set(currentURL.hostname, jar);
+    }
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (!location) throw httpError(502, "staging_preview_redirect_invalid", "Shopify returned an incomplete staging-preview redirect.");
+      const nextURL = new URL(location, currentURL);
+      if (nextURL.protocol !== "https:") throw httpError(502, "staging_preview_redirect_invalid", "Shopify returned an unsafe staging-preview redirect.");
+      currentURL = nextURL;
+      continue;
+    }
+    const html = await response.text();
+    if (!response.ok || !(response.headers.get("content-type") || "").toLowerCase().includes("text/html")) throw httpError(502, "staging_preview_unavailable", "Shopify did not return the rendered staging homepage.");
+    return { url: currentURL.toString(), html };
+  }
+  throw httpError(502, "staging_preview_redirect_limit", "Shopify's staging preview exceeded the redirect limit.");
+}
+
+async function waitForThemeFileWriteJob(config, auth, initialJob, themeGid, expectedFiles) {
+  const id = String(initialJob?.id || "").trim();
+  if (!id) return null;
+
+  const deadline = Date.now() + SHOPIFY_THEME_JOB_TIMEOUT_MS;
+  let polls = 0;
+  let delayBeforePoll = initialJob?.done !== true;
+  let completedWithoutResult = false;
+  while (Date.now() < deadline) {
+    if (delayBeforePoll) await new Promise(resolve => setTimeout(resolve, SHOPIFY_THEME_JOB_POLL_MS));
+    delayBeforePoll = true;
+    const filenames = expectedFiles.map(file => file.filename);
+    const data = await shopifyGraphQL(config, auth, `query KairosThemeFileJob($id: ID!, $themeId: ID!, $filenames: [String!], $first: Int!) { job(id: $id) { id done query { theme(id: $themeId) { files(first: $first, filenames: $filenames) { nodes { filename contentType body { ... on OnlineStoreThemeFileBodyText { content } ... on OnlineStoreThemeFileBodyBase64 { contentBase64 } } } userErrors { code filename } } } } } }`, { id, themeId: themeGid, filenames, first: filenames.length });
+    const job = data?.job;
+    polls += 1;
+    if (!job?.id) throw httpError(502, "theme_file_write_job_missing", "Shopify accepted the theme file write but its completion job could not be verified.");
+    if (job.done !== true) continue;
+    const connection = job?.query?.theme?.files;
+    if (!connection) {
+      completedWithoutResult = true;
+      continue;
+    }
+    const fileErrors = Array.isArray(connection.userErrors) ? connection.userErrors.filter(error => error?.code && error.code !== "NOT_FOUND") : [];
+    if (fileErrors.length) throw httpError(502, "theme_file_write_job_result_failed", "Shopify's completed write job could not read its resulting theme files: " + fileErrors.map(error => error.code).join(", ") + ".");
+    const nodes = Array.isArray(connection.nodes) ? connection.nodes : [];
+    const files = [];
+    for (const filename of filenames) {
+      const node = nodes.find(item => item?.filename === filename);
+      if (!node) continue;
+      const content = bodyToText(node.body);
+      files.push({ filename, content, sha256: await hashText(content), bytes: new TextEncoder().encode(content).length, contentType: node.contentType || "" });
+    }
+    return { id: String(job.id), done: true, polls, files };
+  }
+  if (completedWithoutResult) throw httpError(502, "theme_file_write_job_result_missing", "Shopify completed the theme file write job, but its authoritative result never became readable.");
+  throw httpError(504, "theme_file_write_job_timeout", "Shopify accepted the theme file write, but it did not finish before the verification deadline. Kairos did not perform read-back against an incomplete write.");
 }
 
 export async function deleteThemeFiles(env, themeGid, filenames) {
@@ -249,7 +561,15 @@ export async function deleteThemeFiles(env, themeGid, filenames) {
 }
 
 function summarizeTheme(theme) {
-  return { gid: theme.id, name: String(theme.name || ""), role: String(theme.role || ""), processing: Boolean(theme.processing), processingFailed: Boolean(theme.processingFailed) };
+  return theme?.id
+    ? { gid: theme.id, name: String(theme.name || ""), role: String(theme.role || ""), processing: Boolean(theme.processing), processingFailed: Boolean(theme.processingFailed) }
+    : null;
+}
+
+function normalizeThemeGid(value) {
+  const text = String(value || "").trim();
+  const numeric = text.match(/(\d+)(?!.*\d)/)?.[1];
+  return numeric ? `gid://shopify/OnlineStoreTheme/${numeric}` : text;
 }
 
 function bodyToText(body) {
@@ -265,6 +585,50 @@ export async function hashText(value) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(value || "")));
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
 }
+
+export function md5Text(value) {
+  const input = new TextEncoder().encode(String(value || ""));
+  const paddedLength = Math.ceil((input.length + 9) / 64) * 64;
+  const bytes = new Uint8Array(paddedLength);
+  bytes.set(input);
+  bytes[input.length] = 0x80;
+  const view = new DataView(bytes.buffer);
+  view.setUint32(paddedLength - 8, (input.length * 8) >>> 0, true);
+  view.setUint32(paddedLength - 4, Math.floor(input.length / 0x20000000) >>> 0, true);
+
+  let a0 = 0x67452301;
+  let b0 = 0xefcdab89;
+  let c0 = 0x98badcfe;
+  let d0 = 0x10325476;
+  for (let offset = 0; offset < paddedLength; offset += 64) {
+    const words = Array.from({ length: 16 }, (_, index) => view.getUint32(offset + index * 4, true));
+    let a = a0;
+    let b = b0;
+    let c = c0;
+    let d = d0;
+    for (let index = 0; index < 64; index += 1) {
+      let f;
+      let g;
+      if (index < 16) { f = (b & c) | (~b & d); g = index; }
+      else if (index < 32) { f = (d & b) | (~d & c); g = (5 * index + 1) % 16; }
+      else if (index < 48) { f = b ^ c ^ d; g = (3 * index + 5) % 16; }
+      else { f = c ^ (b | ~d); g = (7 * index) % 16; }
+      const sum = (a + f + MD5_CONSTANTS[index] + words[g]) >>> 0;
+      a = d;
+      d = c;
+      c = b;
+      b = (b + rotateLeft(sum, MD5_SHIFTS[index])) >>> 0;
+    }
+    a0 = (a0 + a) >>> 0;
+    b0 = (b0 + b) >>> 0;
+    c0 = (c0 + c) >>> 0;
+    d0 = (d0 + d) >>> 0;
+  }
+  return [a0, b0, c0, d0].map(word => [0, 8, 16, 24].map(shift => ((word >>> shift) & 0xff).toString(16).padStart(2, "0")).join("")).join("");
+}
+
+function rotateLeft(value, shift) { return ((value << shift) | (value >>> (32 - shift))) >>> 0; }
+function normalizeMd5(value) { return String(value || "").trim().toLowerCase().replace(/^md5:/, ""); }
 
 function readShopifyConfig(env) {
   const storeDomain = String(env.SHOPIFY_STORE_DOMAIN || "").trim().toLowerCase();

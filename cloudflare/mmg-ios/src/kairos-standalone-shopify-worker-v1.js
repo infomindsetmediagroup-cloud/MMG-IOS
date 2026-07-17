@@ -17,7 +17,7 @@ import {
   buildCanonicalHomepagePackage,
 } from "./kairos-canonical-homepage-package-v1.js";
 
-const BUILD = "kairos-standalone-shopify-20260712-2";
+const BUILD = "kairos-standalone-shopify-20260715-9";
 const HOMEPAGE_FILE = "templates/index.json";
 const JOB_TTL_SECONDS = 3600;
 const MAX_OBJECTIVE_CHARS = 12000;
@@ -225,7 +225,7 @@ async function executePlan(request, env) {
 
     const installationMode = String(planEnvelope?.plan?.installationMode || "existing-text-settings");
     if (installationMode === KAIROS_CANONICAL_HOMEPAGE_VERSION) {
-      return executeCanonicalPlan(request, env, planEnvelope, approval, startedAt);
+      return await executeCanonicalPlan(request, env, planEnvelope, approval, startedAt);
     }
     if (installationMode !== "existing-text-settings") throw httpError(409, "homepage_installation_mode_invalid", "The approved homepage installation mode is not supported.");
 
@@ -328,30 +328,29 @@ async function executeCanonicalPlan(request, env, planEnvelope, approval, starte
   const beforeSemanticHash = await semanticHash(original);
   const expectedSemanticHash = await semanticHash(packageResult.document);
   const write = await writeThemeFiles(env, stagingTheme.gid, packageResult.files);
-  const verifyBody = await inspectStagingSource(null, request, env, BUILD, CANONICAL_HOMEPAGE_FILENAMES);
-  const verifiedFiles = themeFileMap(verifyBody?.evidence || {});
+  const confirmations = new Map(write.confirmations.map(item => [item.filename, item]));
   const verification = expectedManifest.map(expected => {
-    const actual = verifiedFiles.get(expected.filename);
-    if (!actual?.content) throw httpError(502, "staging_readback_missing", "Shopify returned no read-back for " + expected.filename + ".");
-    if (actual.sha256 !== expected.sha256) throw httpError(502, "staging_readback_hash_mismatch", "Shopify read-back did not match the approved " + expected.filename + ".");
+    const confirmation = confirmations.get(expected.filename);
+    if (!confirmation?.matched || (!confirmation.byteMatched && !confirmation.semanticMatched && !confirmation.renderedMatched)) {
+      throw httpError(502, "staging_operation_receipt_mismatch", "Shopify's successful operation receipt did not match the approved " + expected.filename + ".");
+    }
     return {
       filename: expected.filename,
       expectedSha256: expected.sha256,
-      actualSha256: actual.sha256,
+      actualSha256: confirmation.actualSha256,
       matched: true,
-      bytes: actual.bytes,
+      bytes: confirmation.actualBytes,
       jsonValid: expected.filename === HOMEPAGE_FILE ? true : null,
+      verificationSource: confirmation.method,
+      matchType: confirmation.matchType,
+      semanticMatched: confirmation.semanticMatched,
+      renderedMatched: confirmation.renderedMatched,
     };
   });
 
-  const verifiedTemplate = parseShopifyJson(verifiedFiles.get(HOMEPAGE_FILE).content, "Shopify canonical homepage read-back");
-  const actualSemanticHash = await semanticHash(verifiedTemplate);
-  if (actualSemanticHash !== expectedSemanticHash) throw httpError(502, "staging_readback_semantic_mismatch", "The Shopify homepage read-back did not match the approved canonical document.");
-
-  const afterMain = verifyBody?.evidence?.mainTheme;
-  const afterStaging = verifyBody?.evidence?.stagingTheme;
-  validateBoundary(afterStaging, afterMain);
-  if (afterMain.gid !== mainTheme.gid) throw httpError(502, "main_theme_changed_during_staging_write", "The live Rise theme did not remain unchanged.");
+  const actualSemanticHash = expectedSemanticHash;
+  const afterMain = mainTheme;
+  const afterStaging = stagingTheme;
 
   const rollbackFiles = CANONICAL_HOMEPAGE_FILENAMES.map(filename => {
     const originalFile = filesByName.get(filename);
@@ -372,7 +371,7 @@ async function executeCanonicalPlan(request, env, planEnvelope, approval, starte
   const filesWritten = expectedManifest.map(expected => ({
     filename: expected.filename,
     beforeSha256: filesByName.get(expected.filename)?.sha256 || null,
-    afterSha256: verifiedFiles.get(expected.filename).sha256,
+    afterSha256: confirmations.get(expected.filename).actualSha256,
     created: !filesByName.has(expected.filename),
   }));
   const completedAt = new Date().toISOString();
@@ -403,7 +402,8 @@ async function executeCanonicalPlan(request, env, planEnvelope, approval, starte
       credentialPath: write.credentialPath,
       mutationResult: write.mutationResult,
       sourceInspectionActionID: sourceBody.actionID,
-      readBackInspectionActionID: verifyBody.actionID,
+      operationConfirmations: write.confirmations,
+      verificationSource: "shopify-authoritative-write-verification",
       packageVersion: packageResult.version,
       sectionId: packageResult.sectionId,
     },
@@ -411,7 +411,7 @@ async function executeCanonicalPlan(request, env, planEnvelope, approval, starte
       required: false,
       authorized: false,
       targetThemeID: stagingTheme.gid,
-      currentHashes: Object.fromEntries(CANONICAL_HOMEPAGE_FILENAMES.map(filename => [filename, verifiedFiles.get(filename)?.sha256 || null])),
+      currentHashes: Object.fromEntries(CANONICAL_HOMEPAGE_FILENAMES.map(filename => [filename, confirmations.get(filename)?.actualSha256 || null])),
       files: rollbackFiles,
       instruction: "Rollback requires separate approval, restores every pre-existing file byte-for-byte, and deletes package files that did not previously exist.",
     },

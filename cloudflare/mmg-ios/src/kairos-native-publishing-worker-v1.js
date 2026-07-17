@@ -13,12 +13,13 @@ import { buildCreationArtifact, creationArtifactContentType, creationArtifactNam
 import { KAIROS_NATIVE_KERNEL_VERSION, NATIVE_DEPARTMENTS, analyzeNativeObjective, buildNativeExecutionGraph } from "./kairos-native-kernel-v1.js";
 import {
   KAIROS_PROVIDER_POLICY,
+  inferenceRuntime,
   intelligenceConfigured,
   probeKairosIntelligence,
   runKairosIntelligence,
 } from "./kairos-intelligence-v1.js";
 
-const BUILD = "kairos-native-publishing-20260712-2";
+const BUILD = "kairos-native-publishing-20260716-3";
 const KAIROS_SELF_HOSTED_INFERENCE_VERSION = "kairos-private-runtime-v1";
 const ARTIFACT_CACHE_SECONDS = 60 * 60;
 const MAX_COVER_BYTES = 8 * 1024 * 1024;
@@ -31,6 +32,7 @@ export default {
 
     if (url.pathname === "/api/native-intelligence/status" && request.method === "GET") {
       const runtimeReady = Boolean(env.KAIROS_PROJECTS);
+      const enhancedInference = inferenceRuntime(env);
       return json({
         status: runtimeReady ? "operational" : "needs-attention",
         build: BUILD,
@@ -39,7 +41,8 @@ export default {
         provider: "kairos-native",
         providerPolicy: KAIROS_PROVIDER_POLICY,
         externalInferenceAPI: false,
-        selfHostedInference: nativeInferenceState(env),
+        enhancedInference,
+        selfHostedInference: enhancedInference.selfHosted ? "configured" : "not-configured",
         selfHostedInferenceEngine: KAIROS_SELF_HOSTED_INFERENCE_VERSION,
         persistentProjectRuntime: Boolean(env.KAIROS_PROJECTS),
         capabilities: nativeCapabilities(env),
@@ -63,11 +66,13 @@ export default {
     }
 
     if (url.pathname === "/api/content/capabilities" && request.method === "GET") {
+      const enhancedInference = inferenceRuntime(env);
       return json({
         status: "ready",
         version: "kairos-native-creation-pipeline-v1",
         launchMode: "native-generative-production",
-        intelligenceRuntime: intelligenceConfigured(env) ? "kairos-private-runtime" : "kairos-deterministic-native-fallback",
+        intelligenceRuntime: enhancedInference.mode,
+        enhancedInference,
         supportedTypes: ["product_asset_copy", "book_package"],
         productionActions: {
           research: "operational",
@@ -129,13 +134,13 @@ export default {
     const response = await runtime.fetch(request, env, ctx);
     if (url.pathname === "/api/health" || url.pathname === "/api/capabilities") {
       const body = await safeJSON(response.clone());
+      const enhancedInference = inferenceRuntime(env);
       body.build = BUILD;
       body.kernel = "kairos-native-publishing-v1";
       body.launchMode = "native-generative-production";
       body.openaiAPIUsed = false;
       body.intelligenceRuntime = {
-        provider: intelligenceConfigured(env) ? "kairos-private-runtime" : "kairos-deterministic-native-fallback",
-        configured: intelligenceConfigured(env),
+        ...enhancedInference,
         status: "operational",
         providerPolicy: KAIROS_PROVIDER_POLICY,
         externalInferenceAPI: false,
@@ -145,14 +150,16 @@ export default {
         provider: "kairos-native",
         providerPolicy: KAIROS_PROVIDER_POLICY,
         externalInferenceAPI: false,
-        selfHostedInference: nativeInferenceState(env),
+        enhancedInference,
+        selfHostedInference: enhancedInference.selfHosted ? "configured" : "not-configured",
         selfHostedInferenceEngine: KAIROS_SELF_HOSTED_INFERENCE_VERSION,
         projectStorage: env.KAIROS_PROJECTS ? "durable-object" : "unavailable",
       };
       body.capabilities = {
         ...(body.capabilities || {}),
         ...nativeCapabilities(env),
-        privateInferenceGateway: intelligenceConfigured(env) ? "configured" : "optional-native-enhancement",
+        enhancedInference: enhancedInference.configured ? "operational" : "needs-configuration",
+        selfHostedInferenceGateway: enhancedInference.selfHosted ? "configured" : "optional-private-upgrade",
         bookDevelopment: env.KAIROS_PROJECTS ? "operational" : "needs-configuration",
         productAssetCopy: env.KAIROS_PROJECTS ? "operational" : "needs-configuration",
         productionPublishing: env.KAIROS_PROJECTS ? "operational" : "needs-configuration",
@@ -173,6 +180,13 @@ export class KairosProject {
   async fetch(request) {
     const url = new URL(request.url);
     try {
+      if (url.pathname === "/control/inference/claim" && request.method === "POST") return this.claimInference(request);
+      if (url.pathname === "/control/autonomy/claim" && request.method === "POST") return this.claimAutonomy(request);
+      if (url.pathname === "/ledger/upsert" && request.method === "POST") return this.ledgerUpsert(request);
+      if (url.pathname === "/ledger/batch-upsert" && request.method === "POST") return this.ledgerBatchUpsert(request);
+      if (url.pathname === "/ledger/get" && request.method === "GET") return this.ledgerGet(url);
+      if (url.pathname === "/ledger/list" && request.method === "GET") return this.ledgerList(url);
+      if (url.pathname === "/ledger/delete" && request.method === "DELETE") return this.ledgerDelete(url);
       if (url.pathname === "/create" && request.method === "POST") return this.create(request);
       if (url.pathname === "/status" && request.method === "GET") return this.status();
       if (url.pathname === "/cover-approval" && request.method === "POST") return this.approveCover(request);
@@ -182,6 +196,126 @@ export class KairosProject {
     } catch (error) {
       return failure(error);
     }
+  }
+
+  async ledgerUpsert(request) {
+    const payload = await safeRequestJSON(request);
+    const collection = ledgerToken(payload?.collection, "collection");
+    const id = ledgerToken(payload?.id || payload?.value?.id, "record id");
+    const value = payload?.value;
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw engineError(400, "ledger_value_required", "Kairos requires an object value for durable persistence.");
+    const key = `ledger:${collection}:${id}`;
+    const indexKey = `ledger:index:${collection}`;
+    const existingIndex = await this.state.storage.get(indexKey);
+    const index = Array.isArray(existingIndex) ? existingIndex.filter(entry => entry?.id !== id) : [];
+    const updatedAt = String(value.updatedAt || value.createdAt || new Date().toISOString());
+    index.unshift({ id, updatedAt });
+    await this.state.storage.put({
+      [key]: { ...value, id },
+      [indexKey]: index.slice(0, 1000),
+    });
+    return json({ status: "persisted", collection, id, value: { ...value, id } });
+  }
+
+  async ledgerBatchUpsert(request) {
+    const payload = await safeRequestJSON(request);
+    const records = Array.isArray(payload?.records) ? payload.records.slice(0, 25) : [];
+    if (!records.length) throw engineError(400, "ledger_records_required", "Kairos requires one or more durable records.");
+    const now = new Date().toISOString();
+    const writes = {};
+    const indexCache = new Map();
+    const persisted = [];
+    for (const record of records) {
+      const collection = ledgerToken(record?.collection, "collection");
+      const id = ledgerToken(record?.id || record?.value?.id, "record id");
+      const value = record?.value;
+      if (!value || typeof value !== "object" || Array.isArray(value)) throw engineError(400, "ledger_value_required", "Every Kairos batch record requires an object value.");
+      const indexKey = `ledger:index:${collection}`;
+      let index = indexCache.get(indexKey);
+      if (!index) {
+        const existing = await this.state.storage.get(indexKey);
+        index = Array.isArray(existing) ? existing : [];
+      }
+      index = index.filter(entry => entry?.id !== id);
+      const updatedAt = String(value.updatedAt || value.createdAt || now);
+      index.unshift({ id, updatedAt });
+      indexCache.set(indexKey, index.slice(0, 1000));
+      writes[`ledger:${collection}:${id}`] = { ...value, id };
+      persisted.push({ collection, id });
+    }
+    for (const [indexKey, index] of indexCache) writes[indexKey] = index;
+    await this.state.storage.put(writes);
+    return json({ status: "persisted", atomic: true, records: persisted });
+  }
+
+  async ledgerGet(url) {
+    const collection = ledgerToken(url.searchParams.get("collection"), "collection");
+    const id = ledgerToken(url.searchParams.get("id"), "record id");
+    const value = await this.state.storage.get(`ledger:${collection}:${id}`);
+    if (!value) return json({ status: "not-found", collection, id }, 404);
+    return json({ status: "ready", collection, id, value });
+  }
+
+  async ledgerList(url) {
+    const collection = ledgerToken(url.searchParams.get("collection"), "collection");
+    const limit = Math.max(1, Math.min(500, Number(url.searchParams.get("limit") || 250)));
+    const index = await this.state.storage.get(`ledger:index:${collection}`);
+    const entries = Array.isArray(index) ? index.slice(0, limit) : [];
+    const values = [];
+    for (const entry of entries) {
+      const value = await this.state.storage.get(`ledger:${collection}:${entry.id}`);
+      if (value) values.push(value);
+    }
+    return json({ status: "ready", collection, values });
+  }
+
+  async ledgerDelete(url) {
+    const collection = ledgerToken(url.searchParams.get("collection"), "collection");
+    const id = ledgerToken(url.searchParams.get("id"), "record id");
+    const indexKey = `ledger:index:${collection}`;
+    const existingIndex = await this.state.storage.get(indexKey);
+    const index = Array.isArray(existingIndex) ? existingIndex.filter(entry => entry?.id !== id) : [];
+    await this.state.storage.delete?.(`ledger:${collection}:${id}`);
+    await this.state.storage.put(indexKey, index);
+    return json({ status: "deleted", collection, id });
+  }
+
+  async claimInference(request) {
+    const payload = await safeRequestJSON(request);
+    const perMinute = Math.max(1, Math.min(60, Number(payload?.perMinute || 6)));
+    const perDay = Math.max(10, Math.min(5000, Number(payload?.perDay || 200)));
+    const purpose = String(payload?.purpose || "inference").replace(/[^a-z0-9._:-]/gi, "-").slice(0, 120);
+    const now = Date.now();
+    const day = new Date(now).toISOString().slice(0, 10);
+    const key = `control:inference:${day}`;
+    const existing = await this.state.storage.get(key);
+    const timestamps = Array.isArray(existing?.timestamps) ? existing.timestamps.filter(value => now - Number(value) < 60_000) : [];
+    const total = Number(existing?.total || 0);
+    if (timestamps.length >= perMinute || total >= perDay) {
+      const retryAfterMs = timestamps.length >= perMinute ? Math.max(1000, 60_000 - (now - Number(timestamps[0] || now))) : Math.max(1000, Date.parse(`${day}T23:59:59.999Z`) - now);
+      return json({ status: "deferred", retryAfterMs, error: { code: "kairos_inference_rate_limited", message: "Kairos preserved its configured inference budget. Retry after the current budget window." } }, 429, { "Retry-After": String(Math.ceil(retryAfterMs / 1000)) });
+    }
+    timestamps.push(now);
+    const byPurpose = { ...(existing?.byPurpose || {}), [purpose]: Number(existing?.byPurpose?.[purpose] || 0) + 1 };
+    await this.state.storage.put(key, { day, total: total + 1, timestamps, byPurpose, updatedAt: new Date(now).toISOString() });
+    return json({ status: "claimed", day, total: total + 1, perMinute, perDay, purpose });
+  }
+
+  async claimAutonomy(request) {
+    const payload = await safeRequestJSON(request);
+    const scope = ledgerToken(payload?.scope || "operational-cycle", "autonomy scope");
+    const minimumIntervalMs = Math.max(60_000, Math.min(24 * 60 * 60 * 1000, Number(payload?.minimumIntervalMs || 15 * 60 * 1000)));
+    const key = `control:autonomy:${scope}`;
+    const existing = await this.state.storage.get(key);
+    const now = Date.now();
+    const lastClaimedAt = Date.parse(existing?.claimedAt || 0);
+    if (Number.isFinite(lastClaimedAt) && now - lastClaimedAt < minimumIntervalMs) {
+      const nextEligibleAt = new Date(lastClaimedAt + minimumIntervalMs).toISOString();
+      return json({ status: "deferred", scope, lastClaimedAt: existing.claimedAt, nextEligibleAt }, 409);
+    }
+    const claim = { id: crypto.randomUUID(), scope, source: String(payload?.source || "scheduled").slice(0, 160), claimedAt: new Date(now).toISOString(), minimumIntervalMs };
+    await this.state.storage.put(key, claim);
+    return json({ status: "claimed", ...claim });
   }
 
   async alarm() {
@@ -210,6 +344,7 @@ export class KairosProject {
     const analysis = analyzeBookIdea(payload?.idea);
     const cover = await this.storeCover(payload?.cover);
     const now = new Date().toISOString();
+    const enhancedInference = inferenceRuntime(this.env);
     const job = {
       projectId: String(payload?.projectId || crypto.randomUUID()),
       status: "queued",
@@ -226,8 +361,11 @@ export class KairosProject {
       startedAt: now,
       engine: KAIROS_NATIVE_ENGINE_VERSION,
       externalInferenceAPI: false,
-      selfHostedInference: intelligenceConfigured(this.env) ? "enabled" : "deterministic-fallback",
-      inferenceEngine: intelligenceConfigured(this.env) ? KAIROS_SELF_HOSTED_INFERENCE_VERSION : null,
+      enhancedInference: enhancedInference.configured ? "enabled" : "deterministic-fallback",
+      inferenceMode: enhancedInference.mode,
+      inferenceProvider: enhancedInference.provider,
+      selfHostedInference: enhancedInference.selfHosted ? "enabled" : "not-configured",
+      inferenceEngine: enhancedInference.selfHosted ? KAIROS_SELF_HOSTED_INFERENCE_VERSION : enhancedInference.configured ? "kairos-cloudflare-account-inference-v1" : null,
       inferenceEvidence: [],
       inferenceFailures: [],
       manuscriptRequired: false,
@@ -350,7 +488,7 @@ export class KairosProject {
       if (inference.status === "pending") return;
       job = inference.job;
       if (inference.status === "completed") {
-        research = { ...research, nativeSynthesis: research.synthesis, synthesis: inference.text, synthesizedBy: KAIROS_SELF_HOSTED_INFERENCE_VERSION };
+        research = { ...research, nativeSynthesis: research.synthesis, synthesis: inference.text, synthesizedBy: inference.evidence.engine };
         await this.state.storage.put("research", research);
       }
       await this.state.storage.put("research", research);
@@ -374,7 +512,7 @@ export class KairosProject {
       if (inference.status === "pending") return;
       job = inference.job;
       if (inference.status === "completed") {
-        architecture = { ...architecture, intelligenceReview: inference.text, reviewedBy: KAIROS_SELF_HOSTED_INFERENCE_VERSION };
+        architecture = { ...architecture, intelligenceReview: inference.text, reviewedBy: inference.evidence.engine };
         await this.state.storage.put("architecture", architecture);
       }
       return this.move({ ...job, title: architecture.title, subtitle: architecture.subtitle }, "manuscript", "Writing the Gold Master manuscript", 22, { chapterCursor: 0 });
@@ -403,7 +541,7 @@ export class KairosProject {
         let chapter;
         if (inference.status === "completed") {
           try {
-            chapter = inferredChapter(plan, chapterIndex, inference.text);
+            chapter = inferredChapter(plan, chapterIndex, inference.text, inference.evidence.engine);
           } catch (error) {
             job = await this.recordInferenceFailure(job, "chapter_output_rejected", safeMessage(error));
           }
@@ -438,7 +576,7 @@ export class KairosProject {
         let edited;
         if (inference.status === "completed") {
           try {
-            edited = inferredEditorialPass(chapter, pass, inference.text);
+            edited = inferredEditorialPass(chapter, pass, inference.text, inference.evidence.engine);
           } catch (error) {
             job = await this.recordInferenceFailure(job, "editorial_output_rejected", safeMessage(error));
           }
@@ -478,7 +616,7 @@ export class KairosProject {
       }, "Kairos model is developing the cover art direction");
       if (inference.status === "pending") return;
       job = inference.job;
-      if (inference.status === "completed") await this.state.storage.put("coverBrief", { content: inference.text, generatedBy: KAIROS_SELF_HOSTED_INFERENCE_VERSION, generatedAt: new Date().toISOString() });
+      if (inference.status === "completed") await this.state.storage.put("coverBrief", { content: inference.text, generatedBy: inference.evidence.engine, generatedAt: new Date().toISOString() });
       return this.move(job, "manufacturing", "Manufacturing DOCX, digital, and KDP production masters", 80);
     }
 
@@ -541,28 +679,37 @@ export class KairosProject {
   async runInference(job, request, stageLabel) {
     if (!intelligenceConfigured(this.env)) return { status: "unavailable", job };
     try {
+      const runtimeState = inferenceRuntime(this.env);
       const prompt = inferencePrompt(request);
       const generated = await runKairosIntelligence(this.env, {
         system: prompt.system,
         user: prompt.user,
         maxTokens: request.maxTokens || 4096,
         temperature: prompt.temperature,
+        purpose: `publishing-${request.task}`,
       });
       const evidence = {
         task: request.task,
         requestId: request.requestId,
         model: generated.model,
-        engine: KAIROS_SELF_HOSTED_INFERENCE_VERSION,
+        provider: generated.provider,
+        runtime: generated.runtime,
+        engine: runtimeState.selfHosted ? KAIROS_SELF_HOSTED_INFERENCE_VERSION : "kairos-cloudflare-account-inference-v1",
         outputTokens: generated.usage?.completion_tokens || null,
         latencyMs: null,
         completedAt: new Date().toISOString(),
-        externalProvider: false,
+        selfHosted: runtimeState.selfHosted,
+        managedService: runtimeState.managedService,
+        privacy: runtimeState.privacy,
       };
       const next = {
         ...job,
         status: "working",
         stageLabel,
-        selfHostedInference: "active",
+        enhancedInference: "active",
+        inferenceMode: runtimeState.mode,
+        inferenceProvider: runtimeState.provider,
+        selfHostedInference: runtimeState.selfHosted ? "active" : "not-configured",
         inferenceEngine: evidence.engine,
         inferenceJob: null,
         inferenceEvidence: [...(job.inferenceEvidence || []), evidence].slice(-80),
@@ -571,7 +718,13 @@ export class KairosProject {
       await this.state.storage.put("job", next);
       return { status: "completed", job: next, text: generated.text, evidence };
     } catch (error) {
-      const next = await this.recordInferenceFailure(job, error?.code || "private_inference_failed", safeMessage(error));
+      if (error?.code === "kairos_inference_rate_limited") {
+        const next = { ...job, status: "working", stageLabel: "Waiting for the governed inference budget", updatedAt: new Date().toISOString() };
+        await this.state.storage.put("job", next);
+        await this.state.storage.setAlarm(Date.now() + Math.max(1000, Math.min(60_000, Number(error?.retryAfterMs || 60_000))));
+        return { status: "pending", job: next };
+      }
+      const next = await this.recordInferenceFailure(job, error?.code || "enhanced_inference_failed", safeMessage(error));
       return { status: "failed", job: next };
     }
   }
@@ -619,11 +772,13 @@ export class KairosProject {
       if (chapter) chapters.push(chapter);
     }
     const intelligence = {
-      mode: job.selfHostedInference || "deterministic-fallback",
+      mode: job.inferenceMode || "deterministic-native",
+      provider: job.inferenceProvider || "kairos-native",
       engine: job.inferenceEngine || null,
       completedTasks: Number(job.inferenceEvidence?.length || 0),
       fallbackTasks: Number(job.inferenceFailures?.length || 0),
-      externalProvider: false,
+      managedService: job.inferenceMode === "cloudflare-account-scoped",
+      selfHosted: job.inferenceMode === "self-hosted-private",
     };
     if (stored) return { ...stored, chapters, coverBrief: coverBrief || stored.coverBrief || null, intelligence: stored.intelligence || intelligence, approval: job.approval || stored.approval || null };
     return { ...buildPublicationRecord({ projectId: job.projectId, analysis, research, architecture, chapters, approval: job.approval }), coverBrief: coverBrief || null, intelligence };
@@ -665,13 +820,14 @@ async function forwardToProject(request, env, projectId, path) {
 }
 
 function nativeCapabilities(env) {
-  const inferenceState = nativeInferenceState(env);
+  const enhancedInference = inferenceRuntime(env);
   return {
     nativeObjectiveAnalysis: "operational",
     nativePublicResearchAdapters: "operational",
-    selfHostedOpenWeightInference: inferenceState,
-    nativeManuscriptComposition: inferenceState === "configured" ? "model-enhanced" : inferenceState === "needs-configuration" ? "needs-configuration" : "operational",
-    nativeTripleEditorialPass: inferenceState === "configured" ? "model-enhanced" : inferenceState === "needs-configuration" ? "needs-configuration" : "operational",
+    enhancedAccountScopedInference: enhancedInference.configured ? "operational" : "needs-configuration",
+    selfHostedOpenWeightInference: enhancedInference.selfHosted ? "configured" : "optional-private-upgrade",
+    nativeManuscriptComposition: enhancedInference.configured ? "model-enhanced" : "operational-deterministic",
+    nativeTripleEditorialPass: enhancedInference.configured ? "model-enhanced" : "operational-deterministic",
     nativeCoverGeneration: "operational",
     approvedCoverIntake: "operational",
     nativeProductPagePackaging: "operational",
@@ -699,7 +855,10 @@ function publicJob(job) {
     completedAt: job.completedAt || null,
     engine: job.engine,
     externalInferenceAPI: false,
-    selfHostedInference: job.selfHostedInference || "deterministic-fallback",
+    enhancedInference: job.enhancedInference || "deterministic-fallback",
+    inferenceMode: job.inferenceMode || "deterministic-native",
+    inferenceProvider: job.inferenceProvider || "kairos-native",
+    selfHostedInference: job.selfHostedInference || "not-configured",
     inferenceEngine: job.inferenceEngine || null,
     inferenceSummary: {
       completedTasks: Number(job.inferenceEvidence?.length || 0),
@@ -736,7 +895,13 @@ function updateStageLedger(stages, active, status) {
 }
 
 function isPublicationObjective(objective) { return /\b(book|manuscript|author|chapter|kdp|paperback|ebook|publication|publish)\b/i.test(objective); }
-function nativeInferenceState(env) { return intelligenceConfigured(env) ? "configured" : "deterministic-fallback"; }
+function nativeInferenceState(env) { return inferenceRuntime(env).selfHosted ? "configured" : "not-configured"; }
+
+function ledgerToken(value, label) {
+  const token = String(value || "").trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9._:-]{0,159}$/.test(token)) throw engineError(400, "ledger_key_invalid", `Kairos requires a valid ${label}.`);
+  return token;
+}
 function inferenceRequestId(job, unit) { return `${job.projectId}:${String(unit).replace(/[^A-Za-z0-9_.:-]/g, "-")}`.slice(0, 128); }
 function inferenceBookContext(analysis) {
   return {
@@ -779,20 +944,20 @@ function inferencePrompt(request) {
     temperature: 0.25,
   };
 }
-function inferredChapter(plan, chapterIndex, text) {
+function inferredChapter(plan, chapterIndex, text, engine = KAIROS_SELF_HOSTED_INFERENCE_VERSION) {
   const content = normalizeModelMarkdown(text);
   validateRequiredChapter(content);
   const words = countWords(content);
   if (words < 1_100 || words > 2_300) throw new Error(`Model chapter failed the 1,100–2,300 word acceptance band (${words} words).`);
-  return { number: chapterIndex + 1, title: plan.title, lens: plan.lens, content, generatedBy: KAIROS_SELF_HOSTED_INFERENCE_VERSION, generatedAt: new Date().toISOString() };
+  return { number: chapterIndex + 1, title: plan.title, lens: plan.lens, content, generatedBy: engine, generatedAt: new Date().toISOString() };
 }
-function inferredEditorialPass(chapter, pass, text) {
+function inferredEditorialPass(chapter, pass, text, engine = KAIROS_SELF_HOSTED_INFERENCE_VERSION) {
   const content = normalizeModelMarkdown(text);
   validateRequiredChapter(content);
   const originalWords = countWords(chapter.content);
   const editedWords = countWords(content);
   if (editedWords < Math.max(950, Math.floor(originalWords * 0.72)) || editedWords > Math.ceil(originalWords * 1.35)) throw new Error(`Editorial pass changed chapter length outside the governed acceptance band (${originalWords} to ${editedWords} words).`);
-  return { ...chapter, content, generatedBy: chapter.generatedBy, editorialEngine: KAIROS_SELF_HOSTED_INFERENCE_VERSION, editorialPasses: Math.max(Number(chapter.editorialPasses || 0), pass), editedAt: new Date().toISOString() };
+  return { ...chapter, content, generatedBy: chapter.generatedBy, editorialEngine: engine, editorialPasses: Math.max(Number(chapter.editorialPasses || 0), pass), editedAt: new Date().toISOString() };
 }
 function normalizeModelMarkdown(text) {
   let value = String(text || "").replace(/^```(?:markdown)?\s*/i, "").replace(/\s*```$/i, "").trim();
@@ -827,7 +992,7 @@ function sanitizeUploadName(value, type) {
 }
 function downloadFilename(title, name) { const prefix = String(title || "publication").normalize("NFKD").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 72) || "publication"; return `${prefix}-${name}`; }
 function retag(response) { const headers = new Headers(response.headers); headers.set("X-MMG-Runtime", BUILD); headers.set("X-Kairos-Kernel", "kairos-native-publishing-v1"); headers.set("X-Kairos-External-Inference", "false"); return new Response(response.body, { status: response.status, statusText: response.statusText, headers }); }
-function json(value, status = 200) { return new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-MMG-Runtime": BUILD, "X-Kairos-Kernel": "kairos-native-publishing-v1", "X-Kairos-External-Inference": "false", "X-Content-Type-Options": "nosniff" } }); }
+function json(value, status = 200, additionalHeaders = {}) { return new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-MMG-Runtime": BUILD, "X-Kairos-Kernel": "kairos-native-publishing-v1", "X-Kairos-External-Inference": "false", "X-Content-Type-Options": "nosniff", ...additionalHeaders } }); }
 function failure(error) { const status = Number.isInteger(error?.status) ? error.status : 500; return json({ status: "needs-attention", error: { code: error?.code || "native_engine_error", message: safeMessage(error) } }, status); }
 async function safeRequestJSON(request) { try { const value = await request.json(); return value && typeof value === "object" && !Array.isArray(value) ? value : {}; } catch { return {}; } }
 async function safeJSON(response) { const text = await response.text(); if (!text) return {}; try { return JSON.parse(text); } catch { return {}; } }

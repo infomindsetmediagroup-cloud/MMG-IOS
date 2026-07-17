@@ -1,0 +1,76 @@
+name: Command Center Browser Proof
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - "cloudflare/mmg-ios/**"
+      - "web/kairos-dashboard/**"
+      - ".github/workflows/command-center-browser-proof.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  proof:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out pull request source
+        uses: actions/checkout@v4
+
+      - name: Install DOM harness
+        run: npm install jsdom@26.1.0 --no-audit --no-fund --no-save
+
+      - name: Execute self-contained Command Center
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const { JSDOM, VirtualConsole } = require('jsdom');
+          const html = fs.readFileSync('web/kairos-dashboard/index.html', 'utf8');
+          const errors = [];
+          const virtualConsole = new VirtualConsole();
+          virtualConsole.on('jsdomError', error => errors.push(String(error?.message || error)));
+          virtualConsole.on('error', message => errors.push(String(message)));
+
+          const dom = new JSDOM(html, {
+            url: 'https://mmg-ios.info-mindsetmediagroup.workers.dev/center/content/website',
+            runScripts: 'dangerously',
+            pretendToBeVisual: true,
+            virtualConsole,
+          });
+
+          setTimeout(() => {
+            const { document } = dom.window;
+            const hub = document.querySelector('#kairos-hub');
+            const input = document.querySelector('#website-objective');
+            const button = document.querySelector('[data-website-plan]');
+            const value = 'Verified functioning Website Retool input.';
+            if (input) input.value = value;
+            const receipt = {
+              boot: document.documentElement.dataset.kairosBoot || null,
+              build: hub?.dataset?.selfContainedBuild || null,
+              loading: Boolean(hub?.textContent?.includes('Loading Kairos Command Center')),
+              commandView: Boolean(document.querySelector('#command-view')),
+              websiteRetool: Boolean(hub?.textContent?.includes('Website Retool')),
+              objectiveValue: input?.value || null,
+              buttonPresent: Boolean(button),
+              buttonEnabled: Boolean(button && !button.disabled),
+              errors,
+            };
+            console.log(`KAIROS_BROWSER_RECEIPT=${JSON.stringify(receipt)}`);
+            dom.window.close();
+            const passed = receipt.boot === 'ready'
+              && receipt.build === 'kairos-command-center-inline-20260717-1'
+              && !receipt.loading
+              && receipt.commandView
+              && receipt.websiteRetool
+              && receipt.objectiveValue === value
+              && receipt.buttonPresent
+              && receipt.buttonEnabled;
+            process.exit(passed ? 0 : 1);
+          }, 250);
+          NODE
