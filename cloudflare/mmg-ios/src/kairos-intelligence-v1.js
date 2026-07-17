@@ -109,17 +109,20 @@ export async function runKairosIntelligence(env, input) {
   if (runtime.selfHosted) return runSelfHosted(env, input, runtime);
 
   await claimInferenceBudget(env, String(input?.purpose || "inference"));
+  const request = {
+    messages: [
+      { role: "system", content: String(input?.system || "") },
+      { role: "user", content: String(input?.user || "") },
+    ],
+    temperature: clampNumber(input?.temperature, 0, 2, 0.2),
+    max_tokens: Math.max(64, Math.min(4096, Number(input?.maxTokens || 2600))),
+    seed: Number(input?.seed || 1729),
+  };
+  if (requiresStructuredJSON(input)) request.response_format = structuredJSONFormat(input);
+
   let result;
   try {
-    result = await env.AI.run(runtime.model, {
-      messages: [
-        { role: "system", content: String(input?.system || "") },
-        { role: "user", content: String(input?.user || "") },
-      ],
-      temperature: clampNumber(input?.temperature, 0, 2, 0.2),
-      max_tokens: Math.max(64, Math.min(4096, Number(input?.maxTokens || 2600))),
-      seed: Number(input?.seed || 1729),
-    });
+    result = await env.AI.run(runtime.model, request);
   } catch (error) {
     throw gatewayError(safeMessage(error, "Kairos account-scoped inference failed."), error?.code || "kairos_inference_failed", Number(error?.statusCode || 502));
   }
@@ -132,6 +135,7 @@ export async function runKairosIntelligence(env, input) {
     runtime: runtime.mode,
     privacy: runtime.privacy,
     managedService: runtime.managedService,
+    structuredOutput: requiresStructuredJSON(input),
     usage: result?.usage || null,
   };
 }
@@ -139,12 +143,12 @@ export async function runKairosIntelligence(env, input) {
 export function parseStrictJSON(value) {
   if (value && typeof value === "object" && !Array.isArray(value)) return value;
   const trimmed = String(value || "").trim();
-  try { return JSON.parse(trimmed); } catch {}
-  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
-  if (fenced) { try { return JSON.parse(fenced.trim()); } catch {} }
-  const start = trimmed.indexOf("{");
-  const end = trimmed.lastIndexOf("}");
-  if (start >= 0 && end > start) { try { return JSON.parse(trimmed.slice(start, end + 1)); } catch {} }
+  const withoutReasoning = stripReasoningBlocks(trimmed);
+  const fenced = withoutReasoning.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
+  for (const candidate of [withoutReasoning, fenced]) {
+    const parsed = parseJSONCandidate(candidate);
+    if (parsed) return parsed;
+  }
   throw gatewayError("Kairos returned invalid structured output.", "kairos_invalid_json", 502);
 }
 
@@ -163,24 +167,98 @@ async function probeSelfHosted(env, runtime) {
 }
 
 async function runSelfHosted(env, input, runtime) {
+  const body = {
+    model: runtime.model,
+    temperature: input?.temperature ?? 0.2,
+    max_tokens: input?.maxTokens ?? 12000,
+    messages: [
+      { role: "system", content: input?.system },
+      { role: "user", content: input?.user },
+    ],
+  };
+  if (requiresStructuredJSON(input)) body.response_format = structuredJSONFormat(input);
+
   const response = await timedFetch(`${baseURLFor(env)}/v1/chat/completions`, {
     method: "POST",
     headers: { ...authHeaders(env), "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: runtime.model,
-      temperature: input?.temperature ?? 0.2,
-      max_tokens: input?.maxTokens ?? 12000,
-      messages: [
-        { role: "system", content: input?.system },
-        { role: "user", content: input?.user },
-      ],
-    }),
+    body: JSON.stringify(body),
   }, Number(env.KAIROS_INFERENCE_TIMEOUT_MS || 180000));
   const data = await safeJSON(response);
   if (!response.ok) throw gatewayError(data?.error?.message || data?.message || `Kairos intelligence returned ${response.status}.`, "kairos_inference_failed", 502);
   const text = extractGeneratedText(data);
   if (!text) throw gatewayError("Kairos private intelligence returned an empty response.", "kairos_inference_empty", 502);
-  return { text, model: runtime.model, provider: runtime.provider, runtime: runtime.mode, privacy: runtime.privacy, managedService: false, usage: data?.usage || null };
+  return { text, model: runtime.model, provider: runtime.provider, runtime: runtime.mode, privacy: runtime.privacy, managedService: false, structuredOutput: requiresStructuredJSON(input), usage: data?.usage || null };
+}
+
+function requiresStructuredJSON(input) {
+  if (input?.structuredOutput === true || input?.jsonSchema) return true;
+  const system = String(input?.system || "");
+  return /\b(?:return|respond with)\s+(?:strict\s+)?json\b/i.test(system);
+}
+
+function structuredJSONFormat(input) {
+  const schema = input?.jsonSchema;
+  if (schema && typeof schema === "object" && !Array.isArray(schema)) {
+    return { type: "json_schema", json_schema: schema };
+  }
+  return { type: "json_object" };
+}
+
+function stripReasoningBlocks(value) {
+  return String(value || "")
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/<analysis>[\s\S]*?<\/analysis>/gi, "")
+    .trim();
+}
+
+function parseJSONCandidate(value) {
+  const text = String(value || "").trim();
+  if (!text) return null;
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+  } catch {}
+  for (const candidate of balancedJSONObjectCandidates(text)) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+    } catch {}
+  }
+  return null;
+}
+
+function balancedJSONObjectCandidates(value) {
+  const candidates = [];
+  let start = -1;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') inString = false;
+      continue;
+    }
+    if (character === '"') {
+      inString = true;
+      continue;
+    }
+    if (character === "{") {
+      if (depth === 0) start = index;
+      depth += 1;
+      continue;
+    }
+    if (character === "}" && depth > 0) {
+      depth -= 1;
+      if (depth === 0 && start >= 0) {
+        candidates.push(value.slice(start, index + 1));
+        start = -1;
+      }
+    }
+  }
+  return candidates;
 }
 
 function selfHostedConfigured(env) {
