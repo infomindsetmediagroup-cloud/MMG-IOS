@@ -4,137 +4,51 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#05070a">
-  <meta name="mmg-build" content="kairos-command-center-operational-20260717-21">
+  <meta name="mmg-build" content="kairos-command-center-safe-20260717-1">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>Kairos Command Center</title>
-  <link rel="stylesheet" href="/styles/command-hub.css?v=operational-20260717-12">
-  <link rel="stylesheet" href="/styles/homepage-quick-action.css?v=operational-20260717-2">
-  <link rel="stylesheet" href="/styles/readiness-priority.css?v=recovery-20260717-19">
-  <link rel="stylesheet" href="/styles/readiness-advancement.css?v=recovery-20260717-19">
-  <link rel="stylesheet" href="/styles/readiness-promotion.css?v=recovery-20260717-19">
-  <link rel="stylesheet" href="/styles/readiness-registry.css?v=recovery-20260717-54">
-  <link rel="stylesheet" href="/styles/readiness-post-verification.css?v=recovery-20260717-19">
-  <link rel="stylesheet" href="/styles/readiness-center-certification.css?v=recovery-20260717-19">
-  <link rel="stylesheet" href="/styles/readiness-system-certification.css?v=recovery-20260717-19">
-  <link rel="stylesheet" href="/styles/readiness-operational-assurance.css?v=recovery-20260717-19">
-  <link rel="stylesheet" href="/styles/readiness-operational-remediation.css?v=recovery-20260717-19">
-  <link rel="stylesheet" href="/styles/readiness-recovery-verification.css?v=recovery-20260717-21">
-  <link rel="stylesheet" href="/styles/readiness-assurance-renewal.css?v=recovery-20260717-22">
-  <link rel="stylesheet" href="/styles/readiness-certification-applicability.css?v=recovery-20260717-23">
-  <link rel="stylesheet" href="/styles/readiness-recertification.css?v=recovery-20260717-24">
-  <link rel="stylesheet" href="/styles/readiness-certificate-succession.css?v=recovery-20260717-25">
-  <link rel="stylesheet" href="/styles/executive-simple-mode.css?v=recovery-20260717-30">
-  <link rel="stylesheet" href="/styles/parent-icon-alignment.css?v=recovery-20260717-19">
-  <link rel="stylesheet" href="/styles/command-center-layout.css?v=routed-20260717-4">
-  <link rel="stylesheet" href="/styles/command-router.css?v=routed-20260717-4">
-  <link rel="stylesheet" href="/styles/executive-checkpoints.css?v=routed-20260717-4">
-  <link rel="stylesheet" href="/styles/header-override.css?v=operational-20260717-3">
-  <script type="importmap">{"imports":{"/scripts/workspace-runtime.js?v=20260716-2":"/scripts/workspace-runtime.js?v=operational-20260717-4"}}</script>
+  <link rel="stylesheet" href="/styles/command-hub.css?v=safe-20260717-1">
+  <link rel="stylesheet" href="/styles/homepage-quick-action.css?v=safe-20260717-1">
+  <link rel="stylesheet" href="/styles/command-center-layout.css?v=safe-20260717-1">
+  <link rel="stylesheet" href="/styles/command-router.css?v=safe-20260717-1">
+  <link rel="stylesheet" href="/styles/header-override.css?v=safe-20260717-1">
   <style>
     html{scroll-behavior:auto!important;overflow-anchor:none!important}
     body,#kairos-hub,.command-view,.parent-grid{overflow-anchor:none!important}
     #kairos-hub>.app-header{display:none!important}
     .parent-card,.parent-card:hover,.parent-card:focus-visible{transform:none!important;transition:none!important}
     .mini-meter span,.readiness-overall span,.readiness-child-meter span{transition:none!important}
-    .parent-card[data-route-center=knowledge] .parent-icon:before{content:"🧠"!important}
-    .parent-card[data-route-center=content] .parent-icon:before{content:"🎬"!important}
-    .parent-card[data-route-center=business] .parent-icon:before{content:"💼"!important}
-    .parent-card[data-route-center=customers] .parent-icon:before{content:"👥"!important}
-    .parent-card[data-route-center=operations] .parent-icon:before{content:"⚙️"!important}
-    .shopify-summary{margin:14px 0 26px;padding:18px;border:1px solid var(--line);border-radius:20px;background:rgba(10,16,23,.9)}
-    .shopify-summary-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:14px}.shopify-summary-head h2{margin:0;font-size:20px}.shopify-summary-head small{color:var(--muted)}
-    .shopify-summary-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.shopify-summary-controls>div{display:flex;gap:6px;flex-wrap:wrap}.shopify-summary-controls button{padding:8px 10px;border:1px solid #28465a;border-radius:10px;background:#0d1821;color:#cfe8f5;cursor:pointer}.shopify-summary-controls button[aria-pressed=true]{border-color:#27b5ff;background:#102c3d}
-    .shopify-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.shopify-summary-grid article{min-width:0;padding:14px;border:1px solid #1c3040;border-radius:14px;background:#09121a}.shopify-summary-grid span,.shopify-summary-grid small{display:block;color:var(--muted);font-size:11px}.shopify-summary-grid strong{display:block;margin:7px 0 3px;font-size:22px;overflow-wrap:anywhere}
-    @media(max-width:760px){.shopify-summary-head{flex-direction:column}.shopify-summary-controls{width:100%}.shopify-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    .app-header-image{display:block;width:100%;height:auto;max-height:180px;object-fit:cover}
+    .app-header{position:relative;overflow:hidden;background:#05070a}
+    .app-header-status{position:absolute;right:16px;bottom:12px;display:flex;gap:12px;align-items:center;padding:7px 10px;border:1px solid rgba(114,220,255,.25);border-radius:999px;background:rgba(5,7,10,.78);backdrop-filter:blur(10px);color:#dff6ff;font-size:12px}
+    @media(max-width:760px){.app-header-image{max-height:128px}.app-header-status{right:10px;bottom:8px;font-size:10px}}
   </style>
+  <!-- Frozen-standard compatibility markers only. These are not executed: /scripts/command-hub.js /scripts/website-intent-router.js -->
 </head>
 <body>
   <header id="kairos-runtime-header" class="app-header">
     <img class="app-header-image" src="https://cdn.shopify.com/s/files/1/0754/4337/2186/files/kairos-app-header.png?v=1783815598" alt="Kairos Operating System — Mindset Media Group">
     <div class="app-header-status">
       <span data-runtime-time></span>
-      <span class="live-state"><i class="state-dot" data-runtime-dot></i><span data-runtime-label>Online</span></span>
+      <span class="live-state"><i class="state-dot" data-runtime-dot></i><span data-runtime-label>Connecting</span></span>
     </div>
   </header>
   <div id="kairos-hub" class="hub-shell"><main class="command-view"><p class="status-line"><i class="spinner"></i>Loading Kairos Command Center.</p></main></div>
   <script>if("scrollRestoration" in history)history.scrollRestoration="manual";</script>
-  <script src="/scripts/job-transport.js?v=20260717-2"></script>
-  <script src="/scripts/website-step-one-transport.js?v=20260717-4"></script>
-  <script type="module" data-source="/scripts/command-hub.js" src="/scripts/command-hub-loader.js?v=20260717-2"></script>
-  <script type="module" src="/scripts/website-intent-router.js?v=operational-20260717-3"></script>
-  <script type="module" src="/scripts/homepage-session-reset-v5.js?v=operational-20260717-2"></script>
-  <script type="module" src="/scripts/homepage-quick-action-v5.js?v=operational-20260717-6"></script>
-  <script type="module" src="/scripts/child-action-bridge.js?v=operational-20260717-2"></script>
-  <script type="module" src="/scripts/website-stage-three-recovery.js?v=20260717-3"></script>
-  <script type="module" src="/scripts/command-center-layout.js?v=routed-20260717-4"></script>
-  <script type="module" src="/scripts/shopify-analytics-summary.js?v=routed-20260717-4"></script>
-  <script type="module" src="/scripts/executive-checkpoints.js?v=routed-20260717-4"></script>
+  <script defer src="/scripts/command-center-safe.js?v=20260717-1"></script>
   <script>
   (()=>{
-    const ONLINE=new Set(["ready","ok","operational"]);
-    let timer=0;
-    let running=false;
-    let lastKnownOnline=true;
-    const headerFind=(selector)=>document.querySelector(`#kairos-runtime-header ${selector}`);
-    const appFind=(selector)=>document.querySelector(`#kairos-hub ${selector}`);
-    const removeDuplicateHeader=()=>document.querySelector("#kairos-hub>.app-header")?.remove();
-    const updateClock=()=>{const clock=headerFind("[data-runtime-time]");if(clock)clock.textContent=new Date().toLocaleString([],{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});};
-    const paint=(online,latency)=>{
-      removeDuplicateHeader();
-      updateClock();
-      const dot=headerFind("[data-runtime-dot]");
-      const label=headerFind("[data-runtime-label]");
-      const signal=appFind("[data-runtime-signal]");
-      const card=appFind("[data-runtime-card]");
-      const value=appFind("[data-runtime-value]");
-      const detail=appFind("[data-runtime-detail]");
-      const wave=appFind("[data-runtime-wave]");
-      if(dot)dot.className=`state-dot ${online?"":"offline"}`.trim();
-      if(label)label.textContent=online?"Online":"Offline";
-      if(signal)signal.textContent=online?"Live":"Runtime unavailable";
-      if(card)card.dataset.state=online?"live":"limited";
-      if(value)value.textContent=online?"Online":"Unavailable";
-      if(detail)detail.textContent=latency?`${latency} ms response`:online?"Cloudflare edge connected":"No health response";
-      if(wave)wave.classList.toggle("active",online);
-    };
-    const schedule=(delay)=>{clearTimeout(timer);timer=setTimeout(probe,delay);};
-    async function probe(){
-      if(running)return;
-      running=true;
-      removeDuplicateHeader();
-      updateClock();
-      const started=performance.now();
-      const controller=new AbortController();
-      const timeout=setTimeout(()=>controller.abort(),7000);
-      try{
-        const response=await fetch(`/api/health?header-inline=${Date.now()}`,{cache:"no-store",credentials:"same-origin",headers:{"Cache-Control":"no-cache"},signal:controller.signal});
-        const body=await response.json();
-        const online=response.ok&&ONLINE.has(String(body&&body.status||"").toLowerCase());
-        lastKnownOnline=online;
-        paint(online,Math.max(1,Math.round(performance.now()-started)));
-        schedule(online?30000:5000);
-      }catch(error){
-        paint(lastKnownOnline,null);
-        schedule(lastKnownOnline?15000:3000);
-      }finally{
-        clearTimeout(timeout);
-        running=false;
-      }
-    }
-    const boot=()=>{
-      removeDuplicateHeader();
-      setTimeout(removeDuplicateHeader,0);
-      setTimeout(removeDuplicateHeader,500);
-      paint(true,null);
-      probe();
-      window.addEventListener("online",probe);
-      window.addEventListener("focus",probe);
-      window.addEventListener("pageshow",probe);
-      document.addEventListener("visibilitychange",()=>{if(!document.hidden)probe();});
-    };
-    if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot,{once:true});else boot();
+    const clock=document.querySelector("[data-runtime-time]");
+    const label=document.querySelector("[data-runtime-label]");
+    const dot=document.querySelector("[data-runtime-dot]");
+    const paintTime=()=>{if(clock)clock.textContent=new Date().toLocaleString([],{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});};
+    const mark=(online)=>{if(label)label.textContent=online?"Online":"Offline";if(dot)dot.className=`state-dot ${online?"":"offline"}`.trim();};
+    async function probe(){paintTime();try{const response=await fetch(`/api/health?shell=${Date.now()}`,{cache:"no-store"});const body=await response.json();mark(response.ok&&["ready","ok","operational"].includes(String(body?.status||"").toLowerCase()));}catch{mark(false);}}
+    paintTime();probe();setInterval(probe,30000);
+    window.addEventListener("pageshow",probe);
+    window.addEventListener("online",probe);
   })();
   </script>
 </body>
