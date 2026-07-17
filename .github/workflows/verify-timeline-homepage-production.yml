@@ -33,7 +33,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     env:
       KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
     steps:
@@ -133,6 +133,71 @@ jobs:
           if(Object.values(checks).some(value=>value!==true))process.exit(1);
           NODE
 
+      - name: Generate a real read-only homepage text plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > planning-request.json <<'JSON'
+          {
+            "objective": "Keep the currently published homepage framework exactly as it is. Rewrite the existing visible customer-facing copy so visitors clearly understand that Mindset Media Group helps creators, entrepreneurs, authors, educators, and small businesses turn knowledge, experience, and ideas into professional digital products, publishing assets, educational resources, business assets, and revenue-generating intellectual property. Do not change sections, blocks, images, buttons, links, navigation, colors, typography, spacing, styling, animation, layout, mobile behavior, Liquid logic, CSS, or assets.",
+            "requestType": "homepage-preserve-design",
+            "intent": "homepage-preserve-design",
+            "homepageMode": "preserve-published-framework",
+            "sourceOfTruth": "published-main-theme",
+            "preserveExistingDesign": true,
+            "preservePublishedFramework": true,
+            "renderedTextRequired": true,
+            "activeOrderedSectionsOnly": true,
+            "activeOrderedBlocksOnly": true,
+            "templateTextPreferred": true,
+            "literalLiquidTextFallbackAuthorized": true,
+            "structuralMutationAuthorized": false,
+            "styleMutationAuthorized": false,
+            "liquidStructureMutationAuthorized": false,
+            "assetMutationAuthorized": false,
+            "canonicalPackageAuthorized": false
+          }
+          JSON
+          http_code="$(curl --silent --show-error --location --max-time 180 \
+            -D real-plan-headers.txt \
+            -H 'Content-Type: application/json' \
+            -H 'Cache-Control: no-cache' \
+            --data-binary @planning-request.json \
+            "${KAIROS_PRODUCTION_URL}/api/shopify/staging/plan/jobs" \
+            --output real-plan-body.json \
+            --write-out '%{http_code}')"
+          HTTP_CODE="${http_code}" node <<'NODE'
+          const fs=require('fs');
+          const body=JSON.parse(fs.readFileSync('real-plan-body.json','utf8'));
+          const headers=fs.readFileSync('real-plan-headers.txt','utf8');
+          const result=body?.result||{};
+          const plan=result?.plan||{};
+          const mode=String(plan.installationMode||'');
+          const templateCount=Array.isArray(plan?.templateTextPatch?.operations)?plan.templateTextPatch.operations.length:0;
+          const liquidCount=Array.isArray(plan?.liquidTextPatches)?plan.liquidTextPatches.reduce((sum,patch)=>sum+(Array.isArray(patch?.replacements)?patch.replacements.length:0),0):0;
+          const count=templateCount+liquidCount;
+          const checks={
+            accepted:Number(process.env.HTTP_CODE)===202,
+            completed:body?.status==='completed'&&result?.status==='ready-for-approval',
+            governedMode:['published-main-template-text-settings-v1','published-main-liquid-visible-text-v1'].includes(mode),
+            visibleReplacementPlanned:count>0,
+            readOnly:result?.readOnly===true,
+            publishedSource:result?.evidence?.sourceOfTruth==='published-main-theme',
+            targetIsStaging:String(plan?.targetTheme?.role||'').toUpperCase()!=='MAIN',
+            publishedIsMain:String(plan?.publishedTheme?.role||'').toUpperCase()==='MAIN',
+            frameworkPreserved:plan?.preservePublishedFramework===true,
+            canonicalPackageBlocked:plan?.canonicalPackage===null,
+            noProductionAuthorization:plan?.productionPublishAuthorized===false&&plan?.liveThemeMutationAuthorized===false,
+            productionHeader:/x-kairos-production-entry:\s*kairos-production-entry-20260716-99/i.test(headers),
+            textSourceHeader:/x-kairos-homepage-text-source:\s*(template-settings|liquid-literal-text)/i.test(headers),
+          };
+          console.log(JSON.stringify({httpStatus:Number(process.env.HTTP_CODE),mode,templateCount,liquidCount,summary:result?.summary,checks},null,2));
+          if(Object.values(checks).some(value=>value!==true)){
+            console.error(JSON.stringify(body,null,2));
+            process.exit(1);
+          }
+          NODE
+
       - name: Publish production verification receipt
         if: always()
         shell: bash
@@ -143,10 +208,10 @@ jobs:
           set -euo pipefail
           if [ "${JOB_STATUS}" = "success" ]; then
             state="success"
-            description="v42 template and Liquid homepage text checks passed"
+            description="v42 live plan, Liquid fallback, and timeline checks passed"
           else
             state="failure"
-            description="v42 homepage text or timeline verification failed"
+            description="v42 homepage plan or production verification failed"
           fi
           payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-timeline-homepage-production",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
           curl --fail --silent --show-error \
