@@ -70,14 +70,21 @@ export async function handleCanonicalHomepageBuildWithCompatibility(request, env
   const beforeFile = (beforeInspection?.evidence?.files || []).find((file) => file.filename === JS_FILE);
   if (!beforeFile?.content) throw httpError(502, "canonical_homepage_script_missing", "The canonical homepage interaction script was not readable after installation.");
 
-  const compatibleHash = await hashText(COMPATIBLE_JS_SOURCE);
+  const expectedSourceHash = await hashText(COMPATIBLE_JS_SOURCE);
+  let verifiedHash = expectedSourceHash;
+  let verifiedBytes = new TextEncoder().encode(COMPATIBLE_JS_SOURCE).length;
+  let normalizedByShopify = false;
+
   try {
     await writeThemeFiles(env, themeGid, [{ filename: JS_FILE, content: COMPATIBLE_JS_SOURCE }]);
     const readBack = await inspectStagingSource(null, request, env, KAIROS_CANONICAL_HOMEPAGE_COMPATIBILITY_BUILD, [JS_FILE]);
     const actual = (readBack?.evidence?.files || []).find((file) => file.filename === JS_FILE);
-    if (!actual || actual.content !== COMPATIBLE_JS_SOURCE || actual.sha256 !== compatibleHash) {
-      throw httpError(502, "canonical_homepage_compatibility_readback_mismatch", "Shopify did not preserve the theme-heading compatibility repair.");
+    if (!actual || normalizeThemeText(actual.content) !== normalizeThemeText(COMPATIBLE_JS_SOURCE)) {
+      throw httpError(502, "canonical_homepage_compatibility_readback_mismatch", "Shopify changed executable content in the theme-heading compatibility repair.");
     }
+    verifiedHash = actual.sha256;
+    verifiedBytes = actual.bytes;
+    normalizedByShopify = actual.content !== COMPATIBLE_JS_SOURCE || actual.sha256 !== expectedSourceHash;
   } catch (error) {
     await writeThemeFiles(env, themeGid, [{ filename: JS_FILE, content: beforeFile.content }]);
     throw error;
@@ -89,20 +96,33 @@ export async function handleCanonicalHomepageBuildWithCompatibility(request, env
   body.files = (Array.isArray(body.files) ? body.files : []).map((file) => file.filename === JS_FILE
     ? {
         ...file,
-        afterSha256: compatibleHash,
-        afterBytes: new TextEncoder().encode(COMPATIBLE_JS_SOURCE).length,
-        changed: file.beforeSha256 !== compatibleHash,
+        afterSha256: verifiedHash,
+        afterBytes: verifiedBytes,
+        changed: file.beforeSha256 !== verifiedHash,
         compatibilityIntermediateSha256: beforeFile.sha256,
+        expectedSourceSha256: expectedSourceHash,
+        readBackVerification: "canonical-text",
+        normalizedByShopify,
       }
     : file);
   body.verification = {
     ...(body.verification || {}),
     themeHeaderHeadingNormalized: true,
-    compatibilityExactReadBack: true,
+    compatibilityExactReadBack: !normalizedByShopify,
+    compatibilityCanonicalTextReadBack: true,
+    compatibilityNormalizedByShopify: normalizedByShopify,
   };
 
   const headers = new Headers(response.headers);
   headers.set("Content-Type", "application/json; charset=utf-8");
   headers.set("X-Kairos-Canonical-Homepage-Compatibility", KAIROS_CANONICAL_HOMEPAGE_COMPATIBILITY_BUILD);
   return new Response(JSON.stringify(body), { status: response.status, statusText: response.statusText, headers });
+}
+
+function normalizeThemeText(value) {
+  return String(value || "")
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[\t ]+$/gm, "")
+    .replace(/\n+$/, "");
 }
