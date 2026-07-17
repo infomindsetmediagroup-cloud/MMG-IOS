@@ -6,6 +6,7 @@ import {
 
 const BUILD = "kairos-production-entry-20260717-103";
 const DIAGNOSTIC_ROUTE = "/api/website/diagnostics/deterministic-plan";
+const COMMAND_CENTER_PREFIX = "/center/";
 
 export { KairosProject };
 
@@ -13,6 +14,10 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     try {
+      if ((request.method === "GET" || request.method === "HEAD") && url.pathname.startsWith(COMMAND_CENTER_PREFIX)) {
+        const dashboard = await serveCommandCenter(request, env);
+        if (dashboard) return stamp(dashboard);
+      }
       if (request.method === "GET" && url.pathname === DIAGNOSTIC_ROUTE) return diagnosticPlan(request, env, ctx);
       const deterministicPlan = await handleDeterministicFirstWeb003Request(request, env, ctx);
       if (deterministicPlan) return stamp(deterministicPlan);
@@ -33,6 +38,28 @@ export default {
     if (typeof runtime.scheduled === "function") return runtime.scheduled(controller, env, ctx);
   },
 };
+
+async function serveCommandCenter(request, env) {
+  if (!env?.ASSETS || typeof env.ASSETS.fetch !== "function") return null;
+  const cleanUrl = new URL(request.url);
+  cleanUrl.search = "";
+  const cleanRequest = new Request(cleanUrl.toString(), {
+    method: request.method,
+    headers: request.headers,
+    redirect: request.redirect,
+  });
+  const response = await env.ASSETS.fetch(cleanRequest);
+  const headers = new Headers(response.headers);
+  headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
+  headers.set("Pragma", "no-cache");
+  headers.set("Expires", "0");
+  headers.set("X-Kairos-Command-Center-Route", "direct-assets-spa");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
 
 async function diagnosticPlan(request, env, ctx) {
   const target = new URL("/api/shopify/staging/plan/jobs", request.url);
@@ -131,12 +158,14 @@ async function addHealth(response) {
     combinedHomepagePlanning: "model-format-independent",
     visibleCopyDeltaBeforePreview: "required",
     deterministicPlanDiagnostic: DIAGNOSTIC_ROUTE,
+    commandCenterRoute: "direct-assets-spa",
   };
   body.capabilities = {
     ...(body.capabilities || {}),
     deterministicFirstHomepageCopyPlusHeaderFooter: "operational",
     modelFormattedCopyPlanDependency: "retired-for-combined-retool",
     readOnlyDeterministicPlanDiagnostic: "operational",
+    commandCenterDirectAssetServing: "operational",
   };
   const headers = new Headers(response.headers);
   headers.set("Content-Type", "application/json; charset=utf-8");
