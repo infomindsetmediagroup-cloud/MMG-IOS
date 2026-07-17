@@ -20,10 +20,34 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     env:
       KAIROS_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+      EXPECTED_SOURCE_BOUND_BUILD: kairos-web003-source-bound-composite-runtime-20260717-2
     steps:
+      - name: Wait for exact source-bound build on Cloudflare
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 48); do
+            rm -f health-headers.txt health.json
+            curl --silent --show-error --location --max-time 30 \
+              -H 'Cache-Control: no-cache' \
+              -D health-headers.txt \
+              "${KAIROS_URL}/api/health?source-bound-build=${GITHUB_SHA}-${attempt}-$(date +%s)" \
+              --output health.json || true
+            live_build="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-source-bound-web-003:/{gsub(/\r/,"",$2); print $2}' health-headers.txt | tail -1)"
+            if [ "${live_build}" = "${EXPECTED_SOURCE_BOUND_BUILD}" ]; then
+              echo "Exact source-bound build is live."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Exact source-bound build did not reach Cloudflare." >&2
+          cat health-headers.txt >&2 || true
+          cat health.json >&2 || true
+          exit 1
+
       - name: Prove combined request contains visible copy changes
         shell: bash
         run: |
