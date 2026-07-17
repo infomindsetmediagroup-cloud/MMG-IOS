@@ -78,8 +78,10 @@
     let lastKnownOnline=true;
     const headerFind=(selector)=>document.querySelector(`#kairos-runtime-header ${selector}`);
     const appFind=(selector)=>document.querySelector(`#kairos-hub ${selector}`);
+    const removeDuplicateHeader=()=>document.querySelector("#kairos-hub>.app-header")?.remove();
     const updateClock=()=>{const clock=headerFind("[data-runtime-time]");if(clock)clock.textContent=new Date().toLocaleString([],{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});};
     const paint=(online,latency)=>{
+      removeDuplicateHeader();
       updateClock();
       const dot=headerFind("[data-runtime-dot]");
       const label=headerFind("[data-runtime-label]");
@@ -100,6 +102,7 @@
     async function probe(){
       if(running)return;
       running=true;
+      removeDuplicateHeader();
       updateClock();
       const started=performance.now();
       const controller=new AbortController();
@@ -120,6 +123,9 @@
       }
     }
     const boot=()=>{
+      removeDuplicateHeader();
+      setTimeout(removeDuplicateHeader,0);
+      setTimeout(removeDuplicateHeader,500);
       paint(true,null);
       probe();
       window.addEventListener("online",probe);
