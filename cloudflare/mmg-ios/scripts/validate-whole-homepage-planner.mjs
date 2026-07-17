@@ -11,10 +11,11 @@ const entry = read(join(workerRoot, "src/kairos-production-entry-autonomous-v1.j
 const planner = read(join(workerRoot, "src/kairos-whole-homepage-planner-v1.js"));
 const executor = read(join(workerRoot, "src/kairos-direct-homepage-execution-v1.js"));
 const index = read(join(repoRoot, "web/kairos-dashboard/index.html"));
+const fetchBody = entry.slice(entry.indexOf('async fetch(request, env, ctx)'));
 
 assert.ok(entry.includes('./kairos-whole-homepage-planner-v1.js'));
 assert.ok(entry.includes('handleWholeHomepagePlan'));
-assert.ok(entry.indexOf('handleWholeHomepagePlan') < entry.indexOf('handleDirectHomepagePlan'), "Whole-page continuation must run before the old limited planner.");
+assert.ok(fetchBody.indexOf('handleWholeHomepagePlan') < fetchBody.indexOf('handleDirectHomepagePlan'), "Whole-page continuation must run before the old limited planner.");
 assert.ok(entry.includes('homepageWholePagePlannerEnabled: true'));
 assert.ok(entry.includes('homepageWholePageMaximumOperations: 96'));
 assert.ok(entry.includes('homepageTemplateOnlyMutation: false'));
