@@ -8,20 +8,23 @@ import { prepareWebsiteRetoolExceptions } from "./kairos-website-retool-exceptio
 import { executeWebsiteRetoolExceptions } from "./kairos-website-retool-exception-executor-v1.js";
 import { buildCompositePlan, mergeCompositeExecution } from "./kairos-web003-composite-runtime-v1.js";
 
-export const KAIROS_WEB003_SOURCE_BOUND_COMPOSITE_BUILD = "kairos-web003-source-bound-composite-runtime-20260717-1";
+export const KAIROS_WEB003_SOURCE_BOUND_COMPOSITE_BUILD = "kairos-web003-source-bound-composite-runtime-20260717-2";
 
 const PLAN_ROUTE = "/api/shopify/staging/plan/jobs";
 const EXECUTE_ROUTE = "/api/shopify/staging/execute/jobs";
 const ROLLBACK_ROUTE = "/api/shopify/staging/rollback/jobs";
+const STRUCTURED_FALLBACK_CODES = ["kairos_invalid_json", "kairos_inference_empty"];
 const PRIMARY_FALLBACK_CODES = new Set([
   "rendered_homepage_text_delta_missing",
   "published_homepage_text_settings_missing",
   "safe_template_text_changes_missing",
+  ...STRUCTURED_FALLBACK_CODES,
 ]);
 const MARKUP_FALLBACK_CODES = new Set([
   "embedded_template_markup_text_missing",
   "safe_embedded_markup_text_changes_missing",
   "embedded_markup_text_patch_empty",
+  ...STRUCTURED_FALLBACK_CODES,
 ]);
 const INSTANCE_FALLBACK_CODES = new Set([
   "homepage_liquid_scope_unsafe",
@@ -29,6 +32,7 @@ const INSTANCE_FALLBACK_CODES = new Set([
   "homepage_liquid_visible_text_missing",
   "safe_liquid_text_changes_missing",
   "liquid_text_patch_empty",
+  ...STRUCTURED_FALLBACK_CODES,
 ]);
 
 export async function handleSourceBoundWeb003Request(request, env, ctx, delegate) {
@@ -65,8 +69,10 @@ export async function handleSourceBoundWeb003Request(request, env, ctx, delegate
 }
 
 async function createSourceBoundCompositePlan(request, payload, env, ctx) {
+  const boundedObjective = `${String(payload?.objective || "").trim()}\n\nSOURCE-BOUND OUTPUT LIMIT: Select only the 4 to 8 highest-impact visible customer-facing homepage text replacements. Prioritize the hero heading, hero supporting copy, major section headings, and primary customer-journey copy. Keep every replacement concise. Do not attempt to rewrite every text node. Return one complete valid JSON object without commentary.`;
   const textPayload = {
     ...payload,
+    objective: boundedObjective,
     requestType: "homepage-preserve-design",
     intent: "homepage-preserve-design",
     homepageMode: "preserve-published-framework",
@@ -81,6 +87,7 @@ async function createSourceBoundCompositePlan(request, payload, env, ctx) {
   };
 
   const textResult = await createSourceBoundTextPlan(makeRequest(request, textPayload), env, ctx);
+  textResult.objective = String(payload?.objective || "").trim();
   const visibleChanges = Array.isArray(textResult?.plan?.changes)
     ? textResult.plan.changes.filter(change => !["no-change", "native-theme-exception-candidate"].includes(change?.changeType))
     : [];
@@ -96,6 +103,7 @@ async function createSourceBoundCompositePlan(request, payload, env, ctx) {
   const result = buildCompositePlan(textResult, exceptionPlan);
   result.build = KAIROS_WEB003_SOURCE_BOUND_COMPOSITE_BUILD;
   result.kernel = "source-bound-copy-plus-native-theme-plan-v1";
+  result.objective = String(payload?.objective || "").trim();
   result.summary = "Kairos prepared real source-bound homepage copy replacements plus the explicitly selected native Shopify header and footer settings.";
   result.plan.summary = result.summary;
   result.plan.strategy = "Rewrite verified rendered customer-facing homepage text in the published framework, then layer only the approved native header/footer settings onto the same non-live staging theme.";
@@ -120,6 +128,8 @@ async function createSourceBoundCompositePlan(request, payload, env, ctx) {
     sourceBoundCopyComposite: true,
     visibleTextChangeCount: visibleChanges.length,
     canonicalHomepageInstallation: false,
+    structuredFallbackCodes: STRUCTURED_FALLBACK_CODES,
+    boundedReplacementMaximum: 8,
   };
 
   return completed(result);
