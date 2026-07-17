@@ -7,6 +7,8 @@ import {
   KAIROS_OPERATIONAL_RUNTIME_BUILD,
 } from "./kairos-operational-runtime-v1.js";
 import { inferenceRuntime } from "./kairos-intelligence-v1.js";
+import homepagePreservePlanner, { KAIROS_HOMEPAGE_PRESERVE_PLANNER_BUILD } from "./kairos-homepage-preserve-planner-v1.js";
+import homepageTemplateTextExecutor, { KAIROS_HOMEPAGE_TEMPLATE_TEXT_EXECUTOR_BUILD } from "./kairos-homepage-template-text-executor-v1.js";
 import { auditHomepageLinks } from "./kairos-link-lifecycle-engine-v1.js";
 import {
   executeHomepageLinkRepair,
@@ -34,10 +36,13 @@ import {
 } from "./kairos-executive-briefing-v1.js";
 import { handleHomepageReleaseRequest } from "./shopify-homepage-release-v1.js";
 
-const BUILD = "kairos-production-baseline-20260717-7";
+const BUILD = "kairos-production-baseline-20260717-8";
 const STAGING_PLAN_PATH = "/api/shopify/staging/plan/jobs";
+const STAGING_EXECUTE_PATH = "/api/shopify/staging/execute/jobs";
 const CHILD_EXECUTE_PATH = "/api/hub/execute";
 const AUTONOMY_PREFIX = "/api/autonomy/";
+const VISUAL_REDESIGN_CONFIRMATION = "AUTHORIZE VISUAL REDESIGN";
+const PRESERVE_INSTALLATION_MODE = "published-main-template-text-settings-v1";
 
 export { KairosProject };
 
@@ -233,6 +238,10 @@ async function handleStableRequest(request, env, ctx) {
     return handleStagingPlan(request, env, ctx);
   }
 
+  if (request.method === "POST" && url.pathname === STAGING_EXECUTE_PATH) {
+    return handleStagingExecution(request, env, ctx);
+  }
+
   return stamp(await baseRuntime.fetch(request, env, ctx));
 }
 
@@ -252,6 +261,17 @@ async function addOperationalHealth(response, env) {
     enhancedInference: enhancedInference.configured ? enhancedInference.mode : "needs-configuration",
     deterministicNativeFallback: "operational",
   };
+  body.websiteVisualPreservation = {
+    status: "enforced",
+    planningBuild: KAIROS_HOMEPAGE_PRESERVE_PLANNER_BUILD,
+    executionBuild: KAIROS_HOMEPAGE_TEMPLATE_TEXT_EXECUTOR_BUILD,
+    defaultMode: "published-main-framework-text-only",
+    colors: "immutable",
+    typography: "immutable",
+    pillsButtonsCards: "immutable",
+    cssAssetsDesignTokens: "immutable",
+    nativeThemeStyling: "keep-current",
+  };
   body.capabilities = {
     ...(body.capabilities || {}),
     durableOperationalLedger: env?.KAIROS_PROJECTS ? "operational" : "needs-configuration",
@@ -260,11 +280,13 @@ async function addOperationalHealth(response, env) {
     executionReceiptMirroring: "operational",
     systemRegistry: "operational",
     childCardActionContracts: "operational",
+    serverEnforcedWebsiteVisualPreservation: "operational",
   };
   const headers = new Headers(response.headers);
   headers.set("Content-Type", "application/json; charset=utf-8");
   headers.set("Cache-Control", "no-store");
   headers.set("X-Kairos-Operational-Runtime", KAIROS_OPERATIONAL_RUNTIME_BUILD);
+  headers.set("X-Kairos-Visual-Preservation", "enforced");
   return new Response(JSON.stringify(body), {
     status: response.status,
     statusText: response.statusText,
@@ -287,7 +309,135 @@ async function handleStagingPlan(request, env, ctx) {
   const bodyText = await request.text();
   const payload = parseJSON(bodyText);
   await appendLinkIntelligence(payload, env);
-  return stamp(await baseRuntime.fetch(cloneRequest(request, JSON.stringify(payload)), env, ctx));
+
+  if (!explicitVisualRedesignAuthorized(payload)) {
+    const protectedPayload = enforceVisualPreservation(payload);
+    const response = await homepagePreservePlanner.fetch(cloneRequest(request, JSON.stringify(protectedPayload)), env, ctx);
+    return stamp(response, {
+      "X-Kairos-Website-Planning": KAIROS_HOMEPAGE_PRESERVE_PLANNER_BUILD,
+      "X-Kairos-Visual-Preservation": "server-enforced",
+      "X-Kairos-Style-Mutation": "prohibited",
+    });
+  }
+
+  return stamp(await baseRuntime.fetch(cloneRequest(request, JSON.stringify(payload)), env, ctx), {
+    "X-Kairos-Visual-Preservation": "explicit-redesign-exception",
+  });
+}
+
+async function handleStagingExecution(request, env, ctx) {
+  const bodyText = await request.text();
+  const payload = parseJSON(bodyText);
+  const mode = String(payload?.plan?.plan?.installationMode || "");
+
+  if (mode === PRESERVE_INSTALLATION_MODE) {
+    const protectedPayload = enforceExecutionPreservation(payload);
+    const response = await homepageTemplateTextExecutor.fetch(cloneRequest(request, JSON.stringify(protectedPayload)), env, ctx);
+    return stamp(response, {
+      "X-Kairos-Website-Execution": KAIROS_HOMEPAGE_TEMPLATE_TEXT_EXECUTOR_BUILD,
+      "X-Kairos-Visual-Preservation": "server-enforced",
+      "X-Kairos-Style-Mutation": "prohibited",
+    });
+  }
+
+  if (!explicitVisualRedesignAuthorized(payload) || unsafeVisualPlan(payload)) {
+    return failure(
+      "visual_preservation_replan_required",
+      new Error("This staging package is not bound to the visual-preservation executor. Rebuild the proposal so colors, typography, pills, buttons, cards, CSS, design tokens, and native theme styling remain unchanged."),
+      409,
+      {
+        liveThemeChanged: false,
+        stagingThemeChanged: false,
+        styleMutationAuthorized: false,
+        replanRequired: true,
+        requiredInstallationMode: PRESERVE_INSTALLATION_MODE,
+      },
+    );
+  }
+
+  return stamp(await baseRuntime.fetch(cloneRequest(request, JSON.stringify(payload)), env, ctx), {
+    "X-Kairos-Visual-Preservation": "explicit-redesign-exception",
+  });
+}
+
+function enforceVisualPreservation(payload) {
+  return {
+    ...payload,
+    requestType: "homepage-preserve-design",
+    intent: "homepage-preserve-design",
+    mode: "published-main-framework-text-only",
+    fullRetoolConfirmed: false,
+    structuralMutationAuthorized: false,
+    styleMutationAuthorized: false,
+    visualMutationAuthorized: false,
+    cssMutationAuthorized: false,
+    assetMutationAuthorized: false,
+    designTokenMutationAuthorized: false,
+    themeSchemeMutationAuthorized: false,
+    preserveVisualDesign: true,
+    preserveExistingDesign: true,
+    preservePublishedFramework: true,
+    preserveColors: true,
+    preserveTypography: true,
+    preservePillsAndButtons: true,
+    preserveCardsAndSpacing: true,
+    keepNativeHeader: true,
+    keepNativeFooter: true,
+    nativeThemeDecision: "keep-current",
+    selectedChanges: [],
+    visualPreservationBuild: BUILD,
+  };
+}
+
+function enforceExecutionPreservation(payload) {
+  return {
+    ...payload,
+    websiteRetool: {
+      ...(payload?.websiteRetool || {}),
+      nativeThemeDecision: "keep-current",
+      selectedChanges: [],
+      preserveVisualDesign: true,
+      styleMutationAuthorized: false,
+      visualMutationAuthorized: false,
+      cssMutationAuthorized: false,
+      assetMutationAuthorized: false,
+      designTokenMutationAuthorized: false,
+      themeSchemeMutationAuthorized: false,
+      visualPreservationBuild: BUILD,
+    },
+    approval: {
+      ...(payload?.approval || {}),
+      styleMutationAuthorized: false,
+      visualMutationAuthorized: false,
+      keepNativeThemeStyling: true,
+      visualPreservationBuild: BUILD,
+    },
+  };
+}
+
+function explicitVisualRedesignAuthorized(payload) {
+  const root = payload || {};
+  const approval = root.approval || {};
+  return root.visualRedesignApproved === true
+    && root.styleMutationAuthorized === true
+    && root.visualMutationAuthorized === true
+    && String(root.visualRedesignConfirmation || "") === VISUAL_REDESIGN_CONFIRMATION
+    && (!approval.status || approval.status === "approved");
+}
+
+function unsafeVisualPlan(payload) {
+  const plan = payload?.plan?.plan || {};
+  const selectedChanges = payload?.websiteRetool?.selectedChanges;
+  if (plan.styleMutationAuthorized === true || plan.visualMutationAuthorized === true || plan.cssMutationAuthorized === true || plan.assetMutationAuthorized === true) return true;
+  if (Array.isArray(selectedChanges) && selectedChanges.length) return true;
+  const changes = Array.isArray(plan.changes) ? plan.changes : [];
+  return changes.some(change => {
+    const filename = String(change?.filename || "").toLowerCase();
+    const type = String(change?.changeType || "").toLowerCase();
+    return /\.(css|scss|sass|less)$/.test(filename)
+      || filename === "config/settings_data.json"
+      || /style|color|scheme|font|typography|spacing|pill|button|card|layout|asset|css/.test(type);
+  });
 }
 
 async function appendLinkIntelligence(payload, env) {
@@ -361,7 +511,7 @@ async function safeJSON(response) {
 function stamp(response, additionalHeaders = {}) {
   const headers = new Headers(response.headers);
   headers.set("X-MMG-Runtime", BUILD);
-  headers.set("X-Kairos-Production-Baseline", "reconciled-v7");
+  headers.set("X-Kairos-Production-Baseline", "reconciled-v8");
   headers.set("X-Kairos-Website-Workflow", "staging-preview-approval-release");
   for (const [name, value] of Object.entries(additionalHeaders)) headers.set(name, value);
   if (headers.get("Content-Type")?.includes("text/html")) {
@@ -381,7 +531,7 @@ function json(value, status = 200, additionalHeaders = {}) {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store",
       "X-MMG-Runtime": BUILD,
-      "X-Kairos-Production-Baseline": "reconciled-v7",
+      "X-Kairos-Production-Baseline": "reconciled-v8",
       "X-Content-Type-Options": "nosniff",
       ...additionalHeaders,
     },
