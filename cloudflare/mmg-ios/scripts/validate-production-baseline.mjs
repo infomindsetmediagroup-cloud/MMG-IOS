@@ -76,7 +76,7 @@ for (const marker of [
   'validateVisibleDiff',
   'authorizedDiffVerified: true',
   'writeThemeFiles',
-  'exact Shopify read-back',
+  'Shopify did not preserve the exact approved source',
   'workersAIUsed: false',
   'neuronsConsumed: 0',
 ]) assert.ok(immutableExecution.includes(marker), `Immutable execution contract is missing: ${marker}`);
