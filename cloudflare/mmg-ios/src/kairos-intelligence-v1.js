@@ -2,6 +2,7 @@ const DEFAULT_SELF_HOSTED_MODEL = "Qwen3.6-35B-A3B";
 const DEFAULT_ACCOUNT_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8";
 const HEALTH_CACHE_MS = 15 * 60 * 1000;
 const CONTROL_OBJECT = "kairos-intelligence-control-v1";
+const STRUCTURED_OUTPUT_ATTEMPTS = 3;
 
 export const KAIROS_PROVIDER_POLICY = Object.freeze({
   openai: "prohibited",
@@ -108,36 +109,40 @@ export async function runKairosIntelligence(env, input) {
   if (!runtime.configured) throw gatewayError("Kairos enhanced intelligence runtime is not configured.", "kairos_inference_not_configured", 503);
   if (runtime.selfHosted) return runSelfHosted(env, input, runtime);
 
-  await claimInferenceBudget(env, String(input?.purpose || "inference"));
-  const request = {
-    messages: [
-      { role: "system", content: String(input?.system || "") },
-      { role: "user", content: String(input?.user || "") },
-    ],
-    temperature: clampNumber(input?.temperature, 0, 2, 0.2),
-    max_tokens: Math.max(64, Math.min(4096, Number(input?.maxTokens || 2600))),
-    seed: Number(input?.seed || 1729),
-  };
-  if (requiresStructuredJSON(input)) request.response_format = structuredJSONFormat(input);
-
-  let result;
-  try {
-    result = await env.AI.run(runtime.model, request);
-  } catch (error) {
-    throw gatewayError(safeMessage(error, "Kairos account-scoped inference failed."), error?.code || "kairos_inference_failed", Number(error?.statusCode || 502));
+  const structured = requiresStructuredJSON(input);
+  let lastError = null;
+  for (let attempt = 0; attempt < (structured ? STRUCTURED_OUTPUT_ATTEMPTS : 1); attempt += 1) {
+    await claimInferenceBudget(env, structured && attempt > 0
+      ? `${String(input?.purpose || "inference")}:structured-retry-${attempt}`
+      : String(input?.purpose || "inference"));
+    const request = buildAccountRequest(input, attempt);
+    let result;
+    try {
+      result = await env.AI.run(runtime.model, request);
+    } catch (error) {
+      throw gatewayError(safeMessage(error, "Kairos account-scoped inference failed."), error?.code || "kairos_inference_failed", Number(error?.statusCode || 502));
+    }
+    const text = extractGeneratedText(result);
+    if (!text) {
+      lastError = gatewayError("Kairos enhanced intelligence returned an empty response.", "kairos_inference_empty", 502);
+      continue;
+    }
+    if (structured) {
+      try {
+        const parsed = parseStrictJSON(text);
+        return intelligenceResult(JSON.stringify(parsed), result, runtime, true, attempt + 1);
+      } catch (error) {
+        lastError = error;
+        continue;
+      }
+    }
+    return intelligenceResult(text, result, runtime, false, attempt + 1);
   }
-  const text = extractGeneratedText(result);
-  if (!text) throw gatewayError("Kairos enhanced intelligence returned an empty response.", "kairos_inference_empty", 502);
-  return {
-    text,
-    model: runtime.model,
-    provider: runtime.provider,
-    runtime: runtime.mode,
-    privacy: runtime.privacy,
-    managedService: runtime.managedService,
-    structuredOutput: requiresStructuredJSON(input),
-    usage: result?.usage || null,
-  };
+  throw gatewayError(
+    safeMessage(lastError, "Kairos returned invalid structured output."),
+    lastError?.code || "kairos_invalid_json",
+    Number(lastError?.statusCode || 502),
+  );
 }
 
 export function parseStrictJSON(value) {
@@ -167,27 +172,97 @@ async function probeSelfHosted(env, runtime) {
 }
 
 async function runSelfHosted(env, input, runtime) {
+  const structured = requiresStructuredJSON(input);
+  let lastError = null;
+  for (let attempt = 0; attempt < (structured ? STRUCTURED_OUTPUT_ATTEMPTS : 1); attempt += 1) {
+    await claimInferenceBudget(env, structured && attempt > 0
+      ? `${String(input?.purpose || "inference")}:structured-retry-${attempt}`
+      : String(input?.purpose || "inference"));
+    const body = buildSelfHostedRequest(input, runtime, attempt);
+    const response = await timedFetch(`${baseURLFor(env)}/v1/chat/completions`, {
+      method: "POST",
+      headers: { ...authHeaders(env), "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }, Number(env.KAIROS_INFERENCE_TIMEOUT_MS || 180000));
+    const data = await safeJSON(response);
+    if (!response.ok) throw gatewayError(data?.error?.message || data?.message || `Kairos intelligence returned ${response.status}.`, "kairos_inference_failed", 502);
+    const text = extractGeneratedText(data);
+    if (!text) {
+      lastError = gatewayError("Kairos private intelligence returned an empty response.", "kairos_inference_empty", 502);
+      continue;
+    }
+    if (structured) {
+      try {
+        const parsed = parseStrictJSON(text);
+        return intelligenceResult(JSON.stringify(parsed), data, runtime, true, attempt + 1);
+      } catch (error) {
+        lastError = error;
+        continue;
+      }
+    }
+    return intelligenceResult(text, data, runtime, false, attempt + 1);
+  }
+  throw gatewayError(
+    safeMessage(lastError, "Kairos returned invalid structured output."),
+    lastError?.code || "kairos_invalid_json",
+    Number(lastError?.statusCode || 502),
+  );
+}
+
+function buildAccountRequest(input, attempt) {
+  const structured = requiresStructuredJSON(input);
+  const request = {
+    messages: [
+      { role: "system", content: structuredSystemPrompt(input, attempt) },
+      { role: "user", content: String(input?.user || "") },
+    ],
+    temperature: attempt > 0 ? 0 : clampNumber(input?.temperature, 0, 2, 0.2),
+    max_tokens: Math.max(64, Math.min(structured ? 3072 : 4096, Number(input?.maxTokens || 2600))),
+    seed: Number(input?.seed || 1729) + attempt,
+  };
+  if (structured) request.response_format = structuredJSONFormat(input);
+  return request;
+}
+
+function buildSelfHostedRequest(input, runtime, attempt) {
+  const structured = requiresStructuredJSON(input);
   const body = {
     model: runtime.model,
-    temperature: input?.temperature ?? 0.2,
-    max_tokens: input?.maxTokens ?? 12000,
+    temperature: attempt > 0 ? 0 : (input?.temperature ?? 0.2),
+    max_tokens: Math.max(64, Math.min(structured ? 3072 : 12000, Number(input?.maxTokens || 12000))),
     messages: [
-      { role: "system", content: input?.system },
-      { role: "user", content: input?.user },
+      { role: "system", content: structuredSystemPrompt(input, attempt) },
+      { role: "user", content: String(input?.user || "") },
     ],
   };
-  if (requiresStructuredJSON(input)) body.response_format = structuredJSONFormat(input);
+  if (structured) body.response_format = structuredJSONFormat(input);
+  return body;
+}
 
-  const response = await timedFetch(`${baseURLFor(env)}/v1/chat/completions`, {
-    method: "POST",
-    headers: { ...authHeaders(env), "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  }, Number(env.KAIROS_INFERENCE_TIMEOUT_MS || 180000));
-  const data = await safeJSON(response);
-  if (!response.ok) throw gatewayError(data?.error?.message || data?.message || `Kairos intelligence returned ${response.status}.`, "kairos_inference_failed", 502);
-  const text = extractGeneratedText(data);
-  if (!text) throw gatewayError("Kairos private intelligence returned an empty response.", "kairos_inference_empty", 502);
-  return { text, model: runtime.model, provider: runtime.provider, runtime: runtime.mode, privacy: runtime.privacy, managedService: false, structuredOutput: requiresStructuredJSON(input), usage: data?.usage || null };
+function structuredSystemPrompt(input, attempt) {
+  const base = String(input?.system || "");
+  if (!requiresStructuredJSON(input)) return base;
+  const homepageLimit = /homepage/i.test(String(input?.purpose || ""))
+    ? " For homepage replacement plans, return between 1 and 8 replacements only, selecting the highest-impact visible customer-facing text."
+    : "";
+  const retry = attempt > 0
+    ? ` This is structured-output retry ${attempt + 1}. Return one complete JSON object only. Do not include markdown fences, reasoning, comments, prefixes, suffixes, or trailing text.${homepageLimit}`
+    : ` Return one complete JSON object only.${homepageLimit}`;
+  return `${base}\n\n${retry}`.trim();
+}
+
+function intelligenceResult(text, result, runtime, structuredOutput, attempts) {
+  return {
+    text,
+    model: runtime.model,
+    provider: runtime.provider,
+    runtime: runtime.mode,
+    privacy: runtime.privacy,
+    managedService: runtime.managedService,
+    structuredOutput,
+    structuredAttempts: attempts,
+    usage: result?.usage || null,
+  };
 }
 
 function requiresStructuredJSON(input) {
@@ -218,7 +293,14 @@ function parseJSONCandidate(value) {
     const parsed = JSON.parse(text);
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
   } catch {}
-  for (const candidate of balancedJSONObjectCandidates(text)) {
+  const normalized = text.replace(/^\uFEFF/, "").replace(/,\s*([}\]])/g, "$1");
+  if (normalized !== text) {
+    try {
+      const parsed = JSON.parse(normalized);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+    } catch {}
+  }
+  for (const candidate of balancedJSONObjectCandidates(normalized)) {
     try {
       const parsed = JSON.parse(candidate);
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
