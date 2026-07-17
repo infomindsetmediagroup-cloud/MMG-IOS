@@ -1,4 +1,5 @@
-const BUILD = "kairos-command-hub-loader-20260717-2";
+// Live browser initialization proof trigger: 2026-07-17T05:20Z
+const BUILD = "kairos-command-hub-loader-20260717-3";
 const HUB_SELECTOR = "#kairos-hub";
 const LOADING_TEXT = "Loading Kairos Command Center";
 const MODULE_URL = "/scripts/command-hub.js?v=operational-20260717-13";
