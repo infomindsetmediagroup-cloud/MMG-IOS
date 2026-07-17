@@ -24,15 +24,15 @@ jobs:
     env:
       APP_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev/center/content/website
       CSS_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev/styles/command-hub.css
-      JS_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev/scripts/command-hub.js
+      JS_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev/scripts/command-center-safe.js
     steps:
-      - name: Verify shell and static assets
+      - name: Verify safe shell and static assets
         shell: bash
         run: |
           set -euo pipefail
           for attempt in $(seq 1 36); do
             nonce="${GITHUB_SHA}-${attempt}-$(date +%s)"
-            rm -f shell-headers.txt css-headers.txt js-headers.txt dashboard.html command-hub.css command-hub.js
+            rm -f shell-headers.txt css-headers.txt js-headers.txt dashboard.html command-hub.css command-center-safe.js
 
             shell_code="$(curl --silent --show-error --location --max-time 30 \
               -H 'Cache-Control: no-cache' \
@@ -50,14 +50,14 @@ jobs:
               -H 'Cache-Control: no-cache' \
               -D js-headers.txt \
               "${JS_URL}?route-verification=${nonce}" \
-              --output command-hub.js \
+              --output command-center-safe.js \
               --write-out '%{http_code}' || true)"
 
             shell_route="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-command-center-route:/{gsub(/\r/,"",$2);print $2}' shell-headers.txt | tail -1)"
             css_route="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-command-center-route:/{gsub(/\r/,"",$2);print $2}' css-headers.txt | tail -1)"
             js_route="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-command-center-route:/{gsub(/\r/,"",$2);print $2}' js-headers.txt | tail -1)"
-            css_type="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{sub(/\r$/,"");sub(/^[^:]+:[[:space:]]*/,"");print}' css-headers.txt | tail -1)"
-            js_type="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{sub(/\r$/,"");sub(/^[^:]+:[[:space:]]*/,"");print}' js-headers.txt | tail -1)"
+            css_type="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{sub(/\r$/ ,"");sub(/^[^:]+:[[:space:]]*/,"");print}' css-headers.txt | tail -1)"
+            js_type="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{sub(/\r$/ ,"");sub(/^[^:]+:[[:space:]]*/,"");print}' js-headers.txt | tail -1)"
 
             if [ "${shell_code}" = "200" ] \
               && [ "${css_code}" = "200" ] \
@@ -68,17 +68,18 @@ jobs:
               && [[ "${css_type}" == text/css* ]] \
               && [[ "${js_type}" == *javascript* ]] \
               && grep -q 'id="kairos-hub"' dashboard.html \
-              && grep -q '/scripts/command-hub-loader.js' dashboard.html \
+              && grep -q '/scripts/command-center-safe.js' dashboard.html \
               && grep -q '\.hub-shell' command-hub.css \
-              && grep -q 'const BUILD="kairos-command-hub' command-hub.js \
+              && grep -q 'kairos-command-center-safe-20260717-1' command-center-safe.js \
+              && grep -q 'root.dataset.safeBoot' command-center-safe.js \
               && ! grep -qi '<html' command-hub.css \
-              && ! grep -qi '<html' command-hub.js; then
-              echo "Command Center shell and static assets are healthy."
+              && ! grep -qi '<html' command-center-safe.js; then
+              echo "Dependency-free Command Center shell and assets are healthy."
               break
             fi
 
             if [ "${attempt}" = "36" ]; then
-              echo "Command Center shell or static assets did not become healthy." >&2
+              echo "Dependency-free Command Center shell or assets did not become healthy." >&2
               printf 'shell=%s css=%s js=%s shell_route=%s css_route=%s js_route=%s css_type=%s js_type=%s\n' \
                 "${shell_code:-}" "${css_code:-}" "${js_code:-}" "${shell_route:-}" "${css_route:-}" "${js_route:-}" "${css_type:-}" "${js_type:-}" >&2
               exit 1
@@ -113,34 +114,16 @@ jobs:
           echo "KAIROS_CHROME_BINARY=${CHROME}"
           echo "KAIROS_RENDERED_BYTES=$(wc -c < rendered.html | tr -d ' ')"
 
-          if [ ! -s rendered.html ]; then
-            echo "Headless Chrome returned no rendered DOM." >&2
-            cat chrome-errors.log >&2 || true
-            exit 1
-          fi
-
-          if grep -q 'Loading Kairos Command Center' rendered.html; then
-            echo "The live app remained stuck on the loading screen." >&2
-            cat chrome-errors.log >&2 || true
-            grep -o '<html[^>]*>' rendered.html | head -1 >&2 || true
-            grep -o 'Loading Kairos Command Center[^<]*' rendered.html | head -1 >&2 || true
-            exit 1
-          fi
-
-          if grep -q 'Kairos could not finish opening' rendered.html; then
-            echo "The guarded startup loader reported a module failure." >&2
-            cat chrome-errors.log >&2 || true
-            grep -o 'Kairos could not finish opening[^<]*' rendered.html | head -1 >&2 || true
-            grep -o '<p class="error">[^<]*' rendered.html | head -1 >&2 || true
-            exit 1
-          fi
-
+          test -s rendered.html || { echo "Headless Chrome returned no rendered DOM." >&2; cat chrome-errors.log >&2 || true; exit 1; }
+          ! grep -q 'Loading Kairos Command Center' rendered.html || { echo "The live app remained stuck on the loading screen." >&2; cat chrome-errors.log >&2 || true; exit 1; }
+          grep -q 'data-kairos-boot="ready"' rendered.html || { echo "The safe shell did not report ready." >&2; exit 1; }
+          grep -q 'data-safe-boot="kairos-command-center-safe-20260717-1"' rendered.html || { echo "The dependency-free shell identity was not rendered." >&2; exit 1; }
           grep -q 'id="command-view"' rendered.html || { echo "The Command Center view did not initialize." >&2; exit 1; }
-          grep -q 'data-kairos-boot="ready"' rendered.html || { echo "The guarded loader did not report ready." >&2; exit 1; }
           grep -q 'Website Retool' rendered.html || { echo "The Website Retool workspace did not render." >&2; exit 1; }
-          grep -q 'Describe the homepage you want Kairos to build' rendered.html || { echo "The Website objective form did not render." >&2; exit 1; }
+          grep -q 'Website objective' rendered.html || { echo "The Website objective form did not render." >&2; exit 1; }
+          grep -q 'Inspect &amp; Prepare Proposal' rendered.html || { echo "The Website proposal action did not render." >&2; exit 1; }
 
-          echo "Command Center initialized and rendered the Website Retool workspace in headless Chrome."
+          echo "Dependency-free Command Center initialized and rendered Website Retool in headless Chrome."
 
       - name: Upload rendered browser evidence
         if: always()
@@ -162,7 +145,7 @@ jobs:
           set -euo pipefail
           if [ "${JOB_STATUS}" = "success" ]; then
             state="success"
-            description="Command Center initializes and renders in headless Chrome"
+            description="Dependency-free Command Center rendered in Chrome"
           else
             state="failure"
             description="Command Center browser initialization failed"
