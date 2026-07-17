@@ -1,0 +1,4 @@
+stable-renderer-v2-20260717-1
+loader-preserved=true
+floating-status=false
+child-registry=live
