@@ -28,7 +28,7 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
 
     steps:
-      - name: Download repository archive
+      - name: Download repository archive and run complete validation suite
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -48,6 +48,7 @@ jobs:
           tar -xzf repository.tar.gz --strip-components=1 -C repository
           test -f repository/cloudflare/mmg-ios/wrangler.toml
           echo "Repository archive prepared for ${GITHUB_SHA}."
+          node repository/cloudflare/mmg-ios/scripts/validate-production-suite.mjs
 
       - name: Resolve Cloudflare deployment credentials
         shell: bash
@@ -108,7 +109,7 @@ jobs:
       - name: Install dependencies
         shell: bash
         working-directory: repository/cloudflare/mmg-ios
-        run: npm install --no-package-lock --no-audit --no-fund
+        run: npm install --ignore-scripts --no-package-lock --no-audit --no-fund
 
       - name: Validate reconciled production baseline
         shell: bash
@@ -164,19 +165,7 @@ jobs:
             executiveBriefing: briefing.status === "completed" && Array.isArray(briefing.briefing?.actions) && briefing.briefing.actions.includes("approve") && briefing.briefing.actions.includes("deny") && briefing.briefing.actions.includes("fix"),
             connectorHonesty: briefing.briefing?.safeguards?.externalSocialPublishingAvailable === false,
           };
-          console.log(JSON.stringify({
-            runtime,
-            healthStatus: health.status,
-            healthBuild: health.build,
-            launchMode: health.launchMode,
-            projectStorage: health.nativeIntelligence?.projectStorage,
-            bookDevelopment: health.capabilities?.bookDevelopment,
-            productAssetCopy: health.capabilities?.productAssetCopy,
-            briefingWindow: briefing.briefing?.window,
-            briefingReady: briefing.briefing?.counts?.ready,
-            websitePageBytes: Buffer.byteLength(page),
-            checks,
-          }, null, 2));
+          console.log(JSON.stringify({runtime,healthStatus:health.status,healthBuild:health.build,launchMode:health.launchMode,projectStorage:health.nativeIntelligence?.projectStorage,bookDevelopment:health.capabilities?.bookDevelopment,productAssetCopy:health.capabilities?.productAssetCopy,briefingWindow:briefing.briefing?.window,briefingReady:briefing.briefing?.counts?.ready,websitePageBytes:Buffer.byteLength(page),checks},null,2));
           if (Object.values(checks).some(value => value !== true)) process.exit(1);
           NODE
               then
@@ -209,12 +198,7 @@ jobs:
           fi
           target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           payload="$(STATE="${state}" DESCRIPTION="${description}" TARGET_URL="${target_url}" node -e '
-            process.stdout.write(JSON.stringify({
-              state: process.env.STATE,
-              description: process.env.DESCRIPTION,
-              context: "kairos-cloudflare-production",
-              target_url: process.env.TARGET_URL,
-            }));
+            process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-cloudflare-production",target_url:process.env.TARGET_URL}));
           ')"
           curl --fail --show-error --silent \
             -X POST \
