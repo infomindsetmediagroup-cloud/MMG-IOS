@@ -1,5 +1,5 @@
 {
-  "baseline": "kairos-production-standard-20260717-40",
+  "baseline": "kairos-production-standard-20260717-41",
   "status": "frozen",
   "productionUrl": "https://mmg-ios.info-mindsetmediagroup.workers.dev",
   "worker": {
@@ -33,7 +33,7 @@
     "homepageLiquidTextFallback": "kairos-homepage-liquid-text-fallback-20260716-1",
     "homepageInstanceLiquidFallback": "kairos-homepage-instance-liquid-fallback-20260717-1",
     "homepageInstanceLiquidExecutor": "kairos-homepage-instance-liquid-executor-20260717-2",
-    "web003SourceBoundComposite": "kairos-web003-source-bound-composite-runtime-20260717-1",
+    "web003SourceBoundComposite": "kairos-web003-source-bound-composite-runtime-20260717-2",
     "systemRegistry": "kairos-system-registry-ui-20260716-3",
     "commandCenterLayout": "kairos-command-center-layout-20260714-9",
     "chromeHamburgerController": "kairos-chrome-hamburger-controller-20260714-3",
@@ -50,7 +50,7 @@
     "oneHundredReservedForBlueprintCompletion": true
   },
   "approvedExpansion": {
-    "scope": "Operational Command Center with durable objective-to-deliverable execution, a clickable completed-work timeline, and a one-objective homepage action that reads the currently published MAIN Shopify homepage as the immutable framework source. Combined website requests now require a verified rendered customer-facing text delta before selected native Shopify header or footer settings may be layered onto the same non-live staging theme. The canonical homepage package is not installed when the request is to rewrite the existing published homepage. Kairos checks four governed visible-copy sources in order: active rendered text settings, literal text nodes embedded inside active template HTML or Liquid settings, literal text nodes inside homepage-specific section Liquid files, and homepage-only deterministic clones of shared section instances. Shared-source originals remain byte-for-byte immutable; only the selected homepage instance type reference may be rebound to its clone. Template read-back is verified by canonical JSON semantics because Shopify may normalize JSON serialization; cloned Liquid is verified by exact bytes and SHA-256. Every path preserves block identity, order, markup and Liquid tokens, styled text-node distribution, CSS, assets, classes, links, colors, typography, spacing, layout, animation, and responsive behavior except for explicitly selected native header/footer settings; writes only to verified non-live staging; returns the real preview; and retains explicit preview and live-publication approvals with rollback evidence.",
+    "scope": "Operational Command Center with durable objective-to-deliverable execution, a clickable completed-work timeline, and a one-objective homepage action that reads the currently published MAIN Shopify homepage as the immutable framework source. Combined website requests require a verified rendered customer-facing text delta before selected native Shopify header or footer settings may be layered onto the same non-live staging theme. Source-bound copy planning is limited to the 4 to 8 highest-impact visible replacements so structured output remains complete and verifiable. The canonical homepage package is not installed when the request is to rewrite the existing published homepage. Kairos checks four governed visible-copy sources in order: active rendered text settings, literal text nodes embedded inside active template HTML or Liquid settings, literal text nodes inside homepage-specific section Liquid files, and homepage-only deterministic clones of shared section instances. Shared-source originals remain byte-for-byte immutable; only the selected homepage instance type reference may be rebound to its clone. Template read-back is verified by canonical JSON semantics because Shopify may normalize JSON serialization; cloned Liquid is verified by exact bytes and SHA-256. Every path preserves block identity, order, markup and Liquid tokens, styled text-node distribution, CSS, assets, classes, links, colors, typography, spacing, layout, animation, and responsive behavior except for explicitly selected native header/footer settings; writes only to verified non-live staging; returns the real preview; and retains explicit preview and live-publication approvals with rollback evidence.",
     "activeEdge": "src/kairos-production-entry-v44.js",
     "preservesPriorEdge": "src/kairos-production-entry-v43.js",
     "automaticExternalExecution": false,
@@ -107,6 +107,8 @@
     "sourceBoundCopyCompositeRequired": true,
     "sourceBoundCopyDeltaBeforeNativeThemeRequired": true,
     "canonicalNoOpCompositePreviewProhibited": true,
+    "sourceBoundReplacementLimitRequired": true,
+    "structuredPlannerFallbackRequired": true,
     "fifteenMinuteRecoveryCycle": true,
     "verifiedNativeTaskArtifactsRequired": true,
     "nativeTaskReadbackBeforeCompletion": true,
