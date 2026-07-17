@@ -20,6 +20,7 @@ const websiteGovernance = read(join(workerRoot, "src/kairos-website-planning-gov
 const homepageContinuation = read(join(workerRoot, "src/kairos-homepage-continuation-v1.js"));
 const index = read(join(repoRoot, "web/kairos-dashboard/index.html"));
 const hub = read(join(repoRoot, "web/kairos-dashboard/scripts/command-hub.js"));
+const fetchBody = entry.slice(entry.indexOf('async fetch(request, env, ctx)'));
 
 assert.match(wrangler, /^main\s*=\s*"src\/kairos-production-entry-immutable-v1\.js"$/m);
 assert.ok(activeEntry.includes('./kairos-production-entry-autonomous-v1.js'), "The immutable production entry must wrap the autonomous runtime.");
@@ -43,11 +44,11 @@ assert.ok(entry.includes('applyHomepageContinuationMetadata'));
 assert.ok(entry.includes('handleZeroNeuronChildRequest'));
 assert.ok(entry.includes('handleDirectHomepageExecution'));
 assert.ok(entry.includes('handleDirectHomepagePlan'));
-assert.ok(entry.indexOf('governWebsitePlanningRequest') < entry.indexOf('handleDirectHomepagePlan'), "Website doctrine must be resolved before planning begins.");
-assert.ok(entry.indexOf('buildDeterministicHomepageContinuationRequest') < entry.indexOf('handleDirectHomepagePlan'), "Continuation routing must run before planning.");
-assert.ok(entry.indexOf('handleZeroNeuronChildRequest') < entry.indexOf('handleDirectHomepageExecution'), "Zero-neuron internal routing must run before generic request execution.");
-assert.ok(entry.indexOf('handleDirectHomepageExecution') < entry.indexOf('handleDirectHomepagePlan'), "Approved direct execution must run before all generic planners and executors.");
-assert.ok(entry.indexOf('handleDirectHomepagePlan') < entry.indexOf('handleNeuronFreeHomepagePlan'), "Direct plan must run before legacy binders.");
+assert.ok(fetchBody.indexOf('governWebsitePlanningRequest') < fetchBody.indexOf('handleDirectHomepagePlan'), "Website doctrine must be resolved before planning begins.");
+assert.ok(fetchBody.indexOf('buildDeterministicHomepageContinuationRequest') < fetchBody.indexOf('handleDirectHomepagePlan'), "Continuation routing must run before planning.");
+assert.ok(fetchBody.indexOf('handleZeroNeuronChildRequest') < fetchBody.indexOf('handleDirectHomepageExecution'), "Zero-neuron internal routing must run before generic request execution.");
+assert.ok(fetchBody.indexOf('handleDirectHomepageExecution') < fetchBody.indexOf('handleDirectHomepagePlan'), "Approved direct execution must run before all generic planners and executors.");
+assert.ok(fetchBody.indexOf('handleDirectHomepagePlan') < fetchBody.indexOf('handleNeuronFreeHomepagePlan'), "Direct plan must run before legacy binders.");
 assert.ok(entry.includes('requestType: "homepage"'), "Existing Website Retool must remain homepage by default unless a future planner declares another page type.");
 assert.ok(entry.includes('&& !continuation.active'), "Continuation planning must not duplicate MAIN again.");
 assert.ok(entry.includes('homepageContinuationPrivateRuntimeRequired: false'));
