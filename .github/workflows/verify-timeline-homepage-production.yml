@@ -166,6 +166,7 @@ jobs:
             "${KAIROS_PRODUCTION_URL}/api/shopify/staging/plan/jobs" \
             --output real-plan-body.json \
             --write-out '%{http_code}')"
+          echo -n "${http_code}" > real-plan-status.txt
           HTTP_CODE="${http_code}" node <<'NODE'
           const fs=require('fs');
           const body=JSON.parse(fs.readFileSync('real-plan-body.json','utf8'));
@@ -197,6 +198,18 @@ jobs:
             process.exit(1);
           }
           NODE
+
+      - name: Upload real-plan diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-homepage-plan-response
+          path: |
+            planning-request.json
+            real-plan-headers.txt
+            real-plan-body.json
+            real-plan-status.txt
+          retention-days: 1
 
       - name: Publish production verification receipt
         if: always()
