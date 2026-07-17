@@ -61,9 +61,10 @@ jobs:
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}" || { echo "CLOUDFLARE_ACCOUNT_ID is required." >&2; exit 1; }
           npx wrangler deploy
 
-      - name: Verify exact live runtime and dashboard assets
+      - name: Verify exact live runtime and dependency-free dashboard assets
         env:
           KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+        shell: bash
         run: |
           set -euo pipefail
           expected_entry="$(node -e 'const fs=require("fs");const root="repository/cloudflare/mmg-ios";const manifest=JSON.parse(fs.readFileSync(`${root}/production-baseline.json`,"utf8"));const x=fs.readFileSync(`${root}/${manifest.worker.entry}`,"utf8").match(/const BUILD\s*=\s*"([^"]+)"/);if(!x)process.exit(1);process.stdout.write(x[1])')"
@@ -72,65 +73,85 @@ jobs:
 
           for attempt in $(seq 1 36); do
             nonce="${GITHUB_SHA}-${attempt}-$(date +%s)"
-            rm -f health.json dashboard.html dashboard.css dashboard.js loader.js
+            rm -f health.json dashboard.html dashboard.css safe-shell.js shell-headers.txt css-headers.txt js-headers.txt
 
-            curl --fail --silent --show-error --location --max-time 30 \
+            health_code="$(curl --silent --show-error --location --max-time 30 \
               -H 'Cache-Control: no-cache' \
               "${KAIROS_PRODUCTION_URL}/api/health?deployment=${nonce}" \
-              --output health.json || true
-            curl --fail --silent --show-error --location --max-time 30 \
+              --output health.json \
+              --write-out '%{http_code}' || true)"
+            shell_code="$(curl --silent --show-error --location --max-time 30 \
               -H 'Cache-Control: no-cache' \
+              -D shell-headers.txt \
               "${KAIROS_PRODUCTION_URL}/center/content/website?deployment=${nonce}" \
-              --output dashboard.html || true
-            curl --fail --silent --show-error --location --max-time 30 \
+              --output dashboard.html \
+              --write-out '%{http_code}' || true)"
+            css_code="$(curl --silent --show-error --location --max-time 30 \
               -H 'Cache-Control: no-cache' \
+              -D css-headers.txt \
               "${KAIROS_PRODUCTION_URL}/styles/command-hub.css?deployment=${nonce}" \
-              --output dashboard.css || true
-            curl --fail --silent --show-error --location --max-time 30 \
+              --output dashboard.css \
+              --write-out '%{http_code}' || true)"
+            js_code="$(curl --silent --show-error --location --max-time 30 \
               -H 'Cache-Control: no-cache' \
-              "${KAIROS_PRODUCTION_URL}/scripts/command-hub.js?deployment=${nonce}" \
-              --output dashboard.js || true
-            curl --fail --silent --show-error --location --max-time 30 \
-              -H 'Cache-Control: no-cache' \
-              "${KAIROS_PRODUCTION_URL}/scripts/command-hub-loader.js?deployment=${nonce}" \
-              --output loader.js || true
+              -D js-headers.txt \
+              "${KAIROS_PRODUCTION_URL}/scripts/command-center-safe.js?deployment=${nonce}" \
+              --output safe-shell.js \
+              --write-out '%{http_code}' || true)"
 
-            if node -e '
-              const fs=require("fs");
-              let health={};
-              try{health=JSON.parse(fs.readFileSync("health.json","utf8"))}catch{}
-              const html=fs.existsSync("dashboard.html")?fs.readFileSync("dashboard.html","utf8"):"";
-              const css=fs.existsSync("dashboard.css")?fs.readFileSync("dashboard.css","utf8"):"";
-              const js=fs.existsSync("dashboard.js")?fs.readFileSync("dashboard.js","utf8"):"";
-              const loader=fs.existsSync("loader.js")?fs.readFileSync("loader.js","utf8"):"";
-              const ok=["ready","ok","operational"].includes(String(health.status||"").toLowerCase())
-                && health.build===process.env.EXPECTED_ENTRY
-                && health.enhancedInference?.status==="operational"
-                && health.enhancedInference?.provider==="cloudflare-workers-ai"
-                && health.autonomy?.status==="operational"
-                && health.autonomy?.build===process.env.EXPECTED_AUTONOMY
-                && html.includes("id=\"kairos-hub\"")
-                && html.includes("/scripts/command-hub-loader.js")
-                && css.includes(".hub-shell")
-                && js.includes("renderApp();")
-                && loader.includes("data.kairosBoot")
-                && !css.includes("<html")
-                && !js.includes("<html")
-                && !loader.includes("<html");
-              process.exit(ok?0:1);
-            '; then
-              echo "Exact runtime, app shell, CSS, main module, and guarded loader are live."
+            shell_route="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-command-center-route:/{gsub(/\r/,"",$2);print $2}' shell-headers.txt | tail -1)"
+            css_route="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-command-center-route:/{gsub(/\r/,"",$2);print $2}' css-headers.txt | tail -1)"
+            js_route="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-command-center-route:/{gsub(/\r/,"",$2);print $2}' js-headers.txt | tail -1)"
+            css_type="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{sub(/\r$/ ,"");sub(/^[^:]+:[[:space:]]*/,"");print}' css-headers.txt | tail -1)"
+            js_type="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{sub(/\r$/ ,"");sub(/^[^:]+:[[:space:]]*/,"");print}' js-headers.txt | tail -1)"
+
+            if HEALTH_CODE="${health_code}" SHELL_CODE="${shell_code}" CSS_CODE="${css_code}" JS_CODE="${js_code}" \
+              SHELL_ROUTE="${shell_route}" CSS_ROUTE="${css_route}" JS_ROUTE="${js_route}" \
+              CSS_TYPE="${css_type}" JS_TYPE="${js_type}" node -e '
+                const fs=require("fs");
+                let health={};
+                try{health=JSON.parse(fs.readFileSync("health.json","utf8"))}catch{}
+                const html=fs.existsSync("dashboard.html")?fs.readFileSync("dashboard.html","utf8"):"";
+                const css=fs.existsSync("dashboard.css")?fs.readFileSync("dashboard.css","utf8"):"";
+                const js=fs.existsSync("safe-shell.js")?fs.readFileSync("safe-shell.js","utf8"):"";
+                const ok=process.env.HEALTH_CODE==="200"
+                  && process.env.SHELL_CODE==="200"
+                  && process.env.CSS_CODE==="200"
+                  && process.env.JS_CODE==="200"
+                  && process.env.SHELL_ROUTE==="direct-assets-root-shell"
+                  && process.env.CSS_ROUTE==="direct-assets-static"
+                  && process.env.JS_ROUTE==="direct-assets-static"
+                  && String(process.env.CSS_TYPE||"").startsWith("text/css")
+                  && /javascript/.test(String(process.env.JS_TYPE||""))
+                  && ["ready","ok","operational"].includes(String(health.status||"").toLowerCase())
+                  && health.build===process.env.EXPECTED_ENTRY
+                  && health.enhancedInference?.status==="operational"
+                  && health.enhancedInference?.provider==="cloudflare-workers-ai"
+                  && health.autonomy?.status==="operational"
+                  && health.autonomy?.build===process.env.EXPECTED_AUTONOMY
+                  && html.includes("id=\"kairos-hub\"")
+                  && html.includes("/scripts/command-center-safe.js")
+                  && css.includes(".hub-shell")
+                  && js.includes("kairos-command-center-safe-20260717-1")
+                  && js.includes("root.dataset.safeBoot")
+                  && !css.includes("<html")
+                  && !js.includes("<html");
+                process.exit(ok?0:1);
+              '; then
+              echo "Exact runtime and dependency-free Command Center assets are live."
               break
             fi
 
             if [ "${attempt}" = "36" ]; then
-              echo "Kairos failed exact runtime or dashboard asset verification." >&2
+              echo "Kairos failed exact runtime or dependency-free dashboard verification." >&2
+              printf 'health=%s shell=%s css=%s js=%s shell_route=%s css_route=%s js_route=%s css_type=%s js_type=%s\n' \
+                "${health_code:-}" "${shell_code:-}" "${css_code:-}" "${js_code:-}" "${shell_route:-}" "${css_route:-}" "${js_route:-}" "${css_type:-}" "${js_type:-}" >&2
               exit 1
             fi
             sleep 5
           done
 
-      - name: Prove Website Retool renders in headless Chrome
+      - name: Prove Website Retool renders and functions in headless Chrome
         env:
           APP_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev/center/content/website
         shell: bash
@@ -149,6 +170,7 @@ jobs:
             --no-sandbox \
             --disable-gpu \
             --disable-dev-shm-usage \
+            --disable-background-networking \
             --window-size=390,844 \
             --virtual-time-budget=15000 \
             --dump-dom \
@@ -159,26 +181,17 @@ jobs:
           echo "KAIROS_RENDERED_BYTES=$(wc -c < rendered.html | tr -d ' ')"
 
           test -s rendered.html || { echo "Chrome returned no rendered DOM." >&2; cat chrome-errors.log >&2 || true; exit 1; }
-
-          if grep -q 'Loading Kairos Command Center' rendered.html; then
-            echo "The live app is still stuck on its loading screen." >&2
-            cat chrome-errors.log >&2 || true
-            exit 1
-          fi
-
-          if grep -q 'Kairos could not finish opening' rendered.html; then
-            echo "The guarded loader exposed a startup module failure." >&2
-            grep -o '<p class="error">[^<]*' rendered.html | head -1 >&2 || true
-            cat chrome-errors.log >&2 || true
-            exit 1
-          fi
-
-          grep -q 'data-kairos-boot="ready"' rendered.html || { echo "The guarded startup loader did not report ready." >&2; exit 1; }
+          ! grep -q 'Loading Kairos Command Center' rendered.html || { echo "The live app is still stuck on its loading screen." >&2; cat chrome-errors.log >&2 || true; exit 1; }
+          grep -q 'data-kairos-boot="ready"' rendered.html || { echo "The dependency-free shell did not report ready." >&2; exit 1; }
+          grep -q 'data-safe-boot="kairos-command-center-safe-20260717-1"' rendered.html || { echo "The dependency-free shell identity was not rendered." >&2; exit 1; }
           grep -q 'id="command-view"' rendered.html || { echo "The Command Center view did not initialize." >&2; exit 1; }
           grep -q 'Website Retool' rendered.html || { echo "The Website Retool workspace did not render." >&2; exit 1; }
-          grep -q 'Describe the homepage you want Kairos to build' rendered.html || { echo "The Website objective form did not render." >&2; exit 1; }
+          grep -q 'Website objective' rendered.html || { echo "The Website objective form did not render." >&2; exit 1; }
+          grep -q 'Inspect &amp; Prepare Proposal' rendered.html || { echo "The Website proposal action did not render." >&2; exit 1; }
+          grep -q 'id="website-objective"' rendered.html || { echo "The Website objective input is not present." >&2; exit 1; }
+          grep -q 'data-website-plan' rendered.html || { echo "The Website planning control is not present." >&2; exit 1; }
 
-          echo "Website Retool rendered successfully in a real headless Chrome session."
+          echo "Website Retool rendered successfully with its objective input and planning control in a real Chrome session."
 
       - name: Upload live browser evidence
         if: always()
@@ -201,7 +214,7 @@ jobs:
           set -euo pipefail
           if [ "${JOB_STATUS}" = "success" ]; then
             state="success"
-            description="Kairos deployed and Website Retool rendered in Chrome"
+            description="Kairos deployed and safe Website Retool rendered in Chrome"
           else
             state="failure"
             description="Kairos deployment or browser render verification failed"
