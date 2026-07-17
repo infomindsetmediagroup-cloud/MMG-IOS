@@ -22,8 +22,8 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     env:
-      APP_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev/
-      WORKSPACE_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev/center/content/website
+      APP_URL: https://kairos.themindsetmediagroup.com/
+      WORKSPACE_URL: https://kairos.themindsetmediagroup.com/center/content/website
     steps:
       - name: Check out production source
         uses: actions/checkout@v4
