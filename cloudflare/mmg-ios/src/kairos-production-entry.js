@@ -1,33 +1,9 @@
-import baseRuntime, { KairosProject } from "./kairos-production-entry-v2.js";
-import { auditHomepageLinks } from "./kairos-link-lifecycle-engine-v1.js";
-import {
-  executeHomepageLinkRepair,
-  prepareHomepageLinkRepair,
-} from "./kairos-link-lifecycle-repair-v2.js";
-import {
-  decideLifecycleReview,
-  executeApprovedLifecycleReview,
-  prepareLifecycleReview,
-} from "./kairos-link-lifecycle-review-v1.js";
-import { inspectWebsiteRetoolSchema } from "./kairos-website-retool-schema-inspector-v1.js";
-import { prepareWebsiteRetoolExceptions } from "./kairos-website-retool-exception-planner-v1.js";
-import {
-  executeWebsiteRetoolExceptions,
-  rollbackWebsiteRetoolExceptions,
-} from "./kairos-website-retool-exception-executor-v1.js";
-import {
-  readLatestWebsiteIntelligenceReport,
-  runWebsiteIntelligenceSupervisor,
-} from "./kairos-website-intelligence-supervisor-v1.js";
-import {
-  buildExecutiveBriefing,
-  decideExecutiveBriefingItem,
-  readLatestExecutiveBriefing,
-} from "./kairos-executive-briefing-v1.js";
-import { handleHomepageReleaseRequest } from "./shopify-homepage-release-v1.js";
+import enhancedRuntime, { KairosProject } from "./kairos-production-entry-v45.js";
 
-const BUILD = "kairos-production-baseline-20260715-4";
-const STAGING_PLAN_PATH = "/api/shopify/staging/plan/jobs";
+const BUILD = "kairos-tuesday-shell-enhanced-runtime-20260717-1";
+const TUESDAY_SHELL_BUILD = "kairos-command-hub-recovery-20260714-1";
+const API_PREFIX = "/api/";
+const CENTER_PREFIX = "/center/";
 
 export { KairosProject };
 
@@ -35,211 +11,68 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
-    if (request.method === "GET" && url.pathname === "/api/shopify/link-intelligence/audit") {
-      return handleLinkAudit(env);
+    // Browser loading is isolated from the enhanced execution graph. Every
+    // non-API GET/HEAD request is served by the proven Tuesday asset shell.
+    if ((request.method === "GET" || request.method === "HEAD") && !url.pathname.startsWith(API_PREFIX)) {
+      const assetResponse = await serveTuesdayAsset(request, env, url.pathname);
+      if (assetResponse) return stamp(assetResponse, "tuesday-browser-shell");
     }
 
-    if (request.method === "POST" && url.pathname === "/api/shopify/link-intelligence/repair/prepare") {
-      return guarded("link_repair_prepare_failed", async () => ({
-        plan: await prepareHomepageLinkRepair(request, env),
-      }));
+    // All operational APIs use the complete enhanced runtime chain. A runtime
+    // failure is contained to this request and can never prevent / from loading.
+    try {
+      const response = await enhancedRuntime.fetch(request, env, ctx);
+      return stamp(response, "enhanced-api-runtime");
+    } catch (error) {
+      return apiFailure(error);
     }
-
-    if (request.method === "POST" && url.pathname === "/api/shopify/link-intelligence/repair/execute") {
-      return guarded("link_repair_execute_failed", async () => ({
-        result: await executeHomepageLinkRepair(request, env, await safeJSON(request.clone())),
-      }));
-    }
-
-    if (request.method === "POST" && url.pathname === "/api/shopify/link-intelligence/review/prepare") {
-      return guarded("lifecycle_review_prepare_failed", async () => ({
-        review: await prepareLifecycleReview(request, env),
-      }));
-    }
-
-    if (request.method === "POST" && url.pathname === "/api/shopify/link-intelligence/review/decide") {
-      return guarded("lifecycle_review_decision_failed", async () => ({
-        review: await decideLifecycleReview(request, await safeJSON(request.clone())),
-      }));
-    }
-
-    if (request.method === "POST" && url.pathname === "/api/shopify/link-intelligence/review/execute") {
-      return guarded("lifecycle_review_execute_failed", async () => ({
-        result: await executeApprovedLifecycleReview(request, env, await safeJSON(request.clone())),
-      }));
-    }
-
-    if (request.method === "GET" && url.pathname === "/api/shopify/website-retool/schema-inspection") {
-      return guarded("website_retool_schema_inspection_failed", async () => ({
-        report: await inspectWebsiteRetoolSchema(request, env),
-      }));
-    }
-
-    if (request.method === "POST" && url.pathname === "/api/shopify/website-retool/exceptions/prepare") {
-      return guarded("website_retool_exception_plan_failed", async () => ({
-        plan: await prepareWebsiteRetoolExceptions(request, env),
-      }));
-    }
-
-    if (request.method === "POST" && url.pathname === "/api/shopify/website-retool/exceptions/execute") {
-      return guarded("website_retool_exception_execution_failed", async () => ({
-        result: await executeWebsiteRetoolExceptions(request, env, await safeJSON(request.clone())),
-      }));
-    }
-
-    if (request.method === "POST" && url.pathname === "/api/shopify/website-retool/exceptions/rollback") {
-      return guarded("website_retool_exception_rollback_failed", async () => ({
-        result: await rollbackWebsiteRetoolExceptions(request, env, await safeJSON(request.clone())),
-      }));
-    }
-
-    if (request.method === "POST" && url.pathname === "/api/shopify/website-intelligence/run") {
-      return guarded("website_intelligence_run_failed", async () => ({
-        report: await runWebsiteIntelligenceSupervisor(request, env, "manual"),
-      }), 502);
-    }
-
-    if (request.method === "GET" && url.pathname === "/api/shopify/website-intelligence/latest") {
-      const report = await readLatestWebsiteIntelligenceReport(request);
-      return report
-        ? json({ status: "completed", build: BUILD, report })
-        : json({ status: "not-ready", build: BUILD, message: "No website review has been completed yet." }, 404);
-    }
-
-    if (request.method === "POST" && url.pathname === "/api/executive-briefing/build") {
-      return guarded("executive_briefing_build_failed", async () => ({
-        briefing: await buildExecutiveBriefing(request, env, "manual"),
-      }), 502);
-    }
-
-    if (request.method === "GET" && url.pathname === "/api/executive-briefing/latest") {
-      const briefing = await readLatestExecutiveBriefing(request);
-      return briefing
-        ? json({ status: "completed", build: BUILD, briefing })
-        : json({ status: "not-ready", build: BUILD, message: "No executive briefing has been prepared yet." }, 404);
-    }
-
-    if (request.method === "POST" && url.pathname === "/api/executive-briefing/decide") {
-      return guarded("executive_briefing_decision_failed", async () => ({
-        briefing: await decideExecutiveBriefingItem(request, await safeJSON(request.clone())),
-      }));
-    }
-
-    if (url.pathname.startsWith("/api/shopify/homepage-release/")) {
-      const response = await handleHomepageReleaseRequest(request, env);
-      if (response) return stamp(response);
-    }
-
-    if (request.method === "POST" && url.pathname === STAGING_PLAN_PATH) {
-      return handleStagingPlan(request, env, ctx);
-    }
-
-    return stamp(await baseRuntime.fetch(request, env, ctx));
   },
 
   async scheduled(controller, env, ctx) {
-    const request = new Request("https://kairos.internal/api/shopify/website-intelligence/run", { method: "POST" });
-    ctx.waitUntil((async () => {
-      await runWebsiteIntelligenceSupervisor(request, env, `scheduled:${controller.cron}`);
-      await buildExecutiveBriefing(request, env, `scheduled:${controller.cron}`);
-    })().catch(() => null));
+    if (typeof enhancedRuntime.scheduled !== "function") return;
+    try {
+      return await enhancedRuntime.scheduled(controller, env, ctx);
+    } catch (error) {
+      console.error("Kairos enhanced scheduled runtime failed", error);
+    }
   },
 };
 
-async function handleLinkAudit(env) {
-  try {
-    const origin = String(env.MMG_STOREFRONT_ORIGIN || "").trim();
-    if (!origin) throw new Error("MMG storefront origin is not configured.");
-    const report = await auditHomepageLinks(origin);
-    return json({ status: "completed", build: BUILD, report });
-  } catch (error) {
-    return failure("link_audit_failed", error, 502);
+async function serveTuesdayAsset(request, env, pathname) {
+  if (!env?.ASSETS || typeof env.ASSETS.fetch !== "function") return null;
+
+  const assetUrl = new URL(request.url);
+  assetUrl.search = "";
+
+  if (pathname === "/" || pathname === "/index.html" || pathname.startsWith(CENTER_PREFIX)) {
+    assetUrl.pathname = "/index.html";
   }
-}
 
-async function handleStagingPlan(request, env, ctx) {
-  const bodyText = await request.text();
-  const payload = parseJSON(bodyText);
-  await appendLinkIntelligence(payload, env);
-  return stamp(await baseRuntime.fetch(cloneRequest(request, JSON.stringify(payload)), env, ctx));
-}
-
-async function appendLinkIntelligence(payload, env) {
-  try {
-    const origin = String(env.MMG_STOREFRONT_ORIGIN || "").trim();
-    if (!origin) return;
-    const report = await auditHomepageLinks(origin);
-    const actionable = report.results
-      .filter(item => item.lifecycleDecision !== "keep")
-      .slice(0, 20)
-      .map(item => ({
-        label: item.label,
-        currentURL: item.url,
-        status: item.status,
-        statusCode: item.statusCode,
-        lifecycleDecision: item.lifecycleDecision,
-        expectedStage: item.expectedStage,
-        recommendedURL: item.recommendedURL,
-        confidence: item.confidence,
-        rationale: item.rationale,
-      }));
-    payload.objective = `${String(payload.objective || "").trim()}\n\nKAIROS LINK LIFECYCLE INTELLIGENCE:\n${JSON.stringify({ summary: report.summary, actionable }, null, 2)}\n\nRULES: Repair broken links automatically only when confidence is at least 0.9 and the destination is verified. For lower-confidence lifecycle mismatches, include the correction in the proposal for executive approval. Never invent a route. Preserve the rendered design; change only existing URL values.`;
-  } catch (error) {
-    payload.objective = `${String(payload.objective || "").trim()}\n\nLINK AUDIT WARNING: ${error instanceof Error ? error.message : "Audit unavailable"}. Do not guess or invent replacements.`;
-  }
-}
-
-async function guarded(code, run, status = 409) {
-  try {
-    return json({ status: "completed", build: BUILD, ...(await run()) });
-  } catch (error) {
-    return failure(code, error, status);
-  }
-}
-
-function failure(code, error, status = 409, safeguards = {}) {
-  return json({
-    status: status >= 500 ? "failed" : "needs-attention",
-    build: BUILD,
-    error: {
-      code,
-      message: error instanceof Error ? error.message : "Kairos could not complete this operation.",
-    },
-    safeguards: {
-      liveThemeChanged: false,
-      sourceHashBound: true,
-      ...safeguards,
-    },
-  }, status);
-}
-
-function cloneRequest(request, body) {
-  return new Request(request.url, {
+  const response = await env.ASSETS.fetch(new Request(assetUrl.toString(), {
     method: request.method,
-    headers: new Headers(request.headers),
-    body,
+    headers: request.headers,
     redirect: request.redirect,
+  }));
+
+  const headers = new Headers(response.headers);
+  headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
+  headers.set("Pragma", "no-cache");
+  headers.set("Expires", "0");
+  headers.set("X-Kairos-Loading-Baseline", TUESDAY_SHELL_BUILD);
+  headers.set("X-Kairos-Browser-Route", pathname.startsWith(CENTER_PREFIX) ? "tuesday-spa-shell" : "tuesday-assets");
+
+  return new Response(request.method === "HEAD" ? null : response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
   });
 }
 
-function parseJSON(text) {
-  try { return text ? JSON.parse(text) : {}; }
-  catch { return {}; }
-}
-
-async function safeJSON(response) {
-  try { return await response.json(); }
-  catch { return {}; }
-}
-
-function stamp(response) {
+function stamp(response, route) {
   const headers = new Headers(response.headers);
   headers.set("X-MMG-Runtime", BUILD);
-  headers.set("X-Kairos-Production-Baseline", "reconciled-v4");
-  headers.set("X-Kairos-Website-Workflow", "staging-preview-approval-release");
-  if (headers.get("Content-Type")?.includes("text/html")) {
-    headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
-  }
+  headers.set("X-Kairos-Hybrid-Route", route);
+  headers.set("X-Kairos-Loading-Baseline", TUESDAY_SHELL_BUILD);
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
@@ -247,16 +80,28 @@ function stamp(response) {
   });
 }
 
-function json(value, status = 200, additionalHeaders = {}) {
-  return new Response(JSON.stringify(value), {
-    status,
+function apiFailure(error) {
+  const message = error instanceof Error ? error.message : "Kairos enhanced runtime could not complete this request.";
+  return new Response(JSON.stringify({
+    status: "failed",
+    build: BUILD,
+    error: {
+      code: "enhanced_runtime_request_failed",
+      message,
+    },
+    safeguards: {
+      browserShellAvailable: true,
+      browserLoadingBaseline: TUESDAY_SHELL_BUILD,
+      failureContainedToRequest: true,
+    },
+  }), {
+    status: 500,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store",
       "X-MMG-Runtime": BUILD,
-      "X-Kairos-Production-Baseline": "reconciled-v2",
-      "X-Content-Type-Options": "nosniff",
-      ...additionalHeaders,
+      "X-Kairos-Hybrid-Route": "enhanced-api-failure-contained",
+      "X-Kairos-Loading-Baseline": TUESDAY_SHELL_BUILD,
     },
   });
 }
