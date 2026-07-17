@@ -1,14 +1,19 @@
 import deterministicCopyPlanner, { KAIROS_HOMEPAGE_DETERMINISTIC_COPY_PLANNER_BUILD } from "./kairos-homepage-deterministic-copy-planner-v1.js";
 import deterministicMarkupPlanner, { KAIROS_HOMEPAGE_DETERMINISTIC_MARKUP_COPY_PLANNER_BUILD } from "./kairos-homepage-deterministic-markup-copy-planner-v1.js";
+import deterministicLiquidPlanner, { KAIROS_HOMEPAGE_DETERMINISTIC_LIQUID_COPY_PLANNER_BUILD } from "./kairos-homepage-deterministic-liquid-copy-planner-v1.js";
 import { prepareWebsiteRetoolExceptions } from "./kairos-website-retool-exception-planner-v1.js";
 import { buildCompositePlan } from "./kairos-web003-composite-runtime-v1.js";
 
-export const KAIROS_WEB003_DETERMINISTIC_FIRST_BUILD = "kairos-web003-deterministic-first-runtime-20260717-2";
+export const KAIROS_WEB003_DETERMINISTIC_FIRST_BUILD = "kairos-web003-deterministic-first-runtime-20260717-3";
 
 const PLAN_ROUTE = "/api/shopify/staging/plan/jobs";
 const PLAIN_TEXT_FALLBACK_CODES = new Set([
   "deterministic_visible_copy_missing",
   "deterministic_visible_copy_delta_missing",
+]);
+const MARKUP_FALLBACK_CODES = new Set([
+  "deterministic_embedded_visible_copy_missing",
+  "deterministic_embedded_markup_patch_empty",
 ]);
 
 export async function handleDeterministicFirstWeb003Request(request, env, ctx) {
@@ -35,8 +40,12 @@ export async function handleDeterministicFirstWeb003Request(request, env, ctx) {
     const planned = await deterministicTextPlan(makeRequest(request, textPayload), env, ctx);
     const textResult = planned.result;
     textResult.objective = String(payload?.objective || "").trim();
-    const visibleChanges = Array.isArray(textResult?.plan?.changes) ? textResult.plan.changes.filter(change => change?.changeType !== "no-change") : [];
-    if (!visibleChanges.length) throw httpError(409, "deterministic_visible_copy_delta_missing", "Kairos did not produce a visible homepage copy change, so it will not build an unchanged preview.");
+    const visibleChanges = Array.isArray(textResult?.plan?.changes)
+      ? textResult.plan.changes.filter(change => change?.changeType !== "no-change")
+      : [];
+    if (!visibleChanges.length) {
+      throw httpError(409, "deterministic_visible_copy_delta_missing", "Kairos did not produce a visible homepage copy change, so it will not build an unchanged preview.");
+    }
 
     const exceptionPlan = await prepareWebsiteRetoolExceptions(request, env);
     if (exceptionPlan?.stagingTheme?.gid !== textResult?.plan?.targetTheme?.gid) {
@@ -45,13 +54,11 @@ export async function handleDeterministicFirstWeb003Request(request, env, ctx) {
 
     const result = buildCompositePlan(textResult, exceptionPlan);
     result.build = KAIROS_WEB003_DETERMINISTIC_FIRST_BUILD;
-    result.kernel = "deterministic-source-bound-copy-plus-native-theme-plan-v2";
+    result.kernel = "deterministic-source-bound-copy-plus-native-theme-plan-v3";
     result.objective = String(payload?.objective || "").trim();
     result.summary = "Kairos prepared verified visible homepage copy replacements plus bounded native Shopify header and footer settings for staging approval.";
     result.plan.summary = result.summary;
-    result.plan.strategy = planned.source === "embedded-template-markup"
-      ? "Rewrite visible heading and paragraph nodes inside the active published homepage HTML or Liquid setting, then layer only explicitly selected native header/footer settings onto the same non-live staging theme."
-      : "Rewrite active plain published homepage text settings, then layer only explicitly selected native header/footer settings onto the same non-live staging theme.";
+    result.plan.strategy = strategyFor(planned.source);
     result.plan.sourceBoundCopyComposite = true;
     result.plan.deterministicFirst = true;
     result.plan.deterministicTextSource = planned.source;
@@ -80,6 +87,7 @@ export async function handleDeterministicFirstWeb003Request(request, env, ctx) {
       deterministicPlannerBuild: planned.build,
       plainTextPlannerBuild: KAIROS_HOMEPAGE_DETERMINISTIC_COPY_PLANNER_BUILD,
       embeddedMarkupPlannerBuild: KAIROS_HOMEPAGE_DETERMINISTIC_MARKUP_COPY_PLANNER_BUILD,
+      homepageLiquidPlannerBuild: KAIROS_HOMEPAGE_DETERMINISTIC_LIQUID_COPY_PLANNER_BUILD,
       visibleTextChangeCount: Number(textResult?.evidence?.visibleTextReplacementCount || textResult?.evidence?.replacementCount || visibleChanges.length),
       canonicalHomepageInstallation: false,
       modelPlanningRequired: false,
@@ -107,12 +115,32 @@ async function deterministicTextPlan(request, env, ctx) {
     throw httpError(plainResponse.status || 502, plainCode || "deterministic_copy_plan_failed", plainBody?.error?.message || "Kairos could not prepare deterministic homepage copy replacements.");
   }
 
-  const markupResponse = await deterministicMarkupPlanner.fetch(request, env, ctx);
+  const markupResponse = await deterministicMarkupPlanner.fetch(request.clone(), env, ctx);
   const markupBody = await safeJSON(markupResponse.clone());
-  if (!markupResponse.ok || !markupBody?.result?.planID) {
-    throw httpError(markupResponse.status || 502, markupBody?.error?.code || "deterministic_markup_copy_plan_failed", markupBody?.error?.message || "Kairos could not prepare deterministic embedded homepage copy replacements.");
+  if (markupResponse.ok && markupBody?.result?.planID) {
+    return { result: markupBody.result, source: "embedded-template-markup", build: KAIROS_HOMEPAGE_DETERMINISTIC_MARKUP_COPY_PLANNER_BUILD };
   }
-  return { result: markupBody.result, source: "embedded-template-markup", build: KAIROS_HOMEPAGE_DETERMINISTIC_MARKUP_COPY_PLANNER_BUILD };
+  const markupCode = String(markupBody?.error?.code || "");
+  if (!MARKUP_FALLBACK_CODES.has(markupCode)) {
+    throw httpError(markupResponse.status || 502, markupCode || "deterministic_markup_copy_plan_failed", markupBody?.error?.message || "Kairos could not prepare deterministic embedded homepage copy replacements.");
+  }
+
+  const liquidResponse = await deterministicLiquidPlanner.fetch(request, env, ctx);
+  const liquidBody = await safeJSON(liquidResponse.clone());
+  if (!liquidResponse.ok || !liquidBody?.result?.planID) {
+    throw httpError(liquidResponse.status || 502, liquidBody?.error?.code || "deterministic_liquid_copy_plan_failed", liquidBody?.error?.message || "Kairos could not prepare deterministic homepage Liquid copy replacements.");
+  }
+  return { result: liquidBody.result, source: "homepage-specific-liquid", build: KAIROS_HOMEPAGE_DETERMINISTIC_LIQUID_COPY_PLANNER_BUILD };
+}
+
+function strategyFor(source) {
+  if (source === "homepage-specific-liquid") {
+    return "Rewrite verified literal heading and paragraph nodes inside the active homepage-specific Liquid section, then layer only explicitly selected native header/footer settings onto the same non-live staging theme.";
+  }
+  if (source === "embedded-template-markup") {
+    return "Rewrite visible heading and paragraph nodes inside the active published homepage HTML or Liquid setting, then layer only explicitly selected native header/footer settings onto the same non-live staging theme.";
+  }
+  return "Rewrite active plain published homepage text settings, then layer only explicitly selected native header/footer settings onto the same non-live staging theme.";
 }
 
 function isExplicitCompositeRetool(payload) {
