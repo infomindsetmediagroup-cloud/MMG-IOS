@@ -1,5 +1,5 @@
 {
-  "baseline": "kairos-production-standard-20260717-43",
+  "baseline": "kairos-production-standard-20260717-44",
   "status": "frozen",
   "productionUrl": "https://mmg-ios.info-mindsetmediagroup.workers.dev",
   "worker": {
@@ -34,8 +34,9 @@
     "homepageInstanceLiquidFallback": "kairos-homepage-instance-liquid-fallback-20260717-1",
     "homepageInstanceLiquidExecutor": "kairos-homepage-instance-liquid-executor-20260717-2",
     "homepageDeterministicCopyPlanner": "kairos-homepage-deterministic-copy-planner-20260717-1",
+    "homepageDeterministicMarkupCopyPlanner": "kairos-homepage-deterministic-markup-copy-planner-20260717-1",
     "web003SourceBoundComposite": "kairos-web003-source-bound-composite-runtime-20260717-3",
-    "web003DeterministicFirst": "kairos-web003-deterministic-first-runtime-20260717-1",
+    "web003DeterministicFirst": "kairos-web003-deterministic-first-runtime-20260717-2",
     "systemRegistry": "kairos-system-registry-ui-20260716-3",
     "commandCenterLayout": "kairos-command-center-layout-20260714-9",
     "chromeHamburgerController": "kairos-chrome-hamburger-controller-20260714-3",
@@ -52,7 +53,7 @@
     "oneHundredReservedForBlueprintCompletion": true
   },
   "approvedExpansion": {
-    "scope": "Operational Command Center with durable objective-to-deliverable execution and a one-objective homepage action. Combined homepage copy plus header/footer requests now route directly to a deterministic source-bound planner that reads active published MAIN template settings, produces real visible copy replacements, and then layers only explicitly selected native Shopify header/footer settings on the non-live staging theme. Model-formatted planning is not required for this combined path. The canonical homepage package is never installed for a rewrite-existing-homepage request. Exact source hashes, semantic hashes, read-back verification, explicit preview approval, final live approval, and rollback evidence remain mandatory.",
+    "scope": "Operational Command Center with durable objective-to-deliverable execution and a one-objective homepage action. Combined homepage copy plus header/footer requests route directly to deterministic source-bound planning. Kairos checks active plain template settings first and then the actual active embedded HTML or Liquid setting used by the published MMG homepage. The embedded planner rewrites only verified visible heading and paragraph nodes while preserving every HTML and Liquid token and styled text-node distribution. It then layers only explicitly selected native Shopify header/footer settings on the same non-live staging theme. Model-formatted planning is not required for this combined path. The canonical homepage package is never installed for a rewrite-existing-homepage request. Exact source hashes, semantic hashes, structure signatures, read-back verification, explicit preview approval, final live approval, and rollback evidence remain mandatory.",
     "activeEdge": "src/kairos-production-entry-v45.js",
     "preservesPriorEdge": "src/kairos-production-entry-v44.js",
     "automaticExternalExecution": false,
@@ -115,6 +116,9 @@
     "deterministicFallbackSourceHashBindingRequired": true,
     "deterministicFirstCombinedWebsitePlanningRequired": true,
     "combinedWebsiteModelFormattingDependencyRetired": true,
+    "deterministicEmbeddedMarkupCopyRequired": true,
+    "embeddedMarkupTokenPreservationRequired": true,
+    "embeddedMarkupNodeDistributionPreservationRequired": true,
     "fifteenMinuteRecoveryCycle": true,
     "verifiedNativeTaskArtifactsRequired": true,
     "nativeTaskReadbackBeforeCompletion": true,
