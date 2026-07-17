@@ -7,6 +7,8 @@ import {
 const BUILD = "kairos-production-entry-20260717-103";
 const DIAGNOSTIC_ROUTE = "/api/website/diagnostics/deterministic-plan";
 const COMMAND_CENTER_PREFIX = "/center/";
+const DASHBOARD_ASSET_PREFIXES = ["/styles/", "/scripts/", "/images/", "/fonts/"];
+const DASHBOARD_ASSET_FILES = new Set(["/favicon.ico", "/manifest.webmanifest", "/apple-touch-icon.png"]);
 
 export { KairosProject };
 
@@ -14,8 +16,8 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     try {
-      if ((request.method === "GET" || request.method === "HEAD") && url.pathname.startsWith(COMMAND_CENTER_PREFIX)) {
-        const dashboard = await serveCommandCenter(request, env);
+      if ((request.method === "GET" || request.method === "HEAD") && isDashboardRequest(url.pathname)) {
+        const dashboard = await serveDashboardAsset(request, env, url.pathname.startsWith(COMMAND_CENTER_PREFIX));
         if (dashboard) return stamp(dashboard);
       }
       if (request.method === "GET" && url.pathname === DIAGNOSTIC_ROUTE) return diagnosticPlan(request, env, ctx);
@@ -39,21 +41,28 @@ export default {
   },
 };
 
-async function serveCommandCenter(request, env) {
+function isDashboardRequest(pathname) {
+  return pathname.startsWith(COMMAND_CENTER_PREFIX)
+    || DASHBOARD_ASSET_PREFIXES.some(prefix => pathname.startsWith(prefix))
+    || DASHBOARD_ASSET_FILES.has(pathname);
+}
+
+async function serveDashboardAsset(request, env, shellRequest) {
   if (!env?.ASSETS || typeof env.ASSETS.fetch !== "function") return null;
-  const cleanUrl = new URL(request.url);
-  cleanUrl.search = "";
-  const cleanRequest = new Request(cleanUrl.toString(), {
+  const assetUrl = new URL(request.url);
+  assetUrl.search = "";
+  if (shellRequest) assetUrl.pathname = "/index.html";
+  const assetRequest = new Request(assetUrl.toString(), {
     method: request.method,
     headers: request.headers,
     redirect: request.redirect,
   });
-  const response = await env.ASSETS.fetch(cleanRequest);
+  const response = await env.ASSETS.fetch(assetRequest);
   const headers = new Headers(response.headers);
   headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
   headers.set("Pragma", "no-cache");
   headers.set("Expires", "0");
-  headers.set("X-Kairos-Command-Center-Route", "direct-assets-spa");
+  headers.set("X-Kairos-Command-Center-Route", shellRequest ? "direct-assets-root-shell" : "direct-assets-static");
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
@@ -158,7 +167,7 @@ async function addHealth(response) {
     combinedHomepagePlanning: "model-format-independent",
     visibleCopyDeltaBeforePreview: "required",
     deterministicPlanDiagnostic: DIAGNOSTIC_ROUTE,
-    commandCenterRoute: "direct-assets-spa",
+    commandCenterRoute: "direct-assets-root-shell-and-static",
   };
   body.capabilities = {
     ...(body.capabilities || {}),
