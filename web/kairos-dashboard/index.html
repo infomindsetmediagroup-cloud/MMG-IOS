@@ -54,7 +54,6 @@
   <script src="/scripts/job-transport.js?v=20260715-1"></script>
   <script src="/scripts/website-step-one-transport.js?v=20260715-3"></script>
   <script type="module" src="/scripts/command-hub.js?v=operational-20260716-12"></script>
-  <script type="module" src="/scripts/runtime-status-controller.js?v=operational-20260717-1"></script>
   <script type="module" src="/scripts/website-intent-router.js?v=operational-20260716-2"></script>
   <script type="module" src="/scripts/homepage-session-reset-v5.js?v=operational-20260717-1"></script>
   <script type="module" src="/scripts/homepage-quick-action-v5.js?v=operational-20260717-5"></script>
@@ -63,5 +62,62 @@
   <script type="module" src="/scripts/command-center-layout.js?v=routed-20260715-3"></script>
   <script type="module" src="/scripts/shopify-analytics-summary.js?v=routed-20260715-3"></script>
   <script type="module" src="/scripts/executive-checkpoints.js?v=routed-20260715-3"></script>
+  <script>
+  (()=>{
+    const ONLINE=new Set(["ready","ok","operational"]);
+    let timer=0;
+    let running=false;
+    const find=(selector)=>document.querySelector(`#kairos-hub ${selector}`);
+    const paint=(online,latency)=>{
+      const dot=find("[data-runtime-dot]");
+      const label=find("[data-runtime-label]");
+      const signal=find("[data-runtime-signal]");
+      const card=find("[data-runtime-card]");
+      const value=find("[data-runtime-value]");
+      const detail=find("[data-runtime-detail]");
+      const wave=find("[data-runtime-wave]");
+      if(dot)dot.className=`state-dot ${online?"":"offline"}`.trim();
+      if(label)label.textContent=online?"Online":"Offline";
+      if(signal)signal.textContent=online?"Live":"Runtime unavailable";
+      if(card)card.dataset.state=online?"live":"limited";
+      if(value)value.textContent=online?"Online":"Unavailable";
+      if(detail)detail.textContent=latency?`${latency} ms response`:"No health response";
+      if(wave)wave.classList.toggle("active",online);
+    };
+    const schedule=(delay)=>{clearTimeout(timer);timer=setTimeout(probe,delay);};
+    const waitForHeader=(attempt=0)=>{
+      if(find("[data-runtime-label]")){probe();return;}
+      if(attempt<100)setTimeout(()=>waitForHeader(attempt+1),50);
+    };
+    async function probe(){
+      if(running)return;
+      running=true;
+      const started=performance.now();
+      const controller=new AbortController();
+      const timeout=setTimeout(()=>controller.abort(),7000);
+      try{
+        const response=await fetch(`/api/health?header-inline=${Date.now()}`,{cache:"no-store",credentials:"same-origin",headers:{"Cache-Control":"no-cache"},signal:controller.signal});
+        const body=await response.json();
+        const online=response.ok&&ONLINE.has(String(body&&body.status||"").toLowerCase());
+        paint(online,Math.max(1,Math.round(performance.now()-started)));
+        schedule(online?30000:5000);
+      }catch(error){
+        paint(false,null);
+        schedule(3000);
+      }finally{
+        clearTimeout(timeout);
+        running=false;
+      }
+    }
+    const boot=()=>{
+      waitForHeader();
+      window.addEventListener("online",probe);
+      window.addEventListener("focus",probe);
+      window.addEventListener("pageshow",probe);
+      document.addEventListener("visibilitychange",()=>{if(!document.hidden)probe();});
+    };
+    if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot,{once:true});else boot();
+  })();
+  </script>
 </body>
 </html>
