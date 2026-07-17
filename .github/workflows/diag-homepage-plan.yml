@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 jobs:
   diagnose:
@@ -63,3 +64,20 @@ jobs:
             headers.txt
             body.json
           retention-days: 1
+      - name: Publish compact diagnostic status
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          description="$(node -e 'const fs=require("fs");const d=JSON.parse(fs.readFileSync("diag.json","utf8"));const text=`HTTP ${d.httpStatus} ${d.errorCode||d.installationMode||d.bodyStatus||"unknown"}`;process.stdout.write(text.slice(0,130))')"
+          state="success"
+          payload="$(STATE="$state" DESCRIPTION="$description" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"homepage-plan-diagnostic",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          curl --fail --silent --show-error -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "${payload}"
