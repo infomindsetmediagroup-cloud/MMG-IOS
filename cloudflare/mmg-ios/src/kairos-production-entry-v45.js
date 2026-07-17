@@ -58,7 +58,26 @@ async function diagnosticPlan(request, env, ctx) {
   }
   const result = body.result;
   const plan = result.plan || {};
-  const operations = Array.isArray(plan?.templateTextPatch?.operations) ? plan.templateTextPatch.operations : [];
+  const sourceOperations = Array.isArray(plan?.templateTextPatch?.operations) ? plan.templateTextPatch.operations : [];
+  const visibleOperations = sourceOperations.flatMap(operation => {
+    const location = operation.location || `${operation.scope}:${operation.sectionId}:${operation.blockId || "section"}:${operation.key}`;
+    if (Array.isArray(operation.visibleReplacements) && operation.visibleReplacements.length) {
+      return operation.visibleReplacements.map(replacement => ({
+        location: `${location}#${replacement.id || "visible-text"}`,
+        before: replacement.before,
+        after: replacement.after,
+        reason: replacement.reason || operation.reason || "",
+        kind: replacement.kind || "visible-text",
+      }));
+    }
+    return [{
+      location,
+      before: operation.before,
+      after: operation.after,
+      reason: operation.reason || "",
+      kind: "plain-setting",
+    }];
+  });
   const nativeCandidates = [
     ...(Array.isArray(plan?.websiteRetoolExceptions?.highConfidence) ? plan.websiteRetoolExceptions.highConfidence : []),
     ...(Array.isArray(plan?.websiteRetoolExceptions?.executiveReview) ? plan.websiteRetoolExceptions.executiveReview : []),
@@ -68,17 +87,14 @@ async function diagnosticPlan(request, env, ctx) {
     build: body.build,
     planID: result.planID,
     deterministicFirst: plan.deterministicFirst === true,
+    deterministicTextSource: plan.deterministicTextSource || null,
     sourceBoundCopyComposite: plan.sourceBoundCopyComposite === true,
     canonicalPackageExcluded: plan.canonicalPackage === null,
     canonicalHomepageInstallation: plan?.compositePackage?.canonicalHomepageInstallation === true,
     stagingOnly: plan?.compositePackage?.stagingOnly === true,
-    operationCount: operations.length,
-    operations: operations.slice(0, 8).map(operation => ({
-      location: operation.location || `${operation.scope}:${operation.sectionId}:${operation.blockId || "section"}:${operation.key}`,
-      before: operation.before,
-      after: operation.after,
-      reason: operation.reason || "",
-    })),
+    operationCount: visibleOperations.length,
+    operations: visibleOperations.slice(0, 8),
+    sourceSettingOperationCount: sourceOperations.length,
     nativeCandidateCount: nativeCandidates.length,
     nativeCandidates: nativeCandidates.slice(0, 12).map(candidate => ({
       filename: candidate.filename,
@@ -150,5 +166,3 @@ function jsonError(status, code, message) {
     },
   });
 }
-
-// Verification trigger: read-only deterministic plan diagnostic contract.
