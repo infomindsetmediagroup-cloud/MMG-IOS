@@ -1,0 +1,74 @@
+name: Verify Command Center Route
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/verify-command-center-route.yml"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-v45.js"
+      - "web/kairos-dashboard/**"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: kairos-command-center-route
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      APP_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev/center/content/website
+    steps:
+      - name: Verify exact Command Center app shell
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 48); do
+            nonce="${GITHUB_SHA}-${attempt}-$(date +%s)"
+            rm -f headers.txt dashboard.html
+            code="$(curl --silent --show-error --location --max-time 30 \
+              -H 'Cache-Control: no-cache' \
+              -D headers.txt \
+              "${APP_URL}?route-verification=${nonce}" \
+              --output dashboard.html \
+              --write-out '%{http_code}' || true)"
+            route="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-command-center-route:/{gsub(/\r/,"",$2);print $2}' headers.txt | tail -1)"
+            if [ "${code}" = "200" ] && [ "${route}" = "direct-assets-spa" ] && grep -q 'id="kairos-hub"' dashboard.html && grep -q 'scripts/command-hub.js' dashboard.html; then
+              echo "Command Center route is live and serving the dashboard shell directly."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Command Center route did not become healthy." >&2
+          cat headers.txt >&2 || true
+          head -c 1000 dashboard.html >&2 || true
+          exit 1
+
+      - name: Publish route verification receipt
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          if [ "${JOB_STATUS}" = "success" ]; then
+            state="success"
+            description="Command Center app shell opens through direct asset routing"
+          else
+            state="failure"
+            description="Command Center app shell route verification failed"
+          fi
+          payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-command-center-route",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          curl --fail --silent --show-error -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "${payload}"
