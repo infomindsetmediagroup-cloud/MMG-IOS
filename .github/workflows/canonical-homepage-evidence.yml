@@ -1,0 +1,151 @@
+name: Canonical Homepage Evidence
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+      KAIROS_SKIP_RELEASE_MATCH: "true"
+
+    steps:
+      - name: Download verification source
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p repository artifacts/canonical-homepage
+          source_sha="${SOURCE_SHA:-${GITHUB_SHA}}"
+          curl --fail --show-error --silent --location \
+            --connect-timeout 15 \
+            --max-time 60 \
+            --retry 2 \
+            --retry-delay 2 \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/tarball/${source_sha}" \
+            --output repository.tar.gz
+          tar -xzf repository.tar.gz --strip-components=1 -C repository
+          test -f repository/.github/scripts/run-canonical-homepage-release.mjs
+          test -f repository/.github/scripts/verify-canonical-homepage.mjs
+
+      - name: Install Playwright Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm init -y >/dev/null
+          npm install --no-save --no-audit --no-fund playwright >/dev/null 2>&1
+          npx playwright install --with-deps chromium >/dev/null 2>&1
+          echo "Playwright Chromium is ready."
+
+      - name: Build, repair, and verify canonical Shopify staging homepage
+        id: release
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          node repository/.github/scripts/run-canonical-homepage-release.mjs \
+            > >(tee artifacts/canonical-homepage/release.log) \
+            2> >(tee artifacts/canonical-homepage/release-error.log >&2)
+          status=$?
+          echo "exit_code=${status}" >> "${GITHUB_OUTPUT}"
+          find artifacts/canonical-homepage -maxdepth 3 -type f -printf '%p %s bytes\n' | sort \
+            > artifacts/canonical-homepage/evidence-manifest.txt
+          exit 0
+
+      - name: Persist evidence to review branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.head_ref }}
+          RELEASE_EXIT_CODE: ${{ steps.release.outputs.exit_code }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const root = path.resolve('artifacts/canonical-homepage');
+          const branch = process.env.HEAD_REF || process.env.GITHUB_REF_NAME;
+          const runID = process.env.GITHUB_RUN_ID;
+          const repo = process.env.GITHUB_REPOSITORY;
+          const api = process.env.GITHUB_API_URL;
+          const token = process.env.GH_TOKEN;
+          const allowed = new Set(['.json', '.md', '.log', '.txt']);
+
+          const files = [];
+          function walk(directory) {
+            for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+              const absolute = path.join(directory, entry.name);
+              if (entry.isDirectory()) walk(absolute);
+              else if (allowed.has(path.extname(entry.name).toLowerCase())) files.push(absolute);
+            }
+          }
+          walk(root);
+
+          const summary = {
+            runID,
+            sourceCommit: process.env.GITHUB_SHA,
+            branch,
+            releaseExitCode: Number(process.env.RELEASE_EXIT_CODE || 1),
+            evidenceFiles: files.map(file => ({
+              path: path.relative(root, file).replaceAll(path.sep, '/'),
+              bytes: fs.statSync(file).size,
+            })),
+            generatedAt: new Date().toISOString(),
+          };
+          const summaryPath = path.join(root, 'workflow-summary.json');
+          fs.writeFileSync(summaryPath, JSON.stringify(summary, null, 2) + '\n');
+          files.push(summaryPath);
+
+          async function putFile(file) {
+            const relative = path.relative(root, file).replaceAll(path.sep, '/');
+            const destination = `.github/evidence/canonical-homepage/run-${runID}/${relative}`;
+            const url = `${api}/repos/${repo}/contents/${destination.split('/').map(encodeURIComponent).join('/')}`;
+            const response = await fetch(url, {
+              method: 'PUT',
+              headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: 'application/vnd.github+json',
+                'X-GitHub-Api-Version': '2022-11-28',
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                message: `Record canonical homepage evidence from run ${runID}`,
+                branch,
+                content: fs.readFileSync(file).toString('base64'),
+              }),
+            });
+            if (!response.ok) {
+              const body = await response.text();
+              throw new Error(`Could not persist ${destination}: ${response.status} ${body}`);
+            }
+            console.log(`Persisted ${destination}`);
+          }
+
+          (async () => {
+            for (const file of files) await putFile(file);
+          })().catch(error => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Enforce final browser result
+        shell: bash
+        env:
+          RELEASE_EXIT_CODE: ${{ steps.release.outputs.exit_code }}
+        run: |
+          test "${RELEASE_EXIT_CODE}" = "0"
