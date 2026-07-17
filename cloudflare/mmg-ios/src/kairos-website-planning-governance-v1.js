@@ -186,7 +186,7 @@ export async function applyWebsiteGovernanceToPlanResponse(request, response, co
   if (!body?.result?.plan || !body?.jobID) return response;
 
   const result = structuredClone(body.result);
-  const coverage = assessJourneyCoverage(result, context);
+  const coverage = assessJourneyCoverage({ ...result, objective: context.objectiveDigest }, context);
   const existingCriteria = Array.isArray(result.plan.acceptanceCriteria) ? result.plan.acceptanceCriteria : [];
 
   result.governance = summarizeContext(context);
@@ -227,13 +227,14 @@ export async function applyWebsiteGovernanceToPlanResponse(request, response, co
 
   body.result = result;
   body.summary = result.summary || body.summary;
+  const now = new Date().toISOString();
   const envelope = {
     jobID: body.jobID,
     status: "completed",
     build: result.build || body.build || KAIROS_WEBSITE_PLANNING_GOVERNANCE_BUILD,
-    submittedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    completedAt: new Date().toISOString(),
+    submittedAt: now,
+    updatedAt: now,
+    completedAt: now,
     summary: body.summary || "Governed website plan prepared.",
     result,
   };
@@ -412,15 +413,15 @@ function zoneMatches(zone, text) {
 }
 
 function inferPageType(payload, objective) {
-  const explicit = normalizePageType(payload?.requestType || payload?.pageType || payload?.resourceType);
-  if (explicit !== "page" || /\bpage\b/i.test(String(payload?.requestType || payload?.pageType || ""))) return explicit;
-  const text = normalize(`${payload?.template || ""} ${payload?.pageTitle || ""} ${objective || ""}`);
-  if (/\bproduct\b/.test(text)) return "product";
-  if (/\bservice\b/.test(text)) return "service";
-  if (/\bsubscription\b|\bweekly\b|\bbi weekly\b|\bmonthly\b/.test(text)) return "subscription";
-  if (/\blanding\b|\bcampaign page\b/.test(text)) return "landing";
-  if (/\bcollection\b|\bcatalog\b/.test(text)) return "collection";
-  if (/\bhomepage\b|\bhome page\b|\bhero\b/.test(text)) return "homepage";
+  const declared = payload?.requestType || payload?.pageType || payload?.resourceType;
+  if (declared) return normalizePageType(declared);
+  const descriptor = normalize(`${payload?.template || ""} ${payload?.pageTitle || ""} ${payload?.resourceTitle || ""}`);
+  if (/\bproduct page\b/.test(descriptor)) return "product";
+  if (/\bservice page\b/.test(descriptor)) return "service";
+  if (/\bsubscription page\b/.test(descriptor)) return "subscription";
+  if (/\blanding page\b|\bcampaign page\b/.test(descriptor)) return "landing";
+  if (/\bcollection page\b|\bcatalog page\b/.test(descriptor)) return "collection";
+  if (/\bstandard page\b/.test(descriptor)) return "page";
   return "homepage";
 }
 
