@@ -89,11 +89,10 @@ export async function handleCanonicalHomepageBuildWithCompatibility(request, env
   body.files = (Array.isArray(body.files) ? body.files : []).map((file) => file.filename === JS_FILE
     ? {
         ...file,
-        beforeSha256: beforeFile.sha256,
         afterSha256: compatibleHash,
-        beforeBytes: beforeFile.bytes,
         afterBytes: new TextEncoder().encode(COMPATIBLE_JS_SOURCE).length,
-        changed: beforeFile.sha256 !== compatibleHash,
+        changed: file.beforeSha256 !== compatibleHash,
+        compatibilityIntermediateSha256: beforeFile.sha256,
       }
     : file);
   body.verification = {
