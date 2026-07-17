@@ -1,15 +1,8 @@
 name = "mmg-ios"
-main = "src/kairos-production-entry-v46.js"
-# main = "src/kairos-production-entry-v45.js"
-# main = "src/kairos-production-entry-v44.js"
-# main = "src/kairos-production-entry-v43.js"
+main = "src/kairos-production-entry.js"
 compatibility_date = "2026-07-11"
 workers_dev = true
 keep_vars = true
-
-[[routes]]
-pattern = "kairos.themindsetmediagroup.com"
-custom_domain = true
 
 [assets]
 directory = "../../web/kairos-dashboard"
