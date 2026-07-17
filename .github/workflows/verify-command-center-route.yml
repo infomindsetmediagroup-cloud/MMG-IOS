@@ -23,65 +23,36 @@ jobs:
     timeout-minutes: 10
     env:
       APP_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev/center/content/website
-      CSS_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev/styles/command-hub.css
-      JS_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev/scripts/command-center-safe.js
     steps:
-      - name: Verify safe shell and static assets
+      - name: Verify exact self-contained app shell
         shell: bash
         run: |
           set -euo pipefail
           for attempt in $(seq 1 36); do
             nonce="${GITHUB_SHA}-${attempt}-$(date +%s)"
-            rm -f shell-headers.txt css-headers.txt js-headers.txt dashboard.html command-hub.css command-center-safe.js
-
-            shell_code="$(curl --silent --show-error --location --max-time 30 \
+            rm -f headers.txt dashboard.html
+            code="$(curl --silent --show-error --location --max-time 30 \
               -H 'Cache-Control: no-cache' \
-              -D shell-headers.txt \
+              -D headers.txt \
               "${APP_URL}?route-verification=${nonce}" \
               --output dashboard.html \
               --write-out '%{http_code}' || true)"
-            css_code="$(curl --silent --show-error --location --max-time 30 \
-              -H 'Cache-Control: no-cache' \
-              -D css-headers.txt \
-              "${CSS_URL}?route-verification=${nonce}" \
-              --output command-hub.css \
-              --write-out '%{http_code}' || true)"
-            js_code="$(curl --silent --show-error --location --max-time 30 \
-              -H 'Cache-Control: no-cache' \
-              -D js-headers.txt \
-              "${JS_URL}?route-verification=${nonce}" \
-              --output command-center-safe.js \
-              --write-out '%{http_code}' || true)"
-
-            shell_route="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-command-center-route:/{gsub(/\r/,"",$2);print $2}' shell-headers.txt | tail -1)"
-            css_route="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-command-center-route:/{gsub(/\r/,"",$2);print $2}' css-headers.txt | tail -1)"
-            js_route="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-command-center-route:/{gsub(/\r/,"",$2);print $2}' js-headers.txt | tail -1)"
-            css_type="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{sub(/\r$/ ,"");sub(/^[^:]+:[[:space:]]*/,"");print}' css-headers.txt | tail -1)"
-            js_type="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{sub(/\r$/ ,"");sub(/^[^:]+:[[:space:]]*/,"");print}' js-headers.txt | tail -1)"
-
-            if [ "${shell_code}" = "200" ] \
-              && [ "${css_code}" = "200" ] \
-              && [ "${js_code}" = "200" ] \
-              && [ "${shell_route}" = "direct-assets-root-shell" ] \
-              && [ "${css_route}" = "direct-assets-static" ] \
-              && [ "${js_route}" = "direct-assets-static" ] \
-              && [[ "${css_type}" == text/css* ]] \
-              && [[ "${js_type}" == *javascript* ]] \
+            route="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-command-center-route:/{gsub(/\r/,"",$2);print $2}' headers.txt | tail -1)"
+            type="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{sub(/\r$/ ,"");sub(/^[^:]+:[[:space:]]*/,"");print}' headers.txt | tail -1)"
+            if [ "${code}" = "200" ] \
+              && [ "${route}" = "direct-assets-root-shell" ] \
+              && [[ "${type}" == text/html* ]] \
               && grep -q 'id="kairos-hub"' dashboard.html \
-              && grep -q '/scripts/command-center-safe.js' dashboard.html \
-              && grep -q '\.hub-shell' command-hub.css \
-              && grep -q 'kairos-command-center-safe-20260717-1' command-center-safe.js \
-              && grep -q 'root.dataset.safeBoot' command-center-safe.js \
-              && ! grep -qi '<html' command-hub.css \
-              && ! grep -qi '<html' command-center-safe.js; then
-              echo "Dependency-free Command Center shell and assets are healthy."
+              && grep -q 'kairos-command-center-inline-20260717-1' dashboard.html \
+              && grep -q 'Website Retool' dashboard.html \
+              && grep -q 'website-objective' dashboard.html; then
+              echo "Self-contained Command Center shell is live."
               break
             fi
-
             if [ "${attempt}" = "36" ]; then
-              echo "Dependency-free Command Center shell or assets did not become healthy." >&2
-              printf 'shell=%s css=%s js=%s shell_route=%s css_route=%s js_route=%s css_type=%s js_type=%s\n' \
-                "${shell_code:-}" "${css_code:-}" "${js_code:-}" "${shell_route:-}" "${css_route:-}" "${js_route:-}" "${css_type:-}" "${js_type:-}" >&2
+              echo "Self-contained Command Center shell did not become healthy." >&2
+              printf 'code=%s route=%s content_type=%s\n' "${code:-}" "${route:-}" "${type:-}" >&2
+              head -c 1200 dashboard.html >&2 || true
               exit 1
             fi
             sleep 5
@@ -92,11 +63,7 @@ jobs:
         run: |
           set -euo pipefail
           CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium-browser || command -v chromium || true)"
-          if [ -z "${CHROME}" ]; then
-            echo "No headless Chrome binary is available on the runner." >&2
-            exit 1
-          fi
-
+          test -n "${CHROME}" || { echo "No headless Chrome binary is available." >&2; exit 1; }
           nonce="${GITHUB_SHA}-$(date +%s)"
           rm -f rendered.html chrome-errors.log
           timeout 75s "${CHROME}" \
@@ -106,30 +73,26 @@ jobs:
             --disable-dev-shm-usage \
             --disable-background-networking \
             --window-size=390,844 \
-            --virtual-time-budget=15000 \
+            --virtual-time-budget=12000 \
             --dump-dom \
             "${APP_URL}?chrome-verification=${nonce}" \
             > rendered.html 2> chrome-errors.log || true
 
-          echo "KAIROS_CHROME_BINARY=${CHROME}"
-          echo "KAIROS_RENDERED_BYTES=$(wc -c < rendered.html | tr -d ' ')"
-
-          test -s rendered.html || { echo "Headless Chrome returned no rendered DOM." >&2; cat chrome-errors.log >&2 || true; exit 1; }
-          ! grep -q 'Loading Kairos Command Center' rendered.html || { echo "The live app remained stuck on the loading screen." >&2; cat chrome-errors.log >&2 || true; exit 1; }
-          grep -q 'data-kairos-boot="ready"' rendered.html || { echo "The safe shell did not report ready." >&2; exit 1; }
-          grep -q 'data-safe-boot="kairos-command-center-safe-20260717-1"' rendered.html || { echo "The dependency-free shell identity was not rendered." >&2; exit 1; }
-          grep -q 'id="command-view"' rendered.html || { echo "The Command Center view did not initialize." >&2; exit 1; }
-          grep -q 'Website Retool' rendered.html || { echo "The Website Retool workspace did not render." >&2; exit 1; }
-          grep -q 'Website objective' rendered.html || { echo "The Website objective form did not render." >&2; exit 1; }
-          grep -q 'Inspect &amp; Prepare Proposal' rendered.html || { echo "The Website proposal action did not render." >&2; exit 1; }
-
-          echo "Dependency-free Command Center initialized and rendered Website Retool in headless Chrome."
+          test -s rendered.html || { echo "Headless Chrome returned no DOM." >&2; cat chrome-errors.log >&2 || true; exit 1; }
+          ! grep -q 'Loading Kairos Command Center' rendered.html || { echo "App remained on loading screen." >&2; cat chrome-errors.log >&2 || true; exit 1; }
+          grep -q 'data-kairos-boot="ready"' rendered.html || { echo "App did not report ready." >&2; exit 1; }
+          grep -q 'data-self-contained-build="kairos-command-center-inline-20260717-1"' rendered.html || { echo "Self-contained build identity missing." >&2; exit 1; }
+          grep -q 'id="command-view"' rendered.html || { echo "Command Center view missing." >&2; exit 1; }
+          grep -q 'Website Retool' rendered.html || { echo "Website Retool missing." >&2; exit 1; }
+          grep -q 'id="website-objective"' rendered.html || { echo "Website objective input missing." >&2; exit 1; }
+          grep -q 'data-website-plan' rendered.html || { echo "Website planning control missing." >&2; exit 1; }
+          echo "Self-contained Command Center rendered Website Retool in Chrome."
 
       - name: Upload rendered browser evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: command-center-headless-chrome-proof
+          name: command-center-self-contained-browser-proof
           path: |
             rendered.html
             chrome-errors.log
@@ -145,7 +108,7 @@ jobs:
           set -euo pipefail
           if [ "${JOB_STATUS}" = "success" ]; then
             state="success"
-            description="Dependency-free Command Center rendered in Chrome"
+            description="Self-contained Command Center rendered in Chrome"
           else
             state="failure"
             description="Command Center browser initialization failed"
