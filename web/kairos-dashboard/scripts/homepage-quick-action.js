@@ -1,7 +1,7 @@
-const BUILD = "kairos-homepage-quick-action-20260716-3";
+const BUILD = "kairos-homepage-quick-action-20260717-4";
 const ROUTE = "/center/content/website";
-const STATE_KEY = "kairos.homepage.quick-action.v4";
-const LEGACY_STATE_KEYS = ["kairos.homepage.quick-action.v3", "kairos.homepage.quick-action.v2"];
+const STATE_KEY = "kairos.homepage.quick-action.v5";
+const LEGACY_STATE_KEYS = ["kairos.homepage.quick-action.v4", "kairos.homepage.quick-action.v3", "kairos.homepage.quick-action.v2"];
 for (const key of LEGACY_STATE_KEYS) { try { sessionStorage.removeItem(key); } catch {} }
 const state = loadState();
 
@@ -35,7 +35,7 @@ function inputMarkup() {
     <div class="homepage-quick-hero">
       <p class="eyebrow">Homepage Text Redo</p>
       <h2>Keep my homepage. Change the words.</h2>
-      <p>Kairos reads the currently published Shopify homepage, targets visible customer-facing copy wherever it actually lives, copies that exact framework into non-live staging, and returns the preview.</p>
+      <p>Kairos reads the currently published Shopify homepage, finds the visible customer-facing words wherever they actually live, copies that exact framework into non-live staging, and returns the preview.</p>
     </div>
     <div class="homepage-design-lock">
       <strong>Published framework locked</strong>
@@ -45,15 +45,15 @@ function inputMarkup() {
     <textarea class="objective" id="homepage-quick-objective" maxlength="12000" placeholder="Example: Keep the entire homepage exactly as it is, but rewrite the visible copy so visitors understand that MMG helps creators turn knowledge into professional digital products.">${escapeHTML(state.objective)}</textarea>
     ${state.error ? `<p class="homepage-quick-error">${escapeHTML(state.error)}</p>` : ""}
     <button class="primary homepage-quick-build" type="button" data-homepage-quick-build>Rewrite Text & Build Preview</button>
-    <small class="homepage-quick-boundary">Kairos first uses active rendered template settings. When the visible wording is hard-coded in a homepage-specific Liquid section, it changes only literal text nodes while proving the markup and styled-node structure are identical.</small>
+    <small class="homepage-quick-boundary">Kairos checks active template settings, embedded template wording, and Liquid text. When a Liquid section is shared by another page, Kairos creates a homepage-only clone, changes only literal words in that clone, and leaves the original shared section untouched.</small>
   </section>`;
 }
 
 function workingMarkup() {
   const copy = {
-    planning: ["Reading the real homepage copy", "Kairos is using the current live MAIN homepage as the framework source and locating visible text in active template settings or homepage-specific Liquid text nodes."],
-    executing: ["Rewriting words inside the locked framework", "Kairos is copying the published framework to staging and changing only verified customer-facing text. Markup, Liquid logic, CSS, assets, classes, links, sections, blocks, order, colors, and layout are locked."],
-    verifying: ["Preparing the real Shopify preview", "Kairos is verifying that the staging preview preserves the published framework and contains at least one visible text replacement."],
+    planning: ["Reading the real homepage copy", "Kairos is using the current live MAIN homepage as the framework source and locating visible text in template settings, embedded markup, or rendered section Liquid."],
+    executing: ["Rewriting words inside the locked framework", "Kairos is copying the published framework to staging and changing only verified customer-facing text. Shared sections are isolated to the homepage before any words change."],
+    verifying: ["Preparing the real Shopify preview", "Kairos is proving that visible text changed, the original shared sections stayed untouched, and the staging framework remains intact."],
     publishing: ["Applying and verifying the approved text update", "Kairos is saving only the exact approved text-bearing files and preserving rollback evidence."],
   }[state.mode] || ["Working", "Kairos is completing the homepage text job."];
   return `<section class="homepage-quick-action homepage-quick-working">
@@ -69,7 +69,12 @@ function previewMarkup() {
   const preview = state.verification?.preview || {};
   const checks = Array.isArray(state.verification?.automatedChecks) ? state.verification.automatedChecks : [];
   const passed = checks.filter(check => check?.passed).length;
-  const source = state.execution?.execution?.liquidTextOnly ? "homepage-specific Liquid text nodes" : "active template text settings";
+  const execution = state.execution?.execution || {};
+  const source = execution.homepageInstanceIsolation
+    ? "homepage-only clones of shared section instances"
+    : execution.liquidTextOnly
+      ? "Liquid literal text nodes"
+      : "active template text settings";
   return `<section class="homepage-quick-action">
     <div class="homepage-quick-success">
       <p class="eyebrow">Homepage text preview ready</p>
@@ -82,7 +87,7 @@ function previewMarkup() {
     </div>
     <div class="homepage-preview-evidence">
       <strong>${passed}/${checks.length || passed} rendered checks passed</strong>
-      <span>Published MAIN framework · ${escapeHTML(source)} changed · markup/CSS/assets/design tokens preserved · staging only</span>
+      <span>Published MAIN framework · ${escapeHTML(source)} changed · original shared sections protected · CSS/assets/design tokens preserved · staging only</span>
     </div>
     ${state.error ? `<p class="homepage-quick-error">${escapeHTML(state.error)}</p>` : ""}
     <label class="homepage-quick-confirm"><input type="checkbox" data-homepage-preview-reviewed><span>I reviewed this exact staging preview and want Kairos to prepare only this text update for live application.</span></label>
@@ -96,7 +101,7 @@ function releaseMarkup() {
     <p class="eyebrow">Final approval</p>
     <h2>Apply the approved homepage text?</h2>
     <p>Kairos will apply only the verified files below, read them back from Shopify, and preserve rollback evidence.</p>
-    <div class="homepage-preview-evidence"><strong>${escapeHTML(files.map(file => file.filename).join(", ") || "Verified homepage text package")}</strong><span>No CSS, asset, class, section, block, order, color, typography, spacing, layout, link, animation, or responsive behavior changes are authorized.</span></div>
+    <div class="homepage-preview-evidence"><strong>${escapeHTML(files.map(file => file.filename).join(", ") || "Verified homepage text package")}</strong><span>No CSS, asset, class, block, order, color, typography, spacing, layout, link, animation, or responsive behavior changes are authorized. A homepage-only section type reference is permitted only when required to isolate a shared section.</span></div>
     ${state.error ? `<p class="homepage-quick-error">${escapeHTML(state.error)}</p>` : ""}
     <label class="homepage-quick-confirm danger"><input type="checkbox" data-homepage-live-approved><span>I authorize Kairos to apply and verify this exact approved homepage text update on the live Shopify theme.</span></label>
     <div class="homepage-quick-actions"><button class="primary" type="button" data-homepage-publish>Apply & Save Homepage Text</button><button type="button" data-homepage-back-preview>Back to Preview</button></div>
@@ -151,6 +156,8 @@ async function buildPreview() {
       activeOrderedBlocksOnly: true,
       templateTextPreferred: true,
       literalLiquidTextFallbackAuthorized: true,
+      homepageInstanceIsolationAuthorized: true,
+      originalSharedSectionsImmutable: true,
       fullRetoolConfirmed: false,
       structuralMutationAuthorized: false,
       styleMutationAuthorized: false,
@@ -163,10 +170,13 @@ async function buildPreview() {
     const mode = String(plan?.plan?.installationMode || "");
     const templateMode = mode === "published-main-template-text-settings-v1";
     const liquidMode = mode === "published-main-liquid-visible-text-v1";
-    if (!templateMode && !liquidMode) throw new Error("Kairos did not return a governed published-framework text plan. Nothing was changed.");
+    const instanceMode = mode === "published-main-homepage-instance-liquid-text-v1";
+    if (!templateMode && !liquidMode && !instanceMode) throw new Error("Kairos did not return a governed published-framework text plan. Nothing was changed.");
     const plannedCount = templateMode
       ? Number(plan?.plan?.templateTextPatch?.operations?.length || 0)
-      : (plan?.plan?.liquidTextPatches || []).reduce((sum, patch) => sum + Number(patch?.replacements?.length || 0), 0);
+      : liquidMode
+        ? (plan?.plan?.liquidTextPatches || []).reduce((sum, patch) => sum + Number(patch?.replacements?.length || 0), 0)
+        : (plan?.plan?.instancePatches || []).reduce((sum, patch) => sum + Number(patch?.replacements?.length || 0), 0);
     if (plannedCount < 1) throw new Error("Kairos did not produce a verified visible homepage text change. Nothing was changed.");
 
     state.mode = "executing";
@@ -180,13 +190,19 @@ async function buildPreview() {
       targetThemeID: plan?.plan?.targetTheme?.gid || "",
       sourceHashes: plan?.plan?.sourceHashes || {},
       objective,
-      scope: liquidMode ? "published-main-homepage-liquid-literal-text-only" : "published-main-template-text-settings-only",
+      scope: instanceMode
+        ? "published-main-homepage-instance-isolated-liquid-text-only"
+        : liquidMode
+          ? "published-main-homepage-liquid-literal-text-only"
+          : "published-main-template-text-settings-only",
     };
     const submittedExecution = await submitJob("/api/shopify/staging/execute/jobs", { plan, approval });
     state.execution = await pollJob(submittedExecution, "execute");
     const execution = state.execution?.execution || {};
-    if (execution.publishedFrameworkPreserved !== true || (!execution.templateTextOnly && !execution.liquidTextOnly)) throw new Error("Kairos did not verify published-framework preservation. Nothing will be previewed.");
-    const replacementCount = execution.liquidTextOnly
+    const governedModeVerified = execution.templateTextOnly || execution.liquidTextOnly || execution.homepageInstanceIsolation;
+    if (execution.publishedFrameworkPreserved !== true || !governedModeVerified) throw new Error("Kairos did not verify published-framework preservation. Nothing will be previewed.");
+    if (execution.homepageInstanceIsolation && execution.originalSharedSectionsChanged !== false) throw new Error("Kairos did not verify protection of the original shared sections. Nothing will be previewed.");
+    const replacementCount = execution.liquidTextOnly || execution.homepageInstanceIsolation
       ? Number(state.execution?.evidence?.visibleTextReplacementCount || 0)
       : Number(state.execution?.evidence?.textSettingReplacementCount || 0);
     if (replacementCount < 1) throw new Error("Kairos did not verify a visible homepage text replacement. Nothing will be previewed.");
