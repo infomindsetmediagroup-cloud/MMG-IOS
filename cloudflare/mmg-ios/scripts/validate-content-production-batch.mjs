@@ -1,0 +1,16 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+const here=dirname(fileURLToPath(import.meta.url));const workerRoot=resolve(here,"..");const repoRoot=resolve(workerRoot,"../..");
+const publishing=readFileSync(join(repoRoot,"web/kairos-dashboard/scripts/publishing-studio.js"),"utf8");
+const creative=readFileSync(join(repoRoot,"web/kairos-dashboard/scripts/creative-studio.js"),"utf8");
+const registry=readFileSync(join(workerRoot,"src/kairos-readiness-registry-v1.js"),"utf8");
+const index=readFileSync(join(repoRoot,"web/kairos-dashboard/index.html"),"utf8");
+for(const marker of ["Publication Operations","Next best action","Create Cover & Assets","Open My Work","kairos:creative-studio:open"])assert.ok(publishing.includes(marker),`Publishing batch missing: ${marker}`);
+for(const marker of ["Creative Production Operations","Next best action","Send to Publishing","Open My Work","kairos:publishing-studio:open"])assert.ok(creative.includes(marker),`Creative batch missing: ${marker}`);
+assert.ok(registry.includes('"publishing-studio":80'),"Publishing readiness floor is not 80.");
+assert.ok(registry.includes('"creative-studio":80'),"Creative readiness floor is not 80.");
+assert.ok(index.includes("recovery-20260714-33"),"Content production batch build marker is not current.");
+assert.ok(!publishing.includes("position:fixed")&&!creative.includes("position:fixed"),"Content production batch must not add floating controls.");
+console.log(JSON.stringify({status:"ready",batch:"content-production",publishingOperations:true,creativeOperations:true,crossStudioHandoff:true,simplifiedMyWork:true,publishingReadiness:80,creativeReadiness:80},null,2));
