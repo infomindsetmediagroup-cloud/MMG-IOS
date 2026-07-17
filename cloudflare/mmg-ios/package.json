@@ -8,7 +8,8 @@
     "dev": "wrangler dev",
     "test": "node --test test/*.test.js",
     "validate:loading": "node scripts/validate-app-loading-baseline.mjs",
-    "validate:production": "node scripts/validate-app-loading-baseline.mjs && node scripts/validate-stable-functionality-integration.mjs"
+    "validate:recovery": "node scripts/validate-prebreak-functionality-recovery.mjs",
+    "validate:production": "node scripts/validate-app-loading-baseline.mjs && node scripts/validate-stable-functionality-integration.mjs && node scripts/validate-prebreak-functionality-recovery.mjs"
   },
   "dependencies": {
     "fflate": "^0.8.2",
