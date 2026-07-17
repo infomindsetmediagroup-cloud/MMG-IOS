@@ -1,6 +1,6 @@
 name: Verify Source-Bound WEB-003
 
-# Verification revision: deterministic-first combined homepage planning live contract.
+# Verification revision: exact deterministic-first combined homepage planning contract.
 on:
   push:
     branches: [main]
@@ -28,7 +28,7 @@ jobs:
     timeout-minutes: 15
     env:
       KAIROS_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
-      EXPECTED_SOURCE_BOUND_BUILD: kairos-web003-source-bound-composite-runtime-20260717-3
+      EXPECTED_DETERMINISTIC_BUILD: kairos-web003-deterministic-first-runtime-20260717-1
     steps:
       - uses: actions/checkout@v4
 
@@ -46,16 +46,16 @@ jobs:
           set -euo pipefail
           if [ "${JOB_STATUS}" = "success" ]; then
             state="success"
-            description="Combined website request produced real source-bound copy changes"
+            description="Deterministic homepage plan produced real visible copy changes"
           else
             state="failure"
-            description="Source-bound WEB-003 verification failed"
+            description="Deterministic homepage planning verification failed"
           fi
           payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-source-bound-web003",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
           curl --fail --silent --show-error -X POST \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2026-03-10" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
             -H "Content-Type: application/json" \
             "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             --data "${payload}"
