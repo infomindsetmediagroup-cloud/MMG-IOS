@@ -1,0 +1,21 @@
+{
+  "runID": "29621334978",
+  "sourceCommit": "8507c33499eb44cb8f1ffab0760088e97c33bce5",
+  "branch": "kairos/canonical-homepage-evidence",
+  "releaseExitCode": 1,
+  "evidenceFiles": [
+    {
+      "path": "evidence-manifest.txt",
+      "bytes": 167
+    },
+    {
+      "path": "release-error.log",
+      "bytes": 1400
+    },
+    {
+      "path": "release.log",
+      "bytes": 88
+    }
+  ],
+  "generatedAt": "2026-07-17T23:42:27.804Z"
+}

@@ -1,0 +1,213 @@
+{
+  "previewURL": "https://themindsetmediagroup.com/?preview_theme_id=155242856602",
+  "startedAt": "2026-07-17T23:45:25.836Z",
+  "passed": false,
+  "attempts": 1,
+  "viewports": [
+    {
+      "name": "desktop",
+      "width": 1440,
+      "height": 1100,
+      "passed": false,
+      "checks": [
+        {
+          "name": "HTTP response",
+          "passed": true
+        },
+        {
+          "name": "Canonical build marker",
+          "passed": true
+        },
+        {
+          "name": "Exactly one H1",
+          "passed": true
+        },
+        {
+          "name": "Section #pathways",
+          "passed": true
+        },
+        {
+          "name": "Section #resources",
+          "passed": true
+        },
+        {
+          "name": "Section #services",
+          "passed": true
+        },
+        {
+          "name": "Section #subscriptions",
+          "passed": true
+        },
+        {
+          "name": "Section #kairos",
+          "passed": true
+        },
+        {
+          "name": "Section #mission",
+          "passed": true
+        },
+        {
+          "name": "Section #questions",
+          "passed": true
+        },
+        {
+          "name": "Section #next-step",
+          "passed": true
+        },
+        {
+          "name": "Action links are valid",
+          "passed": true
+        },
+        {
+          "name": "Primary CTA interaction",
+          "passed": true
+        },
+        {
+          "name": "FAQ interaction",
+          "passed": true
+        },
+        {
+          "name": "No horizontal overflow",
+          "passed": true
+        },
+        {
+          "name": "Interactive controls have names",
+          "passed": true
+        },
+        {
+          "name": "Images include alt attributes",
+          "passed": true
+        },
+        {
+          "name": "No page console errors",
+          "passed": false,
+          "details": [
+            "Framing 'https://shop.app/' violates the following Content Security Policy directive: \"frame-ancestors 'self' https://shop.app https://admin.shopify.com\". The request has been blocked.\n",
+            "Failed to load resource: the server responded with a status of 403 ()"
+          ]
+        },
+        {
+          "name": "No failed required requests",
+          "passed": false,
+          "details": [
+            "GET https://shop.app/pay/hop?analytics_trace_id=e6b23bd4-9335-452c-89c0-3aecd98d406e&target_origin=https%3A%2F%2Fthemindsetmediagroup.com&client_handle=07kd8e-qw.myshopify.com — net::ERR_BLOCKED_BY_RESPONSE"
+          ]
+        }
+      ],
+      "consoleErrors": [
+        "Framing 'https://shop.app/' violates the following Content Security Policy directive: \"frame-ancestors 'self' https://shop.app https://admin.shopify.com\". The request has been blocked.\n",
+        "Failed to load resource: the server responded with a status of 403 ()"
+      ],
+      "failedRequests": [
+        "GET https://shop.app/pay/hop?analytics_trace_id=e6b23bd4-9335-452c-89c0-3aecd98d406e&target_origin=https%3A%2F%2Fthemindsetmediagroup.com&client_handle=07kd8e-qw.myshopify.com — net::ERR_BLOCKED_BY_RESPONSE"
+      ],
+      "screenshotPath": "/home/runner/work/MMG-IOS/MMG-IOS/artifacts/canonical-homepage/pass-1/canonical-homepage-desktop.png"
+    },
+    {
+      "name": "mobile",
+      "width": 390,
+      "height": 844,
+      "passed": false,
+      "checks": [
+        {
+          "name": "HTTP response",
+          "passed": true
+        },
+        {
+          "name": "Canonical build marker",
+          "passed": true
+        },
+        {
+          "name": "Exactly one H1",
+          "passed": true
+        },
+        {
+          "name": "Section #pathways",
+          "passed": true
+        },
+        {
+          "name": "Section #resources",
+          "passed": true
+        },
+        {
+          "name": "Section #services",
+          "passed": true
+        },
+        {
+          "name": "Section #subscriptions",
+          "passed": true
+        },
+        {
+          "name": "Section #kairos",
+          "passed": true
+        },
+        {
+          "name": "Section #mission",
+          "passed": true
+        },
+        {
+          "name": "Section #questions",
+          "passed": true
+        },
+        {
+          "name": "Section #next-step",
+          "passed": true
+        },
+        {
+          "name": "Action links are valid",
+          "passed": true
+        },
+        {
+          "name": "Primary CTA interaction",
+          "passed": true
+        },
+        {
+          "name": "FAQ interaction",
+          "passed": true
+        },
+        {
+          "name": "No horizontal overflow",
+          "passed": true
+        },
+        {
+          "name": "Interactive controls have names",
+          "passed": true
+        },
+        {
+          "name": "Images include alt attributes",
+          "passed": true
+        },
+        {
+          "name": "No page console errors",
+          "passed": false,
+          "details": [
+            "Framing 'https://shop.app/' violates the following Content Security Policy directive: \"frame-ancestors 'self' https://shop.app https://admin.shopify.com\". The request has been blocked.\n",
+            "Failed to load resource: the server responded with a status of 403 ()"
+          ]
+        },
+        {
+          "name": "No failed required requests",
+          "passed": false,
+          "details": [
+            "GET https://shop.app/pay/hop?analytics_trace_id=d5813de4-152c-4223-9864-bdf6cf25fcde&target_origin=https%3A%2F%2Fthemindsetmediagroup.com&client_handle=07kd8e-qw.myshopify.com — net::ERR_BLOCKED_BY_RESPONSE"
+          ]
+        }
+      ],
+      "consoleErrors": [
+        "Framing 'https://shop.app/' violates the following Content Security Policy directive: \"frame-ancestors 'self' https://shop.app https://admin.shopify.com\". The request has been blocked.\n",
+        "Failed to load resource: the server responded with a status of 403 ()"
+      ],
+      "failedRequests": [
+        "GET https://shop.app/pay/hop?analytics_trace_id=d5813de4-152c-4223-9864-bdf6cf25fcde&target_origin=https%3A%2F%2Fthemindsetmediagroup.com&client_handle=07kd8e-qw.myshopify.com — net::ERR_BLOCKED_BY_RESPONSE"
+      ],
+      "screenshotPath": "/home/runner/work/MMG-IOS/MMG-IOS/artifacts/canonical-homepage/pass-1/canonical-homepage-mobile.png"
+    }
+  ],
+  "failures": [
+    "desktop: No page console errors — [\"Framing 'https://shop.app/' violates the following Content Security Policy directive: \\\"frame-ancestors 'self' https://shop.app https://admin.shopify.com\\\". The request has been blocked.\\n\",\"Failed to load resource: the server responded with a status of 403 ()\"]",
+    "desktop: No failed required requests — [\"GET https://shop.app/pay/hop?analytics_trace_id=e6b23bd4-9335-452c-89c0-3aecd98d406e&target_origin=https%3A%2F%2Fthemindsetmediagroup.com&client_handle=07kd8e-qw.myshopify.com — net::ERR_BLOCKED_BY_RESPONSE\"]",
+    "mobile: No page console errors — [\"Framing 'https://shop.app/' violates the following Content Security Policy directive: \\\"frame-ancestors 'self' https://shop.app https://admin.shopify.com\\\". The request has been blocked.\\n\",\"Failed to load resource: the server responded with a status of 403 ()\"]",
+    "mobile: No failed required requests — [\"GET https://shop.app/pay/hop?analytics_trace_id=d5813de4-152c-4223-9864-bdf6cf25fcde&target_origin=https%3A%2F%2Fthemindsetmediagroup.com&client_handle=07kd8e-qw.myshopify.com — net::ERR_BLOCKED_BY_RESPONSE\"]"
+  ],
+  "completedAt": "2026-07-17T23:45:33.872Z"
+}

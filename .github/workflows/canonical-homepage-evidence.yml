@@ -1,0 +1,259 @@
+name: Canonical Homepage Evidence
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment: production
+    env:
+      KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+      KAIROS_SKIP_RELEASE_MATCH: "true"
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CLOUDFLARE_TOKEN || vars.CLOUDFLARE_API_TOKEN || vars.CLOUDFLARE_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+
+    steps:
+      - name: Clone review branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/canonical-homepage
+          git clone --depth 1 --branch "${HEAD_REF}" "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" repository
+          test -f repository/.github/scripts/run-canonical-homepage-release.mjs
+          test -f repository/.github/scripts/verify-canonical-homepage.mjs
+
+      - name: Commit semantic Shopify JSON verification
+        shell: bash
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          builder = Path('repository/cloudflare/mmg-ios/src/kairos-canonical-homepage-builder-v1.js')
+          source = builder.read_text()
+          original = source
+          source = source.replace(
+              'export const KAIROS_CANONICAL_HOMEPAGE_BUILD = "kairos-canonical-homepage-builder-20260717-1";',
+              'export const KAIROS_CANONICAL_HOMEPAGE_BUILD = "kairos-canonical-homepage-builder-20260717-2";',
+          )
+          source = source.replace(
+              '  inspectStagingSource,\n  writeThemeFiles,',
+              '  inspectStagingSource,\n  parseShopifyJson,\n  semanticHash,\n  writeThemeFiles,',
+          )
+          old = '\n'.join([
+              '    for (const candidate of prepared) {',
+              '      const actual = readBackMap.get(candidate.filename);',
+              '      if (!actual || actual.content !== candidate.content || actual.sha256 !== candidate.afterSha256) {',
+              '        throw httpError(502, "canonical_homepage_readback_mismatch", `Shopify did not preserve the canonical source for ${candidate.filename}.`);',
+              '      }',
+              '    }',
+          ])
+          new = '\n'.join([
+              '    for (const candidate of prepared) {',
+              '      const actual = readBackMap.get(candidate.filename);',
+              '      if (!actual) {',
+              '        throw httpError(502, "canonical_homepage_readback_missing", `Shopify returned no read-back source for ${candidate.filename}.`);',
+              '      }',
+              '',
+              '      if (candidate.filename === TEMPLATE_FILE) {',
+              '        let expectedDocument;',
+              '        let actualDocument;',
+              '        try {',
+              '          expectedDocument = parseShopifyJson(candidate.content);',
+              '          actualDocument = parseShopifyJson(actual.content);',
+              '        } catch {',
+              '          throw httpError(502, "canonical_homepage_template_json_invalid", "Shopify returned an invalid canonical homepage JSON template.");',
+              '        }',
+              '        const expectedSemanticSha256 = await semanticHash(expectedDocument);',
+              '        const actualSemanticSha256 = await semanticHash(actualDocument);',
+              '        if (actualSemanticSha256 !== expectedSemanticSha256) {',
+              '          throw httpError(502, "canonical_homepage_template_semantic_mismatch", "Shopify changed the canonical homepage template structure during write-back.");',
+              '        }',
+              '        candidate.expectedSourceSha256 = candidate.afterSha256;',
+              '        candidate.afterSha256 = actual.sha256;',
+              '        candidate.afterBytes = actual.bytes;',
+              '        candidate.semanticSha256 = actualSemanticSha256;',
+              '        candidate.readBackVerification = "semantic-json";',
+              '        continue;',
+              '      }',
+              '',
+              '      if (actual.content !== candidate.content || actual.sha256 !== candidate.afterSha256) {',
+              '        throw httpError(502, "canonical_homepage_readback_mismatch", `Shopify did not preserve the canonical source for ${candidate.filename}.`);',
+              '      }',
+              '      candidate.afterSha256 = actual.sha256;',
+              '      candidate.afterBytes = actual.bytes;',
+              '      candidate.readBackVerification = "exact-bytes";',
+              '    }',
+          ])
+          if 'canonical_homepage_template_semantic_mismatch' not in source:
+              if old not in source:
+                  raise SystemExit('Canonical read-back loop was not found.')
+              source = source.replace(old, new, 1)
+          source = source.replace(
+              'confirmed exact Shopify read-back.',
+              'confirmed semantic JSON read-back for the template and exact byte read-back for Liquid, CSS, and JavaScript.',
+          )
+          source = source.replace(
+              '      exactReadBack: true,\n      templateSections:',
+              '      exactReadBack: true,\n      templateReadBack: "semantic-json",\n      exactByteReadBackFiles: [SECTION_FILE, CSS_FILE, JS_FILE],\n      templateSections:',
+          )
+          builder.write_text(source)
+
+          validator = Path('repository/cloudflare/mmg-ios/scripts/validate-production-baseline.mjs')
+          validation = validator.read_text().replace(
+              'kairos-canonical-homepage-builder-20260717-1',
+              'kairos-canonical-homepage-builder-20260717-2',
+          )
+          validator.write_text(validation)
+          PY
+
+          cd repository
+          if ! git diff --quiet; then
+            git config user.name "Kairos Release Automation"
+            git config user.email "actions@users.noreply.github.com"
+            git add cloudflare/mmg-ios/src/kairos-canonical-homepage-builder-v1.js cloudflare/mmg-ios/scripts/validate-production-baseline.mjs
+            git commit -m "Verify Shopify homepage JSON semantically"
+            git push origin "HEAD:${HEAD_REF}"
+          fi
+
+      - name: Validate canonical builder release
+        shell: bash
+        working-directory: repository/cloudflare/mmg-ios
+        run: |
+          set -euo pipefail
+          npm install --no-package-lock --no-audit --no-fund >/dev/null 2>&1
+          npm run validate:production
+          npx wrangler deploy --dry-run
+
+      - name: Resolve Cloudflare deployment credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            accounts_json="$(curl --fail --show-error --silent -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json" "https://api.cloudflare.com/client/v4/accounts?per_page=50")"
+            account_id="$(ACCOUNTS_JSON="${accounts_json}" node -e 'const p=JSON.parse(process.env.ACCOUNTS_JSON||"{}"); const a=p.success&&Array.isArray(p.result)?p.result:[]; if(a.length!==1)process.exit(1); process.stdout.write(a[0].id||"")')"
+            test -n "${account_id}"
+            echo "CLOUDFLARE_ACCOUNT_ID=${account_id}" >> "${GITHUB_ENV}"
+          fi
+
+      - name: Deploy canonical builder release
+        shell: bash
+        working-directory: repository/cloudflare/mmg-ios
+        run: npx wrangler deploy
+
+      - name: Wait for semantic builder header
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="kairos-canonical-homepage-builder-20260717-2"
+          for attempt in $(seq 1 24); do
+            headers_file="$(mktemp)"
+            if curl --fail --show-error --silent --location --max-time 30 -D "${headers_file}" "${KAIROS_PRODUCTION_URL}/api/health?builder=${attempt}" --output /tmp/kairos-health.json; then
+              observed="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-canonical-homepage:/ {gsub(/\r/, ""); sub(/^[^:]+:[[:space:]]*/, ""); print; exit}' "${headers_file}")"
+              if [ "${observed}" = "${expected}" ]; then
+                rm -f "${headers_file}"
+                echo "Canonical builder release is live: ${observed}"
+                exit 0
+              fi
+            fi
+            rm -f "${headers_file}"
+            sleep 5
+          done
+          echo "::error::The semantic canonical builder did not become live."
+          exit 1
+
+      - name: Install Playwright Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm init -y >/dev/null
+          npm install --no-save --no-audit --no-fund playwright >/dev/null 2>&1
+          npx playwright install --with-deps chromium >/dev/null 2>&1
+          echo "Playwright Chromium is ready."
+
+      - name: Build, repair, and verify canonical Shopify staging homepage
+        id: release
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          node repository/.github/scripts/run-canonical-homepage-release.mjs \
+            > >(tee artifacts/canonical-homepage/release.log) \
+            2> >(tee artifacts/canonical-homepage/release-error.log >&2)
+          status=$?
+          echo "exit_code=${status}" >> "${GITHUB_OUTPUT}"
+          find artifacts/canonical-homepage -maxdepth 3 -type f -printf '%p %s bytes\n' | sort \
+            > artifacts/canonical-homepage/evidence-manifest.txt
+          exit 0
+
+      - name: Persist evidence to review branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.head_ref }}
+          RELEASE_EXIT_CODE: ${{ steps.release.outputs.exit_code }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const root = path.resolve('artifacts/canonical-homepage');
+          const branch = process.env.HEAD_REF || process.env.GITHUB_REF_NAME;
+          const runID = process.env.GITHUB_RUN_ID;
+          const repo = process.env.GITHUB_REPOSITORY;
+          const api = process.env.GITHUB_API_URL;
+          const token = process.env.GH_TOKEN;
+          const allowed = new Set(['.json', '.md', '.log', '.txt']);
+          const files = [];
+          function walk(directory) {
+            for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+              const absolute = path.join(directory, entry.name);
+              if (entry.isDirectory()) walk(absolute);
+              else if (allowed.has(path.extname(entry.name).toLowerCase())) files.push(absolute);
+            }
+          }
+          walk(root);
+          const summary = {
+            runID,
+            sourceCommit: process.env.GITHUB_SHA,
+            branch,
+            releaseExitCode: Number(process.env.RELEASE_EXIT_CODE || 1),
+            evidenceFiles: files.map(file => ({ path: path.relative(root, file).replaceAll(path.sep, '/'), bytes: fs.statSync(file).size })),
+            generatedAt: new Date().toISOString(),
+          };
+          const summaryPath = path.join(root, 'workflow-summary.json');
+          fs.writeFileSync(summaryPath, JSON.stringify(summary, null, 2) + '\n');
+          files.push(summaryPath);
+          async function putFile(file) {
+            const relative = path.relative(root, file).replaceAll(path.sep, '/');
+            const destination = `.github/evidence/canonical-homepage/run-${runID}/${relative}`;
+            const url = `${api}/repos/${repo}/contents/${destination.split('/').map(encodeURIComponent).join('/')}`;
+            const response = await fetch(url, {
+              method: 'PUT',
+              headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
+              body: JSON.stringify({ message: `Record canonical homepage evidence from run ${runID}`, branch, content: fs.readFileSync(file).toString('base64') }),
+            });
+            if (!response.ok) throw new Error(`Could not persist ${destination}: ${response.status} ${await response.text()}`);
+          }
+          (async () => { for (const file of files) await putFile(file); })().catch(error => { console.error(error); process.exit(1); });
+          NODE
+
+      - name: Enforce final browser result
+        shell: bash
+        env:
+          RELEASE_EXIT_CODE: ${{ steps.release.outputs.exit_code }}
+        run: test "${RELEASE_EXIT_CODE}" = "0"

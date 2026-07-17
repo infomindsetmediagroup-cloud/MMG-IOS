@@ -1,0 +1,118 @@
+{
+  "status": "completed",
+  "build": "kairos-canonical-homepage-compatibility-20260717-1",
+  "mode": "build",
+  "completedAt": "2026-07-17T23:49:10.056Z",
+  "summary": "Kairos installed the canonical MMG homepage bundle in the verified non-live Kairos Staging theme and confirmed semantic JSON read-back for the template and exact byte read-back for Liquid, CSS, and JavaScript. Kairos also normalized the Rise homepage logo heading so the rendered document retains one primary H1.",
+  "preview": {
+    "url": "https://themindsetmediagroup.com/?preview_theme_id=155242856602",
+    "desktopURL": "https://themindsetmediagroup.com/?preview_theme_id=155242856602",
+    "mobileURL": "https://themindsetmediagroup.com/?preview_theme_id=155242856602",
+    "theme": {
+      "gid": "gid://shopify/OnlineStoreTheme/155242856602",
+      "name": "Kairos Staging",
+      "role": "UNPUBLISHED",
+      "processing": false,
+      "processingFailed": false
+    }
+  },
+  "production": {
+    "publishedTheme": {
+      "gid": "gid://shopify/OnlineStoreTheme/153970737306",
+      "name": "Rise",
+      "role": "MAIN",
+      "processing": false,
+      "processingFailed": false
+    },
+    "publishedThemeChanged": false,
+    "publishAuthorized": false
+  },
+  "files": [
+    {
+      "filename": "templates/index.json",
+      "beforeSha256": "5b6698c691a71ca7dbfe1ee7f4da2b4a9cdc1c94a216b77e0a2d92deab058448",
+      "afterSha256": "5b6698c691a71ca7dbfe1ee7f4da2b4a9cdc1c94a216b77e0a2d92deab058448",
+      "existedBefore": true,
+      "beforeBytes": 532,
+      "afterBytes": 532,
+      "expectedSourceSha256": "5c7e5df04c811ce780597d73688bcae1fc515cc31833ef0312bca42e64170e83",
+      "semanticSha256": "b65e3d51a21482656cc351b9dc83896a742399d85648490ab09d6ee58af1415c",
+      "readBackVerification": "semantic-json",
+      "changed": false
+    },
+    {
+      "filename": "sections/mmg-canonical-homepage.liquid",
+      "beforeSha256": "a3567a0aeb00eba9e4be52a4459a1101f7b8ac1c63313db4e69d8eb72edf08eb",
+      "afterSha256": "a3567a0aeb00eba9e4be52a4459a1101f7b8ac1c63313db4e69d8eb72edf08eb",
+      "existedBefore": true,
+      "beforeBytes": 13529,
+      "afterBytes": 13529,
+      "readBackVerification": "exact-bytes",
+      "changed": false
+    },
+    {
+      "filename": "assets/mmg-canonical-homepage.css",
+      "beforeSha256": "43fc9e3765a3752f910c6785c36b758a345fe76443c6d2d5c45af145209b9c6b",
+      "afterSha256": "43fc9e3765a3752f910c6785c36b758a345fe76443c6d2d5c45af145209b9c6b",
+      "existedBefore": true,
+      "beforeBytes": 11833,
+      "afterBytes": 11833,
+      "readBackVerification": "exact-bytes",
+      "changed": false
+    },
+    {
+      "filename": "assets/mmg-canonical-homepage.js",
+      "beforeSha256": "17f4486594def4ca19a1965e739b7348f81a9cc3952f86d16677b87011edff7e",
+      "afterSha256": "17f4486594def4ca19a1965e739b7348f81a9cc3952f86d16677b87011edff7e",
+      "existedBefore": true,
+      "beforeBytes": 1734,
+      "afterBytes": 1734,
+      "readBackVerification": "canonical-text-with-retry",
+      "changed": false,
+      "compatibilityIntermediateSha256": "2513b8ec255ee692dd0bcb280e18413881c1e1a5f930929c997b69dc405f9200",
+      "expectedSourceSha256": "17f4486594def4ca19a1965e739b7348f81a9cc3952f86d16677b87011edff7e",
+      "normalizedByShopify": false,
+      "readBackAttempts": 1
+    }
+  ],
+  "verification": {
+    "exactReadBack": true,
+    "templateReadBack": "semantic-json",
+    "exactByteReadBackFiles": [
+      "sections/mmg-canonical-homepage.liquid",
+      "assets/mmg-canonical-homepage.css",
+      "assets/mmg-canonical-homepage.js"
+    ],
+    "templateSections": [
+      "mmg_canonical_homepage"
+    ],
+    "requiredSectionIDs": [
+      "pathways",
+      "resources",
+      "services",
+      "subscriptions",
+      "kairos",
+      "mission",
+      "questions",
+      "next-step"
+    ],
+    "singlePrimaryHeadingDesigned": true,
+    "responsiveStylesIncluded": true,
+    "interactionScriptIncluded": true,
+    "reducedMotionSupported": true,
+    "themeHeaderHeadingNormalized": true,
+    "compatibilityExactReadBack": true,
+    "compatibilityCanonicalTextReadBack": true,
+    "compatibilityNormalizedByShopify": false,
+    "compatibilityReadBackAttempts": 1
+  },
+  "safeguards": {
+    "stagingOnly": true,
+    "mainThemeMutation": false,
+    "externalInferenceAPIUsed": false,
+    "workersAIUsed": false,
+    "approvalTimeReconstructionUsed": false,
+    "rollbackOnReadBackFailure": true
+  },
+  "builderBuild": "kairos-canonical-homepage-builder-20260717-2"
+}

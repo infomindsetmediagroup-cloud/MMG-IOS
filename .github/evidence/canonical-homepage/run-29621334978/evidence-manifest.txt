@@ -1,0 +1,3 @@
+artifacts/canonical-homepage/evidence-manifest.txt 0 bytes
+artifacts/canonical-homepage/release-error.log 1400 bytes
+artifacts/canonical-homepage/release.log 88 bytes
