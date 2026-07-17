@@ -8,13 +8,15 @@ const workerRoot = resolve(here, "..");
 const repoRoot = resolve(workerRoot, "../..");
 const sourceRoot = join(workerRoot, "src");
 const entryPath = join(sourceRoot, "kairos-production-entry.js");
-const activeEntryPath = join(sourceRoot, "kairos-production-entry-autonomous-v1.js");
+const activeEntryPath = join(sourceRoot, "kairos-production-entry-immutable-v1.js");
+const autonomousEntryPath = join(sourceRoot, "kairos-production-entry-autonomous-v1.js");
+const immutableExecutionPath = join(sourceRoot, "kairos-immutable-approved-file-execution-v1.js");
 const controllerPath = join(sourceRoot, "kairos-autonomous-prompt-controller-v1.js");
 const guardedEntryPath = join(sourceRoot, "kairos-production-entry-v2.js");
 const wranglerPath = join(workerRoot, "wrangler.toml");
 
 const requiredFiles = [
-  entryPath, activeEntryPath, controllerPath,
+  entryPath, activeEntryPath, autonomousEntryPath, immutableExecutionPath, controllerPath,
   join(sourceRoot, "kairos-production-entry-v1.js"), guardedEntryPath,
   join(sourceRoot, "kairos-executive-briefing-v1.js"),
   join(sourceRoot, "kairos-approved-work-dispatcher-v1.js"),
@@ -42,7 +44,7 @@ assert.deepEqual(staleRuntimeFiles, [], `Obsolete production wrappers remain: ${
 assert.ok(!existsSync(join(sourceRoot, "kairos-deterministic-homepage-v2.js")), "Unused duplicate homepage planner remains in the production source tree.");
 
 const wrangler = readFileSync(wranglerPath, "utf8");
-assert.match(wrangler, /^main\s*=\s*"src\/kairos-production-entry-autonomous-v1\.js"/m, "Wrangler must point to the autonomous wrapper over the frozen Tuesday entry.");
+assert.match(wrangler, /^main\s*=\s*"src\/kairos-production-entry-immutable-v1\.js"/m, "Wrangler must point to the immutable approved-file wrapper over the autonomous runtime.");
 assert.match(wrangler, /crons\s*=\s*\["0 15 \* \* \*", "0 2 \* \* \*"\]/, "Morning and evening schedules must remain configured.");
 
 const source = readFileSync(entryPath, "utf8");
@@ -55,9 +57,31 @@ assert.ok(source.includes("visual_replacement_forbidden"), "Frozen baseline patc
 assert.ok(source.includes("scheduled(controller, env, ctx)"), "Scheduled website intelligence handler is missing.");
 
 const activeEntry = readFileSync(activeEntryPath, "utf8");
-assert.ok(activeEntry.includes('./kairos-production-entry.js'), "Autonomous runtime must wrap the frozen Tuesday entry.");
-assert.ok(activeEntry.includes('./kairos-autonomous-prompt-controller-v1.js'), "Autonomous prompt controller is not wired.");
-assert.ok(activeEntry.includes('tuesday-command-center-6f96b10d'), "Frozen visual baseline identity is missing.");
+assert.ok(activeEntry.includes('./kairos-production-entry-autonomous-v1.js'), "Immutable production entry must wrap the autonomous runtime.");
+assert.ok(activeEntry.includes('./kairos-immutable-approved-file-execution-v1.js'), "Immutable approved-file execution is not wired.");
+assert.ok(activeEntry.includes('handleImmutableApprovedFileExecution'));
+assert.ok(activeEntry.includes('tuesday-command-center-6f96b10d'));
+
+const autonomousEntry = readFileSync(autonomousEntryPath, "utf8");
+assert.ok(autonomousEntry.includes('./kairos-production-entry.js'), "Autonomous runtime must wrap the frozen Tuesday entry.");
+assert.ok(autonomousEntry.includes('./kairos-autonomous-prompt-controller-v1.js'), "Autonomous prompt controller is not wired.");
+assert.ok(autonomousEntry.includes('tuesday-command-center-6f96b10d'), "Frozen visual baseline identity is missing.");
+
+const immutableExecution = readFileSync(immutableExecutionPath, "utf8");
+for (const marker of [
+  'kairos-immutable-approved-file-execution-20260717-1',
+  'immutableApprovedCandidateUsed: true',
+  'approvalTimeReconstructionUsed: false',
+  'validateTemplateDiff',
+  'validateVisibleDiff',
+  'authorizedDiffVerified: true',
+  'writeThemeFiles',
+  'exact Shopify read-back',
+  'workersAIUsed: false',
+  'neuronsConsumed: 0',
+]) assert.ok(immutableExecution.includes(marker), `Immutable execution contract is missing: ${marker}`);
+assert.ok(!immutableExecution.includes('approved_text_source_changed'));
+assert.ok(!immutableExecution.includes('approved_text_segment_changed'));
 
 const controller = readFileSync(controllerPath, "utf8");
 for (const marker of ["autonomous-text-only-v1", "browserSurfaceChanged: false", "styleMutationAuthorized: false", "liveThemeMutationAuthorized: false"]) {
@@ -123,15 +147,17 @@ assert.ok(!websiteProduction.includes("PRESERVE_PROMPT"), "Website Production st
 assert.ok(!websiteProduction.includes("placeholder:j.placeholder"), "Website Production still assigns predetermined prompt placeholders.");
 
 const runtimeModule = await import(`${pathToFileURL(activeEntryPath).href}?validation=${Date.now()}`);
-assert.equal(typeof runtimeModule.default?.fetch, "function", "Active autonomous runtime must export fetch().");
-assert.equal(typeof runtimeModule.default?.scheduled, "function", "Active autonomous runtime must export scheduled().");
-assert.equal(typeof runtimeModule.KairosProject, "function", "Active autonomous runtime must export KairosProject.");
+assert.equal(typeof runtimeModule.default?.fetch, "function", "Active immutable runtime must export fetch().");
+assert.equal(typeof runtimeModule.default?.scheduled, "function", "Active immutable runtime must export scheduled().");
+assert.equal(typeof runtimeModule.KairosProject, "function", "Active immutable runtime must export KairosProject.");
 
 console.log(JSON.stringify({
   status: "ready",
   baseline: "tuesday-command-center-6f96b10d",
   browserSurfaceChanged: false,
   autonomousPromptController: true,
+  immutableApprovedFileExecution: true,
+  approvalTimeTextReconstruction: false,
   textOnlyShopifyExecution: true,
   integratedHeaderStatusStrip: true,
   integratedHamburgerNavigation: true,
