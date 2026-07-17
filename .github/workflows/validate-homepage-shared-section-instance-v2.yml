@@ -1,0 +1,88 @@
+name: Validate Semantic Homepage Instance Isolation
+
+on:
+  push:
+    branches:
+      - fix/homepage-shared-section-instance-v2
+    paths:
+      - ".github/workflows/validate-homepage-shared-section-instance-v2.yml"
+      - "cloudflare/mmg-ios/src/kairos-homepage-instance-liquid-fallback-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-homepage-instance-liquid-executor-v2.js"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-v43.js"
+      - "cloudflare/mmg-ios/production-baseline.json"
+      - "cloudflare/mmg-ios/scripts/validate-frozen-production-standard.mjs"
+      - "cloudflare/mmg-ios/wrangler.toml"
+      - "web/kairos-dashboard/scripts/homepage-quick-action.js"
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download exact branch commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p repository
+          curl --fail --silent --show-error --location \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" \
+            --output repository.tar.gz
+          tar -xzf repository.tar.gz --strip-components=1 -C repository
+
+      - name: Install Cloudflare dependencies
+        working-directory: repository/cloudflare/mmg-ios
+        run: npm install --ignore-scripts --no-package-lock --no-audit --no-fund
+
+      - name: Check JavaScript syntax
+        working-directory: repository
+        run: |
+          set -euo pipefail
+          node --check cloudflare/mmg-ios/src/kairos-homepage-instance-liquid-fallback-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-homepage-instance-liquid-executor-v2.js
+          node --check cloudflare/mmg-ios/src/kairos-production-entry-v43.js
+          node --check web/kairos-dashboard/scripts/homepage-quick-action.js
+          node --check cloudflare/mmg-ios/scripts/validate-frozen-production-standard.mjs
+
+      - name: Validate production contracts
+        working-directory: repository/cloudflare/mmg-ios
+        run: |
+          set -euo pipefail
+          node scripts/validate-production-suite.mjs
+          node scripts/validate-frozen-production-standard.mjs
+
+      - name: Validate Worker bundle
+        working-directory: repository/cloudflare/mmg-ios
+        run: npx wrangler deploy --dry-run
+
+      - name: Publish validation receipt
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          if [ "${JOB_STATUS}" = "success" ]; then
+            state="success"
+            description="Semantic homepage instance validation passed"
+          else
+            state="failure"
+            description="Semantic homepage instance validation failed"
+          fi
+          payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-homepage-instance-validation-v2",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          curl --fail --silent --show-error \
+            -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "${payload}"
