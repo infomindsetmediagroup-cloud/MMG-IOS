@@ -20,7 +20,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 15
     env:
       APP_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev/center/content/website
       CSS_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev/styles/command-hub.css
@@ -56,8 +56,8 @@ jobs:
             shell_route="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-command-center-route:/{gsub(/\r/,"",$2);print $2}' shell-headers.txt | tail -1)"
             css_route="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-command-center-route:/{gsub(/\r/,"",$2);print $2}' css-headers.txt | tail -1)"
             js_route="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-command-center-route:/{gsub(/\r/,"",$2);print $2}' js-headers.txt | tail -1)"
-            css_type="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{sub(/\r$/,"");sub(/^[^:]+:[[:space:]]*/,"");print}' css-headers.txt | tail -1)"
-            js_type="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{sub(/\r$/,"");sub(/^[^:]+:[[:space:]]*/,"");print}' js-headers.txt | tail -1)"
+            css_type="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{sub(/\r$/ ,"");sub(/^[^:]+:[[:space:]]*/,"");print}' css-headers.txt | tail -1)"
+            js_type="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{sub(/\r$/ ,"");sub(/^[^:]+:[[:space:]]*/,"");print}' js-headers.txt | tail -1)"
 
             if [ "${shell_code}" = "200" ] \
               && [ "${css_code}" = "200" ] \
@@ -74,18 +74,75 @@ jobs:
               && ! grep -qi '<html' command-hub.css \
               && ! grep -qi '<html' command-hub.js; then
               echo "Command Center shell, CSS, and JavaScript are live through direct asset routing."
-              exit 0
+              break
+            fi
+            if [ "${attempt}" = "48" ]; then
+              echo "Command Center shell or static assets did not become healthy." >&2
+              printf 'shell_code=%s css_code=%s js_code=%s shell_route=%s css_route=%s js_route=%s css_type=%s js_type=%s\n' \
+                "${shell_code:-}" "${css_code:-}" "${js_code:-}" "${shell_route:-}" "${css_route:-}" "${js_route:-}" "${css_type:-}" "${js_type:-}" >&2
+              exit 1
             fi
             sleep 5
           done
 
-          echo "Command Center shell or static assets did not become healthy." >&2
-          printf 'shell_code=%s css_code=%s js_code=%s shell_route=%s css_route=%s js_route=%s css_type=%s js_type=%s\n' \
-            "${shell_code:-}" "${css_code:-}" "${js_code:-}" "${shell_route:-}" "${css_route:-}" "${js_route:-}" "${css_type:-}" "${js_type:-}" >&2
-          cat shell-headers.txt >&2 || true
-          cat css-headers.txt >&2 || true
-          cat js-headers.txt >&2 || true
-          exit 1
+      - name: Install browser harness
+        run: |
+          set -euo pipefail
+          npm init -y >/dev/null 2>&1
+          npm install playwright@1.52.0 --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Prove live app initializes
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const { chromium } = require('playwright');
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true });
+            const consoleErrors = [];
+            const pageErrors = [];
+            const failedRequests = [];
+            page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+            page.on('pageerror', error => pageErrors.push(String(error?.stack || error)));
+            page.on('requestfailed', request => failedRequests.push({ url: request.url(), error: request.failure()?.errorText || 'failed' }));
+            const response = await page.goto(`${process.env.APP_URL}?browser-verification=${Date.now()}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+            await page.waitForTimeout(12000);
+            const result = await page.evaluate(() => {
+              const hub = document.querySelector('#kairos-hub');
+              const loading = Boolean(hub?.textContent?.includes('Loading Kairos Command Center'));
+              const rendered = Boolean(document.querySelector('.parent-grid, .workspace, .job, [data-action-id="website"], [data-action="website"]'));
+              const bodyStyle = getComputedStyle(document.body);
+              const image = document.querySelector('.app-header-image');
+              return {
+                title: document.title,
+                hubPresent: Boolean(hub),
+                loading,
+                rendered,
+                bodyFont: bodyStyle.fontFamily,
+                bodyBackground: bodyStyle.backgroundColor,
+                headerWidth: image?.getBoundingClientRect().width || 0,
+                text: (hub?.innerText || '').slice(0, 1200),
+              };
+            });
+            const receipt = { httpStatus: response?.status() || 0, result, consoleErrors, pageErrors, failedRequests: failedRequests.slice(0, 30) };
+            console.log(`KAIROS_BROWSER_RECEIPT=${JSON.stringify(receipt)}`);
+            await page.screenshot({ path: 'command-center-browser.png', fullPage: true });
+            await browser.close();
+            const initialized = response?.ok() && result.hubPresent && !result.loading && result.rendered;
+            const styled = !/Times New Roman|serif/i.test(result.bodyFont || '') && result.headerWidth > 0 && result.headerWidth < 600;
+            if (!initialized || !styled || pageErrors.length) process.exit(1);
+          })().catch(error => { console.error(error); process.exit(1); });
+          NODE
+
+      - name: Upload browser proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: command-center-browser-proof
+          path: command-center-browser.png
+          if-no-files-found: ignore
 
       - name: Publish route verification receipt
         if: always()
@@ -97,10 +154,10 @@ jobs:
           set -euo pipefail
           if [ "${JOB_STATUS}" = "success" ]; then
             state="success"
-            description="Command Center shell, CSS, and JavaScript assets verified"
+            description="Command Center initializes and renders in Chromium"
           else
             state="failure"
-            description="Command Center shell or static asset verification failed"
+            description="Command Center browser initialization failed"
           fi
           payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-command-center-route",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
           curl --fail --silent --show-error -X POST \
