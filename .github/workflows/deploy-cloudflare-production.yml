@@ -1,6 +1,12 @@
 name: Deploy Cloudflare Production
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "cloudflare/mmg-ios/**"
+      - "web/kairos-dashboard/**"
+      - ".github/workflows/deploy-cloudflare-production.yml"
   push:
     branches: [main]
     paths:
@@ -14,11 +20,36 @@ permissions:
   statuses: write
 
 concurrency:
-  group: kairos-cloudflare-production
+  group: kairos-cloudflare-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        working-directory: cloudflare/mmg-ios
+        run: npm install --no-package-lock --no-audit --no-fund
+
+      - name: Enforce loading baseline
+        working-directory: cloudflare/mmg-ios
+        run: npm run validate:loading
+
+      - name: Validate enhanced functionality integration
+        working-directory: cloudflare/mmg-ios
+        run: npm run validate:production
+
+      - name: Validate Worker bundle
+        working-directory: cloudflare/mmg-ios
+        run: npx wrangler deploy --dry-run
+
   deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: production
@@ -55,18 +86,6 @@ jobs:
         working-directory: cloudflare/mmg-ios
         run: npm install --no-package-lock --no-audit --no-fund
 
-      - name: Enforce loading baseline
-        working-directory: cloudflare/mmg-ios
-        run: npm run validate:loading
-
-      - name: Validate production functionality
-        working-directory: cloudflare/mmg-ios
-        run: npm run validate:production
-
-      - name: Validate Worker bundle
-        working-directory: cloudflare/mmg-ios
-        run: npx wrangler deploy --dry-run
-
       - name: Deploy Worker
         working-directory: cloudflare/mmg-ios
         run: npx wrangler deploy
@@ -82,11 +101,12 @@ jobs:
               && ROOT_HTML="${root_html}" HEALTH_JSON="${health_json}" node <<'NODE'
           const root=process.env.ROOT_HTML||"";
           const health=JSON.parse(process.env.HEALTH_JSON||"{}");
+          const status=String(health.status||"").toLowerCase();
           const passed=root.includes('kairos-command-hub-recovery-20260714-1')
             && root.includes('id="kairos-hub"')
             && root.includes('./scripts/command-hub.js?v=recovery-20260714-1')
-            && ["ready","ok","operational"].includes(health.status);
-          console.log(JSON.stringify({rootMarker:root.includes('kairos-command-hub-recovery-20260714-1'),mount:root.includes('id="kairos-hub"'),bootModule:root.includes('./scripts/command-hub.js?v=recovery-20260714-1'),health:health.status},null,2));
+            && ["ready","ok","operational"].includes(status);
+          console.log(JSON.stringify({rootMarker:root.includes('kairos-command-hub-recovery-20260714-1'),mount:root.includes('id="kairos-hub"'),bootModule:root.includes('./scripts/command-hub.js?v=recovery-20260714-1'),health:status},null,2));
           process.exit(passed?0:1);
           NODE
             then
