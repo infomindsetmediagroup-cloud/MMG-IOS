@@ -12,8 +12,12 @@ import {
   KAIROS_FULL_THEME_BASELINE_BUILD,
   restoreApprovedHomepageBaseline,
 } from "./kairos-approved-baseline-restore-v1.js";
+import {
+  handleNeuronFreeHomepagePlan,
+  KAIROS_NEURON_FREE_HOMEPAGE_BUILD,
+} from "./kairos-neuron-free-homepage-planner-v1.js";
 
-const BUILD = "kairos-production-entry-autonomous-20260717-3";
+const BUILD = "kairos-production-entry-autonomous-20260717-4";
 const PLAN_PATH = "/api/shopify/staging/plan/jobs";
 
 export { KairosProject };
@@ -37,6 +41,14 @@ export default {
         delegatedRequest => baselineRuntime.fetch(delegatedRequest, env, ctx),
       );
 
+      const neuronFreePlan = await handleNeuronFreeHomepagePlan(
+        request,
+        env,
+        ctx,
+        autonomousDelegate,
+      );
+      if (neuronFreePlan) return stamp(neuronFreePlan, baselineRefresh);
+
       const bindingRepair = await handleHomepagePromptBindingRepair(
         request,
         env,
@@ -53,6 +65,7 @@ export default {
         status: "failed",
         build: BUILD,
         controller: KAIROS_AUTONOMOUS_PROMPT_CONTROLLER_BUILD,
+        neuronFreeHomepage: KAIROS_NEURON_FREE_HOMEPAGE_BUILD,
         promptBinding: KAIROS_HOMEPAGE_PROMPT_BINDING_REPAIR_BUILD,
         fullThemeBaseline: KAIROS_FULL_THEME_BASELINE_BUILD,
         error: {
@@ -63,6 +76,7 @@ export default {
           liveThemeChanged: false,
           dirtyStagingRejected: true,
           sourceOfTruth: "current-live-main-theme",
+          labeledHomepagePromptsRequireWorkersAI: false,
         },
       }, Number(error?.status || error?.statusCode || 500));
     }
@@ -78,6 +92,7 @@ function stamp(response, baselineRefresh = null) {
   const headers = new Headers(response.headers);
   headers.set("X-MMG-Autonomous-Entry", BUILD);
   headers.set("X-Kairos-Prompt-Controller", KAIROS_AUTONOMOUS_PROMPT_CONTROLLER_BUILD);
+  headers.set("X-Kairos-Neuron-Free-Homepage", KAIROS_NEURON_FREE_HOMEPAGE_BUILD);
   headers.set("X-Kairos-Prompt-Binding-Build", KAIROS_HOMEPAGE_PROMPT_BINDING_REPAIR_BUILD);
   headers.set("X-Kairos-Full-Theme-Baseline", KAIROS_FULL_THEME_BASELINE_BUILD);
   headers.set("X-Kairos-Visual-Baseline", "tuesday-command-center-6f96b10d");
@@ -97,6 +112,7 @@ function json(value, status = 200) {
       "Cache-Control": "no-store",
       "X-MMG-Autonomous-Entry": BUILD,
       "X-Kairos-Prompt-Controller": KAIROS_AUTONOMOUS_PROMPT_CONTROLLER_BUILD,
+      "X-Kairos-Neuron-Free-Homepage": KAIROS_NEURON_FREE_HOMEPAGE_BUILD,
       "X-Kairos-Prompt-Binding-Build": KAIROS_HOMEPAGE_PROMPT_BINDING_REPAIR_BUILD,
       "X-Kairos-Full-Theme-Baseline": KAIROS_FULL_THEME_BASELINE_BUILD,
       "X-Kairos-Visual-Baseline": "tuesday-command-center-6f96b10d",
