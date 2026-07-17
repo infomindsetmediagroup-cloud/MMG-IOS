@@ -1,0 +1,91 @@
+name: Discover Authoritative Worker URL
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "cloudflare/mmg-ios/**"
+      - ".github/workflows/discover-authoritative-worker-url.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  discover-and-prove:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install Worker dependencies
+        working-directory: cloudflare/mmg-ios
+        run: npm install --ignore-scripts --no-package-lock --no-audit --no-fund
+
+      - name: Deploy and capture authoritative URL
+        id: deploy
+        working-directory: cloudflare/mmg-ios
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          npx wrangler deploy 2>&1 | tee wrangler-deploy.log
+          worker_url="$(grep -Eo 'https://[^[:space:]]+\.workers\.dev/?' wrangler-deploy.log | tail -1 | sed 's#/$##')"
+          test -n "${worker_url}"
+          echo "KAIROS_AUTHORITATIVE_WORKER_URL=${worker_url}"
+          echo "worker_url=${worker_url}" >> "${GITHUB_OUTPUT}"
+
+      - name: Prove root app shell
+        env:
+          WORKER_URL: ${{ steps.deploy.outputs.worker_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f headers.txt app.html
+          code="$(curl --silent --show-error --location --max-time 30 \
+            -H 'Cache-Control: no-cache' \
+            -D headers.txt \
+            "${WORKER_URL}/?proof=${GITHUB_SHA}-$(date +%s)" \
+            --output app.html \
+            --write-out '%{http_code}')"
+          route="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-command-center-route:/{gsub(/\r/,"",$2);print $2}' headers.txt | tail -1)"
+          app_entry="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-app-entry:/{gsub(/\r/,"",$2);print $2}' headers.txt | tail -1)"
+          echo "KAIROS_ROOT_HTTP_STATUS=${code}"
+          echo "KAIROS_ROOT_ROUTE=${route}"
+          echo "KAIROS_APP_ENTRY=${app_entry}"
+          test "${code}" = "200"
+          test "${route}" = "direct-assets-root-shell"
+          test "${app_entry}" = "kairos-production-entry-20260717-104"
+          grep -q 'kairos-command-center-inline-20260717-1' app.html
+          grep -q 'id="kairos-hub"' app.html
+
+      - name: Publish authoritative URL receipt
+        if: always() && steps.deploy.outputs.worker_url != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKER_URL: ${{ steps.deploy.outputs.worker_url }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${JOB_STATUS}" = "success" ]; then
+            state="success"
+            description="Kairos root shell verified at authoritative Worker URL"
+          else
+            state="failure"
+            description="Kairos authoritative Worker URL proof failed"
+          fi
+          payload="$(STATE="${state}" DESCRIPTION="${description}" TARGET_URL="${WORKER_URL}/" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-authoritative-worker-url",target_url:process.env.TARGET_URL}))')"
+          curl --fail --silent --show-error -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "${payload}"
