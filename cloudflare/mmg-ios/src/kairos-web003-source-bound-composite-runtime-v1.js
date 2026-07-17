@@ -2,13 +2,14 @@ import renderedTextPlanner from "./kairos-rendered-homepage-text-planner-v1.js";
 import templateMarkupPlanner from "./kairos-homepage-template-markup-text-planner-v1.js";
 import liquidFallback from "./kairos-homepage-liquid-text-fallback-v1.js";
 import instanceFallback from "./kairos-homepage-instance-liquid-fallback-v1.js";
+import deterministicCopyPlanner from "./kairos-homepage-deterministic-copy-planner-v1.js";
 import templateTextExecutor from "./kairos-homepage-template-text-executor-v1.js";
 import instanceExecutor from "./kairos-homepage-instance-liquid-executor-v2.js";
 import { prepareWebsiteRetoolExceptions } from "./kairos-website-retool-exception-planner-v1.js";
 import { executeWebsiteRetoolExceptions } from "./kairos-website-retool-exception-executor-v1.js";
 import { buildCompositePlan, mergeCompositeExecution } from "./kairos-web003-composite-runtime-v1.js";
 
-export const KAIROS_WEB003_SOURCE_BOUND_COMPOSITE_BUILD = "kairos-web003-source-bound-composite-runtime-20260717-2";
+export const KAIROS_WEB003_SOURCE_BOUND_COMPOSITE_BUILD = "kairos-web003-source-bound-composite-runtime-20260717-3";
 
 const PLAN_ROUTE = "/api/shopify/staging/plan/jobs";
 const EXECUTE_ROUTE = "/api/shopify/staging/execute/jobs";
@@ -130,6 +131,7 @@ async function createSourceBoundCompositePlan(request, payload, env, ctx) {
     canonicalHomepageInstallation: false,
     structuredFallbackCodes: STRUCTURED_FALLBACK_CODES,
     boundedReplacementMaximum: 8,
+    deterministicFinalFallbackAvailable: true,
   };
 
   return completed(result);
@@ -151,10 +153,14 @@ async function createSourceBoundTextPlan(request, env, ctx) {
   if (liquid.ok) return requireResult(liquidBody, "homepage Liquid text planner");
   if (!INSTANCE_FALLBACK_CODES.has(String(liquidBody?.error?.code || ""))) throw responseError(liquid, liquidBody);
 
-  const instance = await instanceFallback.fetch(request, env, ctx);
+  const instance = await instanceFallback.fetch(request.clone(), env, ctx);
   const instanceBody = await safeJSON(instance.clone());
-  if (!instance.ok) throw responseError(instance, instanceBody);
-  return requireResult(instanceBody, "homepage instance text planner");
+  if (instance.ok) return requireResult(instanceBody, "homepage instance text planner");
+
+  const deterministic = await deterministicCopyPlanner.fetch(request, env, ctx);
+  const deterministicBody = await safeJSON(deterministic.clone());
+  if (!deterministic.ok) throw responseError(deterministic, deterministicBody);
+  return requireResult(deterministicBody, "deterministic homepage copy planner");
 }
 
 async function executeSourceBoundCompositePlan(request, payload, env, ctx, delegate) {
