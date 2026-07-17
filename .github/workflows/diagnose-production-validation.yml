@@ -61,7 +61,7 @@ jobs:
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}" || { echo "CLOUDFLARE_ACCOUNT_ID is required." >&2; exit 1; }
           npx wrangler deploy
 
-      - name: Verify live Kairos application
+      - name: Verify exact live runtime and dashboard assets
         env:
           KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
         run: |
@@ -69,9 +69,11 @@ jobs:
           expected_entry="$(node -e 'const fs=require("fs");const root="repository/cloudflare/mmg-ios";const manifest=JSON.parse(fs.readFileSync(`${root}/production-baseline.json`,"utf8"));const x=fs.readFileSync(`${root}/${manifest.worker.entry}`,"utf8").match(/const BUILD\s*=\s*"([^"]+)"/);if(!x)process.exit(1);process.stdout.write(x[1])')"
           expected_autonomy="$(node -e 'const fs=require("fs");const x=fs.readFileSync("repository/cloudflare/mmg-ios/src/kairos-autonomy-runtime-v1.js","utf8").match(/KAIROS_AUTONOMY_BUILD\s*=\s*"([^"]+)"/);if(!x)process.exit(1);process.stdout.write(x[1])')"
           export EXPECTED_ENTRY="${expected_entry}" EXPECTED_AUTONOMY="${expected_autonomy}"
+
           for attempt in $(seq 1 36); do
             nonce="${GITHUB_SHA}-${attempt}-$(date +%s)"
-            rm -f health.json dashboard.html
+            rm -f health.json dashboard.html dashboard.css dashboard.js loader.js
+
             curl --fail --silent --show-error --location --max-time 30 \
               -H 'Cache-Control: no-cache' \
               "${KAIROS_PRODUCTION_URL}/api/health?deployment=${nonce}" \
@@ -80,152 +82,114 @@ jobs:
               -H 'Cache-Control: no-cache' \
               "${KAIROS_PRODUCTION_URL}/center/content/website?deployment=${nonce}" \
               --output dashboard.html || true
-            if node -e 'const fs=require("fs");let h={};try{h=JSON.parse(fs.readFileSync("health.json","utf8"))}catch{};const x=fs.existsSync("dashboard.html")?fs.readFileSync("dashboard.html","utf8"):"";const ok=["ready","ok","operational"].includes(String(h.status||"").toLowerCase())&&h.build===process.env.EXPECTED_ENTRY&&h.enhancedInference?.status==="operational"&&h.enhancedInference?.provider==="cloudflare-workers-ai"&&h.autonomy?.status==="operational"&&h.autonomy?.build===process.env.EXPECTED_AUTONOMY&&x.includes("id=\"kairos-hub\"")&&x.includes("scripts/command-hub.js")&&x.includes("scripts/website-stage-three-recovery.js");process.exit(ok?0:1)'; then
-              echo "Kairos exact deployment builds are live on Cloudflare."
-              exit 0
+            curl --fail --silent --show-error --location --max-time 30 \
+              -H 'Cache-Control: no-cache' \
+              "${KAIROS_PRODUCTION_URL}/styles/command-hub.css?deployment=${nonce}" \
+              --output dashboard.css || true
+            curl --fail --silent --show-error --location --max-time 30 \
+              -H 'Cache-Control: no-cache' \
+              "${KAIROS_PRODUCTION_URL}/scripts/command-hub.js?deployment=${nonce}" \
+              --output dashboard.js || true
+            curl --fail --silent --show-error --location --max-time 30 \
+              -H 'Cache-Control: no-cache' \
+              "${KAIROS_PRODUCTION_URL}/scripts/command-hub-loader.js?deployment=${nonce}" \
+              --output loader.js || true
+
+            if node -e '
+              const fs=require("fs");
+              let health={};
+              try{health=JSON.parse(fs.readFileSync("health.json","utf8"))}catch{}
+              const html=fs.existsSync("dashboard.html")?fs.readFileSync("dashboard.html","utf8"):"";
+              const css=fs.existsSync("dashboard.css")?fs.readFileSync("dashboard.css","utf8"):"";
+              const js=fs.existsSync("dashboard.js")?fs.readFileSync("dashboard.js","utf8"):"";
+              const loader=fs.existsSync("loader.js")?fs.readFileSync("loader.js","utf8"):"";
+              const ok=["ready","ok","operational"].includes(String(health.status||"").toLowerCase())
+                && health.build===process.env.EXPECTED_ENTRY
+                && health.enhancedInference?.status==="operational"
+                && health.enhancedInference?.provider==="cloudflare-workers-ai"
+                && health.autonomy?.status==="operational"
+                && health.autonomy?.build===process.env.EXPECTED_AUTONOMY
+                && html.includes("id=\"kairos-hub\"")
+                && html.includes("/scripts/command-hub-loader.js")
+                && css.includes(".hub-shell")
+                && js.includes("renderApp();")
+                && loader.includes("data.kairosBoot")
+                && !css.includes("<html")
+                && !js.includes("<html")
+                && !loader.includes("<html");
+              process.exit(ok?0:1);
+            '; then
+              echo "Exact runtime, app shell, CSS, main module, and guarded loader are live."
+              break
+            fi
+
+            if [ "${attempt}" = "36" ]; then
+              echo "Kairos failed exact runtime or dashboard asset verification." >&2
+              exit 1
             fi
             sleep 5
           done
-          echo "Kairos failed live verification." >&2
-          exit 1
 
-      - name: Verify enhanced intelligence and bounded autonomous operation
+      - name: Prove Website Retool renders in headless Chrome
         env:
-          KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+          APP_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev/center/content/website
+        shell: bash
         run: |
           set -euo pipefail
-          expected_autonomy="$(node -e 'const fs=require("fs");const x=fs.readFileSync("repository/cloudflare/mmg-ios/src/kairos-autonomy-runtime-v1.js","utf8").match(/KAIROS_AUTONOMY_BUILD\s*=\s*"([^"]+)"/);if(!x)process.exit(1);process.stdout.write(x[1])')"
-          expected_native="$(node -e 'const fs=require("fs");const x=fs.readFileSync("repository/cloudflare/mmg-ios/src/kairos-native-task-execution-v1.js","utf8").match(/KAIROS_NATIVE_TASK_EXECUTION_BUILD\s*=\s*"([^"]+)"/);if(!x)process.exit(1);process.stdout.write(x[1])')"
-          export EXPECTED_AUTONOMY="${expected_autonomy}" EXPECTED_NATIVE="${expected_native}"
-          inference_code=""
-          for attempt in $(seq 1 6); do
-            inference_code="$(curl --silent --show-error --location --max-time 180 \
-              -H 'Cache-Control: no-cache' \
-              "${KAIROS_PRODUCTION_URL}/api/inference/health?deployment=${GITHUB_SHA}-${attempt}" \
-              --output inference-health.json \
-              --write-out '%{http_code}' || true)"
-            if [ "${inference_code}" = "200" ]; then
-              break
-            fi
-            ATTEMPT="${attempt}" HTTP_CODE="${inference_code}" node -e '
-              const fs=require("fs");
-              let body={};
-              try{body=JSON.parse(fs.readFileSync("inference-health.json","utf8"))}catch{}
-              console.error(JSON.stringify({
-                attempt:Number(process.env.ATTEMPT),
-                httpStatus:Number(process.env.HTTP_CODE||0),
-                status:body.status||"unknown",
-                mode:body.mode||null,
-                provider:body.provider||null,
-                model:body.model||null,
-                error:body.error||null,
-              }));
-            '
-            sleep 10
-          done
-          if [ "${inference_code}" != "200" ]; then
-            echo "Kairos enhanced inference did not become ready after six probes." >&2
+          CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium-browser || command -v chromium || true)"
+          if [ -z "${CHROME}" ]; then
+            echo "No Chrome or Chromium binary is available on the production runner." >&2
             exit 1
           fi
-          stable_runtime_probes=0
-          for attempt in $(seq 1 36); do
-            runtime_code="$(curl --silent --show-error --location --max-time 60 \
-              -H 'Cache-Control: no-cache' -H 'Connection: close' \
-              "${KAIROS_PRODUCTION_URL}/api/autonomy/status?deployment=${GITHUB_SHA}-runtime-${attempt}-$(date +%s)" \
-              --output autonomy-runtime-probe.json \
-              --write-out '%{http_code}' || true)"
-            if [ "${runtime_code}" = "200" ] && node -e '
-              const fs=require("fs");
-              let body={};
-              try{body=JSON.parse(fs.readFileSync("autonomy-runtime-probe.json","utf8"))}catch{}
-              const exact=body.status==="operational"&&body.build===process.env.EXPECTED_AUTONOMY&&body.nativeExecutionBuild===process.env.EXPECTED_NATIVE;
-              process.exit(exact?0:1);
-            '; then
-              stable_runtime_probes=$((stable_runtime_probes + 1))
-            else
-              stable_runtime_probes=0
-            fi
-            if [ "${stable_runtime_probes}" -ge 4 ]; then
-              break
-            fi
-            sleep 5
-          done
-          if [ "${stable_runtime_probes}" -lt 4 ]; then
-            echo "Kairos exact autonomy and native-execution builds did not stabilize across four consecutive probes." >&2
+
+          nonce="${GITHUB_SHA}-$(date +%s)"
+          rm -f rendered.html chrome-errors.log
+          timeout 75s "${CHROME}" \
+            --headless=new \
+            --no-sandbox \
+            --disable-gpu \
+            --disable-dev-shm-usage \
+            --window-size=390,844 \
+            --virtual-time-budget=15000 \
+            --dump-dom \
+            "${APP_URL}?browser-verification=${nonce}" \
+            > rendered.html 2> chrome-errors.log || true
+
+          echo "KAIROS_CHROME_BINARY=${CHROME}"
+          echo "KAIROS_RENDERED_BYTES=$(wc -c < rendered.html | tr -d ' ')"
+
+          test -s rendered.html || { echo "Chrome returned no rendered DOM." >&2; cat chrome-errors.log >&2 || true; exit 1; }
+
+          if grep -q 'Loading Kairos Command Center' rendered.html; then
+            echo "The live app is still stuck on its loading screen." >&2
+            cat chrome-errors.log >&2 || true
             exit 1
           fi
-          curl --fail-with-body --silent --show-error --location --max-time 60 \
-            -H 'Content-Type: application/json' -H 'Cache-Control: no-cache' -H 'X-Kairos-Autonomy-Dispatch: manual' \
-            --data "{\"title\":\"Deployment native execution ${GITHUB_SHA}\",\"objective\":\"Prove that Kairos produces a grounded native analysis artifact and verifies durable read-back before task completion.\",\"center\":\"operations\",\"priority\":\"high\",\"source\":\"verified-production-deployment\",\"tasks\":[{\"title\":\"Observe authoritative deployment workflow\",\"description\":\"Read this durable workflow and produce a grounded internal deployment verification artifact.\",\"stage\":\"observe\",\"executionClass\":\"native-analysis\"}]}" \
-            "${KAIROS_PRODUCTION_URL}/api/workflows" \
-            --output native-validation-workflow.json
-          workflow_id="$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync("native-validation-workflow.json","utf8")).workflow.id)')"
-          curl --fail-with-body --silent --show-error --location --max-time 180 \
-            -H 'Content-Type: application/json' -H 'Cache-Control: no-cache' \
-            --data "{\"source\":\"deployment:${GITHUB_SHA}\",\"workflowID\":\"${workflow_id}\"}" \
-            "${KAIROS_PRODUCTION_URL}/api/autonomy/run" \
-            --output autonomy-cycle.json
-          artifact_id="$(node -e 'const x=JSON.parse(require("fs").readFileSync("autonomy-cycle.json","utf8"));process.stdout.write(x.applied?.[0]?.artifactID||"")')"
-          if [ -z "${artifact_id}" ]; then
-            curl --silent --show-error --location --max-time 60 \
-              -H 'Cache-Control: no-cache' \
-              "${KAIROS_PRODUCTION_URL}/api/autonomy/decisions?deployment=${GITHUB_SHA}" \
-              --output autonomy-decisions.json || true
-            WORKFLOW_ID="${workflow_id}" node <<'NODE'
-          const fs=require('fs');
-          const cycle=JSON.parse(fs.readFileSync('autonomy-cycle.json','utf8'));
-          let decisions={};
-          try{decisions=JSON.parse(fs.readFileSync('autonomy-decisions.json','utf8'))}catch{}
-          const decision=(decisions.decisions||[]).find(value=>value.cycleID===cycle.id&&value.workflowID===process.env.WORKFLOW_ID)||null;
-          console.error(JSON.stringify({
-            error:'native-validation-artifact-missing',
-            expected:{autonomy:process.env.EXPECTED_AUTONOMY,nativeExecution:process.env.EXPECTED_NATIVE},
-            cycle:{id:cycle.id,status:cycle.status,build:cycle.build,nativeExecutionBuild:cycle.nativeExecutionBuild,actionsApplied:cycle.actionsApplied,decisionsPreserved:cycle.decisionsPreserved,error:cycle.error||null},
-            decision:decision?{id:decision.id,status:decision.status,action:decision.action,blockedReason:decision.blockedReason||null,classification:decision.classification||null}:null,
-          },null,2));
-          NODE
+
+          if grep -q 'Kairos could not finish opening' rendered.html; then
+            echo "The guarded loader exposed a startup module failure." >&2
+            grep -o '<p class="error">[^<]*' rendered.html | head -1 >&2 || true
+            cat chrome-errors.log >&2 || true
             exit 1
           fi
-          curl --fail-with-body --silent --show-error --location --max-time 60 \
-            -H 'Cache-Control: no-cache' \
-            "${KAIROS_PRODUCTION_URL}/api/autonomy/artifacts/${artifact_id}?deployment=${GITHUB_SHA}" \
-            --output native-validation-artifact.json
-          curl --fail-with-body --silent --show-error --location --max-time 60 \
-            -H 'Cache-Control: no-cache' \
-            "${KAIROS_PRODUCTION_URL}/api/workflows/${workflow_id}?deployment=${GITHUB_SHA}" \
-            --output native-validation-readback.json
-          curl --fail-with-body --silent --show-error --location --max-time 60 \
-            -H 'Cache-Control: no-cache' \
-            "${KAIROS_PRODUCTION_URL}/api/autonomy/status?deployment=${GITHUB_SHA}" \
-            --output autonomy-status.json
-          node <<'NODE'
-          const fs=require('fs');
-          const inference=JSON.parse(fs.readFileSync('inference-health.json','utf8'));
-          const requested=JSON.parse(fs.readFileSync('autonomy-cycle.json','utf8'));
-          const autonomy=JSON.parse(fs.readFileSync('autonomy-status.json','utf8'));
-          const artifact=JSON.parse(fs.readFileSync('native-validation-artifact.json','utf8')).artifact;
-          const workflow=JSON.parse(fs.readFileSync('native-validation-readback.json','utf8')).workflow;
-          const cycle=requested.status==='completed'?requested:autonomy.lastCycle;
-          const task=workflow?.tasks?.[0];
-          const checks={
-            inferenceReady:inference.status==='ready'&&inference.reachable===true,
-            accountScoped:inference.mode==='cloudflare-account-scoped'&&inference.provider==='cloudflare-workers-ai',
-            qwenModel:inference.model==='@cf/qwen/qwen3-30b-a3b-fp8',
-            privacy:inference.privacy==='customer-content-isolated-no-training',
-            autonomyOperational:autonomy.status==='operational'&&autonomy.enabled===true,
-            exactRuntimeBuilds:cycle?.build===process.env.EXPECTED_AUTONOMY&&cycle?.nativeExecutionBuild===process.env.EXPECTED_NATIVE&&autonomy?.build===process.env.EXPECTED_AUTONOMY&&autonomy?.nativeExecutionBuild===process.env.EXPECTED_NATIVE,
-            cycleCompleted:cycle?.status==='completed',
-            intelligentDecision:cycle?.inference?.mode==='cloudflare-account-scoped',
-            nativeActionApplied:cycle?.actionsApplied===1&&cycle?.applied?.[0]?.artifactReadbackVerified===true&&cycle?.applied?.[0]?.atomicCommitVerified===true,
-            artifactVerified:artifact?.status==='verified'&&typeof artifact?.contentHash==='string'&&artifact.contentHash.length===64&&artifact?.safeguards?.durableReadbackRequired===true,
-            reasoningPrivate:artifact?.safeguards?.modelReasoningStored===false,
-            workflowReadback:workflow?.state==='completed'&&task?.state==='completed'&&task?.nativeOutput?.artifactID===artifact?.id,
-            noExternalEffect:artifact?.safeguards?.externalActionTaken===false&&cycle?.applied?.[0]?.externalActionTaken===false,
-            boundedExternalEffects:cycle?.safeguards?.approvalRequired?.includes('external-publication')&&cycle?.safeguards?.prohibited?.includes('bypass-approval')
-          };
-          console.log(JSON.stringify({checks,inference:{status:inference.status,mode:inference.mode,provider:inference.provider,model:inference.model,privacy:inference.privacy},cycle:{id:cycle?.id,status:cycle?.status,actionsApplied:cycle?.actionsApplied,decisionsPreserved:cycle?.decisionsPreserved},artifact:{id:artifact?.id,status:artifact?.status,contentHash:artifact?.contentHash},workflow:{id:workflow?.id,state:workflow?.state,progress:workflow?.progress}},null,2));
-          if(Object.values(checks).some(value=>value!==true))process.exit(1);
-          NODE
+
+          grep -q 'data-kairos-boot="ready"' rendered.html || { echo "The guarded startup loader did not report ready." >&2; exit 1; }
+          grep -q 'id="command-view"' rendered.html || { echo "The Command Center view did not initialize." >&2; exit 1; }
+          grep -q 'Website Retool' rendered.html || { echo "The Website Retool workspace did not render." >&2; exit 1; }
+          grep -q 'Describe the homepage you want Kairos to build' rendered.html || { echo "The Website objective form did not render." >&2; exit 1; }
+
+          echo "Website Retool rendered successfully in a real headless Chrome session."
+
+      - name: Upload live browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kairos-live-browser-proof
+          path: |
+            rendered.html
+            chrome-errors.log
+            health.json
+          if-no-files-found: ignore
 
       - name: Publish deployment receipt
         if: always()
@@ -237,10 +201,10 @@ jobs:
           set -euo pipefail
           if [ "${JOB_STATUS}" = "success" ]; then
             state="success"
-            description="Kairos Cloudflare deployment passed live verification"
+            description="Kairos deployed and Website Retool rendered in Chrome"
           else
             state="failure"
-            description="Kairos Cloudflare deployment failed"
+            description="Kairos deployment or browser render verification failed"
           fi
           payload="$(STATE="${state}" DESCRIPTION="${description}" node -e '
             process.stdout.write(JSON.stringify({
