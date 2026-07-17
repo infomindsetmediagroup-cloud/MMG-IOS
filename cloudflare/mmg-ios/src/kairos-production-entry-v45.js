@@ -150,3 +150,5 @@ function jsonError(status, code, message) {
     },
   });
 }
+
+// Verification trigger: read-only deterministic plan diagnostic contract.
