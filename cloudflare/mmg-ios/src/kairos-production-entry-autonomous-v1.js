@@ -24,14 +24,21 @@ import {
   handleDirectHomepageExecution,
   KAIROS_DIRECT_HOMEPAGE_EXECUTION_BUILD,
 } from "./kairos-direct-homepage-execution-v1.js";
+import {
+  handleZeroNeuronChildRequest,
+  KAIROS_ZERO_NEURON_CHILD_ROUTER_BUILD,
+} from "./kairos-zero-neuron-child-router-v1.js";
+import { KAIROS_INTERNAL_DOCTRINE_REGISTRY_BUILD } from "./kairos-internal-doctrine-registry-v1.js";
 
-const BUILD = "kairos-production-entry-autonomous-20260717-6";
+const BUILD = "kairos-production-entry-autonomous-20260717-7";
 const PLAN_PATH = "/api/shopify/staging/plan/jobs";
 
 export { KairosProject };
 
 export default {
   async fetch(request, env, ctx) {
+    const internalEnv = workersAIBlockedEnv(env);
+
     try {
       const url = new URL(request.url);
       let baselineRefresh = null;
@@ -39,25 +46,34 @@ export default {
       if (request.method === "POST" && url.pathname === PLAN_PATH) {
         const payload = await safeRequestJSON(request.clone());
         const requestType = String(payload?.requestType || "homepage").trim().toLowerCase();
-        if (requestType === "homepage") baselineRefresh = await restoreApprovedHomepageBaseline(env);
+        if (requestType === "homepage") baselineRefresh = await restoreApprovedHomepageBaseline(internalEnv);
       }
 
+      const baselineInternalDelegate = delegatedRequest => baselineRuntime.fetch(delegatedRequest, internalEnv, ctx);
       const autonomousDelegate = nextRequest => handleAutonomousPromptRequest(
         nextRequest,
-        env,
+        internalEnv,
         ctx,
-        delegatedRequest => baselineRuntime.fetch(delegatedRequest, env, ctx),
+        baselineInternalDelegate,
       );
 
-      const directExecution = await handleDirectHomepageExecution(request, env, ctx);
+      const zeroNeuronChild = await handleZeroNeuronChildRequest(
+        request,
+        internalEnv,
+        ctx,
+        baselineInternalDelegate,
+      );
+      if (zeroNeuronChild) return stamp(zeroNeuronChild, baselineRefresh);
+
+      const directExecution = await handleDirectHomepageExecution(request, internalEnv, ctx);
       if (directExecution) return stamp(directExecution, baselineRefresh);
 
-      const directPlan = await handleDirectHomepagePlan(request, env, ctx);
+      const directPlan = await handleDirectHomepagePlan(request, internalEnv, ctx);
       if (directPlan) return stamp(directPlan, baselineRefresh);
 
       const neuronFreePlan = await handleNeuronFreeHomepagePlan(
         request,
-        env,
+        internalEnv,
         ctx,
         autonomousDelegate,
       );
@@ -65,7 +81,7 @@ export default {
 
       const bindingRepair = await handleHomepagePromptBindingRepair(
         request,
-        env,
+        internalEnv,
         ctx,
         autonomousDelegate,
       );
@@ -73,12 +89,14 @@ export default {
 
       const handled = await autonomousDelegate(request);
       if (handled) return stamp(handled, baselineRefresh);
-      return stamp(await baselineRuntime.fetch(request, env, ctx), baselineRefresh);
+      return stamp(await baselineRuntime.fetch(request, internalEnv, ctx), baselineRefresh);
     } catch (error) {
       return json({
         status: "failed",
         build: BUILD,
         controller: KAIROS_AUTONOMOUS_PROMPT_CONTROLLER_BUILD,
+        zeroNeuronChildRouter: KAIROS_ZERO_NEURON_CHILD_ROUTER_BUILD,
+        doctrineRegistry: KAIROS_INTERNAL_DOCTRINE_REGISTRY_BUILD,
         directHomepagePlan: KAIROS_DIRECT_HOMEPAGE_PLAN_BUILD,
         directHomepageExecution: KAIROS_DIRECT_HOMEPAGE_EXECUTION_BUILD,
         neuronFreeHomepage: KAIROS_NEURON_FREE_HOMEPAGE_BUILD,
@@ -92,6 +110,11 @@ export default {
           liveThemeChanged: false,
           dirtyStagingRejected: true,
           sourceOfTruth: "current-live-main-theme",
+          workersAIAvailableToRequests: false,
+          workersAIUsed: false,
+          neuronsConsumed: 0,
+          childRetrievalMode: "deterministic-internal",
+          generativeInferenceMode: "kairos-private-runtime-only",
           labeledHomepagePromptsRequireWorkersAI: false,
           labeledHomepagePromptsUseSecondBindingPass: false,
           approvedDirectPackagesUseApprovalTimeRebinding: false,
@@ -101,20 +124,39 @@ export default {
   },
 
   async scheduled(controller, env, ctx) {
-    if (typeof baselineRuntime.scheduled === "function") await baselineRuntime.scheduled(controller, env, ctx);
-    ctx.waitUntil(Promise.resolve(runAutonomousScheduledCycle(controller, env, ctx)).catch(() => null));
+    const internalEnv = workersAIBlockedEnv(env);
+    if (typeof baselineRuntime.scheduled === "function") await baselineRuntime.scheduled(controller, internalEnv, ctx);
+    ctx.waitUntil(Promise.resolve(runAutonomousScheduledCycle(controller, internalEnv, ctx)).catch(() => null));
   },
 };
+
+function workersAIBlockedEnv(env) {
+  return new Proxy(env || {}, {
+    get(target, property, receiver) {
+      if (property === "AI") return undefined;
+      return Reflect.get(target, property, receiver);
+    },
+    has(target, property) {
+      if (property === "AI") return false;
+      return Reflect.has(target, property);
+    },
+  });
+}
 
 function stamp(response, baselineRefresh = null) {
   const headers = new Headers(response.headers);
   headers.set("X-MMG-Autonomous-Entry", BUILD);
   headers.set("X-Kairos-Prompt-Controller", KAIROS_AUTONOMOUS_PROMPT_CONTROLLER_BUILD);
+  headers.set("X-Kairos-Zero-Neuron-Child-Router", KAIROS_ZERO_NEURON_CHILD_ROUTER_BUILD);
+  headers.set("X-Kairos-Doctrine-Registry", KAIROS_INTERNAL_DOCTRINE_REGISTRY_BUILD);
   headers.set("X-Kairos-Direct-Homepage-Plan", KAIROS_DIRECT_HOMEPAGE_PLAN_BUILD);
   headers.set("X-Kairos-Direct-Homepage-Execution", KAIROS_DIRECT_HOMEPAGE_EXECUTION_BUILD);
   headers.set("X-Kairos-Neuron-Free-Homepage", KAIROS_NEURON_FREE_HOMEPAGE_BUILD);
   headers.set("X-Kairos-Prompt-Binding-Build", KAIROS_HOMEPAGE_PROMPT_BINDING_REPAIR_BUILD);
   headers.set("X-Kairos-Full-Theme-Baseline", KAIROS_FULL_THEME_BASELINE_BUILD);
+  headers.set("X-Kairos-Workers-AI-Available", "false");
+  headers.set("X-Kairos-Workers-AI-Used", "false");
+  headers.set("X-Kairos-Neurons-Consumed", "0");
   headers.set("X-Kairos-Visual-Baseline", "tuesday-command-center-6f96b10d");
   if (baselineRefresh?.targetTheme?.gid) {
     headers.set("X-Kairos-Staging-Refreshed", "full-main-theme-duplicate");
@@ -132,11 +174,16 @@ function json(value, status = 200) {
       "Cache-Control": "no-store",
       "X-MMG-Autonomous-Entry": BUILD,
       "X-Kairos-Prompt-Controller": KAIROS_AUTONOMOUS_PROMPT_CONTROLLER_BUILD,
+      "X-Kairos-Zero-Neuron-Child-Router": KAIROS_ZERO_NEURON_CHILD_ROUTER_BUILD,
+      "X-Kairos-Doctrine-Registry": KAIROS_INTERNAL_DOCTRINE_REGISTRY_BUILD,
       "X-Kairos-Direct-Homepage-Plan": KAIROS_DIRECT_HOMEPAGE_PLAN_BUILD,
       "X-Kairos-Direct-Homepage-Execution": KAIROS_DIRECT_HOMEPAGE_EXECUTION_BUILD,
       "X-Kairos-Neuron-Free-Homepage": KAIROS_NEURON_FREE_HOMEPAGE_BUILD,
       "X-Kairos-Prompt-Binding-Build": KAIROS_HOMEPAGE_PROMPT_BINDING_REPAIR_BUILD,
       "X-Kairos-Full-Theme-Baseline": KAIROS_FULL_THEME_BASELINE_BUILD,
+      "X-Kairos-Workers-AI-Available": "false",
+      "X-Kairos-Workers-AI-Used": "false",
+      "X-Kairos-Neurons-Consumed": "0",
       "X-Kairos-Visual-Baseline": "tuesday-command-center-6f96b10d",
       "X-Content-Type-Options": "nosniff",
     },
