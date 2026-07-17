@@ -62,26 +62,47 @@ jobs:
           (async () => {
             const browser = await chromium.launch({ headless: true });
             const page = await browser.newPage();
-            const consoleErrors = [];
-            page.on('console', message => {
-              if (message.type() === 'error') consoleErrors.push(message.text());
+            const consoleMessages = [];
+            const requestFailures = [];
+            const badResponses = [];
+            page.on('console', message => consoleMessages.push({ type: message.type(), text: message.text() }));
+            page.on('pageerror', error => consoleMessages.push({ type: 'pageerror', text: error.message }));
+            page.on('requestfailed', request => requestFailures.push({ url: request.url(), failure: request.failure()?.errorText || 'unknown' }));
+            page.on('response', response => {
+              if (response.status() >= 400) badResponses.push({ status: response.status(), url: response.url() });
             });
-            page.on('pageerror', error => consoleErrors.push(error.message));
             const url = `${process.env.KAIROS_URL}?browser-runtime=${process.env.GITHUB_SHA}-${Date.now()}`;
-            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-            await page.locator('[data-runtime-label]').waitFor({ state: 'visible', timeout: 30000 });
-            await page.waitForFunction(() => document.querySelector('[data-runtime-label]')?.textContent?.trim() === 'Online', null, { timeout: 30000 });
-            const label = await page.locator('[data-runtime-label]').textContent();
-            const health = await page.evaluate(async () => {
-              const response = await fetch(`/api/health?browser-readback=${Date.now()}`, { cache: 'no-store' });
-              return { ok: response.ok, body: await response.json() };
-            });
-            if (!health.ok || !['ready', 'ok', 'operational'].includes(String(health.body?.status || '').toLowerCase())) {
-              throw new Error(`Browser health readback was not operational: ${JSON.stringify(health)}`);
+            try {
+              await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+              await page.waitForTimeout(3000);
+              await page.locator('[data-runtime-label]').waitFor({ state: 'visible', timeout: 15000 });
+              await page.waitForFunction(() => document.querySelector('[data-runtime-label]')?.textContent?.trim() === 'Online', null, { timeout: 30000 });
+              const label = await page.locator('[data-runtime-label]').textContent();
+              const health = await page.evaluate(async () => {
+                const response = await fetch(`/api/health?browser-readback=${Date.now()}`, { cache: 'no-store' });
+                return { ok: response.ok, body: await response.json() };
+              });
+              if (!health.ok || !['ready', 'ok', 'operational'].includes(String(health.body?.status || '').toLowerCase())) {
+                throw new Error(`Browser health readback was not operational: ${JSON.stringify(health)}`);
+              }
+              if (label?.trim() !== 'Online') throw new Error(`Visible runtime label was ${JSON.stringify(label)}.`);
+              console.log(JSON.stringify({ status: 'passed', visibleLabel: label.trim(), healthStatus: health.body.status, consoleMessages, requestFailures, badResponses }, null, 2));
+            } catch (error) {
+              const html = await page.content().catch(() => '');
+              console.error(JSON.stringify({
+                error: error?.message || String(error),
+                pageURL: page.url(),
+                title: await page.title().catch(() => ''),
+                bodyText: await page.locator('body').innerText().catch(() => ''),
+                html: html.slice(0, 12000),
+                consoleMessages,
+                requestFailures,
+                badResponses,
+              }, null, 2));
+              throw error;
+            } finally {
+              await browser.close();
             }
-            if (label?.trim() !== 'Online') throw new Error(`Visible runtime label was ${JSON.stringify(label)}.`);
-            console.log(JSON.stringify({ status: 'passed', visibleLabel: label.trim(), healthStatus: health.body.status, consoleErrors }, null, 2));
-            await browser.close();
           })().catch(error => {
             console.error(error);
             process.exit(1);
