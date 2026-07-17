@@ -9,17 +9,23 @@ const read = path => readFileSync(path, "utf8");
 
 const entry = read(join(workerRoot, "src/kairos-production-entry-autonomous-v1.js"));
 const planner = read(join(workerRoot, "src/kairos-whole-homepage-planner-v1.js"));
+const constitutionalPlanner = read(join(workerRoot, "src/kairos-constitutional-in-place-homepage-planner-v1.js"));
 const executor = read(join(workerRoot, "src/kairos-direct-homepage-execution-v1.js"));
 const index = read(join(repoRoot, "web/kairos-dashboard/index.html"));
 
 assert.ok(entry.includes('./kairos-whole-homepage-planner-v1.js'));
+assert.ok(entry.includes('./kairos-constitutional-in-place-homepage-planner-v1.js'));
+assert.ok(entry.includes('handleConstitutionalInPlaceHomepagePlan'));
 assert.ok(entry.includes('handleWholeHomepagePlan'));
+assert.ok(entry.indexOf('handleConstitutionalInPlaceHomepagePlan') < entry.indexOf('handleWholeHomepagePlan'), "Constitutional in-place planning must run before generic whole-page planning.");
 assert.ok(entry.indexOf('handleWholeHomepagePlan') < entry.indexOf('handleDirectHomepagePlan'), "Whole-page continuation must run before the old limited planner.");
 assert.ok(entry.includes('homepageWholePagePlannerEnabled: true'));
-assert.ok(entry.includes('homepageWholePageMaximumOperations: 96'));
+assert.ok(entry.includes('homepageWholePageMaximumOperations: 160'));
 assert.ok(entry.includes('homepageTemplateOnlyMutation: false'));
 assert.ok(entry.includes('homepageMarkupBackedSettingsCovered: true'));
 assert.ok(entry.includes('homepagePageBoundSectionSourcesCovered: true'));
+assert.ok(entry.includes('homepageSectionIdentityPreserved: true'));
+assert.ok(entry.includes('homepageGenericJourneyZoneAssignmentUsed: false'));
 
 for (const marker of [
   'kairos-whole-homepage-planner-20260717-3',
@@ -59,12 +65,12 @@ for (const marker of [
   'structuralMutationAuthorized: false',
   'styleMutationAuthorized: false',
   'liveThemeMutationAuthorized: false',
-]) assert.ok(planner.includes(marker), `Missing markup-first homepage planner contract: ${marker}`);
+]) assert.ok(planner.includes(marker), `Missing markup-first homepage inspector contract: ${marker}`);
 
 assert.ok(planner.indexOf('const markupContainer = isMarkupContainer') < planner.indexOf('if (!isPlainEditableText'), "Markup containers must be classified before plain strings.");
 assert.ok(planner.includes('/(custom_liquid|richtext|rich_text|markup|html|content|liquid)/i.test(name)'), "Plain text classifier must explicitly reject markup-container setting names.");
-assert.ok(!planner.includes('env.AI.run'), "Whole-homepage planning must not call Workers AI.");
-assert.ok(!planner.includes('runKairosIntelligence'), "Whole-homepage planning must not call private inference.");
+assert.ok(!planner.includes('env.AI.run'), "Whole-homepage inspection must not call Workers AI.");
+assert.ok(!planner.includes('runKairosIntelligence'), "Whole-homepage inspection must not call private inference.");
 assert.ok(planner.includes('sections/${type}.liquid'), "Planner must inspect referenced homepage section files.");
 assert.ok(planner.includes('GENERIC_SHARED_SECTION_TYPES'), "Shared generic section files must remain guarded.");
 assert.ok(planner.includes('sectionIds.length !== 1'), "Section-file edits must require a unique homepage section type.");
@@ -72,6 +78,14 @@ assert.ok(planner.includes('isPageBoundSectionSource'), "Section-file edits must
 assert.ok(planner.includes('url|link(?!.*label)|href'));
 assert.ok(planner.includes('product|collection|menu'));
 assert.ok(planner.includes('sourceHashes'));
+
+for (const marker of [
+  'kairos-constitutional-in-place-homepage-20260717-1',
+  'sectionIdentityPreserved = true',
+  'genericJourneyZoneAssignmentUsed = false',
+  'sectionRepurposingAuthorized = false',
+  'MAX_OPERATIONS = 160',
+]) assert.ok(constitutionalPlanner.includes(marker), `Missing active constitutional planner contract: ${marker}`);
 
 for (const marker of [
   'json-markup-text',
@@ -88,15 +102,17 @@ assert.ok(!index.includes('command-hub-canonical-v3'));
 
 console.log(JSON.stringify({
   status: "passed",
-  planner: "kairos-whole-homepage-planner-20260717-3",
-  maximumOperations: 96,
-  journeyZones: 8,
+  inspector: "kairos-whole-homepage-planner-20260717-3",
+  activePlanner: "kairos-constitutional-in-place-homepage-20260717-1",
+  maximumOperations: 160,
   markupContainerPrecedence: true,
   duplicatePlainPathsRejected: true,
   customLiquidWholeValueReplacementAllowed: false,
   templatePlainTextCoverage: true,
   templateMarkupTextCoverage: true,
   guardedPageBoundSectionCoverage: true,
+  sectionIdentityPreserved: true,
+  genericZoneAssignmentUsed: false,
   URLsMutable: false,
   workersAIUsed: false,
   privateRuntimeUsed: false,
