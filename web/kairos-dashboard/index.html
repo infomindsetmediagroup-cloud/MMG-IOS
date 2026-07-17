@@ -34,6 +34,7 @@
   <style>
     html{scroll-behavior:auto!important;overflow-anchor:none!important}
     body,#kairos-hub,.command-view,.parent-grid{overflow-anchor:none!important}
+    #kairos-hub>.app-header{display:none!important}
     .parent-card,.parent-card:hover,.parent-card:focus-visible{transform:none!important;transition:none!important}
     .mini-meter span,.readiness-overall span,.readiness-child-meter span{transition:none!important}
     .parent-card[data-route-center=knowledge] .parent-icon:before{content:"🧠"!important}
@@ -49,17 +50,14 @@
   </style>
 </head>
 <body>
-  <div id="kairos-hub" class="hub-shell">
-    <header class="app-header">
-      <img class="app-header-image" src="https://cdn.shopify.com/s/files/1/0754/4337/2186/files/kairos-app-header.png?v=1783815598" alt="Kairos Operating System — Mindset Media Group">
-      <div class="app-header-status">
-        <span data-runtime-time></span>
-        <span class="live-state"><i class="state-dot checking" data-runtime-dot></i><span data-runtime-label>Checking</span></span>
-      </div>
-    </header>
-    <div id="command-status-anchor"></div>
-    <main id="command-view" class="command-view" tabindex="-1"><p class="status-line"><i class="spinner"></i>Loading Kairos Command Center.</p></main>
-  </div>
+  <header id="kairos-runtime-header" class="app-header">
+    <img class="app-header-image" src="https://cdn.shopify.com/s/files/1/0754/4337/2186/files/kairos-app-header.png?v=1783815598" alt="Kairos Operating System — Mindset Media Group">
+    <div class="app-header-status">
+      <span data-runtime-time></span>
+      <span class="live-state"><i class="state-dot checking" data-runtime-dot></i><span data-runtime-label>Checking</span></span>
+    </div>
+  </header>
+  <div id="kairos-hub" class="hub-shell"><main class="command-view"><p class="status-line"><i class="spinner"></i>Loading Kairos Command Center.</p></main></div>
   <script>if("scrollRestoration" in history)history.scrollRestoration="manual";</script>
   <script src="/scripts/job-transport.js?v=20260715-1"></script>
   <script src="/scripts/website-step-one-transport.js?v=20260715-3"></script>
@@ -77,17 +75,19 @@
     const ONLINE=new Set(["ready","ok","operational"]);
     let timer=0;
     let running=false;
-    const find=(selector)=>document.querySelector(`#kairos-hub ${selector}`);
-    const updateClock=()=>{const clock=find("[data-runtime-time]");if(clock)clock.textContent=new Date().toLocaleString([],{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});};
+    const headerFind=(selector)=>document.querySelector(`#kairos-runtime-header ${selector}`);
+    const appFind=(selector)=>document.querySelector(`#kairos-hub ${selector}`);
+    const find=(selector)=>headerFind(selector)||appFind(selector);
+    const updateClock=()=>{const clock=headerFind("[data-runtime-time]");if(clock)clock.textContent=new Date().toLocaleString([],{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});};
     const paint=(online,latency)=>{
       updateClock();
-      const dot=find("[data-runtime-dot]");
-      const label=find("[data-runtime-label]");
-      const signal=find("[data-runtime-signal]");
-      const card=find("[data-runtime-card]");
-      const value=find("[data-runtime-value]");
-      const detail=find("[data-runtime-detail]");
-      const wave=find("[data-runtime-wave]");
+      const dot=headerFind("[data-runtime-dot]");
+      const label=headerFind("[data-runtime-label]");
+      const signal=appFind("[data-runtime-signal]");
+      const card=appFind("[data-runtime-card]");
+      const value=appFind("[data-runtime-value]");
+      const detail=appFind("[data-runtime-detail]");
+      const wave=appFind("[data-runtime-wave]");
       if(dot)dot.className=`state-dot ${online?"":"offline"}`.trim();
       if(label)label.textContent=online?"Online":"Offline";
       if(signal)signal.textContent=online?"Live":"Runtime unavailable";
