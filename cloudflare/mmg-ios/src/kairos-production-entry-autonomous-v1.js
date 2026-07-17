@@ -42,15 +42,11 @@ import {
   KAIROS_HOMEPAGE_CONTINUATION_BUILD,
 } from "./kairos-homepage-continuation-v1.js";
 import {
-  handleConstitutionalInPlaceHomepagePlan,
-  KAIROS_CONSTITUTIONAL_IN_PLACE_HOMEPAGE_BUILD,
-} from "./kairos-constitutional-in-place-homepage-planner-v1.js";
-import {
-  handleWholeHomepagePlan,
-  KAIROS_WHOLE_HOMEPAGE_PLANNER_BUILD,
-} from "./kairos-whole-homepage-planner-v1.js";
+  handleSectionBoundHomepagePlan,
+  KAIROS_SECTION_BOUND_HOMEPAGE_PLANNER_BUILD,
+} from "./kairos-section-bound-homepage-planner-v2.js";
 
-const BUILD = "kairos-production-entry-autonomous-20260717-12";
+const BUILD = "kairos-production-entry-autonomous-20260717-13";
 const PLAN_PATH = "/api/shopify/staging/plan/jobs";
 
 export { KairosProject };
@@ -112,24 +108,13 @@ export default {
       const directExecution = await handleDirectHomepageExecution(request, internalEnv, ctx);
       if (directExecution) return stamp(directExecution, baselineRefresh, governedPlanning.context, continuation);
 
-      const constitutionalPlan = await handleConstitutionalInPlaceHomepagePlan(
+      const sectionBoundPlan = await handleSectionBoundHomepagePlan(
         deterministicPlanningRequest,
         internalEnv,
         continuation,
       );
-      if (constitutionalPlan) {
-        const continuedResponse = await applyHomepageContinuationMetadata(request, constitutionalPlan, continuation);
-        const governedResponse = await applyWebsiteGovernanceToPlanResponse(request, continuedResponse, governedPlanning.context);
-        return stamp(governedResponse, baselineRefresh, governedPlanning.context, continuation);
-      }
-
-      const wholeHomepagePlan = await handleWholeHomepagePlan(
-        deterministicPlanningRequest,
-        internalEnv,
-        continuation,
-      );
-      if (wholeHomepagePlan) {
-        const continuedResponse = await applyHomepageContinuationMetadata(request, wholeHomepagePlan, continuation);
+      if (sectionBoundPlan) {
+        const continuedResponse = await applyHomepageContinuationMetadata(request, sectionBoundPlan, continuation);
         const governedResponse = await applyWebsiteGovernanceToPlanResponse(request, continuedResponse, governedPlanning.context);
         return stamp(governedResponse, baselineRefresh, governedPlanning.context, continuation);
       }
@@ -188,8 +173,7 @@ export default {
         doctrineRegistry: KAIROS_INTERNAL_DOCTRINE_REGISTRY_BUILD,
         websitePlanningGovernance: KAIROS_WEBSITE_PLANNING_GOVERNANCE_BUILD,
         homepageContinuation: KAIROS_HOMEPAGE_CONTINUATION_BUILD,
-        constitutionalInPlaceHomepage: KAIROS_CONSTITUTIONAL_IN_PLACE_HOMEPAGE_BUILD,
-        wholeHomepagePlanner: KAIROS_WHOLE_HOMEPAGE_PLANNER_BUILD,
+        sectionBoundHomepagePlanner: KAIROS_SECTION_BOUND_HOMEPAGE_PLANNER_BUILD,
         directHomepagePlan: KAIROS_DIRECT_HOMEPAGE_PLAN_BUILD,
         directHomepageExecution: KAIROS_DIRECT_HOMEPAGE_EXECUTION_BUILD,
         neuronFreeHomepage: KAIROS_NEURON_FREE_HOMEPAGE_BUILD,
@@ -213,15 +197,18 @@ export default {
           websiteDesignMutationAuthorizedByCopyObjective: false,
           homepageHeroOnlyCompletionAccepted: false,
           homepageWholePagePlannerEnabled: true,
-          homepageWholePageMaximumOperations: 160,
+          homepageWholePageMaximumOperations: 200,
           homepageTemplateOnlyMutation: false,
           homepageMarkupBackedSettingsCovered: true,
           homepagePageBoundSectionSourcesCovered: true,
+          homepageInnerHTMLSectionBoundariesUsed: true,
+          homepageHeroIdentityLocked: true,
           homepageContinuationPrivateRuntimeRequired: false,
           homepageContinuationDuplicatesMain: false,
           homepageContinuationPreservesApprovedStaging: true,
           homepageSectionIdentityPreserved: true,
           homepageGenericJourneyZoneAssignmentUsed: false,
+          homepagePositionFallbackUsed: false,
           homepageSectionRepurposingAuthorized: false,
           homepageCanonicalCopySource: "MMG-HOMEPAGE-v6.6.0-KAIROS-OPERATIONAL-ACTIVATION-GREEN-CANDIDATE",
           labeledHomepagePromptsRequireWorkersAI: false,
@@ -260,8 +247,7 @@ function stamp(response, baselineRefresh = null, governanceContext = null, conti
   headers.set("X-Kairos-Doctrine-Registry", KAIROS_INTERNAL_DOCTRINE_REGISTRY_BUILD);
   headers.set("X-Kairos-Website-Governance", KAIROS_WEBSITE_PLANNING_GOVERNANCE_BUILD);
   headers.set("X-Kairos-Homepage-Continuation", KAIROS_HOMEPAGE_CONTINUATION_BUILD);
-  headers.set("X-Kairos-Constitutional-In-Place-Homepage", KAIROS_CONSTITUTIONAL_IN_PLACE_HOMEPAGE_BUILD);
-  headers.set("X-Kairos-Whole-Homepage-Planner", KAIROS_WHOLE_HOMEPAGE_PLANNER_BUILD);
+  headers.set("X-Kairos-Section-Bound-Homepage", KAIROS_SECTION_BOUND_HOMEPAGE_PLANNER_BUILD);
   headers.set("X-Kairos-Direct-Homepage-Plan", KAIROS_DIRECT_HOMEPAGE_PLAN_BUILD);
   headers.set("X-Kairos-Direct-Homepage-Execution", KAIROS_DIRECT_HOMEPAGE_EXECUTION_BUILD);
   headers.set("X-Kairos-Neuron-Free-Homepage", KAIROS_NEURON_FREE_HOMEPAGE_BUILD);
@@ -272,8 +258,11 @@ function stamp(response, baselineRefresh = null, governanceContext = null, conti
   headers.set("X-Kairos-Neurons-Consumed", "0");
   headers.set("X-Kairos-Website-Doctrine-Inherited", governanceContext?.applied ? "true" : "false");
   headers.set("X-Kairos-Homepage-Continuation-Active", continuation?.active ? "true" : "false");
+  headers.set("X-Kairos-Inner-HTML-Section-Boundaries", "true");
+  headers.set("X-Kairos-Hero-Identity-Locked", "true");
   headers.set("X-Kairos-Section-Identity-Preserved", "true");
   headers.set("X-Kairos-Generic-Zone-Assignment", "false");
+  headers.set("X-Kairos-Position-Fallback", "false");
   headers.set("X-Kairos-Section-Repurposing-Authorized", "false");
   if (continuation?.active) {
     headers.set("X-Kairos-Managed-Staging-Reused", "true");
@@ -313,8 +302,7 @@ function json(value, status = 200) {
       "X-Kairos-Doctrine-Registry": KAIROS_INTERNAL_DOCTRINE_REGISTRY_BUILD,
       "X-Kairos-Website-Governance": KAIROS_WEBSITE_PLANNING_GOVERNANCE_BUILD,
       "X-Kairos-Homepage-Continuation": KAIROS_HOMEPAGE_CONTINUATION_BUILD,
-      "X-Kairos-Constitutional-In-Place-Homepage": KAIROS_CONSTITUTIONAL_IN_PLACE_HOMEPAGE_BUILD,
-      "X-Kairos-Whole-Homepage-Planner": KAIROS_WHOLE_HOMEPAGE_PLANNER_BUILD,
+      "X-Kairos-Section-Bound-Homepage": KAIROS_SECTION_BOUND_HOMEPAGE_PLANNER_BUILD,
       "X-Kairos-Direct-Homepage-Plan": KAIROS_DIRECT_HOMEPAGE_PLAN_BUILD,
       "X-Kairos-Direct-Homepage-Execution": KAIROS_DIRECT_HOMEPAGE_EXECUTION_BUILD,
       "X-Kairos-Neuron-Free-Homepage": KAIROS_NEURON_FREE_HOMEPAGE_BUILD,
@@ -323,8 +311,11 @@ function json(value, status = 200) {
       "X-Kairos-Workers-AI-Available": "false",
       "X-Kairos-Workers-AI-Used": "false",
       "X-Kairos-Neurons-Consumed": "0",
+      "X-Kairos-Inner-HTML-Section-Boundaries": "true",
+      "X-Kairos-Hero-Identity-Locked": "true",
       "X-Kairos-Section-Identity-Preserved": "true",
       "X-Kairos-Generic-Zone-Assignment": "false",
+      "X-Kairos-Position-Fallback": "false",
       "X-Kairos-Section-Repurposing-Authorized": "false",
       "X-Kairos-Visual-Baseline": "tuesday-command-center-6f96b10d",
       "X-Content-Type-Options": "nosniff",
