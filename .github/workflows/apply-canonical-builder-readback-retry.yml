@@ -1,0 +1,125 @@
+name: Apply Canonical Builder Readback Retry
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/apply-canonical-builder-readback-retry.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Clone review branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch "${HEAD_REF}" "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" repository
+
+      - name: Add bounded canonical read-back retries
+        shell: bash
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('repository/cloudflare/mmg-ios/src/kairos-canonical-homepage-builder-v1.js')
+          source = path.read_text()
+          original = source
+
+          marker = 'const MANAGED_FILES = [TEMPLATE_FILE, SECTION_FILE, CSS_FILE, JS_FILE];'
+          constants = '''const MANAGED_FILES = [TEMPLATE_FILE, SECTION_FILE, CSS_FILE, JS_FILE];
+          const READ_BACK_ATTEMPTS = 10;
+          const READ_BACK_DELAY_MS = 450;'''
+          if 'const READ_BACK_ATTEMPTS = 10;' not in source:
+              if marker not in source:
+                  raise SystemExit('Managed-files marker was not found.')
+              source = source.replace(marker, constants, 1)
+
+          immediate = 'const readBack = await inspectStagingSource(null, request, env, KAIROS_CANONICAL_HOMEPAGE_BUILD, MANAGED_FILES);'
+          retried = 'const readBack = await waitForCanonicalReadBack(request, env, prepared);'
+          if immediate in source:
+              source = source.replace(immediate, retried, 1)
+
+          helper_marker = 'async function restorePreviousFiles(env, themeGid, prepared, beforeMap) {'
+          helper = '''async function waitForCanonicalReadBack(request, env, prepared) {
+            let lastError = null;
+            let lastObserved = [];
+            for (let attempt = 1; attempt <= READ_BACK_ATTEMPTS; attempt += 1) {
+              try {
+                const readBack = await inspectStagingSource(null, request, env, KAIROS_CANONICAL_HOMEPAGE_BUILD, MANAGED_FILES);
+                const readBackMap = new Map((readBack?.evidence?.files || []).map((file) => [file.filename, file]));
+                const observed = [];
+                let matched = true;
+                for (const candidate of prepared) {
+                  const actual = readBackMap.get(candidate.filename);
+                  if (!actual) {
+                    matched = false;
+                    observed.push(`${candidate.filename}:missing`);
+                    break;
+                  }
+                  if (candidate.filename === TEMPLATE_FILE) {
+                    const expectedDocument = parseShopifyJson(candidate.content);
+                    const actualDocument = parseShopifyJson(actual.content);
+                    const expectedSemanticSha256 = await semanticHash(expectedDocument);
+                    const actualSemanticSha256 = await semanticHash(actualDocument);
+                    observed.push(`${candidate.filename}:${actualSemanticSha256}`);
+                    if (actualSemanticSha256 !== expectedSemanticSha256) {
+                      matched = false;
+                      break;
+                    }
+                    continue;
+                  }
+                  observed.push(`${candidate.filename}:${actual.sha256}`);
+                  if (actual.content !== candidate.content || actual.sha256 !== candidate.afterSha256) {
+                    matched = false;
+                    break;
+                  }
+                }
+                lastObserved = observed;
+                if (matched) return readBack;
+              } catch (error) {
+                lastError = error;
+              }
+              if (attempt < READ_BACK_ATTEMPTS) await delay(READ_BACK_DELAY_MS);
+            }
+            const detail = lastError instanceof Error ? ` Last read error: ${lastError.message}` : '';
+            throw httpError(502, 'canonical_homepage_readback_mismatch', `Shopify did not expose the current canonical homepage revision after ${READ_BACK_ATTEMPTS} read-back attempts. Observed ${lastObserved.join(', ') || 'no readable files'}.${detail}`);
+          }
+
+          function delay(ms) {
+            return new Promise((resolve) => setTimeout(resolve, ms));
+          }
+
+          async function restorePreviousFiles(env, themeGid, prepared, beforeMap) {'''
+          if 'async function waitForCanonicalReadBack' not in source:
+              if helper_marker not in source:
+                  raise SystemExit('Restore helper marker was not found.')
+              source = source.replace(helper_marker, helper, 1)
+
+          if source == original:
+              print('Canonical builder read-back retry is already present.')
+          else:
+              path.write_text(source)
+              print('Canonical builder read-back retry added.')
+          PY
+
+          cd repository
+          if ! git diff --quiet; then
+            git config user.name "Kairos Release Automation"
+            git config user.email "actions@users.noreply.github.com"
+            git add cloudflare/mmg-ios/src/kairos-canonical-homepage-builder-v1.js
+            git commit -m "Retry canonical Shopify read-back after theme writes"
+            git push origin "HEAD:${HEAD_REF}"
+          fi
