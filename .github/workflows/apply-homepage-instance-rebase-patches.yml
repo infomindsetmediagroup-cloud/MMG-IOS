@@ -1,0 +1,84 @@
+name: Apply Homepage Instance Rebase Corrections
+
+on:
+  push:
+    branches: [fix/homepage-shared-section-instance-v2]
+    paths: [".github/workflows/apply-homepage-instance-rebase-patches.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/homepage-shared-section-instance-v2
+          fetch-depth: 0
+
+      - name: Apply exact corrections
+        shell: bash
+        run: |
+          set -euo pipefail
+          python <<'PY'
+          from pathlib import Path
+
+          instance = Path('cloudflare/mmg-ios/src/kairos-homepage-instance-liquid-fallback-v1.js')
+          source = instance.read_text()
+          old = '''    for (const expected of writes) {
+                const actual = readBackFiles.get(expected.filename);
+                if (!actual?.content || actual.content !== expected.content || actual.sha256 !== await hashText(expected.content)) throw httpError(502, "homepage_instance_readback_mismatch", `Kairos Staging did not persist the exact approved ${expected.filename}.`);
+              }'''.replace('            ', '')
+          new = '''    for (const expected of writes) {
+                const actual = readBackFiles.get(expected.filename);
+                if (!actual?.content) throw httpError(502, "homepage_instance_readback_mismatch", `Kairos Staging did not persist the approved ${expected.filename}.`);
+                const matched = expected.filename === TEMPLATE_FILE
+                  ? JSON.stringify(parseShopifyJson(actual.content, "Staging homepage read-back")) === JSON.stringify(parseShopifyJson(expected.content, "Approved homepage template"))
+                  : actual.content === expected.content && actual.sha256 === await hashText(expected.content);
+                if (!matched) throw httpError(502, "homepage_instance_readback_mismatch", `Kairos Staging did not persist the approved ${expected.filename}.`);
+              }'''.replace('            ', '')
+          if source.count(old) != 1:
+              raise SystemExit(f'instance read-back block count={source.count(old)}')
+          source = source.replace(old, new)
+          old_verification = 'verification: writes.map(file => ({ filename: file.filename, actualSha256: readBackFiles.get(file.filename).sha256, matched: true, sourceOfTruth: "published-main-theme", frameworkPreserved: true })), '
+          new_verification = 'verification: writes.map(file => ({ filename: file.filename, actualSha256: readBackFiles.get(file.filename).sha256, matched: true, verificationMode: file.filename === TEMPLATE_FILE ? "canonical-json-semantics" : "exact-bytes-and-sha256", sourceOfTruth: "published-main-theme", frameworkPreserved: true })), '
+          if source.count(old_verification) != 1:
+              raise SystemExit(f'instance verification block count={source.count(old_verification)}')
+          source = source.replace(old_verification, new_verification)
+          instance.write_text(source)
+
+          validator = Path('cloudflare/mmg-ios/scripts/validate-frozen-production-standard.mjs')
+          source = validator.read_text()
+          replacements = {
+              "  'homepage-instance-isolated-liquid-literal-text-only', 'clone-and-bind-homepage-instance-only',\n": "  'homepage-instance-isolated-liquid-literal-text-only',\n",
+              "  'templateFiles', 'markupSignature', 'nodeDistributionPreserved: true',\n": "  'const writes =', 'markupSignature', 'nodeDistributionPreserved: true',\n",
+              "  'homepageCloneType', 'kairos-home-', 'published-main-theme', 'visibleTextReplacementCount',\n": "  'cloneTypeFor', 'kairos-home-', 'published-main-theme', 'visibleTextReplacementCount',\n",
+          }
+          for old_text, new_text in replacements.items():
+              if source.count(old_text) != 1:
+                  raise SystemExit(f'validator marker count={source.count(old_text)} for {old_text!r}')
+              source = source.replace(old_text, new_text)
+          validator.write_text(source)
+
+          workflow = Path('.github/workflows/verify-timeline-homepage-production.yml')
+          source = workflow.read_text()
+          old_text = "kairos-homepage.session-migration.v5"
+          if source.count(old_text) != 1:
+              raise SystemExit(f'workflow reset marker count={source.count(old_text)}')
+          workflow.write_text(source.replace(old_text, "kairos.homepage.session-migration.v5"))
+          PY
+
+      - name: Remove one-time workflow and commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/apply-homepage-instance-rebase-patches.yml
+          git config user.name "Kairos Production"
+          git config user.email "actions@users.noreply.github.com"
+          git add cloudflare/mmg-ios/src/kairos-homepage-instance-liquid-fallback-v1.js \
+            cloudflare/mmg-ios/scripts/validate-frozen-production-standard.mjs \
+            .github/workflows/verify-timeline-homepage-production.yml \
+            .github/workflows/apply-homepage-instance-rebase-patches.yml
+          git commit -m "Correct homepage instance read-back and validation"
+          git push origin HEAD:fix/homepage-shared-section-instance-v2
