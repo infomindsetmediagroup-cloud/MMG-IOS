@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/canonical-homepage-final-verification.yml"
       - "cloudflare/mmg-ios/src/kairos-canonical-homepage-builder-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-canonical-homepage-compatibility-v1.js"
       - "cloudflare/mmg-ios/scripts/validate-production-baseline.mjs"
       - ".github/scripts/run-canonical-homepage-release.mjs"
       - ".github/scripts/verify-canonical-homepage.mjs"
@@ -47,6 +48,7 @@ jobs:
             --output repository.tar.gz
           tar -xzf repository.tar.gz --strip-components=1 -C repository
           grep -q 'kairos-canonical-homepage-builder-20260717-2' repository/cloudflare/mmg-ios/src/kairos-canonical-homepage-builder-v1.js
+          grep -q 'compatibilityCanonicalTextReadBack' repository/cloudflare/mmg-ios/src/kairos-canonical-homepage-compatibility-v1.js
 
       - name: Validate canonical builder
         shell: bash
