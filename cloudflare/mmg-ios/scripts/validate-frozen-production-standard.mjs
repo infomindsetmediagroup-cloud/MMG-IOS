@@ -46,7 +46,7 @@ const manifest = JSON.parse(read(paths.manifest));
 const sources = Object.fromEntries(Object.entries(paths).filter(([name]) => name !== "manifest").map(([name, path]) => [name, read(path)]));
 
 assert.equal(manifest.status, "frozen");
-assert.equal(manifest.baseline, "kairos-production-standard-20260717-40");
+assert.equal(manifest.baseline, "kairos-production-standard-20260717-41");
 assert.equal(manifest.worker.entry, "src/kairos-production-entry-v44.js");
 assert.equal(manifest.worker.build, "kairos-production-entry-20260717-102");
 assert.equal(manifest.dashboard.commandCenterDocument, "kairos-command-center-operational-20260717-20");
@@ -58,7 +58,7 @@ assert.equal(manifest.dashboard.homepageTemplateMarkupTextPlanner, "kairos-homep
 assert.equal(manifest.dashboard.homepageLiquidTextFallback, "kairos-homepage-liquid-text-fallback-20260716-1");
 assert.equal(manifest.dashboard.homepageInstanceLiquidFallback, "kairos-homepage-instance-liquid-fallback-20260717-1");
 assert.equal(manifest.dashboard.homepageInstanceLiquidExecutor, "kairos-homepage-instance-liquid-executor-20260717-2");
-assert.equal(manifest.dashboard.web003SourceBoundComposite, "kairos-web003-source-bound-composite-runtime-20260717-1");
+assert.equal(manifest.dashboard.web003SourceBoundComposite, "kairos-web003-source-bound-composite-runtime-20260717-2");
 
 for (const flag of [
   "synchronousChildActionExecution", "childActionObjectiveBridgeRequired", "queuedAcknowledgementOnlyRetired",
@@ -83,7 +83,8 @@ for (const flag of [
   "verifiedNativeTaskArtifactsRequired", "nativeTaskReadbackBeforeCompletion", "explicitPreviewApprovalRequired",
   "explicitLiveApplicationRequired", "finalLiveApprovalRequired", "web003CompositeWebsiteProductionRequired",
   "compositeWebsiteRollbackRequired", "sourceBoundCopyCompositeRequired",
-  "sourceBoundCopyDeltaBeforeNativeThemeRequired", "canonicalNoOpCompositePreviewProhibited"
+  "sourceBoundCopyDeltaBeforeNativeThemeRequired", "canonicalNoOpCompositePreviewProhibited",
+  "sourceBoundReplacementLimitRequired", "structuredPlannerFallbackRequired"
 ]) assert.equal(manifest.approvedExpansion[flag], true, `Frozen baseline flag is not enabled: ${flag}`);
 assert.equal(manifest.approvedExpansion.automaticExternalExecution, false);
 assert.equal(manifest.approvedExpansion.modelReasoningPersisted, false);
@@ -205,11 +206,12 @@ requireAll(sources.nativeTask, ['executeNativeTask', 'native-task-artifacts', 'd
 requireAll(sources.intelligence, ['openai: "prohibited"', 'openAIModels: "prohibited"', 'cloudflare-account-scoped', '@cf/qwen/qwen3-30b-a3b-fp8'], "Intelligence policy");
 requireAll(sources.web003, ['buildCompositePlan', 'mergeCompositeExecution', 'web-003-composite', 'rollbackCanonicalExecution'], "WEB-003 runtime");
 requireAll(sources.sourceComposite, [
-  'kairos-web003-source-bound-composite-runtime-20260717-1', 'createSourceBoundTextPlan',
+  'kairos-web003-source-bound-composite-runtime-20260717-2', 'createSourceBoundTextPlan',
   'sourceBoundCopyComposite = true', 'canonicalHomepageInstallation: false',
   'source_bound_visible_copy_delta_missing', 'executeWebsiteRetoolExceptions',
   'published-main-template-text-settings-v1', 'published-main-liquid-visible-text-v1',
-  'published-main-homepage-instance-liquid-text-v1', 'canonicalHomepageInstalled: false'
+  'published-main-homepage-instance-liquid-text-v1', 'canonicalHomepageInstalled: false',
+  'SOURCE-BOUND OUTPUT LIMIT', 'boundedReplacementMaximum: 8', 'STRUCTURED_FALLBACK_CODES'
 ], "Source-bound copy and native theme composite");
 requireAll(sources.hub, ['/api/shopify/staging/plan/jobs', '/api/shopify/staging/execute/jobs', '/api/shopify/staging/visual-verification', '/api/shopify/homepage-release/publish'], "Command Hub");
 
@@ -229,6 +231,7 @@ console.log(`KAIROS_FROZEN_STANDARD=${JSON.stringify({
   cloneReadback: "exact-bytes-and-sha256",
   selectedHomepageInstanceIsolation: true,
   visibleTextDeltaRequired: true,
+  boundedReplacementMaximum: 8,
   canonicalNoOpCompositePreview: "prohibited",
   publishedFrameworkPreserved: true,
   stagingOnlyBeforeApproval: true,
