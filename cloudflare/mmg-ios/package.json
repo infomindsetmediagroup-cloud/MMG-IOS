@@ -10,7 +10,8 @@
     "validate:loading": "node scripts/validate-app-loading-baseline.mjs",
     "validate:recovery": "node scripts/validate-prebreak-functionality-recovery.mjs",
     "validate:autonomy": "node scripts/validate-autonomy-controls.mjs",
-    "validate:production": "node scripts/validate-app-loading-baseline.mjs && node scripts/validate-stable-functionality-integration.mjs && node scripts/validate-prebreak-functionality-recovery.mjs && node scripts/validate-autonomy-controls.mjs"
+    "validate:operations": "node scripts/validate-operational-routes.mjs",
+    "validate:production": "node scripts/validate-app-loading-baseline.mjs && node scripts/validate-stable-functionality-integration.mjs && node scripts/validate-prebreak-functionality-recovery.mjs && node scripts/validate-autonomy-controls.mjs && node scripts/validate-operational-routes.mjs"
   },
   "dependencies": {
     "fflate": "^0.8.2",
