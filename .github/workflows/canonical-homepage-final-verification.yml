@@ -1,4 +1,5 @@
 name: Final Canonical Homepage Verification
+# Release lane includes bounded Shopify read-back retries for build and repair writes.
 
 on:
   pull_request:
@@ -48,6 +49,7 @@ jobs:
             --output repository.tar.gz
           tar -xzf repository.tar.gz --strip-components=1 -C repository
           grep -q 'kairos-canonical-homepage-builder-20260717-2' repository/cloudflare/mmg-ios/src/kairos-canonical-homepage-builder-v1.js
+          grep -q 'waitForCanonicalReadBack' repository/cloudflare/mmg-ios/src/kairos-canonical-homepage-builder-v1.js
           grep -q 'compatibilityCanonicalTextReadBack' repository/cloudflare/mmg-ios/src/kairos-canonical-homepage-compatibility-v1.js
 
       - name: Validate canonical builder
