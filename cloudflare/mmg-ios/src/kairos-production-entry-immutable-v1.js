@@ -3,14 +3,21 @@ import {
   handleImmutableApprovedFileExecution,
   KAIROS_IMMUTABLE_APPROVED_FILE_EXECUTION_BUILD,
 } from "./kairos-immutable-approved-file-execution-v1.js";
+import { KAIROS_CANONICAL_HOMEPAGE_BUILD } from "./kairos-canonical-homepage-builder-v1.js";
+import {
+  handleCanonicalHomepageBuildWithCompatibility,
+  KAIROS_CANONICAL_HOMEPAGE_COMPATIBILITY_BUILD,
+} from "./kairos-canonical-homepage-compatibility-v1.js";
 
-const BUILD = "kairos-production-entry-immutable-20260717-1";
+const BUILD = "kairos-production-entry-immutable-20260717-2";
 
 export { KairosProject };
 
 export default {
   async fetch(request, env, ctx) {
     try {
+      const canonicalHomepage = await handleCanonicalHomepageBuildWithCompatibility(request, env, ctx);
+      if (canonicalHomepage) return stamp(canonicalHomepage);
       const immutableExecution = await handleImmutableApprovedFileExecution(request, env, ctx);
       if (immutableExecution) return stamp(immutableExecution);
       return stamp(await autonomousRuntime.fetch(request, env, ctx));
@@ -18,6 +25,8 @@ export default {
       return json({
         status: "failed",
         build: BUILD,
+        canonicalHomepage: KAIROS_CANONICAL_HOMEPAGE_BUILD,
+        canonicalHomepageCompatibility: KAIROS_CANONICAL_HOMEPAGE_COMPATIBILITY_BUILD,
         immutableExecution: KAIROS_IMMUTABLE_APPROVED_FILE_EXECUTION_BUILD,
         error: {
           code: error?.code || "immutable_entry_failed",
@@ -25,6 +34,7 @@ export default {
         },
         safeguards: {
           liveThemeChanged: false,
+          canonicalHomepageStagingOnly: true,
           immutableApprovedCandidateRequired: true,
           approvalTimeTextReconstruction: false,
           exactSourceHashRequired: true,
@@ -47,6 +57,8 @@ export default {
 function stamp(response) {
   const headers = new Headers(response.headers);
   headers.set("X-MMG-Production-Entry", BUILD);
+  headers.set("X-Kairos-Canonical-Homepage", KAIROS_CANONICAL_HOMEPAGE_BUILD);
+  headers.set("X-Kairos-Canonical-Homepage-Compatibility", KAIROS_CANONICAL_HOMEPAGE_COMPATIBILITY_BUILD);
   headers.set("X-Kairos-Immutable-Approved-File-Execution", KAIROS_IMMUTABLE_APPROVED_FILE_EXECUTION_BUILD);
   headers.set("X-Kairos-Approval-Time-Reconstruction", "false");
   headers.set("X-Kairos-Workers-AI-Used", "false");
@@ -69,6 +81,8 @@ function json(value, status = 200) {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store",
       "X-MMG-Production-Entry": BUILD,
+      "X-Kairos-Canonical-Homepage": KAIROS_CANONICAL_HOMEPAGE_BUILD,
+      "X-Kairos-Canonical-Homepage-Compatibility": KAIROS_CANONICAL_HOMEPAGE_COMPATIBILITY_BUILD,
       "X-Kairos-Immutable-Approved-File-Execution": KAIROS_IMMUTABLE_APPROVED_FILE_EXECUTION_BUILD,
       "X-Kairos-Approval-Time-Reconstruction": "false",
       "X-Kairos-Workers-AI-Used": "false",
