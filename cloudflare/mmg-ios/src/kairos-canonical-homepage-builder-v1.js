@@ -3,10 +3,12 @@ import {
   hashText,
   httpError,
   inspectStagingSource,
+  parseShopifyJson,
+  semanticHash,
   writeThemeFiles,
 } from "./kairos-compact-homepage-utils-v1.js";
 
-export const KAIROS_CANONICAL_HOMEPAGE_BUILD = "kairos-canonical-homepage-builder-20260717-1";
+export const KAIROS_CANONICAL_HOMEPAGE_BUILD = "kairos-canonical-homepage-builder-20260717-2";
 
 const BUILD_PATH = "/api/shopify/staging/canonical-homepage/build";
 const CONFIRMATION = "BUILD_CANONICAL_MMG_HOMEPAGE_STAGING";
@@ -276,9 +278,38 @@ export async function handleCanonicalHomepageBuild(request, env) {
     const readBackMap = new Map((readBack?.evidence?.files || []).map((file) => [file.filename, file]));
     for (const candidate of prepared) {
       const actual = readBackMap.get(candidate.filename);
-      if (!actual || actual.content !== candidate.content || actual.sha256 !== candidate.afterSha256) {
+      if (!actual) {
+        throw httpError(502, "canonical_homepage_readback_missing", `Shopify returned no read-back source for ${candidate.filename}.`);
+      }
+
+      if (candidate.filename === TEMPLATE_FILE) {
+        let expectedDocument;
+        let actualDocument;
+        try {
+          expectedDocument = parseShopifyJson(candidate.content);
+          actualDocument = parseShopifyJson(actual.content);
+        } catch {
+          throw httpError(502, "canonical_homepage_template_json_invalid", "Shopify returned an invalid canonical homepage JSON template.");
+        }
+        const expectedSemanticSha256 = await semanticHash(expectedDocument);
+        const actualSemanticSha256 = await semanticHash(actualDocument);
+        if (actualSemanticSha256 !== expectedSemanticSha256) {
+          throw httpError(502, "canonical_homepage_template_semantic_mismatch", "Shopify changed the canonical homepage template structure during write-back.");
+        }
+        candidate.expectedSourceSha256 = candidate.afterSha256;
+        candidate.afterSha256 = actual.sha256;
+        candidate.afterBytes = actual.bytes;
+        candidate.semanticSha256 = actualSemanticSha256;
+        candidate.readBackVerification = "semantic-json";
+        continue;
+      }
+
+      if (actual.content !== candidate.content || actual.sha256 !== candidate.afterSha256) {
         throw httpError(502, "canonical_homepage_readback_mismatch", `Shopify did not preserve the canonical source for ${candidate.filename}.`);
       }
+      candidate.afterSha256 = actual.sha256;
+      candidate.afterBytes = actual.bytes;
+      candidate.readBackVerification = "exact-bytes";
     }
   } catch (error) {
     await restorePreviousFiles(env, evidence.stagingTheme.gid, prepared, beforeMap);
@@ -291,7 +322,7 @@ export async function handleCanonicalHomepageBuild(request, env) {
     build: KAIROS_CANONICAL_HOMEPAGE_BUILD,
     mode,
     completedAt: new Date().toISOString(),
-    summary: `Kairos ${mode === "repair" ? "repaired" : "installed"} the canonical MMG homepage bundle in the verified non-live Kairos Staging theme and confirmed exact Shopify read-back.`,
+    summary: `Kairos ${mode === "repair" ? "repaired" : "installed"} the canonical MMG homepage bundle in the verified non-live Kairos Staging theme and confirmed semantic JSON read-back for the template and exact byte read-back for Liquid, CSS, and JavaScript.`,
     preview: {
       url: previewURL,
       desktopURL: previewURL,
@@ -306,6 +337,8 @@ export async function handleCanonicalHomepageBuild(request, env) {
     files: prepared.map(({ content, ...file }) => ({ ...file, changed: file.beforeSha256 !== file.afterSha256 })),
     verification: {
       exactReadBack: true,
+      templateReadBack: "semantic-json",
+      exactByteReadBackFiles: [SECTION_FILE, CSS_FILE, JS_FILE],
       templateSections: ["mmg_canonical_homepage"],
       requiredSectionIDs: ["pathways", "resources", "services", "subscriptions", "kairos", "mission", "questions", "next-step"],
       singlePrimaryHeadingDesigned: true,
