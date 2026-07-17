@@ -8,6 +8,14 @@ on:
       - "cloudflare/mmg-ios/**"
       - "web/kairos-dashboard/**"
       - ".github/workflows/verify-child-action-production.yml"
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+    paths:
+      - "cloudflare/mmg-ios/**"
+      - "web/kairos-dashboard/**"
+      - ".github/workflows/verify-child-action-production.yml"
   workflow_dispatch: {}
 
 permissions:
@@ -15,7 +23,7 @@ permissions:
   statuses: write
 
 concurrency:
-  group: kairos-command-center-recovery
+  group: kairos-command-center-recovery-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
