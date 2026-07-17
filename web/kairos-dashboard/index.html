@@ -49,7 +49,17 @@
   </style>
 </head>
 <body>
-  <div id="kairos-hub" class="hub-shell"></div>
+  <div id="kairos-hub" class="hub-shell">
+    <header class="app-header">
+      <img class="app-header-image" src="https://cdn.shopify.com/s/files/1/0754/4337/2186/files/kairos-app-header.png?v=1783815598" alt="Kairos Operating System — Mindset Media Group">
+      <div class="app-header-status">
+        <span data-runtime-time></span>
+        <span class="live-state"><i class="state-dot checking" data-runtime-dot></i><span data-runtime-label>Checking</span></span>
+      </div>
+    </header>
+    <div id="command-status-anchor"></div>
+    <main id="command-view" class="command-view" tabindex="-1"><p class="status-line"><i class="spinner"></i>Loading Kairos Command Center.</p></main>
+  </div>
   <script>if("scrollRestoration" in history)history.scrollRestoration="manual";</script>
   <script src="/scripts/job-transport.js?v=20260715-1"></script>
   <script src="/scripts/website-step-one-transport.js?v=20260715-3"></script>
@@ -68,7 +78,9 @@
     let timer=0;
     let running=false;
     const find=(selector)=>document.querySelector(`#kairos-hub ${selector}`);
+    const updateClock=()=>{const clock=find("[data-runtime-time]");if(clock)clock.textContent=new Date().toLocaleString([],{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});};
     const paint=(online,latency)=>{
+      updateClock();
       const dot=find("[data-runtime-dot]");
       const label=find("[data-runtime-label]");
       const signal=find("[data-runtime-signal]");
@@ -85,13 +97,10 @@
       if(wave)wave.classList.toggle("active",online);
     };
     const schedule=(delay)=>{clearTimeout(timer);timer=setTimeout(probe,delay);};
-    const waitForHeader=(attempt=0)=>{
-      if(find("[data-runtime-label]")){probe();return;}
-      if(attempt<100)setTimeout(()=>waitForHeader(attempt+1),50);
-    };
     async function probe(){
       if(running)return;
       running=true;
+      updateClock();
       const started=performance.now();
       const controller=new AbortController();
       const timeout=setTimeout(()=>controller.abort(),7000);
@@ -110,7 +119,8 @@
       }
     }
     const boot=()=>{
-      waitForHeader();
+      updateClock();
+      probe();
       window.addEventListener("online",probe);
       window.addEventListener("focus",probe);
       window.addEventListener("pageshow",probe);
