@@ -1,5 +1,6 @@
 name: Verify Source-Bound WEB-003
 
+# Verification revision: structured inference retry live contract.
 on:
   push:
     branches: [main]
