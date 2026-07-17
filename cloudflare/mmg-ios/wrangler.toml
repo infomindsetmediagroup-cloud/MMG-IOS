@@ -1,5 +1,6 @@
 name = "mmg-ios"
-main = "src/kairos-production-entry-v45.js"
+main = "src/kairos-production-entry-v46.js"
+# main = "src/kairos-production-entry-v45.js"
 # main = "src/kairos-production-entry-v44.js"
 # main = "src/kairos-production-entry-v43.js"
 compatibility_date = "2026-07-11"
