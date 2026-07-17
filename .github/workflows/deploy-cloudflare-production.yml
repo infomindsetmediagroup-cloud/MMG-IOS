@@ -78,24 +78,39 @@ jobs:
           for attempt in $(seq 1 24); do
             nonce="${GITHUB_SHA}-${attempt}-$(date +%s)"
             if root_html="$(curl --fail --silent --show-error --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}/?proof=${nonce}")" \
+              && renderer_js="$(curl --fail --silent --show-error --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}/scripts/command-hub-stable-v2.js?proof=${nonce}")" \
+              && contracts_json="$(curl --fail --silent --show-error --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}/api/hub/contracts?proof=${nonce}")" \
               && health_json="$(curl --fail --silent --show-error --location --max-time 30 -H 'Cache-Control: no-cache' "${KAIROS_PRODUCTION_URL}/api/health?proof=${nonce}")" \
-              && ROOT_HTML="${root_html}" HEALTH_JSON="${health_json}" node <<'NODE'
+              && ROOT_HTML="${root_html}" RENDERER_JS="${renderer_js}" CONTRACTS_JSON="${contracts_json}" HEALTH_JSON="${health_json}" node <<'NODE'
           const root=process.env.ROOT_HTML||"";
+          const renderer=process.env.RENDERER_JS||"";
+          const contracts=JSON.parse(process.env.CONTRACTS_JSON||"{}");
           const health=JSON.parse(process.env.HEALTH_JSON||"{}");
-          const passed=root.includes('kairos-command-hub-recovery-20260714-1')
-            && root.includes('id="kairos-hub"')
-            && root.includes('./scripts/command-hub.js?v=recovery-20260714-1')
-            && ["ready","ok","operational"].includes(health.status);
-          console.log(JSON.stringify({rootMarker:root.includes('kairos-command-hub-recovery-20260714-1'),mount:root.includes('id="kairos-hub"'),bootModule:root.includes('./scripts/command-hub.js?v=recovery-20260714-1'),health:health.status},null,2));
+          const actions=contracts.actions&&typeof contracts.actions==="object"?Object.keys(contracts.actions):[];
+          const rootMarker=root.includes('kairos-command-hub-recovery-20260714-1');
+          const mount=root.includes('id="kairos-hub"');
+          const stableRenderer=root.includes('./scripts/command-hub-stable-v2.js?v=20260717-1');
+          const obsoleteRenderer=!root.includes('./scripts/command-hub.js?v=recovery-20260714-1')
+            && !root.includes('prebreak-functionality-recovery.js')
+            && !root.includes('authoritative-command-center-reconcile.js');
+          const rendererBuild=renderer.includes('kairos-command-hub-stable-v2-20260717-1');
+          const noFloatingStatus=!renderer.includes('app-header-status');
+          const visualMutationDisabled=renderer.includes('styleMutationAuthorized: false')
+            && renderer.includes('visualMutationAuthorized: false')
+            && !renderer.includes('styleMutationAuthorized: true');
+          const currentContracts=actions.length===25;
+          const healthy=["ready","ok","operational"].includes(String(health.status||"").toLowerCase());
+          const passed=rootMarker&&mount&&stableRenderer&&obsoleteRenderer&&rendererBuild&&noFloatingStatus&&visualMutationDisabled&&currentContracts&&healthy;
+          console.log(JSON.stringify({rootMarker,mount,stableRenderer,obsoleteRenderer,rendererBuild,noFloatingStatus,visualMutationDisabled,contractCount:actions.length,health:health.status},null,2));
           process.exit(passed?0:1);
           NODE
             then
-              echo "Kairos app-loading baseline and health endpoint verified."
+              echo "Kairos stable loader, single renderer, live child registry, and health endpoint verified."
               exit 0
             fi
             sleep 5
           done
-          echo "::error::Kairos did not satisfy the locked loading contract after deployment."
+          echo "::error::Kairos did not satisfy the stable single-renderer loading contract after deployment."
           exit 1
 
       - name: Publish deployment receipt
@@ -108,10 +123,10 @@ jobs:
           set -euo pipefail
           if [ "${JOB_STATUS}" = "success" ]; then
             state="success"
-            description="Kairos app opened and enhanced production validated"
+            description="Kairos single renderer opened with current child contracts"
           else
             state="failure"
-            description="Kairos loading or enhanced production validation failed"
+            description="Kairos stable renderer or production validation failed"
           fi
           payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-cloudflare-production",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
           curl --fail --silent --show-error -X POST \
