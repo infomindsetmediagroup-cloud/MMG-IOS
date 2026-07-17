@@ -1,18 +1,19 @@
 name: Canonical MMG Homepage Preview
 
 on:
-  pull_request:
-    types: [opened, reopened, synchronize]
+  push:
+    branches:
+      - "kairos/canonical-homepage-preview"
     paths:
       - ".github/workflows/canonical-homepage-preview.yml"
       - "scripts/canonical-homepage-preview.mjs"
+  workflow_dispatch: {}
 
 permissions:
   contents: write
-  pull-requests: write
 
 concurrency:
-  group: canonical-homepage-preview-${{ github.event.pull_request.number }}
+  group: canonical-homepage-preview
   cancel-in-progress: true
 
 jobs:
@@ -21,94 +22,65 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
+      GH_TOKEN: ${{ github.token }}
       KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
       SHOPIFY_STORE_DOMAIN: 07kd8e-qw.myshopify.com
+      REVIEW_BRANCH: kairos/canonical-homepage-preview
 
     steps:
-      - name: Check out review branch
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 0
-          persist-credentials: true
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install Playwright
+      - name: Build, test, repair, and persist verified preview
+        shell: bash
         run: |
           set -euo pipefail
+
+          git init repository
+          git -C repository remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git -C repository fetch --depth=1 origin "refs/heads/${REVIEW_BRANCH}"
+          git -C repository checkout -B "${REVIEW_BRANCH}" FETCH_HEAD
+
+          cd repository
+          node --version
+          npm --version
           npm install --no-save --no-audit --no-fund playwright@1.61.1
           npx playwright install --with-deps chromium
+          node --check scripts/canonical-homepage-preview.mjs
 
-      - name: Validate harness syntax
-        run: node --check scripts/canonical-homepage-preview.mjs
-
-      - name: Clone, build, test, and repair canonical homepage
-        id: canonical
-        run: node scripts/canonical-homepage-preview.mjs
-
-      - name: Generate reviewable Shopify theme patch
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ ! -d shopify/canonical-homepage-preview/baseline ] || [ ! -d shopify/canonical-homepage-preview/candidate ]; then
-            exit 0
-          fi
-          mkdir -p artifacts/canonical-homepage
           set +e
-          git diff --no-index --no-ext-diff --src-prefix=a/ --dst-prefix=b/ \
-            shopify/canonical-homepage-preview/baseline \
-            shopify/canonical-homepage-preview/candidate \
-            > artifacts/canonical-homepage/homepage-theme.patch
-          diff_status=$?
+          node scripts/canonical-homepage-preview.mjs
+          harness_status=$?
           set -e
-          if [ "${diff_status}" -gt 1 ]; then
-            exit "${diff_status}"
+
+          if [ -d shopify/canonical-homepage-preview/baseline ] && [ -d shopify/canonical-homepage-preview/candidate ]; then
+            mkdir -p artifacts/canonical-homepage
+            set +e
+            git diff --no-index --no-ext-diff --src-prefix=a/ --dst-prefix=b/ \
+              shopify/canonical-homepage-preview/baseline \
+              shopify/canonical-homepage-preview/candidate \
+              > artifacts/canonical-homepage/homepage-theme.patch
+            diff_status=$?
+            set -e
+            if [ "${diff_status}" -gt 1 ]; then
+              exit "${diff_status}"
+            fi
           fi
 
-      - name: Publish run summary
-        if: always()
-        shell: bash
-        run: |
           if [ -f artifacts/canonical-homepage/report.md ]; then
             cat artifacts/canonical-homepage/report.md >> "${GITHUB_STEP_SUMMARY}"
-          else
-            echo "# Canonical MMG Homepage Preview" >> "${GITHUB_STEP_SUMMARY}"
-            echo "The harness did not produce a report." >> "${GITHUB_STEP_SUMMARY}"
           fi
 
-      - name: Upload Playwright and execution evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: canonical-homepage-preview-${{ github.event.pull_request.number }}
-          path: |
-            artifacts/canonical-homepage/
-            shopify/canonical-homepage-preview/
-          if-no-files-found: warn
-          retention-days: 30
+          if [ -f artifacts/canonical-homepage/receipt.json ]; then
+            git config user.name "kairos-production-bot"
+            git config user.email "actions@users.noreply.github.com"
+            git add artifacts/canonical-homepage/receipt.json \
+                    artifacts/canonical-homepage/report.md \
+                    shopify/canonical-homepage-preview
+            if [ -f artifacts/canonical-homepage/homepage-theme.patch ]; then
+              git add artifacts/canonical-homepage/homepage-theme.patch
+            fi
+            if ! git diff --cached --quiet; then
+              git commit -m "Add canonical homepage preview evidence [skip ci]"
+              git push origin "HEAD:${REVIEW_BRANCH}"
+            fi
+          fi
 
-      - name: Commit verified preview evidence to review branch
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ ! -f artifacts/canonical-homepage/receipt.json ]; then
-            exit 0
-          fi
-          git config user.name "kairos-production-bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add artifacts/canonical-homepage/receipt.json \
-                  artifacts/canonical-homepage/report.md \
-                  artifacts/canonical-homepage/homepage-theme.patch \
-                  shopify/canonical-homepage-preview
-          if git diff --cached --quiet; then
-            exit 0
-          fi
-          git commit -m "Add canonical homepage preview evidence [skip ci]"
-          git push origin "HEAD:${GITHUB_HEAD_REF}"
+          exit "${harness_status}"
