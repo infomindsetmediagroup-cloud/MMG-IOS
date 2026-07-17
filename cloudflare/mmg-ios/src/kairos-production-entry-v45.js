@@ -5,12 +5,15 @@ import {
 } from "./kairos-web003-deterministic-first-runtime-v1.js";
 
 const BUILD = "kairos-production-entry-20260717-103";
+const DIAGNOSTIC_ROUTE = "/api/website/diagnostics/deterministic-plan";
 
 export { KairosProject };
 
 export default {
   async fetch(request, env, ctx) {
+    const url = new URL(request.url);
     try {
+      if (request.method === "GET" && url.pathname === DIAGNOSTIC_ROUTE) return diagnosticPlan(request, env, ctx);
       const deterministicPlan = await handleDeterministicFirstWeb003Request(request, env, ctx);
       if (deterministicPlan) return stamp(deterministicPlan);
     } catch (error) {
@@ -22,7 +25,6 @@ export default {
     }
 
     let response = await runtime.fetch(request, env, ctx);
-    const url = new URL(request.url);
     if (request.method === "GET" && ["/api/health", "/api/capabilities"].includes(url.pathname)) response = await addHealth(response);
     return stamp(response);
   },
@@ -31,6 +33,65 @@ export default {
     if (typeof runtime.scheduled === "function") return runtime.scheduled(controller, env, ctx);
   },
 };
+
+async function diagnosticPlan(request, env, ctx) {
+  const target = new URL("/api/shopify/staging/plan/jobs", request.url);
+  const payload = {
+    objective: "Rewrite the existing published Mindset Media Group homepage customer-facing copy so visitors immediately understand the knowledge, publishing, creator education, digital-product, and professional-service ecosystem. Preserve the existing homepage structure and design. Also prepare bounded native Shopify header dark-blue and footer black color changes for explicit staging approval. Do not publish anything live.",
+    requestType: "full-retool",
+    intent: "full-retool",
+    fullRetoolConfirmed: true,
+    structuralMutationAuthorized: true,
+    styleMutationAuthorized: true,
+    contentOnlyLocked: false,
+  };
+  const synthetic = new Request(target, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+    body: JSON.stringify(payload),
+  });
+  const response = await handleDeterministicFirstWeb003Request(synthetic, env, ctx);
+  if (!response) return jsonDiagnostic({ status: "failed", error: { code: "diagnostic_route_unhandled", message: "The deterministic planning edge did not handle the diagnostic request." } }, 500);
+  const body = await response.clone().json().catch(() => ({}));
+  if (!response.ok || !body?.result) {
+    return jsonDiagnostic({ status: body?.status || "failed", build: body?.build || KAIROS_WEB003_DETERMINISTIC_FIRST_BUILD, error: body?.error || { code: "diagnostic_plan_failed", message: "The deterministic planning diagnostic failed." }, safeguards: body?.safeguards || null }, response.status || 500);
+  }
+  const result = body.result;
+  const plan = result.plan || {};
+  const operations = Array.isArray(plan?.templateTextPatch?.operations) ? plan.templateTextPatch.operations : [];
+  const nativeCandidates = [
+    ...(Array.isArray(plan?.websiteRetoolExceptions?.highConfidence) ? plan.websiteRetoolExceptions.highConfidence : []),
+    ...(Array.isArray(plan?.websiteRetoolExceptions?.executiveReview) ? plan.websiteRetoolExceptions.executiveReview : []),
+  ];
+  return jsonDiagnostic({
+    status: "completed",
+    build: body.build,
+    planID: result.planID,
+    deterministicFirst: plan.deterministicFirst === true,
+    sourceBoundCopyComposite: plan.sourceBoundCopyComposite === true,
+    canonicalPackageExcluded: plan.canonicalPackage === null,
+    canonicalHomepageInstallation: plan?.compositePackage?.canonicalHomepageInstallation === true,
+    stagingOnly: plan?.compositePackage?.stagingOnly === true,
+    operationCount: operations.length,
+    operations: operations.slice(0, 8).map(operation => ({
+      location: operation.location || `${operation.scope}:${operation.sectionId}:${operation.blockId || "section"}:${operation.key}`,
+      before: operation.before,
+      after: operation.after,
+      reason: operation.reason || "",
+    })),
+    nativeCandidateCount: nativeCandidates.length,
+    nativeCandidates: nativeCandidates.slice(0, 12).map(candidate => ({
+      filename: candidate.filename,
+      category: candidate.category,
+      key: candidate.key,
+      currentValue: candidate.currentValuePreview ?? candidate.currentValue ?? null,
+      proposedValue: candidate.proposedValue ?? null,
+      requiresExecutiveApproval: candidate.requiresExecutiveApproval === true,
+    })),
+    liveThemeChanged: false,
+    stagingTheme: plan?.targetTheme?.name || "Kairos Staging",
+  });
+}
 
 async function addHealth(response) {
   let body;
@@ -42,11 +103,13 @@ async function addHealth(response) {
     deterministicFirstComposite: "operational",
     combinedHomepagePlanning: "model-format-independent",
     visibleCopyDeltaBeforePreview: "required",
+    deterministicPlanDiagnostic: DIAGNOSTIC_ROUTE,
   };
   body.capabilities = {
     ...(body.capabilities || {}),
     deterministicFirstHomepageCopyPlusHeaderFooter: "operational",
     modelFormattedCopyPlanDependency: "retired-for-combined-retool",
+    readOnlyDeterministicPlanDiagnostic: "operational",
   };
   const headers = new Headers(response.headers);
   headers.set("Content-Type", "application/json; charset=utf-8");
@@ -61,6 +124,20 @@ function stamp(response) {
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
+function jsonDiagnostic(value, status = 200) {
+  return new Response(JSON.stringify(value), {
+    status,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Kairos-Production-Entry": BUILD,
+      "X-Kairos-Deterministic-WEB-003": KAIROS_WEB003_DETERMINISTIC_FIRST_BUILD,
+      "X-Kairos-Diagnostic": "read-only-no-theme-write",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+}
+
 function jsonError(status, code, message) {
   return new Response(JSON.stringify({ status: status >= 500 ? "failed" : "needs-attention", build: BUILD, error: { code, message } }), {
     status,
@@ -73,5 +150,3 @@ function jsonError(status, code, message) {
     },
   });
 }
-
-// Verification trigger: exact deterministic-first homepage copy contract.
