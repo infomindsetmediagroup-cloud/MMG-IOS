@@ -15,6 +15,7 @@ const directPlan = read(join(workerRoot, "src/kairos-direct-homepage-plan-v1.js"
 const directExecution = read(join(workerRoot, "src/kairos-direct-homepage-execution-v1.js"));
 const zeroNeuronRouter = read(join(workerRoot, "src/kairos-zero-neuron-child-router-v1.js"));
 const doctrineRegistry = read(join(workerRoot, "src/kairos-internal-doctrine-registry-v1.js"));
+const websiteGovernance = read(join(workerRoot, "src/kairos-website-planning-governance-v1.js"));
 const index = read(join(repoRoot, "web/kairos-dashboard/index.html"));
 const hub = read(join(repoRoot, "web/kairos-dashboard/scripts/command-hub.js"));
 
@@ -27,13 +28,20 @@ assert.ok(entry.includes('./kairos-direct-homepage-plan-v1.js'));
 assert.ok(entry.includes('./kairos-direct-homepage-execution-v1.js'));
 assert.ok(entry.includes('./kairos-zero-neuron-child-router-v1.js'));
 assert.ok(entry.includes('./kairos-internal-doctrine-registry-v1.js'));
+assert.ok(entry.includes('./kairos-website-planning-governance-v1.js'));
 assert.ok(entry.includes('restoreApprovedHomepageBaseline(internalEnv)'));
+assert.ok(entry.includes('governWebsitePlanningRequest'));
+assert.ok(entry.includes('buildPrivateGovernedPlanningRequest'));
+assert.ok(entry.includes('applyWebsiteGovernanceToPlanResponse'));
+assert.ok(entry.includes('handleWebsiteGovernanceStatus'));
 assert.ok(entry.includes('handleZeroNeuronChildRequest'));
 assert.ok(entry.includes('handleDirectHomepageExecution'));
 assert.ok(entry.includes('handleDirectHomepagePlan'));
+assert.ok(entry.indexOf('governWebsitePlanningRequest') < entry.indexOf('handleDirectHomepagePlan'), "Website doctrine must be resolved before planning begins.");
 assert.ok(entry.indexOf('handleZeroNeuronChildRequest') < entry.indexOf('handleDirectHomepageExecution'), "Zero-neuron internal routing must run before generic request execution.");
 assert.ok(entry.indexOf('handleDirectHomepageExecution') < entry.indexOf('handleDirectHomepagePlan'), "Approved direct execution must run before all generic planners and executors.");
 assert.ok(entry.indexOf('handleDirectHomepagePlan') < entry.indexOf('handleNeuronFreeHomepagePlan'), "Direct plan must run before legacy binders.");
+assert.ok(entry.includes('requestType: "homepage"'), "Existing Website Retool must remain homepage by default unless a future planner declares another page type.");
 assert.ok(entry.includes('workersAIBlockedEnv'));
 assert.ok(entry.includes('if (property === "AI") return undefined'));
 assert.ok(entry.includes('if (property === "AI") return false'));
@@ -42,6 +50,11 @@ assert.ok(entry.includes('workersAIUsed: false'));
 assert.ok(entry.includes('neuronsConsumed: 0'));
 assert.ok(entry.includes('childRetrievalMode: "deterministic-internal"'));
 assert.ok(entry.includes('generativeInferenceMode: "kairos-private-runtime-only"'));
+assert.ok(entry.includes('websiteDoctrineInheritedAutomatically: true'));
+assert.ok(entry.includes('websiteLinkDestinationsMutableByTextPlan: false'));
+assert.ok(entry.includes('websiteDesignMutationAuthorizedByCopyObjective: false'));
+assert.ok(entry.includes('homepageHeroOnlyCompletionAccepted: false'));
+assert.ok(entry.includes('X-Kairos-Website-Doctrine-Inherited'));
 assert.ok(entry.includes('labeledHomepagePromptsRequireWorkersAI: false'));
 assert.ok(entry.includes('labeledHomepagePromptsUseSecondBindingPass: false'));
 assert.ok(entry.includes('approvedDirectPackagesUseApprovalTimeRebinding: false'));
@@ -80,6 +93,38 @@ for (const marker of [
   'findInternalDoctrines',
   'resolveInternalDoctrine',
 ]) assert.ok(doctrineRegistry.includes(marker), `Missing internal doctrine registry contract: ${marker}`);
+
+for (const marker of [
+  'kairos-website-planning-governance-20260717-1',
+  '/api/website/governance/status',
+  'governWebsitePlanningRequest',
+  'buildPrivateGovernedPlanningRequest',
+  'applyWebsiteGovernanceToPlanResponse',
+  'buildWebsiteGovernanceContext',
+  'inheritedAutomatically: true',
+  'Ecosystem orientation and routing layer',
+  'A homepage objective is not complete after hero-only work.',
+  'product',
+  'service',
+  'subscription',
+  'landing',
+  'collection',
+  'labelsAndDestinationsGovernedSeparately: true',
+  'textOnlyMayChangeDestinations: false',
+  'destinationChangesRequireSeparateExactApproval: true',
+  'copyDoesNotAuthorizeDesignMutation: true',
+  'consultApprovedRecordsBeforeFuturePlans: true',
+  'additional-approved-batches-required',
+  'wholePageCompletionRequired',
+  'governanceApplied: true',
+  'workersAIUsedForGovernance: false',
+  'neuronsConsumedForGovernance: 0',
+  'X-Kairos-Doctrine-Inherited',
+  'X-Kairos-Planning-Neurons',
+]) assert.ok(websiteGovernance.includes(marker), `Missing website planning governance contract: ${marker}`);
+
+assert.ok(!websiteGovernance.includes('env.AI.run'), "Website governance retrieval must not call Workers AI.");
+assert.ok(!websiteGovernance.includes('runKairosIntelligence'), "Website governance retrieval must remain deterministic and internal.");
 
 for (const marker of [
   'kairos-autonomous-prompt-controller-20260717-1',
@@ -166,6 +211,7 @@ assert.ok(hub.includes('4 · Deliver'));
 
 console.log(JSON.stringify({
   status: "passed",
+  websitePlanningGovernance: "kairos-website-planning-governance-20260717-1",
   zeroNeuronChildRouter: "kairos-zero-neuron-child-router-20260717-1",
   doctrineRegistry: "kairos-internal-doctrine-registry-20260717-1",
   directHomepagePlan: "kairos-direct-homepage-plan-20260717-1",
@@ -173,6 +219,12 @@ console.log(JSON.stringify({
   fullThemeBaseline: "kairos-full-theme-main-baseline-20260717-1",
   visualBaseline: "tuesday-command-center-6f96b10d",
   browserFilesChanged: false,
+  websiteDoctrineInheritedAutomatically: true,
+  websiteGovernanceNeuronUsage: 0,
+  homepageHeroOnlyCompletionAccepted: false,
+  websiteLinkDestinationsMutableByTextPlan: false,
+  websiteDesignMutationAuthorizedByCopyObjective: false,
+  supportedFuturePageTypes: ["product", "service", "subscription", "landing", "collection", "page"],
   workersAIAvailableToRequestRuntime: false,
   childRetrievalNeuronUsage: 0,
   doctrineVaultNeuronUsage: 0,
