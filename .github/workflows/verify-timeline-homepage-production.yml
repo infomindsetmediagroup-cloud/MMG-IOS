@@ -1,0 +1,181 @@
+name: Verify Timeline and Homepage Production
+# v43 verification revision 6
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/verify-timeline-homepage-production.yml"
+      - "cloudflare/mmg-ios/src/kairos-homepage-preserve-planner-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-rendered-homepage-text-planner-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-homepage-template-markup-text-planner-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-homepage-template-text-executor-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-homepage-liquid-text-fallback-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-homepage-instance-liquid-fallback-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-homepage-instance-liquid-executor-v2.js"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-v43.js"
+      - "cloudflare/mmg-ios/production-baseline.json"
+      - "cloudflare/mmg-ios/scripts/validate-frozen-production-standard.mjs"
+      - "cloudflare/mmg-ios/wrangler.toml"
+      - "web/kairos-dashboard/index.html"
+      - "web/kairos-dashboard/scripts/homepage-session-reset-v5.js"
+      - "web/kairos-dashboard/scripts/homepage-quick-action-v5.js"
+      - "web/kairos-dashboard/scripts/workflow-runtime.js"
+      - "web/kairos-dashboard/scripts/workspace-runtime.js"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: kairos-v43-homepage-production
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+    steps:
+      - name: Wait for build 101 and immutable dashboard assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          nonce="${GITHUB_SHA}-$(date +%s)"
+          for attempt in $(seq 1 30); do
+            curl --silent --show-error --location --max-time 45 -H 'Cache-Control: no-cache' \
+              "${KAIROS_PRODUCTION_URL}/api/health?immutable-dashboard=${nonce}-${attempt}" --output health.json || true
+            curl --silent --show-error --location --max-time 45 -H 'Cache-Control: no-cache' \
+              "${KAIROS_PRODUCTION_URL}/center/content/website?immutable-dashboard=${nonce}-${attempt}" --output website.html || true
+            if node -e "const fs=require('fs');try{const h=JSON.parse(fs.readFileSync('health.json','utf8'));const w=fs.readFileSync('website.html','utf8');process.exit(h.build==='kairos-production-entry-20260717-101'&&w.includes('kairos-command-center-operational-20260717-20')&&w.includes('/scripts/homepage-quick-action-v5.js?v=operational-20260717-5')?0:1)}catch{process.exit(1)}"; then
+              break
+            fi
+            if [ "${attempt}" = "30" ]; then
+              echo "build 101 and immutable dashboard assets did not become live"
+              exit 1
+            fi
+            sleep 6
+          done
+          curl --fail --silent --show-error --location --max-time 45 -H 'Cache-Control: no-cache' \
+            "${KAIROS_PRODUCTION_URL}/scripts/homepage-session-reset-v5.js?v=${nonce}" --output reset.js
+          curl --fail --silent --show-error --location --max-time 45 -H 'Cache-Control: no-cache' \
+            "${KAIROS_PRODUCTION_URL}/scripts/homepage-quick-action-v5.js?v=${nonce}" --output quick.js
+          node <<'NODE'
+          const fs=require('fs');
+          const health=JSON.parse(fs.readFileSync('health.json','utf8'));
+          const website=fs.readFileSync('website.html','utf8');
+          const reset=fs.readFileSync('reset.js','utf8');
+          const quick=fs.readFileSync('quick.js','utf8');
+          const p=health.homepagePreserveDesign||{};
+          const order=Array.isArray(p.sourceOrder)?p.sourceOrder:[];
+          const checks={
+            build:health.build==='kairos-production-entry-20260717-101',
+            contract:p.contract==='published-main-four-source-visible-text-preservation',
+            fourSources:order.length===4&&order[3]==='homepage-instance isolated shared-section clone',
+            instancePlanner:p.instanceFallbackBuild==='kairos-homepage-instance-liquid-fallback-20260717-1',
+            instanceExecutor:p.instanceExecutorBuild==='kairos-homepage-instance-liquid-executor-20260717-2',
+            originalsImmutable:p.originalSharedSectionFiles==='immutable',
+            templateReadback:p.templateReadbackVerification==='canonical-json-semantics',
+            cloneReadback:p.cloneReadbackVerification==='exact-bytes-and-sha256',
+            instanceCapability:health.capabilities?.homepageSharedSectionInstanceIsolation==='operational',
+            originalProtection:health.capabilities?.homepageOriginalSharedSectionProtection==='required',
+            dashboard:website.includes('kairos-command-center-operational-20260717-20'),
+            resetBound:website.includes('/scripts/homepage-session-reset-v5.js?v=operational-20260717-1'),
+            quickBound:website.includes('/scripts/homepage-quick-action-v5.js?v=operational-20260717-5'),
+            retiredQuickUnbound:!website.includes('/scripts/homepage-quick-action.js?v='),
+            resetScript:reset.includes('kairos.homepage.session-migration.v5'),
+            immutableQuickAction:quick.includes('kairos-homepage-quick-action-20260717-4')&&quick.includes('homepageInstanceIsolationAuthorized: true')
+          };
+          const failed=Object.entries(checks).filter(([,value])=>value!==true).map(([key])=>key);
+          console.log(JSON.stringify({failed,checks}));
+          if(failed.length)process.exit(1);
+          NODE
+
+      - name: Prove a real safe homepage text plan with bounded retries
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE' > request.json
+          const objective='Keep the currently published homepage framework exactly as it is. Rewrite the existing visible customer-facing copy so visitors clearly understand that Mindset Media Group helps creators, entrepreneurs, authors, educators, and small businesses turn knowledge, experience, and ideas into professional digital products, publishing assets, educational resources, business assets, and revenue-generating intellectual property. Do not change sections, blocks, images, buttons, links, navigation, colors, typography, spacing, styling, animation, layout, mobile behavior, Liquid logic, CSS, or assets.';
+          process.stdout.write(JSON.stringify({objective,requestType:'homepage-preserve-design',intent:'homepage-preserve-design',homepageMode:'preserve-published-framework',sourceOfTruth:'published-main-theme',preserveExistingDesign:true,preservePublishedFramework:true,renderedTextRequired:true,activeOrderedSectionsOnly:true,activeOrderedBlocksOnly:true,templateTextPreferred:true,literalLiquidTextFallbackAuthorized:true,homepageInstanceIsolationAuthorized:true,originalSharedSectionsImmutable:true,structuralMutationAuthorized:false,styleMutationAuthorized:false,liquidStructureMutationAuthorized:false,assetMutationAuthorized:false,canonicalPackageAuthorized:false}));
+          NODE
+          cat > check-plan.cjs <<'NODE'
+          const fs=require('fs');
+          const body=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          const headers=fs.readFileSync(process.argv[3],'utf8');
+          const result=body?.result||{};
+          const plan=result?.plan||{};
+          const mode=String(plan.installationMode||'');
+          const templateCount=Array.isArray(plan?.templateTextPatch?.operations)?plan.templateTextPatch.operations.length:0;
+          const liquidCount=Array.isArray(plan?.liquidTextPatches)?plan.liquidTextPatches.reduce((sum,p)=>sum+(Array.isArray(p?.replacements)?p.replacements.length:0),0):0;
+          const instanceCount=Array.isArray(plan?.instancePatches)?plan.instancePatches.reduce((sum,p)=>sum+(Array.isArray(p?.replacements)?p.replacements.length:0),0):0;
+          const instanceMode=mode==='published-main-homepage-instance-liquid-text-v1';
+          const checks={
+            http:Number(process.env.HTTP_CODE)===202,
+            completed:body?.status==='completed'&&result?.status==='ready-for-approval',
+            governedMode:['published-main-template-text-settings-v1','published-main-liquid-visible-text-v1','published-main-homepage-instance-liquid-text-v1'].includes(mode),
+            visibleDelta:templateCount+liquidCount+instanceCount>0,
+            readOnly:result?.readOnly===true,
+            publishedSource:result?.evidence?.sourceOfTruth==='published-main-theme',
+            stagingTarget:String(plan?.targetTheme?.role||'').toUpperCase()!=='MAIN',
+            mainSource:String(plan?.publishedTheme?.role||'').toUpperCase()==='MAIN',
+            framework:plan?.preservePublishedFramework===true,
+            noCanonical:plan?.canonicalPackage===null,
+            noLiveAuthorization:plan?.productionPublishAuthorized===false&&plan?.liveThemeMutationAuthorized===false,
+            instanceIsolation:!instanceMode||(plan?.homepageInstanceIsolation===true&&plan?.originalSharedSectionsImmutable===true),
+            originalsUnchanged:!instanceMode||(plan?.instancePatches||[]).every(p=>p?.originalSharedSourceChanged===false&&p?.homepageInstanceIsolated===true),
+            productionHeader:/x-kairos-production-entry:\s*kairos-production-entry-20260717-101/i.test(headers),
+            sourceHeader:/x-kairos-homepage-text-source:\s*(template-settings|embedded-template-markup|homepage-specific-liquid-text|homepage-instance-clone)/i.test(headers),
+            plannerHeader:/x-kairos-homepage-instance-fallback:\s*kairos-homepage-instance-liquid-fallback-20260717-1/i.test(headers),
+            executorHeader:/x-kairos-homepage-instance-executor:\s*kairos-homepage-instance-liquid-executor-20260717-2/i.test(headers),
+            templateReadbackHeader:/x-kairos-template-readback:\s*canonical-json-semantics/i.test(headers),
+            cloneReadbackHeader:/x-kairos-clone-readback:\s*exact-bytes-and-sha256/i.test(headers),
+            originalHeader:/x-kairos-original-shared-sections:\s*immutable/i.test(headers)
+          };
+          const failed=Object.entries(checks).filter(([,value])=>value!==true).map(([key])=>key);
+          console.log(JSON.stringify({failed,http:Number(process.env.HTTP_CODE),mode,templateCount,liquidCount,instanceCount,error:body?.error||null}));
+          process.exit(failed.length?1:0);
+          NODE
+          for attempt in 1 2 3; do
+            code="$(curl --silent --show-error --location --max-time 180 \
+              -D "plan-headers-${attempt}.txt" \
+              -H 'Content-Type: application/json' \
+              -H 'Cache-Control: no-cache' \
+              --data-binary @request.json \
+              "${KAIROS_PRODUCTION_URL}/api/shopify/staging/plan/jobs?verification-attempt=${attempt}" \
+              --output "plan-${attempt}.json" \
+              --write-out '%{http_code}')"
+            if HTTP_CODE="${code}" node check-plan.cjs "plan-${attempt}.json" "plan-headers-${attempt}.txt"; then
+              echo "Governed live homepage plan verified on attempt ${attempt}."
+              exit 0
+            fi
+            if [ "${attempt}" != "3" ]; then sleep 4; fi
+          done
+          echo "No governed safe plan passed within three bounded attempts."
+          exit 1
+
+      - name: Publish verification receipt
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          if [ "${JOB_STATUS}" = "success" ]; then
+            state="success"
+            description="build 101 immutable asset and bounded live plan checks passed"
+          else
+            state="failure"
+            description="build 101 homepage production verification failed"
+          fi
+          payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-v43-homepage-production",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          curl --fail --silent --show-error -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "${payload}"

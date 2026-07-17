@@ -1,111 +1,15 @@
-const BUILD = "kairos-command-center-layout-20260713-4";
+const BUILD="kairos-command-center-layout-routed-20260715-1";
+const state={menuOpen:false,online:false,active:0,finished:0,pending:0,available:false};
 
-const layoutState = {
-  menuOpen: false,
-  online: "Connecting",
-  onlineState: "checking",
-  activeWork: "0",
-  capabilities: "—",
-};
+document.addEventListener("click",handleClick,true);
+document.addEventListener("keydown",handleKeydown,true);
+window.addEventListener("kairos:command-status",event=>{Object.assign(state,event.detail||{});renderStatus();});
+install();
 
-let observer;
-let scheduled = false;
-
-start();
-
-function start() {
-  observer = new MutationObserver(() => {
-    if (scheduled) return;
-    scheduled = true;
-    requestAnimationFrame(() => {
-      scheduled = false;
-      applyLayout();
-    });
-  });
-  observe();
-  applyLayout();
-}
-
-function observe() {
-  observer.observe(document.documentElement, { childList: true, subtree: true });
-}
-
-function applyLayout() {
-  const hub = document.querySelector("#kairos-hub");
-  const header = hub?.querySelector(".app-header");
-  const hero = hub?.querySelector(".hero");
-  if (!hub || !header || !hero) return;
-
-  observer?.disconnect();
-  try {
-    captureMetricValues(hub.querySelector(".metrics"));
-    hub.querySelector(".metrics")?.remove();
-    header.querySelector(".app-header-status")?.remove();
-
-    const heroCopy = hero.querySelector(".hero-copy");
-    if (heroCopy) heroCopy.textContent = "Real-time visibility. Governed tools. Measurable outcomes.";
-
-    let strip = hub.querySelector("#command-status-strip");
-    if (!strip) {
-      strip = document.createElement("section");
-      strip.id = "command-status-strip";
-      strip.className = "command-status-strip";
-      header.insertAdjacentElement("afterend", strip);
-    }
-
-    strip.innerHTML = `<button class="command-menu-button" type="button" aria-label="Open operating centers" aria-expanded="${layoutState.menuOpen}" data-command-menu><span></span><span></span><span></span></button><div class="command-indicator command-online"><i class="${layoutState.onlineState}"></i><span>${escapeHTML(layoutState.online)}</span></div><div class="command-indicator"><small>Active Work</small><strong>${escapeHTML(layoutState.activeWork)}</strong></div><div class="command-indicator"><small>Capabilities</small><strong>${escapeHTML(layoutState.capabilities)}</strong></div><div class="command-indicator"><small>Entry Points</small><strong>25</strong></div>`;
-
-    let menu = hub.querySelector("#command-center-menu");
-    if (!menu) {
-      menu = document.createElement("nav");
-      menu.id = "command-center-menu";
-      menu.className = "command-center-menu";
-      menu.setAttribute("aria-label", "Operating centers");
-      strip.insertAdjacentElement("afterend", menu);
-    }
-
-    menu.hidden = !layoutState.menuOpen;
-    menu.innerHTML = [
-      ["Knowledge", "knowledge"],
-      ["Content", "content"],
-      ["Business", "business"],
-      ["Customers", "customers"],
-      ["Operations", "operations"],
-    ].map(([label, id]) => `<button type="button" data-menu-center="${id}">${label}</button>`).join("");
-
-    strip.querySelector("[data-command-menu]")?.addEventListener("click", () => {
-      layoutState.menuOpen = !layoutState.menuOpen;
-      applyLayout();
-    });
-
-    menu.querySelectorAll("[data-menu-center]").forEach(button => button.addEventListener("click", () => {
-      layoutState.menuOpen = false;
-      const target = hub.querySelector(`[data-center="${button.dataset.menuCenter}"]`);
-      target?.click();
-      applyLayout();
-    }));
-  } finally {
-    observe();
-  }
-}
-
-function captureMetricValues(metrics) {
-  if (!metrics) return;
-  const cards = [...metrics.querySelectorAll(".metric")];
-  const read = label => cards.find(card => card.querySelector("span")?.textContent?.trim().toLowerCase() === label)?.querySelector("strong")?.textContent?.trim();
-  const runtime = read("runtime");
-  const active = read("active work");
-  const capabilities = read("capabilities");
-  if (runtime) {
-    layoutState.online = runtime === "Online" ? "Online" : runtime;
-    layoutState.onlineState = runtime === "Online" ? "" : "checking";
-  }
-  if (active) layoutState.activeWork = active;
-  if (capabilities) layoutState.capabilities = capabilities;
-}
-
-function escapeHTML(value) {
-  return String(value ?? "").replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
-}
-
-window.KairosCommandCenterLayout = { build: BUILD, refresh: applyLayout };
+function install(){const anchor=document.querySelector("#command-status-anchor");if(!anchor)return;anchor.innerHTML=`<section id="command-status-strip" class="command-status-strip" aria-label="Kairos command status"><button class="command-menu-button" type="button" aria-label="Open operating centers" aria-controls="command-center-menu" aria-expanded="false" data-command-menu><span></span><span></span><span></span></button><div class="command-indicator command-online"><i class="checking"></i><span>Connecting</span></div>${metric("active","In Progress")}${metric("finished","Done 24h")}${metric("pending","Pending")}</section><nav id="command-center-menu" class="command-center-menu" aria-label="Operating centers" hidden>${[["Knowledge","knowledge"],["Content","content"],["Business","business"],["Customers","customers"],["Operations","operations"]].map(([label,id])=>`<button type="button" data-menu-center="${id}">${label}</button>`).join("")}</nav>`;renderStatus();}
+function metric(id,label){return `<button class="command-indicator command-pulse" type="button" data-status-route="${id}" aria-label="Open ${label} work"><small>${label}</small><strong data-status-value="${id}">—</strong></button>`;}
+function handleClick(event){const toggle=event.target.closest?.("[data-command-menu]");if(toggle){event.preventDefault();event.stopImmediatePropagation();setMenu(!state.menuOpen);return;}const center=event.target.closest?.("[data-menu-center]");if(center){event.preventDefault();event.stopImmediatePropagation();setMenu(false);window.KairosCommandHub?.openCenter?.(center.dataset.menuCenter);return;}const status=event.target.closest?.("[data-status-route]");if(status){event.preventDefault();window.KairosCommandHub?.openWorkspace?.("operations","work-queue");}}
+function handleKeydown(event){if(event.key==="Escape"&&state.menuOpen){event.preventDefault();setMenu(false,true);}}
+function setMenu(open,restore=false){state.menuOpen=Boolean(open);const button=document.querySelector("[data-command-menu]"),menu=document.querySelector("#command-center-menu");button?.setAttribute("aria-expanded",String(state.menuOpen));button?.classList.toggle("is-open",state.menuOpen);if(menu){menu.hidden=!state.menuOpen;menu.classList.toggle("is-open",state.menuOpen);}queueMicrotask(()=>{if(state.menuOpen)menu?.querySelector("button")?.focus({preventScroll:true});else if(restore)button?.focus({preventScroll:true});});}
+function renderStatus(){const strip=document.querySelector("#command-status-strip");if(!strip)return;const dot=strip.querySelector(".command-online i"),label=strip.querySelector(".command-online span");if(dot)dot.className=state.online?"":"offline";if(label)label.textContent=state.online?"Online":"Connecting";for(const key of["active","finished","pending"]){const value=strip.querySelector(`[data-status-value="${key}"]`);if(value)value.textContent=state.available?String(state[key]??0):"—";}}
+window.KairosCommandCenterLayout={build:BUILD,refresh:renderStatus,setMenuOpen:setMenu};

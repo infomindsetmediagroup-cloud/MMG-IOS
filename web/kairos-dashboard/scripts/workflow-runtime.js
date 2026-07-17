@@ -1,153 +1,44 @@
-const BUILD = "kairos-workflow-runtime-ui-20260713-1";
-const state = { open: false, loading: false, workflows: [], selected: null, error: "" };
+const BUILD="kairos-workflow-runtime-ui-20260716-4";
+const state={open:false,loading:false,workflows:[],selected:null,error:"",notice:"",filter:"current"};
 
 start();
+function start(){document.addEventListener("click",interceptWorkQueue,true);window.addEventListener("kairos:workflow-runtime:open",openWorkspace);}
+function interceptWorkQueue(event){const button=event.target.closest?.('[data-child="work-queue"], [data-route-workspace="work-queue"]');if(!button)return;event.preventDefault();event.stopImmediatePropagation();openWorkspace();}
+async function openWorkspace(event){state.open=true;state.filter=normalizeFilter(event?.detail?.filter||"current");await loadQueue();render();}
+async function loadQueue(){state.loading=true;state.error="";render();try{const{response,body}=await request("/api/workflows");if(!response.ok)throw new Error(body?.error?.message||"Kairos could not load My Work.");state.workflows=Array.isArray(body.workflows)?body.workflows:[];}catch(error){state.error=error.message||"Kairos could not load My Work.";}finally{state.loading=false;render();}}
+async function createWorkflow(event){event.preventDefault();const form=event.currentTarget,data=new FormData(form);state.loading=true;state.error="";render();try{const{response,body}=await request("/api/workflows",{method:"POST",headers:headers(),body:JSON.stringify({title:data.get("title"),objective:data.get("objective"),center:data.get("center"),priority:data.get("priority"),approvalRequired:data.get("approvalRequired")==="on",source:"command-center-work-queue"})});if(!response.ok)throw new Error(body?.error?.message||"Kairos could not create the workflow.");state.selected=body.workflow;state.filter="current";await loadQueue();}catch(error){state.error=error.message||"Kairos could not create the workflow.";}finally{state.loading=false;render();}}
+async function openWorkflow(id){state.loading=true;state.error="";render();try{const{response,body}=await request(`/api/workflows/${encodeURIComponent(id)}`);if(!response.ok)throw new Error(body?.error?.message||"Kairos could not open this work item.");state.selected=body.workflow;}catch(error){state.error=error.message||"Kairos could not open this work item.";}finally{state.loading=false;render();}}
+async function workflowCommand(command){if(!state.selected)return;state.loading=true;state.error="";state.notice="";render();try{const{response,body}=await request(`/api/workflows/${encodeURIComponent(state.selected.id)}`,{method:"PATCH",headers:headers(),body:JSON.stringify({command,actor:"Executive"})});if(!response.ok)throw new Error(body?.error?.message||"Kairos could not update the workflow.");state.selected=body.workflow;if(command==="approve")state.notice="Approved. Kairos can now execute this work item.";await loadQueue();}catch(error){state.error=error.message||"Kairos could not update the workflow.";}finally{state.loading=false;render();}}
+async function runKairos(){if(!state.selected)return;const workflowID=state.selected.id;state.loading=true;state.error="";state.notice="Kairos is producing the verified deliverable…";render();try{const{response,body}=await request("/api/autonomy/run",{method:"POST",headers:headers(),body:JSON.stringify({source:"work-queue-targeted-cycle",workflowID})});if(!response.ok&&response.status!==202)throw new Error(body?.error?.message||"Kairos could not run this work item.");const read=await request(`/api/workflows/${encodeURIComponent(workflowID)}`);if(read.response.ok)state.selected=read.body.workflow;state.notice=body.status==="deferred"?"This work item is already running. Refresh to read the durable result.":`Kairos preserved ${Number(body.actionsApplied||0)} verified deliverable${Number(body.actionsApplied||0)===1?"":"s"}.`;await loadQueue();}catch(error){state.error=error.message||"Kairos could not run this work item.";}finally{state.loading=false;render();}}
+async function addTask(event){event.preventDefault();if(!state.selected)return;const data=new FormData(event.currentTarget);state.loading=true;state.error="";render();try{const{response,body}=await request(`/api/workflows/${encodeURIComponent(state.selected.id)}/tasks`,{method:"POST",headers:headers(),body:JSON.stringify({title:data.get("title"),description:data.get("description")})});if(!response.ok)throw new Error(body?.error?.message||"Kairos could not add the task.");state.selected=body.workflow;await loadQueue();}catch(error){state.error=error.message||"Kairos could not add the task.";}finally{state.loading=false;render();}}
+async function setTask(taskID,taskState){if(!state.selected)return;state.loading=true;state.error="";render();try{const{response,body}=await request(`/api/workflows/${encodeURIComponent(state.selected.id)}/tasks/${encodeURIComponent(taskID)}`,{method:"PATCH",headers:headers(),body:JSON.stringify({state:taskState})});if(!response.ok)throw new Error(body?.error?.message||"Kairos could not update the task.");state.selected=body.workflow;await loadQueue();}catch(error){state.error=error.message||"Kairos could not update the task.";}finally{state.loading=false;render();}}
 
-function start() {
-  document.addEventListener("click", interceptWorkQueue, true);
-  window.addEventListener("kairos:workflow-runtime:open", openWorkspace);
-}
+function render(){const hub=document.querySelector("#kairos-hub");if(!hub)return;let root=document.querySelector("#workflow-runtime");if(!state.open){root?.remove();return;}if(!root){root=document.createElement("section");root.id="workflow-runtime";root.className="workflow-runtime workspace";hub.appendChild(root);}const rows=filteredWorkflows();root.innerHTML=`<header class="workflow-head"><div><p class="eyebrow">Operations · My Work</p><h2>Work Timeline</h2><p>Current work stays visible. Completed work moves into a clickable day, week, and month archive.</p></div><button type="button" data-close-workflow>Close</button></header>${state.error?`<p class="workflow-error">${escapeHTML(state.error)}</p>`:""}${state.notice?`<p class="workflow-notice">${escapeHTML(state.notice)}</p>`:""}<div class="workflow-filter-bar">${filterButton("current","Current Work")}${filterButton("active","In Progress")}${filterButton("pending","Not Started")}${filterButton("archive","Completed Timeline")}</div><div class="workflow-layout"><section class="workflow-create"><h3>New Workflow</h3><form data-workflow-form><label>Title<input name="title" maxlength="180" required placeholder="Example: Finish tonight’s TikTok package"></label><label>Objective<textarea name="objective" maxlength="4000" required placeholder="Describe the finished outcome."></textarea></label><div class="workflow-fields"><label>Center<select name="center"><option value="content">Content</option><option value="business">Business</option><option value="customers">Customers</option><option value="knowledge">Knowledge</option><option value="operations">Operations</option></select></label><label>Priority<select name="priority"><option value="high">High</option><option value="normal" selected>Normal</option><option value="critical">Critical</option><option value="low">Low</option></select></label></div><label class="workflow-check"><input type="checkbox" name="approvalRequired"> Require approval before start</label><button class="primary" type="submit">Create Workflow</button></form></section><section class="workflow-queue"><div class="workflow-section-head"><div><h3>${escapeHTML(filterTitle())}</h3><small>${rows.length} item${rows.length===1?"":"s"}</small></div><button type="button" data-refresh-workflows>Refresh</button></div>${state.loading?`<p class="workflow-loading">Kairos is updating My Work…</p>`:queueMarkup(rows)}</section></div>${state.selected?detailMarkup(state.selected):""}`;bind();}
+function filterButton(filter,label){return `<button type="button" class="workflow-filter ${state.filter===filter?"active":""}" data-workflow-filter="${filter}">${label}</button>`;}
+function normalizeFilter(value){return["current","active","pending","archive"].includes(value)?value:"current";}
+function filteredWorkflows(){return state.workflows.filter(item=>state.filter==="archive"?item.state==="completed":state.filter==="active"?item.state==="active":state.filter==="pending"?!["active","completed","cancelled"].includes(item.state):!["completed","cancelled"].includes(item.state)).sort((a,b)=>workTime(b)-workTime(a));}
+function filterTitle(){return({current:"Current Work",active:"In Progress",pending:"Not Started",archive:"Completed Timeline"})[state.filter]||"Current Work";}
+function queueMarkup(rows){if(!rows.length)return `<div class="workflow-empty"><strong>No ${escapeHTML(filterTitle().toLowerCase())} items.</strong><p>Kairos will place work here automatically when it reaches this state.</p></div>`;return state.filter==="archive"?archiveMarkup(rows):`<div class="workflow-list">${rows.map(workflowRow).join("")}</div>`;}
+function workflowRow(item){return `<button type="button" class="workflow-row" data-open-workflow="${escapeAttribute(item.id)}"><span class="workflow-priority" data-priority="${escapeAttribute(item.priority)}"></span><div><strong>${escapeHTML(item.title)}</strong><small>${escapeHTML(item.center)} · ${escapeHTML(item.state)} · ${item.completedTasks}/${item.taskCount} tasks · ${escapeHTML(shortDate(workTime(item)))}</small></div><b>${Number(item.progress||0)}%</b></button>`;}
+function archiveMarkup(rows){const now=new Date(),today=startDay(now).getTime(),seven=today-6*86400000,sixty=today-60*86400000;const days=group(rows.filter(item=>workTime(item)>=seven),item=>dayKey(workTime(item))),weeks=group(rows.filter(item=>workTime(item)<seven&&workTime(item)>=sixty),item=>weekKey(workTime(item))),months=group(rows.filter(item=>workTime(item)<sixty),item=>monthKey(workTime(item)));return `<div class="workflow-archive">${archiveTier("Recent days",days,"day",true)}${archiveTier("Previous weeks",weeks,"week",false)}${archiveTier("Earlier months",months,"month",false)}</div>`;}
+function archiveTier(title,groups,type,open){const entries=[...groups.entries()];return `<details class="workflow-archive-tier" ${open?"open":""}><summary><span>${escapeHTML(title)}</span><b>${entries.reduce((sum,[,items])=>sum+items.length,0)}</b></summary>${entries.length?`<div class="workflow-archive-groups">${entries.map(([key,items],index)=>`<details class="workflow-archive-group" ${open&&index===0?"open":""}><summary><span>${escapeHTML(groupLabel(key,type))}</span><b>${items.length}</b></summary><div class="workflow-list">${items.map(workflowRow).join("")}</div></details>`).join("")}</div>`:`<p class="workflow-archive-empty">No completed work in this period.</p>`}</details>`;}
+function group(items,keyFn){const map=new Map();for(const item of items){const key=keyFn(item);if(!map.has(key))map.set(key,[]);map.get(key).push(item);}return new Map([...map.entries()].sort((a,b)=>b[0].localeCompare(a[0])));}
+function dayKey(ms){const d=new Date(ms);return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;}
+function weekKey(ms){const d=startDay(new Date(ms)),day=(d.getDay()+6)%7;d.setDate(d.getDate()-day);return dayKey(d.getTime());}
+function monthKey(ms){const d=new Date(ms);return `${d.getFullYear()}-${pad(d.getMonth()+1)}`;}
+function groupLabel(key,type){if(type==="month"){const[y,m]=key.split("-").map(Number);return new Date(y,m-1,1).toLocaleDateString([],{month:"long",year:"numeric"});}const date=new Date(`${key}T12:00:00`);if(type==="week"){const end=new Date(date);end.setDate(end.getDate()+6);return `Week of ${date.toLocaleDateString([],{month:"short",day:"numeric"})} – ${end.toLocaleDateString([],{month:"short",day:"numeric",year:"numeric"})}`;}const today=dayKey(Date.now());return key===today?`Today · ${date.toLocaleDateString([],{month:"long",day:"numeric"})}`:date.toLocaleDateString([],{weekday:"long",month:"long",day:"numeric",year:"numeric"});}
+function workTime(item){return Date.parse(item.completedAt||item.updatedAt||item.createdAt||0)||0;}
+function shortDate(ms){return ms?new Date(ms).toLocaleDateString([],{month:"short",day:"numeric",year:"numeric"}):"No date";}
+function startDay(date){return new Date(date.getFullYear(),date.getMonth(),date.getDate());}
+function pad(value){return String(value).padStart(2,"0");}
 
-function interceptWorkQueue(event) {
-  const button = event.target.closest?.('[data-child="work-queue"]');
-  if (!button) return;
-  event.preventDefault();
-  event.stopImmediatePropagation();
-  openWorkspace();
-}
+function detailMarkup(workflow){const canStart=workflow.state==="ready"&&(!workflow.approvalRequired||workflow.approvalStatus==="approved"),canRun=!["completed","cancelled"].includes(workflow.state)&&(!workflow.approvalRequired||workflow.approvalStatus==="approved");return `<section class="workflow-detail"><header><div><p class="eyebrow">${escapeHTML(workflow.center)} · ${escapeHTML(workflow.priority)} priority</p><h3>${escapeHTML(workflow.title)}</h3><p>${escapeHTML(workflow.objective)}</p><small>${escapeHTML(longDate(workTime(workflow)))}</small></div><div class="workflow-progress"><strong>${Number(workflow.progress||0)}%</strong><span>${escapeHTML(workflow.state)}</span></div></header><div class="workflow-meter"><span style="width:${Number(workflow.progress||0)}%"></span></div><div class="workflow-actions">${workflow.approvalRequired&&workflow.approvalStatus!=="approved"?`<button type="button" data-workflow-command="approve">Approve & Start Kairos</button>`:""}${canStart?`<button class="primary" type="button" data-workflow-command="start">Start</button>`:""}${canRun?`<button class="primary" type="button" data-run-kairos>Run Kairos Now</button>`:""}${workflow.state==="blocked"?`<button type="button" data-workflow-command="resume">Resume</button>`:""}${workflow.state==="active"?`<button type="button" data-workflow-command="block">Block</button>`:""}${workflow.progress===100&&workflow.state!=="completed"?`<button class="primary" type="button" data-workflow-command="complete">Complete</button>`:""}${!["completed","cancelled"].includes(workflow.state)?`<button type="button" data-workflow-command="cancel">Cancel</button>`:""}</div><div class="workflow-tasks">${(workflow.tasks||[]).map(taskMarkup).join("")}</div>${!["completed","cancelled"].includes(workflow.state)?`<form class="workflow-add-task" data-task-form><input name="title" maxlength="240" required placeholder="Add another task"><input name="description" maxlength="2000" placeholder="Task description"><button type="submit">Add Task</button></form>`:""}</section>`;}
+function taskMarkup(task){const output=task.nativeOutput,evidence=Array.isArray(output?.evidenceReferences)?output.evidenceReferences:[],verification=Array.isArray(output?.verification)?output.verification:[];return `<article><div class="workflow-task-copy"><div class="workflow-task-labels"><span>${escapeHTML(task.stage||"unclassified")}</span><span>${escapeHTML(task.executionClass||"native-analysis")}</span></div><strong>${escapeHTML(task.title)}</strong><p>${escapeHTML(task.description||"")}</p></div><select data-task-state="${escapeAttribute(task.id)}" ${["completed","cancelled"].includes(task.state)?"disabled":""}><option value="ready" ${task.state==="ready"?"selected":""}>Ready</option><option value="active" ${task.state==="active"?"selected":""}>Active</option><option value="blocked" ${task.state==="blocked"?"selected":""}>Blocked</option><option value="completed" ${task.state==="completed"?"selected":""}>Completed</option><option value="cancelled" ${task.state==="cancelled"?"selected":""}>Cancelled</option></select>${output?`<details class="workflow-native-output"><summary>Open verified deliverable · ${escapeHTML(output.artifactID||"artifact")}</summary><h4>${escapeHTML(output.deliverable?.title||task.title)}</h4><p>${escapeHTML(output.summary||"")}</p><div class="workflow-deliverable">${escapeHTML(output.deliverable?.content||"")}</div><dl><div><dt>Evidence</dt><dd>${evidence.map(escapeHTML).join(" · ")||"No reference"}</dd></div><div><dt>Verification</dt><dd>${verification.map(escapeHTML).join(" · ")||"No verification"}</dd></div><div><dt>Read-back hash</dt><dd>${escapeHTML(output.contentHash||"")}</dd></div></dl></details>`:""}</article>`;}
+function longDate(ms){return ms?new Date(ms).toLocaleString([],{month:"long",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit"}):"Date unavailable";}
 
-async function openWorkspace() {
-  state.open = true;
-  await loadQueue();
-  render();
-  setTimeout(() => document.querySelector("#workflow-runtime")?.scrollIntoView({ behavior: "smooth", block: "start" }), 20);
-}
-
-async function loadQueue() {
-  state.loading = true; state.error = ""; render();
-  try {
-    const { response, body } = await request("/api/workflows");
-    if (!response.ok) throw new Error(body?.error?.message || "Kairos could not load the production queue.");
-    state.workflows = body.workflows || [];
-  } catch (error) { state.error = error.message || "Kairos could not load the production queue."; }
-  finally { state.loading = false; render(); }
-}
-
-async function createWorkflow(event) {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const data = new FormData(form);
-  state.loading = true; state.error = ""; render();
-  try {
-    const { response, body } = await request("/api/workflows", {
-      method: "POST",
-      headers: headers(),
-      body: JSON.stringify({
-        title: data.get("title"),
-        objective: data.get("objective"),
-        center: data.get("center"),
-        priority: data.get("priority"),
-        approvalRequired: data.get("approvalRequired") === "on",
-        source: "command-center-work-queue",
-      }),
-    });
-    if (!response.ok) throw new Error(body?.error?.message || "Kairos could not create the workflow.");
-    state.selected = body.workflow;
-    form.reset();
-    await loadQueue();
-  } catch (error) { state.error = error.message || "Kairos could not create the workflow."; }
-  finally { state.loading = false; render(); }
-}
-
-async function openWorkflow(id) {
-  state.loading = true; state.error = ""; render();
-  try {
-    const { response, body } = await request(`/api/workflows/${encodeURIComponent(id)}`);
-    if (!response.ok) throw new Error(body?.error?.message || "Kairos could not open the workflow.");
-    state.selected = body.workflow;
-  } catch (error) { state.error = error.message || "Kairos could not open the workflow."; }
-  finally { state.loading = false; render(); }
-}
-
-async function workflowCommand(command) {
-  if (!state.selected) return;
-  state.loading = true; state.error = ""; render();
-  try {
-    const { response, body } = await request(`/api/workflows/${encodeURIComponent(state.selected.id)}`, {
-      method: "PATCH", headers: headers(), body: JSON.stringify({ command, actor: "Executive" }),
-    });
-    if (!response.ok) throw new Error(body?.error?.message || "Kairos could not update the workflow.");
-    state.selected = body.workflow;
-    await loadQueue();
-  } catch (error) { state.error = error.message || "Kairos could not update the workflow."; }
-  finally { state.loading = false; render(); }
-}
-
-async function addTask(event) {
-  event.preventDefault();
-  if (!state.selected) return;
-  const data = new FormData(event.currentTarget);
-  state.loading = true; state.error = ""; render();
-  try {
-    const { response, body } = await request(`/api/workflows/${encodeURIComponent(state.selected.id)}/tasks`, {
-      method: "POST", headers: headers(), body: JSON.stringify({ title: data.get("title"), description: data.get("description") }),
-    });
-    if (!response.ok) throw new Error(body?.error?.message || "Kairos could not add the task.");
-    state.selected = body.workflow;
-    await loadQueue();
-  } catch (error) { state.error = error.message || "Kairos could not add the task."; }
-  finally { state.loading = false; render(); }
-}
-
-async function setTask(taskID, taskState) {
-  if (!state.selected) return;
-  state.loading = true; state.error = ""; render();
-  try {
-    const { response, body } = await request(`/api/workflows/${encodeURIComponent(state.selected.id)}/tasks/${encodeURIComponent(taskID)}`, {
-      method: "PATCH", headers: headers(), body: JSON.stringify({ state: taskState }),
-    });
-    if (!response.ok) throw new Error(body?.error?.message || "Kairos could not update the task.");
-    state.selected = body.workflow;
-    await loadQueue();
-  } catch (error) { state.error = error.message || "Kairos could not update the task."; }
-  finally { state.loading = false; render(); }
-}
-
-function render() {
-  const hub = document.querySelector("#kairos-hub");
-  if (!hub) return;
-  let root = document.querySelector("#workflow-runtime");
-  if (!state.open) { root?.remove(); return; }
-  if (!root) {
-    root = document.createElement("section");
-    root.id = "workflow-runtime";
-    root.className = "workflow-runtime workspace";
-    hub.appendChild(root);
-  }
-  root.innerHTML = `<header class="workflow-head"><div><p class="eyebrow">Operations · Work Queue</p><h2>Workflow Runtime</h2><p>Create work, break it into tasks, run it, verify it, and close it.</p></div><button type="button" data-close-workflow>Close</button></header>${state.error ? `<p class="workflow-error">${escapeHTML(state.error)}</p>` : ""}<div class="workflow-layout"><section class="workflow-create"><h3>New Workflow</h3><form data-workflow-form><label>Title<input name="title" maxlength="180" required placeholder="Example: Finish tonight’s TikTok package"></label><label>Objective<textarea name="objective" maxlength="4000" required placeholder="Describe the finished outcome."></textarea></label><div class="workflow-fields"><label>Center<select name="center"><option value="content">Content</option><option value="business">Business</option><option value="customers">Customers</option><option value="knowledge">Knowledge</option><option value="operations">Operations</option></select></label><label>Priority<select name="priority"><option value="high">High</option><option value="normal" selected>Normal</option><option value="critical">Critical</option><option value="low">Low</option></select></label></div><label class="workflow-check"><input type="checkbox" name="approvalRequired"> Require executive approval before start</label><button class="primary" type="submit">Create Workflow</button></form></section><section class="workflow-queue"><div class="workflow-section-head"><h3>Production Queue</h3><button type="button" data-refresh-workflows>Refresh</button></div>${state.loading ? `<p class="workflow-loading">Kairos is updating the queue…</p>` : queueMarkup()}</section></div>${state.selected ? detailMarkup(state.selected) : ""}`;
-  bind();
-}
-
-function queueMarkup() {
-  if (!state.workflows.length) return `<div class="workflow-empty"><strong>No active workflows yet.</strong><p>Create the first work package above.</p></div>`;
-  return `<div class="workflow-list">${state.workflows.map(item => `<button type="button" class="workflow-row" data-open-workflow="${escapeHTML(item.id)}"><span class="workflow-priority" data-priority="${escapeHTML(item.priority)}"></span><div><strong>${escapeHTML(item.title)}</strong><small>${escapeHTML(item.center)} · ${escapeHTML(item.state)} · ${item.completedTasks}/${item.taskCount} tasks</small></div><b>${Number(item.progress || 0)}%</b></button>`).join("")}</div>`;
-}
-
-function detailMarkup(workflow) {
-  const canStart = workflow.state === "ready" && (!workflow.approvalRequired || workflow.approvalStatus === "approved");
-  return `<section class="workflow-detail"><header><div><p class="eyebrow">${escapeHTML(workflow.center)} · ${escapeHTML(workflow.priority)} priority</p><h3>${escapeHTML(workflow.title)}</h3><p>${escapeHTML(workflow.objective)}</p></div><div class="workflow-progress"><strong>${Number(workflow.progress || 0)}%</strong><span>${escapeHTML(workflow.state)}</span></div></header><div class="workflow-meter"><span style="width:${Number(workflow.progress || 0)}%"></span></div><div class="workflow-actions">${workflow.approvalRequired && workflow.approvalStatus !== "approved" ? `<button type="button" data-workflow-command="approve">Approve</button>` : ""}${canStart ? `<button class="primary" type="button" data-workflow-command="start">Start</button>` : ""}${workflow.state === "blocked" ? `<button type="button" data-workflow-command="resume">Resume</button>` : ""}${workflow.state === "active" ? `<button type="button" data-workflow-command="block">Block</button>` : ""}${workflow.progress === 100 && workflow.state !== "completed" ? `<button class="primary" type="button" data-workflow-command="complete">Complete</button>` : ""}${!["completed","cancelled"].includes(workflow.state) ? `<button type="button" data-workflow-command="cancel">Cancel</button>` : ""}</div><div class="workflow-tasks">${workflow.tasks.map(task => `<article><div><strong>${escapeHTML(task.title)}</strong><p>${escapeHTML(task.description || "")}</p></div><select data-task-state="${escapeHTML(task.id)}"><option value="ready" ${task.state === "ready" ? "selected" : ""}>Ready</option><option value="active" ${task.state === "active" ? "selected" : ""}>Active</option><option value="blocked" ${task.state === "blocked" ? "selected" : ""}>Blocked</option><option value="completed" ${task.state === "completed" ? "selected" : ""}>Completed</option><option value="cancelled" ${task.state === "cancelled" ? "selected" : ""}>Cancelled</option></select></article>`).join("")}</div><form class="workflow-add-task" data-task-form><input name="title" maxlength="240" required placeholder="Add another task"><input name="description" maxlength="2000" placeholder="Task description"><button type="submit">Add Task</button></form></section>`;
-}
-
-function bind() {
-  document.querySelector("[data-close-workflow]")?.addEventListener("click", () => { state.open = false; state.selected = null; render(); });
-  document.querySelector("[data-refresh-workflows]")?.addEventListener("click", loadQueue);
-  document.querySelector("[data-workflow-form]")?.addEventListener("submit", createWorkflow);
-  document.querySelector("[data-task-form]")?.addEventListener("submit", addTask);
-  document.querySelectorAll("[data-open-workflow]").forEach(button => button.addEventListener("click", () => openWorkflow(button.dataset.openWorkflow)));
-  document.querySelectorAll("[data-workflow-command]").forEach(button => button.addEventListener("click", () => workflowCommand(button.dataset.workflowCommand)));
-  document.querySelectorAll("[data-task-state]").forEach(select => select.addEventListener("change", () => setTask(select.dataset.taskState, select.value)));
-}
-
-function headers() { return { "Content-Type": "application/json", "X-MMG-Client-Build": BUILD }; }
-async function request(url, init = {}) { const response = await fetch(url, { cache: "no-store", credentials: "include", ...init }); const text = await response.text(); let body = {}; try { body = text ? JSON.parse(text) : {}; } catch { body = { message: text }; } return { response, body }; }
-function escapeHTML(value) { return String(value ?? "").replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]); }
+function bind(){document.querySelector("[data-close-workflow]")?.addEventListener("click",()=>{state.open=false;state.selected=null;render();});document.querySelector("[data-refresh-workflows]")?.addEventListener("click",loadQueue);document.querySelector("[data-workflow-form]")?.addEventListener("submit",createWorkflow);document.querySelectorAll("[data-workflow-filter]").forEach(button=>button.addEventListener("click",()=>{state.filter=button.dataset.workflowFilter;state.selected=null;render();}));document.querySelectorAll("[data-open-workflow]").forEach(button=>button.addEventListener("click",()=>openWorkflow(button.dataset.openWorkflow)));document.querySelectorAll("[data-workflow-command]").forEach(button=>button.addEventListener("click",()=>workflowCommand(button.dataset.workflowCommand)));document.querySelector("[data-run-kairos]")?.addEventListener("click",runKairos);document.querySelector("[data-task-form]")?.addEventListener("submit",addTask);document.querySelectorAll("[data-task-state]").forEach(select=>select.addEventListener("change",()=>setTask(select.dataset.taskState,select.value)));}
+async function request(url,init={}){const response=await fetch(url,{cache:"no-store",credentials:"include",...init}),text=await response.text();let body={};try{body=text?JSON.parse(text):{};}catch{body={summary:text};}return{response,body};}
+function headers(){return{"Content-Type":"application/json","X-MMG-Client-Build":BUILD};}
+function escapeAttribute(value){return escapeHTML(value).replace(/`/g,"&#96;");}
+function escapeHTML(value){return String(value??"").replace(/[&<>'"]/g,character=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"})[character]);}
+window.KairosWorkflowRuntime={build:BUILD,open:openWorkspace,refresh:loadQueue};

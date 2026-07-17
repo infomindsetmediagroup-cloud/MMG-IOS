@@ -1,4 +1,4 @@
-const MOBILE_WEBSITE_BUILD = "kairos-mobile-website-route-20260713-1";
+const MOBILE_WEBSITE_BUILD = "kairos-mobile-website-route-20260716-2";
 const MOBILE_WEBSITE_URL = `/web-003.html?v=${MOBILE_WEBSITE_BUILD}`;
 
 function isMobileWebsiteViewport() {

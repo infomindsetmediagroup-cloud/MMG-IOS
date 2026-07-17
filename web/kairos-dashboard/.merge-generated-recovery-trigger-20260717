@@ -1,0 +1,3 @@
+trigger=github-merge-generated-push
+build=kairos-command-center-inline-20260717-1
+verification=mobile-browser-input

@@ -1,0 +1,4 @@
+trigger=minimal-pull-request-browser-proof
+build=kairos-command-center-inline-20260717-1
+assertions=opens,styled,input,button
+synchronized=2026-07-17T06:31:00Z

@@ -1,0 +1,4 @@
+triggered_at=2026-07-16T21:38:00-07:00
+purpose=verify live combined homepage copy plus native header and footer plan contains real source-bound before-after operations without writing to Shopify
+expected_runtime=kairos-web003-deterministic-first-runtime-20260717-3
+expected_sources=plain-template-settings,embedded-template-markup,homepage-specific-liquid

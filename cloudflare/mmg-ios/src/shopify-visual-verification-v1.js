@@ -1,4 +1,4 @@
-const BUILD = "shopify-visual-verification-20260712-2";
+const BUILD = "shopify-visual-verification-20260716-3";
 const REVIEW_TTL_SECONDS = 60 * 60 * 24;
 
 export async function handleVisualVerificationRequest(request, env) {
@@ -25,6 +25,12 @@ async function createVerification(request, env) {
   const probe = await probePreview(previewURL);
   const pendingAssignment = execution?.pendingLiveAssignment || null;
   const resource = execution?.resource || null;
+  const approvedFiles = (Array.isArray(execution?.filesWritten) ? execution.filesWritten : [])
+    .map(file => ({
+      filename: String(typeof file === "string" ? file : file?.filename || file?.key || "").trim(),
+      afterSha256: String(typeof file === "object" ? file?.afterSha256 || file?.actualSha256 || file?.sha256 || "" : "").trim(),
+    }))
+    .filter(file => file.filename && file.afterSha256);
 
   const record = {
     reviewID,
@@ -57,6 +63,7 @@ async function createVerification(request, env) {
       releaseType: "theme-publication",
       stagingTheme: theme,
       publishedTheme: execution?.publishedTheme || null,
+      approvedFiles,
       sourceExecutionID: result?.actionID || null,
       sourceBuild: result?.build || null
     },
@@ -69,7 +76,14 @@ async function createVerification(request, env) {
       "Navigation and every visible CTA lead to the intended verified destination.",
       "Kairos guidance is restrained, dismissible, captioned, and does not obstruct content.",
       "No unsupported capability, invented product, fake metric, or placeholder content appears.",
-      "The live published storefront remains unchanged before Release Control approval."
+      "The live published storefront remains unchanged before Release Control approval.",
+      ...(approvedFiles.some(file => /^(?:sections\/header-group\.json|config\/settings_data\.json)$/.test(file.filename)) ? [
+        "The native Shopify announcement bar and header render with the exact approved scheme, branding behavior, navigation, and mobile alignment.",
+        "If the logo assignment was cleared, no unintended shop-name fallback, empty brand gap, clipped menu, or inaccessible header state appears.",
+      ] : []),
+      ...(approvedFiles.some(file => file.filename === "templates/index.json") ? [
+        "The native header is followed by the MMG page-title strip and then the canonical homepage hero, with no duplicated hero or title treatment.",
+      ] : []),
     ],
     publicationAuthorized: false,
     executiveDecision: null

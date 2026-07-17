@@ -1,15 +1,14 @@
 const BUILD = "kairos-executive-briefing-ui-20260713-5";
-const state = { briefing: null, loading: false, error: "", evidence: null, workOrders: {}, results: {}, corrections: {}, lastWindow: null };
+const state = { open: false, briefing: null, loading: false, error: "", evidence: null, workOrders: {}, results: {}, corrections: {}, lastWindow: null };
 
 start();
 function start() {
-  observe();
-  loadLatest();
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) ensureCurrentWindow(); });
-  setInterval(ensureCurrentWindow, 60 * 1000);
+  window.addEventListener("kairos:executive-briefing:open", openWorkspace);
+  document.addEventListener("visibilitychange", () => { if (state.open && !document.hidden) ensureCurrentWindow(); });
+  setInterval(() => { if (state.open) ensureCurrentWindow(); }, 60 * 1000);
 }
-function observe() { const observer = new MutationObserver(() => mount()); observer.observe(document.documentElement, { childList: true, subtree: true }); mount(); }
-function mount() { const hero = document.querySelector("#kairos-hub .hero"); if (!hero || document.querySelector("#executive-briefing")) return; const section = document.createElement("section"); section.id = "executive-briefing"; section.className = "executive-briefing"; hero.insertAdjacentElement("afterend", section); render(); }
+function openWorkspace() { state.open = true; mount(); loadLatest(); }
+function mount() { const route = document.querySelector(".child-workspace-page"); if (!route || document.querySelector("#executive-briefing")) return; const section = document.createElement("section"); section.id = "executive-briefing"; section.className = "executive-briefing"; route.appendChild(section); render(); }
 
 async function loadLatest() {
   state.loading = true; state.error = ""; render();
