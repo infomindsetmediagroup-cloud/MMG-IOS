@@ -1,5 +1,5 @@
 name: Verify Timeline and Homepage Production
-# v43 verification revision 4
+# v43 verification revision 5
 
 on:
   push:
@@ -19,7 +19,7 @@ on:
       - "cloudflare/mmg-ios/wrangler.toml"
       - "web/kairos-dashboard/index.html"
       - "web/kairos-dashboard/scripts/homepage-session-reset-v5.js"
-      - "web/kairos-dashboard/scripts/homepage-quick-action.js"
+      - "web/kairos-dashboard/scripts/homepage-quick-action-v5.js"
       - "web/kairos-dashboard/scripts/workflow-runtime.js"
       - "web/kairos-dashboard/scripts/workspace-runtime.js"
   workflow_dispatch: {}
@@ -39,30 +39,31 @@ jobs:
     env:
       KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
     steps:
-      - name: Wait for build 101 and verify four-source dashboard
+      - name: Wait for build 101 and immutable dashboard assets
         shell: bash
         run: |
           set -euo pipefail
           nonce="${GITHUB_SHA}-$(date +%s)"
-          for attempt in $(seq 1 20); do
+          for attempt in $(seq 1 30); do
             curl --silent --show-error --location --max-time 45 -H 'Cache-Control: no-cache' \
-              "${KAIROS_PRODUCTION_URL}/api/health?v43=${nonce}-${attempt}" --output health.json || true
-            if node -e "const fs=require('fs');try{const h=JSON.parse(fs.readFileSync('health.json','utf8'));process.exit(h.build==='kairos-production-entry-20260717-101'?0:1)}catch{process.exit(1)}"; then
+              "${KAIROS_PRODUCTION_URL}/api/health?immutable-dashboard=${nonce}-${attempt}" --output health.json || true
+            curl --silent --show-error --location --max-time 45 -H 'Cache-Control: no-cache' \
+              "${KAIROS_PRODUCTION_URL}/center/content/website?immutable-dashboard=${nonce}-${attempt}" --output website.html || true
+            if node -e "const fs=require('fs');try{const h=JSON.parse(fs.readFileSync('health.json','utf8'));const w=fs.readFileSync('website.html','utf8');process.exit(h.build==='kairos-production-entry-20260717-101'&&w.includes('kairos-command-center-operational-20260717-20')&&w.includes('/scripts/homepage-quick-action-v5.js?v=operational-20260717-5')?0:1)}catch{process.exit(1)}"; then
               break
             fi
-            if [ "${attempt}" = "20" ]; then
-              echo "build 101 did not become live"
+            if [ "${attempt}" = "30" ]; then
+              echo "build 101 and immutable dashboard assets did not become live"
               cat health.json || true
+              cat website.html || true
               exit 1
             fi
             sleep 6
           done
           curl --fail --silent --show-error --location --max-time 45 -H 'Cache-Control: no-cache' \
-            "${KAIROS_PRODUCTION_URL}/center/content/website?v43=${nonce}" --output website.html
-          curl --fail --silent --show-error --location --max-time 45 -H 'Cache-Control: no-cache' \
             "${KAIROS_PRODUCTION_URL}/scripts/homepage-session-reset-v5.js?v=${nonce}" --output reset.js
           curl --fail --silent --show-error --location --max-time 45 -H 'Cache-Control: no-cache' \
-            "${KAIROS_PRODUCTION_URL}/scripts/homepage-quick-action.js?v=${nonce}" --output quick.js
+            "${KAIROS_PRODUCTION_URL}/scripts/homepage-quick-action-v5.js?v=${nonce}" --output quick.js
           node <<'NODE'
           const fs=require('fs');
           const health=JSON.parse(fs.readFileSync('health.json','utf8'));
@@ -92,11 +93,12 @@ jobs:
             cloneReadbackRequired:health.capabilities?.homepageInstanceCloneReadback==='required',
             templateReadbackRequired:health.capabilities?.homepageTemplateSemanticReadback==='required',
             canonicalFallback:health.capabilities?.homepageCanonicalRebuildFallback==='prohibited',
-            dashboard:website.includes('kairos-command-center-operational-20260717-19'),
+            dashboard:website.includes('kairos-command-center-operational-20260717-20'),
             resetBound:website.includes('/scripts/homepage-session-reset-v5.js?v=operational-20260717-1'),
-            quickBound:website.includes('/scripts/homepage-quick-action.js?v=operational-20260717-4'),
+            quickBound:website.includes('/scripts/homepage-quick-action-v5.js?v=operational-20260717-5'),
+            retiredQuickUnbound:!website.includes('/scripts/homepage-quick-action.js?v='),
             resetScript:reset.includes('kairos.homepage.session-migration.v5')&&reset.includes('kairos.homepage.quick-action.v4'),
-            quickAction:quick.includes('Keep my homepage. Change the words.')&&quick.includes('homepageInstanceIsolationAuthorized: true')&&quick.includes('published-main-homepage-instance-liquid-text-v1')
+            immutableQuickAction:quick.includes('kairos-homepage-quick-action-20260717-4')&&quick.includes('Keep my homepage. Change the words.')&&quick.includes('homepageInstanceIsolationAuthorized: true')&&quick.includes('published-main-homepage-instance-liquid-text-v1')
           };
           const failed=Object.entries(checks).filter(([,value])=>value!==true).map(([key])=>key);
           console.log(JSON.stringify({failed,checks},null,2));
@@ -170,10 +172,10 @@ jobs:
           set -euo pipefail
           if [ "${JOB_STATUS}" = "success" ]; then
             state="success"
-            description="build 101 four-source homepage checks passed"
+            description="build 101 immutable homepage asset and four-source checks passed"
           else
             state="failure"
-            description="build 101 homepage instance verification failed"
+            description="build 101 immutable homepage asset verification failed"
           fi
           payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-v43-homepage-production",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
           curl --fail --silent --show-error -X POST \
