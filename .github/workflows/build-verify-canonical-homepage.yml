@@ -9,6 +9,35 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+      KAIROS_SKIP_RELEASE_MATCH: "true"
+
     steps:
-      - name: Verify GitHub runner startup
-        run: echo "Canonical homepage verification runner is available."
+      - name: Check out verification source
+        uses: actions/checkout@v4
+        with:
+          path: repository
+
+      - name: Install Playwright Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/canonical-homepage
+          npm init -y >/dev/null
+          npm install --no-save --no-audit --no-fund playwright
+          npx playwright install --with-deps chromium
+
+      - name: Build, repair, and verify canonical Shopify staging homepage
+        shell: bash
+        run: node repository/.github/scripts/run-canonical-homepage-release.mjs
+
+      - name: Upload preview evidence and browser results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: canonical-mmg-homepage-evidence
+          path: artifacts/canonical-homepage
+          if-no-files-found: error
+          retention-days: 30
