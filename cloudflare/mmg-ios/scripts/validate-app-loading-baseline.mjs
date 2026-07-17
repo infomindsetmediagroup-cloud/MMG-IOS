@@ -31,7 +31,8 @@ assert.ok(!index.includes("kairos-command-center-inline-20260717-1"), "The faile
 assert.ok(workflow.includes("https://mmg-ios.info-mindsetmediagroup.workers.dev"), "Production verification must target the proven browser hostname.");
 assert.ok(workflow.includes("npx wrangler deploy --dry-run"), "Bundle validation must run before deployment.");
 assert.ok(workflow.includes("npx wrangler deploy"), "The canonical deployment step is missing.");
-assert.ok(workflow.includes("Verify deployed production baseline"), "Live production readback is required.");
+assert.ok(workflow.includes("Prove app opens after deployment"), "Live app-loading readback is required.");
+assert.ok(workflow.includes("kairos-command-hub-recovery-20260714-1"), "Live readback must verify the Tuesday build marker.");
 
 console.log(JSON.stringify({
   status: "passed",
