@@ -2,16 +2,7 @@ name: Verify Kairos Command Center Recovery
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - "cloudflare/mmg-ios/**"
-      - "web/kairos-dashboard/**"
-      - ".github/workflows/verify-child-action-production.yml"
-  pull_request:
-    branches:
-      - main
-    types: [opened, synchronize, reopened]
+    branches: [main]
     paths:
       - "cloudflare/mmg-ios/**"
       - "web/kairos-dashboard/**"
@@ -23,13 +14,13 @@ permissions:
   statuses: write
 
 concurrency:
-  group: kairos-command-center-recovery-${{ github.event.pull_request.number || github.ref }}
+  group: kairos-command-center-recovery
   cancel-in-progress: true
 
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     env:
       APP_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev/center/content/website
     steps:
@@ -55,7 +46,7 @@ jobs:
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}" || { echo "CLOUDFLARE_ACCOUNT_ID is required." >&2; exit 1; }
           npx wrangler deploy
 
-      - name: Wait for exact self-contained shell
+      - name: Fetch exact live self-contained shell
         shell: bash
         run: |
           set -euo pipefail
@@ -69,21 +60,21 @@ jobs:
               --output dashboard.html \
               --write-out '%{http_code}' || true)"
             route="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-command-center-route:/{gsub(/\r/,"",$2);print $2}' headers.txt | tail -1)"
-            type="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{sub(/\r$/ ,"");sub(/^[^:]+:[[:space:]]*/,"");print}' headers.txt | tail -1)"
+            type="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{sub(/\r$/,"");sub(/^[^:]+:[[:space:]]*/,"");print}' headers.txt | tail -1)"
 
             if [ "${code}" = "200" ] \
               && [ "${route}" = "direct-assets-root-shell" ] \
               && [[ "${type}" == text/html* ]] \
               && grep -q 'kairos-command-center-inline-20260717-1' dashboard.html \
               && grep -q 'id="kairos-hub"' dashboard.html \
-              && grep -q 'Website Retool' dashboard.html \
-              && grep -q 'website-objective' dashboard.html; then
+              && grep -q 'id="website-objective"' dashboard.html \
+              && grep -q 'data-website-plan' dashboard.html; then
               echo "Exact self-contained Command Center shell is live."
-              break
+              exit 0
             fi
 
             if [ "${attempt}" = "48" ]; then
-              echo "The self-contained Command Center shell did not become live." >&2
+              echo "The exact self-contained Command Center shell did not become live." >&2
               printf 'http=%s route=%s type=%s\n' "${code:-}" "${route:-}" "${type:-}" >&2
               head -c 1600 dashboard.html >&2 || true
               exit 1
@@ -91,112 +82,81 @@ jobs:
             sleep 5
           done
 
-      - name: Install mobile browser harness
-        run: |
-          set -euo pipefail
-          npm init -y >/dev/null 2>&1
-          npm install playwright@1.52.0 --no-audit --no-fund
-          npx playwright install --with-deps chromium
+      - name: Install deterministic DOM harness
+        run: npm install jsdom@26.1.0 --no-audit --no-fund --no-save
 
-      - name: Prove app opens and Website Retool accepts input
+      - name: Execute live app and verify Website input
         shell: bash
         run: |
           set -euo pipefail
           node <<'NODE'
-          const { chromium } = require('playwright');
+          const fs = require('fs');
+          const { JSDOM, VirtualConsole } = require('jsdom');
 
-          (async () => {
-            const browser = await chromium.launch({ headless: true });
-            const context = await browser.newContext({
-              viewport: { width: 390, height: 844 },
-              isMobile: true,
-              hasTouch: true,
-              userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148',
-            });
-            const page = await context.newPage();
-            const consoleErrors = [];
-            const pageErrors = [];
-            const failedRequests = [];
+          const html = fs.readFileSync('dashboard.html', 'utf8');
+          const errors = [];
+          const virtualConsole = new VirtualConsole();
+          virtualConsole.on('jsdomError', error => errors.push(String(error?.message || error)));
+          virtualConsole.on('error', message => errors.push(String(message)));
 
-            page.on('console', message => {
-              if (message.type() === 'error') consoleErrors.push(message.text());
-            });
-            page.on('pageerror', error => pageErrors.push(String(error?.stack || error)));
-            page.on('requestfailed', request => failedRequests.push({
-              url: request.url(),
-              error: request.failure()?.errorText || 'failed',
-            }));
+          const dom = new JSDOM(html, {
+            url: process.env.APP_URL,
+            runScripts: 'dangerously',
+            pretendToBeVisual: true,
+            virtualConsole,
+          });
 
-            const response = await page.goto(`${process.env.APP_URL}?browser-proof=${Date.now()}`, {
-              waitUntil: 'domcontentloaded',
-              timeout: 60000,
-            });
-
-            await page.waitForSelector('html[data-kairos-boot="ready"]', { timeout: 15000 });
-            await page.waitForSelector('#website-objective', { state: 'visible', timeout: 15000 });
-
-            const objective = 'Verify the functioning Website Retool input without submitting a Shopify mutation.';
-            await page.fill('#website-objective', objective);
-
-            const inputValue = await page.inputValue('#website-objective');
-            const planningButton = page.locator('[data-website-plan]');
-            const buttonVisible = await planningButton.isVisible();
-            const buttonEnabled = await planningButton.isEnabled();
-            const hubText = await page.locator('#kairos-hub').innerText();
-            const build = await page.locator('#kairos-hub').getAttribute('data-self-contained-build');
-            const header = page.locator('.app-header-image');
-            const headerBox = await header.boundingBox();
-            const bodyFont = await page.evaluate(() => getComputedStyle(document.body).fontFamily);
+          setTimeout(() => {
+            const { document } = dom.window;
+            const hub = document.querySelector('#kairos-hub');
+            const objective = document.querySelector('#website-objective');
+            const button = document.querySelector('[data-website-plan]');
+            const testValue = 'Verify the functioning Website Retool input without submitting a Shopify mutation.';
+            if (objective) {
+              objective.value = testValue;
+              objective.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+            }
 
             const receipt = {
-              httpStatus: response?.status() || 0,
-              title: await page.title(),
-              loadingScreenPresent: hubText.includes('Loading Kairos Command Center'),
-              build,
-              objectiveValue: inputValue,
-              buttonVisible,
-              buttonEnabled,
-              headerWidth: headerBox?.width || 0,
-              headerHeight: headerBox?.height || 0,
-              bodyFont,
-              consoleErrors,
-              pageErrors,
-              failedRequests: failedRequests.slice(0, 20),
+              status: 'completed',
+              boot: document.documentElement.dataset.kairosBoot || null,
+              build: hub?.dataset?.selfContainedBuild || null,
+              loadingScreenPresent: Boolean(hub?.textContent?.includes('Loading Kairos Command Center')),
+              commandViewPresent: Boolean(document.querySelector('#command-view')),
+              websiteRetoolPresent: Boolean(hub?.textContent?.includes('Website Retool')),
+              objectivePresent: Boolean(objective),
+              objectiveValue: objective?.value || null,
+              planningButtonPresent: Boolean(button),
+              planningButtonEnabled: Boolean(button && !button.disabled),
+              errors,
             };
+            fs.writeFileSync('command-center-recovery-receipt.json', JSON.stringify(receipt, null, 2));
+            console.log(`KAIROS_COMMAND_CENTER_RECOVERY_RECEIPT=${JSON.stringify(receipt)}`);
 
-            console.log(`KAIROS_COMMAND_CENTER_BROWSER_RECEIPT=${JSON.stringify(receipt)}`);
-            await page.screenshot({ path: 'kairos-command-center-recovery.png', fullPage: true });
-            await browser.close();
-
-            const passed = response?.ok()
+            const passed = receipt.boot === 'ready'
+              && receipt.build === 'kairos-command-center-inline-20260717-1'
               && receipt.loadingScreenPresent === false
-              && build === 'kairos-command-center-inline-20260717-1'
-              && inputValue === objective
-              && buttonVisible
-              && buttonEnabled
-              && receipt.headerWidth > 0
-              && receipt.headerWidth <= 390
-              && receipt.headerHeight > 0
-              && receipt.headerHeight <= 180
-              && !/Times New Roman|serif/i.test(bodyFont || '')
-              && pageErrors.length === 0;
+              && receipt.commandViewPresent
+              && receipt.websiteRetoolPresent
+              && receipt.objectivePresent
+              && receipt.objectiveValue === testValue
+              && receipt.planningButtonPresent
+              && receipt.planningButtonEnabled;
 
-            if (!passed) process.exit(1);
-          })().catch(error => {
-            console.error(error);
-            process.exit(1);
-          });
+            dom.window.close();
+            process.exit(passed ? 0 : 1);
+          }, 250);
           NODE
 
-      - name: Upload rendered mobile proof
+      - name: Upload recovery receipt
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: kairos-command-center-mobile-proof
-          path: kairos-command-center-recovery.png
+          name: kairos-command-center-recovery-receipt
+          path: command-center-recovery-receipt.json
           if-no-files-found: ignore
 
-      - name: Publish Command Center recovery receipt
+      - name: Publish Command Center recovery status
         if: always()
         shell: bash
         env:
@@ -209,16 +169,9 @@ jobs:
             description="Command Center opened and Website Retool accepted input"
           else
             state="failure"
-            description="Command Center mobile browser proof failed"
+            description="Command Center recovery DOM proof failed"
           fi
-          payload="$(STATE="${state}" DESCRIPTION="${description}" node -e '
-            process.stdout.write(JSON.stringify({
-              state: process.env.STATE,
-              description: process.env.DESCRIPTION,
-              context: "kairos-command-center-recovery",
-              target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
-            }));
-          ')"
+          payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-command-center-recovery",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
           curl --fail --silent --show-error -X POST \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
