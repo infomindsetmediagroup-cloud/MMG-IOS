@@ -1,0 +1,65 @@
+name: Diagnose Homepage Plan
+
+on:
+  push:
+    branches:
+      - diag/homepage-plan-response
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Call live homepage planner
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE' > request.json
+          const objective='Keep the currently published homepage framework exactly as it is. Rewrite the existing visible customer-facing copy so visitors clearly understand that Mindset Media Group helps creators, entrepreneurs, authors, educators, and small businesses turn knowledge, experience, and ideas into professional digital products, publishing assets, educational resources, business assets, and revenue-generating intellectual property. Do not change sections, blocks, images, buttons, links, navigation, colors, typography, spacing, styling, animation, layout, mobile behavior, Liquid logic, CSS, or assets.';
+          process.stdout.write(JSON.stringify({objective,requestType:'homepage-preserve-design',intent:'homepage-preserve-design',homepageMode:'preserve-published-framework',sourceOfTruth:'published-main-theme',preserveExistingDesign:true,preservePublishedFramework:true,renderedTextRequired:true,activeOrderedSectionsOnly:true,activeOrderedBlocksOnly:true,templateTextPreferred:true,literalLiquidTextFallbackAuthorized:true,homepageInstanceIsolationAuthorized:true,originalSharedSectionsImmutable:true,structuralMutationAuthorized:false,styleMutationAuthorized:false,liquidStructureMutationAuthorized:false,assetMutationAuthorized:false,canonicalPackageAuthorized:false}));
+          NODE
+          code="$(curl --silent --show-error --location --max-time 180 \
+            -D headers.txt \
+            -H 'Content-Type: application/json' \
+            -H 'Cache-Control: no-cache' \
+            --data-binary @request.json \
+            'https://mmg-ios.info-mindsetmediagroup.workers.dev/api/shopify/staging/plan/jobs' \
+            --output body.json \
+            --write-out '%{http_code}')"
+          HTTP_CODE="$code" node <<'NODE' > diag.json
+          const fs=require('fs');
+          let body={};
+          try{body=JSON.parse(fs.readFileSync('body.json','utf8'))}catch(error){body={parseError:error.message,raw:fs.readFileSync('body.json','utf8').slice(0,2000)}}
+          const headers=fs.readFileSync('headers.txt','utf8');
+          const result=body?.result||{};
+          const plan=result?.plan||{};
+          const compact={
+            httpStatus:Number(process.env.HTTP_CODE),
+            bodyStatus:body?.status||null,
+            build:body?.build||result?.build||null,
+            summary:body?.summary||result?.summary||null,
+            errorCode:body?.error?.code||result?.error?.code||null,
+            errorMessage:body?.error?.message||result?.error?.message||null,
+            resultStatus:result?.status||null,
+            installationMode:plan?.installationMode||null,
+            sourceHeader:(headers.match(/x-kairos-homepage-text-source:\s*([^\r\n]+)/i)||[])[1]||null,
+            productionHeader:(headers.match(/x-kairos-production-entry:\s*([^\r\n]+)/i)||[])[1]||null,
+            plannerHeader:(headers.match(/x-kairos-homepage-instance-fallback:\s*([^\r\n]+)/i)||[])[1]||null,
+            templateCount:Array.isArray(plan?.templateTextPatch?.operations)?plan.templateTextPatch.operations.length:0,
+            liquidCount:Array.isArray(plan?.liquidTextPatches)?plan.liquidTextPatches.reduce((s,p)=>s+(Array.isArray(p?.replacements)?p.replacements.length:0),0):0,
+            instanceCount:Array.isArray(plan?.instancePatches)?plan.instancePatches.reduce((s,p)=>s+(Array.isArray(p?.replacements)?p.replacements.length:0),0):0
+          };
+          process.stdout.write(JSON.stringify(compact,null,2));
+          NODE
+      - name: Upload diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: homepage-plan-diagnostic
+          path: |
+            diag.json
+            headers.txt
+            body.json
+          retention-days: 1
