@@ -1,5 +1,5 @@
 {
-  "baseline": "kairos-production-standard-20260717-38",
+  "baseline": "kairos-production-standard-20260717-39",
   "status": "frozen",
   "productionUrl": "https://mmg-ios.info-mindsetmediagroup.workers.dev",
   "worker": {
@@ -13,6 +13,7 @@
   },
   "dashboard": {
     "build": "kairos-command-hub-routed-20260716-6",
+    "commandCenterDocument": "kairos-command-center-operational-20260717-20",
     "workspaceRuntime": "kairos-workspace-runtime-20260716-3",
     "workflowRuntime": "kairos-workflow-runtime-ui-20260716-4",
     "operationalRuntime": "kairos-operational-runtime-20260716-3",
@@ -22,6 +23,8 @@
     "childActionBridge": "kairos-child-action-bridge-20260716-1",
     "websiteIntentRouter": "kairos-website-intent-router-20260716-2",
     "homepageQuickAction": "kairos-homepage-quick-action-20260717-4",
+    "homepageQuickActionAsset": "scripts/homepage-quick-action-v5.js",
+    "homepageQuickActionAssetBinding": "/scripts/homepage-quick-action-v5.js?v=operational-20260717-5",
     "homepageSessionReset": "kairos-homepage-session-reset-20260717-1",
     "homepagePreservePlanner": "kairos-homepage-preserve-planner-20260716-2",
     "homepageRenderedTextPlanner": "kairos-rendered-homepage-text-planner-20260716-1",
@@ -46,7 +49,7 @@
     "oneHundredReservedForBlueprintCompletion": true
   },
   "approvedExpansion": {
-    "scope": "Operational Command Center with durable objective-to-deliverable execution, a clickable completed-work timeline, and a one-objective homepage text action that reads the currently published MAIN Shopify homepage as the immutable framework source. Kairos checks four governed visible-copy sources in order: active rendered text settings, literal text nodes embedded inside active template HTML or Liquid settings, literal text nodes inside homepage-specific section Liquid files, and homepage-only deterministic clones of shared section instances. Shared-source originals remain byte-for-byte immutable; only the selected homepage instance type reference may be rebound to its clone. Template read-back is verified by canonical JSON semantics because Shopify may normalize JSON serialization; cloned Liquid is verified by exact bytes and SHA-256. Every path preserves block identity, order, markup and Liquid tokens, styled text-node distribution, CSS, assets, classes, links, colors, typography, spacing, layout, animation, and responsive behavior; writes only to verified non-live staging; returns the real preview; and retains explicit preview and live-publication approvals with rollback evidence.",
+    "scope": "Operational Command Center with durable objective-to-deliverable execution, a clickable completed-work timeline, and a one-objective homepage text action that reads the currently published MAIN Shopify homepage as the immutable framework source. Kairos checks four governed visible-copy sources in order: active rendered text settings, literal text nodes embedded inside active template HTML or Liquid settings, literal text nodes inside homepage-specific section Liquid files, and homepage-only deterministic clones of shared section instances. Shared-source originals remain byte-for-byte immutable; only the selected homepage instance type reference may be rebound to its clone. Template read-back is verified by canonical JSON semantics because Shopify may normalize JSON serialization; cloned Liquid is verified by exact bytes and SHA-256. The dashboard loads the verified Quick Action module from an immutable versioned asset filename so an older static object cannot be served under the active route. Every path preserves block identity, order, markup and Liquid tokens, styled text-node distribution, CSS, assets, classes, links, colors, typography, spacing, layout, animation, and responsive behavior; writes only to verified non-live staging; returns the real preview; and retains explicit preview and live-publication approvals with rollback evidence.",
     "activeEdge": "src/kairos-production-entry-v43.js",
     "preservesPriorEdge": "src/kairos-production-entry-v42.js",
     "automaticExternalExecution": false,
@@ -79,6 +82,8 @@
     "homepageInstanceExecutorRequired": true,
     "homepageTemplateSemanticReadbackRequired": true,
     "homepageCloneExactReadbackRequired": true,
+    "homepageQuickActionImmutableAssetRequired": true,
+    "homepageQuickActionAssetPathVerificationRequired": true,
     "homepageVisibleTextDeltaRequired": true,
     "homepageHiddenTextSuccessProhibited": true,
     "homepageMarkupSignaturePreservationRequired": true,
