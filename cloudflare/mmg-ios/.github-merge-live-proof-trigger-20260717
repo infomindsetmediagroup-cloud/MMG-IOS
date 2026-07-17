@@ -1,0 +1,3 @@
+trigger=github-owned-merge-production-proof
+workflow=command-center-browser-proof.yml
+build=kairos-command-center-inline-20260717-1
