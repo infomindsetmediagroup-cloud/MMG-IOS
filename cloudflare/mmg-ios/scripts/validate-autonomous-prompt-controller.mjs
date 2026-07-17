@@ -11,6 +11,7 @@ const wrangler = read(join(workerRoot, "wrangler.toml"));
 const entry = read(join(workerRoot, "src/kairos-production-entry-autonomous-v1.js"));
 const controller = read(join(workerRoot, "src/kairos-autonomous-prompt-controller-v1.js"));
 const bindingRepair = read(join(workerRoot, "src/kairos-homepage-prompt-binding-repair-v1.js"));
+const fullThemeBaseline = read(join(workerRoot, "src/kairos-approved-baseline-restore-v1.js"));
 const index = read(join(repoRoot, "web/kairos-dashboard/index.html"));
 const hub = read(join(repoRoot, "web/kairos-dashboard/scripts/command-hub.js"));
 
@@ -22,6 +23,9 @@ assert.match(wrangler, /KAIROS_WORKERS_AI_MODEL\s*=\s*"@cf\/qwen\/qwen3-30b-a3b-
 assert.ok(entry.includes('./kairos-production-entry.js'), "The autonomous entry must wrap the Tuesday production entry.");
 assert.ok(entry.includes('./kairos-autonomous-prompt-controller-v1.js'));
 assert.ok(entry.includes('./kairos-homepage-prompt-binding-repair-v1.js'));
+assert.ok(entry.includes('./kairos-approved-baseline-restore-v1.js'));
+assert.ok(entry.includes('restoreApprovedHomepageBaseline(env)'));
+assert.ok(entry.includes('requestType === "homepage"'));
 assert.ok(entry.includes('tuesday-command-center-6f96b10d'));
 
 for (const marker of [
@@ -51,6 +55,22 @@ for (const marker of [
   'X-Kairos-Prompt-Binding',
 ]) assert.ok(bindingRepair.includes(marker), `Missing prompt-binding repair contract: ${marker}`);
 
+for (const marker of [
+  'kairos-full-theme-main-baseline-20260717-1',
+  'themeDuplicate',
+  'themeUpdate',
+  'full-theme-main-duplicate',
+  'layout/theme.liquid',
+  'config/settings_schema.json',
+  'config/settings_data.json',
+  'templates/index.json',
+  'current-live-main-theme',
+  'fullThemeDuplicate: true',
+  'liveThemeChanged: false',
+  'stagingOnly: true',
+]) assert.ok(fullThemeBaseline.includes(marker), `Missing full-theme baseline contract: ${marker}`);
+
+assert.ok(!fullThemeBaseline.includes('await writeThemeFile(config, auth, stagingTheme.id, filename, source)'), "Legacy one-file staging restore remains active.");
 assert.ok(index.includes('content="kairos-command-hub-recovery-20260714-1"'));
 assert.ok(index.includes('./scripts/command-hub.js?v=recovery-20260714-1'));
 assert.ok(!index.includes('command-hub-canonical-v3'));
@@ -67,9 +87,11 @@ console.log(JSON.stringify({
   status: "passed",
   contract: "kairos-autonomous-prompt-controller-20260717-1",
   promptBindingRepair: "kairos-homepage-prompt-binding-repair-20260717-1",
+  fullThemeBaseline: "kairos-full-theme-main-baseline-20260717-1",
   visualBaseline: "tuesday-command-center-6f96b10d",
   browserFilesChanged: false,
-  websiteMode: "text-only-source-bound-staging",
+  websiteMode: "fresh-main-duplicate-plus-text-only-source-bound-staging",
+  dirtyStagingReuse: false,
   broadPromptBinding: "verified-inventory-id-to-authoritative-source-text",
   childPromptExecution: "autonomous-workflow",
 }, null, 2));
