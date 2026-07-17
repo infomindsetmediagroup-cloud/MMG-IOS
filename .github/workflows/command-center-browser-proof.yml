@@ -22,7 +22,8 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     env:
-      APP_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev/center/content/website
+      APP_URL: https://kairos.themindsetmediagroup.com/
+      WORKSPACE_URL: https://kairos.themindsetmediagroup.com/center/content/website
     steps:
       - name: Check out production source
         uses: actions/checkout@v4
@@ -46,7 +47,7 @@ jobs:
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
           npx wrangler deploy
 
-      - name: Wait for exact live shell
+      - name: Wait for exact live root shell
         run: |
           set -euo pipefail
           for attempt in $(seq 1 48); do
@@ -62,12 +63,13 @@ jobs:
             if [ "${code}" = "200" ] \
               && [ "${route}" = "direct-assets-root-shell" ] \
               && grep -q 'kairos-command-center-inline-20260717-1' app.html \
-              && grep -q 'id="website-objective"' app.html; then
-              echo "Exact self-contained app shell is live."
+              && grep -q 'id="kairos-hub"' app.html; then
+              echo "Exact self-contained app root shell is live."
               break
             fi
             if [ "${attempt}" = "48" ]; then
-              echo "Exact self-contained app shell did not become live." >&2
+              echo "Exact self-contained app root shell did not become live." >&2
+              cat headers.txt >&2 || true
               exit 1
             fi
             sleep 5
@@ -83,7 +85,7 @@ jobs:
           node <<'NODE'
           const { JSDOM, VirtualConsole } = require('jsdom');
           (async () => {
-            const response = await fetch(`${process.env.APP_URL}?dom-proof=${Date.now()}`, {
+            const response = await fetch(`${process.env.WORKSPACE_URL}?dom-proof=${Date.now()}`, {
               headers: { 'Cache-Control': 'no-cache' },
             });
             const html = await response.text();
@@ -92,7 +94,7 @@ jobs:
             virtualConsole.on('jsdomError', error => errors.push(String(error?.message || error)));
             virtualConsole.on('error', message => errors.push(String(message)));
             const dom = new JSDOM(html, {
-              url: process.env.APP_URL,
+              url: process.env.WORKSPACE_URL,
               runScripts: 'dangerously',
               pretendToBeVisual: true,
               virtualConsole,
@@ -155,10 +157,10 @@ jobs:
           set -euo pipefail
           if [ "${JOB_STATUS}" = "success" ]; then
             state="success"
-            description="Live Command Center opened and Website Retool accepted input"
+            description="Live Kairos root opened and Website Retool accepted input"
           else
             state="failure"
-            description="Live Command Center browser proof failed"
+            description="Live Kairos browser proof failed"
           fi
           payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:"kairos-command-center-browser-proof",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
           curl --fail --silent --show-error -X POST \

@@ -6,6 +6,9 @@ main = "src/kairos-production-entry-v46.js"
 compatibility_date = "2026-07-11"
 workers_dev = true
 keep_vars = true
+routes = [
+  { pattern = "kairos.themindsetmediagroup.com", custom_domain = true }
+]
 
 [assets]
 directory = "../../web/kairos-dashboard"
