@@ -20,7 +20,8 @@ const paths = {
   markupPlanner: join(root, "src/kairos-homepage-template-markup-text-planner-v1.js"),
   templateExecutor: join(root, "src/kairos-homepage-template-text-executor-v1.js"),
   liquidFallback: join(root, "src/kairos-homepage-liquid-text-fallback-v1.js"),
-  instanceFallback: join(root, "src/kairos-homepage-instance-liquid-fallback-v1.js"),
+  instancePlanner: join(root, "src/kairos-homepage-instance-liquid-fallback-v1.js"),
+  instanceExecutor: join(root, "src/kairos-homepage-instance-liquid-executor-v2.js"),
   childRuntime: join(root, "src/kairos-child-action-runtime-v1.js"),
   operational: join(root, "src/kairos-operational-runtime-v1.js"),
   autonomy: join(root, "src/kairos-autonomy-runtime-v1.js"),
@@ -43,16 +44,16 @@ const manifest = JSON.parse(read(paths.manifest));
 const sources = Object.fromEntries(Object.entries(paths).filter(([name]) => name !== "manifest").map(([name, path]) => [name, read(path)]));
 
 assert.equal(manifest.status, "frozen");
-assert.equal(manifest.baseline, "kairos-production-standard-20260717-37");
+assert.equal(manifest.baseline, "kairos-production-standard-20260717-38");
 assert.equal(manifest.worker.entry, "src/kairos-production-entry-v43.js");
+assert.equal(manifest.worker.build, "kairos-production-entry-20260717-101");
 assert.equal(manifest.dashboard.homepageQuickAction, "kairos-homepage-quick-action-20260717-4");
 assert.equal(manifest.dashboard.homepageSessionReset, "kairos-homepage-session-reset-20260717-1");
-assert.equal(manifest.dashboard.homepagePreservePlanner, "kairos-homepage-preserve-planner-20260716-2");
-assert.equal(manifest.dashboard.homepageRenderedTextPlanner, "kairos-rendered-homepage-text-planner-20260716-1");
 assert.equal(manifest.dashboard.homepageTemplateMarkupTextPlanner, "kairos-homepage-template-markup-text-planner-20260717-1");
-assert.equal(manifest.dashboard.homepageTemplateTextExecutor, "kairos-homepage-template-text-executor-20260716-1");
 assert.equal(manifest.dashboard.homepageLiquidTextFallback, "kairos-homepage-liquid-text-fallback-20260716-1");
 assert.equal(manifest.dashboard.homepageInstanceLiquidFallback, "kairos-homepage-instance-liquid-fallback-20260717-1");
+assert.equal(manifest.dashboard.homepageInstanceLiquidExecutor, "kairos-homepage-instance-liquid-executor-20260717-2");
+
 for (const flag of [
   "synchronousChildActionExecution", "childActionObjectiveBridgeRequired", "queuedAcknowledgementOnlyRetired",
   "childActionDurableReadbackRequired", "childActionResultPersistenceRequired", "completedWorkTimelineArchiveRequired",
@@ -62,7 +63,9 @@ for (const flag of [
   "homepageEmbeddedTemplateMarkupTextRequired", "homepageLiteralLiquidTextFallbackRequired", "homepageHomepageSpecificLiquidScopeRequired",
   "homepageSharedSectionInstanceIsolationRequired", "homepageOriginalSharedSectionImmutabilityRequired",
   "homepageSelectedInstanceTypeReferenceOnlyRequired", "homepageDeterministicCloneFilenameRequired",
-  "homepageInstanceCloneReadbackRequired", "homepageVisibleTextDeltaRequired", "homepageHiddenTextSuccessProhibited",
+  "homepageInstanceCloneReadbackRequired", "homepageInstanceExecutorRequired",
+  "homepageTemplateSemanticReadbackRequired", "homepageCloneExactReadbackRequired",
+  "homepageVisibleTextDeltaRequired", "homepageHiddenTextSuccessProhibited",
   "homepageMarkupSignaturePreservationRequired", "homepageTextNodeDistributionPreservationRequired",
   "homepageLiquidLogicMutationProhibited", "homepageStylesheetMutationProhibitedInPreserveMode",
   "homepageAssetMutationProhibitedInPreserveMode", "homepageClassAndDesignTokenMutationProhibitedInPreserveMode",
@@ -87,11 +90,14 @@ requireAll(sources.wrangler, [
 requireAll(sources.entry, [
   './kairos-production-entry-v42.js', './kairos-rendered-homepage-text-planner-v1.js',
   './kairos-homepage-template-markup-text-planner-v1.js', './kairos-homepage-liquid-text-fallback-v1.js',
-  './kairos-homepage-instance-liquid-fallback-v1.js', 'kairos-production-entry-20260717-100',
-  'homepage_liquid_scope_unsafe', 'published-main-homepage-instance-liquid-text-v1',
-  'published-main-four-source-visible-text-preservation', 'homepage-instance isolated shared-section clone',
-  'homepageSharedSectionInstanceIsolation: "operational"', 'homepageOriginalSharedSectionProtection: "required"',
-  'X-Kairos-Homepage-Instance-Fallback', 'X-Kairos-Shared-Section-Handling',
+  './kairos-homepage-instance-liquid-fallback-v1.js', './kairos-homepage-instance-liquid-executor-v2.js',
+  'kairos-production-entry-20260717-101', 'homepage_liquid_scope_unsafe',
+  'published-main-homepage-instance-liquid-text-v1', 'published-main-four-source-visible-text-preservation',
+  'homepage-instance isolated shared-section clone', 'homepageSharedSectionInstanceIsolation: "operational"',
+  'homepageOriginalSharedSectionProtection: "required"', 'homepageTemplateSemanticReadback: "required"',
+  'instanceExecutorBuild', 'canonical-json-semantics', 'exact-bytes-and-sha256',
+  'X-Kairos-Homepage-Instance-Fallback', 'X-Kairos-Homepage-Instance-Executor',
+  'X-Kairos-Template-Readback', 'X-Kairos-Clone-Readback',
   'X-Kairos-Original-Shared-Sections', 'X-Kairos-Canonical-Rebuild-Fallback'
 ], "Production entry v43");
 requireAll(sources.priorEntry, [
@@ -127,21 +133,30 @@ requireAll(sources.liquidFallback, [
   'nodeDistributionPreserved: true', 'liquidStructureMutationAuthorized: false',
   'canonicalPackage: null', 'visibleTextReplacementCount', 'publishedFrameworkPreserved: true',
   'stylesheetsWritten: []', 'assetsWritten: []', 'classesChanged: false', 'designTokensChanged: false'
-], "Liquid text fallback");
+], "Homepage-specific Liquid fallback");
 assert.ok(!sources.liquidFallback.includes('writeThemeFiles(env, evidence.mainTheme.gid'), "Liquid fallback must never write to MAIN");
 assert.ok(!sources.markupPlanner.includes('writeThemeFile('), "Embedded markup planner must remain read-only");
 
-requireAll(sources.instanceFallback, [
+requireAll(sources.instancePlanner, [
   'kairos-homepage-instance-liquid-fallback-20260717-1', 'published-main-homepage-instance-liquid-text-v1',
-  'homepage-instance-isolated-liquid-literal-text-only', 'clone-and-bind-homepage-instance-only',
-  'originalSharedSourceChanged: false', 'homepageInstanceIsolated: true', 'writeThemeFiles',
-  'templateFiles', 'markupSignature', 'nodeDistributionPreserved: true',
-  'originalSharedSectionsChanged: false', 'publishedThemeChanged: false',
-  'homepageCloneType', 'kairos-home-', 'published-main-theme', 'visibleTextReplacementCount',
+  'homepage-instance-isolated-liquid-literal-text-only', 'originalSharedSourceChanged: false',
+  'homepageInstanceIsolated: true', 'markupSignature', 'nodeDistributionPreserved: true',
+  'cloneTypeFor', 'kairos-home-', 'published-main-theme', 'visibleTextReplacementCount',
   'The original shared section files remain byte-for-byte unchanged.'
-], "Homepage instance isolation fallback");
-assert.ok(!sources.instanceFallback.includes('writeThemeFiles(env, evidence.mainTheme.gid'), "Instance fallback must never write to MAIN");
-assert.ok(!sources.instanceFallback.includes('productionPublishAuthorized: true'), "Instance fallback must not authorize production publishing");
+], "Homepage instance isolation planner");
+assert.ok(!sources.instancePlanner.includes('writeThemeFiles(env, evidence.mainTheme.gid'), "Instance planner must never write to MAIN");
+assert.ok(!sources.instancePlanner.includes('productionPublishAuthorized: true'), "Instance planner must not authorize production publishing");
+
+requireAll(sources.instanceExecutor, [
+  'kairos-homepage-instance-liquid-executor-20260717-2', 'published-main-homepage-instance-liquid-text-v1',
+  'published-homepage-instance-liquid-text-executor-v2', 'writeThemeFiles(env, evidence.stagingTheme.gid',
+  'canonicalJsonEqual', 'canonical-json-semantics', 'exact-bytes-and-sha256',
+  'homepageInstanceIsolation: true', 'originalSharedSectionsChanged: false', 'publishedThemeChanged: false',
+  'templateSemanticReadbackVerified: true', 'cloneExactReadbackVerified: true',
+  'published_main_theme_changed', 'rollbackFiles', 'originalSharedSourceChanged !== false'
+], "Homepage instance semantic executor");
+assert.ok(!sources.instanceExecutor.includes('writeThemeFiles(env, evidence.mainTheme.gid'), "Instance executor must never write to MAIN");
+assert.ok(!sources.instanceExecutor.includes('productionPublishAuthorized: true'), "Instance executor must not authorize production publishing");
 
 requireAll(sources.index, [
   'kairos-command-center-operational-20260717-19',
@@ -190,13 +205,16 @@ console.log(`KAIROS_FROZEN_STANDARD=${JSON.stringify({
   status: "passed",
   baseline: manifest.baseline,
   workerEntry: manifest.worker.entry,
+  workerBuild: manifest.worker.build,
   homepageTextSourceOrder: ["template-settings", "embedded-template-markup", "homepage-specific-liquid", "homepage-instance-clone"],
-  instanceFallback: manifest.dashboard.homepageInstanceLiquidFallback,
+  instancePlanner: manifest.dashboard.homepageInstanceLiquidFallback,
+  instanceExecutor: manifest.dashboard.homepageInstanceLiquidExecutor,
   originalSharedSections: "immutable",
+  templateReadback: "canonical-json-semantics",
+  cloneReadback: "exact-bytes-and-sha256",
   selectedHomepageInstanceIsolation: true,
   visibleTextDeltaRequired: true,
   publishedFrameworkPreserved: true,
-  markupAndNodeDistributionPreserved: true,
   stagingOnlyBeforeApproval: true,
   canonicalRebuildFallback: "prohibited",
   objectiveToVerifiedDeliverable: true,
