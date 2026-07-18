@@ -1,13 +1,10 @@
 name: Deploy MMG Worker and Repair Shopify Navigation
-run-name: MMG rendered navigation reconciliation ${{ github.sha }}
 
 on:
   workflow_dispatch:
   push:
     branches:
       - main
-  schedule:
-    - cron: "*/5 * * * *"
 
 permissions:
   contents: read
@@ -27,19 +24,14 @@ jobs:
       WORKER_BASE_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
       STOREFRONT_URL: https://themindsetmediagroup.com
       THEME_MARKER: kairos-theme-menu-hotfix-20260718-3
+
     steps:
       - name: Resolve deployment commit
         id: release
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
-            release_sha="$(git ls-remote "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" refs/heads/main | awk '{print $1}')"
-          else
-            release_sha="${GITHUB_SHA}"
-          fi
-          test -n "$release_sha"
-          echo "sha=$release_sha" >> "$GITHUB_OUTPUT"
+          echo "sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Materialize exact repository commit
         shell: bash
@@ -50,10 +42,11 @@ jobs:
           cd "$RUNNER_TEMP/mmg-release"
           git init
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git fetch --depth=1 origin "${{ steps.release.outputs.sha }}"
+          git fetch --depth=1 origin "${GITHUB_SHA}"
           git checkout --detach FETCH_HEAD
-          test "$(git rev-parse HEAD)" = "${{ steps.release.outputs.sha }}"
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
           grep -q 'kairos-theme-menu-hotfix-20260718-3' cloudflare/mmg-ios/src/kairos-theme-menu-hotfix-publisher-20260718.js
+          test -f scripts/verify-rendered-navigation.mjs
 
       - name: Deploy exact commit to Cloudflare Worker
         shell: bash
@@ -63,17 +56,19 @@ jobs:
           npm install --no-save wrangler@latest
           deployed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           npx wrangler deploy \
-            --var "DEPLOYMENT_SHA:${{ steps.release.outputs.sha }}" \
+            --var "DEPLOYMENT_SHA:${GITHUB_SHA}" \
             --var "DEPLOYED_AT:${deployed_at}"
 
-      - name: Prove live Worker exposes v3 theme publisher
+      - name: Prove live Worker exposes v3 publisher
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 60); do
+          for attempt in $(seq 1 36); do
             headers="$RUNNER_TEMP/theme-publisher-headers.txt"
-            curl --silent --show-error --head --max-time 30 -o /dev/null -D "$headers" \
-              "${WORKER_BASE_URL}/api/shopify/theme-menu-hotfix/publish?sha=${{ steps.release.outputs.sha }}&attempt=${attempt}" || true
+            curl --silent --show-error --head --max-time 30 \
+              -o /dev/null \
+              -D "$headers" \
+              "${WORKER_BASE_URL}/api/shopify/theme-menu-hotfix/publish?sha=${GITHUB_SHA}&attempt=${attempt}" || true
             if grep -qi "x-mmg-theme-menu-hotfix: ${THEME_MARKER}" "$headers"; then
               exit 0
             fi
@@ -86,19 +81,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          result="$RUNNER_TEMP/theme-menu-result.json"
           status="$(curl --silent --show-error --retry 3 --retry-delay 3 \
             -X POST "${WORKER_BASE_URL}/api/shopify/theme-menu-hotfix/publish" \
             -H 'Content-Type: application/json' \
             --data '{"confirmation":"PUBLISH_MMG_THEME_MENU_HOTFIX_NOW"}' \
-            -o "$RUNNER_TEMP/theme-menu-result.json" -w '%{http_code}' || true)"
-          cat "$RUNNER_TEMP/theme-menu-result.json" || true
+            -o "$result" \
+            -w '%{http_code}' || true)"
+          cat "$result" || true
           test "$status" -ge 200
           test "$status" -lt 300
-          grep -q '"status":"completed"' "$RUNNER_TEMP/theme-menu-result.json"
-          grep -q '"exactThemeReadBack":true' "$RUNNER_TEMP/theme-menu-result.json"
-          grep -q '"inlineReleaseMarkerPresent":true' "$RUNNER_TEMP/theme-menu-result.json"
+          grep -q '"status":"completed"' "$result"
+          grep -q '"exactThemeReadBack":true' "$result"
+          grep -q '"inlineReleaseMarkerPresent":true' "$result"
 
-      - name: Install rendered-browser verifier
+      - name: Install browser verifier
         shell: bash
         run: |
           set -euo pipefail
@@ -109,69 +106,18 @@ jobs:
 
       - name: Verify rendered desktop and mobile navigation
         shell: bash
+        env:
+          RELEASE_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/mmg-release"
-          cat > verify-navigation.mjs <<'EOF'
-          import { chromium } from 'playwright';
-
-          const url = `${process.env.STOREFRONT_URL}/?mmg_render_verify=${process.env.GITHUB_SHA}&t=${Date.now()}`;
-          const expected = ['Shop', 'Create & Learn', 'Services', 'Company', 'Support'];
-          const forbidden = ['Catalog', 'Knowledge Library'];
-          const browser = await chromium.launch({ headless: true });
-
-          async function verify(viewport, label) {
-            const page = await browser.newPage({ viewportSize: viewport });
-            const errors = [];
-            page.on('console', msg => {
-              if (msg.type() === 'error') errors.push(`console: ${msg.text()}`);
-            });
-            page.on('pageerror', err => errors.push(`pageerror: ${err.message}`));
-            const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 90000 });
-            if (!response || response.status() >= 400) throw new Error(`${label}: HTTP ${response?.status()}`);
-            await page.waitForFunction(marker => document.documentElement.dataset.mmgThemeMenuHotfix === marker, process.env.THEME_MARKER, { timeout: 30000 });
-            await page.waitForTimeout(1500);
-            const result = await page.evaluate(({ expected, forbidden, marker }) => {
-              const visibleText = [...document.querySelectorAll('header, nav, [role="navigation"], .menu-drawer, .drawer, body')]
-                .filter(el => {
-                  const s = getComputedStyle(el);
-                  const r = el.getBoundingClientRect();
-                  return s.display !== 'none' && s.visibility !== 'hidden' && r.width > 0 && r.height > 0;
-                })
-                .map(el => el.innerText || '')
-                .join('\n');
-              return {
-                marker: document.documentElement.dataset.mmgThemeMenuHotfix,
-                expected: Object.fromEntries(expected.map(x => [x, visibleText.includes(x)])),
-                forbidden: Object.fromEntries(forbidden.map(x => [x, visibleText.includes(x)])),
-                installedMenus: document.querySelectorAll(`[data-mmg-menu="${marker}"]`).length,
-                bodyText: document.body.innerText.slice(0, 5000)
-              };
-            }, { expected, forbidden, marker: process.env.THEME_MARKER });
-            console.log(label, JSON.stringify(result, null, 2));
-            await page.screenshot({ path: `${label}.png`, fullPage: true });
-            if (result.marker !== process.env.THEME_MARKER) throw new Error(`${label}: marker not active`);
-            if (result.installedMenus < 1) throw new Error(`${label}: no Kairos menu installed`);
-            for (const item of expected) if (!result.expected[item]) throw new Error(`${label}: missing ${item}`);
-            for (const item of forbidden) if (result.forbidden[item]) throw new Error(`${label}: obsolete ${item} still visible`);
-            if (errors.length) console.log(`${label} browser errors`, errors);
-            await page.close();
-          }
-
-          try {
-            await verify({ width: 1440, height: 1000 }, 'desktop-navigation');
-            await verify({ width: 390, height: 844 }, 'mobile-navigation');
-          } finally {
-            await browser.close();
-          }
-          EOF
-          STOREFRONT_URL="${STOREFRONT_URL}" THEME_MARKER="${THEME_MARKER}" GITHUB_SHA="${{ steps.release.outputs.sha }}" node verify-navigation.mjs
+          node scripts/verify-rendered-navigation.mjs
 
       - name: Upload rendered verification evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rendered-navigation-verification-${{ steps.release.outputs.sha }}
+          name: rendered-navigation-verification
           path: |
             ${{ runner.temp }}/mmg-release/desktop-navigation.png
             ${{ runner.temp }}/mmg-release/mobile-navigation.png
