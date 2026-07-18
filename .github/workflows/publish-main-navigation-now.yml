@@ -17,14 +17,28 @@ concurrency:
   group: mmg-main-navigation-publish
   cancel-in-progress: false
 
-# Rerun requested after Shopify online-store navigation scope approval.
-
 jobs:
   publish-navigation:
     name: Publish corrected Shopify navigation
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Wait for Cloudflare deployment to expose publisher v5
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 36); do
+            headers="$(curl --silent --show-error --max-time 30 -I \
+              "https://mmg-ios.info-mindsetmediagroup.workers.dev/api/shopify/navigation/publish?release=${GITHUB_SHA}&attempt=${attempt}" || true)"
+            if printf '%s' "$headers" | grep -qi 'x-mmg-native-navigation: kairos-native-navigation-publisher-20260718-5'; then
+              echo 'Navigation publisher v5 is deployed.'
+              exit 0
+            fi
+            echo "Deployment verification attempt ${attempt}/36 has not exposed v5 yet."
+            sleep 5
+          done
+          exit 1
+
       - name: Publish native Shopify main navigation
         shell: bash
         run: |
@@ -60,11 +74,12 @@ jobs:
           ];
           const observed = body?.verification?.topLevel?.map(item => item.title) || [];
           const valid = body?.status === 'completed'
-            && body?.build === 'kairos-native-navigation-publisher-20260718-4'
+            && body?.build === 'kairos-native-navigation-publisher-20260718-5'
             && body?.verification?.valid === true
             && JSON.stringify(observed) === JSON.stringify(expectedTopLevel)
             && !observed.includes('Catalog')
             && !observed.includes('Contact')
+            && body?.safeguards?.absoluteHttpDestinations === true
             && body?.safeguards?.duplicateDestinationsRemoved === true
             && body?.safeguards?.aboutAndContactNestedUnderCompany === true;
 
@@ -90,7 +105,8 @@ jobs:
             if printf '%s' "$html" | grep -q '>Products<' \
               && printf '%s' "$html" | grep -q '>Membership<' \
               && printf '%s' "$html" | grep -q '>Kairos<' \
-              && ! printf '%s' "$html" | grep -q '>Catalog<' ; then
+              && ! printf '%s' "$html" | grep -q '>Catalog<' \
+              && ! printf '%s' "$html" | grep -Eq '<[^>]+>Contact</a>[^<]*</li>[[:space:]]*</ul>' ; then
               echo 'Verified corrected live storefront navigation.'
               exit 0
             fi
