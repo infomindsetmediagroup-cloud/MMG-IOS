@@ -18,7 +18,7 @@ import { handleRelatedProductsBuild, KAIROS_RELATED_PRODUCTS_BUILD } from "./kai
 import { handleProductAssetViewerBuild, KAIROS_PRODUCT_ASSET_VIEWER_BUILD } from "./kairos-product-asset-viewer-publisher-20260718.js";
 import { handleProductTrustLayerBuild, KAIROS_PRODUCT_TRUST_LAYER_BUILD } from "./kairos-product-trust-layer-publisher-20260718.js";
 
-const BUILD = "kairos-production-entry-immutable-20260718-33";
+const BUILD = "kairos-production-entry-immutable-20260718-34";
 const VISUAL_BASELINE = "verified-product-conversion-trust-layer-20260718";
 
 export { KairosProject };
