@@ -11,8 +11,26 @@ if (!storefrontUrl || !marker) {
 const expected = ['Shop', 'Create & Learn', 'Services', 'Company', 'Support'];
 const forbidden = ['Catalog', 'Knowledge Library'];
 const browser = await chromium.launch({ headless: true });
-
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+
+async function inspectDocument(page) {
+  return page.evaluate(expectedMarker => {
+    const metaMarker = document.querySelector('meta[name="mmg-theme-menu-hotfix"]')?.content || null;
+    const datasetMarker = document.documentElement.dataset.mmgThemeMenuHotfix || null;
+    const installedMenus = document.querySelectorAll(`[data-mmg-menu="${expectedMarker}"]`).length;
+    const bodyText = document.body?.innerText || '';
+    const title = document.title || '';
+
+    return {
+      metaMarker,
+      datasetMarker,
+      installedMenus,
+      title,
+      bodyText: bodyText.slice(0, 3000),
+      challengeLike: /too many requests|rate limit|checking your browser|verify you are human|access denied|temporarily unavailable/i.test(`${title}\n${bodyText}`)
+    };
+  }, marker);
+}
 
 async function openWithRetry(page, label) {
   const attempts = 8;
@@ -25,22 +43,72 @@ async function openWithRetry(page, label) {
       referer: 'https://www.google.com/'
     });
     const status = response?.status() ?? 0;
+    await page.waitForTimeout(2500);
+    const documentState = await inspectDocument(page);
 
-    console.log(`${label}: navigation attempt ${attempt}/${attempts} HTTP ${status || 'no-response'}`);
+    console.log(`${label}: navigation attempt ${attempt}/${attempts} HTTP ${status || 'no-response'} meta=${documentState.metaMarker || 'none'} dataset=${documentState.datasetMarker || 'none'} menus=${documentState.installedMenus}`);
 
-    if (status > 0 && status < 400) return response;
+    const realStorefrontDocument =
+      status > 0 &&
+      status < 400 &&
+      !documentState.challengeLike &&
+      documentState.metaMarker === marker;
 
-    if (![0, 408, 425, 429, 500, 502, 503, 504].includes(status)) {
+    if (realStorefrontDocument) return;
+
+    if (![0, 200, 408, 425, 429, 500, 502, 503, 504].includes(status)) {
       throw new Error(`${label}: HTTP ${status}`);
     }
 
     const retryAfter = Number(response?.headers()['retry-after'] || 0);
     const delay = Math.max(retryAfter * 1000, Math.min(15000 * attempt, 60000));
-    console.log(`${label}: retrying after ${delay}ms`);
+    console.log(`${label}: storefront document not yet verifiable; retrying after ${delay}ms`);
     await sleep(delay);
   }
 
-  throw new Error(`${label}: storefront remained rate-limited or unavailable after ${attempts} attempts`);
+  throw new Error(`${label}: storefront never returned the verified Shopify theme document`);
+}
+
+async function waitForRenderedMenu(page, label) {
+  const deadline = Date.now() + 60000;
+  let lastResult = null;
+
+  while (Date.now() < deadline) {
+    lastResult = await page.evaluate(({ expectedItems, forbiddenItems, expectedMarker }) => {
+      const navigationElements = [...document.querySelectorAll('header, nav, [role="navigation"], .menu-drawer, .drawer')];
+      const visibleText = navigationElements
+        .filter(element => {
+          const style = getComputedStyle(element);
+          const rect = element.getBoundingClientRect();
+          return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+        })
+        .map(element => element.innerText || '')
+        .join('\n');
+
+      return {
+        metaMarker: document.querySelector('meta[name="mmg-theme-menu-hotfix"]')?.content || null,
+        datasetMarker: document.documentElement.dataset.mmgThemeMenuHotfix || null,
+        installedMenus: document.querySelectorAll(`[data-mmg-menu="${expectedMarker}"]`).length,
+        expected: Object.fromEntries(expectedItems.map(item => [item, visibleText.includes(item)])),
+        forbidden: Object.fromEntries(forbiddenItems.map(item => [item, visibleText.includes(item)])),
+        visibleText: visibleText.slice(0, 5000)
+      };
+    }, { expectedItems: expected, forbiddenItems: forbidden, expectedMarker: marker });
+
+    const expectedPresent = expected.every(item => lastResult.expected[item]);
+    const forbiddenAbsent = forbidden.every(item => !lastResult.forbidden[item]);
+    const markerValid = lastResult.metaMarker === marker;
+    const installationObserved = lastResult.installedMenus > 0 || lastResult.datasetMarker === marker;
+
+    if (markerValid && installationObserved && expectedPresent && forbiddenAbsent) {
+      return lastResult;
+    }
+
+    await page.waitForTimeout(2000);
+  }
+
+  console.log(`${label}: final rendered state ${JSON.stringify(lastResult, null, 2)}`);
+  throw new Error(`${label}: canonical navigation did not render within 60 seconds`);
 }
 
 async function verify(viewport, label) {
@@ -57,40 +125,9 @@ async function verify(viewport, label) {
 
   try {
     await openWithRetry(page, label);
-
-    await page.waitForFunction(
-      expectedMarker => document.documentElement.dataset.mmgThemeMenuHotfix === expectedMarker,
-      marker,
-      { timeout: 45000 }
-    );
-    await page.waitForTimeout(2000);
-
-    const result = await page.evaluate(({ expectedItems, forbiddenItems, expectedMarker }) => {
-      const visibleText = [...document.querySelectorAll('header, nav, [role="navigation"], .menu-drawer, .drawer')]
-        .filter(element => {
-          const style = getComputedStyle(element);
-          const rect = element.getBoundingClientRect();
-          return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
-        })
-        .map(element => element.innerText || '')
-        .join('\n');
-
-      return {
-        marker: document.documentElement.dataset.mmgThemeMenuHotfix || null,
-        installedMenus: document.querySelectorAll(`[data-mmg-menu="${expectedMarker}"]`).length,
-        expected: Object.fromEntries(expectedItems.map(item => [item, visibleText.includes(item)])),
-        forbidden: Object.fromEntries(forbiddenItems.map(item => [item, visibleText.includes(item)])),
-        visibleText: visibleText.slice(0, 5000)
-      };
-    }, { expectedItems: expected, forbiddenItems: forbidden, expectedMarker: marker });
-
+    const result = await waitForRenderedMenu(page, label);
     console.log(`${label}: ${JSON.stringify(result, null, 2)}`);
     await page.screenshot({ path: `${label}.png`, fullPage: true });
-
-    if (result.marker !== marker) throw new Error(`${label}: marker not active`);
-    if (result.installedMenus < 1) throw new Error(`${label}: no Kairos menu installed`);
-    for (const item of expected) if (!result.expected[item]) throw new Error(`${label}: missing ${item}`);
-    for (const item of forbidden) if (result.forbidden[item]) throw new Error(`${label}: obsolete ${item} still visible`);
   } finally {
     await page.close();
   }
