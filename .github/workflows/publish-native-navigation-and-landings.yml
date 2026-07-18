@@ -73,6 +73,29 @@ jobs:
           done
           exit 1
 
+      - name: Publish and verify consolidated Shopify navigation
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_navigation_build="$(node -e 'import("./cloudflare/mmg-ios/src/kairos-native-navigation-publisher-20260718.js").then(m=>process.stdout.write(m.KAIROS_NATIVE_NAVIGATION_BUILD)).catch(()=>process.exit(1))')"
+          curl --fail-with-body --silent --show-error --max-time 240 \
+            -X POST -H 'Content-Type: application/json' \
+            "${KAIROS_URL}/api/shopify/navigation/publish" \
+            --data '{"confirmation":"PUBLISH_MMG_NATIVE_MAIN_NAVIGATION"}' \
+            --output /tmp/navigation.json
+          EXPECTED_NAVIGATION_BUILD="${expected_navigation_build}" node -e '
+            const b=require("/tmp/navigation.json");
+            const ok=b.status==="completed"
+              && b.build===process.env.EXPECTED_NAVIGATION_BUILD
+              && b.verification?.valid===true
+              && b.safeguards?.duplicateDestinationsRemoved===true
+              && b.safeguards?.equivalentDestinationsMergedAcrossTree===true
+              && b.safeguards?.companyGroupPreserved===true
+              && b.safeguards?.aboutAndContactNestedUnderCompany===true;
+            if(!ok){console.error(JSON.stringify(b,null,2));process.exit(1)}
+            console.log(JSON.stringify({status:b.status,build:b.build,navigation:b.navigation,cleanup:b.cleanup,verification:b.verification},null,2));
+          '
+
       - name: Publish ecosystem landing pages
         shell: bash
         run: |
@@ -100,25 +123,3 @@ jobs:
           publish '/api/shopify/staging/membership-landing/build' 'BUILD_CANONICAL_MMG_MEMBERSHIP_STAGING' 'PUBLISH_CANONICAL_MMG_MEMBERSHIP_LIVE'
           publish '/api/shopify/staging/kairos-landing/build' 'BUILD_CANONICAL_MMG_KAIROS_STAGING' 'PUBLISH_CANONICAL_MMG_KAIROS_LIVE'
           publish '/api/shopify/staging/customer-portal-landing/build' 'BUILD_CANONICAL_MMG_CUSTOMER_PORTAL_STAGING' 'PUBLISH_CANONICAL_MMG_CUSTOMER_PORTAL_LIVE'
-
-      - name: Publish and verify consolidated Shopify navigation
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl --fail-with-body --silent --show-error --max-time 240 \
-            -X POST -H 'Content-Type: application/json' \
-            "${KAIROS_URL}/api/shopify/navigation/publish" \
-            --data '{"confirmation":"PUBLISH_MMG_NATIVE_MAIN_NAVIGATION"}' \
-            --output /tmp/navigation.json
-          node -e '
-            const b=require("/tmp/navigation.json");
-            const ok=b.status==="completed"
-              && b.build==="kairos-native-navigation-publisher-20260718-3"
-              && b.verification?.valid===true
-              && b.safeguards?.duplicateDestinationsRemoved===true
-              && b.safeguards?.equivalentDestinationsMergedAcrossTree===true
-              && b.safeguards?.companyGroupPreserved===true
-              && b.safeguards?.aboutAndContactNestedUnderCompany===true;
-            if(!ok){console.error(JSON.stringify(b,null,2));process.exit(1)}
-            console.log(JSON.stringify({status:b.status,build:b.build,navigation:b.navigation,cleanup:b.cleanup,verification:b.verification},null,2));
-          '
