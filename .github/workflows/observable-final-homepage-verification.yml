@@ -72,14 +72,11 @@ jobs:
             preview: receipt?.preview?.url || build?.preview?.url || null,
             buildStatus: receipt?.buildStatus || build?.status || null,
             firstPass: first?.passed ?? receipt?.firstPass?.passed ?? null,
-            firstFailures: first?.failures || receipt?.firstPass?.failures || [],
             repairPerformed: Boolean(repair || receipt?.repairPerformed),
             repairStatus: repair?.status || receipt?.repair?.status || null,
             finalPassed: final?.passed ?? receipt?.verification?.passed ?? null,
-            finalFailures: final?.failures || receipt?.verification?.failures || [],
             publishedThemeChanged: receipt?.production?.publishedThemeChanged ?? build?.production?.publishedThemeChanged ?? null,
-            files: receipt?.files || build?.files || [],
-            errorTail: read('release-error.log').split('\n').slice(-12).join('\n'),
+            errorTail: read('release-error.log').split('\n').slice(-30).join('\n'),
           }, null, 2));
           NODE
           exit "${status}"
