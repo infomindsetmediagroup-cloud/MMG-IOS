@@ -1,0 +1,87 @@
+name: Audit Live MMG Site Links
+run-name: Audit live storefront links ${{ github.sha }}
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - scripts/mmg-site-link-audit.mjs
+      - docs/MMG-SITE-LINK-INTEGRITY-BUILD-MAP-20260718.md
+      - cloudflare/mmg-ios/src/**
+      - .github/workflows/audit-live-site-links.yml
+  schedule:
+    - cron: '17 11 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mmg-live-site-link-audit
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Crawl sitemap and internal links
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run full live-site audit
+        id: audit
+        continue-on-error: true
+        env:
+          MMG_STOREFRONT_ORIGIN: https://themindsetmediagroup.com
+          MMG_AUDIT_MAX_URLS: '500'
+          MMG_AUDIT_CONCURRENCY: '8'
+          MMG_AUDIT_OUTPUT: mmg-site-link-audit.json
+        run: node scripts/mmg-site-link-audit.mjs
+      - name: Publish audit summary
+        if: always()
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const path = 'mmg-site-link-audit.json';
+          if (!fs.existsSync(path)) {
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, '## MMG live-site audit failed before producing a report.\n');
+            process.exit(0);
+          }
+          const report = JSON.parse(fs.readFileSync(path, 'utf8'));
+          const s = report.summary;
+          const lines = [
+            '## MMG Live-Site Link Audit',
+            '',
+            `- Sitemap URLs: **${s.sitemapUrls}**`,
+            `- URLs crawled: **${s.crawled}**`,
+            `- Broken destinations: **${s.broken}**`,
+            `- Unresolved internal links: **${s.unresolvedInternalLinks}**`,
+            `- Redirects requiring review: **${s.redirects}**`,
+            `- Thin pages: **${s.thinPages}**`,
+            `- Reachable outside sitemap: **${s.reachableOutsideSitemap}**`,
+          ];
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n');
+          NODE
+      - name: Upload complete audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmg-live-site-link-audit-${{ github.run_id }}
+          path: mmg-site-link-audit.json
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Enforce link integrity gate
+        if: always()
+        shell: bash
+        run: |
+          test -f mmg-site-link-audit.json
+          node - <<'NODE'
+          const r = require('./mmg-site-link-audit.json');
+          if (r.summary.broken > 0 || r.summary.unresolvedInternalLinks > 0) {
+            console.error(JSON.stringify({ broken: r.broken, unresolvedInternalLinks: r.unresolvedInternalLinks }, null, 2));
+            process.exit(1);
+          }
+          NODE
