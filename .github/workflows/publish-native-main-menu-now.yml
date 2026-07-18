@@ -1,115 +1,17 @@
-name: Deploy Kairos Worker and Publish Shopify
+name: Kairos Workflow Baseline
 
-on:
+"on":
   push:
     branches:
       - main
-  workflow_dispatch: {}
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  deploy:
+  validate-workflow:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      WORKER_BASE_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
-      THEME_MARKER: kairos-theme-menu-hotfix-20260718-3
-
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Validate release source
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -f cloudflare/mmg-ios/wrangler.toml
-          test -f cloudflare/mmg-ios/package.json
-          test -f cloudflare/mmg-ios/src/kairos-theme-menu-hotfix-publisher-20260718.js
-          grep -q "${THEME_MARKER}" cloudflare/mmg-ios/src/kairos-theme-menu-hotfix-publisher-20260718.js
-
-      - name: Install Kairos Worker dependencies
-        working-directory: cloudflare/mmg-ios
-        shell: bash
-        run: npm install
-
-      - name: Deploy Kairos Worker
-        working-directory: cloudflare/mmg-ios
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx wrangler deploy \
-            --var "DEPLOYMENT_SHA:${GITHUB_SHA}" \
-            --var "DEPLOYED_AT:$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-
-      - name: Wait for deployed publisher
-        shell: bash
-        run: |
-          set -euo pipefail
-          for attempt in $(seq 1 36); do
-            headers="${RUNNER_TEMP}/publisher-headers.txt"
-            status="$(curl --silent --show-error --head --max-time 30 \
-              -D "${headers}" \
-              -o /dev/null \
-              -w '%{http_code}' \
-              "${WORKER_BASE_URL}/api/shopify/theme-menu-hotfix/publish?sha=${GITHUB_SHA}&attempt=${attempt}" || true)"
-            echo "Publisher verification ${attempt}/36 HTTP ${status}"
-            if grep -qi "x-mmg-theme-menu-hotfix: ${THEME_MARKER}" "${headers}"; then
-              echo "Kairos publisher is live."
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "Kairos publisher did not become live." >&2
-          exit 1
-
-      - name: Publish canonical Shopify navigation
-        shell: bash
-        run: |
-          set -euo pipefail
-          result="${RUNNER_TEMP}/theme-menu-result.json"
-          status="$(curl --silent --show-error --retry 3 --retry-delay 3 \
-            -X POST "${WORKER_BASE_URL}/api/shopify/theme-menu-hotfix/publish" \
-            -H 'Content-Type: application/json' \
-            --data '{"confirmation":"PUBLISH_MMG_THEME_MENU_HOTFIX_NOW"}' \
-            -o "${result}" \
-            -w '%{http_code}' || true)"
-          echo "Shopify publish HTTP ${status}"
-          cat "${result}" || true
-          test "${status}" -ge 200
-          test "${status}" -lt 300
-          grep -q '"status":"completed"' "${result}"
-          grep -q '"exactThemeReadBack":true' "${result}"
-          grep -q '"inlineReleaseMarkerPresent":true' "${result}"
-          grep -q '"mainThemeRoleVerified":true' "${result}"
-          grep -q '"shopDomainIdentityVerified":true' "${result}"
-
-      - name: Verify public release marker
-        shell: bash
-        run: |
-          set -euo pipefail
-          for attempt in $(seq 1 24); do
-            html="${RUNNER_TEMP}/storefront.html"
-            status="$(curl --location --silent --show-error \
-              -H 'Cache-Control: no-cache, no-store, max-age=0' \
-              "https://themindsetmediagroup.com/?mmg_release=${GITHUB_SHA}&attempt=${attempt}" \
-              -o "${html}" \
-              -w '%{http_code}' || true)"
-            echo "Public release verification ${attempt}/24 HTTP ${status}"
-            if [ "${status}" = "200" ] && grep -q "${THEME_MARKER}" "${html}"; then
-              echo "Public Kairos release marker verified."
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "Public storefront did not expose the release marker." >&2
-          exit 1
+      - name: Confirm workflow startup
+        run: echo "Kairos workflow parser and runner are operational."
