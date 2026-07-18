@@ -1,5 +1,17 @@
 export * from "./kairos-canonical-homepage-source-meta-20260718.js";
 export { JS_SOURCE } from "./kairos-canonical-homepage-source-js-20260718.js";
+export {
+  ECOSYSTEM_NAV_FILE,
+  ECOSYSTEM_NAV_SOURCE,
+} from "./kairos-ecosystem-navigation-source-20260718.js";
+export {
+  SERVICES_TEMPLATE_FILE,
+  SERVICES_TEMPLATE_SOURCE,
+  SERVICES_SECTION_FILE,
+  SERVICES_SECTION_SOURCE,
+  SERVICES_CSS_FILE,
+  SERVICES_CSS_SOURCE,
+} from "./kairos-services-landing-source-20260718.js";
 
 import { SECTION_SOURCE_A } from "./kairos-canonical-homepage-source-section-a-20260718.js";
 import { SECTION_SOURCE_B } from "./kairos-canonical-homepage-source-section-b-20260718.js";
