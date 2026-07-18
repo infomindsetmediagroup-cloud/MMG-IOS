@@ -9,15 +9,17 @@ import { handleServicesLandingBuild, KAIROS_SERVICES_LANDING_BUILD } from "./kai
 import { handleMembershipLandingBuild, KAIROS_MEMBERSHIP_LANDING_BUILD } from "./kairos-membership-landing-publisher-20260718.js";
 import { handleKnowledgeLandingBuild, KAIROS_KNOWLEDGE_LANDING_BUILD } from "./kairos-knowledge-landing-publisher-20260718.js";
 import { handleCustomerPortalLandingBuild, KAIROS_CUSTOMER_PORTAL_LANDING_BUILD } from "./kairos-customer-portal-landing-publisher-20260718.js";
-import { handleKairosLandingBuild, KAIROS_LANDING_BUILD } from "./kairos-landing-publisher-20260718.js";
+import { handleKairosLandingBuild, KAIROS_KAIROS_LANDING_BUILD as UNUSED } from "./kairos-landing-publisher-20260718.js";
+import { KAIROS_LANDING_BUILD } from "./kairos-landing-publisher-20260718.js";
 import { handleProductsLandingBuild, KAIROS_PRODUCTS_LANDING_BUILD } from "./kairos-products-landing-publisher-20260718.js";
 import { handleDigitalProductBuild, KAIROS_DIGITAL_PRODUCT_BUILD } from "./kairos-digital-product-publisher-20260718.js";
 import { handleServiceProductBuild, KAIROS_SERVICE_PRODUCT_BUILD } from "./kairos-service-product-publisher-20260718.js";
 import { handleRelatedProductsBuild, KAIROS_RELATED_PRODUCTS_BUILD } from "./kairos-related-products-publisher-20260718.js";
 import { handleProductAssetViewerBuild, KAIROS_PRODUCT_ASSET_VIEWER_BUILD } from "./kairos-product-asset-viewer-publisher-20260718.js";
+import { handleProductTrustLayerBuild, KAIROS_PRODUCT_TRUST_LAYER_BUILD } from "./kairos-product-trust-layer-publisher-20260718.js";
 
-const BUILD = "kairos-production-entry-immutable-20260718-28";
-const VISUAL_BASELINE = "verified-unified-product-asset-viewer-20260718";
+const BUILD = "kairos-production-entry-immutable-20260718-29";
+const VISUAL_BASELINE = "verified-product-conversion-trust-layer-20260718";
 
 export { KairosProject };
 
@@ -28,6 +30,8 @@ export default {
       if (websiteBuilderV2) return stamp(websiteBuilderV2);
       const experience = await handleKairosExperienceRequest(request, env, ctx, delegatedRequest => autonomousRuntime.fetch(delegatedRequest, env, ctx));
       if (experience) return stamp(experience);
+      const productTrustLayer = await handleProductTrustLayerBuild(request, env);
+      if (productTrustLayer) return stamp(productTrustLayer);
       const productAssetViewer = await handleProductAssetViewerBuild(request, env);
       if (productAssetViewer) return stamp(productAssetViewer);
       const relatedProducts = await handleRelatedProductsBuild(request, env);
@@ -59,6 +63,7 @@ export default {
         websiteBuilderV2: KAIROS_WEBSITE_BUILDER_V2_BUILD,
         productManufacturingBridge: KAIROS_PRODUCT_MANUFACTURING_BRIDGE_BUILD,
         experienceController: KAIROS_EXPERIENCE_CONTROLLER_BUILD,
+        productTrustLayer: KAIROS_PRODUCT_TRUST_LAYER_BUILD,
         productAssetViewer: KAIROS_PRODUCT_ASSET_VIEWER_BUILD,
         relatedProducts: KAIROS_RELATED_PRODUCTS_BUILD,
         serviceProduct: KAIROS_SERVICE_PRODUCT_BUILD,
@@ -75,11 +80,12 @@ export default {
         error: { code: error?.code || "immutable_entry_failed", message: error instanceof Error ? error.message : "Kairos could not complete this request." },
         safeguards: {
           liveThemeChanged: false,
-          websiteBuilderStagingOnly: true,
-          websiteAssetLibraryPersistent: true,
-          authoritativeManuscriptPreservationRequired: true,
-          productPublicationDraftFirst: true,
-          canonicalHomepageStagingOnly: false,
+          productTrustLayerStagingRequiredBeforePublish: true,
+          fabricatedReviewsPrevented: true,
+          deliveryAndEligibilityDisclosuresRequired: true,
+          cartContinuityEnabled: true,
+          firstPartyAnalyticsEventsEnabled: true,
+          analyticsProviderAgnostic: true,
           productAssetViewerStagingRequiredBeforePublish: true,
           accessibleMediaControlsRequired: true,
           keyboardAndSwipeNavigationEnabled: true,
@@ -134,6 +140,7 @@ function runtimeHeaders() {
     "X-MMG-Website-Builder-V2": KAIROS_WEBSITE_BUILDER_V2_BUILD,
     "X-Kairos-Product-Manufacturing": KAIROS_PRODUCT_MANUFACTURING_BRIDGE_BUILD,
     "X-MMG-Experience-Controller": KAIROS_EXPERIENCE_CONTROLLER_BUILD,
+    "X-MMG-Product-Trust-Layer": KAIROS_PRODUCT_TRUST_LAYER_BUILD,
     "X-MMG-Product-Asset-Viewer": KAIROS_PRODUCT_ASSET_VIEWER_BUILD,
     "X-MMG-Related-Products": KAIROS_RELATED_PRODUCTS_BUILD,
     "X-MMG-Service-Product": KAIROS_SERVICE_PRODUCT_BUILD,
