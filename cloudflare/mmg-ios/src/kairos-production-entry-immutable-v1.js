@@ -12,14 +12,20 @@ import {
   handleKairosExperienceRequest,
   KAIROS_EXPERIENCE_CONTROLLER_BUILD,
 } from "./kairos-experience-controller-v1.js";
+import {
+  handleWebsiteBuilderV2Request,
+  KAIROS_WEBSITE_BUILDER_V2_BUILD,
+} from "./kairos-website-builder-v2.js";
 
-const BUILD = "kairos-production-entry-immutable-20260717-9";
+const BUILD = "kairos-production-entry-immutable-20260717-10";
 
 export { KairosProject };
 
 export default {
   async fetch(request, env, ctx) {
     try {
+      const websiteBuilderV2 = await handleWebsiteBuilderV2Request(request, env);
+      if (websiteBuilderV2) return stamp(websiteBuilderV2);
       const experience = await handleKairosExperienceRequest(
         request,
         env,
@@ -36,6 +42,7 @@ export default {
       return json({
         status: "failed",
         build: BUILD,
+        websiteBuilderV2: KAIROS_WEBSITE_BUILDER_V2_BUILD,
         experienceController: KAIROS_EXPERIENCE_CONTROLLER_BUILD,
         canonicalHomepage: KAIROS_CANONICAL_HOMEPAGE_BUILD,
         canonicalHomepageCompatibility: KAIROS_CANONICAL_HOMEPAGE_COMPATIBILITY_BUILD,
@@ -47,6 +54,7 @@ export default {
         safeguards: {
           liveThemeChanged: false,
           websiteBuilderStagingOnly: true,
+          websiteAssetLibraryPersistent: true,
           canonicalHomepageStagingOnly: true,
           immutableApprovedCandidateRequired: true,
           approvalTimeTextReconstruction: false,
@@ -70,6 +78,7 @@ export default {
 function stamp(response) {
   const headers = new Headers(response.headers);
   headers.set("X-MMG-Production-Entry", BUILD);
+  headers.set("X-MMG-Website-Builder-V2", KAIROS_WEBSITE_BUILDER_V2_BUILD);
   headers.set("X-MMG-Experience-Controller", KAIROS_EXPERIENCE_CONTROLLER_BUILD);
   headers.set("X-Kairos-Canonical-Homepage", KAIROS_CANONICAL_HOMEPAGE_BUILD);
   headers.set("X-Kairos-Canonical-Homepage-Compatibility", KAIROS_CANONICAL_HOMEPAGE_COMPATIBILITY_BUILD);
@@ -95,6 +104,7 @@ function json(value, status = 200) {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store",
       "X-MMG-Production-Entry": BUILD,
+      "X-MMG-Website-Builder-V2": KAIROS_WEBSITE_BUILDER_V2_BUILD,
       "X-MMG-Experience-Controller": KAIROS_EXPERIENCE_CONTROLLER_BUILD,
       "X-Kairos-Canonical-Homepage": KAIROS_CANONICAL_HOMEPAGE_BUILD,
       "X-Kairos-Canonical-Homepage-Compatibility": KAIROS_CANONICAL_HOMEPAGE_COMPATIBILITY_BUILD,
