@@ -17,6 +17,8 @@ concurrency:
   group: mmg-main-navigation-publish
   cancel-in-progress: false
 
+# Rerun requested after Shopify online-store navigation scope approval.
+
 jobs:
   publish-navigation:
     name: Publish corrected Shopify navigation
