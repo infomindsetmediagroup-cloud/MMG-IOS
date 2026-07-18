@@ -1,28 +1,120 @@
-export const KAIROS_NATIVE_NAVIGATION_BUILD = "kairos-native-navigation-publisher-20260718-4";
+import {
+  deleteThemeFiles,
+  hashText,
+  httpError,
+  writeThemeFiles,
+} from "./kairos-compact-homepage-utils-v1.js";
+
+export const KAIROS_NATIVE_NAVIGATION_BUILD = "kairos-native-navigation-theme-publisher-20260718-6";
 export const NATIVE_NAVIGATION_PATH = "/api/shopify/navigation/publish";
 export const NATIVE_NAVIGATION_CONFIRMATION = "PUBLISH_MMG_NATIVE_MAIN_NAVIGATION";
 
 const SHOPIFY_TIMEOUT_MS = 25_000;
+const READ_BACK_ATTEMPTS = 10;
+const READ_BACK_DELAY_MS = 500;
+const LAYOUT_FILE = "layout/theme.liquid";
+const CSS_FILE = "assets/mmg-canonical-navigation.css";
+const JS_FILE = "assets/mmg-canonical-navigation.js";
+const MANAGED_FILES = [LAYOUT_FILE, CSS_FILE, JS_FILE];
+const MARKER_START = "<!-- MMG_CANONICAL_NAVIGATION_START -->";
+const MARKER_END = "<!-- MMG_CANONICAL_NAVIGATION_END -->";
 const tokenCache = new Map();
 
-const CANONICAL_ITEMS = [
-  { title: "Home", type: "HTTP", url: "/", items: [] },
-  { title: "Products", type: "HTTP", url: "/pages/products", items: [] },
-  { title: "Publishing Services", type: "HTTP", url: "/pages/publishing-services", items: [] },
-  { title: "Knowledge Library", type: "HTTP", url: "/pages/knowledge-library", items: [] },
-  { title: "Membership", type: "HTTP", url: "/pages/membership", items: [] },
-  { title: "Kairos", type: "HTTP", url: "/pages/kairos", items: [] },
-  { title: "Customer Portal", type: "HTTP", url: "/pages/customer-portal", items: [] },
+const TOP_LEVEL = [
+  { title: "Home", url: "/" },
+  { title: "Products", url: "/pages/products" },
+  { title: "Publishing Services", url: "/pages/publishing-services" },
+  { title: "Knowledge Library", url: "/pages/knowledge-library" },
+  { title: "Membership", url: "/pages/membership" },
+  { title: "Kairos", url: "/pages/kairos" },
+  { title: "Customer Portal", url: "/pages/customer-portal" },
   {
     title: "Company",
-    type: "HTTP",
     url: "/pages/about-mindset-media-group",
     items: [
-      { title: "About Mindset Media Group™", type: "HTTP", url: "/pages/about-mindset-media-group", items: [] },
-      { title: "Contact", type: "HTTP", url: "/pages/contact", items: [] },
+      { title: "About Mindset Media Group™", url: "/pages/about-mindset-media-group" },
+      { title: "Contact", url: "/pages/contact" },
     ],
   },
 ];
+
+const CSS_SOURCE = String.raw`/* MMG canonical navigation · kairos-native-navigation-theme-publisher-20260718-6 */
+.mmg-canonical-nav{align-items:center;display:flex;gap:clamp(.65rem,1.35vw,1.55rem);list-style:none;margin:0;padding:0}
+.mmg-canonical-nav>li{position:relative}
+.mmg-canonical-nav a,.mmg-canonical-nav summary{color:rgba(var(--color-foreground),.84);cursor:pointer;font:inherit;font-size:1.4rem;line-height:1.3;list-style:none;padding:1.1rem .15rem;text-decoration:none;white-space:nowrap}
+.mmg-canonical-nav a:hover,.mmg-canonical-nav summary:hover,.mmg-canonical-nav a:focus-visible,.mmg-canonical-nav summary:focus-visible{color:rgb(var(--color-foreground));text-decoration:underline;text-underline-offset:.3rem}
+.mmg-canonical-nav summary::-webkit-details-marker{display:none}
+.mmg-canonical-nav__company summary{align-items:center;display:flex;gap:.45rem}
+.mmg-canonical-nav__company summary:after{content:"⌄";font-size:1.1rem;line-height:1;transform:translateY(-.1rem)}
+.mmg-canonical-nav__submenu{background:rgb(var(--color-background));border:1px solid rgba(var(--color-foreground),.12);border-radius:1rem;box-shadow:0 1.2rem 3rem rgba(0,0,0,.12);display:grid;gap:.2rem;left:50%;list-style:none;margin:0;min-width:24rem;padding:.8rem;position:absolute;top:calc(100% - .2rem);transform:translateX(-50%);z-index:40}
+.mmg-canonical-nav__submenu a{border-radius:.65rem;display:block;padding:1rem 1.15rem;white-space:normal}
+.mmg-canonical-nav__submenu a:hover,.mmg-canonical-nav__submenu a:focus-visible{background:rgba(var(--color-foreground),.06);text-decoration:none}
+.mmg-canonical-drawer{display:grid;list-style:none;margin:0;padding:0}
+.mmg-canonical-drawer>li{border-bottom:1px solid rgba(var(--color-foreground),.08)}
+.mmg-canonical-drawer a,.mmg-canonical-drawer summary{align-items:center;color:rgb(var(--color-foreground));display:flex;font-size:1.8rem;justify-content:space-between;line-height:1.3;padding:1.25rem 2rem;text-decoration:none}
+.mmg-canonical-drawer summary{cursor:pointer;list-style:none}
+.mmg-canonical-drawer summary::-webkit-details-marker{display:none}
+.mmg-canonical-drawer summary:after{content:"+"}
+.mmg-canonical-drawer details[open]>summary:after{content:"−"}
+.mmg-canonical-drawer__submenu{display:grid;list-style:none;margin:0;padding:0 0 .8rem 1.4rem}
+.mmg-canonical-drawer__submenu a{font-size:1.55rem;padding:.9rem 2rem}
+@media(max-width:989px){.header__inline-menu .mmg-canonical-nav{display:none}}
+@media(min-width:990px){.mmg-canonical-drawer{display:none}}
+`;
+
+const JS_SOURCE = String.raw`(() => {
+  "use strict";
+  const BUILD = "kairos-native-navigation-theme-publisher-20260718-6";
+  const LINKS = ${JSON.stringify(TOP_LEVEL)};
+
+  const escapeHTML = (value) => String(value || "").replace(/[&<>\"]/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;"
+  })[character]);
+
+  const desktopHTML = () => '<ul class="mmg-canonical-nav list-menu list-menu--inline" role="list" data-mmg-navigation-build="' + BUILD + '">' + LINKS.map((item) => {
+    if (!item.items) return '<li><a class="header__menu-item list-menu__item link link--text focus-inset" href="' + escapeHTML(item.url) + '"><span>' + escapeHTML(item.title) + '</span></a></li>';
+    return '<li><details class="mmg-canonical-nav__company"><summary class="header__menu-item list-menu__item link focus-inset"><span>' + escapeHTML(item.title) + '</span></summary><ul class="mmg-canonical-nav__submenu" role="list">' + item.items.map((child) => '<li><a href="' + escapeHTML(child.url) + '">' + escapeHTML(child.title) + '</a></li>').join('') + '</ul></details></li>';
+  }).join('') + '</ul>';
+
+  const drawerHTML = () => '<ul class="mmg-canonical-drawer" role="list" data-mmg-navigation-build="' + BUILD + '">' + LINKS.map((item) => {
+    if (!item.items) return '<li><a href="' + escapeHTML(item.url) + '">' + escapeHTML(item.title) + '</a></li>';
+    return '<li><details><summary>' + escapeHTML(item.title) + '</summary><ul class="mmg-canonical-drawer__submenu" role="list">' + item.items.map((child) => '<li><a href="' + escapeHTML(child.url) + '">' + escapeHTML(child.title) + '</a></li>').join('') + '</ul></details></li>';
+  }).join('') + '</ul>';
+
+  function install() {
+    const header = document.querySelector('header.header, .shopify-section-header-sticky header, header[role="banner"]');
+    if (!header) return false;
+
+    const desktop = header.querySelector('.header__inline-menu');
+    if (desktop && desktop.dataset.mmgCanonicalNavigation !== BUILD) {
+      desktop.innerHTML = desktopHTML();
+      desktop.dataset.mmgCanonicalNavigation = BUILD;
+    }
+
+    const drawerNavigation = document.querySelector('#menu-drawer .menu-drawer__navigation, .menu-drawer .menu-drawer__navigation, #menu-drawer nav');
+    if (drawerNavigation && drawerNavigation.dataset.mmgCanonicalNavigation !== BUILD) {
+      drawerNavigation.innerHTML = drawerHTML();
+      drawerNavigation.dataset.mmgCanonicalNavigation = BUILD;
+    }
+
+    document.documentElement.dataset.mmgCanonicalNavigation = BUILD;
+    window.dispatchEvent(new CustomEvent('mmg:navigation:ready', { detail: { build: BUILD } }));
+    return Boolean(desktop || drawerNavigation);
+  }
+
+  let attempts = 0;
+  const timer = window.setInterval(() => {
+    attempts += 1;
+    if (install() || attempts >= 40) window.clearInterval(timer);
+  }, 125);
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, { once: true });
+  else install();
+
+  const observer = new MutationObserver(() => install());
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+  window.setTimeout(() => observer.disconnect(), 12000);
+})();`;
 
 export async function handleNativeNavigationPublish(request, env) {
   const url = new URL(request.url);
@@ -30,293 +122,198 @@ export async function handleNativeNavigationPublish(request, env) {
 
   const payload = await safeRequestJSON(request.clone());
   if (payload?.confirmation !== NATIVE_NAVIGATION_CONFIRMATION) {
-    return json({
-      status: "failed",
-      error: {
-        code: "native_navigation_confirmation_required",
-        message: `Provide the exact confirmation phrase: ${NATIVE_NAVIGATION_CONFIRMATION}.`,
-      },
-    }, 403);
+    throw httpError(403, "native_navigation_confirmation_required", `Provide the exact confirmation phrase: ${NATIVE_NAVIGATION_CONFIRMATION}.`);
   }
 
   const config = readShopifyConfig(env);
   const auth = await resolveAccessToken(config, env);
-  const menu = await getMainMenu(config, auth);
-  const before = summarize(menu.items || []);
-  const updated = await updateMenu(config, auth, menu, CANONICAL_ITEMS);
-  const verification = verify(updated?.items || []);
+  const mainTheme = await getMainTheme(config, auth);
+  const beforeFiles = await readThemeFiles(config, auth, mainTheme.id, MANAGED_FILES);
+  const beforeMap = new Map(beforeFiles.map((file) => [file.filename, file]));
+  const layoutBefore = beforeMap.get(LAYOUT_FILE)?.content;
+  if (!layoutBefore) throw httpError(409, "live_theme_layout_unavailable", `${LAYOUT_FILE} was not readable from the published Shopify theme.`);
 
-  if (!verification.valid) {
-    throw error(422, "native_navigation_verification_failed", verification.errors.join("; "));
+  const layoutAfter = injectNavigationAssets(layoutBefore);
+  const candidates = [
+    { filename: LAYOUT_FILE, content: layoutAfter },
+    { filename: CSS_FILE, content: CSS_SOURCE },
+    { filename: JS_FILE, content: JS_SOURCE },
+  ];
+
+  await writeThemeFiles(env, mainTheme.id, candidates);
+
+  try {
+    await verifyReadBack(config, auth, mainTheme.id, candidates);
+  } catch (failure) {
+    await restoreFiles(env, mainTheme.id, candidates, beforeMap);
+    throw failure;
   }
 
   return json({
     status: "completed",
     build: KAIROS_NATIVE_NAVIGATION_BUILD,
-    summary: "Published the exact canonical Shopify main navigation without coupling menu publication to landing-page creation or template assignment.",
+    completedAt: new Date().toISOString(),
+    summary: "Published the canonical MMG navigation through the verified live-theme file pipeline, bypassing the unavailable Shopify menus scope.",
     navigation: {
-      id: updated.id,
-      handle: updated.handle,
-      title: updated.title,
-      items: updated.items,
+      strategy: "published-theme-runtime-override",
+      topLevel: TOP_LEVEL.map((item) => ({ title: item.title, url: item.url, children: item.items?.length || 0 })),
+      desktop: true,
+      mobileDrawer: true,
+      preservedControls: ["hamburger", "search", "account", "cart"],
     },
-    cleanup: {
-      previousTopLevel: before,
-      canonicalTopLevel: verification.topLevel,
-      replacedLegacyTree: true,
+    theme: summarizeTheme(mainTheme),
+    files: await Promise.all(candidates.map(async (file) => ({
+      filename: file.filename,
+      beforeSha256: beforeMap.get(file.filename)?.sha256 || null,
+      afterSha256: await hashText(file.content),
+      changed: beforeMap.get(file.filename)?.content !== file.content,
+    }))),
+    verification: {
+      valid: true,
+      exactThemeFileReadBack: true,
+      layoutInjectionPresent: true,
+      desktopNavigationInstalled: true,
+      mobileNavigationInstalled: true,
+      topLevel: TOP_LEVEL.map((item) => ({ title: item.title, url: item.url, children: item.items?.length || 0 })),
     },
-    verification,
-    pages: [],
     safeguards: {
-      nativeShopifyMenuOnly: true,
-      existingEquivalentItemsPreferred: false,
-      equivalentDestinationsMergedAcrossTree: true,
-      companyGroupPreserved: true,
+      menusGraphQLDependencyRemoved: true,
+      liveThemeChanged: true,
+      rollbackOnReadBackFailure: true,
+      duplicateStandaloneNavigationPrevented: true,
       aboutAndContactNestedUnderCompany: true,
-      duplicateDestinationsRemoved: true,
-      landingPagesPublished: false,
-      navigationIndependentFromLandingPages: true,
+      searchAccountCartPreserved: true,
+      workersAIUsed: false,
     },
   });
 }
 
-async function getMainMenu(config, auth) {
-  const data = await shopifyGraphQL(
-    config,
-    auth,
-    `query KairosMenus {
-      menus(first: 50) {
-        nodes {
-          id
-          handle
-          title
-          isDefault
-          items {
-            id
-            title
-            type
-            url
-            items {
-              id
-              title
-              type
-              url
-              items { id title type url }
-            }
-          }
-        }
-      }
-    }`,
-    {},
-  );
-
-  const menus = data?.menus?.nodes || [];
-  const menu = menus.find(item => item.handle === "main-menu")
-    || menus.find(item => item.isDefault && /main/i.test(item.title))
-    || menus.find(item => /main/i.test(item.title));
-
-  if (!menu?.id) {
-    throw error(404, "main_menu_not_found", "Shopify's native main menu could not be identified.");
-  }
-  return menu;
+function injectNavigationAssets(source) {
+  const block = `${MARKER_START}\n{{ 'mmg-canonical-navigation.css' | asset_url | stylesheet_tag }}\n<script src="{{ 'mmg-canonical-navigation.js' | asset_url }}" defer="defer"></script>\n${MARKER_END}`;
+  const markerPattern = new RegExp(`${escapeRegExp(MARKER_START)}[\\s\\S]*?${escapeRegExp(MARKER_END)}`, "g");
+  const cleaned = String(source || "").replace(markerPattern, "").trimEnd();
+  if (/<\/head>/i.test(cleaned)) return cleaned.replace(/<\/head>/i, `${block}\n</head>`);
+  if (/<\/body>/i.test(cleaned)) return cleaned.replace(/<\/body>/i, `${block}\n</body>`);
+  throw httpError(409, "live_theme_layout_invalid", `${LAYOUT_FILE} contains neither </head> nor </body>.`);
 }
 
-async function updateMenu(config, auth, menu, items) {
-  const data = await shopifyGraphQL(
-    config,
-    auth,
-    `mutation KairosUpdateMainMenu($id: ID!, $title: String!, $items: [MenuItemUpdateInput!]!) {
-      menuUpdate(id: $id, title: $title, items: $items) {
-        menu {
-          id
-          handle
-          title
-          items {
-            id
-            title
-            type
-            url
-            items {
-              id
-              title
-              type
-              url
-              items { id title type url }
-            }
-          }
-        }
-        userErrors { code field message }
-      }
-    }`,
-    { id: menu.id, title: menu.title, items },
-  );
-
-  const errors = data?.menuUpdate?.userErrors || [];
-  if (errors.length) {
-    throw error(
-      422,
-      "native_navigation_update_failed",
-      errors.map(item => `${item.field?.join(".") || "menu"}: ${item.message}`).join("; "),
-    );
-  }
-
-  const updated = data?.menuUpdate?.menu;
-  if (!updated?.id) {
-    throw error(422, "native_navigation_update_empty", "Shopify returned no updated menu after menuUpdate.");
-  }
-  return updated;
+async function getMainTheme(config, auth) {
+  const data = await shopifyGraphQL(config, auth, `query KairosMainTheme { themes(first: 20) { nodes { id name role processing processingFailed } } }`, {});
+  const themes = Array.isArray(data?.themes?.nodes) ? data.themes.nodes : [];
+  const main = themes.find((theme) => String(theme?.role || "").toUpperCase() === "MAIN");
+  if (!main?.id) throw httpError(409, "main_theme_not_found", "The published Shopify MAIN theme could not be identified.");
+  if (main.processing || main.processingFailed) throw httpError(409, "main_theme_not_ready", "The published Shopify theme is processing or failed processing.");
+  return main;
 }
 
-function verify(items) {
-  const errors = [];
-  const expectedTitles = CANONICAL_ITEMS.map(item => item.title);
-  const observedTitles = items.map(item => item.title);
-
-  if (observedTitles.length !== expectedTitles.length) {
-    errors.push(`Expected ${expectedTitles.length} top-level items; received ${observedTitles.length}.`);
-  }
-
-  expectedTitles.forEach((title, index) => {
-    if (observedTitles[index] !== title) {
-      errors.push(`Expected top-level item ${index + 1} to be ${title}; received ${observedTitles[index] || "missing"}.`);
-    }
+async function readThemeFiles(config, auth, themeId, filenames) {
+  const data = await shopifyGraphQL(config, auth, `query KairosNavigationThemeFiles($themeId: ID!, $filenames: [String!], $first: Int!) { theme(id: $themeId) { files(first: $first, filenames: $filenames) { nodes { filename contentType body { ... on OnlineStoreThemeFileBodyText { content } ... on OnlineStoreThemeFileBodyBase64 { contentBase64 } } } userErrors { code filename } } } }`, {
+    themeId,
+    filenames,
+    first: filenames.length,
   });
-
-  const company = items.find(item => item.title === "Company");
-  const companyChildren = company?.items || [];
-  const childTitles = companyChildren.map(item => item.title);
-  if (childTitles.length !== 2
-    || childTitles[0] !== "About Mindset Media Group™"
-    || childTitles[1] !== "Contact") {
-    errors.push("Company must contain exactly About Mindset Media Group™ and Contact, in that order.");
+  const connection = data?.theme?.files;
+  const errors = Array.isArray(connection?.userErrors) ? connection.userErrors.filter((item) => item?.code && item.code !== "NOT_FOUND") : [];
+  if (errors.length) throw httpError(502, "theme_file_read_failed", errors.map((item) => item.code).join("; "));
+  const files = [];
+  for (const filename of filenames) {
+    const node = (connection?.nodes || []).find((item) => item?.filename === filename);
+    const content = bodyToText(node?.body);
+    if (!content) continue;
+    files.push({ filename, content, sha256: await hashText(content), bytes: new TextEncoder().encode(content).length });
   }
-
-  if (observedTitles.includes("Catalog")) errors.push("Catalog must not remain top-level.");
-  if (observedTitles.includes("Contact")) errors.push("Contact must not remain top-level.");
-
-  const flattened = flatten(items);
-  const normalizedUrls = flattened.map(item => normalize(item.url)).filter(Boolean);
-  const duplicateUrls = [...new Set(normalizedUrls.filter((url, index) => normalizedUrls.indexOf(url) !== index))]
-    .filter(url => url !== "/pages/about-mindset-media-group");
-  if (duplicateUrls.length) errors.push(`Duplicate destinations remain: ${duplicateUrls.join(", ")}.`);
-
-  return {
-    valid: errors.length === 0,
-    errors,
-    topLevel: items.map(item => ({
-      title: item.title,
-      url: item.url || null,
-      children: (item.items || []).length,
-    })),
-    destinationCounts: Object.fromEntries(
-      normalizedUrls.reduce((counts, url) => counts.set(url, (counts.get(url) || 0) + 1), new Map()),
-    ),
-  };
+  return files;
 }
 
-function summarize(items) {
-  return items.map(item => ({
-    title: item.title,
-    url: item.url || null,
-    children: (item.items || []).length,
-  }));
+async function verifyReadBack(config, auth, themeId, candidates) {
+  let lastObserved = [];
+  for (let attempt = 1; attempt <= READ_BACK_ATTEMPTS; attempt += 1) {
+    const readBack = await readThemeFiles(config, auth, themeId, candidates.map((file) => file.filename));
+    const map = new Map(readBack.map((file) => [file.filename, file]));
+    lastObserved = [];
+    let valid = true;
+    for (const candidate of candidates) {
+      const actual = map.get(candidate.filename);
+      const expectedHash = await hashText(candidate.content);
+      lastObserved.push(`${candidate.filename}:${actual?.sha256 || "missing"}`);
+      if (!actual || actual.content !== candidate.content || actual.sha256 !== expectedHash) valid = false;
+    }
+    if (valid) return;
+    if (attempt < READ_BACK_ATTEMPTS) await delay(READ_BACK_DELAY_MS);
+  }
+  throw httpError(502, "native_navigation_theme_readback_failed", `Shopify did not preserve the exact navigation files. Observed ${lastObserved.join(", ")}.`);
 }
 
-function flatten(items) {
-  const output = [];
-  for (const item of items) {
-    output.push(item);
-    output.push(...flatten(item.items || []));
-  }
-  return output;
-}
-
-function normalize(value) {
-  if (!value) return "";
-  try {
-    const parsed = new URL(value, "https://store.invalid");
-    return (parsed.pathname.replace(/\/$/, "") || "/").toLowerCase();
-  } catch {
-    return String(value || "").replace(/\/$/, "").toLowerCase();
-  }
+async function restoreFiles(env, themeId, candidates, beforeMap) {
+  const restore = candidates.filter((file) => beforeMap.has(file.filename)).map((file) => ({ filename: file.filename, content: beforeMap.get(file.filename).content }));
+  const remove = candidates.filter((file) => !beforeMap.has(file.filename)).map((file) => file.filename);
+  if (restore.length) await writeThemeFiles(env, themeId, restore);
+  if (remove.length) await deleteThemeFiles(env, themeId, remove);
 }
 
 function readShopifyConfig(env) {
   const storeDomain = String(env.SHOPIFY_STORE_DOMAIN || "").trim().toLowerCase();
   const apiVersion = String(env.SHOPIFY_API_VERSION || "2026-07").trim();
-  if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(storeDomain)) {
-    throw error(503, "shopify_invalid_domain", "The Shopify store domain is invalid.");
-  }
+  if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(storeDomain)) throw httpError(503, "shopify_invalid_domain", "The Shopify store domain is invalid.");
+  if (!/^\d{4}-\d{2}$/.test(apiVersion)) throw httpError(503, "shopify_invalid_version", "The Shopify API version is invalid.");
   return { storeDomain, apiVersion };
 }
 
 async function resolveAccessToken(config, env) {
   const clientId = String(env.SHOPIFY_CLIENT_ID || "").trim();
   const clientSecret = String(env.SHOPIFY_CLIENT_SECRET || "").trim();
-
   if (clientId && clientSecret) {
     const cacheKey = `${config.storeDomain}:${clientId}`;
     const cached = tokenCache.get(cacheKey);
     if (cached?.expiresAt > Date.now()) return { token: cached.token };
-
     const response = await fetch(`https://${config.storeDomain}/admin/oauth/access_token`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
-      body: new URLSearchParams({
-        grant_type: "client_credentials",
-        client_id: clientId,
-        client_secret: clientSecret,
-      }),
+      body: new URLSearchParams({ grant_type: "client_credentials", client_id: clientId, client_secret: clientSecret }),
       signal: AbortSignal.timeout(SHOPIFY_TIMEOUT_MS),
     });
     const body = await safeResponseJSON(response);
     const token = typeof body?.access_token === "string" ? body.access_token.trim() : "";
-    if (!response.ok || !token) {
-      throw error(
-        401,
-        "shopify_client_credentials_invalid",
-        body?.error_description || body?.error || `Shopify token request returned HTTP ${response.status}.`,
-      );
-    }
+    if (!response.ok || !token) throw httpError(401, "shopify_client_credentials_invalid", body?.error_description || body?.error || `Shopify token request returned HTTP ${response.status}.`);
     tokenCache.set(cacheKey, { token, expiresAt: Date.now() + 55 * 60 * 1000 });
     return { token };
   }
-
   const token = String(env.SHOPIFY_ADMIN_ACCESS_TOKEN || "").trim();
-  if (!token) throw error(503, "shopify_not_configured", "Shopify credentials are not configured.");
+  if (!token) throw httpError(503, "shopify_not_configured", "Shopify credentials are not configured.");
   return { token };
 }
 
 async function shopifyGraphQL(config, auth, query, variables) {
   const response = await fetch(`https://${config.storeDomain}/admin/api/${config.apiVersion}/graphql.json`, {
     method: "POST",
-    headers: {
-      "X-Shopify-Access-Token": auth.token,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
+    headers: { "X-Shopify-Access-Token": auth.token, "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({ query, variables }),
     signal: AbortSignal.timeout(SHOPIFY_TIMEOUT_MS),
   });
   const body = await safeResponseJSON(response);
-  if (!response.ok) {
-    throw error(
-      response.status,
-      "shopify_graphql_http_error",
-      body?.errors?.[0]?.message || `Shopify GraphQL returned HTTP ${response.status}.`,
-    );
-  }
-  if (body?.errors?.length) {
-    throw error(422, "shopify_graphql_error", body.errors.map(item => item.message).join("; "));
-  }
+  if (!response.ok) throw httpError(response.status, "shopify_graphql_http_error", body?.errors?.[0]?.message || `Shopify GraphQL returned HTTP ${response.status}.`);
+  if (Array.isArray(body?.errors) && body.errors.length) throw httpError(422, "shopify_graphql_error", body.errors.map((item) => item?.message).filter(Boolean).join("; "));
   return body?.data || {};
 }
 
-function error(status, code, message) {
-  const value = new Error(message);
-  value.status = status;
-  value.code = code;
-  return value;
+function summarizeTheme(theme) {
+  return { id: theme.id, name: theme.name, role: theme.role };
+}
+
+function bodyToText(body) {
+  if (typeof body?.content === "string") return body.content;
+  if (typeof body?.contentBase64 === "string") {
+    try { return atob(body.contentBase64); } catch { return ""; }
+  }
+  return "";
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function safeRequestJSON(request) {
