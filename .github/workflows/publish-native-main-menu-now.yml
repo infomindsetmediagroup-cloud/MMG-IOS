@@ -1,4 +1,5 @@
 name: Publish Native Shopify Main Menu Now
+run-name: Native Shopify menu shell release ${{ github.sha }}
 
 on:
   workflow_dispatch:
@@ -20,50 +21,63 @@ concurrency:
 
 jobs:
   deploy-publish-verify:
-    name: Deploy and publish native Shopify menu
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    defaults:
-      run:
-        working-directory: cloudflare/mmg-ios
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GITHUB_TOKEN: ${{ github.token }}
     steps:
-      - name: Checkout release
-        uses: actions/checkout@v4
+      - name: Materialize repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/mmg-release"
+          cd "$RUNNER_TEMP/mmg-release"
+          curl --fail --location --silent --show-error \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" \
+            -o repo.tar.gz
+          tar -xzf repo.tar.gz --strip-components=1
+          test -f cloudflare/mmg-ios/wrangler.toml
+          test -f cloudflare/mmg-ios/src/kairos-native-main-menu-publisher-20260718.js
 
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
+      - name: Deploy native-menu Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/mmg-release/cloudflare/mmg-ios"
+          node --version
+          npm --version
+          npm install --no-save wrangler@latest
+          npx wrangler deploy | tee native-main-menu-worker-deploy.txt
 
-      - name: Install Wrangler
-        run: npm install --no-save wrangler@latest
-
-      - name: Deploy production Worker
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx wrangler deploy | tee native-main-menu-worker-deploy.txt
-
-      - name: Wait for native menu endpoint
+      - name: Wait for native-menu endpoint
+        shell: bash
         run: |
           set -euo pipefail
           for attempt in $(seq 1 48); do
-            headers=$(curl -sS -I --max-time 30 "https://mmg-ios.info-mindsetmediagroup.workers.dev/api/shopify/native-main-menu/publish?release=${GITHUB_SHA}&attempt=${attempt}" || true)
-            if echo "$headers" | grep -qi 'x-mmg-native-main-menu:'; then
-              echo 'Native main-menu Worker is deployed.'
+            headers="$(curl --silent --show-error --head --max-time 30 \
+              "https://mmg-ios.info-mindsetmediagroup.workers.dev/api/shopify/native-main-menu/publish?release=${GITHUB_SHA}&attempt=${attempt}" || true)"
+            if grep -qi "x-mmg-native-main-menu:" <<<"$headers"; then
+              echo "Native main-menu Worker is deployed."
               exit 0
             fi
+            echo "Worker verification attempt ${attempt}/48."
             sleep 5
           done
-          echo 'Native main-menu Worker did not become reachable.' >&2
+          echo "Native main-menu Worker did not become reachable." >&2
           exit 1
 
-      - name: Publish native Shopify menu
+      - name: Publish exact native Shopify menu
+        shell: bash
         run: |
           set -euo pipefail
+          cd "$RUNNER_TEMP/mmg-release/cloudflare/mmg-ios"
           curl --fail-with-body --retry 5 --retry-delay 3 \
-            -X POST 'https://mmg-ios.info-mindsetmediagroup.workers.dev/api/shopify/native-main-menu/publish' \
-            -H 'Content-Type: application/json' \
+            -X POST "https://mmg-ios.info-mindsetmediagroup.workers.dev/api/shopify/native-main-menu/publish" \
+            -H "Content-Type: application/json" \
             --data '{"confirmation":"PUBLISH_MMG_NATIVE_MAIN_MENU_NOW"}' \
             -o native-main-menu-result.json
           cat native-main-menu-result.json
@@ -77,30 +91,24 @@ jobs:
           grep -q '"title":"Company"' native-main-menu-result.json
           grep -q '"title":"Support"' native-main-menu-result.json
 
-      - name: Verify live storefront
+      - name: Verify live storefront menu
+        shell: bash
         run: |
           set -euo pipefail
+          cd "$RUNNER_TEMP/mmg-release/cloudflare/mmg-ios"
           for attempt in $(seq 1 18); do
-            curl -L --fail -sS -H 'Cache-Control: no-cache' \
+            curl --location --fail --silent --show-error \
+              -H "Cache-Control: no-cache" \
               "https://themindsetmediagroup.com/?mmg_nav_verify=${GITHUB_SHA}&attempt=${attempt}" \
               -o live-home.html
             if ! grep -q '>Knowledge Library<' live-home.html \
               && grep -q '>Create &amp; Learn<' live-home.html \
               && grep -q '>Support<' live-home.html; then
-              echo 'Live native Shopify menu verified.'
+              echo "Live native Shopify menu verified."
               exit 0
             fi
+            echo "Live verification attempt ${attempt}/18."
             sleep 10
           done
-          echo 'Live storefront still exposes the legacy menu tree.' >&2
+          echo "Live storefront still exposes the legacy menu tree." >&2
           exit 1
-
-      - name: Upload proof
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-main-menu-publication-proof
-          path: |
-            cloudflare/mmg-ios/native-main-menu-worker-deploy.txt
-            cloudflare/mmg-ios/native-main-menu-result.json
-            cloudflare/mmg-ios/live-home.html
