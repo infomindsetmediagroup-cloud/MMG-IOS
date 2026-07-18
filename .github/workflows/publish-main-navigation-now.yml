@@ -2,13 +2,13 @@ name: Publish Corrected Main Navigation
 run-name: Publish corrected Shopify navigation ${{ github.sha }}
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - .github/workflows/publish-main-navigation-now.yml
-      - cloudflare/mmg-ios/src/kairos-native-navigation-publisher-20260718.js
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      authorization_confirmed:
+        description: "Confirm the installed Shopify app currently has read_online_store_navigation and write_online_store_navigation"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -17,11 +17,10 @@ concurrency:
   group: mmg-main-navigation-publish
   cancel-in-progress: false
 
-# Rerun requested after Shopify online-store navigation scope approval.
-
 jobs:
   publish-navigation:
     name: Publish corrected Shopify navigation
+    if: ${{ inputs.authorization_confirmed == true }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -42,6 +41,15 @@ jobs:
           echo
 
           if [ "${http_code}" -lt 200 ] || [ "${http_code}" -ge 300 ]; then
+            node - <<'NODE'
+          const fs = require('node:fs');
+          let body = {};
+          try { body = JSON.parse(fs.readFileSync('/tmp/navigation.json', 'utf8')); } catch {}
+          const message = body?.error?.message || '';
+          if (/Access denied for menus field/i.test(message)) {
+            console.error('BLOCKED: The installed Shopify app token does not include read_online_store_navigation. No Shopify menu write was attempted. Update and release the Shopify app version with read_online_store_navigation and write_online_store_navigation before rerunning this manual workflow.');
+          }
+          NODE
             exit 1
           fi
 
