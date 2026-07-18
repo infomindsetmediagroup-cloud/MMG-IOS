@@ -28,6 +28,14 @@ export {
   KNOWLEDGE_CSS_FILE,
   KNOWLEDGE_CSS_SOURCE,
 } from "./kairos-knowledge-landing-source-20260718.js";
+export {
+  CUSTOMER_PORTAL_TEMPLATE_FILE,
+  CUSTOMER_PORTAL_TEMPLATE_SOURCE,
+  CUSTOMER_PORTAL_SECTION_FILE,
+  CUSTOMER_PORTAL_SECTION_SOURCE,
+  CUSTOMER_PORTAL_CSS_FILE,
+  CUSTOMER_PORTAL_CSS_SOURCE,
+} from "./kairos-customer-portal-landing-source-20260718.js";
 
 import { SECTION_SOURCE_A } from "./kairos-canonical-homepage-source-section-a-20260718.js";
 import { SECTION_SOURCE_B } from "./kairos-canonical-homepage-source-section-b-20260718.js";
