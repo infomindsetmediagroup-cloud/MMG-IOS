@@ -1,4 +1,4 @@
-export const KAIROS_NATIVE_MAIN_MENU_BUILD = "kairos-native-main-menu-publisher-20260718-6";
+export const KAIROS_NATIVE_MAIN_MENU_BUILD = "kairos-native-main-menu-publisher-20260718-7";
 export const NATIVE_MAIN_MENU_PATH = "/api/shopify/native-main-menu/publish";
 export const NATIVE_MAIN_MENU_CONFIRMATION = "PUBLISH_MMG_NATIVE_MAIN_MENU_NOW";
 
@@ -6,6 +6,7 @@ const SHOPIFY_TIMEOUT_MS = 25_000;
 const STOREFRONT_ORIGIN = "https://themindsetmediagroup.com";
 const tokenCache = new Map();
 const THEME_FILES = ["sections/header-group.json", "config/settings_data.json"];
+const LEGACY_TITLES = new Set(["Home", "Catalog", "Publishing Services", "Knowledge Library", "Customer Portal", "Company", "Contact"]);
 
 const CANONICAL_ITEMS = [
   { title: "Shop", type: "HTTP", url: `${STOREFRONT_ORIGIN}/collections/all`, items: [
@@ -50,9 +51,9 @@ export async function handleNativeMainMenuPublish(request, env) {
   const themeConfig = await readThemeFiles(config, auth, theme.id, THEME_FILES);
   const boundHandles = extractMenuHandles(themeConfig);
   const menus = await getMenus(config, auth);
-  const candidates = selectBoundMenus(menus, boundHandles);
+  const candidates = selectTargetMenus(menus, boundHandles);
   if (!candidates.length) {
-    throw error(404, "live_header_menu_not_found", `No Shopify menu matched the MAIN theme header binding. Handles found: ${[...boundHandles].join(", ") || "none"}.`);
+    throw error(404, "live_header_menu_not_found", `No Shopify menu matched the MAIN theme binding, live legacy signature, or main/default fallback. Handles found: ${[...boundHandles].join(", ") || "none"}.`);
   }
 
   const expected = normalize(CANONICAL_ITEMS);
@@ -64,20 +65,24 @@ export async function handleNativeMainMenuPublish(request, env) {
     if (JSON.stringify(after) !== JSON.stringify(expected)) {
       throw error(502, "native_main_menu_readback_mismatch", `Shopify did not return the canonical tree for ${menu.handle || menu.title}.`);
     }
-    updatedMenus.push({ id: updated.id, handle: updated.handle, title: updated.title, before, after });
+    updatedMenus.push({ id: updated.id, handle: updated.handle, title: updated.title, before, after, legacyScore: legacyScore(menu), bound: boundHandles.has(menu.handle) });
   }
 
+  const legacyTargets = candidates.filter(m => legacyScore(m) >= 3);
   return json({
     status: "completed",
     build: KAIROS_NATIVE_MAIN_MENU_BUILD,
     authSource: auth.source,
     theme: { id: theme.id, name: theme.name, role: theme.role },
     boundHandles: [...boundHandles],
+    discovery: menus.map(m => ({ id: m.id, handle: m.handle, title: m.title, isDefault: m.isDefault, topLevelTitles: (m.items || []).map(i => i.title), legacyScore: legacyScore(m) })),
     updatedMenus,
     verification: {
       exactNativeMenuReadBack: true,
       liveThemeBindingResolved: boundHandles.size > 0,
-      boundMenuUpdated: updatedMenus.some(m => boundHandles.has(m.handle)),
+      boundMenuUpdated: updatedMenus.some(m => m.bound),
+      liveLegacySignatureTargeted: legacyTargets.length > 0,
+      legacyMenuUpdated: updatedMenus.some(m => m.legacyScore >= 3),
       knowledgeLibraryRemoved: updatedMenus.every(m => !JSON.stringify(m.after).includes("Knowledge Library")),
       updatedMenuCount: updatedMenus.length,
       freshClientCredentialsTokenUsed: auth.source === "client_credentials",
@@ -133,12 +138,20 @@ function walk(value, path, visit) {
   }
 }
 
-function selectBoundMenus(menus, handles) {
+function legacyScore(menu) {
+  const titles = new Set((menu?.items || []).map(i => i.title));
+  let score = 0;
+  for (const title of LEGACY_TITLES) if (titles.has(title)) score += 1;
+  return score;
+}
+
+function selectTargetMenus(menus, handles) {
   const selected = [];
   const seen = new Set();
   const add = m => { if (m?.id && !seen.has(m.id)) { seen.add(m.id); selected.push(m); } };
   menus.filter(m => handles.has(m.handle)).forEach(add);
-  if (!selected.length) menus.filter(m => m.handle === "main-menu" || m.isDefault).forEach(add);
+  menus.filter(m => legacyScore(m) >= 3).sort((a, b) => legacyScore(b) - legacyScore(a)).forEach(add);
+  menus.filter(m => m.handle === "main-menu" || m.isDefault || /main/i.test(m.title || "")).forEach(add);
   return selected;
 }
 
