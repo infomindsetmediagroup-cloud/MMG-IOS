@@ -23,6 +23,9 @@ const requiredFiles = [
   join(sourceRoot, "kairos-approved-website-executor-v1.js"),
   join(sourceRoot, "kairos-executive-correction-loop-v1.js"),
   join(sourceRoot, "kairos-social-production-v1.js"),
+  join(sourceRoot, "kairos-canonical-homepage-builder-v1.js"),
+  join(sourceRoot, "kairos-canonical-homepage-publisher-20260718.js"),
+  join(sourceRoot, "kairos-canonical-homepage-source-20260718.js"),
   join(repoRoot, "web/kairos-dashboard/index.html"),
   join(repoRoot, "web/kairos-dashboard/web-003.html"),
   join(repoRoot, "web/kairos-dashboard/scripts/command-hub.js"),
@@ -60,12 +63,13 @@ const activeEntry = readFileSync(activeEntryPath, "utf8");
 assert.ok(activeEntry.includes('./kairos-production-entry-autonomous-v1.js'), "Immutable production entry must wrap the autonomous runtime.");
 assert.ok(activeEntry.includes('./kairos-immutable-approved-file-execution-v1.js'), "Immutable approved-file execution is not wired.");
 assert.ok(activeEntry.includes('handleImmutableApprovedFileExecution'));
-assert.ok(activeEntry.includes('tuesday-command-center-6f96b10d'));
+assert.ok(activeEntry.includes('customer-portal-homepage-framework-20260718'), "Customer Portal homepage visual baseline is missing from the active production entry.");
+assert.ok(activeEntry.includes('KAIROS_CANONICAL_HOMEPAGE_BUILD'), "Canonical homepage publisher is not wired into the active production entry.");
 
 const autonomousEntry = readFileSync(autonomousEntryPath, "utf8");
 assert.ok(autonomousEntry.includes('./kairos-production-entry.js'), "Autonomous runtime must wrap the frozen Tuesday entry.");
 assert.ok(autonomousEntry.includes('./kairos-autonomous-prompt-controller-v1.js'), "Autonomous prompt controller is not wired.");
-assert.ok(autonomousEntry.includes('tuesday-command-center-6f96b10d'), "Frozen visual baseline identity is missing.");
+assert.ok(autonomousEntry.includes('tuesday-command-center-6f96b10d'), "Frozen Command Center visual baseline identity is missing.");
 
 const immutableExecution = readFileSync(immutableExecutionPath, "utf8");
 for (const marker of [
@@ -153,12 +157,14 @@ assert.equal(typeof runtimeModule.KairosProject, "function", "Active immutable r
 
 console.log(JSON.stringify({
   status: "ready",
-  baseline: "tuesday-command-center-6f96b10d",
-  browserSurfaceChanged: false,
+  commandCenterBaseline: "tuesday-command-center-6f96b10d",
+  homepageBaseline: "customer-portal-homepage-framework-20260718",
+  browserSurfaceChanged: true,
   autonomousPromptController: true,
   immutableApprovedFileExecution: true,
   approvalTimeTextReconstruction: false,
-  textOnlyShopifyExecution: true,
+  homepagePublisherWired: true,
+  homepageLivePublishAuthorized: true,
   integratedHeaderStatusStrip: true,
   integratedHamburgerNavigation: true,
   commandCenterParents: 5,
