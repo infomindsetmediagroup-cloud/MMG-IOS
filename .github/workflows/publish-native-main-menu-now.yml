@@ -1,5 +1,5 @@
 name: Publish Corrected Shopify Menu Now
-run-name: Native Shopify main navigation release ${{ github.sha }}
+run-name: Live-signature Shopify navigation repair ${{ github.sha }}
 
 on:
   workflow_dispatch:
@@ -42,7 +42,7 @@ jobs:
           test -f cloudflare/mmg-ios/wrangler.toml
           test -f cloudflare/mmg-ios/src/kairos-native-main-menu-publisher-20260718.js
 
-      - name: Deploy native main-menu Worker
+      - name: Deploy live-signature native-menu Worker
         shell: bash
         run: |
           set -euo pipefail
@@ -50,7 +50,7 @@ jobs:
           npm install --no-save wrangler@latest
           npx wrangler deploy | tee native-main-menu-worker-deploy.txt
 
-      - name: Wait for native main-menu endpoint
+      - name: Wait for native-menu v4 endpoint
         shell: bash
         run: |
           set -euo pipefail
@@ -58,16 +58,16 @@ jobs:
             headers_file="$RUNNER_TEMP/native-main-menu-headers.txt"
             status="$(curl --silent --show-error --head --max-time 30 -o /dev/null -D "$headers_file" -w '%{http_code}' "https://mmg-ios.info-mindsetmediagroup.workers.dev/api/shopify/native-main-menu/publish?release=${GITHUB_SHA}&attempt=${attempt}" || true)"
             echo "Endpoint probe ${attempt}/48 HTTP ${status}"
-            if grep -qi "x-mmg-native-main-menu: kairos-native-main-menu-publisher-20260718-3" "$headers_file"; then
-              echo "Native main-menu Worker v3 is deployed."
+            if grep -qi "x-mmg-native-main-menu: kairos-native-main-menu-publisher-20260718-4" "$headers_file"; then
+              echo "Native main-menu Worker v4 is deployed."
               exit 0
             fi
             sleep 5
           done
-          echo "Native main-menu Worker v3 did not become reachable." >&2
+          echo "Native main-menu Worker v4 did not become reachable." >&2
           exit 1
 
-      - name: Publish Shopify native main menu
+      - name: Replace live-signature Shopify navigation menus
         shell: bash
         run: |
           set -euo pipefail
@@ -80,6 +80,8 @@ jobs:
           grep -q '"status":"completed"' native-main-menu-result.json
           grep -q '"exactNativeMenuReadBack":true' native-main-menu-result.json
           grep -q '"knowledgeLibraryRemoved":true' native-main-menu-result.json
+          grep -q '"liveLegacySignatureTargeted":true' native-main-menu-result.json
+          grep -Eq '"updatedMenuCount":[1-9][0-9]*' native-main-menu-result.json
           grep -q '"themeOverrideNotUsed":true' native-main-menu-result.json
 
       - name: Verify live main navigation
@@ -87,17 +89,18 @@ jobs:
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/mmg-release/cloudflare/mmg-ios"
-          for attempt in $(seq 1 24); do
+          for attempt in $(seq 1 36); do
             status="$(curl --location --silent --show-error -H 'Cache-Control: no-cache, no-store, max-age=0' "https://themindsetmediagroup.com/?mmg_native_nav=${GITHUB_SHA}&attempt=${attempt}" -o live-home.html -w '%{http_code}' || true)"
-            echo "Live navigation verification ${attempt}/24 HTTP ${status}"
+            echo "Live navigation verification ${attempt}/36 HTTP ${status}"
             if [ "$status" = "200" ] \
               && grep -q 'Create &amp; Learn' live-home.html \
               && grep -q '>Support<' live-home.html \
-              && ! grep -q '>Knowledge Library<' live-home.html; then
+              && ! grep -q '>Knowledge Library<' live-home.html \
+              && ! grep -q '>Catalog<' live-home.html; then
               echo "Live native main navigation verified."
               exit 0
             fi
             sleep 5
           done
-          echo "Shopify native main navigation did not appear on the live storefront." >&2
+          echo "The live storefront still exposes the obsolete navigation after updating every matching Shopify menu." >&2
           exit 1
