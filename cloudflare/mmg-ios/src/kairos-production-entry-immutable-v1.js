@@ -45,9 +45,13 @@ import {
   handleDigitalProductBuild,
   KAIROS_DIGITAL_PRODUCT_BUILD,
 } from "./kairos-digital-product-publisher-20260718.js";
+import {
+  handleServiceProductBuild,
+  KAIROS_SERVICE_PRODUCT_BUILD,
+} from "./kairos-service-product-publisher-20260718.js";
 
-const BUILD = "kairos-production-entry-immutable-20260718-25";
-const VISUAL_BASELINE = "verified-single-variant-digital-product-20260718";
+const BUILD = "kairos-production-entry-immutable-20260718-26";
+const VISUAL_BASELINE = "verified-multi-variant-service-product-20260718";
 
 export { KairosProject };
 
@@ -63,6 +67,8 @@ export default {
         delegatedRequest => autonomousRuntime.fetch(delegatedRequest, env, ctx),
       );
       if (experience) return stamp(experience);
+      const serviceProduct = await handleServiceProductBuild(request, env);
+      if (serviceProduct) return stamp(serviceProduct);
       const digitalProduct = await handleDigitalProductBuild(request, env);
       if (digitalProduct) return stamp(digitalProduct);
       const productsLanding = await handleProductsLandingBuild(request, env);
@@ -89,6 +95,7 @@ export default {
         websiteBuilderV2: KAIROS_WEBSITE_BUILDER_V2_BUILD,
         productManufacturingBridge: KAIROS_PRODUCT_MANUFACTURING_BRIDGE_BUILD,
         experienceController: KAIROS_EXPERIENCE_CONTROLLER_BUILD,
+        serviceProduct: KAIROS_SERVICE_PRODUCT_BUILD,
         digitalProduct: KAIROS_DIGITAL_PRODUCT_BUILD,
         productsLanding: KAIROS_PRODUCTS_LANDING_BUILD,
         kairosLanding: KAIROS_LANDING_BUILD,
@@ -110,6 +117,9 @@ export default {
           authoritativeManuscriptPreservationRequired: true,
           productPublicationDraftFirst: true,
           canonicalHomepageStagingOnly: false,
+          serviceProductStagingRequiredBeforePublish: true,
+          multiVariantServiceArchitectureVerified: true,
+          shopifyPricingAuthoritative: true,
           digitalProductStagingRequiredBeforePublish: true,
           singleVariantProductArchitectureVerified: true,
           productDataDrivenRenderingRequired: true,
@@ -147,6 +157,7 @@ function stamp(response) {
   headers.set("X-MMG-Website-Builder-V2", KAIROS_WEBSITE_BUILDER_V2_BUILD);
   headers.set("X-Kairos-Product-Manufacturing", KAIROS_PRODUCT_MANUFACTURING_BRIDGE_BUILD);
   headers.set("X-MMG-Experience-Controller", KAIROS_EXPERIENCE_CONTROLLER_BUILD);
+  headers.set("X-MMG-Service-Product", KAIROS_SERVICE_PRODUCT_BUILD);
   headers.set("X-MMG-Digital-Product", KAIROS_DIGITAL_PRODUCT_BUILD);
   headers.set("X-MMG-Products-Landing", KAIROS_PRODUCTS_LANDING_BUILD);
   headers.set("X-MMG-Kairos-Landing", KAIROS_LANDING_BUILD);
@@ -181,6 +192,7 @@ function json(value, status = 200) {
       "X-MMG-Website-Builder-V2": KAIROS_WEBSITE_BUILDER_V2_BUILD,
       "X-Kairos-Product-Manufacturing": KAIROS_PRODUCT_MANUFACTURING_BRIDGE_BUILD,
       "X-MMG-Experience-Controller": KAIROS_EXPERIENCE_CONTROLLER_BUILD,
+      "X-MMG-Service-Product": KAIROS_SERVICE_PRODUCT_BUILD,
       "X-MMG-Digital-Product": KAIROS_DIGITAL_PRODUCT_BUILD,
       "X-MMG-Products-Landing": KAIROS_PRODUCTS_LANDING_BUILD,
       "X-MMG-Kairos-Landing": KAIROS_LANDING_BUILD,
