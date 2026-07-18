@@ -1,0 +1,186 @@
+name: Publish Verified MMG Product Commerce Suite
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "cloudflare/mmg-ios/src/kairos-digital-product-*.js"
+      - "cloudflare/mmg-ios/src/kairos-service-product-*.js"
+      - "cloudflare/mmg-ios/src/kairos-related-products-*.js"
+      - "cloudflare/mmg-ios/src/kairos-product-asset-viewer-*.js"
+      - "cloudflare/mmg-ios/src/kairos-product-trust-layer-*.js"
+      - "cloudflare/mmg-ios/src/kairos-canonical-homepage-source-20260718.js"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-immutable-v1.js"
+      - ".github/scripts/verify-product-commerce-suite.mjs"
+      - ".github/workflows/publish-verified-product-commerce-suite.yml"
+  workflow_dispatch:
+    inputs:
+      digital_product_handle:
+        description: Digital product handle used for browser verification
+        required: false
+        default: ai-image-mastery
+      service_product_handle:
+        description: Service product handle used for browser verification
+        required: false
+        default: professional-cover-design-service
+
+permissions:
+  actions: read
+  contents: read
+  statuses: write
+
+concurrency:
+  group: publish-mmg-product-commerce-suite
+  cancel-in-progress: false
+
+jobs:
+  stage-publish-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+      MMG_STOREFRONT_ORIGIN: https://themindsetmediagroup.com
+      TARGET_SHA: ${{ github.sha }}
+      STATUS_CONTEXT: kairos-product-commerce-suite-live
+      DIGITAL_HANDLE: ${{ inputs.digital_product_handle || 'ai-image-mastery' }}
+      SERVICE_HANDLE: ${{ inputs.service_product_handle || 'professional-cover-design-service' }}
+
+    steps:
+      - name: Publish pending release status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          payload="$(node -e 'process.stdout.write(JSON.stringify({state:"pending",description:"Deploying and verifying the complete MMG product commerce suite",context:process.env.STATUS_CONTEXT,target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          curl --fail --silent --show-error -X POST -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" -H "Content-Type: application/json" "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${TARGET_SHA}" --data "${payload}"
+
+      - name: Download exact release source
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p repository artifacts/product-commerce-suite
+          curl --fail --silent --show-error --location --retry 2 -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/tarball/${TARGET_SHA}" -o repository.tar.gz
+          tar -xzf repository.tar.gz --strip-components=1 -C repository
+          test -f repository/cloudflare/mmg-ios/src/kairos-production-entry-immutable-v1.js
+          test -f repository/.github/scripts/verify-product-commerce-suite.mjs
+
+      - name: Wait for matching Cloudflare Worker release
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_build="$(node -e 'const fs=require("node:fs");const s=fs.readFileSync("repository/cloudflare/mmg-ios/src/kairos-production-entry-immutable-v1.js","utf8");const m=s.match(/const BUILD = "([^"]+)"/);if(!m)process.exit(1);process.stdout.write(m[1])')"
+          for attempt in $(seq 1 72); do
+            headers="$(mktemp)"
+            if curl --fail --silent --show-error --location --max-time 30 -D "${headers}" "${KAIROS_PRODUCTION_URL}/api/health?commerce_suite_release=${TARGET_SHA}" -o /tmp/kairos-health.json; then
+              observed="$(awk 'BEGIN{IGNORECASE=1} /^x-mmg-production-entry:/ {gsub(/\r/,"");sub(/^[^:]+:[[:space:]]*/,"");print;exit}' "${headers}")"
+              if [ "${observed}" = "${expected_build}" ]; then echo "Matching Worker is live: ${observed}"; rm -f "${headers}"; exit 0; fi
+              echo "Worker gate ${attempt}/72: expected ${expected_build}; observed ${observed:-none}."
+            fi
+            rm -f "${headers}"
+            sleep 5
+          done
+          echo "::error::Matching Cloudflare Worker release did not become live."
+          exit 1
+
+      - name: Build all commerce layers in verified Shopify staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          call_layer() {
+            local name="$1" path="$2" confirmation="$3" handle="$4" mode="$5"
+            local output="artifacts/product-commerce-suite/${mode}-${name}.json"
+            node -e 'process.stdout.write(JSON.stringify({mode:process.argv[1],confirmation:process.argv[2],productHandle:process.argv[3],sourceCommit:process.argv[4]}))' "${mode}" "${confirmation}" "${handle}" "${TARGET_SHA}" > /tmp/payload.json
+            curl --fail-with-body --silent --show-error --max-time 150 -X POST -H "Content-Type: application/json" "${KAIROS_PRODUCTION_URL}${path}" --data @/tmp/payload.json -o "${output}"
+            OUTPUT="${output}" MODE="${mode}" node <<'NODE'
+          const fs=require('node:fs');const body=JSON.parse(fs.readFileSync(process.env.OUTPUT,'utf8'));
+          if(body.status!=="completed"||body.mode!==process.env.MODE){console.error(JSON.stringify(body));process.exit(1)}
+          if(process.env.MODE==="build"&&(body.safeguards?.stagingOnly!==true||body.production?.publishedThemeChanged===true)){console.error("Staging boundary failed",body);process.exit(1)}
+          if(process.env.MODE==="publish"&&body.production?.publishedThemeChanged!==true){console.error("MAIN publication proof missing",body);process.exit(1)}
+          NODE
+          }
+          call_layer digital-product /api/shopify/staging/digital-product/build BUILD_CANONICAL_MMG_DIGITAL_PRODUCT_STAGING "${DIGITAL_HANDLE}" build
+          call_layer service-product /api/shopify/staging/service-product/build BUILD_CANONICAL_MMG_SERVICE_PRODUCT_STAGING "${SERVICE_HANDLE}" build
+          call_layer related-products /api/shopify/staging/related-products/build BUILD_INTELLIGENT_RELATED_PRODUCTS_STAGING "${DIGITAL_HANDLE}" build
+          call_layer product-asset-viewer /api/shopify/staging/product-asset-viewer/build BUILD_UNIFIED_PRODUCT_ASSET_VIEWER_STAGING "${DIGITAL_HANDLE}" build
+          call_layer product-trust-layer /api/shopify/staging/product-trust-layer/build BUILD_PRODUCT_CONVERSION_TRUST_LAYER_STAGING "${DIGITAL_HANDLE}" build
+
+      - name: Promote verified commerce layers to Shopify MAIN
+        shell: bash
+        run: |
+          set -euo pipefail
+          call_layer() {
+            local name="$1" path="$2" confirmation="$3" handle="$4"
+            local output="artifacts/product-commerce-suite/publish-${name}.json"
+            node -e 'process.stdout.write(JSON.stringify({mode:"publish",confirmation:process.argv[1],productHandle:process.argv[2],sourceCommit:process.argv[3]}))' "${confirmation}" "${handle}" "${TARGET_SHA}" > /tmp/payload.json
+            curl --fail-with-body --silent --show-error --max-time 150 -X POST -H "Content-Type: application/json" "${KAIROS_PRODUCTION_URL}${path}" --data @/tmp/payload.json -o "${output}"
+            OUTPUT="${output}" node <<'NODE'
+          const fs=require('node:fs');const body=JSON.parse(fs.readFileSync(process.env.OUTPUT,'utf8'));
+          if(body.status!=="completed"||body.mode!=="publish"||body.production?.publishedThemeChanged!==true||body.verification?.publishedThemeReadBackVerified!==true){console.error(JSON.stringify(body));process.exit(1)}
+          NODE
+          }
+          call_layer digital-product /api/shopify/staging/digital-product/build PUBLISH_CANONICAL_MMG_DIGITAL_PRODUCT_LIVE "${DIGITAL_HANDLE}"
+          call_layer service-product /api/shopify/staging/service-product/build PUBLISH_CANONICAL_MMG_SERVICE_PRODUCT_LIVE "${SERVICE_HANDLE}"
+          call_layer related-products /api/shopify/staging/related-products/build PUBLISH_INTELLIGENT_RELATED_PRODUCTS_LIVE "${DIGITAL_HANDLE}"
+          call_layer product-asset-viewer /api/shopify/staging/product-asset-viewer/build PUBLISH_UNIFIED_PRODUCT_ASSET_VIEWER_LIVE "${DIGITAL_HANDLE}"
+          call_layer product-trust-layer /api/shopify/staging/product-trust-layer/build PUBLISH_PRODUCT_CONVERSION_TRUST_LAYER_LIVE "${DIGITAL_HANDLE}"
+
+      - name: Install browser verifier
+        shell: bash
+        working-directory: repository
+        run: |
+          set -euo pipefail
+          npm init -y >/dev/null
+          npm install --no-save --no-audit --no-fund playwright
+          npx playwright install --with-deps chromium
+
+      - name: Verify live digital and service product pages
+        id: browser_verification
+        shell: bash
+        working-directory: repository
+        env:
+          MMG_DIGITAL_PRODUCT_HANDLE: ${{ env.DIGITAL_HANDLE }}
+          MMG_SERVICE_PRODUCT_HANDLE: ${{ env.SERVICE_HANDLE }}
+          MMG_VERIFICATION_OUTPUT: ../artifacts/product-commerce-suite/browser
+        run: |
+          set -euo pipefail
+          sleep 6
+          node .github/scripts/verify-product-commerce-suite.mjs
+
+      - name: Create release receipt
+        if: always()
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs=require('node:fs'),path=require('node:path');const dir='artifacts/product-commerce-suite';
+          const files=fs.existsSync(dir)?fs.readdirSync(dir).filter(x=>x.endsWith('.json')):[];
+          const operations=files.map(file=>{try{return{file,result:JSON.parse(fs.readFileSync(path.join(dir,file),'utf8'))}}catch{return{file,result:null}}});
+          const verificationPath=path.join(dir,'browser','verification-report.json');
+          const verification=fs.existsSync(verificationPath)?JSON.parse(fs.readFileSync(verificationPath,'utf8')):{passed:false,failures:['Browser verification report unavailable.']};
+          const receipt={sourceCommit:process.env.TARGET_SHA,worker:process.env.KAIROS_PRODUCTION_URL,storefront:process.env.MMG_STOREFRONT_ORIGIN,operations,verification,generatedAt:new Date().toISOString()};
+          fs.writeFileSync(path.join(dir,'release-receipt.json'),JSON.stringify(receipt,null,2));
+          fs.writeFileSync(path.join(dir,'release-receipt.md'),`# MMG Product Commerce Suite Release\n\n- Source: ${receipt.sourceCommit}\n- Browser verification: ${verification.passed?'PASS':'FAIL'}\n- Operations recorded: ${operations.length}\n`);
+          NODE
+
+      - name: Upload release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmg-product-commerce-suite-${{ env.TARGET_SHA }}
+          path: artifacts/product-commerce-suite
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish final release status
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERIFY_OUTCOME: ${{ steps.browser_verification.outcome }}
+        run: |
+          set -euo pipefail
+          if [ "${VERIFY_OUTCOME}" = "success" ]; then state=success; description="MMG product commerce suite is live and verified on desktop/mobile"; else state=failure; description="MMG product commerce suite release or live verification failed"; fi
+          payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:process.env.STATUS_CONTEXT,target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          curl --fail --silent --show-error -X POST -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" -H "Content-Type: application/json" "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${TARGET_SHA}" --data "${payload}"
