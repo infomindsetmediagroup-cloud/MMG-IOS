@@ -17,9 +17,9 @@ import { handleServiceProductBuild, KAIROS_SERVICE_PRODUCT_BUILD } from "./kairo
 import { handleRelatedProductsBuild, KAIROS_RELATED_PRODUCTS_BUILD } from "./kairos-related-products-publisher-20260718.js";
 import { handleProductAssetViewerBuild, KAIROS_PRODUCT_ASSET_VIEWER_BUILD } from "./kairos-product-asset-viewer-publisher-20260718.js";
 import { handleProductTrustLayerBuild, KAIROS_PRODUCT_TRUST_LAYER_BUILD } from "./kairos-product-trust-layer-publisher-20260718.js";
-import { handleNativeNavigationPublish, KAIROS_NATIVE_NAVIGATION_BUILD } from "./kairos-native-navigation-publisher-20260718.js";
+import { handleNativeNavigationPublish, KAIROS_NATIVE_NAVIGATION_BUILD } from "./kairos-native-navigation-theme-publisher-v8.js";
 
-const BUILD = "kairos-production-entry-immutable-20260718-33";
+const BUILD = "kairos-production-entry-immutable-20260718-34";
 const VISUAL_BASELINE = "verified-product-conversion-trust-layer-20260718";
 
 export { KairosProject };
