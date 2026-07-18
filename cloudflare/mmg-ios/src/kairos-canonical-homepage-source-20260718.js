@@ -12,6 +12,14 @@ export {
   SERVICES_CSS_FILE,
   SERVICES_CSS_SOURCE,
 } from "./kairos-services-landing-source-20260718.js";
+export {
+  MEMBERSHIP_TEMPLATE_FILE,
+  MEMBERSHIP_TEMPLATE_SOURCE,
+  MEMBERSHIP_SECTION_FILE,
+  MEMBERSHIP_SECTION_SOURCE,
+  MEMBERSHIP_CSS_FILE,
+  MEMBERSHIP_CSS_SOURCE,
+} from "./kairos-membership-landing-source-20260718.js";
 
 import { SECTION_SOURCE_A } from "./kairos-canonical-homepage-source-section-a-20260718.js";
 import { SECTION_SOURCE_B } from "./kairos-canonical-homepage-source-section-b-20260718.js";
