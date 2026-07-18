@@ -1,0 +1,44 @@
+name: Validate Kairos Change
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: cloudflare/mmg-ios/package-lock.json
+
+      - name: Validate repository automation
+        run: |
+          node --check scripts/prep-changes.mjs
+          test -f cloudflare/mmg-ios/wrangler.toml
+          test -f cloudflare/mmg-ios/src/kairos-theme-menu-hotfix-publisher-20260718.js
+          grep -q 'kairos-theme-menu-hotfix-20260718-3' cloudflare/mmg-ios/src/kairos-theme-menu-hotfix-publisher-20260718.js
+
+      - name: Install Kairos Worker dependencies
+        working-directory: cloudflare/mmg-ios
+        run: npm ci
+
+      - name: Run Kairos Worker tests
+        working-directory: cloudflare/mmg-ios
+        run: npm test
+
+      - name: Validate production configuration
+        working-directory: cloudflare/mmg-ios
+        run: npx wrangler deploy --dry-run
