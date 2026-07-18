@@ -1,4 +1,4 @@
-export const KAIROS_NATIVE_MAIN_MENU_BUILD = "kairos-native-main-menu-publisher-20260718-2";
+export const KAIROS_NATIVE_MAIN_MENU_BUILD = "kairos-native-main-menu-publisher-20260718-3";
 export const NATIVE_MAIN_MENU_PATH = "/api/shopify/native-main-menu/publish";
 export const NATIVE_MAIN_MENU_CONFIRMATION = "PUBLISH_MMG_NATIVE_MAIN_MENU_NOW";
 
