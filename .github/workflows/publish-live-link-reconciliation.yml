@@ -1,0 +1,101 @@
+name: Publish MMG Live Link Reconciliation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "cloudflare/mmg-ios/src/kairos-live-link-reconciliation-publisher-20260718.js"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-live-link-reconciliation-v1.js"
+      - "cloudflare/mmg-ios/wrangler.toml"
+      - ".github/workflows/publish-live-link-reconciliation.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-mmg-live-link-reconciliation
+  cancel-in-progress: false
+
+jobs:
+  deploy-stage-publish-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: cloudflare/mmg-ios
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Wrangler
+        run: npm install --no-save wrangler@latest
+      - name: Deploy corrected Kairos runtime
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy | tee link-runtime-deploy.txt
+      - name: Resolve runtime
+        id: runtime
+        env:
+          KAIROS_RUNTIME_URL: ${{ secrets.KAIROS_RUNTIME_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$KAIROS_RUNTIME_URL"
+          echo "url=${KAIROS_RUNTIME_URL%/}" >> "$GITHUB_OUTPUT"
+      - name: Build link reconciliation in staging
+        env:
+          RUNTIME: ${{ steps.runtime.outputs.url }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --retry 4 --retry-delay 3 \
+            -X POST "$RUNTIME/api/shopify/live-link-reconciliation/build" \
+            -H 'Content-Type: application/json' \
+            --data '{"mode":"build","confirmation":"BUILD_MMG_LIVE_LINK_RECONCILIATION_STAGING"}' \
+            | tee live-link-staging.json
+          grep -q '"status":"completed"' live-link-staging.json
+          grep -q '"exactThemeFileReadBack":true' live-link-staging.json
+      - name: Publish link reconciliation to Shopify MAIN
+        env:
+          RUNTIME: ${{ steps.runtime.outputs.url }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --retry 4 --retry-delay 3 \
+            -X POST "$RUNTIME/api/shopify/live-link-reconciliation/build" \
+            -H 'Content-Type: application/json' \
+            --data '{"mode":"publish","confirmation":"PUBLISH_MMG_LIVE_LINK_RECONCILIATION_LIVE"}' \
+            | tee live-link-publish.json
+          grep -q '"status":"completed"' live-link-publish.json
+          grep -q '"exactThemeFileReadBack":true' live-link-publish.json
+      - name: Verify canonical live destinations
+        run: |
+          set -euo pipefail
+          urls=(
+            'https://themindsetmediagroup.com/collections/all'
+            'https://themindsetmediagroup.com/pages/free-creator-toolkit'
+            'https://themindsetmediagroup.com/pages/capcut-templates'
+            'https://themindsetmediagroup.com/pages/project-guide'
+            'https://themindsetmediagroup.com/pages/about'
+            'https://themindsetmediagroup.com/pages/our-standards'
+            'https://themindsetmediagroup.com/pages/publishing-philosophy'
+            'https://themindsetmediagroup.com/pages/publishing-services'
+            'https://themindsetmediagroup.com/pages/customer-portal'
+            'https://themindsetmediagroup.com/pages/contact'
+          )
+          : > canonical-link-verification.txt
+          for url in "${urls[@]}"; do
+            code="$(curl -L -sS --retry 3 --retry-delay 2 -o /tmp/mmg-page.html -w '%{http_code}' "$url")"
+            printf '%s %s\n' "$code" "$url" | tee -a canonical-link-verification.txt
+            test "$code" = "200"
+          done
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmg-live-link-reconciliation-evidence
+          path: |
+            cloudflare/mmg-ios/link-runtime-deploy.txt
+            cloudflare/mmg-ios/live-link-staging.json
+            cloudflare/mmg-ios/live-link-publish.json
+            cloudflare/mmg-ios/canonical-link-verification.txt
