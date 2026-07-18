@@ -1,4 +1,14 @@
 export const CSS_SOURCE_B = String.raw`
+.mmg-ecosystem-nav{position:sticky;top:0;z-index:40;background:rgba(255,255,255,.97);border-bottom:1px solid #dfe5ee;backdrop-filter:blur(16px);font-family:var(--font-body-family,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif)}
+.mmg-ecosystem-nav__inner{width:min(1240px,calc(100% - 48px));min-height:72px;margin-inline:auto;display:flex;align-items:center;gap:24px}
+.mmg-ecosystem-nav__brand{color:#172033;font-size:1rem;font-weight:900;letter-spacing:-.02em;white-space:nowrap}
+.mmg-ecosystem-nav__links{display:flex;align-items:center;justify-content:flex-end;gap:4px;margin-left:auto}
+.mmg-ecosystem-nav__links a{color:#5d6675;font-size:.88rem;font-weight:760;line-height:1.2;padding:11px 10px;border-radius:10px;white-space:nowrap;text-decoration:none}
+.mmg-ecosystem-nav__links a:hover,.mmg-ecosystem-nav__links a:focus-visible{background:#f3f6fb;color:#1d4ed8}
+.mmg-ecosystem-nav__portal{background:#2563eb!important;color:#fff!important;padding-inline:16px!important}
+.mmg-ecosystem-nav__portal:hover,.mmg-ecosystem-nav__portal:focus-visible{background:#1d4ed8!important;color:#fff!important}
+.mmg-ecosystem-nav__toggle{display:none;border:1px solid #dfe5ee;border-radius:12px;background:#fff;color:#172033;font:800 .92rem/1 system-ui;padding:12px 14px;cursor:pointer;margin-left:auto}
+
 /* Homepage refinement layer — larger editorial scale */
 .mmg-home {
   font-size: 18px;
@@ -157,11 +167,22 @@ export const CSS_SOURCE_B = String.raw`
 .mmg-faq-list details {
   padding: 1.65rem 0;
 }
+@media (max-width: 1120px) {
+  .mmg-ecosystem-nav__inner{width:min(100% - 36px,1240px);min-height:66px;position:relative}
+  .mmg-ecosystem-nav__toggle{display:inline-flex;align-items:center;justify-content:center}
+  .mmg-ecosystem-nav__links{display:none;position:absolute;top:calc(100% + 1px);left:0;right:0;margin:0;background:#fff;border:1px solid #dfe5ee;border-top:0;border-radius:0 0 18px 18px;box-shadow:0 18px 40px rgba(15,23,42,.12);padding:12px;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+  .mmg-ecosystem-nav__links.is-open{display:grid}
+  .mmg-ecosystem-nav__links a{padding:13px 14px;font-size:.96rem}
+  .mmg-ecosystem-nav__portal{text-align:center}
+}
 @media (max-width: 980px) {
   .mmg-home { font-size: 17px; }
   .hub-shell { width: min(100% - 36px, 1240px); }
 }
 @media (max-width: 640px) {
+  .mmg-ecosystem-nav__inner{width:min(100% - 24px,1240px)}
+  .mmg-ecosystem-nav__brand{font-size:.94rem}
+  .mmg-ecosystem-nav__links{grid-template-columns:1fr;max-height:calc(100vh - 78px);overflow-y:auto}
   .mmg-home { font-size: 16px; }
   .hub-shell { width: min(100% - 28px, 1240px); }
   .mmg-home h1 { font-size: clamp(3.25rem, 16vw, 5rem); }
