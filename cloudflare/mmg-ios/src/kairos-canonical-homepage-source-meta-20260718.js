@@ -1,4 +1,4 @@
-export const KAIROS_CANONICAL_HOMEPAGE_BUILD = "kairos-canonical-homepage-builder-20260718-1";
+export const KAIROS_CANONICAL_HOMEPAGE_BUILD = "kairos-canonical-homepage-builder-20260718-2";
 
 export const BUILD_PATH = "/api/shopify/staging/canonical-homepage/build";
 export const STAGING_CONFIRMATION = "BUILD_CANONICAL_MMG_HOMEPAGE_STAGING";
