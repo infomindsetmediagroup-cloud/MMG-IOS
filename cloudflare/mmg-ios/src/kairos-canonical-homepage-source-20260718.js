@@ -68,6 +68,16 @@ export {
   SERVICE_PRODUCT_CSS_FILE,
   SERVICE_PRODUCT_CSS_SOURCE,
 } from "./kairos-service-product-source-20260718.js";
+export {
+  RELATED_DIGITAL_TEMPLATE_SOURCE,
+  RELATED_SERVICE_TEMPLATE_SOURCE,
+  RELATED_PRODUCTS_SECTION_FILE,
+  RELATED_PRODUCTS_SECTION_SOURCE,
+  RELATED_PRODUCT_CARD_FILE,
+  RELATED_PRODUCT_CARD_SOURCE,
+  RELATED_PRODUCTS_CSS_FILE,
+  RELATED_PRODUCTS_CSS_SOURCE,
+} from "./kairos-related-products-source-20260718.js";
 
 import { SECTION_SOURCE_A } from "./kairos-canonical-homepage-source-section-a-20260718.js";
 import { SECTION_SOURCE_B } from "./kairos-canonical-homepage-source-section-b-20260718.js";
