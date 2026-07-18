@@ -1,5 +1,7 @@
 export const SECTION_SOURCE_A = String.raw`{{ 'mmg-canonical-homepage.css' | asset_url | stylesheet_tag }}
 
+<!-- kairos-canonical-homepage-builder-20260718-1 -->
+<!-- Turn what you know into something valuable. -->
 <section id="mmg-home" class="mmg-home mmg-portal-framework" data-mmg-canonical-homepage data-build="kairos-canonical-homepage-builder-20260718-2" aria-label="Mindset Media Group knowledge ecosystem">
   <header class="hub-hero mmg-reveal">
     <div class="hub-shell hub-hero__grid">
