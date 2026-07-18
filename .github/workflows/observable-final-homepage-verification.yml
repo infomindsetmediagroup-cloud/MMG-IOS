@@ -53,8 +53,10 @@ jobs:
         run: |
           set -euo pipefail
           npm install --no-package-lock --no-audit --no-fund >/dev/null 2>&1
-          npm run validate:production
-          npx wrangler deploy --dry-run
+          npm run validate:production >/tmp/validate-production.log
+          npx wrangler deploy --dry-run >/tmp/wrangler-dry-run.log 2>&1
+          tail -n 30 /tmp/validate-production.log
+          echo "Wrangler dry-run passed."
 
       - name: Resolve Cloudflare credentials
         shell: bash
@@ -82,7 +84,10 @@ jobs:
       - name: Deploy exact reviewed Worker
         shell: bash
         working-directory: repository/cloudflare/mmg-ios
-        run: npx wrangler deploy
+        run: |
+          set -euo pipefail
+          npx wrangler deploy >/tmp/wrangler-deploy.log 2>&1
+          tail -n 20 /tmp/wrangler-deploy.log
 
       - name: Verify exact live release
         shell: bash
@@ -103,7 +108,6 @@ jobs:
                 echo "Exact release verified: ${entry}; ${builder}"
                 exit 0
               fi
-              echo "Release check ${attempt}/30: entry=${entry:-none}; builder=${builder:-none}"
             fi
             rm -f "${headers_file}"
             sleep 5
@@ -121,18 +125,54 @@ jobs:
           echo "Playwright Chromium is ready."
 
       - name: Build, repair, and verify Shopify staging homepage
+        id: release
         shell: bash
         run: |
-          set -o pipefail
+          set +e
           node repository/.github/scripts/run-canonical-homepage-release.mjs \
-            2>&1 | tee artifacts/canonical-homepage/release.log
-          status=${PIPESTATUS[0]}
-          echo "--- CANONICAL HOMEPAGE REVIEW RECEIPT ---"
-          if [ -f artifacts/canonical-homepage/review-receipt.json ]; then
-            cat artifacts/canonical-homepage/review-receipt.json
-          else
-            echo "Review receipt was not produced."
-          fi
-          echo "--- VERIFICATION REPORTS ---"
-          find artifacts/canonical-homepage -name 'verification-report.json' -print -exec cat {} \;
-          exit "${status}"
+            > artifacts/canonical-homepage/release.log \
+            2> artifacts/canonical-homepage/release-error.log
+          status=$?
+          echo "exit_code=${status}" >> "${GITHUB_OUTPUT}"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const root = 'artifacts/canonical-homepage';
+          const read = (name) => {
+            const file = path.join(root, name);
+            return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+          };
+          const parse = (name) => {
+            const text = read(name);
+            if (!text) return null;
+            try { return JSON.parse(text); } catch { return null; }
+          };
+          const receipt = parse('review-receipt.json');
+          const build = parse('build-result.json');
+          const repair = parse('repair-result.json');
+          const first = parse('pass-1/verification-report.json');
+          const final = parse('final/verification-report.json');
+          console.log(JSON.stringify({
+            releaseExitCode: Number(process.env.RELEASE_EXIT_CODE || 0),
+            preview: receipt?.preview?.url || build?.preview?.url || null,
+            buildStatus: receipt?.buildStatus || build?.status || null,
+            firstPass: first?.passed ?? receipt?.firstPass?.passed ?? null,
+            firstFailures: first?.failures || receipt?.firstPass?.failures || [],
+            repairPerformed: Boolean(repair || receipt?.repairPerformed),
+            repairStatus: repair?.status || receipt?.repair?.status || null,
+            finalPassed: final?.passed ?? receipt?.verification?.passed ?? null,
+            finalFailures: final?.failures || receipt?.verification?.failures || [],
+            publishedThemeChanged: receipt?.production?.publishedThemeChanged ?? build?.production?.publishedThemeChanged ?? null,
+            files: receipt?.files || build?.files || [],
+            errorTail: read('release-error.log').split('\n').slice(-18).join('\n'),
+          }, null, 2));
+          NODE
+          exit 0
+        env:
+          RELEASE_EXIT_CODE: ${{ steps.release.outputs.exit_code }}
+
+      - name: Enforce final verification result
+        shell: bash
+        env:
+          RELEASE_EXIT_CODE: ${{ steps.release.outputs.exit_code }}
+        run: test "${RELEASE_EXIT_CODE}" = "0"
