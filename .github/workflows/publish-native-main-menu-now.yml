@@ -58,13 +58,13 @@ jobs:
             headers_file="$RUNNER_TEMP/native-main-menu-headers.txt"
             status="$(curl --silent --show-error --head --max-time 30 -o /dev/null -D "$headers_file" -w '%{http_code}' "https://mmg-ios.info-mindsetmediagroup.workers.dev/api/shopify/native-main-menu/publish?release=${GITHUB_SHA}&attempt=${attempt}" || true)"
             echo "Endpoint probe ${attempt}/48 HTTP ${status}"
-            if grep -qi "x-mmg-native-main-menu: kairos-native-main-menu-publisher-20260718-2" "$headers_file"; then
-              echo "Native main-menu Worker is deployed."
+            if grep -qi "x-mmg-native-main-menu: kairos-native-main-menu-publisher-20260718-3" "$headers_file"; then
+              echo "Native main-menu Worker v3 is deployed."
               exit 0
             fi
             sleep 5
           done
-          echo "Native main-menu Worker did not become reachable." >&2
+          echo "Native main-menu Worker v3 did not become reachable." >&2
           exit 1
 
       - name: Publish Shopify native main menu
