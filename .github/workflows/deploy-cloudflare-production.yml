@@ -8,6 +8,15 @@ on:
       - "cloudflare/mmg-ios/**"
       - "web/kairos-dashboard/**"
       - ".github/workflows/deploy-cloudflare-production.yml"
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+    paths:
+      - "cloudflare/mmg-ios/**"
+      - "web/kairos-dashboard/**"
+      - ".github/workflows/deploy-cloudflare-production.yml"
   workflow_dispatch: {}
 
 permissions:
@@ -20,11 +29,13 @@ concurrency:
 
 jobs:
   deploy:
+    if: github.event_name != 'pull_request_target' || github.event.pull_request.head.repo.full_name == github.repository
     name: Deploy Worker and publish homepage
     runs-on: ubuntu-latest
     timeout-minutes: 35
     environment: production
     env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CLOUDFLARE_TOKEN || vars.CLOUDFLARE_API_TOKEN || vars.CLOUDFLARE_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
       KAIROS_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
@@ -43,7 +54,7 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             -H "Content-Type: application/json" \
-            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${SOURCE_SHA}" \
             --data "${payload}"
 
       - name: Download repository source
@@ -61,7 +72,7 @@ jobs:
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/tarball/${SOURCE_SHA}" \
             --output repository.tar.gz
           tar -xzf repository.tar.gz --strip-components=1 -C repository
           test -f repository/cloudflare/mmg-ios/wrangler.toml
@@ -141,7 +152,7 @@ jobs:
             headers_file="$(mktemp)"
             if curl --fail --silent --show-error --location --max-time 30 \
               -D "${headers_file}" \
-              "${KAIROS_URL}/api/health?release=${GITHUB_SHA}&attempt=${attempt}" \
+              "${KAIROS_URL}/api/health?release=${SOURCE_SHA}&attempt=${attempt}" \
               --output /tmp/kairos-health.json; then
               deployed_entry="$(awk 'BEGIN{IGNORECASE=1} /^x-mmg-production-entry:/ {gsub(/\r/, ""); sub(/^[^:]+:[[:space:]]*/, ""); print; exit}' "${headers_file}")"
               if [ "${deployed_entry}" = "${expected_entry}" ]; then
@@ -162,7 +173,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          payload="$(node -e 'process.stdout.write(JSON.stringify({confirmation:"BUILD_CANONICAL_MMG_HOMEPAGE_STAGING",mode:"build",sourceCommit:process.env.GITHUB_SHA}))')"
+          payload="$(SOURCE_SHA="${SOURCE_SHA}" node -e 'process.stdout.write(JSON.stringify({confirmation:"BUILD_CANONICAL_MMG_HOMEPAGE_STAGING",mode:"build",sourceCommit:process.env.SOURCE_SHA}))')"
           curl --fail-with-body --silent --show-error --max-time 180 \
             -X POST \
             -H "Content-Type: application/json" \
@@ -187,7 +198,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          payload="$(node -e 'process.stdout.write(JSON.stringify({confirmation:"PUBLISH_CANONICAL_MMG_HOMEPAGE_LIVE",mode:"publish",sourceCommit:process.env.GITHUB_SHA}))')"
+          payload="$(SOURCE_SHA="${SOURCE_SHA}" node -e 'process.stdout.write(JSON.stringify({confirmation:"PUBLISH_CANONICAL_MMG_HOMEPAGE_LIVE",mode:"publish",sourceCommit:process.env.SOURCE_SHA}))')"
           curl --fail-with-body --silent --show-error --max-time 240 \
             -X POST \
             -H "Content-Type: application/json" \
@@ -225,7 +236,7 @@ jobs:
             http_code="$(curl --silent --show-error --location --max-time 30 \
               --output "${page_file}" \
               --write-out '%{http_code}' \
-              "https://themindsetmediagroup.com/?release=${GITHUB_SHA}&attempt=${attempt}" || true)"
+              "https://themindsetmediagroup.com/?release=${SOURCE_SHA}&attempt=${attempt}" || true)"
 
             if [ "${http_code}" = "200" ] \
               && grep -Fq 'kairos-canonical-homepage-builder-20260718-1' "${page_file}" \
@@ -262,5 +273,5 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             -H "Content-Type: application/json" \
-            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${SOURCE_SHA}" \
             --data "${payload}"
