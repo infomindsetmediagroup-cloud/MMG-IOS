@@ -4,7 +4,7 @@ on:
   pull_request:
     branches:
       - main
-    paths:
+    paths: &experience_paths
       - ".github/workflows/verify-kairos-experience-live.yml"
       - "cloudflare/mmg-ios/src/kairos-production-entry-immutable-v1.js"
       - "cloudflare/mmg-ios/src/kairos-production-entry-v1.js"
@@ -15,66 +15,23 @@ on:
       - "web/kairos-dashboard/index.html"
       - "web/kairos-dashboard/scripts/website-builder-studio.js"
       - "web/kairos-dashboard/styles/website-builder-studio.css"
+  push:
+    branches:
+      - main
+    paths: *experience_paths
   workflow_dispatch: {}
 
 permissions:
   contents: read
 
 concurrency:
-  group: verify-kairos-experience-live-${{ github.ref }}
+  group: verify-kairos-experience-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  diagnose-live:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    env:
-      KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
-    steps:
-      - name: Expose live Website Builder v2 contract
-        shell: bash
-        run: |
-          set -uo pipefail
-          sleep 12
-          headers_file="$(mktemp)"
-          status_code="$(curl --show-error --silent --location --max-time 30 -D "${headers_file}" -o status.json -w '%{http_code}' "${KAIROS_PRODUCTION_URL}/api/website-builder/v2/status?diagnostic=${GITHUB_SHA}" || true)"
-          assets_code="$(curl --show-error --silent --location --max-time 30 -o assets.json -w '%{http_code}' "${KAIROS_PRODUCTION_URL}/api/website-builder/assets?diagnostic=${GITHUB_SHA}" || true)"
-          root_code="$(curl --show-error --silent --location --max-time 30 -o root.html -w '%{http_code}' "${KAIROS_PRODUCTION_URL}/?diagnostic=${GITHUB_SHA}" || true)"
-          builder_code="$(curl --show-error --silent --location --max-time 30 -o builder.js -w '%{http_code}' "${KAIROS_PRODUCTION_URL}/scripts/website-builder-studio.js?diagnostic=${GITHUB_SHA}" || true)"
-          css_code="$(curl --show-error --silent --location --max-time 30 -o builder.css -w '%{http_code}' "${KAIROS_PRODUCTION_URL}/styles/website-builder-studio.css?diagnostic=${GITHUB_SHA}" || true)"
-          production_entry="$(awk 'BEGIN{IGNORECASE=1} /^x-mmg-production-entry:/ {gsub(/\r/, ""); sub(/^[^:]+:[[:space:]]*/, ""); print; exit}' "${headers_file}")"
-          website_builder_v2="$(awk 'BEGIN{IGNORECASE=1} /^x-mmg-website-builder-v2:/ {gsub(/\r/, ""); sub(/^[^:]+:[[:space:]]*/, ""); print; exit}' "${headers_file}")"
-          STATUS_CODE="${status_code}" ASSETS_CODE="${assets_code}" ROOT_CODE="${root_code}" BUILDER_CODE="${builder_code}" CSS_CODE="${css_code}" PRODUCTION_ENTRY="${production_entry}" WEBSITE_BUILDER_V2="${website_builder_v2}" node <<'NODE'
-          const fs = require("fs");
-          const read = path => { try { return fs.readFileSync(path, "utf8"); } catch { return ""; } };
-          const statusText = read("status.json");
-          const assetsText = read("assets.json");
-          let status = {}; let assets = {};
-          try { status = JSON.parse(statusText); } catch { status = { raw: statusText.slice(0, 500) }; }
-          try { assets = JSON.parse(assetsText); } catch { assets = { raw: assetsText.slice(0, 500) }; }
-          const root = read("root.html");
-          const builder = read("builder.js");
-          const css = read("builder.css");
-          console.log(JSON.stringify({
-            http: { status: process.env.STATUS_CODE, assets: process.env.ASSETS_CODE, root: process.env.ROOT_CODE, builder: process.env.BUILDER_CODE, css: process.env.CSS_CODE },
-            headers: { productionEntry: process.env.PRODUCTION_ENTRY, websiteBuilderV2: process.env.WEBSITE_BUILDER_V2 },
-            status,
-            assets: { status: assets.status, count: assets.assets?.length, error: assets.error },
-            markers: {
-              rootV2: root.includes("website-builder-studio.js?v=experience-20260717-2"),
-              composer: builder.includes("Compose complete website"),
-              assetLibrary: builder.includes("/api/website-builder/assets"),
-              ordering: builder.includes("moveSection"),
-              canvas: css.includes(".kws-preview__section--full-bleed"),
-            },
-          }, null, 2));
-          NODE
-
-  verify:
+  verify-contract:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
     steps:
       - name: Download repository archive
         shell: bash
@@ -97,12 +54,20 @@ jobs:
       - name: Validate Worker bundle
         working-directory: repository/cloudflare/mmg-ios
         run: npx wrangler deploy --dry-run
-      - name: Verify live Objective Controller and Website Builder v2
+
+  verify-production-live:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+    steps:
+      - name: Verify deployed Objective Controller and Website Builder v2
         shell: bash
         run: |
           set -euo pipefail
           success=0
-          for attempt in $(seq 1 18); do
+          for attempt in $(seq 1 24); do
             headers_file="$(mktemp)"
             if status_json="$(curl --fail --show-error --silent --location --max-time 30 -D "${headers_file}" "${KAIROS_PRODUCTION_URL}/api/website-builder/v2/status?proof=${GITHUB_SHA}")" \
               && assets_json="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/api/website-builder/assets?proof=${GITHUB_SHA}")" \
@@ -139,12 +104,21 @@ jobs:
             persistentUpload: builder.includes("STORE_KAIROS_WEBSITE_ASSET") && builder.includes("DELETE_KAIROS_WEBSITE_ASSET"),
             premiumCanvas: css.includes(".kws-composer") && css.includes(".kws-asset-library") && css.includes(".kws-preview__section--full-bleed"),
           };
+          console.log(JSON.stringify({ productionEntry: process.env.PRODUCTION_ENTRY, websiteBuilderV2: process.env.WEBSITE_BUILDER_V2, status, assetCount: assets.assets?.length, checks }, null, 2));
           if (Object.values(checks).some(value => value !== true)) process.exit(1);
           NODE
               then
-                success=1; rm -f "${headers_file}"; echo "Live Kairos Website Builder v2 verified on attempt ${attempt}."; break
+                success=1
+                rm -f "${headers_file}"
+                echo "Live Kairos Website Builder v2 verified on attempt ${attempt}."
+                break
               fi
             fi
-            rm -f "${headers_file}"; echo "Live Website Builder v2 proof not ready yet (attempt ${attempt}/18)."; sleep 5
+            rm -f "${headers_file}"
+            echo "Production deployment not ready for Website Builder v2 (attempt ${attempt}/24)."
+            sleep 5
           done
-          if [ "${success}" -ne 1 ]; then echo "::error::Live Kairos Website Builder v2 proof failed."; exit 1; fi
+          if [ "${success}" -ne 1 ]; then
+            echo "::error::Live Kairos Website Builder v2 proof failed after the production deployment window."
+            exit 1
+          fi
