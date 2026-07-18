@@ -17,8 +17,9 @@ import { handleServiceProductBuild, KAIROS_SERVICE_PRODUCT_BUILD } from "./kairo
 import { handleRelatedProductsBuild, KAIROS_RELATED_PRODUCTS_BUILD } from "./kairos-related-products-publisher-20260718.js";
 import { handleProductAssetViewerBuild, KAIROS_PRODUCT_ASSET_VIEWER_BUILD } from "./kairos-product-asset-viewer-publisher-20260718.js";
 import { handleProductTrustLayerBuild, KAIROS_PRODUCT_TRUST_LAYER_BUILD } from "./kairos-product-trust-layer-publisher-20260718.js";
+import { handleNativeNavigationPublish, KAIROS_NATIVE_NAVIGATION_BUILD } from "./kairos-native-navigation-publisher-20260718.js";
 
-const BUILD = "kairos-production-entry-immutable-20260718-32";
+const BUILD = "kairos-production-entry-immutable-20260718-33";
 const VISUAL_BASELINE = "verified-product-conversion-trust-layer-20260718";
 
 export { KairosProject };
@@ -26,6 +27,8 @@ export { KairosProject };
 export default {
   async fetch(request, env, ctx) {
     try {
+      const nativeNavigation = await handleNativeNavigationPublish(request, env);
+      if (nativeNavigation) return stamp(nativeNavigation);
       const websiteBuilderV2 = await handleWebsiteBuilderV2Request(request, env);
       if (websiteBuilderV2) return stamp(websiteBuilderV2);
       const experience = await handleKairosExperienceRequest(request, env, ctx, delegatedRequest => autonomousRuntime.fetch(delegatedRequest, env, ctx));
@@ -62,6 +65,7 @@ export default {
     } catch (error) {
       return json({
         status: "failed", build: BUILD,
+        nativeNavigation: KAIROS_NATIVE_NAVIGATION_BUILD,
         websiteBuilderV2: KAIROS_WEBSITE_BUILDER_V2_BUILD,
         productManufacturingBridge: KAIROS_PRODUCT_MANUFACTURING_BRIDGE_BUILD,
         experienceController: KAIROS_EXPERIENCE_CONTROLLER_BUILD,
@@ -83,6 +87,9 @@ export default {
         error: { code: error?.code || "immutable_entry_failed", message: error instanceof Error ? error.message : "Kairos could not complete this request." },
         safeguards: {
           liveThemeChanged: false,
+          nativeShopifyNavigationRequired: true,
+          duplicateStandaloneNavigationPrevented: true,
+          landingPagesRequiredBeforeNavigationPublish: true,
           productTrustLayerStagingRequiredBeforePublish: true,
           fabricatedReviewsPrevented: true,
           deliveryAndEligibilityDisclosuresRequired: true,
@@ -140,6 +147,7 @@ function stamp(response) {
 function runtimeHeaders() {
   return {
     "X-MMG-Production-Entry": BUILD,
+    "X-MMG-Native-Navigation": KAIROS_NATIVE_NAVIGATION_BUILD,
     "X-MMG-Website-Builder-V2": KAIROS_WEBSITE_BUILDER_V2_BUILD,
     "X-Kairos-Product-Manufacturing": KAIROS_PRODUCT_MANUFACTURING_BRIDGE_BUILD,
     "X-MMG-Experience-Controller": KAIROS_EXPERIENCE_CONTROLLER_BUILD,
