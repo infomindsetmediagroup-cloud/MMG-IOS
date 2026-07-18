@@ -1,4 +1,4 @@
-export const KAIROS_NATIVE_MAIN_MENU_BUILD = "kairos-native-main-menu-publisher-20260718-4";
+export const KAIROS_NATIVE_MAIN_MENU_BUILD = "kairos-native-main-menu-publisher-20260718-5";
 export const NATIVE_MAIN_MENU_PATH = "/api/shopify/native-main-menu/publish";
 export const NATIVE_MAIN_MENU_CONFIRMATION = "PUBLISH_MMG_NATIVE_MAIN_MENU_NOW";
 
@@ -64,6 +64,7 @@ export async function handleNativeMainMenuPublish(request, env) {
   return json({
     status: "completed",
     build: KAIROS_NATIVE_MAIN_MENU_BUILD,
+    authSource: auth.source,
     summary: "Replaced every Shopify navigation menu matching the live legacy header signature, plus the active main/default fallback.",
     discovery: menus.map(m => ({ id: m.id, handle: m.handle, title: m.title, isDefault: m.isDefault, topLevelTitles: (m.items || []).map(i => i.title), legacyScore: legacyScore(m) })),
     updatedMenus,
@@ -72,6 +73,7 @@ export async function handleNativeMainMenuPublish(request, env) {
       knowledgeLibraryRemoved: updatedMenus.every(m => !JSON.stringify(m.after).includes("Knowledge Library")),
       liveLegacySignatureTargeted: candidates.some(m => legacyScore(m) >= 3),
       updatedMenuCount: updatedMenus.length,
+      freshClientCredentialsTokenUsed: auth.source === "client_credentials",
       themeOverrideNotUsed: true
     }
   });
@@ -108,7 +110,23 @@ async function updateMenu(config, auth, id, title, items) {
 function normalize(items) { return (items || []).map(i => ({ title: i.title, type: i.type, url: pathOnly(i.url), items: normalize(i.items) })); }
 function pathOnly(value) { try { const u = new URL(value, "https://themindsetmediagroup.com"); return u.pathname + u.search; } catch { return String(value || ""); } }
 function readConfig(env) { const storeDomain = String(env.SHOPIFY_STORE_DOMAIN || "").trim(); const apiVersion = String(env.SHOPIFY_API_VERSION || "2026-07").trim(); if (!storeDomain) throw error(500, "shopify_store_domain_missing", "SHOPIFY_STORE_DOMAIN is required."); return { storeDomain, apiVersion }; }
-async function resolveToken(config, env) { const direct = String(env.SHOPIFY_ADMIN_ACCESS_TOKEN || "").trim(); if (direct) return { token: direct }; const clientId = String(env.SHOPIFY_CLIENT_ID || "").trim(); const clientSecret = String(env.SHOPIFY_CLIENT_SECRET || "").trim(); if (!clientId || !clientSecret) throw error(500, "shopify_credentials_missing", "Shopify credentials are required."); const key = `${config.storeDomain}:${clientId}`; const cached = tokenCache.get(key); if (cached && cached.expiresAt > Date.now() + 60000) return { token: cached.token }; const r = await fetch(`https://${config.storeDomain}/admin/oauth/access_token`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, grant_type: "client_credentials" }), signal: AbortSignal.timeout(SHOPIFY_TIMEOUT_MS) }); const b = await safeJSON(r); if (!r.ok || !b?.access_token) throw error(r.status || 502, "shopify_token_error", "Unable to obtain Shopify token."); tokenCache.set(key, { token: b.access_token, expiresAt: Date.now() + Number(b.expires_in || 86300) * 1000 }); return { token: b.access_token }; }
+async function resolveToken(config, env) {
+  const clientId = String(env.SHOPIFY_CLIENT_ID || "").trim();
+  const clientSecret = String(env.SHOPIFY_CLIENT_SECRET || "").trim();
+  if (clientId && clientSecret) {
+    const key = `${config.storeDomain}:${clientId}`;
+    const cached = tokenCache.get(key);
+    if (cached && cached.expiresAt > Date.now() + 60000) return { token: cached.token, source: "client_credentials" };
+    const r = await fetch(`https://${config.storeDomain}/admin/oauth/access_token`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, grant_type: "client_credentials" }), signal: AbortSignal.timeout(SHOPIFY_TIMEOUT_MS) });
+    const b = await safeJSON(r);
+    if (!r.ok || !b?.access_token) throw error(r.status || 502, "shopify_token_error", "Unable to obtain a fresh Shopify client-credentials token.");
+    tokenCache.set(key, { token: b.access_token, expiresAt: Date.now() + Number(b.expires_in || 86300) * 1000 });
+    return { token: b.access_token, source: "client_credentials" };
+  }
+  const direct = String(env.SHOPIFY_ADMIN_ACCESS_TOKEN || "").trim();
+  if (direct) return { token: direct, source: "legacy_direct_token" };
+  throw error(500, "shopify_credentials_missing", "Shopify client credentials are required; no fallback Admin token is configured.");
+}
 async function gql(config, auth, query, variables) { const r = await fetch(`https://${config.storeDomain}/admin/api/${config.apiVersion}/graphql.json`, { method: "POST", headers: { "X-Shopify-Access-Token": auth.token, "Content-Type": "application/json" }, body: JSON.stringify({ query, variables }), signal: AbortSignal.timeout(SHOPIFY_TIMEOUT_MS) }); const b = await safeJSON(r); if (!r.ok) throw error(r.status, "shopify_graphql_http_error", `Shopify GraphQL returned HTTP ${r.status}.`); if (b?.errors?.length) throw error(422, "shopify_graphql_error", b.errors.map(e => e.message).join("; ")); return b?.data || {}; }
 async function safeJSON(value) { try { return await value.json(); } catch { return {}; } }
 function error(status, code, message) { const e = new Error(message); e.status = status; e.code = code; return e; }
