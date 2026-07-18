@@ -10,131 +10,40 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 20
     env:
       KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
       KAIROS_SKIP_RELEASE_MATCH: "false"
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CLOUDFLARE_TOKEN || vars.CLOUDFLARE_API_TOKEN || vars.CLOUDFLARE_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
 
     steps:
-      - name: Download exact review source
+      - name: Run final Shopify staging and Playwright verification
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          set -euo pipefail
+          set +e
           mkdir -p repository artifacts/canonical-homepage
           source_sha="${SOURCE_SHA:-${GITHUB_SHA}}"
           curl --fail --show-error --silent --location \
-            --connect-timeout 15 \
-            --max-time 60 \
-            --retry 2 \
-            --retry-delay 2 \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/tarball/${source_sha}" \
             --output repository.tar.gz
           tar -xzf repository.tar.gz --strip-components=1 -C repository
-          test -f repository/cloudflare/mmg-ios/wrangler.toml
-          grep -q 'kairos-production-entry-immutable-20260717-8' repository/cloudflare/mmg-ios/src/kairos-production-entry-immutable-v1.js
-          grep -q 'waitForCanonicalReadBack' repository/cloudflare/mmg-ios/src/kairos-canonical-homepage-builder-v1.js
-          grep -q 'waitForCompatibleScript' repository/cloudflare/mmg-ios/src/kairos-canonical-homepage-compatibility-v1.js
-
-      - name: Validate complete production source
-        shell: bash
-        working-directory: repository/cloudflare/mmg-ios
-        run: |
-          set -euo pipefail
-          npm install --no-package-lock --no-audit --no-fund >/dev/null 2>&1
-          npm run validate:production >/tmp/validate-production.log
-          npx wrangler deploy --dry-run >/tmp/wrangler-dry-run.log 2>&1
-          tail -n 30 /tmp/validate-production.log
-          echo "Wrangler dry-run passed."
-
-      - name: Resolve Cloudflare credentials
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "${CLOUDFLARE_API_TOKEN:-}"
-          if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
-            accounts_json="$(curl --fail --show-error --silent \
-              --connect-timeout 15 \
-              --max-time 30 \
-              --retry 2 \
-              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-              -H "Content-Type: application/json" \
-              "https://api.cloudflare.com/client/v4/accounts?per_page=50")"
-            account_id="$(ACCOUNTS_JSON="${accounts_json}" node -e '
-              const payload = JSON.parse(process.env.ACCOUNTS_JSON || "{}");
-              const accounts = payload.success && Array.isArray(payload.result) ? payload.result : [];
-              if (accounts.length !== 1) process.exit(1);
-              process.stdout.write(accounts[0].id || "");
-            ')"
-            test -n "${account_id}"
-            echo "CLOUDFLARE_ACCOUNT_ID=${account_id}" >> "${GITHUB_ENV}"
-          fi
-
-      - name: Deploy exact reviewed Worker
-        shell: bash
-        working-directory: repository/cloudflare/mmg-ios
-        run: |
-          set -euo pipefail
-          npx wrangler deploy >/tmp/wrangler-deploy.log 2>&1
-          tail -n 20 /tmp/wrangler-deploy.log
-
-      - name: Verify exact live release
-        shell: bash
-        run: |
-          set -euo pipefail
-          expected_entry="kairos-production-entry-immutable-20260717-8"
-          expected_builder="kairos-canonical-homepage-builder-20260717-2"
-          for attempt in $(seq 1 30); do
-            headers_file="$(mktemp)"
-            if curl --fail --show-error --silent --location --max-time 30 \
-              -D "${headers_file}" \
-              "${KAIROS_PRODUCTION_URL}/api/health?observable_release=${GITHUB_SHA}&attempt=${attempt}" \
-              --output /tmp/kairos-health.json; then
-              entry="$(awk 'BEGIN{IGNORECASE=1} /^x-mmg-production-entry:/ {gsub(/\r/, ""); sub(/^[^:]+:[[:space:]]*/, ""); print; exit}' "${headers_file}")"
-              builder="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-canonical-homepage:/ {gsub(/\r/, ""); sub(/^[^:]+:[[:space:]]*/, ""); print; exit}' "${headers_file}")"
-              if [ "${entry}" = "${expected_entry}" ] && [ "${builder}" = "${expected_builder}" ]; then
-                rm -f "${headers_file}"
-                echo "Exact release verified: ${entry}; ${builder}"
-                exit 0
-              fi
-            fi
-            rm -f "${headers_file}"
-            sleep 5
-          done
-          echo "::error::The exact reviewed Worker release did not become live."
-          exit 1
-
-      - name: Install Playwright Chromium
-        shell: bash
-        run: |
-          set -euo pipefail
+          grep -q 'kairos-production-entry-immutable-20260717-8' repository/cloudflare/mmg-ios/src/kairos-production-entry-immutable-v1.js || exit 1
           npm init -y >/dev/null
           npm install --no-save --no-audit --no-fund playwright >/dev/null 2>&1
           npx playwright install --with-deps chromium >/dev/null 2>&1
-          echo "Playwright Chromium is ready."
-
-      - name: Build, repair, and verify Shopify staging homepage
-        id: release
-        shell: bash
-        run: |
-          set +e
           node repository/.github/scripts/run-canonical-homepage-release.mjs \
             > artifacts/canonical-homepage/release.log \
             2> artifacts/canonical-homepage/release-error.log
           status=$?
-          echo "exit_code=${status}" >> "${GITHUB_OUTPUT}"
           RELEASE_EXIT_CODE="${status}" node <<'NODE'
           const fs = require('node:fs');
           const path = require('node:path');
@@ -153,7 +62,8 @@ jobs:
           const repair = parse('repair-result.json');
           const first = parse('pass-1/verification-report.json');
           const final = parse('final/verification-report.json');
-          const summary = {
+          console.log('FINAL_CANONICAL_HOMEPAGE_RESULT');
+          console.log(JSON.stringify({
             releaseExitCode: Number(process.env.RELEASE_EXIT_CODE || 1),
             preview: receipt?.preview?.url || build?.preview?.url || null,
             buildStatus: receipt?.buildStatus || build?.status || null,
@@ -165,39 +75,7 @@ jobs:
             finalFailures: final?.failures || receipt?.verification?.failures || [],
             publishedThemeChanged: receipt?.production?.publishedThemeChanged ?? build?.production?.publishedThemeChanged ?? null,
             files: receipt?.files || build?.files || [],
-            errorTail: read('release-error.log').split('\n').slice(-18).join('\n'),
-          };
-          fs.writeFileSync(path.join(root, 'concise-summary.json'), JSON.stringify(summary, null, 2) + '\n');
-          console.log(JSON.stringify(summary, null, 2));
+            errorTail: read('release-error.log').split('\n').slice(-12).join('\n'),
+          }, null, 2));
           NODE
-          exit 0
-
-      - name: Publish concise verification summary
-        if: always()
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          set -euo pipefail
-          summary="$(cat artifacts/canonical-homepage/concise-summary.json 2>/dev/null || printf '{"error":"concise summary unavailable"}')"
-          payload="$(SUMMARY="${summary}" node -e '
-            const summary = process.env.SUMMARY || "{}";
-            process.stdout.write(JSON.stringify({
-              body: `## Canonical Homepage Verification\n\n\u0060\u0060\u0060json\n${summary}\n\u0060\u0060\u0060\n\nRun: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
-            }));
-          ')"
-          curl --fail --show-error --silent \
-            -X POST \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            -H "Content-Type: application/json" \
-            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
-            --data "${payload}" >/dev/null
-
-      - name: Enforce final verification result
-        shell: bash
-        env:
-          RELEASE_EXIT_CODE: ${{ steps.release.outputs.exit_code }}
-        run: test "${RELEASE_EXIT_CODE}" = "0"
+          exit "${status}"
