@@ -17,9 +17,13 @@ import {
   KAIROS_WEBSITE_BUILDER_V2_BUILD,
 } from "./kairos-website-builder-v2.js";
 import { KAIROS_PRODUCT_MANUFACTURING_BRIDGE_BUILD } from "./kairos-product-manufacturing-bridge-v1.js";
+import {
+  handleServicesLandingBuild,
+  KAIROS_SERVICES_LANDING_BUILD,
+} from "./kairos-services-landing-publisher-20260718.js";
 
-const BUILD = "kairos-production-entry-immutable-20260718-18";
-const VISUAL_BASELINE = "ecosystem-navigation-services-landing-foundation-20260718";
+const BUILD = "kairos-production-entry-immutable-20260718-19";
+const VISUAL_BASELINE = "verified-services-landing-publisher-20260718";
 
 export { KairosProject };
 
@@ -35,6 +39,8 @@ export default {
         delegatedRequest => autonomousRuntime.fetch(delegatedRequest, env, ctx),
       );
       if (experience) return stamp(experience);
+      const servicesLanding = await handleServicesLandingBuild(request, env);
+      if (servicesLanding) return stamp(servicesLanding);
       const canonicalHomepage = await handleCanonicalHomepageBuildWithCompatibility(request, env, ctx);
       if (canonicalHomepage) return stamp(canonicalHomepage);
       const immutableExecution = await handleImmutableApprovedFileExecution(request, env, ctx);
@@ -47,6 +53,7 @@ export default {
         websiteBuilderV2: KAIROS_WEBSITE_BUILDER_V2_BUILD,
         productManufacturingBridge: KAIROS_PRODUCT_MANUFACTURING_BRIDGE_BUILD,
         experienceController: KAIROS_EXPERIENCE_CONTROLLER_BUILD,
+        servicesLanding: KAIROS_SERVICES_LANDING_BUILD,
         canonicalHomepage: KAIROS_CANONICAL_HOMEPAGE_BUILD,
         canonicalHomepageCompatibility: KAIROS_CANONICAL_HOMEPAGE_COMPATIBILITY_BUILD,
         immutableExecution: KAIROS_IMMUTABLE_APPROVED_FILE_EXECUTION_BUILD,
@@ -61,6 +68,7 @@ export default {
           authoritativeManuscriptPreservationRequired: true,
           productPublicationDraftFirst: true,
           canonicalHomepageStagingOnly: false,
+          servicesLandingStagingRequiredBeforePublish: true,
           immutableApprovedCandidateRequired: true,
           approvalTimeTextReconstruction: false,
           exactSourceHashRequired: true,
@@ -86,6 +94,7 @@ function stamp(response) {
   headers.set("X-MMG-Website-Builder-V2", KAIROS_WEBSITE_BUILDER_V2_BUILD);
   headers.set("X-Kairos-Product-Manufacturing", KAIROS_PRODUCT_MANUFACTURING_BRIDGE_BUILD);
   headers.set("X-MMG-Experience-Controller", KAIROS_EXPERIENCE_CONTROLLER_BUILD);
+  headers.set("X-MMG-Services-Landing", KAIROS_SERVICES_LANDING_BUILD);
   headers.set("X-Kairos-Canonical-Homepage", KAIROS_CANONICAL_HOMEPAGE_BUILD);
   headers.set("X-Kairos-Canonical-Homepage-Compatibility", KAIROS_CANONICAL_HOMEPAGE_COMPATIBILITY_BUILD);
   headers.set("X-Kairos-Immutable-Approved-File-Execution", KAIROS_IMMUTABLE_APPROVED_FILE_EXECUTION_BUILD);
@@ -113,6 +122,7 @@ function json(value, status = 200) {
       "X-MMG-Website-Builder-V2": KAIROS_WEBSITE_BUILDER_V2_BUILD,
       "X-Kairos-Product-Manufacturing": KAIROS_PRODUCT_MANUFACTURING_BRIDGE_BUILD,
       "X-MMG-Experience-Controller": KAIROS_EXPERIENCE_CONTROLLER_BUILD,
+      "X-MMG-Services-Landing": KAIROS_SERVICES_LANDING_BUILD,
       "X-Kairos-Canonical-Homepage": KAIROS_CANONICAL_HOMEPAGE_BUILD,
       "X-Kairos-Canonical-Homepage-Compatibility": KAIROS_CANONICAL_HOMEPAGE_COMPATIBILITY_BUILD,
       "X-Kairos-Immutable-Approved-File-Execution": KAIROS_IMMUTABLE_APPROVED_FILE_EXECUTION_BUILD,
