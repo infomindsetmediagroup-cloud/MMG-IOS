@@ -1,4 +1,5 @@
 name: Publish Corrected Main Navigation
+run-name: Publish corrected Shopify navigation ${{ github.sha }}
 
 on:
   push:
@@ -6,6 +7,7 @@ on:
       - main
     paths:
       - .github/workflows/publish-main-navigation-now.yml
+      - cloudflare/mmg-ios/src/kairos-native-navigation-publisher-20260718.js
   workflow_dispatch: {}
 
 permissions:
