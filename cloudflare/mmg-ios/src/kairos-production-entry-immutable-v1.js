@@ -18,7 +18,8 @@ import {
 } from "./kairos-website-builder-v2.js";
 import { KAIROS_PRODUCT_MANUFACTURING_BRIDGE_BUILD } from "./kairos-product-manufacturing-bridge-v1.js";
 
-const BUILD = "kairos-production-entry-immutable-20260718-15";
+const BUILD = "kairos-production-entry-immutable-20260718-16";
+const VISUAL_BASELINE = "customer-portal-homepage-framework-20260718";
 
 export { KairosProject };
 
@@ -91,7 +92,7 @@ function stamp(response) {
   headers.set("X-Kairos-Approval-Time-Reconstruction", "false");
   headers.set("X-Kairos-Workers-AI-Used", "false");
   headers.set("X-Kairos-Neurons-Consumed", "0");
-  headers.set("X-Kairos-Visual-Baseline", "publishing-services-homepage-framework-20260718");
+  headers.set("X-Kairos-Visual-Baseline", VISUAL_BASELINE);
   if (headers.get("Content-Type")?.includes("text/html")) {
     headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
   }
@@ -118,7 +119,7 @@ function json(value, status = 200) {
       "X-Kairos-Approval-Time-Reconstruction": "false",
       "X-Kairos-Workers-AI-Used": "false",
       "X-Kairos-Neurons-Consumed": "0",
-      "X-Kairos-Visual-Baseline": "publishing-services-homepage-framework-20260718",
+      "X-Kairos-Visual-Baseline": VISUAL_BASELINE,
       "X-Content-Type-Options": "nosniff",
     },
   });
