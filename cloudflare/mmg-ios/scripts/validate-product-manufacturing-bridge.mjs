@@ -5,6 +5,26 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
+class MockStorage {
+  constructor() { this.values = new Map(); }
+  async get(key) { return this.values.get(key); }
+  async put(key, value) {
+    if (key && typeof key === "object" && !ArrayBuffer.isView(key)) {
+      for (const [entry, item] of Object.entries(key)) this.values.set(entry, item);
+      return;
+    }
+    this.values.set(key, value);
+  }
+  async delete(key) {
+    if (Array.isArray(key)) key.forEach(item => this.values.delete(item));
+    else this.values.delete(key);
+  }
+}
+
+function json(value, status = 200) {
+  return new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json" } });
+}
+
 const BUILD = "kairos-product-manufacturing-bridge-validator-20260717-1";
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
@@ -178,22 +198,3 @@ console.log(JSON.stringify({
     externalInferenceAPI: false,
   },
 }, null, 2));
-
-class MockStorage {
-  constructor() { this.values = new Map(); }
-  async get(key) { return this.values.get(key); }
-  async put(key, value) {
-    if (key && typeof key === "object" && !ArrayBuffer.isView(key)) {
-      for (const [entry, item] of Object.entries(key)) this.values.set(entry, item);
-      return;
-    }
-    this.values.set(key, value);
-  }
-  async delete(key) {
-    if (Array.isArray(key)) key.forEach(item => this.values.delete(item));
-    else this.values.delete(key);
-  }
-}
-function json(value, status = 200) {
-  return new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json" } });
-}
