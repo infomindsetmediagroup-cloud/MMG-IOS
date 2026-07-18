@@ -42,6 +42,13 @@ try {
     await page.waitForSelector("[data-mmg-canonical-homepage]", { state: "visible", timeout: 30_000 });
     await page.waitForTimeout(1_200);
 
+    const ignoredFailedRequests = failedRequests.filter(isOptionalShopPayRequest);
+    const requiredFailedRequests = failedRequests.filter((entry) => !isOptionalShopPayRequest(entry));
+    const { ignored: ignoredConsoleErrors, required: requiredConsoleErrors } = classifyConsoleErrors(
+      consoleErrors,
+      ignoredFailedRequests.length,
+    );
+
     const checks = [];
     checks.push(check("HTTP response", Boolean(response && response.ok()), response ? `${response.status()} ${response.statusText()}` : "No navigation response"));
 
@@ -92,14 +99,25 @@ try {
     const missingImageAlt = await page.locator("img:not([alt])").count();
     checks.push(check("Images include alt attributes", missingImageAlt === 0, `missing alt on ${missingImageAlt} image(s)`));
 
-    checks.push(check("No page console errors", consoleErrors.length === 0, consoleErrors));
-    checks.push(check("No failed required requests", failedRequests.length === 0, failedRequests));
+    checks.push(check("No page console errors", requiredConsoleErrors.length === 0, requiredConsoleErrors));
+    checks.push(check("No failed required requests", requiredFailedRequests.length === 0, requiredFailedRequests));
 
     const screenshotPath = resolve(outputDirectory, `canonical-homepage-${viewport.name}.png`);
     await page.screenshot({ path: screenshotPath, fullPage: true });
 
     const viewportPassed = checks.every((item) => item.passed);
-    report.viewports.push({ ...viewport, passed: viewportPassed, checks, consoleErrors, failedRequests, screenshotPath });
+    report.viewports.push({
+      ...viewport,
+      passed: viewportPassed,
+      checks,
+      consoleErrors: requiredConsoleErrors,
+      failedRequests: requiredFailedRequests,
+      ignoredOptionalShopPay: {
+        consoleErrors: ignoredConsoleErrors,
+        failedRequests: ignoredFailedRequests,
+      },
+      screenshotPath,
+    });
     if (!viewportPassed) {
       report.passed = false;
       report.failures.push(...checks.filter((item) => !item.passed).map((item) => `${viewport.name}: ${item.name} — ${format(item.details)}`));
@@ -115,6 +133,36 @@ await writeFile(resolve(outputDirectory, "verification-report.json"), JSON.strin
 await writeFile(resolve(outputDirectory, "verification-summary.md"), markdown(report));
 console.log(JSON.stringify(report, null, 2));
 if (!report.passed) process.exit(1);
+
+function isOptionalShopPayRequest(entry) {
+  const match = String(entry || "").match(/^\S+\s+(https?:\/\/\S+)\s+—\s+(.+)$/);
+  if (!match) return false;
+  try {
+    const url = new URL(match[1]);
+    return url.hostname === "shop.app" && url.pathname.startsWith("/pay/hop") && /ERR_BLOCKED_BY_RESPONSE/i.test(match[2]);
+  } catch {
+    return false;
+  }
+}
+
+function classifyConsoleErrors(errors, shopPayFailureCount) {
+  const ignored = [];
+  const required = [];
+  let generic403Budget = shopPayFailureCount;
+  for (const error of errors) {
+    if (/Framing 'https:\/\/shop\.app\/' violates .*frame-ancestors/i.test(error)) {
+      ignored.push(error);
+      continue;
+    }
+    if (generic403Budget > 0 && /Failed to load resource: the server responded with a status of 403/i.test(error)) {
+      ignored.push(error);
+      generic403Budget -= 1;
+      continue;
+    }
+    required.push(error);
+  }
+  return { ignored, required };
+}
 
 function check(name, passed, details) {
   return { name, passed: Boolean(passed), details: passed ? undefined : details };
