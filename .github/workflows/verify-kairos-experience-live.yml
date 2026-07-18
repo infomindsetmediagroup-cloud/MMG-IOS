@@ -4,24 +4,34 @@ on:
   pull_request:
     branches:
       - main
-    paths:
+    paths: &experience_paths
       - ".github/workflows/verify-kairos-experience-live.yml"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-immutable-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-website-builder-v2.js"
+      - "cloudflare/mmg-ios/src/kairos-website-builder-asset-library-v1.js"
+      - "cloudflare/mmg-ios/scripts/validate-kairos-experience-controller.mjs"
+      - "cloudflare/mmg-ios/scripts/validate-website-builder-v2.mjs"
+      - "web/kairos-dashboard/index.html"
+      - "web/kairos-dashboard/scripts/website-builder-studio.js"
+      - "web/kairos-dashboard/styles/website-builder-studio.css"
+  push:
+    branches:
+      - main
+    paths: *experience_paths
   workflow_dispatch: {}
 
 permissions:
   contents: read
 
 concurrency:
-  group: verify-kairos-experience-live-${{ github.ref }}
+  group: verify-kairos-experience-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  verify:
+  verify-contract:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
-
     steps:
       - name: Download repository archive
         shell: bash
@@ -30,95 +40,85 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p repository
-          curl --fail --show-error --silent --location \
-            --connect-timeout 15 \
-            --max-time 60 \
-            --retry 2 \
-            --retry-delay 2 \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" \
-            --output repository.tar.gz
+          curl --fail --show-error --silent --location --connect-timeout 15 --max-time 60 --retry 2 --retry-delay 2 \
+            -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" --output repository.tar.gz
           tar -xzf repository.tar.gz --strip-components=1 -C repository
           test -f repository/cloudflare/mmg-ios/wrangler.toml
-
       - name: Install Worker dependencies
-        shell: bash
         working-directory: repository/cloudflare/mmg-ios
         run: npm install --no-package-lock --no-audit --no-fund
-
       - name: Validate complete production contract
-        shell: bash
         working-directory: repository/cloudflare/mmg-ios
         run: npm run validate:production
-
       - name: Validate Worker bundle
-        shell: bash
         working-directory: repository/cloudflare/mmg-ios
         run: npx wrangler deploy --dry-run
 
-      - name: Verify live Objective Controller and Website Builder Studio
+  verify-production-live:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+    steps:
+      - name: Verify deployed Objective Controller and Website Builder v2
         shell: bash
         run: |
           set -euo pipefail
           success=0
-          for attempt in $(seq 1 18); do
+          for attempt in $(seq 1 24); do
             headers_file="$(mktemp)"
-            if status_json="$(curl --fail --show-error --silent --location --max-time 30 -D "${headers_file}" "${KAIROS_PRODUCTION_URL}/api/website-builder/status?proof=${GITHUB_SHA}")" \
+            if status_json="$(curl --fail --show-error --silent --location --max-time 30 -D "${headers_file}" "${KAIROS_PRODUCTION_URL}/api/website-builder/v2/status?proof=${GITHUB_SHA}")" \
+              && assets_json="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/api/website-builder/assets?proof=${GITHUB_SHA}")" \
               && root_html="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/?proof=${GITHUB_SHA}")" \
               && objective_js="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/scripts/objective-controller-v2.js?proof=${GITHUB_SHA}")" \
               && builder_js="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/scripts/website-builder-studio.js?proof=${GITHUB_SHA}")" \
               && builder_css="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/styles/website-builder-studio.css?proof=${GITHUB_SHA}")"; then
               production_entry="$(awk 'BEGIN{IGNORECASE=1} /^x-mmg-production-entry:/ {gsub(/\r/, ""); sub(/^[^:]+:[[:space:]]*/, ""); print; exit}' "${headers_file}")"
-              experience_controller="$(awk 'BEGIN{IGNORECASE=1} /^x-mmg-experience-controller:/ {gsub(/\r/, ""); sub(/^[^:]+:[[:space:]]*/, ""); print; exit}' "${headers_file}")"
-              if STATUS_JSON="${status_json}" ROOT_HTML="${root_html}" OBJECTIVE_JS="${objective_js}" BUILDER_JS="${builder_js}" BUILDER_CSS="${builder_css}" PRODUCTION_ENTRY="${production_entry}" EXPERIENCE_CONTROLLER="${experience_controller}" node <<'NODE'
+              website_builder_v2="$(awk 'BEGIN{IGNORECASE=1} /^x-mmg-website-builder-v2:/ {gsub(/\r/, ""); sub(/^[^:]+:[[:space:]]*/, ""); print; exit}' "${headers_file}")"
+              if STATUS_JSON="${status_json}" ASSETS_JSON="${assets_json}" ROOT_HTML="${root_html}" OBJECTIVE_JS="${objective_js}" BUILDER_JS="${builder_js}" BUILDER_CSS="${builder_css}" PRODUCTION_ENTRY="${production_entry}" WEBSITE_BUILDER_V2="${website_builder_v2}" node <<'NODE'
           const status = JSON.parse(process.env.STATUS_JSON || "{}");
+          const assets = JSON.parse(process.env.ASSETS_JSON || "{}");
           const root = process.env.ROOT_HTML || "";
           const objective = process.env.OBJECTIVE_JS || "";
           const builder = process.env.BUILDER_JS || "";
           const css = process.env.BUILDER_CSS || "";
           const checks = {
-            productionEntry: process.env.PRODUCTION_ENTRY === "kairos-production-entry-immutable-20260717-9",
-            experienceHeader: process.env.EXPERIENCE_CONTROLLER === "kairos-experience-controller-20260717-1",
+            productionEntry: process.env.PRODUCTION_ENTRY === "kairos-production-entry-immutable-20260717-10",
+            websiteBuilderHeader: process.env.WEBSITE_BUILDER_V2 === "kairos-website-builder-v2-20260717-1",
             statusOperational: status.status === "operational",
-            singleEntryObjective: status.objectiveController === "single-entry-execution-v2",
-            premiumBuilder: status.websiteBuilder === "premium-governed-staging-v1",
-            stylePresets: Array.isArray(status.supportedStylePresets) && status.supportedStylePresets.includes("cinematic-obsidian") && status.supportedStylePresets.includes("editorial-light") && status.supportedStylePresets.includes("kinetic-blue"),
-            mediaSlots: status.mediaSlots === "image-upload-and-url",
-            kairosMoments: status.kairosMoments === "audio-upload-url-and-transcript",
-            desktopMobile: Array.isArray(status.previewModes) && status.previewModes.includes("desktop") && status.previewModes.includes("mobile"),
-            stagingOnly: status.safeguards?.stagingOnly === true && status.safeguards?.liveThemeChanged === false,
-            exactReadBack: status.safeguards?.exactShopifyReadBackRequired === true,
-            rootLoadsObjectiveController: root.includes("scripts/objective-controller-v2.js"),
-            rootLoadsWebsiteBuilder: root.includes("scripts/website-builder-studio.js") && root.includes("styles/website-builder-studio.css"),
+            intelligentComposer: status.composer === "objective-to-premium-composition-v2",
+            assetLibrary: status.assetLibrary === "durable-object-central-library-v1",
+            compositionModes: Array.isArray(status.compositionModes) && status.compositionModes.includes("doctrine-compiler-fallback"),
+            supportedAssets: Array.isArray(status.supportedAssets) && status.supportedAssets.includes("image") && status.supportedAssets.includes("audio"),
+            automaticMatching: status.automaticAssetMatching === true,
+            sectionReordering: status.sectionReordering === true,
+            stagingOnly: status.safeguards?.stagingOnly === true && status.safeguards?.mainThemeMutationAutomatic === false,
+            assetsReadable: assets.status === "completed" && Array.isArray(assets.assets),
+            rootLoadsStudioV2: root.includes("website-builder-studio.js?v=experience-20260717-2") && root.includes("website-builder-studio.css?v=experience-20260717-2"),
             objectiveExecutes: objective.includes("/api/objectives/execute") && objective.includes("Execute Objective"),
-            objectivePreserved: objective.includes("window.KairosWebsiteBuilder") && objective.includes("state.objective"),
-            imageControls: builder.includes("data-kws-image") && builder.includes("compressImage"),
-            audioControls: builder.includes("data-kws-audio") && builder.includes("data-kws-audio-transcript"),
-            stagingBuild: builder.includes("/api/website-builder/staging/build") && builder.includes("BUILD_KAIROS_WEBSITE_STUDIO_STAGING"),
-            premiumCanvas: css.includes(".kws-studio") && css.includes(".kws-preview--cinematic-obsidian") && css.includes(".kws-studio__device--mobile"),
+            composerUI: builder.includes("Compose complete website") && builder.includes("/api/website-builder/compose"),
+            assetLibraryUI: builder.includes("Asset Library") && builder.includes("/api/website-builder/assets") && builder.includes("data-kws-library-upload"),
+            sectionOrderingUI: builder.includes("data-kws-move") && builder.includes("moveSection"),
+            persistentUpload: builder.includes("STORE_KAIROS_WEBSITE_ASSET") && builder.includes("DELETE_KAIROS_WEBSITE_ASSET"),
+            premiumCanvas: css.includes(".kws-composer") && css.includes(".kws-asset-library") && css.includes(".kws-preview__section--full-bleed"),
           };
-          console.log(JSON.stringify({
-            productionEntry: process.env.PRODUCTION_ENTRY,
-            experienceController: process.env.EXPERIENCE_CONTROLLER,
-            status,
-            checks,
-          }, null, 2));
+          console.log(JSON.stringify({ productionEntry: process.env.PRODUCTION_ENTRY, websiteBuilderV2: process.env.WEBSITE_BUILDER_V2, status, assetCount: assets.assets?.length, checks }, null, 2));
           if (Object.values(checks).some(value => value !== true)) process.exit(1);
           NODE
               then
                 success=1
                 rm -f "${headers_file}"
-                echo "Live Kairos Objective Controller and Website Builder Studio verified on attempt ${attempt}."
+                echo "Live Kairos Website Builder v2 verified on attempt ${attempt}."
                 break
               fi
             fi
             rm -f "${headers_file}"
-            echo "Live experience proof not ready yet (attempt ${attempt}/18)."
+            echo "Production deployment not ready for Website Builder v2 (attempt ${attempt}/24)."
             sleep 5
           done
           if [ "${success}" -ne 1 ]; then
-            echo "::error::Live Kairos experience proof failed."
+            echo "::error::Live Kairos Website Builder v2 proof failed after the production deployment window."
             exit 1
           fi
