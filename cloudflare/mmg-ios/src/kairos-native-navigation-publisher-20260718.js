@@ -1,25 +1,25 @@
-export const KAIROS_NATIVE_NAVIGATION_BUILD = "kairos-native-navigation-publisher-20260718-4";
+export const KAIROS_NATIVE_NAVIGATION_BUILD = "kairos-native-navigation-publisher-20260718-5";
 export const NATIVE_NAVIGATION_PATH = "/api/shopify/navigation/publish";
 export const NATIVE_NAVIGATION_CONFIRMATION = "PUBLISH_MMG_NATIVE_MAIN_NAVIGATION";
 
 const SHOPIFY_TIMEOUT_MS = 25_000;
+const DEFAULT_STOREFRONT_ORIGIN = "https://themindsetmediagroup.com";
 const tokenCache = new Map();
 
-const CANONICAL_ITEMS = [
-  { title: "Home", type: "HTTP", url: "/", items: [] },
-  { title: "Products", type: "HTTP", url: "/pages/products", items: [] },
-  { title: "Publishing Services", type: "HTTP", url: "/pages/publishing-services", items: [] },
-  { title: "Knowledge Library", type: "HTTP", url: "/pages/knowledge-library", items: [] },
-  { title: "Membership", type: "HTTP", url: "/pages/membership", items: [] },
-  { title: "Kairos", type: "HTTP", url: "/pages/kairos", items: [] },
-  { title: "Customer Portal", type: "HTTP", url: "/pages/customer-portal", items: [] },
+const CANONICAL_LINKS = [
+  { title: "Home", path: "/", items: [] },
+  { title: "Products", path: "/pages/products", items: [] },
+  { title: "Publishing Services", path: "/pages/publishing-services", items: [] },
+  { title: "Knowledge Library", path: "/pages/knowledge-library", items: [] },
+  { title: "Membership", path: "/pages/membership", items: [] },
+  { title: "Kairos", path: "/pages/kairos", items: [] },
+  { title: "Customer Portal", path: "/pages/customer-portal", items: [] },
   {
     title: "Company",
-    type: "HTTP",
-    url: "/pages/about-mindset-media-group",
+    path: "/pages/about-mindset-media-group",
     items: [
-      { title: "About Mindset Media Group™", type: "HTTP", url: "/pages/about-mindset-media-group", items: [] },
-      { title: "Contact", type: "HTTP", url: "/pages/contact", items: [] },
+      { title: "About Mindset Media Group™", path: "/pages/about-mindset-media-group", items: [] },
+      { title: "Contact", path: "/pages/contact", items: [] },
     ],
   },
 ];
@@ -43,7 +43,8 @@ export async function handleNativeNavigationPublish(request, env) {
   const auth = await resolveAccessToken(config, env);
   const menu = await getMainMenu(config, auth);
   const before = summarize(menu.items || []);
-  const updated = await updateMenu(config, auth, menu, CANONICAL_ITEMS);
+  const canonicalItems = buildCanonicalItems(config.storefrontOrigin);
+  const updated = await updateMenu(config, auth, menu, canonicalItems);
   const verification = verify(updated?.items || []);
 
   if (!verification.valid) {
@@ -53,7 +54,7 @@ export async function handleNativeNavigationPublish(request, env) {
   return json({
     status: "completed",
     build: KAIROS_NATIVE_NAVIGATION_BUILD,
-    summary: "Published the exact canonical Shopify main navigation without coupling menu publication to landing-page creation or template assignment.",
+    summary: "Published the exact canonical Shopify main navigation using valid absolute HTTP destinations and verified the resulting native menu tree.",
     navigation: {
       id: updated.id,
       handle: updated.handle,
@@ -69,7 +70,7 @@ export async function handleNativeNavigationPublish(request, env) {
     pages: [],
     safeguards: {
       nativeShopifyMenuOnly: true,
-      existingEquivalentItemsPreferred: false,
+      absoluteHttpDestinations: true,
       equivalentDestinationsMergedAcrossTree: true,
       companyGroupPreserved: true,
       aboutAndContactNestedUnderCompany: true,
@@ -78,6 +79,16 @@ export async function handleNativeNavigationPublish(request, env) {
       navigationIndependentFromLandingPages: true,
     },
   });
+}
+
+function buildCanonicalItems(storefrontOrigin) {
+  const build = item => ({
+    title: item.title,
+    type: "HTTP",
+    url: new URL(item.path, storefrontOrigin).toString(),
+    items: (item.items || []).map(build),
+  });
+  return CANONICAL_LINKS.map(build);
 }
 
 async function getMainMenu(config, auth) {
@@ -169,7 +180,7 @@ async function updateMenu(config, auth, menu, items) {
 
 function verify(items) {
   const errors = [];
-  const expectedTitles = CANONICAL_ITEMS.map(item => item.title);
+  const expectedTitles = CANONICAL_LINKS.map(item => item.title);
   const observedTitles = items.map(item => item.title);
 
   if (observedTitles.length !== expectedTitles.length) {
@@ -234,7 +245,7 @@ function flatten(items) {
 function normalize(value) {
   if (!value) return "";
   try {
-    const parsed = new URL(value, "https://store.invalid");
+    const parsed = new URL(value, DEFAULT_STOREFRONT_ORIGIN);
     return (parsed.pathname.replace(/\/$/, "") || "/").toLowerCase();
   } catch {
     return String(value || "").replace(/\/$/, "").toLowerCase();
@@ -244,10 +255,22 @@ function normalize(value) {
 function readShopifyConfig(env) {
   const storeDomain = String(env.SHOPIFY_STORE_DOMAIN || "").trim().toLowerCase();
   const apiVersion = String(env.SHOPIFY_API_VERSION || "2026-07").trim();
+  const rawOrigin = String(env.SHOPIFY_STOREFRONT_ORIGIN || DEFAULT_STOREFRONT_ORIGIN).trim();
+
   if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(storeDomain)) {
     throw error(503, "shopify_invalid_domain", "The Shopify store domain is invalid.");
   }
-  return { storeDomain, apiVersion };
+
+  let storefrontOrigin;
+  try {
+    const parsed = new URL(rawOrigin);
+    if (parsed.protocol !== "https:") throw new Error("HTTPS required");
+    storefrontOrigin = parsed.origin;
+  } catch {
+    throw error(503, "shopify_invalid_storefront_origin", "SHOPIFY_STOREFRONT_ORIGIN must be a valid HTTPS origin.");
+  }
+
+  return { storeDomain, apiVersion, storefrontOrigin };
 }
 
 async function resolveAccessToken(config, env) {
