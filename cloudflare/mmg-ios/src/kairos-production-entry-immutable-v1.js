@@ -14,9 +14,10 @@ import { handleProductsLandingBuild, KAIROS_PRODUCTS_LANDING_BUILD } from "./kai
 import { handleDigitalProductBuild, KAIROS_DIGITAL_PRODUCT_BUILD } from "./kairos-digital-product-publisher-20260718.js";
 import { handleServiceProductBuild, KAIROS_SERVICE_PRODUCT_BUILD } from "./kairos-service-product-publisher-20260718.js";
 import { handleRelatedProductsBuild, KAIROS_RELATED_PRODUCTS_BUILD } from "./kairos-related-products-publisher-20260718.js";
+import { handleProductAssetViewerBuild, KAIROS_PRODUCT_ASSET_VIEWER_BUILD } from "./kairos-product-asset-viewer-publisher-20260718.js";
 
-const BUILD = "kairos-production-entry-immutable-20260718-27";
-const VISUAL_BASELINE = "verified-intelligent-related-products-20260718";
+const BUILD = "kairos-production-entry-immutable-20260718-28";
+const VISUAL_BASELINE = "verified-unified-product-asset-viewer-20260718";
 
 export { KairosProject };
 
@@ -27,6 +28,8 @@ export default {
       if (websiteBuilderV2) return stamp(websiteBuilderV2);
       const experience = await handleKairosExperienceRequest(request, env, ctx, delegatedRequest => autonomousRuntime.fetch(delegatedRequest, env, ctx));
       if (experience) return stamp(experience);
+      const productAssetViewer = await handleProductAssetViewerBuild(request, env);
+      if (productAssetViewer) return stamp(productAssetViewer);
       const relatedProducts = await handleRelatedProductsBuild(request, env);
       if (relatedProducts) return stamp(relatedProducts);
       const serviceProduct = await handleServiceProductBuild(request, env);
@@ -52,11 +55,11 @@ export default {
       return stamp(await autonomousRuntime.fetch(request, env, ctx));
     } catch (error) {
       return json({
-        status: "failed",
-        build: BUILD,
+        status: "failed", build: BUILD,
         websiteBuilderV2: KAIROS_WEBSITE_BUILDER_V2_BUILD,
         productManufacturingBridge: KAIROS_PRODUCT_MANUFACTURING_BRIDGE_BUILD,
         experienceController: KAIROS_EXPERIENCE_CONTROLLER_BUILD,
+        productAssetViewer: KAIROS_PRODUCT_ASSET_VIEWER_BUILD,
         relatedProducts: KAIROS_RELATED_PRODUCTS_BUILD,
         serviceProduct: KAIROS_SERVICE_PRODUCT_BUILD,
         digitalProduct: KAIROS_DIGITAL_PRODUCT_BUILD,
@@ -77,6 +80,11 @@ export default {
           authoritativeManuscriptPreservationRequired: true,
           productPublicationDraftFirst: true,
           canonicalHomepageStagingOnly: false,
+          productAssetViewerStagingRequiredBeforePublish: true,
+          accessibleMediaControlsRequired: true,
+          keyboardAndSwipeNavigationEnabled: true,
+          inactiveVideoPlaybackPrevented: true,
+          approvedSamplePdfSupported: true,
           relatedProductsStagingRequiredBeforePublish: true,
           currentProductRecommendationExcluded: true,
           duplicateRecommendationsExcluded: true,
@@ -126,6 +134,7 @@ function runtimeHeaders() {
     "X-MMG-Website-Builder-V2": KAIROS_WEBSITE_BUILDER_V2_BUILD,
     "X-Kairos-Product-Manufacturing": KAIROS_PRODUCT_MANUFACTURING_BRIDGE_BUILD,
     "X-MMG-Experience-Controller": KAIROS_EXPERIENCE_CONTROLLER_BUILD,
+    "X-MMG-Product-Asset-Viewer": KAIROS_PRODUCT_ASSET_VIEWER_BUILD,
     "X-MMG-Related-Products": KAIROS_RELATED_PRODUCTS_BUILD,
     "X-MMG-Service-Product": KAIROS_SERVICE_PRODUCT_BUILD,
     "X-MMG-Digital-Product": KAIROS_DIGITAL_PRODUCT_BUILD,
