@@ -1,0 +1,101 @@
+name: Publish MMG Company Site Suite
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'cloudflare/mmg-ios/src/kairos-company-site-suite-publisher-20260718.js'
+      - 'cloudflare/mmg-ios/src/kairos-production-entry-company-suite-v1.js'
+      - 'cloudflare/mmg-ios/wrangler.toml'
+      - '.github/workflows/publish-company-site-suite.yml'
+
+concurrency:
+  group: publish-mmg-company-site-suite
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: cloudflare/mmg-ios
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Worker dependencies
+        run: npm ci
+
+      - name: Deploy Worker
+        run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Verify deployed Company suite build
+        shell: bash
+        run: |
+          set -euo pipefail
+          headers="$(curl -fsSI "${KAIROS_RUNTIME_URL}/health?company-suite=${GITHUB_SHA}")"
+          echo "$headers"
+          echo "$headers" | grep -qi 'x-mmg-company-site-suite: kairos-company-site-suite-publisher-20260718-1'
+        env:
+          KAIROS_RUNTIME_URL: ${{ secrets.KAIROS_RUNTIME_URL }}
+
+      - name: Build in Kairos Staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl -fsS -X POST "${KAIROS_RUNTIME_URL}/api/shopify/company-site-suite/build" \
+            -H 'content-type: application/json' \
+            --data '{"mode":"build","confirmation":"BUILD_MMG_COMPANY_SITE_SUITE_STAGING"}')"
+          echo "$response" | tee company-suite-staging.json
+          node -e 'const r=require("./company-suite-staging.json"); if(r.status!=="completed"||r.build!=="kairos-company-site-suite-publisher-20260718-1"||!r.verification?.exactThemeFileReadBack) process.exit(1)'
+        env:
+          KAIROS_RUNTIME_URL: ${{ secrets.KAIROS_RUNTIME_URL }}
+
+      - name: Publish exact suite to Shopify MAIN
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl -fsS -X POST "${KAIROS_RUNTIME_URL}/api/shopify/company-site-suite/build" \
+            -H 'content-type: application/json' \
+            --data '{"mode":"publish","confirmation":"PUBLISH_MMG_COMPANY_SITE_SUITE_LIVE"}')"
+          echo "$response" | tee company-suite-publish.json
+          node -e 'const r=require("./company-suite-publish.json"); if(r.status!=="completed"||r.mode!=="publish"||!r.verification?.exactThemeFileReadBack) process.exit(1)'
+        env:
+          KAIROS_RUNTIME_URL: ${{ secrets.KAIROS_RUNTIME_URL }}
+
+      - name: Verify live Company views and links
+        shell: bash
+        run: |
+          set -euo pipefail
+          for url in \
+            '/pages/about-mindset-media-group' \
+            '/pages/about-mindset-media-group?view=story' \
+            '/pages/about-mindset-media-group?view=mission' \
+            '/pages/about-mindset-media-group?view=vision' \
+            '/pages/about-mindset-media-group?view=values' \
+            '/pages/about-mindset-media-group?view=partnerships' \
+            '/pages/about-mindset-media-group?view=accessibility' \
+            '/pages/about-mindset-media-group?view=founder' \
+            '/pages/about-mindset-media-group?view=promise'; do
+              body="$(curl -fsSL "https://themindsetmediagroup.com${url}&verification=${GITHUB_SHA}" 2>/dev/null || curl -fsSL "https://themindsetmediagroup.com${url}?verification=${GITHUB_SHA}")"
+              echo "$body" | grep -q 'mmg-company-site-suite.js'
+          done
+
+      - name: Upload publication evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: company-site-suite-publication
+          path: |
+            cloudflare/mmg-ios/company-suite-staging.json
+            cloudflare/mmg-ios/company-suite-publish.json
+          if-no-files-found: ignore
