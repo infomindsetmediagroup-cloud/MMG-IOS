@@ -2,6 +2,7 @@ import autonomousRuntime, { KairosProject } from "./kairos-production-entry-auto
 import { handleImmutableApprovedFileExecution, KAIROS_IMMUTABLE_APPROVED_FILE_EXECUTION_BUILD } from "./kairos-immutable-approved-file-execution-v1.js";
 import { KAIROS_CANONICAL_HOMEPAGE_BUILD } from "./kairos-canonical-homepage-builder-v1.js";
 import { handleCanonicalHomepageBuildWithCompatibility, KAIROS_CANONICAL_HOMEPAGE_COMPATIBILITY_BUILD } from "./kairos-canonical-homepage-compatibility-v1.js";
+import { handleCanonicalHomepageResilient, KAIROS_CANONICAL_HOMEPAGE_RESILIENT_BUILD } from "./kairos-canonical-homepage-publisher-resilient-20260718.js";
 import { handleKairosExperienceRequest, KAIROS_EXPERIENCE_CONTROLLER_BUILD } from "./kairos-experience-controller-v1.js";
 import { handleWebsiteBuilderV2Request, KAIROS_WEBSITE_BUILDER_V2_BUILD } from "./kairos-website-builder-v2.js";
 import { KAIROS_PRODUCT_MANUFACTURING_BRIDGE_BUILD } from "./kairos-product-manufacturing-bridge-v1.js";
@@ -17,7 +18,7 @@ import { handleRelatedProductsBuild, KAIROS_RELATED_PRODUCTS_BUILD } from "./kai
 import { handleProductAssetViewerBuild, KAIROS_PRODUCT_ASSET_VIEWER_BUILD } from "./kairos-product-asset-viewer-publisher-20260718.js";
 import { handleProductTrustLayerBuild, KAIROS_PRODUCT_TRUST_LAYER_BUILD } from "./kairos-product-trust-layer-publisher-20260718.js";
 
-const BUILD = "kairos-production-entry-immutable-20260718-30";
+const BUILD = "kairos-production-entry-immutable-20260718-31";
 const VISUAL_BASELINE = "verified-product-conversion-trust-layer-20260718";
 
 export { KairosProject };
@@ -51,6 +52,8 @@ export default {
       if (membershipLanding) return stamp(membershipLanding);
       const servicesLanding = await handleServicesLandingBuild(request, env);
       if (servicesLanding) return stamp(servicesLanding);
+      const resilientHomepage = await handleCanonicalHomepageResilient(request, env);
+      if (resilientHomepage) return stamp(resilientHomepage);
       const canonicalHomepage = await handleCanonicalHomepageBuildWithCompatibility(request, env, ctx);
       if (canonicalHomepage) return stamp(canonicalHomepage);
       const immutableExecution = await handleImmutableApprovedFileExecution(request, env, ctx);
@@ -74,6 +77,7 @@ export default {
         membershipLanding: KAIROS_MEMBERSHIP_LANDING_BUILD,
         servicesLanding: KAIROS_SERVICES_LANDING_BUILD,
         canonicalHomepage: KAIROS_CANONICAL_HOMEPAGE_BUILD,
+        canonicalHomepageResilient: KAIROS_CANONICAL_HOMEPAGE_RESILIENT_BUILD,
         canonicalHomepageCompatibility: KAIROS_CANONICAL_HOMEPAGE_COMPATIBILITY_BUILD,
         immutableExecution: KAIROS_IMMUTABLE_APPROVED_FILE_EXECUTION_BUILD,
         error: { code: error?.code || "immutable_entry_failed", message: error instanceof Error ? error.message : "Kairos could not complete this request." },
@@ -151,6 +155,7 @@ function runtimeHeaders() {
     "X-MMG-Membership-Landing": KAIROS_MEMBERSHIP_LANDING_BUILD,
     "X-MMG-Services-Landing": KAIROS_SERVICES_LANDING_BUILD,
     "X-Kairos-Canonical-Homepage": KAIROS_CANONICAL_HOMEPAGE_BUILD,
+    "X-Kairos-Canonical-Homepage-Resilient": KAIROS_CANONICAL_HOMEPAGE_RESILIENT_BUILD,
     "X-Kairos-Canonical-Homepage-Compatibility": KAIROS_CANONICAL_HOMEPAGE_COMPATIBILITY_BUILD,
     "X-Kairos-Immutable-Approved-File-Execution": KAIROS_IMMUTABLE_APPROVED_FILE_EXECUTION_BUILD,
     "X-Kairos-Approval-Time-Reconstruction": "false",
