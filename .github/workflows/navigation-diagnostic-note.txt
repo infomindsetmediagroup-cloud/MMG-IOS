@@ -1,0 +1,1 @@
+Navigation publisher v4 decouples Shopify menu publication from landing-page creation and template assignment.
