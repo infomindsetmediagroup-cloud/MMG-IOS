@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - ".github/workflows/observable-final-homepage-verification.yml"
+      - ".github/scripts/verify-canonical-homepage.mjs"
   workflow_dispatch: {}
 
 permissions:
