@@ -1,8 +1,23 @@
 export const SECTION_SOURCE_A = String.raw`{{ 'mmg-canonical-homepage.css' | asset_url | stylesheet_tag }}
 
-<!-- kairos-canonical-homepage-builder-20260718-1 -->
+<nav class="mmg-ecosystem-nav" aria-label="Mindset Media Group ecosystem navigation">
+  <div class="mmg-ecosystem-nav__inner">
+    <a class="mmg-ecosystem-nav__brand" href="/">Mindset Media Group™</a>
+    <button class="mmg-ecosystem-nav__toggle" type="button" aria-expanded="false" aria-controls="mmg-ecosystem-links">Explore</button>
+    <div id="mmg-ecosystem-links" class="mmg-ecosystem-nav__links">
+      <a href="/pages/knowledge-library">Knowledge</a>
+      <a href="/collections/all">Products</a>
+      <a href="/pages/publishing-services">Services</a>
+      <a href="/pages/membership">Membership</a>
+      <a href="/pages/kairos">Kairos</a>
+      <a class="mmg-ecosystem-nav__portal" href="/pages/customer-portal">Customer Portal</a>
+    </div>
+  </div>
+</nav>
+
+<!-- kairos-canonical-homepage-builder-20260718-3 -->
 <!-- Turn what you know into something valuable. -->
-<section id="mmg-home" class="mmg-home mmg-portal-framework" data-mmg-canonical-homepage data-build="kairos-canonical-homepage-builder-20260718-2" aria-label="Mindset Media Group knowledge ecosystem">
+<section id="mmg-home" class="mmg-home mmg-portal-framework" data-mmg-canonical-homepage data-build="kairos-canonical-homepage-builder-20260718-3" aria-label="Mindset Media Group knowledge ecosystem">
   <header class="hub-hero mmg-reveal">
     <div class="hub-shell hub-hero__grid">
       <div>
