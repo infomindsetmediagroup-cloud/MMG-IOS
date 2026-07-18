@@ -1,5 +1,5 @@
 name: Publish Corrected Shopify Menu Now
-run-name: Live-signature Shopify navigation repair ${{ github.sha }}
+run-name: Fresh-auth Shopify navigation repair ${{ github.sha }}
 
 on:
   workflow_dispatch:
@@ -42,7 +42,7 @@ jobs:
           test -f cloudflare/mmg-ios/wrangler.toml
           test -f cloudflare/mmg-ios/src/kairos-native-main-menu-publisher-20260718.js
 
-      - name: Deploy live-signature native-menu Worker
+      - name: Deploy fresh-auth native-menu Worker
         shell: bash
         run: |
           set -euo pipefail
@@ -50,7 +50,7 @@ jobs:
           npm install --no-save wrangler@latest
           npx wrangler deploy | tee native-main-menu-worker-deploy.txt
 
-      - name: Wait for native-menu v4 endpoint
+      - name: Wait for native-menu v5 endpoint
         shell: bash
         run: |
           set -euo pipefail
@@ -58,13 +58,13 @@ jobs:
             headers_file="$RUNNER_TEMP/native-main-menu-headers.txt"
             status="$(curl --silent --show-error --head --max-time 30 -o /dev/null -D "$headers_file" -w '%{http_code}' "https://mmg-ios.info-mindsetmediagroup.workers.dev/api/shopify/native-main-menu/publish?release=${GITHUB_SHA}&attempt=${attempt}" || true)"
             echo "Endpoint probe ${attempt}/48 HTTP ${status}"
-            if grep -qi "x-mmg-native-main-menu: kairos-native-main-menu-publisher-20260718-4" "$headers_file"; then
-              echo "Native main-menu Worker v4 is deployed."
+            if grep -qi "x-mmg-native-main-menu: kairos-native-main-menu-publisher-20260718-5" "$headers_file"; then
+              echo "Native main-menu Worker v5 is deployed."
               exit 0
             fi
             sleep 5
           done
-          echo "Native main-menu Worker v4 did not become reachable." >&2
+          echo "Native main-menu Worker v5 did not become reachable." >&2
           exit 1
 
       - name: Replace live-signature Shopify navigation menus
@@ -78,6 +78,8 @@ jobs:
           test "$status" -ge 200
           test "$status" -lt 300
           grep -q '"status":"completed"' native-main-menu-result.json
+          grep -q '"authSource":"client_credentials"' native-main-menu-result.json
+          grep -q '"freshClientCredentialsTokenUsed":true' native-main-menu-result.json
           grep -q '"exactNativeMenuReadBack":true' native-main-menu-result.json
           grep -q '"knowledgeLibraryRemoved":true' native-main-menu-result.json
           grep -q '"liveLegacySignatureTargeted":true' native-main-menu-result.json
@@ -102,5 +104,5 @@ jobs:
             fi
             sleep 5
           done
-          echo "The live storefront still exposes the obsolete navigation after updating every matching Shopify menu." >&2
+          echo "The live storefront still exposes the obsolete navigation after fresh-auth menu replacement." >&2
           exit 1
