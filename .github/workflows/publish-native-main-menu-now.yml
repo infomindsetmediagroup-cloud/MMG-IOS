@@ -1,5 +1,5 @@
-name: Publish Native Shopify Main Menu Now
-run-name: Native Shopify menu authenticated release ${{ github.sha }}
+name: Publish Corrected Shopify Menu Now
+run-name: Theme menu hotfix release ${{ github.sha }}
 
 on:
   workflow_dispatch:
@@ -7,8 +7,8 @@ on:
     branches:
       - main
     paths:
-      - cloudflare/mmg-ios/src/kairos-native-main-menu-publisher-20260718.js
-      - cloudflare/mmg-ios/src/kairos-production-entry-native-main-menu-v1.js
+      - cloudflare/mmg-ios/src/kairos-theme-menu-hotfix-publisher-20260718.js
+      - cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
       - cloudflare/mmg-ios/wrangler.toml
       - .github/workflows/publish-native-main-menu-now.yml
 
@@ -16,7 +16,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: publish-native-shopify-main-menu-now
+  group: publish-corrected-shopify-menu-now
   cancel-in-progress: false
 
 jobs:
@@ -40,83 +40,65 @@ jobs:
           git fetch --depth=1 origin "${GITHUB_SHA}"
           git checkout --detach FETCH_HEAD
           test -f cloudflare/mmg-ios/wrangler.toml
-          test -f cloudflare/mmg-ios/src/kairos-native-main-menu-publisher-20260718.js
+          test -f cloudflare/mmg-ios/src/kairos-theme-menu-hotfix-publisher-20260718.js
 
-      - name: Deploy native-menu Worker
+      - name: Deploy theme-menu hotfix Worker
         shell: bash
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/mmg-release/cloudflare/mmg-ios"
-          node --version
-          npm --version
           npm install --no-save wrangler@latest
-          npx wrangler deploy | tee native-main-menu-worker-deploy.txt
+          npx wrangler deploy | tee theme-menu-hotfix-worker-deploy.txt
 
-      - name: Wait for native-menu endpoint
+      - name: Wait for theme-menu hotfix endpoint
         shell: bash
         run: |
           set -euo pipefail
           for attempt in $(seq 1 48); do
-            headers_file="$RUNNER_TEMP/native-menu-headers.txt"
-            status="$(curl --silent --show-error --head --max-time 30 \
-              -o /dev/null -D "$headers_file" -w '%{http_code}' \
-              "https://mmg-ios.info-mindsetmediagroup.workers.dev/api/shopify/native-main-menu/publish?release=${GITHUB_SHA}&attempt=${attempt}" || true)"
+            headers_file="$RUNNER_TEMP/theme-menu-hotfix-headers.txt"
+            status="$(curl --silent --show-error --head --max-time 30 -o /dev/null -D "$headers_file" -w '%{http_code}' "https://mmg-ios.info-mindsetmediagroup.workers.dev/api/shopify/theme-menu-hotfix/publish?release=${GITHUB_SHA}&attempt=${attempt}" || true)"
             echo "Endpoint probe ${attempt}/48 HTTP ${status}"
-            cat "$headers_file" || true
-            if grep -qi "x-mmg-native-main-menu:" "$headers_file"; then
-              echo "Native main-menu Worker is deployed."
+            if grep -qi "x-mmg-theme-menu-hotfix:" "$headers_file"; then
+              echo "Theme menu hotfix Worker is deployed."
               exit 0
             fi
             sleep 5
           done
-          echo "Native main-menu Worker did not become reachable." >&2
+          echo "Theme menu hotfix Worker did not become reachable." >&2
           exit 1
 
-      - name: Publish exact native Shopify menu
+      - name: Publish corrected menu into Shopify MAIN theme
         shell: bash
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/mmg-release/cloudflare/mmg-ios"
-          status="$(curl --silent --show-error --retry 2 --retry-delay 3 \
-            -X POST "https://mmg-ios.info-mindsetmediagroup.workers.dev/api/shopify/native-main-menu/publish" \
-            -H "Content-Type: application/json" \
-            --data '{"confirmation":"PUBLISH_MMG_NATIVE_MAIN_MENU_NOW"}' \
-            -o native-main-menu-result.json \
-            -w '%{http_code}' || true)"
-          echo "Native menu publish HTTP ${status}"
-          cat native-main-menu-result.json || true
+          status="$(curl --silent --show-error --retry 2 --retry-delay 3 -X POST "https://mmg-ios.info-mindsetmediagroup.workers.dev/api/shopify/theme-menu-hotfix/publish" -H "Content-Type: application/json" --data '{"confirmation":"PUBLISH_MMG_THEME_MENU_HOTFIX_NOW"}' -o theme-menu-hotfix-result.json -w '%{http_code}' || true)"
+          echo "Theme menu hotfix publish HTTP ${status}"
+          cat theme-menu-hotfix-result.json || true
           test "$status" -ge 200
           test "$status" -lt 300
-          grep -q '"status":"completed"' native-main-menu-result.json
-          grep -q '"exactNativeMenuReadBack":true' native-main-menu-result.json
-          grep -q '"knowledgeLibraryRemoved":true' native-main-menu-result.json
-          grep -q '"companyScopeRestricted":true' native-main-menu-result.json
-          grep -q '"title":"Shop"' native-main-menu-result.json
-          grep -q '"title":"Create & Learn"' native-main-menu-result.json
-          grep -q '"title":"Services"' native-main-menu-result.json
-          grep -q '"title":"Company"' native-main-menu-result.json
-          grep -q '"title":"Support"' native-main-menu-result.json
+          grep -q '"status":"completed"' theme-menu-hotfix-result.json
+          grep -q '"exactThemeReadBack":true' theme-menu-hotfix-result.json
+          grep -q '"menuApiScopeRequired":false' theme-menu-hotfix-result.json
+          grep -q '"knowledgeLibraryRemoved":true' theme-menu-hotfix-result.json
+          grep -q '"inlineReleaseMarkerPresent":true' theme-menu-hotfix-result.json
 
-      - name: Verify live storefront menu
+      - name: Verify corrected menu marker on live storefront
         shell: bash
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/mmg-release/cloudflare/mmg-ios"
-          for attempt in $(seq 1 18); do
-            status="$(curl --location --silent --show-error \
-              -H "Cache-Control: no-cache" \
-              "https://themindsetmediagroup.com/?mmg_nav_verify=${GITHUB_SHA}&attempt=${attempt}" \
-              -o live-home.html \
-              -w '%{http_code}' || true)"
-            echo "Live verification ${attempt}/18 HTTP ${status}"
+          for attempt in $(seq 1 24); do
+            status="$(curl --location --silent --show-error -H "Cache-Control: no-cache" "https://themindsetmediagroup.com/?mmg_menu_hotfix=${GITHUB_SHA}&attempt=${attempt}" -o live-home.html -w '%{http_code}' || true)"
+            echo "Live verification ${attempt}/24 HTTP ${status}"
             if [ "$status" = "200" ] \
-              && ! grep -q '>Knowledge Library<' live-home.html \
-              && grep -q '>Create &amp; Learn<' live-home.html \
-              && grep -q '>Support<' live-home.html; then
-              echo "Live native Shopify menu verified."
+              && grep -q 'kairos-theme-menu-hotfix-20260718-1' live-home.html \
+              && grep -q 'Create &amp; Learn' live-home.html \
+              && grep -q 'Support' live-home.html; then
+              echo "Live corrected menu hotfix verified."
               exit 0
             fi
             sleep 10
           done
-          echo "Live storefront still exposes the legacy menu tree." >&2
+          echo "Live storefront did not expose the corrected menu hotfix." >&2
           exit 1
