@@ -37,7 +37,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          payload="$(node -e 'process.stdout.write(JSON.stringify({state:"pending",description:"Publishing cleaned native navigation and landing pages",context:process.env.STATUS_CONTEXT,target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          payload="$(node -e 'process.stdout.write(JSON.stringify({state:"pending",description:"Publishing consolidated native navigation and landing pages",context:process.env.STATUS_CONTEXT,target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
           curl --fail --silent --show-error -X POST \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
@@ -118,11 +118,14 @@ jobs:
             const b=require("/tmp/navigation.json");
             const ok = b.status === "completed"
               && b.build === process.env.EXPECTED_NAV
+              && b.verification?.valid === true
               && b.safeguards?.nativeShopifyMenuOnly === true
               && b.safeguards?.duplicateDestinationsRemoved === true
-              && b.safeguards?.equivalentDestinationsMerged === true;
+              && b.safeguards?.equivalentDestinationsMergedAcrossTree === true
+              && b.safeguards?.companyGroupPreserved === true
+              && b.safeguards?.aboutAndContactNestedUnderCompany === true;
             if (!ok) { console.error(JSON.stringify(b)); process.exit(1); }
-            console.log(JSON.stringify({status:b.status,build:b.build,navigation:b.navigation,cleanup:b.cleanup,pages:b.pages},null,2));
+            console.log(JSON.stringify({status:b.status,build:b.build,navigation:b.navigation,cleanup:b.cleanup,verification:b.verification,pages:b.pages},null,2));
           '
 
       - name: Publish final status
@@ -133,10 +136,10 @@ jobs:
         run: |
           if [ "${JOB_STATUS}" = "success" ]; then
             state="success"
-            description="Native navigation cleaned, merged, published, and verified"
+            description="Native navigation fully consolidated, published, and verified"
           else
             state="failure"
-            description="Native navigation publication failed; inspect workflow"
+            description="Native navigation consolidation failed; inspect workflow"
           fi
           payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,description:process.env.DESCRIPTION,context:process.env.STATUS_CONTEXT,target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
           curl --fail --silent --show-error -X POST \
