@@ -1,0 +1,96 @@
+name: Publish MMG Resource Discovery Suite
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "cloudflare/mmg-ios/src/kairos-resource-discovery-suite-publisher-20260718.js"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-resource-suite-v1.js"
+      - "cloudflare/mmg-ios/wrangler.toml"
+      - ".github/workflows/publish-resource-discovery-suite.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-mmg-resource-discovery-suite
+  cancel-in-progress: false
+
+jobs:
+  deploy-and-publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cloudflare/mmg-ios
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Wrangler
+        run: npm install --no-save wrangler@latest
+
+      - name: Deploy Kairos worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy
+
+      - name: Resolve Kairos runtime
+        id: runtime
+        env:
+          KAIROS_RUNTIME_URL: ${{ secrets.KAIROS_RUNTIME_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$KAIROS_RUNTIME_URL"
+          echo "url=${KAIROS_RUNTIME_URL%/}" >> "$GITHUB_OUTPUT"
+
+      - name: Build in Kairos Staging
+        env:
+          RUNTIME: ${{ steps.runtime.outputs.url }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --retry 3 --retry-delay 3 \
+            -X POST "$RUNTIME/api/shopify/resource-discovery-suite/build" \
+            -H 'Content-Type: application/json' \
+            --data '{"mode":"build","confirmation":"BUILD_MMG_RESOURCE_DISCOVERY_SUITE_STAGING"}' \
+            | tee resource-suite-staging.json
+          grep -q '"status":"completed"' resource-suite-staging.json
+          grep -q '"exactThemeFileReadBack":true' resource-suite-staging.json
+
+      - name: Publish verified bundle to Shopify MAIN
+        env:
+          RUNTIME: ${{ steps.runtime.outputs.url }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --retry 3 --retry-delay 3 \
+            -X POST "$RUNTIME/api/shopify/resource-discovery-suite/build" \
+            -H 'Content-Type: application/json' \
+            --data '{"mode":"publish","confirmation":"PUBLISH_MMG_RESOURCE_DISCOVERY_SUITE_LIVE"}' \
+            | tee resource-suite-publish.json
+          grep -q '"status":"completed"' resource-suite-publish.json
+          grep -q '"exactThemeFileReadBack":true' resource-suite-publish.json
+
+      - name: Verify live resolving views
+        run: |
+          set -euo pipefail
+          for url in \
+            'https://themindsetmediagroup.com/pages/knowledge-library' \
+            'https://themindsetmediagroup.com/pages/knowledge-library?view=toolkit' \
+            'https://themindsetmediagroup.com/pages/knowledge-library?view=capcut' \
+            'https://themindsetmediagroup.com/pages/knowledge-library?view=guide' \
+            'https://themindsetmediagroup.com/collections/all'; do
+            code="$(curl -L -sS -o /tmp/mmg-page.html -w '%{http_code}' "$url")"
+            test "$code" = "200"
+          done
+
+      - name: Upload publication evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmg-resource-discovery-suite-publication
+          path: |
+            cloudflare/mmg-ios/resource-suite-staging.json
+            cloudflare/mmg-ios/resource-suite-publish.json
