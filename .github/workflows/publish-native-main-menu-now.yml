@@ -39,6 +39,7 @@ jobs:
           test -f cloudflare/mmg-ios/wrangler.toml
           test -f cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
           test -f cloudflare/mmg-ios/src/kairos-theme-menu-hotfix-publisher-20260718.js
+          test -f scripts/verify-rendered-navigation.mjs
 
       - name: Deploy Kairos Worker
         run: |
@@ -52,13 +53,26 @@ jobs:
   publish-shopify:
     needs: deploy-worker
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 20
     env:
       WORKER_BASE_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+      STOREFRONT_URL: https://themindsetmediagroup.com
       THEME_MARKER: kairos-theme-menu-hotfix-20260718-3
     steps:
       - name: Confirm Shopify publication startup
         run: echo "Kairos Shopify publication started after successful Worker deployment."
+
+      - name: Materialize verification source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch main \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "${RUNNER_TEMP}/mmg-verify"
+          cd "${RUNNER_TEMP}/mmg-verify"
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          test -f scripts/verify-rendered-navigation.mjs
 
       - name: Wait for deployed publisher
         run: |
@@ -100,22 +114,19 @@ jobs:
           grep -q '"mainThemeRoleVerified":true' "${result}"
           grep -q '"shopDomainIdentityVerified":true' "${result}"
 
-      - name: Verify public Shopify release marker
+      - name: Install rendered-browser verifier
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 24); do
-            html="${RUNNER_TEMP}/storefront.html"
-            status="$(curl --location --silent --show-error \
-              -H 'Cache-Control: no-cache, no-store, max-age=0' \
-              "https://themindsetmediagroup.com/?mmg_release=${GITHUB_SHA}&attempt=${attempt}" \
-              -o "${html}" \
-              -w '%{http_code}' || true)"
-            echo "Public marker verification ${attempt}/24 HTTP ${status}"
-            if [ "${status}" = "200" ] && grep -q "${THEME_MARKER}" "${html}"; then
-              echo "Public Shopify release marker verified."
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "Public storefront did not expose the Shopify release marker." >&2
-          exit 1
+          cd "${RUNNER_TEMP}/mmg-verify"
+          npm init -y >/dev/null 2>&1
+          npm install --no-save playwright@latest
+          npx playwright install --with-deps chromium
+
+      - name: Verify rendered desktop and mobile navigation
+        run: |
+          set -euo pipefail
+          cd "${RUNNER_TEMP}/mmg-verify"
+          STOREFRONT_URL="${STOREFRONT_URL}" \
+          THEME_MARKER="${THEME_MARKER}" \
+          RELEASE_SHA="${GITHUB_SHA}" \
+          node scripts/verify-rendered-navigation.mjs
