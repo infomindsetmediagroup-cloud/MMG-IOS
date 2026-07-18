@@ -1,0 +1,85 @@
+name: Publish MMG Mobile Navigation Taxonomy
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "cloudflare/mmg-ios/src/kairos-mobile-navigation-taxonomy-publisher-20260718.js"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-mobile-navigation-taxonomy-v1.js"
+      - "cloudflare/mmg-ios/wrangler.toml"
+      - ".github/workflows/publish-mobile-navigation-taxonomy.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-mmg-mobile-navigation-taxonomy
+  cancel-in-progress: false
+
+jobs:
+  deploy-stage-publish-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: cloudflare/mmg-ios
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Wrangler
+        run: npm install --no-save wrangler@latest
+      - name: Deploy Kairos worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy
+      - name: Resolve runtime
+        id: runtime
+        env:
+          KAIROS_RUNTIME_URL: ${{ secrets.KAIROS_RUNTIME_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$KAIROS_RUNTIME_URL"
+          echo "url=${KAIROS_RUNTIME_URL%/}" >> "$GITHUB_OUTPUT"
+      - name: Verify runtime entry
+        env:
+          RUNTIME: ${{ steps.runtime.outputs.url }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --retry 5 --retry-delay 3 -sS -D runtime-headers.txt -o runtime-body.txt "$RUNTIME/"
+          grep -qi '^x-mmg-mobile-navigation-taxonomy-entry:' runtime-headers.txt
+      - name: Build in staging
+        env:
+          RUNTIME: ${{ steps.runtime.outputs.url }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --retry 4 --retry-delay 3 -X POST "$RUNTIME/api/shopify/mobile-navigation-taxonomy/build" -H 'Content-Type: application/json' --data '{"mode":"build","confirmation":"BUILD_MMG_MOBILE_NAV_TAXONOMY_STAGING"}' | tee mobile-navigation-staging.json
+          grep -q '"status":"completed"' mobile-navigation-staging.json
+          grep -q '"exactThemeFileReadBack":true' mobile-navigation-staging.json
+      - name: Publish to Shopify MAIN
+        env:
+          RUNTIME: ${{ steps.runtime.outputs.url }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --retry 4 --retry-delay 3 -X POST "$RUNTIME/api/shopify/mobile-navigation-taxonomy/build" -H 'Content-Type: application/json' --data '{"mode":"publish","confirmation":"PUBLISH_MMG_MOBILE_NAV_TAXONOMY_LIVE"}' | tee mobile-navigation-publish.json
+          grep -q '"status":"completed"' mobile-navigation-publish.json
+          grep -q '"exactThemeFileReadBack":true' mobile-navigation-publish.json
+      - name: Verify live menu asset
+        run: |
+          set -euo pipefail
+          curl -L --fail-with-body --retry 5 --retry-delay 3 -sS https://themindsetmediagroup.com/ -o storefront.html
+          grep -q 'mmg-mobile-navigation-taxonomy.js' storefront.html
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmg-mobile-navigation-taxonomy-evidence
+          path: |
+            cloudflare/mmg-ios/runtime-headers.txt
+            cloudflare/mmg-ios/runtime-body.txt
+            cloudflare/mmg-ios/mobile-navigation-staging.json
+            cloudflare/mmg-ios/mobile-navigation-publish.json
+            cloudflare/mmg-ios/storefront.html
