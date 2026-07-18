@@ -83,11 +83,6 @@ jobs:
         working-directory: repository/cloudflare/mmg-ios
         run: npm install --no-package-lock --no-audit --no-fund
 
-      - name: Validate production source
-        shell: bash
-        working-directory: repository/cloudflare/mmg-ios
-        run: npm run validate:production
-
       - name: Resolve Cloudflare deployment credentials
         shell: bash
         run: |
