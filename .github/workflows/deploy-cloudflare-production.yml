@@ -6,238 +6,125 @@ on:
       - main
     paths:
       - "cloudflare/mmg-ios/**"
-      - "web/kairos-dashboard/**"
-      - ".github/scripts/verify-canonical-homepage.mjs"
       - ".github/workflows/deploy-cloudflare-production.yml"
-  workflow_dispatch: {}
+  workflow_dispatch:
 
 permissions:
   contents: read
-  statuses: write
 
 concurrency:
   group: cloudflare-production
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
+    name: Deploy Worker and publish homepage
     runs-on: ubuntu-latest
-    timeout-minutes: 35
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CLOUDFLARE_TOKEN || vars.CLOUDFLARE_API_TOKEN || vars.CLOUDFLARE_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+    timeout-minutes: 25
 
     steps:
-      - name: Download repository archive
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          mkdir -p repository artifacts/canonical-homepage
-          curl --fail --show-error --silent --location \
-            --connect-timeout 15 \
-            --max-time 60 \
-            --retry 2 \
-            --retry-delay 2 \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" \
-            --output repository.tar.gz
-          tar -xzf repository.tar.gz --strip-components=1 -C repository
-          test -f repository/cloudflare/mmg-ios/wrangler.toml
-          echo "Repository archive prepared for ${GITHUB_SHA}."
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-      - name: Verify runtime tools
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --version
-          npm --version
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
 
-      - name: Install dependencies
-        shell: bash
-        working-directory: repository/cloudflare/mmg-ios
+      - name: Install Worker dependencies
+        working-directory: cloudflare/mmg-ios
         run: npm install --no-package-lock --no-audit --no-fund
 
-      - name: Validate reconciled production baseline
-        shell: bash
-        working-directory: repository/cloudflare/mmg-ios
-        run: npm run validate:production
-
-      - name: Resolve Cloudflare deployment credentials
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
-            echo "::error::Cloudflare API token is unavailable to the production environment."
-            exit 1
-          fi
-
-          if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
-            echo "Cloudflare account ID is not stored in GitHub; resolving it from the deployment token."
-
-            accounts_json="$(curl --fail --show-error --silent \
-              --connect-timeout 15 \
-              --max-time 30 \
-              --retry 2 \
-              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-              -H "Content-Type: application/json" \
-              "https://api.cloudflare.com/client/v4/accounts?per_page=50")"
-
-            account_id="$(ACCOUNTS_JSON="${accounts_json}" node -e '
-              const payload = JSON.parse(process.env.ACCOUNTS_JSON || "{}");
-              if (!payload.success) process.exit(2);
-              const accounts = Array.isArray(payload.result) ? payload.result : [];
-              if (accounts.length !== 1) process.exit(3);
-              process.stdout.write(accounts[0].id || "");
-            ')" || status=$?
-
-            status="${status:-0}"
-            if [ "${status}" -eq 2 ]; then
-              echo "::error::Cloudflare rejected the deployment token while resolving the account."
-              exit 1
-            fi
-            if [ "${status}" -eq 3 ]; then
-              echo "::error::The token can access zero or multiple Cloudflare accounts. Add CLOUDFLARE_ACCOUNT_ID explicitly in GitHub."
-              exit 1
-            fi
-            if [ -z "${account_id:-}" ]; then
-              echo "::error::Cloudflare returned no usable account ID."
-              exit 1
-            fi
-
-            echo "CLOUDFLARE_ACCOUNT_ID=${account_id}" >> "${GITHUB_ENV}"
-            export CLOUDFLARE_ACCOUNT_ID="${account_id}"
-          fi
-
-          echo "Cloudflare production credentials are available."
-
-      - name: Validate canonical Cloudflare Worker bundle
-        shell: bash
-        working-directory: repository/cloudflare/mmg-ios
+      - name: Validate Worker bundle
+        working-directory: cloudflare/mmg-ios
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler deploy --dry-run
 
-      - name: Deploy canonical Cloudflare Worker
-        shell: bash
-        working-directory: repository/cloudflare/mmg-ios
+      - name: Deploy Worker to Cloudflare
+        working-directory: cloudflare/mmg-ios
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler deploy
 
-      - name: Verify release and canonical Shopify homepage
-        shell: bash
+      - name: Wait for deployed homepage publisher
         env:
-          KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+          KAIROS_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 18); do
-            headers_file="$(mktemp)"
-            if health_json="$(curl --fail --show-error --silent --location --max-time 30 -D "${headers_file}" "${KAIROS_PRODUCTION_URL}/api/health?deployment=${GITHUB_SHA}")" \
-              && website_page="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/web-003.html?deployment=${GITHUB_SHA}")" \
-              && command_center="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/?deployment=${GITHUB_SHA}")" \
-              && briefing_ui="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/scripts/executive-briefing.js?deployment=${GITHUB_SHA}")" \
-              && creation_script="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/scripts/creation-engine.js?deployment=${GITHUB_SHA}")" \
-              && briefing_json="$(curl --fail --show-error --silent --location --max-time 30 -X POST "${KAIROS_PRODUCTION_URL}/api/executive-briefing/build?deployment=${GITHUB_SHA}")"; then
-              runtime_header="$(awk 'BEGIN{IGNORECASE=1} /^x-mmg-runtime:/ {gsub(/\r/, ""); sub(/^[^:]+:[[:space:]]*/, ""); print; exit}' "${headers_file}")"
-              if HEALTH_JSON="${health_json}" WEBSITE_PAGE="${website_page}" COMMAND_CENTER="${command_center}" BRIEFING_UI="${briefing_ui}" CREATION_SCRIPT="${creation_script}" BRIEFING_JSON="${briefing_json}" RUNTIME_HEADER="${runtime_header}" node <<'NODE'
-          const health = JSON.parse(process.env.HEALTH_JSON || "{}");
-          const page = process.env.WEBSITE_PAGE || "";
-          const commandCenter = process.env.COMMAND_CENTER || "";
-          const briefingUI = process.env.BRIEFING_UI || "";
-          const script = process.env.CREATION_SCRIPT || "";
-          const briefing = JSON.parse(process.env.BRIEFING_JSON || "{}");
-          const runtime = process.env.RUNTIME_HEADER || "";
-          const checks = {
-            canonicalRuntime: runtime === "kairos-production-baseline-20260713-2",
-            healthy: ["ready", "ok", "operational"].includes(health.status),
-            noExternalOpenAI: health.openaiAPIUsed === false,
-            noExternalInference: health.nativeIntelligence?.externalInferenceAPI === false,
-            durableProjects: health.nativeIntelligence?.projectStorage === "durable-object",
-            bookProduction: health.capabilities?.bookDevelopment === "operational",
-            productAssets: health.capabilities?.productAssetCopy === "operational",
-            websiteBaseline: page.includes("Website Production · Kairos") && page.includes('id="job-type"') && page.includes('id="objective"') && page.includes('id="prepare"'),
-            promptEmpty: !page.includes("PRESERVE_PROMPT"),
-            commandCenterBriefing: commandCenter.includes("scripts/executive-briefing.js"),
-            decisionSurface: briefingUI.includes("Approve") && briefingUI.includes("Deny") && briefingUI.includes("Fix") && briefingUI.includes("View Evidence"),
-            creationEngine: script.includes("Build Complete Package"),
-            executiveBriefing: briefing.status === "completed" && Array.isArray(briefing.briefing?.actions) && briefing.briefing.actions.includes("approve") && briefing.briefing.actions.includes("deny") && briefing.briefing.actions.includes("fix"),
-            connectorHonesty: briefing.briefing?.safeguards?.externalSocialPublishingAvailable === false,
-          };
-          console.log(JSON.stringify({
-            runtime,
-            healthStatus: health.status,
-            healthBuild: health.build,
-            launchMode: health.launchMode,
-            projectStorage: health.nativeIntelligence?.projectStorage,
-            bookDevelopment: health.capabilities?.bookDevelopment,
-            productAssetCopy: health.capabilities?.productAssetCopy,
-            briefingWindow: briefing.briefing?.window,
-            briefingReady: briefing.briefing?.counts?.ready,
-            websitePageBytes: Buffer.byteLength(page),
-            checks,
-          }, null, 2));
-          if (Object.values(checks).some(value => value !== true)) process.exit(1);
-          NODE
-              then
-                rm -f "${headers_file}"
-                echo "Kairos reconciled production baseline verified on attempt ${attempt}."
-                (
-                  cd repository
-                  npm init -y >/dev/null
-                  npm install --no-save --no-audit --no-fund playwright
-                  npx playwright install --with-deps chromium
-                )
-                node repository/.github/scripts/run-canonical-homepage-release.mjs
-                echo "Canonical MMG Shopify homepage verified through Playwright."
-                exit 0
-              fi
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error --max-time 20 \
+              "${KAIROS_URL}/api/health?release=${GITHUB_SHA}" \
+              --output /tmp/kairos-health.json; then
+              echo "Kairos Worker is reachable on attempt ${attempt}."
+              exit 0
             fi
-            rm -f "${headers_file}"
-            echo "Kairos production has not exposed the reconciled baseline yet (attempt ${attempt}/18)."
             sleep 5
           done
-          echo "::error::Kairos production did not pass the reconciled baseline contract."
+          echo "Kairos Worker did not become reachable."
           exit 1
 
-      - name: Upload canonical homepage evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: canonical-mmg-homepage-${{ github.sha }}
-          path: artifacts/canonical-homepage
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Publish Kairos deployment receipt
-        if: always()
-        shell: bash
+      - name: Install verified homepage in staging
         env:
-          GH_TOKEN: ${{ github.token }}
-          DEPLOY_JOB_STATUS: ${{ job.status }}
+          KAIROS_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
         run: |
           set -euo pipefail
-          if [ "${DEPLOY_JOB_STATUS}" = "success" ]; then
-            state="success"
-            description="Kairos release and canonical homepage verification passed"
-          else
-            state="failure"
-            description="Kairos release or canonical homepage verification failed"
-          fi
-          target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          payload="$(STATE="${state}" DESCRIPTION="${description}" TARGET_URL="${target_url}" node -e '
-            process.stdout.write(JSON.stringify({
-              state: process.env.STATE,
-              description: process.env.DESCRIPTION,
-              context: "kairos-cloudflare-production",
-              target_url: process.env.TARGET_URL,
-            }));
-          ')"
-          curl --fail --show-error --silent \
+          curl --fail-with-body --silent --show-error --max-time 150 \
             -X POST \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
             -H "Content-Type: application/json" \
-            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "${payload}"
+            "${KAIROS_URL}/api/shopify/staging/canonical-homepage/build" \
+            --data '{"confirmation":"BUILD_CANONICAL_MMG_HOMEPAGE_STAGING","mode":"build"}' \
+            --output /tmp/homepage-staging.json
+          node -e '
+            const body = require("/tmp/homepage-staging.json");
+            if (body.status !== "completed" || body.verification?.exactReadBack !== true) {
+              console.error(JSON.stringify(body));
+              process.exit(1);
+            }
+          '
+
+      - name: Publish verified homepage to Shopify MAIN
+        env:
+          KAIROS_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --max-time 180 \
+            -X POST \
+            -H "Content-Type: application/json" \
+            "${KAIROS_URL}/api/shopify/staging/canonical-homepage/build" \
+            --data '{"confirmation":"PUBLISH_CANONICAL_MMG_HOMEPAGE_LIVE","mode":"publish"}' \
+            --output /tmp/homepage-live.json
+          node -e '
+            const body = require("/tmp/homepage-live.json");
+            if (
+              body.status !== "completed" ||
+              body.mode !== "publish" ||
+              body.production?.publishedThemeChanged !== true ||
+              body.verification?.publishedThemeReadBackVerified !== true
+            ) {
+              console.error(JSON.stringify(body));
+              process.exit(1);
+            }
+            console.log(JSON.stringify({
+              status: body.status,
+              liveURL: body.production.url,
+              themeChanged: body.production.publishedThemeChanged,
+              build: body.build
+            }, null, 2));
+          '
+
+      - name: Verify live homepage marker
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 12); do
+            page="$(curl --fail --silent --show-error --location --max-time 30 "https://themindsetmediagroup.com/?release=${GITHUB_SHA}")"
+            if printf '%s' "${page}" | grep -q 'kairos-canonical-homepage-builder-20260718-1'; then
+              echo "Live canonical homepage verified."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Live homepage marker was not found."
+          exit 1
