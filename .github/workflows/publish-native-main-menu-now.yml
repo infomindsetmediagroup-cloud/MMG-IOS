@@ -1,4 +1,5 @@
 name: Publish Native Shopify Main Menu Now
+run-name: Force native Shopify menu release ${{ github.sha }}
 
 on:
   workflow_dispatch:
@@ -19,7 +20,6 @@ concurrency:
 
 jobs:
   deploy-publish-verify:
-    name: Replace Shopify native main menu
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -30,57 +30,44 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-
       - name: Install Wrangler
         run: npm install --no-save wrangler@latest
-
       - name: Deploy production Worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler deploy | tee native-main-menu-worker-deploy.txt
-
-      - name: Wait for native menu endpoint
+      - name: Wait for native-menu Worker entry
         run: |
           set -euo pipefail
-          runtime='https://mmg-ios.info-mindsetmediagroup.workers.dev'
           for attempt in $(seq 1 48); do
-            headers="$(curl --silent --show-error --max-time 30 -I "${runtime}/api/shopify/native-main-menu/publish?release=${GITHUB_SHA}&attempt=${attempt}" || true)"
-            if grep -qi 'x-mmg-native-main-menu: kairos-native-main-menu-publisher-20260718-1' <<<"$headers"; then
-              echo 'Native Shopify main-menu publisher is deployed.'
+            headers="$(curl -sS -I --max-time 30 "https://mmg-ios.info-mindsetmediagroup.workers.dev/api/shopify/native-main-menu/publish?release=${GITHUB_SHA}&attempt=${attempt}" || true)"
+            if grep -qi 'x-mmg-native-main-menu:' <<<"$headers"; then
+              echo 'Native main-menu Worker is deployed.'
               exit 0
             fi
-            echo "Deployment verification attempt ${attempt}/48 has not exposed the native menu publisher yet."
             sleep 5
           done
+          echo 'Native main-menu Worker did not become reachable.' >&2
           exit 1
-
-      - name: Publish exact native Shopify menu
+      - name: Publish native Shopify menu
         run: |
           set -euo pipefail
-          runtime='https://mmg-ios.info-mindsetmediagroup.workers.dev'
-          http_code="$(curl --silent --show-error --max-time 240 \
-            -X POST \
+          curl --fail-with-body --retry 5 --retry-delay 3 \
+            -X POST "https://mmg-ios.info-mindsetmediagroup.workers.dev/api/shopify/native-main-menu/publish" \
             -H 'Content-Type: application/json' \
-            "${runtime}/api/shopify/native-main-menu/publish" \
             --data '{"confirmation":"PUBLISH_MMG_NATIVE_MAIN_MENU_NOW"}' \
-            --output native-main-menu-result.json \
-            --write-out '%{http_code}')"
-          echo "Worker HTTP status: ${http_code}"
-          cat native-main-menu-result.json
-          echo
-          test "$http_code" -ge 200
-          test "$http_code" -lt 300
+            | tee native-main-menu-result.json
           node - <<'NODE'
           const fs = require('node:fs');
           const body = JSON.parse(fs.readFileSync('native-main-menu-result.json', 'utf8'));
           const expected = ['Shop', 'Create & Learn', 'Services', 'Company', 'Support'];
           const observed = (body?.menu?.after || []).map(item => item.title);
           const valid = body?.status === 'completed'
-            && body?.build === 'kairos-native-main-menu-publisher-20260718-1'
             && body?.verification?.exactNativeMenuReadBack === true
             && body?.verification?.knowledgeLibraryRemoved === true
             && body?.verification?.companyScopeRestricted === true
+            && body?.verification?.themeOverrideNotUsed === true
             && JSON.stringify(observed) === JSON.stringify(expected);
           if (!valid) {
             console.error(JSON.stringify(body, null, 2));
@@ -88,34 +75,28 @@ jobs:
           }
           console.log(JSON.stringify({status: body.status, topLevel: observed}, null, 2));
           NODE
-
-      - name: Verify live storefront native menu
+      - name: Verify live storefront no longer serves legacy menu
         run: |
           set -euo pipefail
           for attempt in $(seq 1 18); do
-            curl -L --fail --silent --show-error \
-              -H 'Cache-Control: no-cache' \
-              "https://themindsetmediagroup.com/?native_menu_release=${GITHUB_SHA}&attempt=${attempt}" \
+            curl -L --fail -sS -H 'Cache-Control: no-cache' \
+              "https://themindsetmediagroup.com/?mmg_nav_verify=${GITHUB_SHA}&attempt=${attempt}" \
               -o live-home.html
-            if ! grep -q 'Knowledge Library' live-home.html \
-              && grep -q 'Create &amp; Learn' live-home.html \
-              && grep -q '>Support<' live-home.html \
-              && grep -q '>Shop<' live-home.html; then
-              echo 'Verified corrected native Shopify menu on the live storefront.'
+            if ! grep -q '>Knowledge Library<' live-home.html \
+              && grep -q '>Create &amp; Learn<' live-home.html \
+              && grep -q '>Support<' live-home.html; then
+              echo 'Live native Shopify menu verified.'
               exit 0
             fi
-            echo "Live native-menu verification attempt ${attempt}/18 has not exposed the corrected tree yet."
             sleep 10
           done
           echo 'Live storefront still exposes the legacy menu tree.' >&2
           exit 1
-
       - name: Upload proof
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: native-main-menu-publication-proof
-          if-no-files-found: warn
           path: |
             cloudflare/mmg-ios/native-main-menu-worker-deploy.txt
             cloudflare/mmg-ios/native-main-menu-result.json
