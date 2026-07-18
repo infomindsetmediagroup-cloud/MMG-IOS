@@ -18,8 +18,8 @@ import {
 } from "./kairos-website-builder-v2.js";
 import { KAIROS_PRODUCT_MANUFACTURING_BRIDGE_BUILD } from "./kairos-product-manufacturing-bridge-v1.js";
 
-const BUILD = "kairos-production-entry-immutable-20260718-17";
-const VISUAL_BASELINE = "customer-portal-homepage-framework-large-type-20260718";
+const BUILD = "kairos-production-entry-immutable-20260718-18";
+const VISUAL_BASELINE = "ecosystem-navigation-services-landing-foundation-20260718";
 
 export { KairosProject };
 
