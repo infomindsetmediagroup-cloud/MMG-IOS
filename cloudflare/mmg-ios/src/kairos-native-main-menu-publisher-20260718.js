@@ -1,4 +1,4 @@
-export const KAIROS_NATIVE_MAIN_MENU_BUILD = "kairos-native-main-menu-publisher-20260718-1";
+export const KAIROS_NATIVE_MAIN_MENU_BUILD = "kairos-native-main-menu-publisher-20260718-2";
 export const NATIVE_MAIN_MENU_PATH = "/api/shopify/native-main-menu/publish";
 export const NATIVE_MAIN_MENU_CONFIRMATION = "PUBLISH_MMG_NATIVE_MAIN_MENU_NOW";
 
@@ -19,6 +19,9 @@ const CANONICAL_ITEMS = [
   ]},
   { title: "Company", type: "HTTP", url: "/pages/about", items: [
     { title: "Company Overview", type: "HTTP", url: "/pages/about", items: [] },
+    { title: "Founder", type: "HTTP", url: "/pages/founder", items: [] },
+    { title: "Our Standards", type: "HTTP", url: "/pages/our-standards", items: [] },
+    { title: "Publishing Philosophy", type: "HTTP", url: "/pages/publishing-philosophy", items: [] },
     { title: "Contact", type: "HTTP", url: "/pages/contact", items: [] }
   ]},
   { title: "Support", type: "HTTP", url: "/pages/customer-portal", items: [
