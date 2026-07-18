@@ -27,12 +27,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail-with-body --silent --show-error --max-time 240 \
+          http_code="$(curl --silent --show-error --max-time 240 \
             -X POST \
             -H 'Content-Type: application/json' \
             'https://mmg-ios.info-mindsetmediagroup.workers.dev/api/shopify/navigation/publish' \
             --data '{"confirmation":"PUBLISH_MMG_NATIVE_MAIN_NAVIGATION"}' \
-            --output /tmp/navigation.json
+            --output /tmp/navigation.json \
+            --write-out '%{http_code}')"
+
+          echo "Worker HTTP status: ${http_code}"
+          cat /tmp/navigation.json
+          echo
+
+          if [ "${http_code}" -lt 200 ] || [ "${http_code}" -ge 300 ]; then
+            exit 1
+          fi
 
           node - <<'NODE'
           const fs = require('node:fs');
@@ -49,8 +58,9 @@ jobs:
           ];
           const observed = body?.verification?.topLevel?.map(item => item.title) || [];
           const valid = body?.status === 'completed'
+            && body?.build === 'kairos-native-navigation-publisher-20260718-4'
             && body?.verification?.valid === true
-            && expectedTopLevel.every(title => observed.includes(title))
+            && JSON.stringify(observed) === JSON.stringify(expectedTopLevel)
             && !observed.includes('Catalog')
             && !observed.includes('Contact')
             && body?.safeguards?.duplicateDestinationsRemoved === true
