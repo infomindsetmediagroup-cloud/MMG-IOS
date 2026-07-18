@@ -134,13 +134,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 18); do
-            page="$(curl --fail --silent --show-error --location --max-time 30 "https://themindsetmediagroup.com/?release=${GITHUB_SHA}")"
-            if printf '%s' "${page}" | grep -q 'kairos-canonical-homepage-builder-20260718-1'; then
-              echo "Live canonical homepage verified."
+          page_file="$(mktemp)"
+          trap 'rm -f "${page_file}"' EXIT
+
+          for attempt in $(seq 1 24); do
+            http_code="$(curl --silent --show-error --location --max-time 30 \
+              --output "${page_file}" \
+              --write-out '%{http_code}' \
+              "https://themindsetmediagroup.com/?release=${GITHUB_SHA}" || true)"
+
+            if [ "${http_code}" = "200" ] && grep -Fq 'kairos-canonical-homepage-builder-20260718-1' "${page_file}"; then
+              echo "Live canonical homepage verified on attempt ${attempt}."
               exit 0
             fi
+
+            echo "Live verification attempt ${attempt}/24 returned HTTP ${http_code:-000}; marker not available yet."
             sleep 5
           done
-          echo "Live homepage marker was not found."
+
+          echo "Live homepage marker was not found after retrying transient storefront responses."
           exit 1
