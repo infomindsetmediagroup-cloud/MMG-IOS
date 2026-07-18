@@ -8,6 +8,7 @@ if (!previewURL) throw new Error("MMG_PREVIEW_URL is required.");
 await mkdir(outputDirectory, { recursive: true });
 
 const expectedSections = ["pathways", "resources", "services", "subscriptions", "kairos", "mission", "questions", "next-step"];
+const expectedBuild = "kairos-canonical-homepage-builder-20260718-1";
 const viewports = [
   { name: "desktop", width: 1440, height: 1100 },
   { name: "mobile", width: 390, height: 844 },
@@ -15,6 +16,7 @@ const viewports = [
 
 const report = {
   previewURL,
+  expectedBuild,
   startedAt: new Date().toISOString(),
   passed: true,
   attempts: Number(process.env.MMG_VERIFICATION_ATTEMPT || "1"),
@@ -25,7 +27,10 @@ const report = {
 const browser = await chromium.launch({ headless: true });
 try {
   for (const viewport of viewports) {
-    const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height }, deviceScaleFactor: 1 });
+    const context = await browser.newContext({
+      viewport: { width: viewport.width, height: viewport.height },
+      deviceScaleFactor: 1,
+    });
     const page = await context.newPage();
     const consoleErrors = [];
     const failedRequests = [];
@@ -35,7 +40,9 @@ try {
     });
     page.on("requestfailed", (request) => {
       const failure = request.failure()?.errorText || "request failed";
-      if (!/ERR_ABORTED|NS_BINDING_ABORTED/i.test(failure)) failedRequests.push(`${request.method()} ${request.url()} — ${failure}`);
+      if (!/ERR_ABORTED|NS_BINDING_ABORTED/i.test(failure)) {
+        failedRequests.push(`${request.method()} ${request.url()} — ${failure}`);
+      }
     });
 
     const response = await page.goto(previewURL, { waitUntil: "domcontentloaded", timeout: 60_000 });
@@ -52,8 +59,9 @@ try {
     const checks = [];
     checks.push(check("HTTP response", Boolean(response && response.ok()), response ? `${response.status()} ${response.statusText()}` : "No navigation response"));
 
-    const buildMarker = await page.locator("[data-mmg-canonical-homepage]").getAttribute("data-build");
-    checks.push(check("Canonical build marker", buildMarker === "kairos-canonical-homepage-builder-20260717-1", buildMarker || "missing"));
+    const root = page.locator("[data-mmg-canonical-homepage]");
+    const buildMarker = await root.getAttribute("data-build");
+    checks.push(check("Canonical build marker", buildMarker === expectedBuild, buildMarker || "missing"));
 
     const h1Count = await page.locator("h1").count();
     checks.push(check("Exactly one H1", h1Count === 1, `found ${h1Count}`));
@@ -63,7 +71,12 @@ try {
       checks.push(check(`Section #${sectionID}`, await section.count() === 1 && await section.isVisible(), "required section missing or hidden"));
     }
 
-    const anchorAudit = await page.locator("[data-mmg-canonical-homepage] a").evaluateAll((anchors) => anchors.map((anchor) => ({
+    checks.push(check("Publishing-services pill framework", await root.locator(".mmg-pill").count() >= 8, "expected pill labels were not rendered"));
+    checks.push(check("Rounded card framework", await root.locator(".mmg-card").count() >= 12, "expected homepage cards were not rendered"));
+    checks.push(check("Blue feature panel", await root.locator(".mmg-feature-panel").count() === 1, "Kairos feature panel missing"));
+    checks.push(check("Continue Your Journey grid", await page.locator("#next-step .mmg-card--journey").count() === 4, "journey cards missing"));
+
+    const anchorAudit = await root.locator("a").evaluateAll((anchors) => anchors.map((anchor) => ({
       text: (anchor.textContent || "").replace(/\s+/g, " ").trim(),
       href: anchor.getAttribute("href") || "",
       aria: anchor.getAttribute("aria-label") || "",
@@ -87,18 +100,17 @@ try {
     }));
     checks.push(check("No horizontal overflow", Math.max(overflow.documentWidth, overflow.bodyWidth) <= overflow.viewportWidth + 2, overflow));
 
-    const unnamedControls = await page.locator("[data-mmg-canonical-homepage]").evaluate((root) => {
-      const controls = [...root.querySelectorAll("button,a,input,select,textarea,summary")];
-      return controls.filter((element) => {
-        const name = (element.getAttribute("aria-label") || element.textContent || element.getAttribute("title") || "").trim();
+    const unnamedControls = await root.evaluate((element) => {
+      const controls = [...element.querySelectorAll("button,a,input,select,textarea,summary")];
+      return controls.filter((control) => {
+        const name = (control.getAttribute("aria-label") || control.textContent || control.getAttribute("title") || "").trim();
         return !name;
-      }).map((element) => element.outerHTML.slice(0, 180));
+      }).map((control) => control.outerHTML.slice(0, 180));
     });
     checks.push(check("Interactive controls have names", unnamedControls.length === 0, unnamedControls));
 
     const missingImageAlt = await page.locator("img:not([alt])").count();
     checks.push(check("Images include alt attributes", missingImageAlt === 0, `missing alt on ${missingImageAlt} image(s)`));
-
     checks.push(check("No page console errors", requiredConsoleErrors.length === 0, requiredConsoleErrors));
     checks.push(check("No failed required requests", requiredFailedRequests.length === 0, requiredFailedRequests));
 
@@ -118,6 +130,7 @@ try {
       },
       screenshotPath,
     });
+
     if (!viewportPassed) {
       report.passed = false;
       report.failures.push(...checks.filter((item) => !item.passed).map((item) => `${viewport.name}: ${item.name} — ${format(item.details)}`));
@@ -177,14 +190,17 @@ function markdown(value) {
   const lines = [
     "# Canonical MMG Homepage Verification",
     "",
-    `- Preview: ${value.previewURL}`,
+    `- URL: ${value.previewURL}`,
+    `- Expected build: ${value.expectedBuild}`,
     `- Result: ${value.passed ? "PASS" : "FAIL"}`,
     `- Completed: ${value.completedAt}`,
     "",
   ];
   for (const viewport of value.viewports) {
     lines.push(`## ${viewport.name} (${viewport.width} × ${viewport.height})`, "");
-    for (const item of viewport.checks) lines.push(`- ${item.passed ? "PASS" : "FAIL"}: ${item.name}${item.passed ? "" : ` — ${format(item.details)}`}`);
+    for (const item of viewport.checks) {
+      lines.push(`- ${item.passed ? "PASS" : "FAIL"}: ${item.name}${item.passed ? "" : ` — ${format(item.details)}`}`);
+    }
     lines.push("");
   }
   return `${lines.join("\n")}\n`;

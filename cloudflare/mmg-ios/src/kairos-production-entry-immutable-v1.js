@@ -18,7 +18,7 @@ import {
 } from "./kairos-website-builder-v2.js";
 import { KAIROS_PRODUCT_MANUFACTURING_BRIDGE_BUILD } from "./kairos-product-manufacturing-bridge-v1.js";
 
-const BUILD = "kairos-production-entry-immutable-20260717-11";
+const BUILD = "kairos-production-entry-immutable-20260718-12";
 
 export { KairosProject };
 
@@ -59,7 +59,7 @@ export default {
           websiteAssetLibraryPersistent: true,
           authoritativeManuscriptPreservationRequired: true,
           productPublicationDraftFirst: true,
-          canonicalHomepageStagingOnly: true,
+          canonicalHomepageStagingOnly: false,
           immutableApprovedCandidateRequired: true,
           approvalTimeTextReconstruction: false,
           exactSourceHashRequired: true,
@@ -91,7 +91,7 @@ function stamp(response) {
   headers.set("X-Kairos-Approval-Time-Reconstruction", "false");
   headers.set("X-Kairos-Workers-AI-Used", "false");
   headers.set("X-Kairos-Neurons-Consumed", "0");
-  headers.set("X-Kairos-Visual-Baseline", "tuesday-command-center-6f96b10d");
+  headers.set("X-Kairos-Visual-Baseline", "publishing-services-homepage-framework-20260718");
   if (headers.get("Content-Type")?.includes("text/html")) {
     headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
   }
@@ -118,7 +118,7 @@ function json(value, status = 200) {
       "X-Kairos-Approval-Time-Reconstruction": "false",
       "X-Kairos-Workers-AI-Used": "false",
       "X-Kairos-Neurons-Consumed": "0",
-      "X-Kairos-Visual-Baseline": "tuesday-command-center-6f96b10d",
+      "X-Kairos-Visual-Baseline": "publishing-services-homepage-framework-20260718",
       "X-Content-Type-Options": "nosniff",
     },
   });
