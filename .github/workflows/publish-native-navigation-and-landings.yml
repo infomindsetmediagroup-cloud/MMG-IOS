@@ -2,60 +2,69 @@ name: Publish Native Navigation and Landings
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
-      - "cloudflare/mmg-ios/src/kairos-native-navigation-publisher-20260718.js"
-      - "cloudflare/mmg-ios/src/kairos-ecosystem-navigation-source-20260718.js"
-      - "cloudflare/mmg-ios/src/kairos-*-landing-*.js"
-      - "cloudflare/mmg-ios/src/kairos-production-entry-immutable-v1.js"
-      - ".github/workflows/publish-native-navigation-and-landings.yml"
-  workflow_dispatch:
+      - cloudflare/mmg-ios/src/kairos-native-navigation-publisher-20260718.js
+      - cloudflare/mmg-ios/src/kairos-ecosystem-navigation-source-20260718.js
+      - cloudflare/mmg-ios/src/kairos-knowledge-landing-20260718.js
+      - cloudflare/mmg-ios/src/kairos-products-landing-20260718.js
+      - cloudflare/mmg-ios/src/kairos-services-landing-20260718.js
+      - cloudflare/mmg-ios/src/kairos-membership-landing-20260718.js
+      - cloudflare/mmg-ios/src/kairos-kairos-landing-20260718.js
+      - cloudflare/mmg-ios/src/kairos-customer-portal-landing-20260718.js
+      - cloudflare/mmg-ios/src/kairos-production-entry-immutable-v1.js
+      - .github/workflows/publish-native-navigation-and-landings.yml
+  workflow_dispatch: {}
 
 permissions:
   contents: read
 
-concurrency:
-  group: native-navigation-and-landings-production
-  cancel-in-progress: true
-
 jobs:
   publish:
+    name: Publish navigation
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    environment: production
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CLOUDFLARE_TOKEN || vars.CLOUDFLARE_API_TOKEN || vars.CLOUDFLARE_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       KAIROS_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Worker dependencies
+      - name: Verify required deployment secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID}"
+
+      - name: Install dependencies
         working-directory: cloudflare/mmg-ios
         run: npm install --no-package-lock --no-audit --no-fund
 
-      - name: Validate and deploy Worker
+      - name: Validate Worker bundle
         working-directory: cloudflare/mmg-ios
-        run: |
-          set -euo pipefail
-          test -n "${CLOUDFLARE_API_TOKEN:-}"
-          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
-          npx wrangler deploy --dry-run
-          npx wrangler deploy
+        run: npx wrangler deploy --dry-run
 
-      - name: Verify deployed Worker build
+      - name: Deploy Worker
+        working-directory: cloudflare/mmg-ios
+        run: npx wrangler deploy
+
+      - name: Verify deployed Worker
+        shell: bash
         run: |
           set -euo pipefail
-          expected="kairos-production-entry-immutable-20260718-33"
+          expected="$(node -e 'const fs=require("node:fs");const s=fs.readFileSync("cloudflare/mmg-ios/src/kairos-production-entry-immutable-v1.js","utf8");const m=s.match(/const BUILD = "([^"]+)"/);if(!m)process.exit(1);process.stdout.write(m[1]);')"
           for attempt in $(seq 1 36); do
             observed="$(curl -fsSI "${KAIROS_URL}/api/health?navigation_release=${GITHUB_SHA}&attempt=${attempt}" | awk 'BEGIN{IGNORECASE=1} /^x-mmg-production-entry:/ {gsub(/\r/,""); sub(/^[^:]+:[[:space:]]*/,""); print; exit}')"
             if [ "${observed}" = "${expected}" ]; then
               echo "Verified Worker release: ${observed}"
               exit 0
             fi
-            echo "Release gate ${attempt}/36: expected ${expected}; observed ${observed:-none}."
+            echo "Attempt ${attempt}/36: expected ${expected}; observed ${observed:-none}"
             sleep 5
           done
           exit 1
@@ -65,15 +74,22 @@ jobs:
         run: |
           set -euo pipefail
           publish() {
-            local path="$1"
-            local staging="$2"
-            local live="$3"
-            curl --fail-with-body --silent --show-error --max-time 240 -X POST -H 'Content-Type: application/json' "${KAIROS_URL}${path}" --data "{\"confirmation\":\"${staging}\",\"mode\":\"build\",\"sourceCommit\":\"${GITHUB_SHA}\"}" > /tmp/staging.json
-            node -e 'const b=require("/tmp/staging.json"); if(b.status!=="completed") { console.error(JSON.stringify(b)); process.exit(1); }'
-            curl --fail-with-body --silent --show-error --max-time 240 -X POST -H 'Content-Type: application/json' "${KAIROS_URL}${path}" --data "{\"confirmation\":\"${live}\",\"mode\":\"publish\",\"sourceCommit\":\"${GITHUB_SHA}\"}" > /tmp/live.json
-            node -e 'const b=require("/tmp/live.json"); if(b.status!=="completed") { console.error(JSON.stringify(b)); process.exit(1); }'
+            local endpoint="$1"
+            local staging_confirmation="$2"
+            local live_confirmation="$3"
+            curl --fail-with-body --silent --show-error --max-time 240 \
+              -X POST -H 'Content-Type: application/json' \
+              "${KAIROS_URL}${endpoint}" \
+              --data "{\"confirmation\":\"${staging_confirmation}\",\"mode\":\"build\",\"sourceCommit\":\"${GITHUB_SHA}\"}" \
+              --output /tmp/staging.json
+            node -e 'const b=require("/tmp/staging.json");if(b.status!=="completed"){console.error(JSON.stringify(b,null,2));process.exit(1)}'
+            curl --fail-with-body --silent --show-error --max-time 240 \
+              -X POST -H 'Content-Type: application/json' \
+              "${KAIROS_URL}${endpoint}" \
+              --data "{\"confirmation\":\"${live_confirmation}\",\"mode\":\"publish\",\"sourceCommit\":\"${GITHUB_SHA}\"}" \
+              --output /tmp/live.json
+            node -e 'const b=require("/tmp/live.json");if(b.status!=="completed"){console.error(JSON.stringify(b,null,2));process.exit(1)}'
           }
-
           publish '/api/shopify/staging/knowledge-landing/build' 'BUILD_CANONICAL_MMG_KNOWLEDGE_STAGING' 'PUBLISH_CANONICAL_MMG_KNOWLEDGE_LIVE'
           publish '/api/shopify/staging/products-landing/build' 'BUILD_CANONICAL_MMG_PRODUCTS_STAGING' 'PUBLISH_CANONICAL_MMG_PRODUCTS_LIVE'
           publish '/api/shopify/staging/services-landing/build' 'BUILD_CANONICAL_MMG_SERVICES_STAGING' 'PUBLISH_CANONICAL_MMG_SERVICES_LIVE'
@@ -82,6 +98,7 @@ jobs:
           publish '/api/shopify/staging/customer-portal-landing/build' 'BUILD_CANONICAL_MMG_CUSTOMER_PORTAL_STAGING' 'PUBLISH_CANONICAL_MMG_CUSTOMER_PORTAL_LIVE'
 
       - name: Publish and verify consolidated Shopify navigation
+        shell: bash
         run: |
           set -euo pipefail
           curl --fail-with-body --silent --show-error --max-time 240 \
@@ -89,25 +106,15 @@ jobs:
             "${KAIROS_URL}/api/shopify/navigation/publish" \
             --data '{"confirmation":"PUBLISH_MMG_NATIVE_MAIN_NAVIGATION"}' \
             --output /tmp/navigation.json
-
-          node - <<'NODE'
-          const b = require('/tmp/navigation.json');
-          const ok = b.status === 'completed'
-            && b.build === 'kairos-native-navigation-publisher-20260718-3'
-            && b.verification?.valid === true
-            && b.safeguards?.duplicateDestinationsRemoved === true
-            && b.safeguards?.equivalentDestinationsMergedAcrossTree === true
-            && b.safeguards?.companyGroupPreserved === true
-            && b.safeguards?.aboutAndContactNestedUnderCompany === true;
-          if (!ok) {
-            console.error(JSON.stringify(b, null, 2));
-            process.exit(1);
-          }
-          console.log(JSON.stringify({
-            status: b.status,
-            build: b.build,
-            navigation: b.navigation,
-            cleanup: b.cleanup,
-            verification: b.verification
-          }, null, 2));
-          NODE
+          node -e '
+            const b=require("/tmp/navigation.json");
+            const ok=b.status==="completed"
+              && b.build==="kairos-native-navigation-publisher-20260718-3"
+              && b.verification?.valid===true
+              && b.safeguards?.duplicateDestinationsRemoved===true
+              && b.safeguards?.equivalentDestinationsMergedAcrossTree===true
+              && b.safeguards?.companyGroupPreserved===true
+              && b.safeguards?.aboutAndContactNestedUnderCompany===true;
+            if(!ok){console.error(JSON.stringify(b,null,2));process.exit(1)}
+            console.log(JSON.stringify({status:b.status,build:b.build,navigation:b.navigation,cleanup:b.cleanup,verification:b.verification},null,2));
+          '
