@@ -3,22 +3,6 @@ export const JS_SOURCE = String.raw`(() => {
   if (!root || root.dataset.enhanced === 'true') return;
   root.dataset.enhanced = 'true';
 
-  const nav = document.querySelector('.mmg-ecosystem-nav');
-  const navToggle = nav?.querySelector('.mmg-ecosystem-nav__toggle');
-  const navLinks = nav?.querySelector('.mmg-ecosystem-nav__links');
-  if (navToggle && navLinks) {
-    navToggle.addEventListener('click', () => {
-      const open = navToggle.getAttribute('aria-expanded') === 'true';
-      navToggle.setAttribute('aria-expanded', String(!open));
-      navLinks.classList.toggle('is-open', !open);
-    });
-    navLinks.addEventListener('click', (event) => {
-      if (!event.target.closest('a')) return;
-      navToggle.setAttribute('aria-expanded', 'false');
-      navLinks.classList.remove('is-open');
-    });
-  }
-
   const themeHeading = document.querySelector('header h1.header__heading, header .header__heading h1');
   if (themeHeading && !root.contains(themeHeading)) {
     const replacement = document.createElement('div');
