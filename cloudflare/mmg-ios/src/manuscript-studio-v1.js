@@ -1,4 +1,5 @@
-const MAX_CHARS = 180000;
+const BUILD = "kairos-manuscript-studio-20260717-5";
+const MAX_CHARS = 600000;
 
 export async function handleManuscriptRequest(request) {
   const url = new URL(request.url);
@@ -6,7 +7,8 @@ export async function handleManuscriptRequest(request) {
   if (url.pathname === "/api/manuscript/capabilities" && request.method === "GET") {
     return json({
       status: "intake-ready",
-      version: "manuscript-studio-v4-production-intake",
+      build: BUILD,
+      version: "manuscript-studio-v5-large-intake",
       supportedInput: [
         "text/plain",
         "text/markdown",
@@ -25,12 +27,14 @@ export async function handleManuscriptRequest(request) {
         docxExtraction: "operational",
         pdfTextExtraction: "operational",
         productionIntakeAdvance: "operational",
+        largeManuscriptIntake: "operational-up-to-600000-characters",
         pdfOCR: "not-enabled",
         automatedManuscriptEditorialReview: "deferred",
         automatedKdpReadinessReview: "deferred"
       },
       limitations: [
         "PDF files must contain selectable text; OCR is not enabled.",
+        "Production intake accepts up to 600,000 extracted characters.",
         "Automated manuscript editing and KDP-readiness analysis are deferred until an approved MMG intelligence runtime is activated.",
         "Human editorial and production work may continue through the governed MMG workflow.",
         "Final acceptance remains with Amazon KDP."
@@ -51,10 +55,10 @@ export async function handleManuscriptRequest(request) {
     } : null;
 
     if (manuscript.trim().length < 50) {
-      return json({ status: "needs-input", error: { code: "manuscript_required", message: "A validated extracted manuscript is required before production intake." } }, 400);
+      return json({ status: "needs-input", build: BUILD, error: { code: "manuscript_required", message: "A validated extracted manuscript is required before production intake." } }, 400);
     }
     if (manuscript.length > MAX_CHARS) {
-      return json({ status: "needs-input", error: { code: "manuscript_too_large", message: `Production intake supports up to ${MAX_CHARS.toLocaleString()} extracted characters in this launch build.` } }, 413);
+      return json({ status: "needs-input", build: BUILD, error: { code: "manuscript_too_large", message: `Production intake supports up to ${MAX_CHARS.toLocaleString()} extracted characters.` } }, 413);
     }
 
     const createdAt = new Date().toISOString();
@@ -65,6 +69,7 @@ export async function handleManuscriptRequest(request) {
 
     return json({
       status: "production_intake",
+      build: BUILD,
       projectID,
       intakeID,
       createdAt,
@@ -98,6 +103,7 @@ export async function handleManuscriptRequest(request) {
   if (url.pathname === "/api/manuscript/review" && request.method === "POST") {
     return json({
       status: "deferred",
+      build: BUILD,
       error: {
         code: "manuscript_intelligence_deferred",
         message: "Automated editing is deferred. Advance the extracted manuscript into MMG production intake to continue the project."
@@ -123,6 +129,7 @@ function json(value, status = 200) {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store",
+      "X-Kairos-Manuscript-Studio": BUILD,
       "X-Content-Type-Options": "nosniff"
     }
   });
