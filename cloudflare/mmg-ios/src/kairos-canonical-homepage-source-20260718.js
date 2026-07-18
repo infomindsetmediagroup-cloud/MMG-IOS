@@ -78,6 +78,15 @@ export {
   RELATED_PRODUCTS_CSS_FILE,
   RELATED_PRODUCTS_CSS_SOURCE,
 } from "./kairos-related-products-source-20260718.js";
+export {
+  PRODUCT_ASSET_VIEWER_SECTION_FILE,
+  PRODUCT_ASSET_VIEWER_SECTION_SOURCE,
+  PRODUCT_ASSET_VIEWER_CSS_FILE,
+  PRODUCT_ASSET_VIEWER_CSS_SOURCE,
+  PRODUCT_ASSET_VIEWER_JS_FILE,
+  PRODUCT_ASSET_VIEWER_JS_SOURCE,
+  extendProductTemplateWithAssetViewer,
+} from "./kairos-product-asset-viewer-source-20260718.js";
 
 import { SECTION_SOURCE_A } from "./kairos-canonical-homepage-source-section-a-20260718.js";
 import { SECTION_SOURCE_B } from "./kairos-canonical-homepage-source-section-b-20260718.js";
