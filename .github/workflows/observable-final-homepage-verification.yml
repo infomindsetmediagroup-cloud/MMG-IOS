@@ -37,9 +37,12 @@ jobs:
             --output repository.tar.gz
           tar -xzf repository.tar.gz --strip-components=1 -C repository
           grep -q 'kairos-production-entry-immutable-20260717-8' repository/cloudflare/mmg-ios/src/kairos-production-entry-immutable-v1.js || exit 1
-          npm init -y >/dev/null
-          npm install --no-save --no-audit --no-fund playwright >/dev/null 2>&1
-          npx playwright install --with-deps chromium >/dev/null 2>&1
+          (
+            cd repository
+            npm init -y >/dev/null
+            npm install --no-save --no-audit --no-fund playwright >/dev/null 2>&1
+            npx playwright install --with-deps chromium >/dev/null 2>&1
+          )
           node repository/.github/scripts/run-canonical-homepage-release.mjs \
             > artifacts/canonical-homepage/release.log \
             2> artifacts/canonical-homepage/release-error.log
