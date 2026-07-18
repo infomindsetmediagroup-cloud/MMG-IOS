@@ -1,0 +1,121 @@
+name: Publish Company Landing
+run-name: Publish MMG Company landing ${{ github.sha }}
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-company-landing-now.yml
+      - cloudflare/mmg-ios/src/kairos-company-landing-publisher-20260718.js
+      - cloudflare/mmg-ios/src/kairos-production-entry-immutable-v1.js
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mmg-company-landing-publish
+  cancel-in-progress: false
+
+jobs:
+  publish-company:
+    name: Build, verify, and publish Company landing
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Wait for Company publisher deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 48); do
+            headers="$(curl --silent --show-error --max-time 30 -I \
+              "https://mmg-ios.info-mindsetmediagroup.workers.dev/api/shopify/company-landing/build?release=${GITHUB_SHA}&attempt=${attempt}" || true)"
+            if printf '%s' "$headers" | grep -qi 'x-mmg-company-landing: kairos-company-landing-publisher-20260718-1' \
+              && printf '%s' "$headers" | grep -qi 'x-mmg-native-navigation: kairos-native-navigation-theme-publisher-20260718-8'; then
+              echo 'Company publisher is deployed and navigation remains locked to v8.'
+              exit 0
+            fi
+            echo "Deployment verification attempt ${attempt}/48 has not exposed the required builds."
+            sleep 5
+          done
+          exit 1
+
+      - name: Build Company landing in Kairos Staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          http_code="$(curl --silent --show-error --max-time 240 \
+            -X POST \
+            -H 'Content-Type: application/json' \
+            'https://mmg-ios.info-mindsetmediagroup.workers.dev/api/shopify/company-landing/build' \
+            --data '{"mode":"build","confirmation":"BUILD_MMG_COMPANY_LANDING_STAGING"}' \
+            --output /tmp/company-staging.json \
+            --write-out '%{http_code}')"
+          cat /tmp/company-staging.json
+          echo
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then exit 1; fi
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const body = JSON.parse(fs.readFileSync('/tmp/company-staging.json', 'utf8'));
+          const valid = body?.status === 'completed'
+            && body?.build === 'kairos-company-landing-publisher-20260718-1'
+            && body?.mode === 'build'
+            && body?.verification?.exactThemeFileReadBack === true
+            && body?.verification?.navigationPipelineUntouched === true
+            && body?.safeguards?.canonicalNavigationPreserved === true
+            && body?.page?.path === '/pages/about-mindset-media-group';
+          if (!valid) { console.error(JSON.stringify(body, null, 2)); process.exit(1); }
+          NODE
+
+      - name: Publish verified Company landing live
+        shell: bash
+        run: |
+          set -euo pipefail
+          http_code="$(curl --silent --show-error --max-time 240 \
+            -X POST \
+            -H 'Content-Type: application/json' \
+            'https://mmg-ios.info-mindsetmediagroup.workers.dev/api/shopify/company-landing/build' \
+            --data '{"mode":"publish","confirmation":"PUBLISH_MMG_COMPANY_LANDING_LIVE"}' \
+            --output /tmp/company-live.json \
+            --write-out '%{http_code}')"
+          cat /tmp/company-live.json
+          echo
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then exit 1; fi
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const body = JSON.parse(fs.readFileSync('/tmp/company-live.json', 'utf8'));
+          const valid = body?.status === 'completed'
+            && body?.build === 'kairos-company-landing-publisher-20260718-1'
+            && body?.mode === 'publish'
+            && body?.verification?.exactThemeFileReadBack === true
+            && body?.verification?.navigationPipelineUntouched === true
+            && body?.safeguards?.canonicalNavigationPreserved === true
+            && body?.production?.publishedThemeChanged === true;
+          if (!valid) { console.error(JSON.stringify(body, null, 2)); process.exit(1); }
+          NODE
+
+      - name: Verify live Company page and locked navigation
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 36); do
+            html="$(curl --fail --silent --show-error --max-time 30 -H 'Cache-Control: no-cache' \
+              "https://themindsetmediagroup.com/pages/about-mindset-media-group?company_release=${GITHUB_SHA}&attempt=${attempt}" || true)"
+            company_js_url="$(printf '%s' "$html" | grep -oE 'https:[^\" ]*mmg-company-landing\.js[^\" ]*' | head -n1 | sed 's/&amp;/\&/g')"
+            nav_js_url="$(printf '%s' "$html" | grep -oE 'https:[^\" ]*mmg-canonical-navigation\.js[^\" ]*' | head -n1 | sed 's/&amp;/\&/g')"
+            if [ -n "$company_js_url" ] && [ -n "$nav_js_url" ]; then
+              company_js="$(curl --fail --silent --show-error --max-time 30 -H 'Cache-Control: no-cache' "$company_js_url" || true)"
+              nav_js="$(curl --fail --silent --show-error --max-time 30 -H 'Cache-Control: no-cache' "$nav_js_url" || true)"
+              if printf '%s' "$company_js" | grep -q 'kairos-company-landing-publisher-20260718-1' \
+                && printf '%s' "$company_js" | grep -q 'Built to open doors' \
+                && printf '%s' "$company_js" | grep -q 'Contact Mindset Media Group' \
+                && printf '%s' "$nav_js" | grep -q 'kairos-native-navigation-theme-publisher-20260718-8'; then
+                echo 'Verified live Company landing and preserved known-good navigation v8.'
+                exit 0
+              fi
+            fi
+            echo "Live Company verification attempt ${attempt}/36 has not passed yet."
+            sleep 5
+          done
+          exit 1
