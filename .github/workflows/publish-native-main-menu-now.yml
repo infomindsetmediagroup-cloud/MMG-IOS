@@ -83,6 +83,7 @@ jobs:
             if [ "$status" = "200" ] \
               && grep -q '"status":"ok"' "$RUNNER_TEMP/deployment-identity.json" \
               && grep -q '"entryBuild":"kairos-production-entry-native-main-menu-20260718-2"' "$RUNNER_TEMP/deployment-identity.json" \
+              && grep -q '"navigationBuild":"kairos-native-main-menu-publisher-20260718-7"' "$RUNNER_TEMP/deployment-identity.json" \
               && grep -q "\"deploymentSha\":\"${expected_sha}\"" "$RUNNER_TEMP/deployment-identity.json"; then
               echo "Live Worker is running the exact repository commit."
               exit 0
@@ -92,7 +93,7 @@ jobs:
           echo "Cloudflare Worker never exposed the expected deployment identity." >&2
           exit 1
 
-      - name: Publish exact live-header Shopify navigation
+      - name: Publish actual live Shopify navigation menus
         shell: bash
         run: |
           set -euo pipefail
@@ -110,11 +111,15 @@ jobs:
           grep -q '"authSource":"client_credentials"' native-main-menu-result.json
           grep -q '"freshClientCredentialsTokenUsed":true' native-main-menu-result.json
           grep -q '"exactNativeMenuReadBack":true' native-main-menu-result.json
-          grep -q '"liveThemeBindingResolved":true' native-main-menu-result.json
-          grep -q '"boundMenuUpdated":true' native-main-menu-result.json
           grep -q '"absoluteUrlsUsed":true' native-main-menu-result.json
           grep -q '"knowledgeLibraryRemoved":true' native-main-menu-result.json
           grep -Eq '"updatedMenuCount":[1-9][0-9]*' native-main-menu-result.json
+          if grep -q '"liveThemeBindingResolved":true' native-main-menu-result.json; then
+            grep -q '"boundMenuUpdated":true' native-main-menu-result.json
+          else
+            grep -q '"liveLegacySignatureTargeted":true' native-main-menu-result.json
+            grep -q '"legacyMenuUpdated":true' native-main-menu-result.json
+          fi
 
       - name: Verify public storefront navigation
         shell: bash
@@ -138,5 +143,5 @@ jobs:
             fi
             sleep 5
           done
-          echo "Deployment succeeded, but the live storefront navigation is still not canonical." >&2
+          echo "Deployment and Shopify mutation succeeded, but the live storefront navigation is still not canonical." >&2
           exit 1
