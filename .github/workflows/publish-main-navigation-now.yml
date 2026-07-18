@@ -1,5 +1,5 @@
 name: Publish Corrected Main Navigation
-run-name: Publish theme-layer Shopify navigation ${{ github.sha }}
+run-name: Publish integrated Shopify navigation ${{ github.sha }}
 
 on:
   push:
@@ -20,27 +20,27 @@ concurrency:
 
 jobs:
   publish-navigation:
-    name: Publish live theme navigation
+    name: Publish integrated live navigation
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
-      - name: Wait for Cloudflare navigation publisher v6
+      - name: Wait for Cloudflare navigation publisher v7
         shell: bash
         run: |
           set -euo pipefail
           for attempt in $(seq 1 48); do
             headers="$(curl --silent --show-error --max-time 30 -I \
               "https://mmg-ios.info-mindsetmediagroup.workers.dev/api/shopify/navigation/publish?release=${GITHUB_SHA}&attempt=${attempt}" || true)"
-            if printf '%s' "$headers" | grep -qi 'x-mmg-native-navigation: kairos-native-navigation-theme-publisher-20260718-6'; then
-              echo 'Theme navigation publisher v6 is deployed.'
+            if printf '%s' "$headers" | grep -qi 'x-mmg-native-navigation: kairos-native-navigation-theme-publisher-20260718-7'; then
+              echo 'Integrated navigation publisher v7 is deployed.'
               exit 0
             fi
-            echo "Deployment verification attempt ${attempt}/48 has not exposed v6 yet."
+            echo "Deployment verification attempt ${attempt}/48 has not exposed v7 yet."
             sleep 5
           done
           exit 1
 
-      - name: Publish canonical desktop and mobile navigation
+      - name: Publish integrated desktop and mobile navigation
         shell: bash
         run: |
           set -euo pipefail
@@ -75,12 +75,14 @@ jobs:
           ];
           const observed = body?.verification?.topLevel?.map(item => item.title) || [];
           const valid = body?.status === 'completed'
-            && body?.build === 'kairos-native-navigation-theme-publisher-20260718-6'
+            && body?.build === 'kairos-native-navigation-theme-publisher-20260718-7'
             && body?.verification?.valid === true
             && body?.verification?.exactThemeFileReadBack === true
+            && body?.verification?.everyPublishedPageIntegrated === true
             && body?.safeguards?.menusGraphQLDependencyRemoved === true
             && body?.safeguards?.liveThemeChanged === true
-            && body?.safeguards?.aboutAndContactNestedUnderCompany === true
+            && body?.safeguards?.allPublishedPagesIntegrated === true
+            && body?.inventory?.unassignedPages?.length === 0
             && JSON.stringify(observed) === JSON.stringify(expected);
           if (!valid) {
             console.error(JSON.stringify(body, null, 2));
@@ -91,11 +93,14 @@ jobs:
             build: body.build,
             strategy: body.navigation.strategy,
             topLevel: observed,
+            publishedPagesDiscovered: body.inventory.publishedPagesDiscovered,
+            linkedPublishedPages: body.navigation.linkedPublishedPages,
+            integratedPages: body.inventory.integratedPages,
             files: body.files
           }, null, 2));
           NODE
 
-      - name: Verify live storefront navigation assets
+      - name: Verify integrated live storefront navigation assets
         shell: bash
         run: |
           set -euo pipefail
@@ -109,15 +114,15 @@ jobs:
                 js_url="https://themindsetmediagroup.com/cdn/shop/t/1/assets/mmg-canonical-navigation.js"
               fi
               js="$(curl --fail --silent --show-error --max-time 30 -H 'Cache-Control: no-cache' "$js_url" || true)"
-              if printf '%s' "$js" | grep -q 'kairos-native-navigation-theme-publisher-20260718-6' \
+              if printf '%s' "$js" | grep -q 'kairos-native-navigation-theme-publisher-20260718-7' \
                 && printf '%s' "$js" | grep -q 'Publishing Services' \
                 && printf '%s' "$js" | grep -q 'Customer Portal' \
-                && printf '%s' "$js" | grep -q 'About Mindset Media Group'; then
-                echo 'Verified canonical navigation assets on the live storefront.'
+                && printf '%s' "$js" | grep -q 'Company Overview'; then
+                echo 'Verified integrated navigation assets on the live storefront.'
                 exit 0
               fi
             fi
-            echo "Live storefront verification attempt ${attempt}/36 has not exposed the canonical navigation assets yet."
+            echo "Live storefront verification attempt ${attempt}/36 has not exposed integrated navigation assets yet."
             sleep 5
           done
           exit 1
