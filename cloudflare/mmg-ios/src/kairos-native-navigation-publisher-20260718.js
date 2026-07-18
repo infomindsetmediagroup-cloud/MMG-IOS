@@ -5,7 +5,7 @@ import {
   writeThemeFiles,
 } from "./kairos-compact-homepage-utils-v1.js";
 
-export const KAIROS_NATIVE_NAVIGATION_BUILD = "kairos-native-navigation-theme-publisher-20260718-6";
+export const KAIROS_NATIVE_NAVIGATION_BUILD = "kairos-native-navigation-theme-publisher-20260718-7";
 export const NATIVE_NAVIGATION_PATH = "/api/shopify/navigation/publish";
 export const NATIVE_NAVIGATION_CONFIRMATION = "PUBLISH_MMG_NATIVE_MAIN_NAVIGATION";
 
@@ -20,34 +20,63 @@ const MARKER_START = "<!-- MMG_CANONICAL_NAVIGATION_START -->";
 const MARKER_END = "<!-- MMG_CANONICAL_NAVIGATION_END -->";
 const tokenCache = new Map();
 
-const TOP_LEVEL = [
-  { title: "Home", url: "/" },
-  { title: "Products", url: "/pages/products" },
-  { title: "Publishing Services", url: "/pages/publishing-services" },
-  { title: "Knowledge Library", url: "/pages/knowledge-library" },
-  { title: "Membership", url: "/pages/membership" },
-  { title: "Kairos", url: "/pages/kairos" },
-  { title: "Customer Portal", url: "/pages/customer-portal" },
-  {
-    title: "Company",
-    url: "/pages/about-mindset-media-group",
-    items: [
-      { title: "About Mindset Media Group™", url: "/pages/about-mindset-media-group" },
-      { title: "Contact", url: "/pages/contact" },
-    ],
-  },
+const ROOTS = [
+  { key: "home", title: "Home", url: "/" },
+  { key: "products", title: "Products", url: "/pages/products" },
+  { key: "services", title: "Publishing Services", url: "/pages/publishing-services" },
+  { key: "knowledge", title: "Knowledge Library", url: "/pages/knowledge-library" },
+  { key: "membership", title: "Membership", url: "/pages/membership" },
+  { key: "kairos", title: "Kairos", url: "/pages/kairos" },
+  { key: "portal", title: "Customer Portal", url: "/pages/customer-portal" },
+  { key: "company", title: "Company", url: "/pages/about-mindset-media-group" },
 ];
 
-const CSS_SOURCE = String.raw`/* MMG canonical navigation · kairos-native-navigation-theme-publisher-20260718-6 */
-.mmg-canonical-nav{align-items:center;display:flex;gap:clamp(.65rem,1.35vw,1.55rem);list-style:none;margin:0;padding:0}
+const ROOT_HANDLES = new Set(ROOTS.map((item) => item.url.split("/").filter(Boolean).pop()).filter(Boolean));
+
+const CATEGORY_RULES = {
+  products: [
+    "product", "products", "shop", "store", "catalog", "book", "books", "ebook", "ebooks",
+    "digital-product", "digital-products", "prompt", "prompts", "course", "courses", "collection",
+  ],
+  services: [
+    "service", "services", "publishing", "publisher", "manuscript", "editing", "editorial", "proofread",
+    "formatting", "book-design", "cover-design", "author-service", "consultation", "consulting",
+    "production", "professional-cover", "website-design", "website-retool",
+  ],
+  knowledge: [
+    "knowledge", "library", "resource", "resources", "guide", "guides", "learn", "learning",
+    "education", "creator-education", "article", "articles", "tutorial", "tutorials", "faq", "help-center",
+  ],
+  membership: [
+    "membership", "memberships", "member", "members", "pricing", "plans", "subscription", "subscriptions",
+    "community", "join", "benefits",
+  ],
+  kairos: [
+    "kairos", "command-center", "command-centre", "intelligence", "ai-system", "operating-system",
+    "automation", "workspace", "manuscript-studio", "website-builder",
+  ],
+  portal: [
+    "customer-portal", "client-portal", "portal", "customer", "client", "dashboard", "account",
+    "orders", "downloads", "support-ticket", "project-status",
+  ],
+  company: [
+    "about", "company", "our-story", "story", "mission", "vision", "values", "team", "leadership",
+    "founder", "contact", "careers", "career", "press", "media", "partners", "partnerships",
+    "privacy", "terms", "refund", "returns", "shipping", "accessibility", "legal", "policy", "policies",
+    "disclaimer", "intellectual-property", "copyright", "community-guidelines",
+  ],
+};
+
+const CSS_SOURCE = String.raw`/* MMG integrated navigation · kairos-native-navigation-theme-publisher-20260718-7 */
+.mmg-canonical-nav{align-items:center;display:flex;gap:clamp(.55rem,1.1vw,1.25rem);list-style:none;margin:0;padding:0}
 .mmg-canonical-nav>li{position:relative}
-.mmg-canonical-nav a,.mmg-canonical-nav summary{color:rgba(var(--color-foreground),.84);cursor:pointer;font:inherit;font-size:1.4rem;line-height:1.3;list-style:none;padding:1.1rem .15rem;text-decoration:none;white-space:nowrap}
+.mmg-canonical-nav a,.mmg-canonical-nav summary{color:rgba(var(--color-foreground),.84);cursor:pointer;font:inherit;font-size:1.35rem;line-height:1.3;list-style:none;padding:1.1rem .12rem;text-decoration:none;white-space:nowrap}
 .mmg-canonical-nav a:hover,.mmg-canonical-nav summary:hover,.mmg-canonical-nav a:focus-visible,.mmg-canonical-nav summary:focus-visible{color:rgb(var(--color-foreground));text-decoration:underline;text-underline-offset:.3rem}
 .mmg-canonical-nav summary::-webkit-details-marker{display:none}
-.mmg-canonical-nav__company summary{align-items:center;display:flex;gap:.45rem}
-.mmg-canonical-nav__company summary:after{content:"⌄";font-size:1.1rem;line-height:1;transform:translateY(-.1rem)}
-.mmg-canonical-nav__submenu{background:rgb(var(--color-background));border:1px solid rgba(var(--color-foreground),.12);border-radius:1rem;box-shadow:0 1.2rem 3rem rgba(0,0,0,.12);display:grid;gap:.2rem;left:50%;list-style:none;margin:0;min-width:24rem;padding:.8rem;position:absolute;top:calc(100% - .2rem);transform:translateX(-50%);z-index:40}
-.mmg-canonical-nav__submenu a{border-radius:.65rem;display:block;padding:1rem 1.15rem;white-space:normal}
+.mmg-canonical-nav__group summary{align-items:center;display:flex;gap:.4rem}
+.mmg-canonical-nav__group summary:after{content:"⌄";font-size:1.05rem;line-height:1;transform:translateY(-.1rem)}
+.mmg-canonical-nav__submenu{background:rgb(var(--color-background));border:1px solid rgba(var(--color-foreground),.12);border-radius:1rem;box-shadow:0 1.2rem 3rem rgba(0,0,0,.14);display:grid;gap:.15rem;left:50%;list-style:none;margin:0;max-height:min(70vh,52rem);min-width:26rem;overflow:auto;padding:.8rem;position:absolute;top:calc(100% - .2rem);transform:translateX(-50%);z-index:40}
+.mmg-canonical-nav__submenu a{border-radius:.65rem;display:block;padding:.9rem 1.1rem;white-space:normal}
 .mmg-canonical-nav__submenu a:hover,.mmg-canonical-nav__submenu a:focus-visible{background:rgba(var(--color-foreground),.06);text-decoration:none}
 .mmg-canonical-drawer{display:grid;list-style:none;margin:0;padding:0}
 .mmg-canonical-drawer>li{border-bottom:1px solid rgba(var(--color-foreground),.08)}
@@ -62,60 +91,6 @@ const CSS_SOURCE = String.raw`/* MMG canonical navigation · kairos-native-navig
 @media(min-width:990px){.mmg-canonical-drawer{display:none}}
 `;
 
-const JS_SOURCE = String.raw`(() => {
-  "use strict";
-  const BUILD = "kairos-native-navigation-theme-publisher-20260718-6";
-  const LINKS = ${JSON.stringify(TOP_LEVEL)};
-
-  const escapeHTML = (value) => String(value || "").replace(/[&<>\"]/g, (character) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;"
-  })[character]);
-
-  const desktopHTML = () => '<ul class="mmg-canonical-nav list-menu list-menu--inline" role="list" data-mmg-navigation-build="' + BUILD + '">' + LINKS.map((item) => {
-    if (!item.items) return '<li><a class="header__menu-item list-menu__item link link--text focus-inset" href="' + escapeHTML(item.url) + '"><span>' + escapeHTML(item.title) + '</span></a></li>';
-    return '<li><details class="mmg-canonical-nav__company"><summary class="header__menu-item list-menu__item link focus-inset"><span>' + escapeHTML(item.title) + '</span></summary><ul class="mmg-canonical-nav__submenu" role="list">' + item.items.map((child) => '<li><a href="' + escapeHTML(child.url) + '">' + escapeHTML(child.title) + '</a></li>').join('') + '</ul></details></li>';
-  }).join('') + '</ul>';
-
-  const drawerHTML = () => '<ul class="mmg-canonical-drawer" role="list" data-mmg-navigation-build="' + BUILD + '">' + LINKS.map((item) => {
-    if (!item.items) return '<li><a href="' + escapeHTML(item.url) + '">' + escapeHTML(item.title) + '</a></li>';
-    return '<li><details><summary>' + escapeHTML(item.title) + '</summary><ul class="mmg-canonical-drawer__submenu" role="list">' + item.items.map((child) => '<li><a href="' + escapeHTML(child.url) + '">' + escapeHTML(child.title) + '</a></li>').join('') + '</ul></details></li>';
-  }).join('') + '</ul>';
-
-  function install() {
-    const header = document.querySelector('header.header, .shopify-section-header-sticky header, header[role="banner"]');
-    if (!header) return false;
-
-    const desktop = header.querySelector('.header__inline-menu');
-    if (desktop && desktop.dataset.mmgCanonicalNavigation !== BUILD) {
-      desktop.innerHTML = desktopHTML();
-      desktop.dataset.mmgCanonicalNavigation = BUILD;
-    }
-
-    const drawerNavigation = document.querySelector('#menu-drawer .menu-drawer__navigation, .menu-drawer .menu-drawer__navigation, #menu-drawer nav');
-    if (drawerNavigation && drawerNavigation.dataset.mmgCanonicalNavigation !== BUILD) {
-      drawerNavigation.innerHTML = drawerHTML();
-      drawerNavigation.dataset.mmgCanonicalNavigation = BUILD;
-    }
-
-    document.documentElement.dataset.mmgCanonicalNavigation = BUILD;
-    window.dispatchEvent(new CustomEvent('mmg:navigation:ready', { detail: { build: BUILD } }));
-    return Boolean(desktop || drawerNavigation);
-  }
-
-  let attempts = 0;
-  const timer = window.setInterval(() => {
-    attempts += 1;
-    if (install() || attempts >= 40) window.clearInterval(timer);
-  }, 125);
-
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, { once: true });
-  else install();
-
-  const observer = new MutationObserver(() => install());
-  observer.observe(document.documentElement, { childList: true, subtree: true });
-  window.setTimeout(() => observer.disconnect(), 12000);
-})();`;
-
 export async function handleNativeNavigationPublish(request, env) {
   const url = new URL(request.url);
   if (request.method !== "POST" || url.pathname !== NATIVE_NAVIGATION_PATH) return null;
@@ -127,21 +102,25 @@ export async function handleNativeNavigationPublish(request, env) {
 
   const config = readShopifyConfig(env);
   const auth = await resolveAccessToken(config, env);
-  const mainTheme = await getMainTheme(config, auth);
+  const [mainTheme, pages] = await Promise.all([
+    getMainTheme(config, auth),
+    getPublishedPages(config, auth),
+  ]);
+  const navigation = buildNavigation(pages);
+  const jsSource = buildNavigationRuntime(navigation);
+
   const beforeFiles = await readThemeFiles(config, auth, mainTheme.id, MANAGED_FILES);
   const beforeMap = new Map(beforeFiles.map((file) => [file.filename, file]));
   const layoutBefore = beforeMap.get(LAYOUT_FILE)?.content;
   if (!layoutBefore) throw httpError(409, "live_theme_layout_unavailable", `${LAYOUT_FILE} was not readable from the published Shopify theme.`);
 
-  const layoutAfter = injectNavigationAssets(layoutBefore);
   const candidates = [
-    { filename: LAYOUT_FILE, content: layoutAfter },
+    { filename: LAYOUT_FILE, content: injectNavigationAssets(layoutBefore) },
     { filename: CSS_FILE, content: CSS_SOURCE },
-    { filename: JS_FILE, content: JS_SOURCE },
+    { filename: JS_FILE, content: jsSource },
   ];
 
   await writeThemeFiles(env, mainTheme.id, candidates);
-
   try {
     await verifyReadBack(config, auth, mainTheme.id, candidates);
   } catch (failure) {
@@ -149,17 +128,27 @@ export async function handleNativeNavigationPublish(request, env) {
     throw failure;
   }
 
+  const linkedPages = navigation.flatMap((item) => item.items || []);
+  const integratedHandles = new Set(linkedPages.map((item) => item.handle));
+  const unassigned = pages.filter((page) => !ROOT_HANDLES.has(page.handle) && !integratedHandles.has(page.handle));
+
   return json({
     status: "completed",
     build: KAIROS_NATIVE_NAVIGATION_BUILD,
     completedAt: new Date().toISOString(),
-    summary: "Published the canonical MMG navigation through the verified live-theme file pipeline, bypassing the unavailable Shopify menus scope.",
+    summary: "Published an integrated storefront navigation generated from Shopify's complete published-page inventory.",
     navigation: {
-      strategy: "published-theme-runtime-override",
-      topLevel: TOP_LEVEL.map((item) => ({ title: item.title, url: item.url, children: item.items?.length || 0 })),
+      strategy: "published-theme-runtime-override-with-page-inventory",
+      topLevel: navigation.map(summarizeNavigationItem),
+      linkedPublishedPages: linkedPages.length,
       desktop: true,
       mobileDrawer: true,
       preservedControls: ["hamburger", "search", "account", "cart"],
+    },
+    inventory: {
+      publishedPagesDiscovered: pages.length,
+      integratedPages: linkedPages.map((item) => ({ title: item.title, handle: item.handle, url: item.url, category: item.category })),
+      unassignedPages: unassigned.map((item) => ({ title: item.title, handle: item.handle, url: item.url })),
     },
     theme: summarizeTheme(mainTheme),
     files: await Promise.all(candidates.map(async (file) => ({
@@ -169,23 +158,138 @@ export async function handleNativeNavigationPublish(request, env) {
       changed: beforeMap.get(file.filename)?.content !== file.content,
     }))),
     verification: {
-      valid: true,
+      valid: unassigned.length === 0,
       exactThemeFileReadBack: true,
       layoutInjectionPresent: true,
       desktopNavigationInstalled: true,
       mobileNavigationInstalled: true,
-      topLevel: TOP_LEVEL.map((item) => ({ title: item.title, url: item.url, children: item.items?.length || 0 })),
+      everyPublishedPageIntegrated: unassigned.length === 0,
+      topLevel: navigation.map(summarizeNavigationItem),
     },
     safeguards: {
       menusGraphQLDependencyRemoved: true,
       liveThemeChanged: true,
       rollbackOnReadBackFailure: true,
       duplicateStandaloneNavigationPrevented: true,
-      aboutAndContactNestedUnderCompany: true,
+      allPublishedPagesIntegrated: unassigned.length === 0,
       searchAccountCartPreserved: true,
       workersAIUsed: false,
     },
   });
+}
+
+function buildNavigation(pages) {
+  const groups = new Map(ROOTS.map((root) => [root.key, { ...root, items: [] }]));
+  const normalizedPages = pages
+    .filter((page) => page?.handle && page?.title)
+    .map((page) => ({
+      title: String(page.title).trim(),
+      handle: String(page.handle).trim().toLowerCase(),
+      url: `/pages/${String(page.handle).trim()}`,
+    }))
+    .sort((a, b) => a.title.localeCompare(b.title));
+
+  for (const page of normalizedPages) {
+    if (ROOT_HANDLES.has(page.handle) && page.handle !== "about-mindset-media-group") continue;
+    const category = classifyPage(page);
+    const item = { ...page, category };
+    const group = groups.get(category) || groups.get("company");
+    if (!group.items.some((existing) => existing.handle === item.handle)) group.items.push(item);
+  }
+
+  const about = normalizedPages.find((page) => page.handle === "about-mindset-media-group");
+  if (about) groups.get("company").items.unshift({ ...about, title: "About Mindset Media Group™", category: "company" });
+
+  for (const group of groups.values()) group.items = dedupeAndSort(group.items);
+  return ROOTS.map((root) => groups.get(root.key));
+}
+
+function classifyPage(page) {
+  const haystack = `${page.handle} ${page.title}`.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  let best = "company";
+  let score = 0;
+  for (const [category, terms] of Object.entries(CATEGORY_RULES)) {
+    const matches = terms.reduce((total, term) => total + (haystack.includes(term) ? Math.max(1, term.length) : 0), 0);
+    if (matches > score) {
+      score = matches;
+      best = category;
+    }
+  }
+  return best;
+}
+
+function dedupeAndSort(items) {
+  const seen = new Set();
+  return items
+    .filter((item) => {
+      if (seen.has(item.handle)) return false;
+      seen.add(item.handle);
+      return true;
+    })
+    .sort((a, b) => {
+      const preferred = ["about-mindset-media-group", "contact", "our-story", "mission", "vision", "team"];
+      const ai = preferred.indexOf(a.handle);
+      const bi = preferred.indexOf(b.handle);
+      if (ai !== -1 || bi !== -1) return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+      return a.title.localeCompare(b.title);
+    });
+}
+
+function summarizeNavigationItem(item) {
+  return { title: item.title, url: item.url, children: item.items?.length || 0 };
+}
+
+function buildNavigationRuntime(navigation) {
+  return String.raw`(() => {
+  "use strict";
+  const BUILD = "${KAIROS_NATIVE_NAVIGATION_BUILD}";
+  const LINKS = ${JSON.stringify(navigation)};
+
+  const escapeHTML = (value) => String(value || "").replace(/[&<>\"]/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;"
+  })[character]);
+
+  const childHTML = (item) => '<li><a href="' + escapeHTML(item.url) + '">' + escapeHTML(item.title) + '</a></li>';
+
+  const desktopHTML = () => '<ul class="mmg-canonical-nav list-menu list-menu--inline" role="list" data-mmg-navigation-build="' + BUILD + '">' + LINKS.map((item) => {
+    if (!item.items || !item.items.length) return '<li><a class="header__menu-item list-menu__item link link--text focus-inset" href="' + escapeHTML(item.url) + '"><span>' + escapeHTML(item.title) + '</span></a></li>';
+    return '<li><details class="mmg-canonical-nav__group"><summary class="header__menu-item list-menu__item link focus-inset"><span>' + escapeHTML(item.title) + '</span></summary><ul class="mmg-canonical-nav__submenu" role="list"><li><a href="' + escapeHTML(item.url) + '"><strong>' + escapeHTML(item.title) + ' Overview</strong></a></li>' + item.items.map(childHTML).join('') + '</ul></details></li>';
+  }).join('') + '</ul>';
+
+  const drawerHTML = () => '<ul class="mmg-canonical-drawer" role="list" data-mmg-navigation-build="' + BUILD + '">' + LINKS.map((item) => {
+    if (!item.items || !item.items.length) return '<li><a href="' + escapeHTML(item.url) + '">' + escapeHTML(item.title) + '</a></li>';
+    return '<li><details><summary>' + escapeHTML(item.title) + '</summary><ul class="mmg-canonical-drawer__submenu" role="list"><li><a href="' + escapeHTML(item.url) + '"><strong>' + escapeHTML(item.title) + ' Overview</strong></a></li>' + item.items.map(childHTML).join('') + '</ul></details></li>';
+  }).join('') + '</ul>';
+
+  function install() {
+    const header = document.querySelector('header.header, .shopify-section-header-sticky header, header[role="banner"]');
+    if (!header) return false;
+    const desktop = header.querySelector('.header__inline-menu');
+    if (desktop && desktop.dataset.mmgCanonicalNavigation !== BUILD) {
+      desktop.innerHTML = desktopHTML();
+      desktop.dataset.mmgCanonicalNavigation = BUILD;
+    }
+    const drawerNavigation = document.querySelector('#menu-drawer .menu-drawer__navigation, .menu-drawer .menu-drawer__navigation, #menu-drawer nav');
+    if (drawerNavigation && drawerNavigation.dataset.mmgCanonicalNavigation !== BUILD) {
+      drawerNavigation.innerHTML = drawerHTML();
+      drawerNavigation.dataset.mmgCanonicalNavigation = BUILD;
+    }
+    document.documentElement.dataset.mmgCanonicalNavigation = BUILD;
+    window.dispatchEvent(new CustomEvent('mmg:navigation:ready', { detail: { build: BUILD, links: LINKS } }));
+    return Boolean(desktop || drawerNavigation);
+  }
+
+  let attempts = 0;
+  const timer = window.setInterval(() => {
+    attempts += 1;
+    if (install() || attempts >= 40) window.clearInterval(timer);
+  }, 125);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, { once: true });
+  else install();
+  const observer = new MutationObserver(() => install());
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+  window.setTimeout(() => observer.disconnect(), 12000);
+})();`;
 }
 
 function injectNavigationAssets(source) {
@@ -195,6 +299,23 @@ function injectNavigationAssets(source) {
   if (/<\/head>/i.test(cleaned)) return cleaned.replace(/<\/head>/i, `${block}\n</head>`);
   if (/<\/body>/i.test(cleaned)) return cleaned.replace(/<\/body>/i, `${block}\n</body>`);
   throw httpError(409, "live_theme_layout_invalid", `${LAYOUT_FILE} contains neither </head> nor </body>.`);
+}
+
+async function getPublishedPages(config, auth) {
+  const pages = [];
+  let cursor = null;
+  do {
+    const data = await shopifyGraphQL(config, auth, `query KairosPublishedPages($first: Int!, $after: String) {
+      pages(first: $first, after: $after, sortKey: TITLE) {
+        nodes { title handle publishedAt }
+        pageInfo { hasNextPage endCursor }
+      }
+    }`, { first: 100, after: cursor });
+    const connection = data?.pages;
+    pages.push(...(Array.isArray(connection?.nodes) ? connection.nodes.filter((page) => page?.publishedAt) : []));
+    cursor = connection?.pageInfo?.hasNextPage ? connection.pageInfo.endCursor : null;
+  } while (cursor);
+  return pages;
 }
 
 async function getMainTheme(config, auth) {
@@ -208,9 +329,7 @@ async function getMainTheme(config, auth) {
 
 async function readThemeFiles(config, auth, themeId, filenames) {
   const data = await shopifyGraphQL(config, auth, `query KairosNavigationThemeFiles($themeId: ID!, $filenames: [String!], $first: Int!) { theme(id: $themeId) { files(first: $first, filenames: $filenames) { nodes { filename contentType body { ... on OnlineStoreThemeFileBodyText { content } ... on OnlineStoreThemeFileBodyBase64 { contentBase64 } } } userErrors { code filename } } } }`, {
-    themeId,
-    filenames,
-    first: filenames.length,
+    themeId, filenames, first: filenames.length,
   });
   const connection = data?.theme?.files;
   const errors = Array.isArray(connection?.userErrors) ? connection.userErrors.filter((item) => item?.code && item.code !== "NOT_FOUND") : [];
@@ -296,10 +415,7 @@ async function shopifyGraphQL(config, auth, query, variables) {
   return body?.data || {};
 }
 
-function summarizeTheme(theme) {
-  return { id: theme.id, name: theme.name, role: theme.role };
-}
-
+function summarizeTheme(theme) { return { id: theme.id, name: theme.name, role: theme.role }; }
 function bodyToText(body) {
   if (typeof body?.content === "string") return body.content;
   if (typeof body?.contentBase64 === "string") {
@@ -307,23 +423,10 @@ function bodyToText(body) {
   }
   return "";
 }
-
-function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function safeRequestJSON(request) {
-  try { return await request.json(); } catch { return {}; }
-}
-
-async function safeResponseJSON(response) {
-  try { return await response.json(); } catch { return {}; }
-}
-
+function escapeRegExp(value) { return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+function delay(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+async function safeRequestJSON(request) { try { return await request.json(); } catch { return {}; } }
+async function safeResponseJSON(response) { try { return await response.json(); } catch { return {}; } }
 function json(value, status = 200) {
   return new Response(JSON.stringify(value), {
     status,
