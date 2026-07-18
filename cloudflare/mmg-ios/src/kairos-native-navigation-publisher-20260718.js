@@ -1,4 +1,4 @@
-export const KAIROS_NATIVE_NAVIGATION_BUILD = "kairos-native-navigation-publisher-20260718-1";
+export const KAIROS_NATIVE_NAVIGATION_BUILD = "kairos-native-navigation-publisher-20260718-2";
 export const NATIVE_NAVIGATION_PATH = "/api/shopify/navigation/publish";
 export const NATIVE_NAVIGATION_CONFIRMATION = "PUBLISH_MMG_NATIVE_MAIN_NAVIGATION";
 
@@ -6,16 +6,28 @@ const SHOPIFY_TIMEOUT_MS = 25_000;
 const tokenCache = new Map();
 
 const REQUIRED_LINKS = [
-  { title: "Home", url: "/" },
-  { title: "Knowledge Library", url: "/pages/knowledge-library" },
-  { title: "Products", url: "/pages/products" },
-  { title: "Publishing Services", url: "/pages/publishing-services" },
-  { title: "Membership", url: "/pages/membership" },
-  { title: "Kairos", url: "/pages/kairos" },
-  { title: "About", url: "/pages/about-mindset-media-group" },
-  { title: "Contact", url: "/pages/contact" },
-  { title: "Customer Portal", url: "/pages/customer-portal" },
+  { key: "home", title: "Home", url: "/" },
+  { key: "knowledge", title: "Knowledge Library", url: "/pages/knowledge-library" },
+  { key: "products", title: "Products", url: "/pages/products" },
+  { key: "services", title: "Publishing Services", url: "/pages/publishing-services" },
+  { key: "membership", title: "Membership", url: "/pages/membership" },
+  { key: "kairos", title: "Kairos", url: "/pages/kairos" },
+  { key: "about", title: "About", url: "/pages/about-mindset-media-group" },
+  { key: "contact", title: "Contact", url: "/pages/contact" },
+  { key: "portal", title: "Customer Portal", url: "/pages/customer-portal" },
 ];
+
+const DESTINATION_ALIASES = {
+  home: { paths: ["/", "/pages/home"], titles: ["home"] },
+  knowledge: { paths: ["/pages/knowledge-library", "/pages/knowledge", "/blogs/news"], titles: ["knowledge", "knowledge library", "library", "resources"] },
+  products: { paths: ["/pages/products", "/collections/all", "/collections/frontpage"], titles: ["products", "shop", "store", "catalog", "all products"] },
+  services: { paths: ["/pages/publishing-services", "/pages/services", "/collections/services"], titles: ["services", "publishing services", "professional services"] },
+  membership: { paths: ["/pages/membership", "/pages/memberships"], titles: ["membership", "memberships", "member access"] },
+  kairos: { paths: ["/pages/kairos"], titles: ["kairos"] },
+  about: { paths: ["/pages/about-mindset-media-group", "/pages/about", "/pages/about-us"], titles: ["about", "about us", "about mindset media group"] },
+  contact: { paths: ["/pages/contact", "/pages/contact-us"], titles: ["contact", "contact us", "support"] },
+  portal: { paths: ["/pages/customer-portal", "/pages/portal"], titles: ["customer portal", "portal", "client portal"] },
+};
 
 const LANDING_PAGES = [
   { title: "Knowledge Library", handle: "knowledge-library", templateSuffix: "knowledge-library" },
@@ -41,16 +53,25 @@ export async function handleNativeNavigationPublish(request, env) {
   const pages = [];
   for (const page of LANDING_PAGES) pages.push(await ensurePage(config, auth, page));
   const menu = await getMainMenu(config, auth);
-  const items = mergeMenuItems(menu.items || [], REQUIRED_LINKS);
-  const updated = await updateMenu(config, auth, menu, items);
+  const merge = mergeMenuItems(menu.items || [], REQUIRED_LINKS);
+  const updated = await updateMenu(config, auth, menu, merge.items);
 
   return json({
     status: "completed",
     build: KAIROS_NATIVE_NAVIGATION_BUILD,
-    summary: "Kairos wired all MMG ecosystem destinations into Shopify's native main navigation and ensured each landing-page URL exists.",
+    summary: "Kairos preserved existing Shopify navigation items, merged equivalent MMG destinations, removed duplicates, and retained only genuinely distinct main-menu links.",
     navigation: { id: updated.id, handle: updated.handle, title: updated.title, items: updated.items },
+    cleanup: merge.audit,
     pages,
-    safeguards: { nativeShopifyMenuOnly: true, duplicateStandaloneNavigation: false, existingMenuItemsPreserved: true, landingPagesPublished: true },
+    safeguards: {
+      nativeShopifyMenuOnly: true,
+      duplicateStandaloneNavigation: false,
+      existingEquivalentItemsPreferred: true,
+      equivalentDestinationsMerged: true,
+      childNavigationPreservedAndCombined: true,
+      duplicateDestinationsRemoved: true,
+      landingPagesPublished: true,
+    },
   });
 }
 
@@ -63,30 +84,108 @@ async function getMainMenu(config, auth) {
 }
 
 function mergeMenuItems(existing, required) {
-  const output = existing.map(toUpdateInput);
-  const seen = new Set(output.map(item => normalize(item.url)));
+  const output = [];
+  const byDestination = new Map();
+  const audit = { preserved: [], merged: [], added: [], removedDuplicates: [] };
+
+  for (const source of existing) {
+    const item = toUpdateInput(source);
+    const destination = classifyDestination(item);
+    const exactKey = `url:${normalize(item.url)}`;
+    const key = destination ? `destination:${destination}` : exactKey;
+    const retained = byDestination.get(key);
+
+    if (!retained) {
+      if (destination) applyCanonicalDestination(item, destination);
+      output.push(item);
+      byDestination.set(key, item);
+      audit.preserved.push({ title: item.title, destination: destination || normalize(item.url) });
+      continue;
+    }
+
+    retained.items = mergeChildren(retained.items || [], item.items || []);
+    audit.merged.push({ retained: retained.title, absorbed: item.title, destination: destination || normalize(item.url) });
+    audit.removedDuplicates.push({ title: item.title, url: item.url || null });
+  }
+
   for (const link of required) {
-    const key = normalize(link.url);
-    if (seen.has(key)) continue;
-    output.push({ title: link.title, type: "HTTP", url: link.url, items: [] });
-    seen.add(key);
+    const key = `destination:${link.key}`;
+    const retained = byDestination.get(key);
+    if (retained) {
+      applyCanonicalDestination(retained, link.key);
+      continue;
+    }
+    const item = { title: link.title, type: "HTTP", url: link.url, items: [] };
+    output.push(item);
+    byDestination.set(key, item);
+    audit.added.push({ title: link.title, destination: link.key, url: link.url });
+  }
+
+  return { items: output, audit };
+}
+
+function mergeChildren(existing, incoming) {
+  const output = existing.map(cloneMenuItem);
+  const seen = new Map();
+  output.forEach(item => seen.set(childIdentity(item), item));
+  for (const child of incoming) {
+    const candidate = cloneMenuItem(child);
+    const key = childIdentity(candidate);
+    const retained = seen.get(key);
+    if (!retained) {
+      output.push(candidate);
+      seen.set(key, candidate);
+      continue;
+    }
+    retained.items = mergeChildren(retained.items || [], candidate.items || []);
   }
   return output;
 }
 
-function toUpdateInput(item) {
+function childIdentity(item) {
+  const destination = classifyDestination(item);
+  if (destination) return `destination:${destination}`;
+  const url = normalize(item.url);
+  if (url) return `url:${url}`;
+  return `title:${normalizeTitle(item.title)}`;
+}
+
+function classifyDestination(item) {
+  const path = normalize(item?.url);
+  const title = normalizeTitle(item?.title);
+  for (const [key, aliases] of Object.entries(DESTINATION_ALIASES)) {
+    if (aliases.paths.some(alias => normalize(alias) === path)) return key;
+    if (aliases.titles.includes(title)) return key;
+  }
+  return null;
+}
+
+function applyCanonicalDestination(item, key) {
+  const canonical = REQUIRED_LINKS.find(link => link.key === key);
+  if (!canonical) return item;
+  item.type = "HTTP";
+  item.url = canonical.url;
+  delete item.resourceId;
+  return item;
+}
+
+function cloneMenuItem(item) {
   return {
-    id: item.id,
+    ...(item.id ? { id: item.id } : {}),
     title: item.title,
-    type: item.type,
+    type: item.type || "HTTP",
     ...(item.url ? { url: item.url } : {}),
     ...(item.resourceId ? { resourceId: item.resourceId } : {}),
-    items: Array.isArray(item.items) ? item.items.map(toUpdateInput) : [],
+    items: Array.isArray(item.items) ? item.items.map(cloneMenuItem) : [],
   };
 }
 
+function toUpdateInput(item) {
+  return cloneMenuItem(item);
+}
+
 async function updateMenu(config, auth, menu, items) {
-  const data = await shopifyGraphQL(config, auth, `mutation KairosUpdateMainMenu($id: ID!, $title: String!, $items: [MenuItemUpdateInput!]!) { menuUpdate(id: $id, title: $title, items: $items) { menu { id handle title items { id title type url items { id title type url } } } userErrors { code field message } } }`, { id: menu.id, title: menu.title, items });
+  const data = await shopifyGraphQL(config, auth, `mutation KairosUpdateMainMenu($id: ID!, $title: String!, $items: [MenuItemUpdateInput!]!) { menuUpdate(id: $id, title: $title, items: $items) { menu { id handle title items { id title type url items { id title type url items { id title type url } } } } userErrors { code field message } } }`, { id: menu.id, title: menu.title, items });
   const errors = data?.menuUpdate?.userErrors || [];
   if (errors.length) throw error(422, "native_navigation_update_failed", errors.map(item => item.message).join("; "));
   return data?.menuUpdate?.menu;
@@ -110,8 +209,17 @@ async function ensurePage(config, auth, definition) {
 }
 
 function normalize(value) {
-  try { const parsed = new URL(value, "https://store.invalid"); return (parsed.pathname.replace(/\/$/, "") || "/").toLowerCase(); }
-  catch { return String(value || "").replace(/\/$/, "").toLowerCase(); }
+  if (!value) return "";
+  try {
+    const parsed = new URL(value, "https://store.invalid");
+    return (parsed.pathname.replace(/\/$/, "") || "/").toLowerCase();
+  } catch {
+    return String(value || "").replace(/\/$/, "").toLowerCase();
+  }
+}
+
+function normalizeTitle(value) {
+  return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 function readShopifyConfig(env) {
