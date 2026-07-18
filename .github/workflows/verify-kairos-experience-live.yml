@@ -60,7 +60,7 @@ jobs:
         run: npx wrangler deploy --dry-run
 
   verify-production-live:
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.head_ref == 'agent/verify-product-manufacturing-production'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
