@@ -7,6 +7,7 @@ on:
     paths:
       - "cloudflare/mmg-ios/**"
       - "web/kairos-dashboard/**"
+      - ".github/scripts/verify-canonical-homepage.mjs"
       - ".github/workflows/deploy-cloudflare-production.yml"
   workflow_dispatch: {}
 
@@ -181,9 +182,12 @@ jobs:
               then
                 rm -f "${headers_file}"
                 echo "Kairos reconciled production baseline verified on attempt ${attempt}."
-                npm init -y >/dev/null
-                npm install --no-save --no-audit --no-fund playwright
-                npx playwright install --with-deps chromium
+                (
+                  cd repository
+                  npm init -y >/dev/null
+                  npm install --no-save --no-audit --no-fund playwright
+                  npx playwright install --with-deps chromium
+                )
                 node repository/.github/scripts/run-canonical-homepage-release.mjs
                 echo "Canonical MMG Shopify homepage verified through Playwright."
                 exit 0
