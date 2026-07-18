@@ -18,7 +18,7 @@ import {
 } from "./kairos-website-builder-v2.js";
 import { KAIROS_PRODUCT_MANUFACTURING_BRIDGE_BUILD } from "./kairos-product-manufacturing-bridge-v1.js";
 
-const BUILD = "kairos-production-entry-immutable-20260718-12";
+const BUILD = "kairos-production-entry-immutable-20260718-13";
 
 export { KairosProject };
 
