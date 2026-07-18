@@ -10,7 +10,8 @@ const verifierPath = resolve(repositoryRoot, ".github/scripts/verify-canonical-h
 const productionEntryPath = resolve(repositoryRoot, "cloudflare/mmg-ios/src/kairos-production-entry-immutable-v1.js");
 const workerURL = String(process.env.KAIROS_PRODUCTION_URL || "https://mmg-ios.info-mindsetmediagroup.workers.dev").replace(/\/+$/, "");
 const commit = process.env.GITHUB_SHA || "unknown";
-const confirmation = "BUILD_CANONICAL_MMG_HOMEPAGE_STAGING";
+const STAGING_CONFIRMATION = "BUILD_CANONICAL_MMG_HOMEPAGE_STAGING";
+const PUBLISH_CONFIRMATION = "PUBLISH_CANONICAL_MMG_HOMEPAGE_LIVE";
 
 await mkdir(outputRoot, { recursive: true });
 const entrySource = await readFile(productionEntryPath, "utf8");
@@ -18,54 +19,79 @@ const expectedEntry = entrySource.match(/const BUILD = "([^"]+)"/)?.[1];
 if (!expectedEntry) throw new Error("Could not resolve the expected production-entry build marker.");
 
 await waitForRelease(expectedEntry);
+
 const build = await requestBuild("build");
 await writeJSON(resolve(outputRoot, "build-result.json"), build);
-
 if (build.status !== "completed" || !build.preview?.url) {
-  throw new Error(`Canonical homepage build failed: ${JSON.stringify(build)}`);
+  throw new Error(`Canonical homepage staging build failed: ${JSON.stringify(build)}`);
 }
-if (build.production?.publishedThemeChanged !== false) {
-  throw new Error("The canonical homepage builder did not preserve the published MAIN theme boundary.");
+if (build.production?.publishedThemeChanged !== false || build.verification?.exactReadBack !== true) {
+  throw new Error("The staging build did not preserve the published theme boundary or pass exact Shopify read-back.");
 }
 
 const previewURL = build.preview.url;
 const firstPass = runVerifier("pass-1", "1", previewURL);
 let repair = null;
 if (!firstPass.passed) {
-  repair = await requestBuild("repair", "The first Playwright pass failed. Restore the exact canonical staging bundle and verify Shopify read-back again.");
+  repair = await requestBuild(
+    "repair",
+    "The first Playwright pass failed. Restore the exact canonical staging bundle and verify Shopify read-back again.",
+  );
   await writeJSON(resolve(outputRoot, "repair-result.json"), repair);
-  if (repair.status !== "completed" || repair.mode !== "repair" || repair.verification?.exactReadBack !== true || repair.production?.publishedThemeChanged !== false) {
+  if (
+    repair.status !== "completed" ||
+    repair.mode !== "repair" ||
+    repair.verification?.exactReadBack !== true ||
+    repair.production?.publishedThemeChanged !== false
+  ) {
     throw new Error(`Canonical homepage repair failed: ${JSON.stringify(repair)}`);
   }
 }
 
 const finalPass = runVerifier("final", "2", previewURL);
-const receipt = {
-  sourceCommit: commit,
-  expectedProductionEntry: expectedEntry,
-  buildStatus: build.status,
-  preview: build.preview,
-  files: build.files,
-  production: build.production,
-  firstPass: firstPass.report,
-  repairPerformed: Boolean(repair),
-  repair,
-  verification: finalPass.report,
-  generatedAt: new Date().toISOString(),
-};
-await writeJSON(resolve(outputRoot, "review-receipt.json"), receipt);
-await writeFile(resolve(outputRoot, "review-receipt.md"), markdown(receipt));
+if (!finalPass.passed) {
+  const failedReceipt = createReceipt({
+    build,
+    firstPass,
+    repair,
+    finalPass,
+    publish: null,
+    livePass: null,
+  });
+  await persistReceipt(failedReceipt);
+  throw new Error(`Canonical homepage staging verification failed: ${JSON.stringify(finalPass.report?.failures || [])}`);
+}
+
+const publish = await requestBuild("publish");
+await writeJSON(resolve(outputRoot, "publish-result.json"), publish);
+if (
+  publish.status !== "completed" ||
+  publish.mode !== "publish" ||
+  publish.production?.publishedThemeChanged !== true ||
+  publish.verification?.publishedThemeReadBackVerified !== true ||
+  !publish.production?.url
+) {
+  throw new Error(`Canonical homepage live publish failed: ${JSON.stringify(publish)}`);
+}
+
+const liveURL = `${String(publish.production.url).replace(/\/+$/, "")}/?homepage_release=${encodeURIComponent(commit)}`;
+const livePass = runVerifier("live", "3", liveURL);
+const receipt = createReceipt({ build, firstPass, repair, finalPass, publish, livePass });
+await persistReceipt(receipt);
 
 console.log(JSON.stringify({
-  status: finalPass.passed ? "verified" : "failed",
+  status: livePass.passed ? "published-and-verified" : "published-live-verification-failed",
   previewURL,
+  liveURL: publish.production.url,
   firstPass: firstPass.passed,
   repairPerformed: Boolean(repair),
-  finalPass: finalPass.passed,
-  publishedThemeChanged: build.production?.publishedThemeChanged,
+  finalStagingPass: finalPass.passed,
+  publishedThemeChanged: publish.production?.publishedThemeChanged,
+  publishedThemeReadBackVerified: publish.verification?.publishedThemeReadBackVerified,
+  livePass: livePass.passed,
 }, null, 2));
 
-if (!finalPass.passed) process.exit(1);
+if (!livePass.passed) process.exit(1);
 
 async function waitForRelease(expected) {
   for (let attempt = 1; attempt <= 36; attempt += 1) {
@@ -88,6 +114,7 @@ async function waitForRelease(expected) {
 }
 
 async function requestBuild(mode, reason = "") {
+  const confirmation = mode === "publish" ? PUBLISH_CONFIRMATION : STAGING_CONFIRMATION;
   const response = await fetch(`${workerURL}/api/shopify/staging/canonical-homepage/build`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -95,8 +122,11 @@ async function requestBuild(mode, reason = "") {
   });
   const text = await response.text();
   let body;
-  try { body = JSON.parse(text); }
-  catch { body = { status: "failed", error: { code: "invalid_json", message: text.slice(0, 2_000) } }; }
+  try {
+    body = JSON.parse(text);
+  } catch {
+    body = { status: "failed", error: { code: "invalid_json", message: text.slice(0, 2_000) } };
+  }
   if (!response.ok) {
     throw new Error(`Canonical homepage ${mode} request failed (${response.status}): ${JSON.stringify(body)}`);
   }
@@ -118,13 +148,43 @@ function runVerifier(folder, attempt, previewURL) {
   });
   if (result.stdout?.trim()) console.log(result.stdout.trim());
   if (result.stderr?.trim()) console.error(result.stderr.trim());
+
   const reportPath = resolve(output, "verification-report.json");
   let report = { passed: false, failures: [`Verifier exited ${result.status ?? "without status"} and produced no report.`] };
   if (existsSync(reportPath)) {
-    try { report = JSON.parse(readFileSync(reportPath, "utf8")); }
-    catch (error) { report = { passed: false, failures: [`Could not parse verification report: ${error.message}`] }; }
+    try {
+      report = JSON.parse(readFileSync(reportPath, "utf8"));
+    } catch (error) {
+      report = { passed: false, failures: [`Could not parse verification report: ${error.message}`] };
+    }
   }
   return { passed: result.status === 0 && report.passed === true, status: result.status, report };
+}
+
+function createReceipt({ build, firstPass, repair, finalPass, publish, livePass }) {
+  return {
+    sourceCommit: commit,
+    expectedProductionEntry: expectedEntry,
+    buildStatus: build.status,
+    preview: build.preview,
+    stagedFiles: build.files,
+    stagingProductionBoundary: build.production,
+    firstPass: firstPass.report,
+    repairPerformed: Boolean(repair),
+    repair,
+    stagingVerification: finalPass.report,
+    publishStatus: publish?.status || "not-attempted",
+    production: publish?.production || null,
+    publishedFiles: publish?.files || [],
+    publishVerification: publish?.verification || null,
+    liveVerification: livePass?.report || null,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+async function persistReceipt(receipt) {
+  await writeJSON(resolve(outputRoot, "release-receipt.json"), receipt);
+  await writeFile(resolve(outputRoot, "release-receipt.md"), markdown(receipt));
 }
 
 async function writeJSON(path, value) {
@@ -132,17 +192,24 @@ async function writeJSON(path, value) {
 }
 
 function markdown(receipt) {
-  const files = Array.isArray(receipt.files) ? receipt.files : [];
+  const files = Array.isArray(receipt.publishedFiles) && receipt.publishedFiles.length
+    ? receipt.publishedFiles
+    : Array.isArray(receipt.stagedFiles)
+      ? receipt.stagedFiles
+      : [];
   return [
-    "# Canonical MMG Homepage Review Receipt",
+    "# Canonical MMG Homepage Production Release",
     "",
     `- Source commit: ${receipt.sourceCommit}`,
     `- Production entry: ${receipt.expectedProductionEntry}`,
-    `- Preview: ${receipt.preview?.url || "unavailable"}`,
+    `- Staging preview: ${receipt.preview?.url || "unavailable"}`,
     `- First Playwright pass: ${receipt.firstPass?.passed ? "PASS" : "FAIL"}`,
     `- Repair performed: ${receipt.repairPerformed ? "YES" : "NO"}`,
-    `- Final Playwright verification: ${receipt.verification?.passed ? "PASS" : "FAIL"}`,
+    `- Final staging verification: ${receipt.stagingVerification?.passed ? "PASS" : "FAIL"}`,
+    `- Live URL: ${receipt.production?.url || "unavailable"}`,
     `- Published MAIN changed: ${receipt.production?.publishedThemeChanged === true ? "YES" : "NO"}`,
+    `- Published source read-back: ${receipt.publishVerification?.publishedThemeReadBackVerified === true ? "PASS" : "FAIL"}`,
+    `- Live browser verification: ${receipt.liveVerification?.passed ? "PASS" : "FAIL"}`,
     "",
     "## Shopify source changes",
     "",
