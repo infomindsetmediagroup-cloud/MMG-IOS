@@ -1,5 +1,5 @@
 name: Publish Corrected Shopify Menu Now
-run-name: Main navigation origin and cache release ${{ github.sha }}
+run-name: Native Shopify main navigation release ${{ github.sha }}
 
 on:
   workflow_dispatch:
@@ -7,8 +7,8 @@ on:
     branches:
       - main
     paths:
-      - cloudflare/mmg-ios/src/kairos-theme-menu-hotfix-publisher-20260718.js
-      - cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
+      - cloudflare/mmg-ios/src/kairos-native-main-menu-publisher-20260718.js
+      - cloudflare/mmg-ios/src/kairos-production-entry-native-main-menu-v1.js
       - cloudflare/mmg-ios/wrangler.toml
       - .github/workflows/publish-native-main-menu-now.yml
 
@@ -40,81 +40,47 @@ jobs:
           git fetch --depth=1 origin "${GITHUB_SHA}"
           git checkout --detach FETCH_HEAD
           test -f cloudflare/mmg-ios/wrangler.toml
-          test -f cloudflare/mmg-ios/src/kairos-theme-menu-hotfix-publisher-20260718.js
+          test -f cloudflare/mmg-ios/src/kairos-native-main-menu-publisher-20260718.js
 
-      - name: Deploy identity-gated theme-menu Worker
+      - name: Deploy native main-menu Worker
         shell: bash
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/mmg-release/cloudflare/mmg-ios"
           npm install --no-save wrangler@latest
-          npx wrangler deploy | tee theme-menu-hotfix-worker-deploy.txt
+          npx wrangler deploy | tee native-main-menu-worker-deploy.txt
 
-      - name: Wait for identity-gated endpoint
+      - name: Wait for native main-menu endpoint
         shell: bash
         run: |
           set -euo pipefail
           for attempt in $(seq 1 48); do
-            headers_file="$RUNNER_TEMP/theme-menu-hotfix-headers.txt"
-            status="$(curl --silent --show-error --head --max-time 30 -o /dev/null -D "$headers_file" -w '%{http_code}' "https://mmg-ios.info-mindsetmediagroup.workers.dev/api/shopify/theme-menu-hotfix/publish?release=${GITHUB_SHA}&attempt=${attempt}" || true)"
+            headers_file="$RUNNER_TEMP/native-main-menu-headers.txt"
+            status="$(curl --silent --show-error --head --max-time 30 -o /dev/null -D "$headers_file" -w '%{http_code}' "https://mmg-ios.info-mindsetmediagroup.workers.dev/api/shopify/native-main-menu/publish?release=${GITHUB_SHA}&attempt=${attempt}" || true)"
             echo "Endpoint probe ${attempt}/48 HTTP ${status}"
-            if grep -qi "x-mmg-theme-menu-hotfix: kairos-theme-menu-hotfix-20260718-2" "$headers_file"; then
+            if grep -qi "x-mmg-native-main-menu: kairos-native-main-menu-publisher-20260718-2" "$headers_file"; then
+              echo "Native main-menu Worker is deployed."
               exit 0
             fi
             sleep 5
           done
-          echo "Identity-gated theme menu Worker did not become reachable." >&2
+          echo "Native main-menu Worker did not become reachable." >&2
           exit 1
 
-      - name: Publish corrected menu into verified Shopify MAIN
+      - name: Publish Shopify native main menu
         shell: bash
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/mmg-release/cloudflare/mmg-ios"
-          status="$(curl --silent --show-error --retry 2 --retry-delay 3 -X POST "https://mmg-ios.info-mindsetmediagroup.workers.dev/api/shopify/theme-menu-hotfix/publish" -H "Content-Type: application/json" --data '{"confirmation":"PUBLISH_MMG_THEME_MENU_HOTFIX_NOW"}' -o theme-menu-hotfix-result.json -w '%{http_code}' || true)"
-          echo "Theme menu publish HTTP ${status}"
-          cat theme-menu-hotfix-result.json || true
+          status="$(curl --silent --show-error --retry 2 --retry-delay 3 -X POST "https://mmg-ios.info-mindsetmediagroup.workers.dev/api/shopify/native-main-menu/publish" -H "Content-Type: application/json" --data '{"confirmation":"PUBLISH_MMG_NATIVE_MAIN_MENU_NOW"}' -o native-main-menu-result.json -w '%{http_code}' || true)"
+          echo "Native main-menu publish HTTP ${status}"
+          cat native-main-menu-result.json || true
           test "$status" -ge 200
           test "$status" -lt 300
-          grep -q '"status":"completed"' theme-menu-hotfix-result.json
-          grep -q '"exactThemeReadBack":true' theme-menu-hotfix-result.json
-          grep -q '"shopDomainIdentityVerified":true' theme-menu-hotfix-result.json
-          grep -q '"mainThemeRoleVerified":true' theme-menu-hotfix-result.json
-          grep -q '"targetThemeIdEmbedded":true' theme-menu-hotfix-result.json
-          grep -q '"knowledgeLibraryRemoved":true' theme-menu-hotfix-result.json
-
-      - name: Verify marker at Shopify origin
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "$RUNNER_TEMP/mmg-release/cloudflare/mmg-ios"
-          origin_host="$(python3 -c 'import json; print(json.load(open("theme-menu-hotfix-result.json"))["shop"]["myshopifyDomain"])')"
-          test -n "$origin_host"
-          for attempt in $(seq 1 18); do
-            status="$(curl --location --silent --show-error -H 'Cache-Control: no-cache' "https://${origin_host}/?mmg_origin_verify=${GITHUB_SHA}&attempt=${attempt}" -o shopify-origin.html -w '%{http_code}' || true)"
-            echo "Shopify origin verification ${attempt}/18 HTTP ${status}"
-            if [ "$status" = "200" ] && grep -q 'kairos-theme-menu-hotfix-20260718-2' shopify-origin.html; then
-              echo "Shopify origin serves corrected navigation marker."
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "Shopify origin does not serve the corrected navigation marker." >&2
-          exit 1
-
-      - name: Purge Cloudflare storefront cache
-        shell: bash
-        run: |
-          set -euo pipefail
-          zones="$(curl --silent --show-error --fail -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Content-Type: application/json' 'https://api.cloudflare.com/client/v4/zones?name=themindsetmediagroup.com&status=active')"
-          echo "$zones" > cloudflare-zones.json
-          zone_id="$(python3 -c 'import json; d=json.load(open("cloudflare-zones.json")); r=d.get("result") or []; print(r[0]["id"] if r else "")')"
-          test -n "$zone_id"
-          purge_status="$(curl --silent --show-error -X POST -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Content-Type: application/json' --data '{"purge_everything":true}' "https://api.cloudflare.com/client/v4/zones/${zone_id}/purge_cache" -o cloudflare-purge.json -w '%{http_code}' || true)"
-          cat cloudflare-purge.json || true
-          test "$purge_status" -ge 200
-          test "$purge_status" -lt 300
-          grep -q '"success":true' cloudflare-purge.json
+          grep -q '"status":"completed"' native-main-menu-result.json
+          grep -q '"exactNativeMenuReadBack":true' native-main-menu-result.json
+          grep -q '"knowledgeLibraryRemoved":true' native-main-menu-result.json
+          grep -q '"themeOverrideNotUsed":true' native-main-menu-result.json
 
       - name: Verify live main navigation
         shell: bash
@@ -122,17 +88,16 @@ jobs:
           set -euo pipefail
           cd "$RUNNER_TEMP/mmg-release/cloudflare/mmg-ios"
           for attempt in $(seq 1 24); do
-            status="$(curl --location --silent --show-error -H 'Cache-Control: no-cache, no-store, max-age=0' "https://themindsetmediagroup.com/?mmg_main_nav=${GITHUB_SHA}&attempt=${attempt}" -o live-home.html -w '%{http_code}' || true)"
+            status="$(curl --location --silent --show-error -H 'Cache-Control: no-cache, no-store, max-age=0' "https://themindsetmediagroup.com/?mmg_native_nav=${GITHUB_SHA}&attempt=${attempt}" -o live-home.html -w '%{http_code}' || true)"
             echo "Live navigation verification ${attempt}/24 HTTP ${status}"
             if [ "$status" = "200" ] \
-              && grep -q 'kairos-theme-menu-hotfix-20260718-2' live-home.html \
               && grep -q 'Create &amp; Learn' live-home.html \
-              && grep -q 'Support' live-home.html \
+              && grep -q '>Support<' live-home.html \
               && ! grep -q '>Knowledge Library<' live-home.html; then
-              echo "Live main navigation verified."
+              echo "Live native main navigation verified."
               exit 0
             fi
             sleep 5
           done
-          echo "Live main navigation is still stale after Shopify-origin verification and Cloudflare purge." >&2
+          echo "Shopify native main navigation did not appear on the live storefront." >&2
           exit 1
