@@ -1,23 +1,5 @@
 export const SECTION_SOURCE_A = String.raw`{{ 'mmg-canonical-homepage.css' | asset_url | stylesheet_tag }}
 
-<nav class="mmg-ecosystem-nav" aria-label="Mindset Media Group main navigation">
-  <div class="mmg-ecosystem-nav__inner">
-    <a class="mmg-ecosystem-nav__brand" href="/" aria-label="Mindset Media Group home">Mindset Media Group™</a>
-    <button class="mmg-ecosystem-nav__toggle" type="button" aria-expanded="false" aria-controls="mmg-ecosystem-links">Menu</button>
-    <div id="mmg-ecosystem-links" class="mmg-ecosystem-nav__links">
-      <a href="/">Home</a>
-      <a href="/pages/knowledge-library">Knowledge Library</a>
-      <a href="/collections/all">Shop</a>
-      <a href="/pages/publishing-services">Publishing Services</a>
-      <a href="/pages/membership">Membership</a>
-      <a href="/pages/kairos">Kairos</a>
-      <a href="/pages/about-mindset-media-group">About</a>
-      <a href="/pages/contact">Contact</a>
-      <a class="mmg-ecosystem-nav__portal" href="/pages/customer-portal">Customer Portal</a>
-    </div>
-  </div>
-</nav>
-
 <!-- kairos-canonical-homepage-builder-20260718-3 -->
 <!-- Turn what you know into something valuable. -->
 <section id="mmg-home" class="mmg-home mmg-portal-framework" data-mmg-canonical-homepage data-build="kairos-canonical-homepage-builder-20260718-3" aria-label="Mindset Media Group knowledge ecosystem">
