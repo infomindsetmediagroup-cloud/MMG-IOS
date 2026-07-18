@@ -16,9 +16,15 @@ import { handlePublicationPerformanceObjectRequest } from "./kairos-publication-
 import { handlePublicationSettlementObjectRequest } from "./kairos-publication-settlement-v1.js";
 import { handlePublicationTaxComplianceObjectRequest } from "./kairos-publication-tax-compliance-v1.js";
 import { handleWebsiteBuilderAssetObjectRequest } from "./kairos-website-builder-asset-library-v1.js";
+import {
+  handleProductManufacturingBridge,
+  handleProductManufacturingBridgeObjectRequest,
+} from "./kairos-product-manufacturing-bridge-v1.js";
 
 export class KairosProject extends NativeKairosProject {
   async fetch(request) {
+    const productManufacturing = await handleProductManufacturingBridgeObjectRequest(this.state, request, this.env);
+    if (productManufacturing) return productManufacturing;
     const websiteBuilderAsset = await handleWebsiteBuilderAssetObjectRequest(this.state, request);
     if (websiteBuilderAsset) return websiteBuilderAsset;
     const publicationTax = await handlePublicationTaxComplianceObjectRequest(this.state, request);
@@ -75,6 +81,8 @@ export default {
       });
     }
 
+    const productManufacturing = await handleProductManufacturingBridge(request, env);
+    if (productManufacturing) return productManufacturing;
     const registry = await handleProductionRegistry(request, env);
     if (registry) return registry;
     const productLaunch = await handleProductLaunchControl(request, env);

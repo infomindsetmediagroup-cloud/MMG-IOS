@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const BUILD = "kairos-production-validation-orchestrator-20260717-4";
+const BUILD = "kairos-production-validation-orchestrator-20260717-5";
 const here = dirname(fileURLToPath(import.meta.url));
 const validators = [
   "validate-production-baseline.mjs",
@@ -23,6 +23,7 @@ const validators = [
   "validate-whole-homepage-planner.mjs",
   "validate-kairos-experience-controller.mjs",
   "validate-website-builder-v2.mjs",
+  "validate-product-manufacturing-bridge.mjs",
 ];
 
 const completed = [];
