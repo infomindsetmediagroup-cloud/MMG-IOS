@@ -1,5 +1,5 @@
-const BUILD = "manuscript-studio-20260713-3";
-const MAX_TEXT_CHARS = 180000;
+const BUILD = "manuscript-studio-20260717-4";
+const MAX_TEXT_CHARS = 600000;
 const MAX_DOCX_BYTES = 15 * 1024 * 1024;
 const MAX_PDF_BYTES = 20 * 1024 * 1024;
 const MAX_PDF_PAGES = 400;
@@ -18,7 +18,9 @@ window.addEventListener("kairos:manuscript:restore", event => {
   state.manuscript = String(detail.manuscript || "");
   state.source = detail.source ? normalizeSource(detail.source) : null;
   state.result = null;
-  state.error = "";
+  state.error = state.manuscript.length > MAX_TEXT_CHARS
+    ? `This manuscript contains ${state.manuscript.length.toLocaleString()} characters. Manuscript Studio supports up to ${MAX_TEXT_CHARS.toLocaleString()} characters.`
+    : "";
   state.open = true;
   render();
 });
@@ -51,13 +53,13 @@ function inputView(){
   const source=state.source?`<p class="manuscript-source"><strong>Durable source:</strong> ${esc(state.source.name)} · ${esc(state.source.format.toUpperCase())} · ${formatBytes(state.source.size)}${state.source.pages?` · ${state.source.pages} pages`:""} · ${state.source.stored?"stored and verified":"awaiting storage"}</p>`:"";
   const busy=state.working||state.extracting||state.storing;
   const label=state.extracting?"Extracting file…":state.storing?"Preserving source…":state.working?"Creating production intake…":"Continue to Production Intake";
-  return `<div class="manuscript-grid"><label>Publication title<input id="ms-title" maxlength="200" value="${esc(state.title)}" placeholder="Book title"></label><label>Manuscript file<input data-file type="file" accept=".txt,.md,.rtf,.docx,.pdf,text/plain,text/markdown,application/rtf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf"></label></div>${source}<label>Extracted manuscript text<textarea id="ms-body" maxlength="${MAX_TEXT_CHARS}" placeholder="Paste text or load TXT, MD, RTF, DOCX, or a text-based PDF.">${esc(state.manuscript)}</textarea></label><p class="manuscript-note">The original source and extracted text are preserved in the Kairos project runtime for cross-session and cross-device recovery. Scanned or image-only PDFs are rejected because OCR is not enabled.</p>${busy?`<p class="manuscript-progress">${label}</p>`:""}${state.error?`<p class="manuscript-error">${esc(state.error)}</p>`:""}<button class="primary" data-advance ${busy?"disabled":""}>${label}</button>`;
+  return `<div class="manuscript-grid"><label>Publication title<input id="ms-title" maxlength="200" value="${esc(state.title)}" placeholder="Book title"></label><label>Manuscript file<input data-file type="file" accept=".txt,.md,.rtf,.docx,.pdf,text/plain,text/markdown,application/rtf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf"></label></div>${source}<label>Extracted manuscript text<textarea id="ms-body" maxlength="${MAX_TEXT_CHARS}" placeholder="Paste text or load TXT, MD, RTF, DOCX, or a text-based PDF.">${esc(state.manuscript)}</textarea></label><p class="manuscript-note">Manuscript Studio accepts up to ${MAX_TEXT_CHARS.toLocaleString()} extracted characters. The original source and extracted text are preserved in the Kairos project runtime for cross-session and cross-device recovery. Scanned or image-only PDFs are rejected because OCR is not enabled.</p>${busy?`<p class="manuscript-progress">${label}</p>`:""}${state.error?`<p class="manuscript-error">${esc(state.error)}</p>`:""}<button class="primary" data-advance ${busy?"disabled":""}>${label}</button>`;
 }
 
 function resultView(){
   const r=state.result||{};
   const actions=r.workflow?.requiredNextActions||[];
-  return `<div class="manuscript-result"><div class="manuscript-status"><span>Production intake created</span><strong>${esc(r.status||"production_intake")}</strong></div><h3>${esc(r.customerMessage||"Your manuscript has advanced into MMG production intake.")}</h3><p><strong>Project:</strong> ${esc(r.projectID||"—")} · <strong>Intake:</strong> ${esc(r.intakeID||"—")}</p><div class="issue-list">${actions.map((item,index)=>`<article><b>${index+1}. ${esc(item)}</b><p>${index===0?"This is the next required production step.":"Queued in the production setup sequence."}</p></article>`).join("")}</div><p class="manuscript-note">The original manuscript source remains stored in the durable production registry. This workflow does not stop at a file download.</p><div class="manuscript-actions"><button class="primary" data-finish>Return to Production Center</button><button class="secondary" data-edit>Review Intake Source</button></div></div>`;
+  return `<div class="manuscript-result"><div class="manuscript-status"><span>Production intake created</span><strong>${esc(r.status||"production_intake")}</strong></div><h3>${esc(r.customerMessage||"Your manuscript has advanced into MMG production intake.")}</h3><p><strong>Project:</strong> ${esc(r.projectID||"—")} · <strong>Intake:</strong> ${esc(r.intakeID||"—")}</p><p><strong>Accepted source:</strong> ${Number(r.manuscript?.characterCount||state.manuscript.length).toLocaleString()} characters · ${Number(r.manuscript?.wordCount||0).toLocaleString()} words</p><div class="issue-list">${actions.map((item,index)=>`<article><b>${index+1}. ${esc(item)}</b><p>${index===0?"This is the next required production step.":"Queued in the production setup sequence."}</p></article>`).join("")}</div><p class="manuscript-note">The original manuscript source remains stored in the durable production registry. This workflow does not stop at a file download.</p><div class="manuscript-actions"><button class="primary" data-finish>Return to Production Center</button><button class="secondary" data-edit>Review Intake Source</button></div></div>`;
 }
 
 async function loadFile(event){
@@ -73,7 +75,8 @@ async function loadFile(event){
     state.manuscript=normalized;
     const checksum=await fileChecksum(file);
     state.source={name:file.name,size:file.size,format,pages:extracted.pages||null,checksum,stored:false};
-    if(!state.title)state.title=file.name.replace(/\.[^.]+$/,"");
+    if(!state.title)state.title=file.name.replace(/\.[^.]+$/,
+      "");
     state.extracting=false;state.storing=true;render();
     await storeDurableSource(file);
   }catch(error){
@@ -86,7 +89,8 @@ async function storeDurableSource(file){
   const form=new FormData();
   form.append("file",file,file.name);
   form.append("extractedText",state.manuscript);
-  form.append("title",state.title||file.name.replace(/\.[^.]+$/,"")||"Untitled manuscript");
+  form.append("title",state.title||file.name.replace(/\.[^.]+$/,
+    "")||"Untitled manuscript");
   form.append("format",state.source?.format||fileFormat(file));
   form.append("pages",String(state.source?.pages||""));
   form.append("checksum",state.source?.checksum||"");
@@ -108,6 +112,7 @@ async function runIntake(){
   state.title=document.querySelector("#ms-title")?.value.trim()||"Untitled manuscript";
   state.manuscript=document.querySelector("#ms-body")?.value||"";
   if(state.manuscript.trim().length<50){state.error="Provide at least 50 characters of manuscript text.";render();return;}
+  if(state.manuscript.length>MAX_TEXT_CHARS){state.error=`This manuscript contains ${state.manuscript.length.toLocaleString()} characters. Manuscript Studio supports up to ${MAX_TEXT_CHARS.toLocaleString()} characters.`;render();return;}
   state.working=true;state.error="";render();
   try{
     if(!state.source?.stored)await storePastedText();
