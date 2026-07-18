@@ -44,6 +44,14 @@ export {
   KAIROS_CSS_FILE,
   KAIROS_CSS_SOURCE,
 } from "./kairos-landing-source-20260718.js";
+export {
+  PRODUCTS_TEMPLATE_FILE,
+  PRODUCTS_TEMPLATE_SOURCE,
+  PRODUCTS_SECTION_FILE,
+  PRODUCTS_SECTION_SOURCE,
+  PRODUCTS_CSS_FILE,
+  PRODUCTS_CSS_SOURCE,
+} from "./kairos-products-landing-source-20260718.js";
 
 import { SECTION_SOURCE_A } from "./kairos-canonical-homepage-source-section-a-20260718.js";
 import { SECTION_SOURCE_B } from "./kairos-canonical-homepage-source-section-b-20260718.js";
