@@ -33,9 +33,13 @@ import {
   handleCustomerPortalLandingBuild,
   KAIROS_CUSTOMER_PORTAL_LANDING_BUILD,
 } from "./kairos-customer-portal-landing-publisher-20260718.js";
+import {
+  handleKairosLandingBuild,
+  KAIROS_LANDING_BUILD,
+} from "./kairos-landing-publisher-20260718.js";
 
-const BUILD = "kairos-production-entry-immutable-20260718-22";
-const VISUAL_BASELINE = "verified-customer-portal-landing-20260718";
+const BUILD = "kairos-production-entry-immutable-20260718-23";
+const VISUAL_BASELINE = "verified-kairos-public-landing-20260718";
 
 export { KairosProject };
 
@@ -51,6 +55,8 @@ export default {
         delegatedRequest => autonomousRuntime.fetch(delegatedRequest, env, ctx),
       );
       if (experience) return stamp(experience);
+      const kairosLanding = await handleKairosLandingBuild(request, env);
+      if (kairosLanding) return stamp(kairosLanding);
       const customerPortalLanding = await handleCustomerPortalLandingBuild(request, env);
       if (customerPortalLanding) return stamp(customerPortalLanding);
       const knowledgeLanding = await handleKnowledgeLandingBuild(request, env);
@@ -71,6 +77,7 @@ export default {
         websiteBuilderV2: KAIROS_WEBSITE_BUILDER_V2_BUILD,
         productManufacturingBridge: KAIROS_PRODUCT_MANUFACTURING_BRIDGE_BUILD,
         experienceController: KAIROS_EXPERIENCE_CONTROLLER_BUILD,
+        kairosLanding: KAIROS_LANDING_BUILD,
         customerPortalLanding: KAIROS_CUSTOMER_PORTAL_LANDING_BUILD,
         knowledgeLanding: KAIROS_KNOWLEDGE_LANDING_BUILD,
         membershipLanding: KAIROS_MEMBERSHIP_LANDING_BUILD,
@@ -89,6 +96,8 @@ export default {
           authoritativeManuscriptPreservationRequired: true,
           productPublicationDraftFirst: true,
           canonicalHomepageStagingOnly: false,
+          kairosLandingStagingRequiredBeforePublish: true,
+          publicCapabilityClaimsBounded: true,
           customerPortalLandingStagingRequiredBeforePublish: true,
           authenticatedWorkspaceEntryOnly: true,
           knowledgeLandingStagingRequiredBeforePublish: true,
@@ -119,6 +128,7 @@ function stamp(response) {
   headers.set("X-MMG-Website-Builder-V2", KAIROS_WEBSITE_BUILDER_V2_BUILD);
   headers.set("X-Kairos-Product-Manufacturing", KAIROS_PRODUCT_MANUFACTURING_BRIDGE_BUILD);
   headers.set("X-MMG-Experience-Controller", KAIROS_EXPERIENCE_CONTROLLER_BUILD);
+  headers.set("X-MMG-Kairos-Landing", KAIROS_LANDING_BUILD);
   headers.set("X-MMG-Customer-Portal-Landing", KAIROS_CUSTOMER_PORTAL_LANDING_BUILD);
   headers.set("X-MMG-Knowledge-Landing", KAIROS_KNOWLEDGE_LANDING_BUILD);
   headers.set("X-MMG-Membership-Landing", KAIROS_MEMBERSHIP_LANDING_BUILD);
@@ -150,6 +160,7 @@ function json(value, status = 200) {
       "X-MMG-Website-Builder-V2": KAIROS_WEBSITE_BUILDER_V2_BUILD,
       "X-Kairos-Product-Manufacturing": KAIROS_PRODUCT_MANUFACTURING_BRIDGE_BUILD,
       "X-MMG-Experience-Controller": KAIROS_EXPERIENCE_CONTROLLER_BUILD,
+      "X-MMG-Kairos-Landing": KAIROS_LANDING_BUILD,
       "X-MMG-Customer-Portal-Landing": KAIROS_CUSTOMER_PORTAL_LANDING_BUILD,
       "X-MMG-Knowledge-Landing": KAIROS_KNOWLEDGE_LANDING_BUILD,
       "X-MMG-Membership-Landing": KAIROS_MEMBERSHIP_LANDING_BUILD,
