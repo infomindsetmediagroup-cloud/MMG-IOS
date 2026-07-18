@@ -20,6 +20,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: mmg-native-main-navigation-production
+  cancel-in-progress: false
+
 jobs:
   publish:
     name: Publish navigation
