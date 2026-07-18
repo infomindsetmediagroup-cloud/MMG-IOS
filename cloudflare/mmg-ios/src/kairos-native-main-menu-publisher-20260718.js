@@ -1,9 +1,10 @@
-export const KAIROS_NATIVE_MAIN_MENU_BUILD = "kairos-native-main-menu-publisher-20260718-3";
+export const KAIROS_NATIVE_MAIN_MENU_BUILD = "kairos-native-main-menu-publisher-20260718-4";
 export const NATIVE_MAIN_MENU_PATH = "/api/shopify/native-main-menu/publish";
 export const NATIVE_MAIN_MENU_CONFIRMATION = "PUBLISH_MMG_NATIVE_MAIN_MENU_NOW";
 
 const SHOPIFY_TIMEOUT_MS = 25_000;
 const tokenCache = new Map();
+const LEGACY_TITLES = new Set(["Home", "Catalog", "Publishing Services", "Knowledge Library", "Customer Portal", "Company"]);
 
 const CANONICAL_ITEMS = [
   { title: "Shop", type: "HTTP", url: "/collections/all", items: [
@@ -44,31 +45,57 @@ export async function handleNativeMainMenuPublish(request, env) {
 
   const config = readConfig(env);
   const auth = await resolveToken(config, env);
-  const menu = await getMainMenu(config, auth);
-  const before = normalize(menu.items || []);
-  const updated = await updateMenu(config, auth, menu.id, menu.title, CANONICAL_ITEMS);
-  const after = normalize(updated.items || []);
-  const expected = normalize(CANONICAL_ITEMS);
+  const menus = await getMenus(config, auth);
+  const candidates = selectTargetMenus(menus);
+  if (!candidates.length) throw error(404, "live_navigation_menu_not_found", "No Shopify navigation menu matched the live legacy navigation or the default/main menu fallback.");
 
-  if (JSON.stringify(after) !== JSON.stringify(expected)) {
-    throw error(502, "native_main_menu_readback_mismatch", "Shopify did not return the exact canonical native main-menu tree after mutation.");
+  const expected = normalize(CANONICAL_ITEMS);
+  const updatedMenus = [];
+  for (const menu of candidates) {
+    const before = normalize(menu.items || []);
+    const updated = await updateMenu(config, auth, menu.id, menu.title, CANONICAL_ITEMS);
+    const after = normalize(updated.items || []);
+    if (JSON.stringify(after) !== JSON.stringify(expected)) {
+      throw error(502, "native_main_menu_readback_mismatch", `Shopify did not return the exact canonical tree for ${menu.handle || menu.title}.`);
+    }
+    updatedMenus.push({ id: updated.id, handle: updated.handle, title: updated.title, before, after });
   }
 
   return json({
     status: "completed",
     build: KAIROS_NATIVE_MAIN_MENU_BUILD,
-    summary: "Replaced Shopify's native main-menu with the exact MMG taxonomy.",
-    menu: { id: updated.id, handle: updated.handle, title: updated.title, before, after },
-    verification: { exactNativeMenuReadBack: true, knowledgeLibraryRemoved: true, companyScopeRestricted: true, themeOverrideNotUsed: true }
+    summary: "Replaced every Shopify navigation menu matching the live legacy header signature, plus the active main/default fallback.",
+    discovery: menus.map(m => ({ id: m.id, handle: m.handle, title: m.title, isDefault: m.isDefault, topLevelTitles: (m.items || []).map(i => i.title), legacyScore: legacyScore(m) })),
+    updatedMenus,
+    verification: {
+      exactNativeMenuReadBack: true,
+      knowledgeLibraryRemoved: updatedMenus.every(m => !JSON.stringify(m.after).includes("Knowledge Library")),
+      liveLegacySignatureTargeted: candidates.some(m => legacyScore(m) >= 3),
+      updatedMenuCount: updatedMenus.length,
+      themeOverrideNotUsed: true
+    }
   });
 }
 
-async function getMainMenu(config, auth) {
-  const data = await gql(config, auth, `query { menus(first:50) { nodes { id handle title isDefault items { title type url items { title type url items { title type url } } } } } }`, {});
-  const menus = data?.menus?.nodes || [];
-  const menu = menus.find(m => m.handle === "main-menu") || menus.find(m => m.isDefault) || menus.find(m => /main/i.test(m.title));
-  if (!menu?.id) throw error(404, "native_main_menu_not_found", "Shopify native main menu could not be identified.");
-  return menu;
+async function getMenus(config, auth) {
+  const data = await gql(config, auth, `query { menus(first:100) { nodes { id handle title isDefault items { title type url items { title type url items { title type url } } } } } }`, {});
+  return data?.menus?.nodes || [];
+}
+
+function legacyScore(menu) {
+  const titles = new Set((menu?.items || []).map(i => i.title));
+  let score = 0;
+  for (const title of LEGACY_TITLES) if (titles.has(title)) score += 1;
+  return score;
+}
+
+function selectTargetMenus(menus) {
+  const selected = [];
+  const seen = new Set();
+  const add = menu => { if (menu?.id && !seen.has(menu.id)) { seen.add(menu.id); selected.push(menu); } };
+  menus.filter(m => legacyScore(m) >= 3).sort((a, b) => legacyScore(b) - legacyScore(a)).forEach(add);
+  menus.filter(m => m.handle === "main-menu" || m.isDefault || /main/i.test(m.title || "")).forEach(add);
+  return selected;
 }
 
 async function updateMenu(config, auth, id, title, items) {
