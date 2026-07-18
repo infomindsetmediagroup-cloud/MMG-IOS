@@ -1,32 +1,35 @@
-export const KAIROS_NATIVE_NAVIGATION_BUILD = "kairos-native-navigation-publisher-20260718-2";
+export const KAIROS_NATIVE_NAVIGATION_BUILD = "kairos-native-navigation-publisher-20260718-3";
 export const NATIVE_NAVIGATION_PATH = "/api/shopify/navigation/publish";
 export const NATIVE_NAVIGATION_CONFIRMATION = "PUBLISH_MMG_NATIVE_MAIN_NAVIGATION";
 
 const SHOPIFY_TIMEOUT_MS = 25_000;
 const tokenCache = new Map();
 
-const REQUIRED_LINKS = [
+const TOP_LEVEL = [
   { key: "home", title: "Home", url: "/" },
-  { key: "knowledge", title: "Knowledge Library", url: "/pages/knowledge-library" },
   { key: "products", title: "Products", url: "/pages/products" },
   { key: "services", title: "Publishing Services", url: "/pages/publishing-services" },
+  { key: "knowledge", title: "Knowledge Library", url: "/pages/knowledge-library" },
   { key: "membership", title: "Membership", url: "/pages/membership" },
   { key: "kairos", title: "Kairos", url: "/pages/kairos" },
-  { key: "about", title: "About", url: "/pages/about-mindset-media-group" },
-  { key: "contact", title: "Contact", url: "/pages/contact" },
   { key: "portal", title: "Customer Portal", url: "/pages/customer-portal" },
 ];
 
-const DESTINATION_ALIASES = {
-  home: { paths: ["/", "/pages/home"], titles: ["home"] },
-  knowledge: { paths: ["/pages/knowledge-library", "/pages/knowledge", "/blogs/news"], titles: ["knowledge", "knowledge library", "library", "resources"] },
+const COMPANY_LINKS = [
+  { key: "about", title: "About Mindset Media Group™", url: "/pages/about-mindset-media-group" },
+  { key: "contact", title: "Contact", url: "/pages/contact" },
+];
+
+const ALIASES = {
+  home: { paths: ["/", "/pages/home"], titles: ["home", "mmg home"] },
   products: { paths: ["/pages/products", "/collections/all", "/collections/frontpage"], titles: ["products", "shop", "store", "catalog", "all products"] },
   services: { paths: ["/pages/publishing-services", "/pages/services", "/collections/services"], titles: ["services", "publishing services", "professional services"] },
+  knowledge: { paths: ["/pages/knowledge-library", "/pages/knowledge", "/blogs/news"], titles: ["knowledge", "knowledge library", "library", "resources"] },
   membership: { paths: ["/pages/membership", "/pages/memberships"], titles: ["membership", "memberships", "member access"] },
   kairos: { paths: ["/pages/kairos"], titles: ["kairos"] },
-  about: { paths: ["/pages/about-mindset-media-group", "/pages/about", "/pages/about-us"], titles: ["about", "about us", "about mindset media group"] },
-  contact: { paths: ["/pages/contact", "/pages/contact-us"], titles: ["contact", "contact us", "support"] },
   portal: { paths: ["/pages/customer-portal", "/pages/portal"], titles: ["customer portal", "portal", "client portal"] },
+  about: { paths: ["/pages/about-mindset-media-group", "/pages/about", "/pages/about-us"], titles: ["about", "about us", "about mindset media group", "about mindset media group™"] },
+  contact: { paths: ["/pages/contact", "/pages/contact-us"], titles: ["contact", "contact us", "support"] },
 };
 
 const LANDING_PAGES = [
@@ -52,23 +55,27 @@ export async function handleNativeNavigationPublish(request, env) {
   const auth = await resolveAccessToken(config, env);
   const pages = [];
   for (const page of LANDING_PAGES) pages.push(await ensurePage(config, auth, page));
+
   const menu = await getMainMenu(config, auth);
-  const merge = mergeMenuItems(menu.items || [], REQUIRED_LINKS);
-  const updated = await updateMenu(config, auth, menu, merge.items);
+  const consolidated = consolidate(menu.items || []);
+  const updated = await updateMenu(config, auth, menu, consolidated.items);
+  const verification = verify(updated.items || []);
+  if (!verification.valid) throw error(422, "native_navigation_verification_failed", verification.errors.join("; "));
 
   return json({
     status: "completed",
     build: KAIROS_NATIVE_NAVIGATION_BUILD,
-    summary: "Kairos preserved existing Shopify navigation items, merged equivalent MMG destinations, removed duplicates, and retained only genuinely distinct main-menu links.",
+    summary: "Equivalent destinations were consolidated across the full Shopify navigation tree. Existing canonical links were retained, and About and Contact were absorbed into Company.",
     navigation: { id: updated.id, handle: updated.handle, title: updated.title, items: updated.items },
-    cleanup: merge.audit,
+    cleanup: consolidated.audit,
+    verification,
     pages,
     safeguards: {
       nativeShopifyMenuOnly: true,
-      duplicateStandaloneNavigation: false,
       existingEquivalentItemsPreferred: true,
-      equivalentDestinationsMerged: true,
-      childNavigationPreservedAndCombined: true,
+      equivalentDestinationsMergedAcrossTree: true,
+      companyGroupPreserved: true,
+      aboutAndContactNestedUnderCompany: true,
       duplicateDestinationsRemoved: true,
       landingPagesPublished: true,
     },
@@ -83,105 +90,180 @@ async function getMainMenu(config, auth) {
   return menu;
 }
 
-function mergeMenuItems(existing, required) {
+function consolidate(existing) {
   const output = [];
-  const byDestination = new Map();
-  const audit = { preserved: [], merged: [], added: [], removedDuplicates: [] };
+  const topSeen = new Map();
+  const companyCandidates = [];
+  const audit = { preserved: [], merged: [], relocatedToCompany: [], added: [], removedDuplicates: [] };
+  let company = null;
 
   for (const source of existing) {
-    const item = toUpdateInput(source);
-    const destination = classifyDestination(item);
-    const exactKey = `url:${normalize(item.url)}`;
-    const key = destination ? `destination:${destination}` : exactKey;
-    const retained = byDestination.get(key);
+    const item = clone(source);
+    const destination = classify(item);
 
+    if (isCompany(item)) {
+      if (!company) {
+        company = item;
+        company.title = "Company";
+        company.items = dedupe(company.items || [], audit);
+        audit.preserved.push({ title: company.title, destination: "company" });
+      } else {
+        company.items = mergeChildren(company.items || [], item.items || [], audit);
+        audit.merged.push({ retained: "Company", absorbed: item.title, destination: "company" });
+      }
+      continue;
+    }
+
+    if (destination === "about" || destination === "contact") {
+      companyCandidates.push(item);
+      audit.relocatedToCompany.push({ title: item.title, destination, url: item.url || null });
+      continue;
+    }
+
+    const key = destination ? `destination:${destination}` : identity(item);
+    const retained = topSeen.get(key);
     if (!retained) {
-      if (destination) applyCanonicalDestination(item, destination);
+      if (destination) canonicalize(item, destination);
+      item.items = dedupe(item.items || [], audit);
       output.push(item);
-      byDestination.set(key, item);
-      audit.preserved.push({ title: item.title, destination: destination || normalize(item.url) });
-      continue;
+      topSeen.set(key, item);
+      audit.preserved.push({ title: item.title, destination: destination || normalize(item.url) || normalizeTitle(item.title) });
+    } else {
+      retained.items = mergeChildren(retained.items || [], item.items || [], audit);
+      audit.merged.push({ retained: retained.title, absorbed: item.title, destination: destination || normalize(item.url) });
+      audit.removedDuplicates.push({ title: item.title, url: item.url || null });
     }
-
-    retained.items = mergeChildren(retained.items || [], item.items || []);
-    audit.merged.push({ retained: retained.title, absorbed: item.title, destination: destination || normalize(item.url) });
-    audit.removedDuplicates.push({ title: item.title, url: item.url || null });
   }
 
-  for (const link of required) {
-    const key = `destination:${link.key}`;
-    const retained = byDestination.get(key);
-    if (retained) {
-      applyCanonicalDestination(retained, link.key);
-      continue;
+  for (const link of TOP_LEVEL) {
+    const retained = topSeen.get(`destination:${link.key}`);
+    if (retained) canonicalize(retained, link.key);
+    else {
+      const item = { title: link.title, type: "HTTP", url: link.url, items: [] };
+      output.push(item);
+      topSeen.set(`destination:${link.key}`, item);
+      audit.added.push({ title: link.title, destination: link.key, url: link.url });
     }
-    const item = { title: link.title, type: "HTTP", url: link.url, items: [] };
-    output.push(item);
-    byDestination.set(key, item);
-    audit.added.push({ title: link.title, destination: link.key, url: link.url });
   }
 
+  if (!company) {
+    company = { title: "Company", type: "HTTP", url: "/pages/about-mindset-media-group", items: [] };
+    audit.added.push({ title: "Company", destination: "company", url: company.url });
+  }
+
+  for (const candidate of companyCandidates) {
+    const destination = classify(candidate);
+    if (destination) canonicalize(candidate, destination);
+    company.items = mergeChildren(company.items || [], [candidate], audit);
+  }
+
+  for (const link of COMPANY_LINKS) {
+    const retained = findDestination(company.items || [], link.key);
+    if (retained) canonicalize(retained, link.key);
+    else {
+      company.items.push({ title: link.title, type: "HTTP", url: link.url, items: [] });
+      audit.added.push({ title: link.title, destination: link.key, url: link.url, parent: "Company" });
+    }
+  }
+
+  company.items = dedupe(company.items || [], audit);
+  output.push(company);
   return { items: output, audit };
 }
 
-function mergeChildren(existing, incoming) {
-  const output = existing.map(cloneMenuItem);
-  const seen = new Map();
-  output.forEach(item => seen.set(childIdentity(item), item));
-  for (const child of incoming) {
-    const candidate = cloneMenuItem(child);
-    const key = childIdentity(candidate);
-    const retained = seen.get(key);
-    if (!retained) {
-      output.push(candidate);
-      seen.set(key, candidate);
-      continue;
-    }
-    retained.items = mergeChildren(retained.items || [], candidate.items || []);
-  }
-  return output;
-}
-
-function childIdentity(item) {
-  const destination = classifyDestination(item);
-  if (destination) return `destination:${destination}`;
-  const url = normalize(item.url);
-  if (url) return `url:${url}`;
-  return `title:${normalizeTitle(item.title)}`;
-}
-
-function classifyDestination(item) {
-  const path = normalize(item?.url);
+function isCompany(item) {
   const title = normalizeTitle(item?.title);
-  for (const [key, aliases] of Object.entries(DESTINATION_ALIASES)) {
-    if (aliases.paths.some(alias => normalize(alias) === path)) return key;
-    if (aliases.titles.includes(title)) return key;
+  return title === "company" || title === "about & company" || title === "about and company";
+}
+
+function findDestination(items, key) {
+  for (const item of items) {
+    if (classify(item) === key) return item;
+    const nested = findDestination(item.items || [], key);
+    if (nested) return nested;
   }
   return null;
 }
 
-function applyCanonicalDestination(item, key) {
-  const canonical = REQUIRED_LINKS.find(link => link.key === key);
-  if (!canonical) return item;
+function dedupe(items, audit) { return mergeChildren([], items, audit); }
+
+function mergeChildren(existing, incoming, audit) {
+  const output = existing.map(clone);
+  const seen = new Map(output.map(item => [identity(item), item]));
+  for (const source of incoming) {
+    const item = clone(source);
+    const destination = classify(item);
+    if (destination) canonicalize(item, destination);
+    item.items = dedupe(item.items || [], audit);
+    const key = identity(item);
+    const retained = seen.get(key);
+    if (!retained) {
+      output.push(item);
+      seen.set(key, item);
+    } else {
+      retained.items = mergeChildren(retained.items || [], item.items || [], audit);
+      audit?.merged?.push({ retained: retained.title, absorbed: item.title, destination: destination || normalize(item.url) });
+      audit?.removedDuplicates?.push({ title: item.title, url: item.url || null });
+    }
+  }
+  return output;
+}
+
+function identity(item) {
+  const destination = classify(item);
+  if (destination) return `destination:${destination}`;
+  const url = normalize(item?.url);
+  return url ? `url:${url}` : `title:${normalizeTitle(item?.title)}`;
+}
+
+function classify(item) {
+  const path = normalize(item?.url);
+  const title = normalizeTitle(item?.title);
+  for (const [key, aliases] of Object.entries(ALIASES)) {
+    if (aliases.paths.some(alias => normalize(alias) === path) || aliases.titles.includes(title)) return key;
+  }
+  return null;
+}
+
+function canonicalLink(key) { return [...TOP_LEVEL, ...COMPANY_LINKS].find(link => link.key === key); }
+function canonicalize(item, key) {
+  const link = canonicalLink(key);
+  if (!link) return item;
   item.type = "HTTP";
-  item.url = canonical.url;
+  item.url = link.url;
   delete item.resourceId;
   return item;
 }
 
-function cloneMenuItem(item) {
-  return {
-    ...(item.id ? { id: item.id } : {}),
-    title: item.title,
-    type: item.type || "HTTP",
-    ...(item.url ? { url: item.url } : {}),
-    ...(item.resourceId ? { resourceId: item.resourceId } : {}),
-    items: Array.isArray(item.items) ? item.items.map(cloneMenuItem) : [],
-  };
+function verify(items) {
+  const errors = [];
+  const topCounts = new Map();
+  const allCounts = new Map();
+  let company = null;
+  for (const item of items) {
+    const destination = classify(item);
+    if (destination) topCounts.set(destination, (topCounts.get(destination) || 0) + 1);
+    if (isCompany(item)) company = item;
+    count(item, allCounts);
+  }
+  for (const link of TOP_LEVEL) if ((topCounts.get(link.key) || 0) !== 1) errors.push(`Expected exactly one top-level ${link.key} destination.`);
+  if (!company) errors.push("Company menu is missing.");
+  if ((topCounts.get("about") || 0) !== 0) errors.push("About must not remain top-level.");
+  if ((topCounts.get("contact") || 0) !== 0) errors.push("Contact must not remain top-level.");
+  if ((allCounts.get("about") || 0) !== 1) errors.push("Expected exactly one About destination.");
+  if ((allCounts.get("contact") || 0) !== 1) errors.push("Expected exactly one Contact destination.");
+  for (const [key, value] of allCounts) if (value > 1) errors.push(`Duplicate ${key} destinations remain (${value}).`);
+  return { valid: errors.length === 0, errors, topLevel: items.map(item => ({ title: item.title, url: item.url || null, children: (item.items || []).length })), destinationCounts: Object.fromEntries(allCounts) };
 }
 
-function toUpdateInput(item) {
-  return cloneMenuItem(item);
+function count(item, counts) {
+  const destination = classify(item);
+  if (destination) counts.set(destination, (counts.get(destination) || 0) + 1);
+  for (const child of item.items || []) count(child, counts);
+}
+
+function clone(item) {
+  return { ...(item.id ? { id: item.id } : {}), title: item.title, type: item.type || "HTTP", ...(item.url ? { url: item.url } : {}), ...(item.resourceId ? { resourceId: item.resourceId } : {}), items: Array.isArray(item.items) ? item.items.map(clone) : [] };
 }
 
 async function updateMenu(config, auth, menu, items) {
@@ -210,17 +292,10 @@ async function ensurePage(config, auth, definition) {
 
 function normalize(value) {
   if (!value) return "";
-  try {
-    const parsed = new URL(value, "https://store.invalid");
-    return (parsed.pathname.replace(/\/$/, "") || "/").toLowerCase();
-  } catch {
-    return String(value || "").replace(/\/$/, "").toLowerCase();
-  }
+  try { const parsed = new URL(value, "https://store.invalid"); return (parsed.pathname.replace(/\/$/, "") || "/").toLowerCase(); }
+  catch { return String(value || "").replace(/\/$/, "").toLowerCase(); }
 }
-
-function normalizeTitle(value) {
-  return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
-}
+function normalizeTitle(value) { return String(value || "").trim().toLowerCase().replace(/\s+/g, " "); }
 
 function readShopifyConfig(env) {
   const storeDomain = String(env.SHOPIFY_STORE_DOMAIN || "").trim().toLowerCase();
