@@ -17,24 +17,33 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - name: Confirm workflow startup
+        run: echo "Kairos shell-only deployment started."
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
+      - name: Materialize repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch main \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "${RUNNER_TEMP}/mmg-release"
+          cd "${RUNNER_TEMP}/mmg-release"
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
 
       - name: Validate Worker source
         run: |
+          set -euo pipefail
+          cd "${RUNNER_TEMP}/mmg-release"
           test -f cloudflare/mmg-ios/package.json
           test -f cloudflare/mmg-ios/wrangler.toml
           test -f cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
 
-      - name: Install Worker dependencies
-        working-directory: cloudflare/mmg-ios
-        run: npm install
-
       - name: Deploy Kairos Worker
-        working-directory: cloudflare/mmg-ios
-        run: npx wrangler deploy
+        run: |
+          set -euo pipefail
+          cd "${RUNNER_TEMP}/mmg-release/cloudflare/mmg-ios"
+          npm install
+          npx wrangler deploy \
+            --var "DEPLOYMENT_SHA:${GITHUB_SHA}" \
+            --var "DEPLOYED_AT:$(date -u +%Y-%m-%dT%H:%M:%SZ)"
