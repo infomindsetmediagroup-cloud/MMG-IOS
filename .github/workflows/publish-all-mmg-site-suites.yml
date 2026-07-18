@@ -1,0 +1,166 @@
+name: Publish All MMG Site Suites
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/publish-all-mmg-site-suites.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-all-mmg-site-suites
+  cancel-in-progress: false
+
+jobs:
+  deploy-stage-publish-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: cloudflare/mmg-ios
+
+    steps:
+      - name: Checkout exact release commit
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Wrangler
+        run: npm install --no-save wrangler@latest
+
+      - name: Deploy chained Kairos Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler deploy | tee worker-deploy.txt
+
+      - name: Resolve deployed Kairos runtime
+        id: runtime
+        env:
+          KAIROS_RUNTIME_URL: ${{ secrets.KAIROS_RUNTIME_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$KAIROS_RUNTIME_URL"
+          echo "url=${KAIROS_RUNTIME_URL%/}" >> "$GITHUB_OUTPUT"
+
+      - name: Confirm chained runtime is active
+        env:
+          RUNTIME: ${{ steps.runtime.outputs.url }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --retry 5 --retry-delay 3 -sS -D runtime-headers.txt -o runtime-body.txt "$RUNTIME/"
+          grep -qi '^x-mmg-resource-suite-entry:' runtime-headers.txt
+          grep -qi '^x-mmg-company-suite-entry:' runtime-headers.txt
+          grep -qi '^x-mmg-native-navigation:' runtime-headers.txt
+
+      - name: Build Company suite in Kairos Staging
+        env:
+          RUNTIME: ${{ steps.runtime.outputs.url }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --retry 4 --retry-delay 3 \
+            -X POST "$RUNTIME/api/shopify/company-site-suite/build" \
+            -H 'Content-Type: application/json' \
+            --data '{"mode":"build","confirmation":"BUILD_MMG_COMPANY_SITE_SUITE_STAGING"}' \
+            | tee company-suite-staging.json
+          grep -q '"status":"completed"' company-suite-staging.json
+          grep -q '"exactThemeFileReadBack":true' company-suite-staging.json
+
+      - name: Publish Company suite to Shopify MAIN
+        env:
+          RUNTIME: ${{ steps.runtime.outputs.url }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --retry 4 --retry-delay 3 \
+            -X POST "$RUNTIME/api/shopify/company-site-suite/build" \
+            -H 'Content-Type: application/json' \
+            --data '{"mode":"publish","confirmation":"PUBLISH_MMG_COMPANY_SITE_SUITE_LIVE"}' \
+            | tee company-suite-publish.json
+          grep -q '"status":"completed"' company-suite-publish.json
+          grep -q '"exactThemeFileReadBack":true' company-suite-publish.json
+
+      - name: Build Resource suite in Kairos Staging
+        env:
+          RUNTIME: ${{ steps.runtime.outputs.url }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --retry 4 --retry-delay 3 \
+            -X POST "$RUNTIME/api/shopify/resource-discovery-suite/build" \
+            -H 'Content-Type: application/json' \
+            --data '{"mode":"build","confirmation":"BUILD_MMG_RESOURCE_DISCOVERY_SUITE_STAGING"}' \
+            | tee resource-suite-staging.json
+          grep -q '"status":"completed"' resource-suite-staging.json
+          grep -q '"exactThemeFileReadBack":true' resource-suite-staging.json
+
+      - name: Publish Resource suite to Shopify MAIN
+        env:
+          RUNTIME: ${{ steps.runtime.outputs.url }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --retry 4 --retry-delay 3 \
+            -X POST "$RUNTIME/api/shopify/resource-discovery-suite/build" \
+            -H 'Content-Type: application/json' \
+            --data '{"mode":"publish","confirmation":"PUBLISH_MMG_RESOURCE_DISCOVERY_SUITE_LIVE"}' \
+            | tee resource-suite-publish.json
+          grep -q '"status":"completed"' resource-suite-publish.json
+          grep -q '"exactThemeFileReadBack":true' resource-suite-publish.json
+
+      - name: Verify all live destinations resolve
+        run: |
+          set -euo pipefail
+          urls=(
+            'https://themindsetmediagroup.com/'
+            'https://themindsetmediagroup.com/pages/about-mindset-media-group'
+            'https://themindsetmediagroup.com/pages/about-mindset-media-group?view=story'
+            'https://themindsetmediagroup.com/pages/about-mindset-media-group?view=mission'
+            'https://themindsetmediagroup.com/pages/about-mindset-media-group?view=vision'
+            'https://themindsetmediagroup.com/pages/about-mindset-media-group?view=values'
+            'https://themindsetmediagroup.com/pages/about-mindset-media-group?view=founder'
+            'https://themindsetmediagroup.com/pages/about-mindset-media-group?view=promise'
+            'https://themindsetmediagroup.com/pages/about-mindset-media-group?view=partnerships'
+            'https://themindsetmediagroup.com/pages/about-mindset-media-group?view=accessibility'
+            'https://themindsetmediagroup.com/pages/contact'
+            'https://themindsetmediagroup.com/pages/our-standards'
+            'https://themindsetmediagroup.com/pages/publishing-philosophy'
+            'https://themindsetmediagroup.com/pages/knowledge-library'
+            'https://themindsetmediagroup.com/pages/knowledge-library?view=toolkit'
+            'https://themindsetmediagroup.com/pages/knowledge-library?view=capcut'
+            'https://themindsetmediagroup.com/pages/knowledge-library?view=guide'
+            'https://themindsetmediagroup.com/collections/all'
+            'https://themindsetmediagroup.com/pages/publishing-services'
+            'https://themindsetmediagroup.com/pages/customer-portal'
+            'https://themindsetmediagroup.com/policies/privacy-policy'
+            'https://themindsetmediagroup.com/policies/terms-of-service'
+            'https://themindsetmediagroup.com/policies/refund-policy'
+            'https://themindsetmediagroup.com/policies/shipping-policy'
+          )
+          : > live-verification.txt
+          for url in "${urls[@]}"; do
+            code="$(curl -L -sS --retry 3 --retry-delay 2 -o /tmp/mmg-live-page.html -w '%{http_code}' "$url")"
+            printf '%s %s\n' "$code" "$url" | tee -a live-verification.txt
+            test "$code" = "200"
+          done
+
+      - name: Upload complete release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmg-complete-site-suite-release-evidence
+          if-no-files-found: warn
+          path: |
+            cloudflare/mmg-ios/worker-deploy.txt
+            cloudflare/mmg-ios/runtime-headers.txt
+            cloudflare/mmg-ios/runtime-body.txt
+            cloudflare/mmg-ios/company-suite-staging.json
+            cloudflare/mmg-ios/company-suite-publish.json
+            cloudflare/mmg-ios/resource-suite-staging.json
+            cloudflare/mmg-ios/resource-suite-publish.json
+            cloudflare/mmg-ios/live-verification.txt
