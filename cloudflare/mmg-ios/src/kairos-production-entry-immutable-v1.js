@@ -1,57 +1,22 @@
 import autonomousRuntime, { KairosProject } from "./kairos-production-entry-autonomous-v1.js";
-import {
-  handleImmutableApprovedFileExecution,
-  KAIROS_IMMUTABLE_APPROVED_FILE_EXECUTION_BUILD,
-} from "./kairos-immutable-approved-file-execution-v1.js";
+import { handleImmutableApprovedFileExecution, KAIROS_IMMUTABLE_APPROVED_FILE_EXECUTION_BUILD } from "./kairos-immutable-approved-file-execution-v1.js";
 import { KAIROS_CANONICAL_HOMEPAGE_BUILD } from "./kairos-canonical-homepage-builder-v1.js";
-import {
-  handleCanonicalHomepageBuildWithCompatibility,
-  KAIROS_CANONICAL_HOMEPAGE_COMPATIBILITY_BUILD,
-} from "./kairos-canonical-homepage-compatibility-v1.js";
-import {
-  handleKairosExperienceRequest,
-  KAIROS_EXPERIENCE_CONTROLLER_BUILD,
-} from "./kairos-experience-controller-v1.js";
-import {
-  handleWebsiteBuilderV2Request,
-  KAIROS_WEBSITE_BUILDER_V2_BUILD,
-} from "./kairos-website-builder-v2.js";
+import { handleCanonicalHomepageBuildWithCompatibility, KAIROS_CANONICAL_HOMEPAGE_COMPATIBILITY_BUILD } from "./kairos-canonical-homepage-compatibility-v1.js";
+import { handleKairosExperienceRequest, KAIROS_EXPERIENCE_CONTROLLER_BUILD } from "./kairos-experience-controller-v1.js";
+import { handleWebsiteBuilderV2Request, KAIROS_WEBSITE_BUILDER_V2_BUILD } from "./kairos-website-builder-v2.js";
 import { KAIROS_PRODUCT_MANUFACTURING_BRIDGE_BUILD } from "./kairos-product-manufacturing-bridge-v1.js";
-import {
-  handleServicesLandingBuild,
-  KAIROS_SERVICES_LANDING_BUILD,
-} from "./kairos-services-landing-publisher-20260718.js";
-import {
-  handleMembershipLandingBuild,
-  KAIROS_MEMBERSHIP_LANDING_BUILD,
-} from "./kairos-membership-landing-publisher-20260718.js";
-import {
-  handleKnowledgeLandingBuild,
-  KAIROS_KNOWLEDGE_LANDING_BUILD,
-} from "./kairos-knowledge-landing-publisher-20260718.js";
-import {
-  handleCustomerPortalLandingBuild,
-  KAIROS_CUSTOMER_PORTAL_LANDING_BUILD,
-} from "./kairos-customer-portal-landing-publisher-20260718.js";
-import {
-  handleKairosLandingBuild,
-  KAIROS_LANDING_BUILD,
-} from "./kairos-landing-publisher-20260718.js";
-import {
-  handleProductsLandingBuild,
-  KAIROS_PRODUCTS_LANDING_BUILD,
-} from "./kairos-products-landing-publisher-20260718.js";
-import {
-  handleDigitalProductBuild,
-  KAIROS_DIGITAL_PRODUCT_BUILD,
-} from "./kairos-digital-product-publisher-20260718.js";
-import {
-  handleServiceProductBuild,
-  KAIROS_SERVICE_PRODUCT_BUILD,
-} from "./kairos-service-product-publisher-20260718.js";
+import { handleServicesLandingBuild, KAIROS_SERVICES_LANDING_BUILD } from "./kairos-services-landing-publisher-20260718.js";
+import { handleMembershipLandingBuild, KAIROS_MEMBERSHIP_LANDING_BUILD } from "./kairos-membership-landing-publisher-20260718.js";
+import { handleKnowledgeLandingBuild, KAIROS_KNOWLEDGE_LANDING_BUILD } from "./kairos-knowledge-landing-publisher-20260718.js";
+import { handleCustomerPortalLandingBuild, KAIROS_CUSTOMER_PORTAL_LANDING_BUILD } from "./kairos-customer-portal-landing-publisher-20260718.js";
+import { handleKairosLandingBuild, KAIROS_LANDING_BUILD } from "./kairos-landing-publisher-20260718.js";
+import { handleProductsLandingBuild, KAIROS_PRODUCTS_LANDING_BUILD } from "./kairos-products-landing-publisher-20260718.js";
+import { handleDigitalProductBuild, KAIROS_DIGITAL_PRODUCT_BUILD } from "./kairos-digital-product-publisher-20260718.js";
+import { handleServiceProductBuild, KAIROS_SERVICE_PRODUCT_BUILD } from "./kairos-service-product-publisher-20260718.js";
+import { handleRelatedProductsBuild, KAIROS_RELATED_PRODUCTS_BUILD } from "./kairos-related-products-publisher-20260718.js";
 
-const BUILD = "kairos-production-entry-immutable-20260718-26";
-const VISUAL_BASELINE = "verified-multi-variant-service-product-20260718";
+const BUILD = "kairos-production-entry-immutable-20260718-27";
+const VISUAL_BASELINE = "verified-intelligent-related-products-20260718";
 
 export { KairosProject };
 
@@ -60,13 +25,10 @@ export default {
     try {
       const websiteBuilderV2 = await handleWebsiteBuilderV2Request(request, env);
       if (websiteBuilderV2) return stamp(websiteBuilderV2);
-      const experience = await handleKairosExperienceRequest(
-        request,
-        env,
-        ctx,
-        delegatedRequest => autonomousRuntime.fetch(delegatedRequest, env, ctx),
-      );
+      const experience = await handleKairosExperienceRequest(request, env, ctx, delegatedRequest => autonomousRuntime.fetch(delegatedRequest, env, ctx));
       if (experience) return stamp(experience);
+      const relatedProducts = await handleRelatedProductsBuild(request, env);
+      if (relatedProducts) return stamp(relatedProducts);
       const serviceProduct = await handleServiceProductBuild(request, env);
       if (serviceProduct) return stamp(serviceProduct);
       const digitalProduct = await handleDigitalProductBuild(request, env);
@@ -95,6 +57,7 @@ export default {
         websiteBuilderV2: KAIROS_WEBSITE_BUILDER_V2_BUILD,
         productManufacturingBridge: KAIROS_PRODUCT_MANUFACTURING_BRIDGE_BUILD,
         experienceController: KAIROS_EXPERIENCE_CONTROLLER_BUILD,
+        relatedProducts: KAIROS_RELATED_PRODUCTS_BUILD,
         serviceProduct: KAIROS_SERVICE_PRODUCT_BUILD,
         digitalProduct: KAIROS_DIGITAL_PRODUCT_BUILD,
         productsLanding: KAIROS_PRODUCTS_LANDING_BUILD,
@@ -106,10 +69,7 @@ export default {
         canonicalHomepage: KAIROS_CANONICAL_HOMEPAGE_BUILD,
         canonicalHomepageCompatibility: KAIROS_CANONICAL_HOMEPAGE_COMPATIBILITY_BUILD,
         immutableExecution: KAIROS_IMMUTABLE_APPROVED_FILE_EXECUTION_BUILD,
-        error: {
-          code: error?.code || "immutable_entry_failed",
-          message: error instanceof Error ? error.message : "Kairos could not complete this request.",
-        },
+        error: { code: error?.code || "immutable_entry_failed", message: error instanceof Error ? error.message : "Kairos could not complete this request." },
         safeguards: {
           liveThemeChanged: false,
           websiteBuilderStagingOnly: true,
@@ -117,6 +77,11 @@ export default {
           authoritativeManuscriptPreservationRequired: true,
           productPublicationDraftFirst: true,
           canonicalHomepageStagingOnly: false,
+          relatedProductsStagingRequiredBeforePublish: true,
+          currentProductRecommendationExcluded: true,
+          duplicateRecommendationsExcluded: true,
+          metafieldRecommendationOverridesSupported: true,
+          collectionAwareFallbackEnabled: true,
           serviceProductStagingRequiredBeforePublish: true,
           multiVariantServiceArchitectureVerified: true,
           shopifyPricingAuthoritative: true,
@@ -143,71 +108,43 @@ export default {
       }, Number(error?.status || error?.statusCode || 500));
     }
   },
-
   async scheduled(controller, env, ctx) {
-    if (typeof autonomousRuntime.scheduled === "function") {
-      return autonomousRuntime.scheduled(controller, env, ctx);
-    }
+    if (typeof autonomousRuntime.scheduled === "function") return autonomousRuntime.scheduled(controller, env, ctx);
   },
 };
 
 function stamp(response) {
   const headers = new Headers(response.headers);
-  headers.set("X-MMG-Production-Entry", BUILD);
-  headers.set("X-MMG-Website-Builder-V2", KAIROS_WEBSITE_BUILDER_V2_BUILD);
-  headers.set("X-Kairos-Product-Manufacturing", KAIROS_PRODUCT_MANUFACTURING_BRIDGE_BUILD);
-  headers.set("X-MMG-Experience-Controller", KAIROS_EXPERIENCE_CONTROLLER_BUILD);
-  headers.set("X-MMG-Service-Product", KAIROS_SERVICE_PRODUCT_BUILD);
-  headers.set("X-MMG-Digital-Product", KAIROS_DIGITAL_PRODUCT_BUILD);
-  headers.set("X-MMG-Products-Landing", KAIROS_PRODUCTS_LANDING_BUILD);
-  headers.set("X-MMG-Kairos-Landing", KAIROS_LANDING_BUILD);
-  headers.set("X-MMG-Customer-Portal-Landing", KAIROS_CUSTOMER_PORTAL_LANDING_BUILD);
-  headers.set("X-MMG-Knowledge-Landing", KAIROS_KNOWLEDGE_LANDING_BUILD);
-  headers.set("X-MMG-Membership-Landing", KAIROS_MEMBERSHIP_LANDING_BUILD);
-  headers.set("X-MMG-Services-Landing", KAIROS_SERVICES_LANDING_BUILD);
-  headers.set("X-Kairos-Canonical-Homepage", KAIROS_CANONICAL_HOMEPAGE_BUILD);
-  headers.set("X-Kairos-Canonical-Homepage-Compatibility", KAIROS_CANONICAL_HOMEPAGE_COMPATIBILITY_BUILD);
-  headers.set("X-Kairos-Immutable-Approved-File-Execution", KAIROS_IMMUTABLE_APPROVED_FILE_EXECUTION_BUILD);
-  headers.set("X-Kairos-Approval-Time-Reconstruction", "false");
-  headers.set("X-Kairos-Workers-AI-Used", "false");
-  headers.set("X-Kairos-Neurons-Consumed", "0");
-  headers.set("X-Kairos-Visual-Baseline", VISUAL_BASELINE);
-  if (headers.get("Content-Type")?.includes("text/html")) {
-    headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
-  }
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
+  Object.entries(runtimeHeaders()).forEach(([key, value]) => headers.set(key, value));
+  if (headers.get("Content-Type")?.includes("text/html")) headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
+function runtimeHeaders() {
+  return {
+    "X-MMG-Production-Entry": BUILD,
+    "X-MMG-Website-Builder-V2": KAIROS_WEBSITE_BUILDER_V2_BUILD,
+    "X-Kairos-Product-Manufacturing": KAIROS_PRODUCT_MANUFACTURING_BRIDGE_BUILD,
+    "X-MMG-Experience-Controller": KAIROS_EXPERIENCE_CONTROLLER_BUILD,
+    "X-MMG-Related-Products": KAIROS_RELATED_PRODUCTS_BUILD,
+    "X-MMG-Service-Product": KAIROS_SERVICE_PRODUCT_BUILD,
+    "X-MMG-Digital-Product": KAIROS_DIGITAL_PRODUCT_BUILD,
+    "X-MMG-Products-Landing": KAIROS_PRODUCTS_LANDING_BUILD,
+    "X-MMG-Kairos-Landing": KAIROS_LANDING_BUILD,
+    "X-MMG-Customer-Portal-Landing": KAIROS_CUSTOMER_PORTAL_LANDING_BUILD,
+    "X-MMG-Knowledge-Landing": KAIROS_KNOWLEDGE_LANDING_BUILD,
+    "X-MMG-Membership-Landing": KAIROS_MEMBERSHIP_LANDING_BUILD,
+    "X-MMG-Services-Landing": KAIROS_SERVICES_LANDING_BUILD,
+    "X-Kairos-Canonical-Homepage": KAIROS_CANONICAL_HOMEPAGE_BUILD,
+    "X-Kairos-Canonical-Homepage-Compatibility": KAIROS_CANONICAL_HOMEPAGE_COMPATIBILITY_BUILD,
+    "X-Kairos-Immutable-Approved-File-Execution": KAIROS_IMMUTABLE_APPROVED_FILE_EXECUTION_BUILD,
+    "X-Kairos-Approval-Time-Reconstruction": "false",
+    "X-Kairos-Workers-AI-Used": "false",
+    "X-Kairos-Neurons-Consumed": "0",
+    "X-Kairos-Visual-Baseline": VISUAL_BASELINE,
+  };
 }
 
 function json(value, status = 200) {
-  return new Response(JSON.stringify(value), {
-    status,
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "no-store",
-      "X-MMG-Production-Entry": BUILD,
-      "X-MMG-Website-Builder-V2": KAIROS_WEBSITE_BUILDER_V2_BUILD,
-      "X-Kairos-Product-Manufacturing": KAIROS_PRODUCT_MANUFACTURING_BRIDGE_BUILD,
-      "X-MMG-Experience-Controller": KAIROS_EXPERIENCE_CONTROLLER_BUILD,
-      "X-MMG-Service-Product": KAIROS_SERVICE_PRODUCT_BUILD,
-      "X-MMG-Digital-Product": KAIROS_DIGITAL_PRODUCT_BUILD,
-      "X-MMG-Products-Landing": KAIROS_PRODUCTS_LANDING_BUILD,
-      "X-MMG-Kairos-Landing": KAIROS_LANDING_BUILD,
-      "X-MMG-Customer-Portal-Landing": KAIROS_CUSTOMER_PORTAL_LANDING_BUILD,
-      "X-MMG-Knowledge-Landing": KAIROS_KNOWLEDGE_LANDING_BUILD,
-      "X-MMG-Membership-Landing": KAIROS_MEMBERSHIP_LANDING_BUILD,
-      "X-MMG-Services-Landing": KAIROS_SERVICES_LANDING_BUILD,
-      "X-Kairos-Canonical-Homepage": KAIROS_CANONICAL_HOMEPAGE_BUILD,
-      "X-Kairos-Canonical-Homepage-Compatibility": KAIROS_CANONICAL_HOMEPAGE_COMPATIBILITY_BUILD,
-      "X-Kairos-Immutable-Approved-File-Execution": KAIROS_IMMUTABLE_APPROVED_FILE_EXECUTION_BUILD,
-      "X-Kairos-Approval-Time-Reconstruction": "false",
-      "X-Kairos-Workers-AI-Used": "false",
-      "X-Kairos-Neurons-Consumed": "0",
-      "X-Kairos-Visual-Baseline": VISUAL_BASELINE,
-      "X-Content-Type-Options": "nosniff",
-    },
-  });
+  return new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...runtimeHeaders(), "X-Content-Type-Options": "nosniff" } });
 }
