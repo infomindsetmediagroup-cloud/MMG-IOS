@@ -3,21 +3,73 @@ export const JS_SOURCE = String.raw`(() => {
   if (!root || root.dataset.enhanced === 'true') return;
   root.dataset.enhanced = 'true';
 
-  const nav = document.querySelector('.mmg-ecosystem-nav');
-  const navToggle = nav?.querySelector('.mmg-ecosystem-nav__toggle');
-  const navLinks = nav?.querySelector('.mmg-ecosystem-nav__links');
-  if (navToggle && navLinks) {
-    navToggle.addEventListener('click', () => {
-      const open = navToggle.getAttribute('aria-expanded') === 'true';
-      navToggle.setAttribute('aria-expanded', String(!open));
-      navLinks.classList.toggle('is-open', !open);
-    });
-    navLinks.addEventListener('click', (event) => {
-      if (!event.target.closest('a')) return;
-      navToggle.setAttribute('aria-expanded', 'false');
-      navLinks.classList.remove('is-open');
+  const navigation = [
+    ['Home', '/'],
+    ['Knowledge Library', '/pages/knowledge-library'],
+    ['Shop', '/collections/all'],
+    ['Publishing Services', '/pages/publishing-services'],
+    ['Membership', '/pages/membership'],
+    ['Kairos', '/pages/kairos'],
+    ['About', '/pages/about-mindset-media-group'],
+    ['Contact', '/pages/contact'],
+    ['Customer Portal', '/pages/customer-portal']
+  ];
+
+  const normalizedPath = (value) => {
+    try {
+      const path = new URL(value, window.location.origin).pathname.replace(/\/$/, '');
+      return path || '/';
+    } catch {
+      return value;
+    }
+  };
+
+  const hasLink = (list, href) => [...list.querySelectorAll('a[href]')]
+    .some((link) => normalizedPath(link.href) === normalizedPath(href));
+
+  function addDrawerLinks(list) {
+    navigation.forEach(([label, href]) => {
+      if (hasLink(list, href)) return;
+      const item = document.createElement('li');
+      const link = document.createElement('a');
+      link.href = href;
+      link.textContent = label;
+      link.className = 'menu-drawer__menu-item list-menu__item link link--text focus-inset';
+      if (normalizedPath(location.pathname) === normalizedPath(href)) link.setAttribute('aria-current', 'page');
+      item.appendChild(link);
+      list.appendChild(item);
     });
   }
+
+  function addDesktopLinks(list) {
+    navigation.forEach(([label, href]) => {
+      if (hasLink(list, href)) return;
+      const item = document.createElement('li');
+      const link = document.createElement('a');
+      const text = document.createElement('span');
+      link.href = href;
+      link.className = 'header__menu-item list-menu__item link link--text focus-inset';
+      text.textContent = label;
+      link.appendChild(text);
+      if (normalizedPath(location.pathname) === normalizedPath(href)) link.setAttribute('aria-current', 'page');
+      item.appendChild(link);
+      list.appendChild(item);
+    });
+  }
+
+  function enhanceNativeHeader(attempt = 0) {
+    const drawerList = document.querySelector('#menu-drawer .menu-drawer__menu, .menu-drawer__navigation .menu-drawer__menu, header-drawer ul.menu-drawer__menu');
+    const desktopList = document.querySelector('header .header__inline-menu ul.list-menu--inline');
+
+    if (drawerList) addDrawerLinks(drawerList);
+    if (desktopList) addDesktopLinks(desktopList);
+
+    if (!drawerList && !desktopList && attempt < 5) {
+      window.setTimeout(() => enhanceNativeHeader(attempt + 1), 300);
+    }
+  }
+
+  enhanceNativeHeader();
 
   const themeHeading = document.querySelector('header h1.header__heading, header .header__heading h1');
   if (themeHeading && !root.contains(themeHeading)) {
