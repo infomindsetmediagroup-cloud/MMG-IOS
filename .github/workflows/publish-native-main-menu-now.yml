@@ -1,5 +1,5 @@
 name: Deploy MMG Worker and Repair Shopify Navigation
-run-name: MMG theme navigation reconciliation ${{ github.sha }}
+run-name: MMG storefront delivery reconciliation ${{ github.sha }}
 
 on:
   workflow_dispatch:
@@ -25,6 +25,9 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       GH_TOKEN: ${{ github.token }}
       WORKER_BASE_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+      STOREFRONT_HOST: themindsetmediagroup.com
+      SHOPIFY_HOST: 07kd8e-qw.myshopify.com
+      THEME_MARKER: kairos-theme-menu-hotfix-20260718-2
     steps:
       - name: Resolve deployment commit
         id: release
@@ -51,7 +54,7 @@ jobs:
           git fetch --depth=1 origin "${{ steps.release.outputs.sha }}"
           git checkout --detach FETCH_HEAD
           test "$(git rev-parse HEAD)" = "${{ steps.release.outputs.sha }}"
-          grep -q 'main = "src/kairos-production-entry-theme-menu-hotfix-v1.js"' cloudflare/mmg-ios/wrangler.toml
+          test -f cloudflare/mmg-ios/wrangler.toml
           test -f cloudflare/mmg-ios/src/kairos-theme-menu-hotfix-publisher-20260718.js
 
       - name: Deploy exact commit to Cloudflare Worker
@@ -74,7 +77,7 @@ jobs:
             headers="$RUNNER_TEMP/theme-publisher-headers.txt"
             status="$(curl --silent --show-error --head --max-time 30 -o /dev/null -D "$headers" -w '%{http_code}' "${WORKER_BASE_URL}/api/shopify/theme-menu-hotfix/publish?sha=${{ steps.release.outputs.sha }}&attempt=${attempt}" || true)"
             echo "Theme publisher probe ${attempt}/60 HTTP ${status}"
-            if grep -qi 'x-mmg-theme-menu-hotfix: kairos-theme-menu-hotfix-20260718-2' "$headers"; then
+            if grep -qi "x-mmg-theme-menu-hotfix: ${THEME_MARKER}" "$headers"; then
               exit 0
             fi
             sleep 5
@@ -103,28 +106,80 @@ jobs:
           grep -q '"shopDomainIdentityVerified":true' theme-menu-result.json
           grep -q '"knowledgeLibraryRemoved":true' theme-menu-result.json
 
-      - name: Verify public storefront navigation
+      - name: Purge Cloudflare storefront cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          zones_json="$RUNNER_TEMP/cloudflare-zones.json"
+          curl --silent --show-error --fail \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            "https://api.cloudflare.com/client/v4/zones?name=${STOREFRONT_HOST}&account.id=${CLOUDFLARE_ACCOUNT_ID}" \
+            -o "$zones_json"
+          cat "$zones_json"
+          zone_id="$(jq -r '.result[0].id // empty' "$zones_json")"
+          test -n "$zone_id"
+          purge_json="$RUNNER_TEMP/cloudflare-purge.json"
+          curl --silent --show-error --fail \
+            -X POST \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            --data '{"purge_everything":true}' \
+            "https://api.cloudflare.com/client/v4/zones/${zone_id}/purge_cache" \
+            -o "$purge_json"
+          cat "$purge_json"
+          jq -e '.success == true' "$purge_json" >/dev/null
+
+      - name: Compare Shopify origin and custom-domain delivery
+        shell: bash
+        run: |
+          set -euo pipefail
+          release="${{ steps.release.outputs.sha }}"
+          curl --silent --show-error --location \
+            -D "$RUNNER_TEMP/shopify.headers" \
+            -H 'Cache-Control: no-cache, no-store, max-age=0' \
+            "https://${SHOPIFY_HOST}/?mmg_delivery_probe=${release}" \
+            -o "$RUNNER_TEMP/shopify.html"
+          curl --silent --show-error --location \
+            -D "$RUNNER_TEMP/custom.headers" \
+            -H 'Cache-Control: no-cache, no-store, max-age=0' \
+            "https://${STOREFRONT_HOST}/?mmg_delivery_probe=${release}" \
+            -o "$RUNNER_TEMP/custom.html"
+          echo '--- Shopify response headers ---'
+          cat "$RUNNER_TEMP/shopify.headers"
+          echo '--- Custom-domain response headers ---'
+          cat "$RUNNER_TEMP/custom.headers"
+          echo "Shopify HTML SHA256: $(sha256sum "$RUNNER_TEMP/shopify.html" | awk '{print $1}')"
+          echo "Custom HTML SHA256:  $(sha256sum "$RUNNER_TEMP/custom.html" | awk '{print $1}')"
+          echo "Shopify marker count: $(grep -c "${THEME_MARKER}" "$RUNNER_TEMP/shopify.html" || true)"
+          echo "Custom marker count:  $(grep -c "${THEME_MARKER}" "$RUNNER_TEMP/custom.html" || true)"
+
+      - name: Verify public storefront navigation after cache purge
         shell: bash
         run: |
           set -euo pipefail
           expected_sha="${{ steps.release.outputs.sha }}"
-          for attempt in $(seq 1 60); do
+          for attempt in $(seq 1 36); do
+            headers="$RUNNER_TEMP/live-home.headers"
             status="$(curl --location --silent --show-error \
+              -D "$headers" \
               -H 'Cache-Control: no-cache, no-store, max-age=0' \
-              "https://themindsetmediagroup.com/?mmg_theme_navigation=${expected_sha}&attempt=${attempt}" \
+              -H 'Pragma: no-cache' \
+              "https://${STOREFRONT_HOST}/?mmg_theme_navigation=${expected_sha}&attempt=${attempt}&cache_bust=$(date +%s%N)" \
               -o "$RUNNER_TEMP/live-home.html" -w '%{http_code}' || true)"
-            echo "Storefront verification ${attempt}/60 HTTP ${status}"
+            echo "Storefront verification ${attempt}/36 HTTP ${status}"
+            grep -iE '^(cf-cache-status|age|server|x-cache|cache-control):' "$headers" || true
             if [ "$status" = "200" ] \
-              && grep -q 'kairos-theme-menu-hotfix-20260718-2' "$RUNNER_TEMP/live-home.html" \
+              && grep -q "${THEME_MARKER}" "$RUNNER_TEMP/live-home.html" \
               && grep -q 'Create &amp; Learn' "$RUNNER_TEMP/live-home.html" \
               && grep -q '>Support<' "$RUNNER_TEMP/live-home.html" \
               && grep -q '>Shop<' "$RUNNER_TEMP/live-home.html" \
               && ! grep -q '>Knowledge Library<' "$RUNNER_TEMP/live-home.html" \
               && ! grep -q '>Catalog<' "$RUNNER_TEMP/live-home.html"; then
-              echo "Live Shopify navigation verified."
+              echo "Live Shopify navigation verified after Cloudflare cache purge."
               exit 0
             fi
             sleep 5
           done
-          echo "MAIN theme was published, but the public storefront navigation is still not canonical." >&2
+          echo "Shopify MAIN read-back succeeded, Cloudflare cache was purged, but the custom domain still does not render the canonical theme output." >&2
           exit 1
