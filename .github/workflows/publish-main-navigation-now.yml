@@ -1,14 +1,15 @@
 name: Publish Corrected Main Navigation
-run-name: Publish corrected Shopify navigation ${{ github.sha }}
+run-name: Publish theme-layer Shopify navigation ${{ github.sha }}
 
 on:
-  workflow_dispatch:
-    inputs:
-      authorization_confirmed:
-        description: "Confirm the installed Shopify app currently has read_online_store_navigation and write_online_store_navigation"
-        required: true
-        type: boolean
-        default: false
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-main-navigation-now.yml
+      - cloudflare/mmg-ios/src/kairos-native-navigation-publisher-20260718.js
+      - cloudflare/mmg-ios/src/kairos-compact-homepage-utils-v1.js
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -19,12 +20,27 @@ concurrency:
 
 jobs:
   publish-navigation:
-    name: Publish corrected Shopify navigation
-    if: ${{ inputs.authorization_confirmed == true }}
+    name: Publish live theme navigation
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
-      - name: Publish native Shopify main navigation
+      - name: Wait for Cloudflare navigation publisher v6
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 48); do
+            headers="$(curl --silent --show-error --max-time 30 -I \
+              "https://mmg-ios.info-mindsetmediagroup.workers.dev/api/shopify/navigation/publish?release=${GITHUB_SHA}&attempt=${attempt}" || true)"
+            if printf '%s' "$headers" | grep -qi 'x-mmg-native-navigation: kairos-native-navigation-theme-publisher-20260718-6'; then
+              echo 'Theme navigation publisher v6 is deployed.'
+              exit 0
+            fi
+            echo "Deployment verification attempt ${attempt}/48 has not exposed v6 yet."
+            sleep 5
+          done
+          exit 1
+
+      - name: Publish canonical desktop and mobile navigation
         shell: bash
         run: |
           set -euo pipefail
@@ -41,22 +57,13 @@ jobs:
           echo
 
           if [ "${http_code}" -lt 200 ] || [ "${http_code}" -ge 300 ]; then
-            node - <<'NODE'
-          const fs = require('node:fs');
-          let body = {};
-          try { body = JSON.parse(fs.readFileSync('/tmp/navigation.json', 'utf8')); } catch {}
-          const message = body?.error?.message || '';
-          if (/Access denied for menus field/i.test(message)) {
-            console.error('BLOCKED: The installed Shopify app token does not include read_online_store_navigation. No Shopify menu write was attempted. Update and release the Shopify app version with read_online_store_navigation and write_online_store_navigation before rerunning this manual workflow.');
-          }
-          NODE
             exit 1
           fi
 
           node - <<'NODE'
           const fs = require('node:fs');
           const body = JSON.parse(fs.readFileSync('/tmp/navigation.json', 'utf8'));
-          const expectedTopLevel = [
+          const expected = [
             'Home',
             'Products',
             'Publishing Services',
@@ -68,41 +75,49 @@ jobs:
           ];
           const observed = body?.verification?.topLevel?.map(item => item.title) || [];
           const valid = body?.status === 'completed'
-            && body?.build === 'kairos-native-navigation-publisher-20260718-4'
+            && body?.build === 'kairos-native-navigation-theme-publisher-20260718-6'
             && body?.verification?.valid === true
-            && JSON.stringify(observed) === JSON.stringify(expectedTopLevel)
-            && !observed.includes('Catalog')
-            && !observed.includes('Contact')
-            && body?.safeguards?.duplicateDestinationsRemoved === true
-            && body?.safeguards?.aboutAndContactNestedUnderCompany === true;
-
+            && body?.verification?.exactThemeFileReadBack === true
+            && body?.safeguards?.menusGraphQLDependencyRemoved === true
+            && body?.safeguards?.liveThemeChanged === true
+            && body?.safeguards?.aboutAndContactNestedUnderCompany === true
+            && JSON.stringify(observed) === JSON.stringify(expected);
           if (!valid) {
             console.error(JSON.stringify(body, null, 2));
             process.exit(1);
           }
-
           console.log(JSON.stringify({
             status: body.status,
             build: body.build,
+            strategy: body.navigation.strategy,
             topLevel: observed,
-            destinationCounts: body.verification.destinationCounts
+            files: body.files
           }, null, 2));
           NODE
 
-      - name: Verify live storefront navigation
+      - name: Verify live storefront navigation assets
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 24); do
-            html="$(curl --fail --silent --show-error --max-time 30 -H 'Cache-Control: no-cache' "https://themindsetmediagroup.com/?navigation_release=${GITHUB_SHA}&attempt=${attempt}")"
-            if printf '%s' "$html" | grep -q '>Products<' \
-              && printf '%s' "$html" | grep -q '>Membership<' \
-              && printf '%s' "$html" | grep -q '>Kairos<' \
-              && ! printf '%s' "$html" | grep -q '>Catalog<' ; then
-              echo 'Verified corrected live storefront navigation.'
-              exit 0
+          for attempt in $(seq 1 36); do
+            html="$(curl --fail --silent --show-error --max-time 30 -H 'Cache-Control: no-cache' \
+              "https://themindsetmediagroup.com/?navigation_release=${GITHUB_SHA}&attempt=${attempt}")"
+            if printf '%s' "$html" | grep -q 'mmg-canonical-navigation.css' \
+              && printf '%s' "$html" | grep -q 'mmg-canonical-navigation.js'; then
+              js_url="$(printf '%s' "$html" | grep -oE 'https:[^\" ]*mmg-canonical-navigation\.js[^\" ]*' | head -n1 | sed 's/&amp;/\&/g')"
+              if [ -z "$js_url" ]; then
+                js_url="https://themindsetmediagroup.com/cdn/shop/t/1/assets/mmg-canonical-navigation.js"
+              fi
+              js="$(curl --fail --silent --show-error --max-time 30 -H 'Cache-Control: no-cache' "$js_url" || true)"
+              if printf '%s' "$js" | grep -q 'kairos-native-navigation-theme-publisher-20260718-6' \
+                && printf '%s' "$js" | grep -q 'Publishing Services' \
+                && printf '%s' "$js" | grep -q 'Customer Portal' \
+                && printf '%s' "$js" | grep -q 'About Mindset Media Group'; then
+                echo 'Verified canonical navigation assets on the live storefront.'
+                exit 0
+              fi
             fi
-            echo "Storefront verification attempt ${attempt}/24 did not yet reflect the corrected navigation."
+            echo "Live storefront verification attempt ${attempt}/36 has not exposed the canonical navigation assets yet."
             sleep 5
           done
           exit 1
