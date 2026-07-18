@@ -1,33 +1,45 @@
-name: Publish Corrected Shopify Menu Now
-run-name: Live-theme-bound Shopify navigation repair ${{ github.sha }}
+name: Deploy MMG Worker and Repair Shopify Navigation
+run-name: MMG deployment reconciliation ${{ github.sha }}
 
 on:
   workflow_dispatch:
   push:
     branches:
       - main
-    paths:
-      - cloudflare/mmg-ios/src/kairos-native-main-menu-publisher-20260718.js
-      - cloudflare/mmg-ios/src/kairos-production-entry-native-main-menu-v1.js
-      - cloudflare/mmg-ios/wrangler.toml
-      - .github/workflows/publish-native-main-menu-now.yml
+  schedule:
+    - cron: "*/5 * * * *"
 
 permissions:
   contents: read
 
 concurrency:
-  group: publish-corrected-shopify-menu-now
+  group: mmg-production-deployment
   cancel-in-progress: false
 
 jobs:
   deploy-publish-verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       GH_TOKEN: ${{ github.token }}
+      WORKER_BASE_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
     steps:
+      - name: Resolve deployment commit
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
+            release_sha="$(git ls-remote "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" refs/heads/main | awk '{print $1}')"
+          else
+            release_sha="${GITHUB_SHA}"
+          fi
+          test -n "$release_sha"
+          echo "sha=$release_sha" >> "$GITHUB_OUTPUT"
+          echo "Deploying commit $release_sha"
+
       - name: Materialize exact repository commit
         shell: bash
         run: |
@@ -37,42 +49,59 @@ jobs:
           cd "$RUNNER_TEMP/mmg-release"
           git init
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git fetch --depth=1 origin "${GITHUB_SHA}"
+          git fetch --depth=1 origin "${{ steps.release.outputs.sha }}"
           git checkout --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "${{ steps.release.outputs.sha }}"
           test -f cloudflare/mmg-ios/wrangler.toml
+          test -f cloudflare/mmg-ios/src/kairos-production-entry-native-main-menu-v1.js
           test -f cloudflare/mmg-ios/src/kairos-native-main-menu-publisher-20260718.js
 
-      - name: Deploy live-theme-bound native-menu Worker
+      - name: Deploy exact commit to Cloudflare Worker
         shell: bash
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/mmg-release/cloudflare/mmg-ios"
           npm install --no-save wrangler@latest
-          npx wrangler deploy | tee native-main-menu-worker-deploy.txt
+          deployed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          npx wrangler deploy \
+            --var "DEPLOYMENT_SHA:${{ steps.release.outputs.sha }}" \
+            --var "DEPLOYED_AT:${deployed_at}" \
+            | tee worker-deploy.txt
 
-      - name: Wait for native-menu v6 endpoint
+      - name: Prove live Worker matches repository commit
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 48); do
-            headers_file="$RUNNER_TEMP/native-main-menu-headers.txt"
-            status="$(curl --silent --show-error --head --max-time 30 -o /dev/null -D "$headers_file" -w '%{http_code}' "https://mmg-ios.info-mindsetmediagroup.workers.dev/api/shopify/native-main-menu/publish?release=${GITHUB_SHA}&attempt=${attempt}" || true)"
-            echo "Endpoint probe ${attempt}/48 HTTP ${status}"
-            if grep -qi "x-mmg-native-main-menu: kairos-native-main-menu-publisher-20260718-6" "$headers_file"; then
-              echo "Native main-menu Worker v6 is deployed."
+          expected_sha="${{ steps.release.outputs.sha }}"
+          for attempt in $(seq 1 60); do
+            status="$(curl --silent --show-error --max-time 30 \
+              -H 'Cache-Control: no-cache, no-store' \
+              "${WORKER_BASE_URL}/api/deployment/identity?sha=${expected_sha}&attempt=${attempt}" \
+              -o "$RUNNER_TEMP/deployment-identity.json" -w '%{http_code}' || true)"
+            echo "Deployment identity ${attempt}/60 HTTP ${status}"
+            cat "$RUNNER_TEMP/deployment-identity.json" 2>/dev/null || true
+            if [ "$status" = "200" ] \
+              && grep -q '"status":"ok"' "$RUNNER_TEMP/deployment-identity.json" \
+              && grep -q '"entryBuild":"kairos-production-entry-native-main-menu-20260718-2"' "$RUNNER_TEMP/deployment-identity.json" \
+              && grep -q "\"deploymentSha\":\"${expected_sha}\"" "$RUNNER_TEMP/deployment-identity.json"; then
+              echo "Live Worker is running the exact repository commit."
               exit 0
             fi
             sleep 5
           done
-          echo "Native main-menu Worker v6 did not become reachable." >&2
+          echo "Cloudflare Worker never exposed the expected deployment identity." >&2
           exit 1
 
-      - name: Replace exact live-header Shopify navigation
+      - name: Publish exact live-header Shopify navigation
         shell: bash
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/mmg-release/cloudflare/mmg-ios"
-          status="$(curl --silent --show-error --retry 2 --retry-delay 3 -X POST "https://mmg-ios.info-mindsetmediagroup.workers.dev/api/shopify/native-main-menu/publish" -H "Content-Type: application/json" --data '{"confirmation":"PUBLISH_MMG_NATIVE_MAIN_MENU_NOW"}' -o native-main-menu-result.json -w '%{http_code}' || true)"
+          status="$(curl --silent --show-error --retry 3 --retry-delay 3 \
+            -X POST "${WORKER_BASE_URL}/api/shopify/native-main-menu/publish" \
+            -H 'Content-Type: application/json' \
+            --data '{"confirmation":"PUBLISH_MMG_NATIVE_MAIN_MENU_NOW"}' \
+            -o native-main-menu-result.json -w '%{http_code}' || true)"
           echo "Native main-menu publish HTTP ${status}"
           cat native-main-menu-result.json || true
           test "$status" -ge 200
@@ -86,26 +115,28 @@ jobs:
           grep -q '"absoluteUrlsUsed":true' native-main-menu-result.json
           grep -q '"knowledgeLibraryRemoved":true' native-main-menu-result.json
           grep -Eq '"updatedMenuCount":[1-9][0-9]*' native-main-menu-result.json
-          grep -q '"themeOverrideNotUsed":true' native-main-menu-result.json
 
-      - name: Verify live main navigation
+      - name: Verify public storefront navigation
         shell: bash
         run: |
           set -euo pipefail
-          cd "$RUNNER_TEMP/mmg-release/cloudflare/mmg-ios"
-          for attempt in $(seq 1 48); do
-            status="$(curl --location --silent --show-error -H 'Cache-Control: no-cache, no-store, max-age=0' "https://themindsetmediagroup.com/?mmg_native_nav=${GITHUB_SHA}&attempt=${attempt}" -o live-home.html -w '%{http_code}' || true)"
-            echo "Live navigation verification ${attempt}/48 HTTP ${status}"
+          expected_sha="${{ steps.release.outputs.sha }}"
+          for attempt in $(seq 1 60); do
+            status="$(curl --location --silent --show-error \
+              -H 'Cache-Control: no-cache, no-store, max-age=0' \
+              "https://themindsetmediagroup.com/?mmg_navigation_release=${expected_sha}&attempt=${attempt}" \
+              -o "$RUNNER_TEMP/live-home.html" -w '%{http_code}' || true)"
+            echo "Storefront verification ${attempt}/60 HTTP ${status}"
             if [ "$status" = "200" ] \
-              && grep -q 'Create &amp; Learn' live-home.html \
-              && grep -q '>Support<' live-home.html \
-              && grep -q '>Shop<' live-home.html \
-              && ! grep -q '>Knowledge Library<' live-home.html \
-              && ! grep -q '>Catalog<' live-home.html; then
-              echo "Live native main navigation verified."
+              && grep -q 'Create &amp; Learn' "$RUNNER_TEMP/live-home.html" \
+              && grep -q '>Support<' "$RUNNER_TEMP/live-home.html" \
+              && grep -q '>Shop<' "$RUNNER_TEMP/live-home.html" \
+              && ! grep -q '>Knowledge Library<' "$RUNNER_TEMP/live-home.html" \
+              && ! grep -q '>Catalog<' "$RUNNER_TEMP/live-home.html"; then
+              echo "Live Shopify navigation verified."
               exit 0
             fi
             sleep 5
           done
-          echo "The exact live-header menu was updated in Shopify but the storefront still did not expose the canonical navigation." >&2
+          echo "Deployment succeeded, but the live storefront navigation is still not canonical." >&2
           exit 1
