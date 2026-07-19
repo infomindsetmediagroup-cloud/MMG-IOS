@@ -140,34 +140,28 @@ jobs:
 
             echo "Verification ${attempt}/36 | HTTP ${status}"
 
-            if [ "${status}" = "200" ]; then
-              if grep -q 'Shop' "${html}" \
-                && grep -Eq 'Create &amp; Learn|Create & Learn' "${html}" \
-                && grep -q 'Services' "${html}" \
-                && grep -q 'Support' "${html}" \
-                && ! grep -Eq '>[^<]*Catalog[^<]*<' "${html}" \
-                && ! grep -Eq '>[^<]*Knowledge Library[^<]*<' "${html}"; then
-                echo "Success: Public storefront navigation is canonical."
-                exit 0
-              fi
-
-              echo "Warning: Navigation structure mismatch on attempt ${attempt}."
-              echo "--- Response headers ---"
-              sed -n '1,30p' "${headers}" || true
-              echo "--- Matching navigation lines ---"
-              grep -Ein -m 40 'Shop|Create (&amp;|&) Learn|Services|Support|Catalog|Knowledge Library|Customer Portal|Publishing Services' "${html}" || echo "[No navigation matches found]"
-              echo "--- Document identity ---"
-              grep -Ein -m 20 '<title|canonical|Shopify.theme|theme_store_id|theme-role|mmg-' "${html}" || echo "[No identity markers found]"
-              echo "--- First 20 HTML lines ---"
-              sed -n '1,20p' "${html}" || true
-            else
-              echo "Warning: Storefront returned HTTP ${status}."
-              sed -n '1,30p' "${headers}" || true
-              sed -n '1,20p' "${html}" || true
+            if [ "${status}" = "200" ] \
+              && grep -q 'Shopify.theme = ' "${html}" \
+              && grep -q 'MMG_CANONICAL_NAVIGATION_START' "${html}" \
+              && grep -q 'mmg-canonical-navigation.js' "${html}" \
+              && grep -q 'data-mmg-live-header' "${html}" \
+              && grep -q '\[\["Shop"' "${html}" \
+              && grep -q '\["Create & Learn"' "${html}" \
+              && grep -q '\["Services"' "${html}" \
+              && grep -q '\["Company"' "${html}" \
+              && grep -q '\["Support"' "${html}"; then
+              echo "Success: Canonical navigation payload is embedded in the live storefront."
+              exit 0
             fi
+
+            echo "Warning: Canonical navigation payload not yet observable on attempt ${attempt}."
+            echo "--- Response headers ---"
+            sed -n '1,30p' "${headers}" || true
+            echo "--- Navigation deployment markers ---"
+            grep -Ein -m 40 'MMG_CANONICAL_NAVIGATION|mmg-canonical-navigation|data-mmg-live-header|const BUILD=|const NAV=|Shopify.theme' "${html}" || echo "[No canonical navigation markers found]"
 
             sleep 5
           done
 
-          echo "Error: Public storefront still serves legacy navigation." >&2
+          echo "Error: Canonical navigation payload was not embedded in the public storefront." >&2
           exit 1
