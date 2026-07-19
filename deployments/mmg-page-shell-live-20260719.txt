@@ -1,0 +1,5 @@
+MMG page-shell live execution
+Target pages:
+- /pages/free-creator-toolkit
+- /pages/publishing-services
+Execution build: kairos-canonical-navigation-page-shell-20260719-1
