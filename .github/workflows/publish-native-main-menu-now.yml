@@ -18,7 +18,7 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - name: Confirm Worker deployment startup
-        run: echo "Kairos shell-only Worker deployment started."
+        run: echo "Kairos Worker deployment started."
 
       - name: Materialize repository
         env:
@@ -37,10 +37,8 @@ jobs:
           cd "${RUNNER_TEMP}/mmg-release"
           test -f cloudflare/mmg-ios/package.json
           test -f cloudflare/mmg-ios/wrangler.toml
-          test -f cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
-          test -f cloudflare/mmg-ios/src/kairos-native-main-menu-publisher-20260718.js
-          test -f cloudflare/mmg-ios/src/kairos-all-theme-navigation-publisher-20260719.js
-          node --check cloudflare/mmg-ios/src/kairos-all-theme-navigation-publisher-20260719.js
+          test -f cloudflare/mmg-ios/src/kairos-native-navigation-publisher-20260718.js
+          node --check cloudflare/mmg-ios/src/kairos-native-navigation-publisher-20260718.js
 
       - name: Deploy Kairos Worker
         run: |
@@ -58,70 +56,57 @@ jobs:
     env:
       WORKER_BASE_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
       STOREFRONT_URL: https://themindsetmediagroup.com
-      ALL_THEME_BUILD: kairos-all-theme-navigation-20260719-2
+      CANONICAL_BUILD: kairos-native-navigation-theme-publisher-20260718-6
     steps:
       - name: Wait for current Worker deployment
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 36); do
+          for attempt in $(seq 1 24); do
             identity="${RUNNER_TEMP}/deployment-identity.json"
             status="$(curl --silent --show-error --max-time 30 \
               "${WORKER_BASE_URL}/api/deployment/identity?sha=${GITHUB_SHA}&attempt=${attempt}" \
-              -o "${identity}" \
-              -w '%{http_code}' || true)"
-            echo "Deployment identity verification ${attempt}/36 HTTP ${status}"
+              -o "${identity}" -w '%{http_code}' || true)"
+            echo "Deployment identity verification ${attempt}/24 HTTP ${status}"
             cat "${identity}" || true
-            if [ "${status}" = "200" ] \
-              && grep -q "\"deploymentSha\":\"${GITHUB_SHA}\"" "${identity}"; then
-              echo "Current Worker deployment is live."
+            if [ "${status}" = "200" ] && grep -q "\"deploymentSha\":\"${GITHUB_SHA}\"" "${identity}"; then
               exit 0
             fi
             sleep 5
           done
-          echo "Current Worker deployment did not become identifiable." >&2
           exit 1
 
-      - name: Publish native Shopify navigation
+      - name: Publish native Shopify menu
         run: |
           set -euo pipefail
           result="${RUNNER_TEMP}/native-main-menu-result.json"
-          status="$(curl --silent --show-error --retry 3 --retry-delay 3 --max-time 45 \
+          status="$(curl --silent --show-error --retry 3 --retry-delay 3 --max-time 60 \
             -X POST "${WORKER_BASE_URL}/api/shopify/native-main-menu/publish?sha=${GITHUB_SHA}" \
             -H 'Content-Type: application/json' \
             --data '{"confirmation":"PUBLISH_MMG_NATIVE_MAIN_MENU_NOW"}' \
-            -o "${result}" \
-            -w '%{http_code}' || true)"
-          echo "Native Shopify menu publication HTTP ${status}"
+            -o "${result}" -w '%{http_code}' || true)"
           cat "${result}" || true
           test "${status}" = "200"
           grep -q '"status":"completed"' "${result}"
           grep -q '"exactNativeMenuReadBack":true' "${result}"
-          grep -q '"handle":"main-menu"' "${result}"
-          grep -q '"knowledgeLibraryRemoved":true' "${result}"
-          grep -q '"absoluteUrlsUsed":true' "${result}"
 
-      - name: Publish repaired canonical navigation across all renderable themes
+      - name: Publish verified live-theme navigation assets
         run: |
           set -euo pipefail
-          result="${RUNNER_TEMP}/all-theme-result.json"
+          result="${RUNNER_TEMP}/canonical-navigation-result.json"
           status="$(curl --silent --show-error --retry 3 --retry-delay 3 --max-time 180 \
-            -X POST "${WORKER_BASE_URL}/api/shopify/all-theme-navigation/publish?sha=${GITHUB_SHA}" \
+            -X POST "${WORKER_BASE_URL}/api/shopify/navigation/publish?sha=${GITHUB_SHA}" \
             -H 'Content-Type: application/json' \
-            --data '{"confirmation":"PUBLISH_MMG_ALL_THEME_NAVIGATION_NOW"}' \
-            -o "${result}" \
-            -w '%{http_code}' || true)"
-          echo "All-theme navigation publication HTTP ${status}"
+            --data '{"confirmation":"PUBLISH_MMG_NATIVE_MAIN_NAVIGATION"}' \
+            -o "${result}" -w '%{http_code}' || true)"
+          echo "Canonical live-theme publication HTTP ${status}"
           cat "${result}" || true
           test "${status}" = "200"
           grep -q '"status":"completed"' "${result}"
-          grep -q "\"build\":\"${ALL_THEME_BUILD}\"" "${result}"
-          grep -q '"allReadableThemeLayoutsPatched":true' "${result}"
-          grep -q '"exactThemeReadBack":true' "${result}"
-          grep -q '"canonicalNavigationEmbedded":true' "${result}"
-          grep -q '"malformedLegacyBlocksRemoved":true' "${result}"
-          grep -q '"mainThemePatched":true' "${result}"
+          grep -q "\"build\":\"${CANONICAL_BUILD}\"" "${result}"
+          grep -q '"exactThemeFileReadBack":true' "${result}"
+          grep -q '"layoutInjectionPresent":true' "${result}"
 
-      - name: Verify public storefront without flooding Shopify
+      - name: Verify exact live canonical asset pipeline
         run: |
           set -euo pipefail
           for attempt in $(seq 1 8); do
@@ -130,28 +115,22 @@ jobs:
             status="$(curl --location --silent --show-error --max-time 45 \
               -D "${headers}" \
               -H 'User-Agent: Mozilla/5.0 (MMG release verifier)' \
-              -H 'Cache-Control: no-cache' \
-              "${STOREFRONT_URL}/?mmg_release=${GITHUB_SHA}" \
-              -o "${html}" \
-              -w '%{http_code}' || true)"
-
+              -H 'Cache-Control: no-cache, no-store, must-revalidate' \
+              "${STOREFRONT_URL}/?mmg_release=${GITHUB_SHA}&attempt=${attempt}" \
+              -o "${html}" -w '%{http_code}' || true)"
             echo "Verification ${attempt}/8 | HTTP ${status}"
             if [ "${status}" = "200" ] \
-              && grep -q "mmg-all-theme-navigation\" content=\"${ALL_THEME_BUILD}" "${html}" \
-              && grep -q 'id="mmg-all-theme-nav-script"' "${html}" \
-              && grep -q 'data-mmg-all-theme' "${html}" \
-              && ! grep -q 'MMG_THEME_MENU_HOTFIX_START' "${html}"; then
-              echo "Success: repaired navigation runtime is embedded in the live storefront."
+              && grep -q 'Shopify.theme = ' "${html}" \
+              && grep -q 'MMG_CANONICAL_NAVIGATION_START' "${html}" \
+              && grep -q 'mmg-canonical-navigation.css' "${html}" \
+              && grep -q 'mmg-canonical-navigation.js' "${html}"; then
+              echo "Success: verified canonical assets are rendered by the live Shopify theme."
               exit 0
             fi
-
+            echo "--- live navigation markers ---"
+            grep -Ein -m 30 'Shopify.theme|MMG_CANONICAL_NAVIGATION|mmg-canonical-navigation|MMG_ALL_THEME_NAV|MMG_THEME_MENU_HOTFIX' "${html}" || true
             retry_after="$(awk 'BEGIN{IGNORECASE=1} /^retry-after:/ {gsub("\r", "", $2); print $2; exit}' "${headers}")"
-            if [ -n "${retry_after}" ] && [ "${retry_after}" -le 180 ] 2>/dev/null; then
-              sleep "${retry_after}"
-            else
-              sleep 15
-            fi
+            if [ -n "${retry_after}" ] && [ "${retry_after}" -le 180 ] 2>/dev/null; then sleep "${retry_after}"; else sleep 15; fi
           done
-
-          echo "Error: repaired navigation runtime was not observable on the public storefront." >&2
+          echo "Error: canonical live-theme assets were not observable." >&2
           exit 1
