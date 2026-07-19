@@ -1,0 +1,48 @@
+name: Verify MMG Page Shell Live
+
+"on":
+  pull_request:
+    branches:
+      - main
+    paths:
+      - deployments/run-mmg-page-shell-dom-verification.txt
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-mmg-page-shell-live-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  verify-live-page-shell:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout verifier
+        uses: actions/checkout@v4
+
+      - name: Install Playwright
+        run: |
+          set -euo pipefail
+          npm init -y >/dev/null
+          npm install --no-save --no-audit --no-fund playwright
+          npx playwright install --with-deps chromium
+
+      - name: Verify toolkit and publishing pages
+        env:
+          MMG_STOREFRONT_URL: https://themindsetmediagroup.com
+          MMG_PAGE_SHELL_OUTPUT: artifacts/mmg-page-shell-live
+        run: |
+          set -euo pipefail
+          node .github/scripts/verify-mmg-page-shell.mjs
+
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmg-page-shell-live-${{ github.run_id }}
+          path: artifacts/mmg-page-shell-live
+          if-no-files-found: warn
+          retention-days: 14
