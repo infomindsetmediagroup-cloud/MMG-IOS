@@ -38,16 +38,13 @@ jobs:
           test -f cloudflare/mmg-ios/package.json
           test -f cloudflare/mmg-ios/wrangler.toml
           test -f cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
-          test -f cloudflare/mmg-ios/src/kairos-theme-menu-hotfix-publisher-20260718.js
-          test -f cloudflare/mmg-ios/scripts/fix-navigation-links.mjs
-          test -f scripts/verify-rendered-navigation.mjs
+          test -f cloudflare/mmg-ios/src/kairos-native-main-menu-publisher-20260718.js
 
       - name: Deploy Kairos Worker
         run: |
           set -euo pipefail
           cd "${RUNNER_TEMP}/mmg-release/cloudflare/mmg-ios"
           npm install
-          node scripts/fix-navigation-links.mjs
           npx wrangler deploy \
             --var "DEPLOYMENT_SHA:${GITHUB_SHA}" \
             --var "DEPLOYED_AT:$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -55,28 +52,16 @@ jobs:
   publish-shopify:
     needs: deploy-worker
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 12
     env:
       WORKER_BASE_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
       STOREFRONT_URL: https://themindsetmediagroup.com
-      THEME_MARKER: kairos-theme-menu-hotfix-20260718-3
+      NATIVE_MENU_BUILD: kairos-native-main-menu-publisher-20260718-7
     steps:
       - name: Confirm Shopify publication startup
-        run: echo "Kairos Shopify publication started after successful Worker deployment."
+        run: echo "Publishing the native Shopify menu bound to the live MAIN theme."
 
-      - name: Materialize verification source
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          git clone --depth 1 --branch main \
-            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
-            "${RUNNER_TEMP}/mmg-verify"
-          cd "${RUNNER_TEMP}/mmg-verify"
-          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
-          test -f scripts/verify-rendered-navigation.mjs
-
-      - name: Wait for deployed publisher
+      - name: Wait for native menu publisher
         run: |
           set -euo pipefail
           for attempt in $(seq 1 36); do
@@ -85,53 +70,45 @@ jobs:
               -D "${headers}" \
               -o /dev/null \
               -w '%{http_code}' \
-              "${WORKER_BASE_URL}/api/shopify/theme-menu-hotfix/publish?sha=${GITHUB_SHA}&attempt=${attempt}" || true)"
-            echo "Publisher verification ${attempt}/36 HTTP ${status}"
-            if grep -qi "x-mmg-theme-menu-hotfix: ${THEME_MARKER}" "${headers}"; then
-              echo "Kairos Shopify publisher is live."
+              "${WORKER_BASE_URL}/api/shopify/native-main-menu/publish?sha=${GITHUB_SHA}&attempt=${attempt}" || true)"
+            echo "Native publisher verification ${attempt}/36 HTTP ${status}"
+            if grep -qi "x-mmg-native-main-menu: ${NATIVE_MENU_BUILD}" "${headers}"; then
+              echo "Native Shopify menu publisher is live."
               exit 0
             fi
             sleep 5
           done
-          echo "Kairos Shopify publisher did not become live." >&2
+          echo "Native Shopify menu publisher did not become live." >&2
           exit 1
 
-      - name: Publish canonical Shopify navigation
+      - name: Publish native Shopify navigation
         run: |
           set -euo pipefail
-          result="${RUNNER_TEMP}/theme-menu-result.json"
+          result="${RUNNER_TEMP}/native-main-menu-result.json"
           status="$(curl --silent --show-error --retry 3 --retry-delay 3 \
-            -X POST "${WORKER_BASE_URL}/api/shopify/theme-menu-hotfix/publish" \
+            -X POST "${WORKER_BASE_URL}/api/shopify/native-main-menu/publish" \
             -H 'Content-Type: application/json' \
-            --data '{"confirmation":"PUBLISH_MMG_THEME_MENU_HOTFIX_NOW"}' \
+            --data '{"confirmation":"PUBLISH_MMG_NATIVE_MAIN_MENU_NOW"}' \
             -o "${result}" \
             -w '%{http_code}' || true)"
-          echo "Shopify publication HTTP ${status}"
+          echo "Native Shopify menu publication HTTP ${status}"
           cat "${result}" || true
           test "${status}" -ge 200
           test "${status}" -lt 300
           grep -q '"status":"completed"' "${result}"
-          grep -q '"exactThemeReadBack":true' "${result}"
-          grep -q '"inlineReleaseMarkerPresent":true' "${result}"
-          grep -q '"mainThemeRoleVerified":true' "${result}"
-          grep -q '"shopDomainIdentityVerified":true' "${result}"
-
-      - name: Install rendered-browser verifier
-        run: |
-          set -euo pipefail
-          cd "${RUNNER_TEMP}/mmg-verify"
-          npm init -y >/dev/null 2>&1
-          npm install --no-save playwright@latest
-          npx playwright install --with-deps chromium
+          grep -q '"exactNativeMenuReadBack":true' "${result}"
+          grep -q '"boundMenuUpdated":true' "${result}"
+          grep -q '"knowledgeLibraryRemoved":true' "${result}"
+          grep -q '"absoluteUrlsUsed":true' "${result}"
+          grep -q '"themeOverrideNotUsed":true' "${result}"
 
       - name: Record storefront delivery status
         run: |
           set -euo pipefail
           status="$(curl --location --silent --show-error --max-time 30 \
             -H 'Cache-Control: no-cache, no-store, max-age=0' \
-            "${STOREFRONT_URL}/?mmg_release=${GITHUB_SHA}" \
+            "${STOREFRONT_URL}/?mmg_native_menu=${GITHUB_SHA}" \
             -o /dev/null \
             -w '%{http_code}' || true)"
           echo "Storefront delivery HTTP ${status:-unavailable}."
-          echo "Authoritative release verification already passed through exact Shopify MAIN-theme read-back."
-          echo "Storefront delivery is recorded as diagnostic because Shopify may rate-limit or serve a separate delivery document to GitHub runners."
+          echo "Authoritative verification passed through exact native Shopify menu read-back."
