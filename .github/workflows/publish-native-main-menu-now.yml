@@ -58,7 +58,7 @@ jobs:
       WORKER_BASE_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
       STOREFRONT_URL: https://themindsetmediagroup.com
       NATIVE_MENU_BUILD: kairos-native-main-menu-publisher-20260718-7
-      LIVE_HEADER_BUILD: kairos-live-header-navigation-20260719-1
+      LIVE_HEADER_BUILD: kairos-live-header-navigation-20260719-2
     steps:
       - name: Confirm Shopify publication startup
         run: echo "Publishing native menu and rendered live-header navigation."
@@ -118,6 +118,7 @@ jobs:
           test "${status}" = "200"
           grep -q '"status":"completed"' "${result}"
           grep -q "\"build\":\"${LIVE_HEADER_BUILD}\"" "${result}"
+          grep -q '"assetInventoryEnumerated":true' "${result}"
           grep -q '"exactHeaderFileReadBack":true' "${result}"
           grep -q '"renderedHeaderSourcePatched":true' "${result}"
           grep -q '"canonicalNavigationEmbedded":true' "${result}"
