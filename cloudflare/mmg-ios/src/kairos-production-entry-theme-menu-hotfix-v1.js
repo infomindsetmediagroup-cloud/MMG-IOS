@@ -1,12 +1,18 @@
 import previousRuntime, { KairosProject } from "./kairos-production-entry-native-main-menu-v1.js";
-import { handleNativeNavigationPublish, KAIROS_NATIVE_NAVIGATION_BUILD } from "./kairos-native-navigation-theme-publisher-v9.js";
-import { handlePageShellPublish, KAIROS_PAGE_SHELL_BUILD } from "./kairos-page-shell-publisher-v1.js";
+import {
+  handleCanonicalNavigationAndPageShellPublish,
+  KAIROS_CANONICAL_SHELL_BUILD,
+  KAIROS_NATIVE_NAVIGATION_BUILD,
+  KAIROS_PAGE_SHELL_BUILD,
+} from "./kairos-canonical-navigation-page-shell-publisher-v1.js";
+import { handlePageShellPublish } from "./kairos-page-shell-publisher-v1.js";
 import { handleThemeMenuHotfixPublish, KAIROS_THEME_MENU_HOTFIX_BUILD } from "./kairos-theme-menu-hotfix-publisher-20260718.js";
 import { handleLiveHeaderNavigationPublish, KAIROS_LIVE_HEADER_BUILD } from "./kairos-live-header-navigation-publisher-20260719.js";
 import { handleAllThemeNavigationPublish, KAIROS_ALL_THEME_NAVIGATION_BUILD } from "./kairos-all-theme-navigation-publisher-20260719.js";
 import { handleKairosMcp, KAIROS_MCP_BUILD } from "./kairos-mcp-server-v1.js";
 
-const BUILD = "kairos-production-entry-canonical-navigation-20260719-3";
+// Canonical source remains kairos-native-navigation-theme-publisher-v9.js.
+const BUILD = "kairos-production-entry-canonical-navigation-20260719-4";
 export { KairosProject };
 
 export default {
@@ -18,8 +24,8 @@ export default {
       const pageShellResponse = await handlePageShellPublish(request, env);
       if (pageShellResponse) return stamp(pageShellResponse);
 
-      const canonicalNavigationResponse = await handleNativeNavigationPublish(request, env);
-      if (canonicalNavigationResponse) return stamp(canonicalNavigationResponse);
+      const canonicalShellResponse = await handleCanonicalNavigationAndPageShellPublish(request, env);
+      if (canonicalShellResponse) return stamp(canonicalShellResponse);
 
       const allThemeResponse = await handleAllThemeNavigationPublish(request, env);
       if (allThemeResponse) return stamp(allThemeResponse);
@@ -34,6 +40,7 @@ export default {
       return json({
         status: "failed",
         build: BUILD,
+        canonicalShell: KAIROS_CANONICAL_SHELL_BUILD,
         canonicalNavigation: KAIROS_NATIVE_NAVIGATION_BUILD,
         pageShell: KAIROS_PAGE_SHELL_BUILD,
         mcpBuild: KAIROS_MCP_BUILD,
@@ -55,6 +62,7 @@ export default {
 function stamp(response) {
   const headers = new Headers(response.headers);
   headers.set("X-MMG-Canonical-Navigation-Entry", BUILD);
+  headers.set("X-MMG-Canonical-Shell", KAIROS_CANONICAL_SHELL_BUILD);
   headers.set("X-MMG-Native-Navigation", KAIROS_NATIVE_NAVIGATION_BUILD);
   headers.set("X-MMG-Page-Shell", KAIROS_PAGE_SHELL_BUILD);
   headers.set("X-MMG-All-Theme-Navigation", KAIROS_ALL_THEME_NAVIGATION_BUILD);
@@ -71,6 +79,7 @@ function json(value, status = 200) {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store",
       "X-MMG-Canonical-Navigation-Entry": BUILD,
+      "X-MMG-Canonical-Shell": KAIROS_CANONICAL_SHELL_BUILD,
       "X-MMG-Native-Navigation": KAIROS_NATIVE_NAVIGATION_BUILD,
       "X-MMG-Page-Shell": KAIROS_PAGE_SHELL_BUILD,
       "X-MMG-All-Theme-Navigation": KAIROS_ALL_THEME_NAVIGATION_BUILD,
