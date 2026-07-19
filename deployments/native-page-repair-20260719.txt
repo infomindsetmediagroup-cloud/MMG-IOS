@@ -1,0 +1,5 @@
+Execute native Shopify page repair.
+Target pages:
+- /pages/free-creator-toolkit
+- /pages/publishing-services
+Build: kairos-native-page-content-repair-20260719-1
