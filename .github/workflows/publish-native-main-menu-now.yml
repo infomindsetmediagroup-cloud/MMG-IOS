@@ -31,14 +31,18 @@ jobs:
           cd "${RUNNER_TEMP}/mmg-release"
           test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
 
-      - name: Validate Worker source
+      - name: Validate deployed Worker source chain
         run: |
           set -euo pipefail
           cd "${RUNNER_TEMP}/mmg-release"
           test -f cloudflare/mmg-ios/package.json
           test -f cloudflare/mmg-ios/wrangler.toml
-          test -f cloudflare/mmg-ios/src/kairos-native-navigation-publisher-20260718.js
-          node --check cloudflare/mmg-ios/src/kairos-native-navigation-publisher-20260718.js
+          test -f cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
+          test -f cloudflare/mmg-ios/src/kairos-native-navigation-theme-publisher-v9.js
+          node --check cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-native-navigation-theme-publisher-v9.js
+          grep -q 'kairos-native-navigation-theme-publisher-v9.js' cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
+          grep -q 'kairos-native-navigation-theme-publisher-20260719-9' cloudflare/mmg-ios/src/kairos-native-navigation-theme-publisher-v9.js
 
       - name: Deploy Kairos Worker
         run: |
@@ -56,23 +60,28 @@ jobs:
     env:
       WORKER_BASE_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
       STOREFRONT_URL: https://themindsetmediagroup.com
-      CANONICAL_BUILD: kairos-native-navigation-theme-publisher-20260718-6
     steps:
       - name: Wait for current Worker deployment
         run: |
           set -euo pipefail
           for attempt in $(seq 1 24); do
             identity="${RUNNER_TEMP}/deployment-identity.json"
+            headers="${RUNNER_TEMP}/deployment-identity.headers"
             status="$(curl --silent --show-error --max-time 30 \
+              -D "${headers}" \
               "${WORKER_BASE_URL}/api/deployment/identity?sha=${GITHUB_SHA}&attempt=${attempt}" \
               -o "${identity}" -w '%{http_code}' || true)"
             echo "Deployment identity verification ${attempt}/24 HTTP ${status}"
             cat "${identity}" || true
-            if [ "${status}" = "200" ] && grep -q "\"deploymentSha\":\"${GITHUB_SHA}\"" "${identity}"; then
+            if [ "${status}" = "200" ] \
+              && grep -q "\"deploymentSha\":\"${GITHUB_SHA}\"" "${identity}" \
+              && grep -qi 'x-mmg-native-navigation: kairos-native-navigation-theme-publisher-20260719-9' "${headers}"; then
+              echo "Canonical navigation v9 Worker is live."
               exit 0
             fi
             sleep 5
           done
+          echo "Current canonical Worker deployment was not identifiable." >&2
           exit 1
 
       - name: Publish native Shopify menu
@@ -84,12 +93,13 @@ jobs:
             -H 'Content-Type: application/json' \
             --data '{"confirmation":"PUBLISH_MMG_NATIVE_MAIN_MENU_NOW"}' \
             -o "${result}" -w '%{http_code}' || true)"
+          echo "Native Shopify menu publication HTTP ${status}"
           cat "${result}" || true
           test "${status}" = "200"
           grep -q '"status":"completed"' "${result}"
           grep -q '"exactNativeMenuReadBack":true' "${result}"
 
-      - name: Publish verified live-theme navigation assets
+      - name: Publish canonical five-group live-theme navigation
         run: |
           set -euo pipefail
           result="${RUNNER_TEMP}/canonical-navigation-result.json"
@@ -101,17 +111,47 @@ jobs:
           echo "Canonical live-theme publication HTTP ${status}"
           cat "${result}" || true
           test "${status}" = "200"
-          grep -q '"status":"completed"' "${result}"
-          grep -q "\"build\":\"${CANONICAL_BUILD}\"" "${result}"
-          grep -q '"exactThemeFileReadBack":true' "${result}"
-          grep -q '"layoutInjectionPresent":true' "${result}"
 
-      - name: Verify exact live canonical asset pipeline
+          published_build="$(python3 - "${result}" <<'PY'
+          import json
+          import sys
+
+          path = sys.argv[1]
+          with open(path, encoding="utf-8") as handle:
+              body = json.load(handle)
+
+          expected = ["Shop", "Create & Learn", "Services", "Company", "Support"]
+          actual = body.get("verification", {}).get("canonicalTopLevel", [])
+          build = body.get("build", "")
+          valid = (
+              body.get("status") == "completed"
+              and build == "kairos-native-navigation-theme-publisher-20260719-9"
+              and body.get("verification", {}).get("valid") is True
+              and body.get("verification", {}).get("exactThemeFileReadBack") is True
+              and body.get("verification", {}).get("layoutInjectionPresent") is True
+              and body.get("verification", {}).get("legacyRuntimeBlocksRemoved") is True
+              and body.get("cleanup", {}).get("legacyRuntimeBlocksRemoved") is True
+              and body.get("safeguards", {}).get("mainThemeRoleVerified") is True
+              and actual == expected
+          )
+          if not valid:
+              print(json.dumps(body, indent=2), file=sys.stderr)
+              raise SystemExit("Canonical navigation publication response failed validation.")
+          print(build)
+          PY
+          )"
+          echo "CANONICAL_BUILD=${published_build}" >> "${GITHUB_ENV}"
+          echo "Validated published build ${published_build}."
+
+      - name: Verify live storefront and executable canonical assets
         run: |
           set -euo pipefail
           for attempt in $(seq 1 8); do
             html="${RUNNER_TEMP}/storefront-${attempt}.html"
             headers="${RUNNER_TEMP}/storefront-${attempt}.headers"
+            js_file="${RUNNER_TEMP}/mmg-canonical-navigation-${attempt}.js"
+            css_file="${RUNNER_TEMP}/mmg-canonical-navigation-${attempt}.css"
+
             status="$(curl --location --silent --show-error --max-time 45 \
               -D "${headers}" \
               -H 'User-Agent: Mozilla/5.0 (MMG release verifier)' \
@@ -119,18 +159,54 @@ jobs:
               "${STOREFRONT_URL}/?mmg_release=${GITHUB_SHA}&attempt=${attempt}" \
               -o "${html}" -w '%{http_code}' || true)"
             echo "Verification ${attempt}/8 | HTTP ${status}"
+
             if [ "${status}" = "200" ] \
               && grep -q 'Shopify.theme = ' "${html}" \
               && grep -q 'MMG_CANONICAL_NAVIGATION_START' "${html}" \
               && grep -q 'mmg-canonical-navigation.css' "${html}" \
-              && grep -q 'mmg-canonical-navigation.js' "${html}"; then
-              echo "Success: verified canonical assets are rendered by the live Shopify theme."
-              exit 0
+              && grep -q 'mmg-canonical-navigation.js' "${html}" \
+              && ! grep -q 'MMG_THEME_MENU_HOTFIX_START' "${html}" \
+              && ! grep -q 'MMG_ALL_THEME_NAV_START' "${html}"; then
+
+              js_src="$(grep -oE 'src="[^"]*mmg-canonical-navigation\.js[^"]*"' "${html}" | head -n1 | sed 's/^src="//;s/"$//;s/&amp;/\&/g')"
+              css_src="$(grep -oE 'href="[^"]*mmg-canonical-navigation\.css[^"]*"' "${html}" | head -n1 | sed 's/^href="//;s/"$//;s/&amp;/\&/g')"
+
+              case "${js_src}" in
+                //*) js_url="https:${js_src}" ;;
+                /*) js_url="${STOREFRONT_URL}${js_src}" ;;
+                http*) js_url="${js_src}" ;;
+                *) js_url="" ;;
+              esac
+              case "${css_src}" in
+                //*) css_url="https:${css_src}" ;;
+                /*) css_url="${STOREFRONT_URL}${css_src}" ;;
+                http*) css_url="${css_src}" ;;
+                *) css_url="" ;;
+              esac
+
+              if [ -n "${js_url}" ] && [ -n "${css_url}" ] \
+                && curl --fail --silent --show-error --max-time 45 -H 'Cache-Control: no-cache' "${js_url}" -o "${js_file}" \
+                && curl --fail --silent --show-error --max-time 45 -H 'Cache-Control: no-cache' "${css_url}" -o "${css_file}" \
+                && node --check "${js_file}" \
+                && grep -q "${CANONICAL_BUILD}" "${js_file}" \
+                && grep -q '"Shop"' "${js_file}" \
+                && grep -q '"Create & Learn"' "${js_file}" \
+                && grep -q '"Services"' "${js_file}" \
+                && grep -q '"Company"' "${js_file}" \
+                && grep -q '"Support"' "${js_file}" \
+                && ! grep -q 'kairos-native-navigation-theme-publisher-20260718-8' "${js_file}" \
+                && ! grep -q '"title":"Knowledge Library"' "${js_file}" \
+                && ! grep -q '"title":"Membership"' "${js_file}" \
+                && ! grep -q '"title":"Kairos"' "${js_file}"; then
+                echo "Success: storefront is HTTP 200 and canonical v9 JavaScript and CSS are live and executable."
+                exit 0
+              fi
             fi
+
             echo "--- live navigation markers ---"
-            grep -Ein -m 30 'Shopify.theme|MMG_CANONICAL_NAVIGATION|mmg-canonical-navigation|MMG_ALL_THEME_NAV|MMG_THEME_MENU_HOTFIX' "${html}" || true
+            grep -Ein -m 40 'Shopify.theme|MMG_CANONICAL_NAVIGATION|mmg-canonical-navigation|MMG_ALL_THEME_NAV|MMG_THEME_MENU_HOTFIX' "${html}" || true
             retry_after="$(awk 'BEGIN{IGNORECASE=1} /^retry-after:/ {gsub("\r", "", $2); print $2; exit}' "${headers}")"
             if [ -n "${retry_after}" ] && [ "${retry_after}" -le 180 ] 2>/dev/null; then sleep "${retry_after}"; else sleep 15; fi
           done
-          echo "Error: canonical live-theme assets were not observable." >&2
+          echo "Error: canonical v9 storefront assets were not live and executable." >&2
           exit 1
