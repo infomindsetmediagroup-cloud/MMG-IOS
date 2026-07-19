@@ -41,10 +41,23 @@ jobs:
           git checkout --detach "${TARGET_SHA}"
           test "$(git rev-parse HEAD)" = "${TARGET_SHA}"
 
-      - name: Validate repair runtime
+      - name: Repair source syntax and validate runtime
         run: |
           set -euo pipefail
           cd "${RUNNER_TEMP}/mmg-repair"
+          python3 <<'PY'
+          from pathlib import Path
+          path = Path("cloudflare/mmg-ios/src/kairos-native-page-content-repair-v1.js")
+          source = path.read_text(encoding="utf-8")
+          old = '''      ),
+    toolkitMiniNavigationRemoved: toolkitAudit.toolkitMiniNavigationRemoved,'''
+          new = '''      ),
+    ),
+    toolkitMiniNavigationRemoved: toolkitAudit.toolkitMiniNavigationRemoved,'''
+          if source.count(old) != 1:
+              raise SystemExit("Expected native repair syntax target was not found exactly once.")
+          path.write_text(source.replace(old, new, 1), encoding="utf-8")
+          PY
           node --check cloudflare/mmg-ios/src/kairos-native-page-content-repair-v1.js
           node --check cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
           grep -q "${BUILD}" cloudflare/mmg-ios/src/kairos-native-page-content-repair-v1.js
