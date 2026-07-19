@@ -4,6 +4,9 @@ compatibility_date = "2026-07-11"
 workers_dev = true
 keep_vars = true
 
+[build]
+command = "node scripts/publish-page-shell-deployment.mjs"
+
 [assets]
 directory = "../../web/kairos-dashboard"
 binding = "ASSETS"
