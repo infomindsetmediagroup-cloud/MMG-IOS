@@ -11,7 +11,7 @@ name: Repair Audited MMG Pages
       - "cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js"
       - "cloudflare/mmg-ios/wrangler.toml"
       - "cloudflare/mmg-ios/package.json"
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 permissions:
   contents: read
