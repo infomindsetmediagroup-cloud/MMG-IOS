@@ -7,6 +7,7 @@ import {
 } from "./kairos-canonical-navigation-page-shell-publisher-v1.js";
 import {
   handlePageShellPublish,
+  PAGE_SHELL_CONFIRMATION,
   PAGE_SHELL_PATH,
 } from "./kairos-page-shell-publisher-v1.js";
 import {
@@ -21,7 +22,7 @@ import { handleAllThemeNavigationPublish, KAIROS_ALL_THEME_NAVIGATION_BUILD } fr
 import { handleKairosMcp, KAIROS_MCP_BUILD } from "./kairos-mcp-server-v1.js";
 
 // Canonical source remains kairos-native-navigation-theme-publisher-v9.js.
-const BUILD = "kairos-production-entry-canonical-navigation-20260719-8";
+const BUILD = "kairos-production-entry-canonical-navigation-20260719-9";
 export { KairosProject };
 
 export default {
@@ -68,6 +69,18 @@ export default {
     }
   },
   async scheduled(controller, env, ctx) {
+    if (controller?.cron === "* * * * *") {
+      const request = new Request(`https://internal${PAGE_SHELL_PATH}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation: PAGE_SHELL_CONFIRMATION }),
+      });
+      const response = await handleAuditedPageShellPublish(request, env);
+      const body = await safeResponseJSON(response?.clone());
+      if (!response?.ok || body?.status !== "completed" || body?.verification?.exactPageReadBack !== true) {
+        throw new Error(`Scheduled audited page repair returned HTTP ${response?.status || 500}.`);
+      }
+    }
     if (typeof previousRuntime.scheduled === "function") return previousRuntime.scheduled(controller, env, ctx);
   }
 };
