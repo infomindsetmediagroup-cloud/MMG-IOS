@@ -63,24 +63,26 @@ jobs:
       - name: Confirm Shopify publication startup
         run: echo "Publishing the authoritative native Shopify main menu."
 
-      - name: Wait for native menu publisher
+      - name: Wait for deployed native menu publisher
         run: |
           set -euo pipefail
           for attempt in $(seq 1 36); do
-            headers="${RUNNER_TEMP}/publisher-headers.txt"
-            status="$(curl --silent --show-error --head --max-time 30 \
-              -D "${headers}" \
-              -o /dev/null \
-              -w '%{http_code}' \
-              "${WORKER_BASE_URL}/api/shopify/native-main-menu/publish?sha=${GITHUB_SHA}&attempt=${attempt}" || true)"
-            echo "Native publisher verification ${attempt}/36 HTTP ${status}"
-            if grep -qi "x-mmg-native-main-menu: ${NATIVE_MENU_BUILD}" "${headers}"; then
-              echo "Native Shopify menu publisher is live."
+            identity="${RUNNER_TEMP}/deployment-identity.json"
+            status="$(curl --silent --show-error --max-time 30 \
+              "${WORKER_BASE_URL}/api/deployment/identity?sha=${GITHUB_SHA}&attempt=${attempt}" \
+              -o "${identity}" \
+              -w '%{http_code}' || true)"
+            echo "Deployment identity verification ${attempt}/36 HTTP ${status}"
+            cat "${identity}" || true
+            if [ "${status}" = "200" ] \
+              && grep -q "\"navigationBuild\":\"${NATIVE_MENU_BUILD}\"" "${identity}" \
+              && grep -q "\"deploymentSha\":\"${GITHUB_SHA}\"" "${identity}"; then
+              echo "Native Shopify menu publisher is live for the current deployment."
               exit 0
             fi
             sleep 5
           done
-          echo "Native Shopify menu publisher did not become live." >&2
+          echo "Current native Shopify menu publisher deployment did not become identifiable." >&2
           exit 1
 
       - name: Publish native Shopify navigation
