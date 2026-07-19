@@ -5,10 +5,15 @@ import {
   KAIROS_NATIVE_NAVIGATION_BUILD,
   KAIROS_PAGE_SHELL_BUILD,
 } from "./kairos-canonical-navigation-page-shell-publisher-v1.js";
-import { handlePageShellPublish } from "./kairos-page-shell-publisher-v1.js";
+import {
+  handlePageShellPublish,
+  PAGE_SHELL_PATH,
+} from "./kairos-page-shell-publisher-v1.js";
 import {
   handleNativePageRepair,
   KAIROS_NATIVE_PAGE_REPAIR_BUILD,
+  NATIVE_PAGE_REPAIR_CONFIRMATION,
+  NATIVE_PAGE_REPAIR_PATH,
 } from "./kairos-native-page-content-repair-v1.js";
 import { handleThemeMenuHotfixPublish, KAIROS_THEME_MENU_HOTFIX_BUILD } from "./kairos-theme-menu-hotfix-publisher-20260718.js";
 import { handleLiveHeaderNavigationPublish, KAIROS_LIVE_HEADER_BUILD } from "./kairos-live-header-navigation-publisher-20260719.js";
@@ -16,7 +21,7 @@ import { handleAllThemeNavigationPublish, KAIROS_ALL_THEME_NAVIGATION_BUILD } fr
 import { handleKairosMcp, KAIROS_MCP_BUILD } from "./kairos-mcp-server-v1.js";
 
 // Canonical source remains kairos-native-navigation-theme-publisher-v9.js.
-const BUILD = "kairos-production-entry-canonical-navigation-20260719-7";
+const BUILD = "kairos-production-entry-canonical-navigation-20260719-8";
 export { KairosProject };
 
 export default {
@@ -25,11 +30,11 @@ export default {
       const mcpResponse = await handleKairosMcp(request, env);
       if (mcpResponse) return stamp(mcpResponse);
 
+      const combinedPageRepairResponse = await handleAuditedPageShellPublish(request, env);
+      if (combinedPageRepairResponse) return stamp(combinedPageRepairResponse);
+
       const nativePageRepairResponse = await handleNativePageRepair(request, env);
       if (nativePageRepairResponse) return stamp(nativePageRepairResponse);
-
-      const pageShellResponse = await handlePageShellPublish(request, env);
-      if (pageShellResponse) return stamp(pageShellResponse);
 
       const canonicalShellResponse = await handleCanonicalNavigationAndPageShellPublish(request, env);
       if (canonicalShellResponse) return stamp(canonicalShellResponse);
@@ -67,6 +72,54 @@ export default {
   }
 };
 
+async function handleAuditedPageShellPublish(request, env) {
+  const url = new URL(request.url);
+  if (request.method !== "POST" || url.pathname !== PAGE_SHELL_PATH) return null;
+
+  const pageShellResponse = await handlePageShellPublish(request.clone(), env);
+  const pageShell = await safeResponseJSON(pageShellResponse?.clone());
+  if (!pageShellResponse?.ok || pageShell?.status !== "completed") return pageShellResponse;
+
+  const nativeRequest = new Request(new URL(NATIVE_PAGE_REPAIR_PATH, request.url), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ confirmation: NATIVE_PAGE_REPAIR_CONFIRMATION }),
+  });
+  const nativeResponse = await handleNativePageRepair(nativeRequest, env);
+  const nativePageRepair = await safeResponseJSON(nativeResponse?.clone());
+  if (!nativeResponse?.ok || nativePageRepair?.status !== "completed") {
+    return json({
+      status: "failed",
+      build: KAIROS_PAGE_SHELL_BUILD,
+      pageShell,
+      nativePageRepair,
+      error: {
+        code: "native_page_repair_failed_after_page_shell",
+        message: "The shared page shell published, but the audited Shopify page-body repair failed.",
+      },
+    }, nativeResponse?.status || 502);
+  }
+
+  return json({
+    ...pageShell,
+    summary: `${pageShell.summary} The audited Shopify page bodies were also repaired directly.`,
+    nativePageRepair,
+    verification: {
+      ...(pageShell.verification || {}),
+      nativePageRepairValid: nativePageRepair.verification?.valid === true,
+      exactPageReadBack: nativePageRepair.verification?.exactPageReadBack === true,
+      toolkitMiniNavigationRemoved:
+        nativePageRepair.verification?.toolkitMiniNavigationRemoved === true,
+      publishingDirectoryRemoved:
+        nativePageRepair.verification?.publishingDirectoryRemoved === true,
+      projectGuideLinksRepaired:
+        nativePageRepair.verification?.projectGuideLinksRepaired === true,
+      nativeTitleSuppressionInstalled:
+        nativePageRepair.verification?.nativeTitleSuppressionInstalled === true,
+    },
+  });
+}
+
 function stamp(response) {
   const headers = new Headers(response.headers);
   headers.set("X-MMG-Canonical-Navigation-Entry", BUILD);
@@ -79,6 +132,14 @@ function stamp(response) {
   headers.set("X-MMG-Theme-Menu-Hotfix", KAIROS_THEME_MENU_HOTFIX_BUILD);
   headers.set("X-Kairos-MCP", KAIROS_MCP_BUILD);
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
+async function safeResponseJSON(response) {
+  try {
+    return await response?.json();
+  } catch {
+    return {};
+  }
 }
 
 function json(value, status = 200) {
