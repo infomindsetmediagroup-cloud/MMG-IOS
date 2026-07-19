@@ -29,23 +29,31 @@ jobs:
       TARGET_SHA: ${{ github.event.pull_request.head.sha }}
       BUILD: kairos-native-page-content-repair-20260719-1
     steps:
-      - name: Checkout PR head
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Materialize PR head
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git clone --no-checkout \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "${RUNNER_TEMP}/mmg-repair"
+          cd "${RUNNER_TEMP}/mmg-repair"
+          git checkout --detach "${TARGET_SHA}"
+          test "$(git rev-parse HEAD)" = "${TARGET_SHA}"
 
       - name: Validate repair runtime
         run: |
           set -euo pipefail
+          cd "${RUNNER_TEMP}/mmg-repair"
           node --check cloudflare/mmg-ios/src/kairos-native-page-content-repair-v1.js
           node --check cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
           grep -q "${BUILD}" cloudflare/mmg-ios/src/kairos-native-page-content-repair-v1.js
           grep -q 'kairos-native-page-content-repair-v1.js' cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
 
       - name: Deploy PR Worker
-        working-directory: cloudflare/mmg-ios
         run: |
           set -euo pipefail
+          cd "${RUNNER_TEMP}/mmg-repair/cloudflare/mmg-ios"
           npm install --no-audit --no-fund
           npx wrangler deploy \
             --var "DEPLOYMENT_SHA:${TARGET_SHA}" \
