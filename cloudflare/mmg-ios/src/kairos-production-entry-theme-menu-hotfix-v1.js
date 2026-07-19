@@ -6,13 +6,17 @@ import {
   KAIROS_PAGE_SHELL_BUILD,
 } from "./kairos-canonical-navigation-page-shell-publisher-v1.js";
 import { handlePageShellPublish } from "./kairos-page-shell-publisher-v1.js";
+import {
+  handleNativePageRepair,
+  KAIROS_NATIVE_PAGE_REPAIR_BUILD,
+} from "./kairos-native-page-content-repair-v1.js";
 import { handleThemeMenuHotfixPublish, KAIROS_THEME_MENU_HOTFIX_BUILD } from "./kairos-theme-menu-hotfix-publisher-20260718.js";
 import { handleLiveHeaderNavigationPublish, KAIROS_LIVE_HEADER_BUILD } from "./kairos-live-header-navigation-publisher-20260719.js";
 import { handleAllThemeNavigationPublish, KAIROS_ALL_THEME_NAVIGATION_BUILD } from "./kairos-all-theme-navigation-publisher-20260719.js";
 import { handleKairosMcp, KAIROS_MCP_BUILD } from "./kairos-mcp-server-v1.js";
 
 // Canonical source remains kairos-native-navigation-theme-publisher-v9.js.
-const BUILD = "kairos-production-entry-canonical-navigation-20260719-6";
+const BUILD = "kairos-production-entry-canonical-navigation-20260719-7";
 export { KairosProject };
 
 export default {
@@ -20,6 +24,9 @@ export default {
     try {
       const mcpResponse = await handleKairosMcp(request, env);
       if (mcpResponse) return stamp(mcpResponse);
+
+      const nativePageRepairResponse = await handleNativePageRepair(request, env);
+      if (nativePageRepairResponse) return stamp(nativePageRepairResponse);
 
       const pageShellResponse = await handlePageShellPublish(request, env);
       if (pageShellResponse) return stamp(pageShellResponse);
@@ -43,13 +50,14 @@ export default {
         canonicalShell: KAIROS_CANONICAL_SHELL_BUILD,
         canonicalNavigation: KAIROS_NATIVE_NAVIGATION_BUILD,
         pageShell: KAIROS_PAGE_SHELL_BUILD,
+        nativePageRepair: KAIROS_NATIVE_PAGE_REPAIR_BUILD,
         mcpBuild: KAIROS_MCP_BUILD,
         allThemeNavigation: KAIROS_ALL_THEME_NAVIGATION_BUILD,
         liveHeaderNavigation: KAIROS_LIVE_HEADER_BUILD,
         themeMenuHotfix: KAIROS_THEME_MENU_HOTFIX_BUILD,
         error: {
           code: error?.code || "canonical_navigation_entry_failed",
-          message: error instanceof Error ? error.message : "Canonical navigation or page-shell publication failed."
+          message: error instanceof Error ? error.message : "Canonical navigation or page repair failed."
         }
       }, Number(error?.status || 500));
     }
@@ -65,6 +73,7 @@ function stamp(response) {
   headers.set("X-MMG-Canonical-Shell", KAIROS_CANONICAL_SHELL_BUILD);
   headers.set("X-MMG-Native-Navigation", KAIROS_NATIVE_NAVIGATION_BUILD);
   headers.set("X-MMG-Page-Shell", KAIROS_PAGE_SHELL_BUILD);
+  headers.set("X-MMG-Native-Page-Repair", KAIROS_NATIVE_PAGE_REPAIR_BUILD);
   headers.set("X-MMG-All-Theme-Navigation", KAIROS_ALL_THEME_NAVIGATION_BUILD);
   headers.set("X-MMG-Live-Header-Navigation", KAIROS_LIVE_HEADER_BUILD);
   headers.set("X-MMG-Theme-Menu-Hotfix", KAIROS_THEME_MENU_HOTFIX_BUILD);
@@ -82,6 +91,7 @@ function json(value, status = 200) {
       "X-MMG-Canonical-Shell": KAIROS_CANONICAL_SHELL_BUILD,
       "X-MMG-Native-Navigation": KAIROS_NATIVE_NAVIGATION_BUILD,
       "X-MMG-Page-Shell": KAIROS_PAGE_SHELL_BUILD,
+      "X-MMG-Native-Page-Repair": KAIROS_NATIVE_PAGE_REPAIR_BUILD,
       "X-MMG-All-Theme-Navigation": KAIROS_ALL_THEME_NAVIGATION_BUILD,
       "X-MMG-Live-Header-Navigation": KAIROS_LIVE_HEADER_BUILD,
       "X-MMG-Theme-Menu-Hotfix": KAIROS_THEME_MENU_HOTFIX_BUILD,
