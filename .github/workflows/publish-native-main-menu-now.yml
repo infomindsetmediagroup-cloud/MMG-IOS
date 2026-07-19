@@ -89,23 +89,35 @@ jobs:
         run: |
           set -euo pipefail
           result="${RUNNER_TEMP}/native-main-menu-result.json"
-          status="$(curl --silent --show-error --retry 3 --retry-delay 3 \
-            -X POST "${WORKER_BASE_URL}/api/shopify/native-main-menu/publish" \
-            -H 'Content-Type: application/json' \
-            --data '{"confirmation":"PUBLISH_MMG_NATIVE_MAIN_MENU_NOW"}' \
-            -o "${result}" \
-            -w '%{http_code}' || true)"
-          echo "Native Shopify menu publication HTTP ${status}"
-          cat "${result}" || true
-          test "${status}" -ge 200
-          test "${status}" -lt 300
-          grep -q '"status":"completed"' "${result}"
-          grep -q '"exactNativeMenuReadBack":true' "${result}"
-          grep -q '"primaryMainMenuUpdated":true' "${result}"
-          grep -q '"authoritativeMenuUpdated":true' "${result}"
-          grep -q '"knowledgeLibraryRemoved":true' "${result}"
-          grep -q '"absoluteUrlsUsed":true' "${result}"
-          grep -q '"themeOverrideNotUsed":true' "${result}"
+          for attempt in $(seq 1 24); do
+            status="$(curl --silent --show-error --max-time 45 \
+              -X POST "${WORKER_BASE_URL}/api/shopify/native-main-menu/publish?sha=${GITHUB_SHA}&attempt=${attempt}" \
+              -H 'Content-Type: application/json' \
+              --data '{"confirmation":"PUBLISH_MMG_NATIVE_MAIN_MENU_NOW"}' \
+              -o "${result}" \
+              -w '%{http_code}' || true)"
+            echo "Native Shopify menu publication attempt ${attempt}/24 HTTP ${status}"
+            cat "${result}" || true
+
+            if [ "${status}" = "200" ] \
+              && grep -q '"status":"completed"' "${result}" \
+              && grep -q "\"build\":\"${NATIVE_MENU_BUILD}\"" "${result}" \
+              && grep -q '"exactNativeMenuReadBack":true' "${result}" \
+              && grep -q '"primaryMainMenuUpdated":true' "${result}" \
+              && grep -q '"authoritativeMenuUpdated":true' "${result}" \
+              && grep -q '"knowledgeLibraryRemoved":true' "${result}" \
+              && grep -q '"absoluteUrlsUsed":true' "${result}" \
+              && grep -q '"themeOverrideNotUsed":true' "${result}"; then
+              echo "Current native Shopify main-menu publisher completed successfully."
+              exit 0
+            fi
+
+            echo "Publication response was stale or incomplete; retrying after 5 seconds."
+            sleep 5
+          done
+
+          echo "Current native Shopify main-menu publisher did not complete successfully." >&2
+          exit 1
 
       - name: Record storefront delivery status
         run: |
