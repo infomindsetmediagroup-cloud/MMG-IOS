@@ -1,7 +1,9 @@
-import { chromium } from "playwright";
+import fs from "node:fs";
+import puppeteer from "puppeteer-core";
 
 const origin = "https://themindsetmediagroup.com";
 const expectedBuild = "kairos-page-shell-publisher-20260719-1";
+const reportPath = "../../web/kairos-dashboard/mmg-page-shell-verification.json";
 const pages = [
   {
     key: "free-creator-toolkit",
@@ -21,85 +23,132 @@ const viewports = [
   { name: "desktop", width: 1440, height: 1000 },
   { name: "mobile", width: 390, height: 844 },
 ];
+const executablePath = [
+  process.env.PUPPETEER_EXECUTABLE_PATH,
+  "/usr/bin/google-chrome",
+  "/usr/bin/google-chrome-stable",
+  "/usr/bin/chromium",
+  "/usr/bin/chromium-browser",
+].find((candidate) => candidate && fs.existsSync(candidate));
 
-const browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
-const results = [];
+const report = {
+  generatedAt: new Date().toISOString(),
+  sourceSha: process.env.SOURCE_SHA || process.env.GITHUB_SHA || "unknown",
+  origin,
+  expectedBuild,
+  executablePath: executablePath || null,
+  passed: false,
+  results: [],
+  error: null,
+};
+
+let browser;
 try {
+  if (!executablePath) throw new Error("No Chrome or Chromium executable was available on the deployment runner.");
+  browser = await puppeteer.launch({
+    executablePath,
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+  });
+
   for (const definition of pages) {
     for (const viewport of viewports) {
-      const context = await browser.newContext({ viewport });
-      const page = await context.newPage();
-      const url = `${origin}${definition.path}?mmg_dom_verify=${Date.now()}-${viewport.name}`;
-      const response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 });
-      await page.waitForFunction(
-        (build) => document.documentElement.dataset.mmgPageShell === build,
-        expectedBuild,
-        { timeout: 25_000 },
-      );
-      await page.waitForFunction(
-        () => document.documentElement.dataset.mmgPageShellReady === "true",
-        null,
-        { timeout: 25_000 },
-      );
-      await page.waitForTimeout(1_000);
-
-      const visibleH1 = (await page.locator("main h1:visible").allTextContents())
-        .map((value) => value.replace(/\s+/g, " ").trim());
-      const titleHidden = await page.locator("main .mmg-native-page-title-hidden").count();
-      const normalizedBlockHidden = await page.locator(definition.hiddenSelector).count();
-      const nativeFooter = await page.locator("footer").count();
-      const build = await page.locator("html").getAttribute("data-mmg-page-shell");
-      const ready = await page.locator("html").getAttribute("data-mmg-page-shell-ready");
-      const pageKey = await page.locator("html").getAttribute("data-mmg-page-shell-page");
-      const unresolvedProjectGuide = await page.locator('main a[href*="/pages/project-guide"]').count();
-      const repairedProcessLinks = definition.publishing
-        ? await page.locator('main a[href="/pages/publishing-services#publishing-process"][data-mmg-link-repaired="true"]').count()
-        : 0;
-      const publishingProcess = definition.publishing ? await page.locator("#publishing-process").count() : 0;
-      const overflow = await page.evaluate(() => ({
-        viewport: document.documentElement.clientWidth,
-        document: document.documentElement.scrollWidth,
-        body: document.body.scrollWidth,
-      }));
-
-      const passed = Boolean(response?.ok())
-        && build === expectedBuild
-        && ready === "true"
-        && pageKey === definition.key
-        && visibleH1.length === 1
-        && visibleH1[0] === definition.hero
-        && titleHidden === 1
-        && normalizedBlockHidden === 1
-        && nativeFooter >= 1
-        && unresolvedProjectGuide === 0
-        && (!definition.publishing || repairedProcessLinks >= 3)
-        && (!definition.publishing || publishingProcess === 1)
-        && Math.max(overflow.document, overflow.body) <= overflow.viewport + 2;
-
-      results.push({
+      const page = await browser.newPage();
+      await page.setViewport({ width: viewport.width, height: viewport.height });
+      const result = {
         page: definition.key,
         viewport: viewport.name,
-        http: response?.status() || 0,
-        build,
-        ready,
-        pageKey,
-        visibleH1,
-        titleHidden,
-        normalizedBlockHidden,
-        nativeFooter,
-        unresolvedProjectGuide,
-        repairedProcessLinks,
-        publishingProcess,
-        overflow,
-        passed,
-      });
-      await context.close();
+        http: 0,
+        build: null,
+        ready: null,
+        pageKey: null,
+        visibleH1: [],
+        titleHidden: 0,
+        normalizedBlockHidden: 0,
+        nativeFooter: 0,
+        unresolvedProjectGuide: 0,
+        repairedProcessLinks: 0,
+        publishingProcess: 0,
+        overflow: null,
+        passed: false,
+        error: null,
+      };
+
+      try {
+        const response = await page.goto(
+          `${origin}${definition.path}?mmg_dom_verify=${Date.now()}-${viewport.name}`,
+          { waitUntil: "domcontentloaded", timeout: 60_000 },
+        );
+        result.http = response?.status() || 0;
+        await page.waitForFunction(
+          (build) => document.documentElement.dataset.mmgPageShell === build,
+          { timeout: 25_000 },
+          expectedBuild,
+        );
+        await page.waitForFunction(
+          () => document.documentElement.dataset.mmgPageShellReady === "true",
+          { timeout: 25_000 },
+        );
+        await new Promise((resolve) => setTimeout(resolve, 1_000));
+
+        const state = await page.evaluate(({ hiddenSelector, publishing }) => {
+          const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim();
+          const visible = (element) => {
+            const style = window.getComputedStyle(element);
+            return style.display !== "none" && style.visibility !== "hidden" && element.getClientRects().length > 0;
+          };
+          const visibleH1 = [...document.querySelectorAll("main h1")]
+            .filter(visible)
+            .map((element) => normalize(element.textContent));
+          return {
+            build: document.documentElement.dataset.mmgPageShell || null,
+            ready: document.documentElement.dataset.mmgPageShellReady || null,
+            pageKey: document.documentElement.dataset.mmgPageShellPage || null,
+            visibleH1,
+            titleHidden: document.querySelectorAll("main .mmg-native-page-title-hidden").length,
+            normalizedBlockHidden: document.querySelectorAll(hiddenSelector).length,
+            nativeFooter: document.querySelectorAll("footer").length,
+            unresolvedProjectGuide: document.querySelectorAll('main a[href*="/pages/project-guide"]').length,
+            repairedProcessLinks: publishing
+              ? document.querySelectorAll('main a[href="/pages/publishing-services#publishing-process"][data-mmg-link-repaired="true"]').length
+              : 0,
+            publishingProcess: publishing ? document.querySelectorAll("#publishing-process").length : 0,
+            overflow: {
+              viewport: document.documentElement.clientWidth,
+              document: document.documentElement.scrollWidth,
+              body: document.body.scrollWidth,
+            },
+          };
+        }, { hiddenSelector: definition.hiddenSelector, publishing: Boolean(definition.publishing) });
+        Object.assign(result, state);
+        result.passed = result.http >= 200
+          && result.http < 400
+          && result.build === expectedBuild
+          && result.ready === "true"
+          && result.pageKey === definition.key
+          && result.visibleH1.length === 1
+          && result.visibleH1[0] === definition.hero
+          && result.titleHidden === 1
+          && result.normalizedBlockHidden === 1
+          && result.nativeFooter >= 1
+          && result.unresolvedProjectGuide === 0
+          && (!definition.publishing || result.repairedProcessLinks >= 3)
+          && (!definition.publishing || result.publishingProcess === 1)
+          && Math.max(result.overflow.document, result.overflow.body) <= result.overflow.viewport + 2;
+      } catch (error) {
+        result.error = error instanceof Error ? error.stack || error.message : String(error);
+      } finally {
+        report.results.push(result);
+        await page.close();
+      }
     }
   }
+  report.passed = report.results.length === pages.length * viewports.length
+    && report.results.every((result) => result.passed);
+} catch (error) {
+  report.error = error instanceof Error ? error.stack || error.message : String(error);
 } finally {
-  await browser.close();
+  if (browser) await browser.close();
+  fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+  console.log(JSON.stringify(report, null, 2));
 }
-
-const passed = results.every((result) => result.passed);
-console.log(JSON.stringify({ passed, expectedBuild, results }, null, 2));
-if (!passed) process.exit(1);
