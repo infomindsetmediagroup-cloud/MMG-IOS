@@ -1,6 +1,6 @@
 import { httpError, writeThemeFiles } from "./kairos-compact-homepage-utils-v1.js";
 
-export const KAIROS_ALL_THEME_NAVIGATION_BUILD = "kairos-all-theme-navigation-20260719-1";
+export const KAIROS_ALL_THEME_NAVIGATION_BUILD = "kairos-all-theme-navigation-20260719-2";
 export const ALL_THEME_NAVIGATION_PATH = "/api/shopify/all-theme-navigation/publish";
 export const ALL_THEME_NAVIGATION_CONFIRMATION = "PUBLISH_MMG_ALL_THEME_NAVIGATION_NOW";
 
@@ -8,6 +8,11 @@ const SHOPIFY_TIMEOUT_MS = 25_000;
 const LAYOUT_FILE = "layout/theme.liquid";
 const MARKER_START = "<!-- MMG_ALL_THEME_NAV_START -->";
 const MARKER_END = "<!-- MMG_ALL_THEME_NAV_END -->";
+const LEGACY_MARKERS = [
+  ["<!-- MMG_THEME_MENU_HOTFIX_START -->", "<!-- MMG_THEME_MENU_HOTFIX_END -->"],
+  ["<!-- MMG_CANONICAL_NAVIGATION_START -->", "<!-- MMG_CANONICAL_NAVIGATION_END -->"],
+  [MARKER_START, MARKER_END],
+];
 const tokenCache = new Map();
 
 const NAV = [
@@ -64,6 +69,7 @@ export async function handleAllThemeNavigationPublish(request, env) {
       allReadableThemeLayoutsPatched: true,
       exactThemeReadBack: true,
       canonicalNavigationEmbedded: true,
+      malformedLegacyBlocksRemoved: true,
       patchedThemeCount: patched.length,
       mainThemePatched: patched.some(theme => String(theme.role).toUpperCase() === "MAIN"),
     },
@@ -72,18 +78,26 @@ export async function handleAllThemeNavigationPublish(request, env) {
 
 function buildBlock() {
   const nav = JSON.stringify(NAV).replace(/</g, "\\u003c");
-  return `${MARKER_START}\n<meta name="mmg-all-theme-navigation" content="${KAIROS_ALL_THEME_NAVIGATION_BUILD}">\n<style id="mmg-all-theme-nav-style">.mmg-all-theme-nav{display:flex;gap:1.5rem;list-style:none;margin:0;padding:0}.mmg-all-theme-nav>li{position:relative}.mmg-all-theme-nav a,.mmg-all-theme-nav summary{color:inherit;text-decoration:none;cursor:pointer;list-style:none}.mmg-all-theme-nav summary::-webkit-details-marker{display:none}.mmg-all-theme-nav ul{position:absolute;z-index:9999;top:100%;left:0;min-width:22rem;background:#fff;color:#111;border:1px solid rgba(0,0,0,.12);padding:1rem;list-style:none}.mmg-all-theme-nav ul a{display:block;padding:.75rem 1rem}@media(max-width:989px){.mmg-all-theme-nav{display:grid}.mmg-all-theme-nav ul{position:static;border:0;padding:.5rem 0 1rem 1rem}}</style>\n<script id="mmg-all-theme-nav-script">(()=>{\"use strict\";const BUILD=\"${KAIROS_ALL_THEME_NAVIGATION_BUILD}\",NAV=${nav},esc=v=>String(v).replace(/[&<>\\\"]/g,c=>({\"&\":\"&amp;\",\"<\":\"&lt;\",\">\":\"&gt;\",\"\\\"\":\"&quot;\"})[c]),html='<ul class="mmg-all-theme-nav" data-mmg-all-theme="'+BUILD+'">'+NAV.map(g=>'<li><details><summary>'+esc(g[0])+'</summary><ul>'+g[1].map(x=>'<li><a href="'+esc(x[1])+'">'+esc(x[0])+'</a></li>').join('')+'</ul></details></li>').join('')+'</ul>';function install(){const roots=[...document.querySelectorAll('header nav,header .header__inline-menu,header [role="navigation"],.menu-drawer__navigation')];for(const el of roots){const text=(el.innerText||'').replace(/\\s+/g,' ');if(/Catalog|Knowledge Library|Customer Portal|Publishing Services/i.test(text)||el.classList.contains('header__inline-menu')||el.classList.contains('menu-drawer__navigation')){el.innerHTML=html;el.dataset.mmgAllTheme=BUILD}}document.documentElement.dataset.mmgAllThemeNavigation=BUILD}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();new MutationObserver(install).observe(document.documentElement,{childList:true,subtree:true});})();</script>\n${MARKER_END}`;
+  const script = `(()=>{"use strict";const BUILD=${JSON.stringify(KAIROS_ALL_THEME_NAVIGATION_BUILD)},NAV=${nav};function esc(value){return String(value).replace(/[&<>\"]/g,function(char){if(char==="&")return "&amp;";if(char==="<")return "&lt;";if(char===">")return "&gt;";return "&quot;"})}const desktop='<ul class="mmg-all-theme-nav" data-mmg-all-theme="'+BUILD+'">'+NAV.map(function(group){return '<li><details><summary>'+esc(group[0])+'</summary><ul>'+group[1].map(function(item){return '<li><a href="'+esc(item[1])+'">'+esc(item[0])+'</a></li>'}).join('')+'</ul></details></li>'}).join('')+'</ul>';const drawer='<nav class="mmg-all-theme-drawer" data-mmg-all-theme="'+BUILD+'">'+NAV.map(function(group){return '<details><summary>'+esc(group[0])+'</summary><div>'+group[1].map(function(item){return '<a href="'+esc(item[1])+'">'+esc(item[0])+'</a>'}).join('')+'</div></details>'}).join('')+'</nav>';function install(){const roots=[...document.querySelectorAll('header .header__inline-menu,header nav,header [role="navigation"],.menu-drawer__navigation')];for(const el of roots){const mobile=el.classList.contains('menu-drawer__navigation')||/drawer|mobile/i.test(el.className||'');el.innerHTML=mobile?drawer:desktop;el.dataset.mmgAllTheme=BUILD}document.documentElement.dataset.mmgAllThemeNavigation=BUILD}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();new MutationObserver(function(){install()}).observe(document.documentElement,{childList:true,subtree:true})})();`;
+  return `${MARKER_START}\n<meta name="mmg-all-theme-navigation" content="${KAIROS_ALL_THEME_NAVIGATION_BUILD}">\n<style id="mmg-all-theme-nav-style">.mmg-all-theme-nav{display:flex;gap:1.5rem;list-style:none;margin:0;padding:0}.mmg-all-theme-nav>li{position:relative}.mmg-all-theme-nav a,.mmg-all-theme-nav summary,.mmg-all-theme-drawer a,.mmg-all-theme-drawer summary{color:inherit;text-decoration:none;cursor:pointer;list-style:none}.mmg-all-theme-nav summary::-webkit-details-marker,.mmg-all-theme-drawer summary::-webkit-details-marker{display:none}.mmg-all-theme-nav ul{position:absolute;z-index:9999;top:100%;left:0;min-width:22rem;background:#fff;color:#111;border:1px solid rgba(0,0,0,.12);padding:1rem;list-style:none}.mmg-all-theme-nav ul a{display:block;padding:.75rem 1rem}.mmg-all-theme-drawer{display:grid}.mmg-all-theme-drawer details{border-bottom:1px solid rgba(0,0,0,.12)}.mmg-all-theme-drawer summary{display:flex;justify-content:space-between;padding:1.25rem 1rem}.mmg-all-theme-drawer div{display:grid;padding:0 1rem 1rem}.mmg-all-theme-drawer a{padding:.65rem 0}@media(max-width:989px){.mmg-all-theme-nav{display:none!important}}@media(min-width:990px){.mmg-all-theme-drawer{display:none!important}}</style>\n<script id="mmg-all-theme-nav-script">${script}</script>\n${MARKER_END}`;
 }
 
 function injectBlock(source, block) {
-  const stripped = stripBlock(source);
+  const stripped = stripKnownBlocks(source);
   return /<\/body>/i.test(stripped) ? stripped.replace(/<\/body>/i, `${block}\n</body>`) : `${stripped}\n${block}`;
 }
 
-function stripBlock(source) {
-  const start = source.indexOf(MARKER_START);
-  const end = source.indexOf(MARKER_END);
-  return start >= 0 && end > start ? source.slice(0, start) + source.slice(end + MARKER_END.length) : source;
+function stripKnownBlocks(source) {
+  let output = source;
+  for (const [startMarker, endMarker] of LEGACY_MARKERS) {
+    while (true) {
+      const start = output.indexOf(startMarker);
+      const end = output.indexOf(endMarker);
+      if (start < 0 || end <= start) break;
+      output = output.slice(0, start) + output.slice(end + endMarker.length);
+    }
+  }
+  return output;
 }
 
 function readConfig(env) {
