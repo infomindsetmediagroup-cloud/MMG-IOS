@@ -25,6 +25,20 @@ jobs:
       EXPECTED_BUILD: kairos-page-shell-publisher-20260719-1
       STATUS_CONTEXT: mmg-free-creator-toolkit-dom
     steps:
+      - name: Mark verification pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          payload="$(node -e 'process.stdout.write(JSON.stringify({state:"pending",context:process.env.STATUS_CONTEXT,description:"Verifying Free Creator Toolkit live DOM",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          curl --fail --silent --show-error -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "${payload}"
+
       - name: Install Playwright
         run: |
           set -euo pipefail
@@ -112,33 +126,30 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if [ -f toolkit-dom-result.json ]; then
-            read -r state description passed <<EOF
-          $(node -e '
-            const r=require("./toolkit-dom-result.json");
-            const d=r.results.find(x=>x.viewport==="desktop")||{};
-            const m=r.results.find(x=>x.viewport==="mobile")||{};
-            const description=r.passed
-              ? "Toolkit fixed: one H1 and legacy mini-nav removed"
-              : `FAIL d:H1=${(d.visibleH1||[]).length},title=${d.titleHidden||0},nav=${d.miniNavigationHidden||0}; m:H1=${(m.visibleH1||[]).length},title=${m.titleHidden||0},nav=${m.miniNavigationHidden||0}`;
-            process.stdout.write(`${r.passed?"success":"failure"} ${JSON.stringify(description)} ${r.passed?"true":"false"}`);
-          ')
-          EOF
-            description="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]))' "${description}")"
-          else
-            state="failure"
-            description="Toolkit DOM verification produced no result"
-            passed="false"
-          fi
-          payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,context:process.env.STATUS_CONTEXT,description:process.env.DESCRIPTION.slice(0,140),target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          node <<'NODE' > /tmp/toolkit-status.json
+          const fs = require("node:fs");
+          let result = { passed: false, results: [] };
+          try { result = JSON.parse(fs.readFileSync("toolkit-dom-result.json", "utf8")); } catch {}
+          const desktop = result.results.find((item) => item.viewport === "desktop") || {};
+          const mobile = result.results.find((item) => item.viewport === "mobile") || {};
+          const description = result.passed
+            ? "Toolkit fixed: one H1 and legacy mini-nav removed"
+            : `FAIL d:H1=${(desktop.visibleH1 || []).length},title=${desktop.titleHidden || 0},nav=${desktop.miniNavigationHidden || 0}; m:H1=${(mobile.visibleH1 || []).length},title=${mobile.titleHidden || 0},nav=${mobile.miniNavigationHidden || 0}`;
+          process.stdout.write(JSON.stringify({
+            state: result.passed ? "success" : "failure",
+            context: process.env.STATUS_CONTEXT,
+            description: description.slice(0, 140),
+            target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+          }));
+          NODE
           curl --fail --silent --show-error -X POST \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             -H "Content-Type: application/json" \
             "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "${payload}"
-          test "${passed}" = "true"
+            --data @/tmp/toolkit-status.json
+          node -e 'const r=require("./toolkit-dom-result.json"); if(!r.passed) process.exit(1)'
 
       - name: Upload verification evidence
         if: always()
