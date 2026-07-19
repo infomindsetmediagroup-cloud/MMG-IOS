@@ -39,6 +39,7 @@ jobs:
           test -f cloudflare/mmg-ios/wrangler.toml
           test -f cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
           test -f cloudflare/mmg-ios/src/kairos-theme-menu-hotfix-publisher-20260718.js
+          test -f cloudflare/mmg-ios/scripts/fix-navigation-links.mjs
           test -f scripts/verify-rendered-navigation.mjs
 
       - name: Deploy Kairos Worker
@@ -46,6 +47,7 @@ jobs:
           set -euo pipefail
           cd "${RUNNER_TEMP}/mmg-release/cloudflare/mmg-ios"
           npm install
+          node scripts/fix-navigation-links.mjs
           npx wrangler deploy \
             --var "DEPLOYMENT_SHA:${GITHUB_SHA}" \
             --var "DEPLOYED_AT:$(date -u +%Y-%m-%dT%H:%M:%SZ)"
