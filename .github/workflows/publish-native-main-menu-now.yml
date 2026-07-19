@@ -39,7 +39,7 @@ jobs:
           test -f cloudflare/mmg-ios/wrangler.toml
           test -f cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
           test -f cloudflare/mmg-ios/src/kairos-native-main-menu-publisher-20260718.js
-          test -f cloudflare/mmg-ios/src/kairos-live-header-navigation-publisher-20260719.js
+          test -f cloudflare/mmg-ios/src/kairos-all-theme-navigation-publisher-20260719.js
 
       - name: Deploy Kairos Worker
         run: |
@@ -53,16 +53,12 @@ jobs:
   publish-shopify:
     needs: deploy-worker
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       WORKER_BASE_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
       STOREFRONT_URL: https://themindsetmediagroup.com
-      NATIVE_MENU_BUILD: kairos-native-main-menu-publisher-20260718-7
-      LIVE_HEADER_BUILD: kairos-live-header-navigation-20260719-2
+      ALL_THEME_BUILD: kairos-all-theme-navigation-20260719-1
     steps:
-      - name: Confirm Shopify publication startup
-        run: echo "Publishing native menu and rendered live-header navigation."
-
       - name: Wait for current Worker deployment
         run: |
           set -euo pipefail
@@ -103,34 +99,49 @@ jobs:
           grep -q '"knowledgeLibraryRemoved":true' "${result}"
           grep -q '"absoluteUrlsUsed":true' "${result}"
 
-      - name: Publish canonical navigation into rendered header source
+      - name: Publish canonical navigation across all renderable themes
         run: |
           set -euo pipefail
-          result="${RUNNER_TEMP}/live-header-result.json"
-          status="$(curl --silent --show-error --retry 3 --retry-delay 3 --max-time 90 \
-            -X POST "${WORKER_BASE_URL}/api/shopify/live-header-navigation/publish?sha=${GITHUB_SHA}" \
+          result="${RUNNER_TEMP}/all-theme-result.json"
+          status="$(curl --silent --show-error --retry 3 --retry-delay 3 --max-time 180 \
+            -X POST "${WORKER_BASE_URL}/api/shopify/all-theme-navigation/publish?sha=${GITHUB_SHA}" \
             -H 'Content-Type: application/json' \
-            --data '{"confirmation":"PUBLISH_MMG_LIVE_HEADER_NAVIGATION_NOW"}' \
+            --data '{"confirmation":"PUBLISH_MMG_ALL_THEME_NAVIGATION_NOW"}' \
             -o "${result}" \
             -w '%{http_code}' || true)"
-          echo "Live header publication HTTP ${status}"
+          echo "All-theme navigation publication HTTP ${status}"
           cat "${result}" || true
           test "${status}" = "200"
           grep -q '"status":"completed"' "${result}"
-          grep -q "\"build\":\"${LIVE_HEADER_BUILD}\"" "${result}"
-          grep -q '"assetInventoryEnumerated":true' "${result}"
-          grep -q '"exactHeaderFileReadBack":true' "${result}"
-          grep -q '"renderedHeaderSourcePatched":true' "${result}"
+          grep -q "\"build\":\"${ALL_THEME_BUILD}\"" "${result}"
+          grep -q '"allReadableThemeLayoutsPatched":true' "${result}"
+          grep -q '"exactThemeReadBack":true' "${result}"
           grep -q '"canonicalNavigationEmbedded":true' "${result}"
-          grep -q '"legacyNavigationTargetFound":true' "${result}"
+          grep -q '"mainThemePatched":true' "${result}"
 
-      - name: Record storefront delivery status
+      - name: Verify public storefront navigation
         run: |
           set -euo pipefail
-          status="$(curl --location --silent --show-error --max-time 30 \
-            -H 'Cache-Control: no-cache, no-store, max-age=0' \
-            "${STOREFRONT_URL}/?mmg_live_header=${GITHUB_SHA}" \
-            -o /dev/null \
-            -w '%{http_code}' || true)"
-          echo "Storefront delivery HTTP ${status:-unavailable}."
-          echo "Authoritative verification passed through exact native-menu and rendered-header source read-back."
+          for attempt in $(seq 1 36); do
+            html="${RUNNER_TEMP}/storefront-${attempt}.html"
+            status="$(curl --location --silent --show-error --max-time 45 \
+              -H 'User-Agent: Mozilla/5.0 (MMG release verifier)' \
+              -H 'Cache-Control: no-cache, no-store, max-age=0' \
+              "${STOREFRONT_URL}/?mmg_public_nav=${GITHUB_SHA}&attempt=${attempt}" \
+              -o "${html}" \
+              -w '%{http_code}' || true)"
+            echo "Public storefront verification ${attempt}/36 HTTP ${status}"
+            if [ "${status}" = "200" ] \
+              && grep -q 'Shop' "${html}" \
+              && grep -q 'Create &amp; Learn\|Create & Learn' "${html}" \
+              && grep -q 'Services' "${html}" \
+              && grep -q 'Support' "${html}" \
+              && ! grep -q '>Catalog<' "${html}" \
+              && ! grep -q '>Knowledge Library<' "${html}"; then
+              echo "Public storefront navigation is canonical."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Public storefront still serves the legacy navigation." >&2
+          exit 1
