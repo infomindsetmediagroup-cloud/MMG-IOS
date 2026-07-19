@@ -39,12 +39,14 @@ jobs:
           test -f cloudflare/mmg-ios/wrangler.toml
           test -f cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
           test -f cloudflare/mmg-ios/src/kairos-native-main-menu-publisher-20260718.js
+          test -f cloudflare/mmg-ios/scripts/fix-native-main-menu-targeting.mjs
 
       - name: Deploy Kairos Worker
         run: |
           set -euo pipefail
           cd "${RUNNER_TEMP}/mmg-release/cloudflare/mmg-ios"
           npm install
+          node scripts/fix-native-main-menu-targeting.mjs
           npx wrangler deploy \
             --var "DEPLOYMENT_SHA:${GITHUB_SHA}" \
             --var "DEPLOYED_AT:$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -56,10 +58,10 @@ jobs:
     env:
       WORKER_BASE_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
       STOREFRONT_URL: https://themindsetmediagroup.com
-      NATIVE_MENU_BUILD: kairos-native-main-menu-publisher-20260718-7
+      NATIVE_MENU_BUILD: kairos-native-main-menu-publisher-20260718-8
     steps:
       - name: Confirm Shopify publication startup
-        run: echo "Publishing the native Shopify menu bound to the live MAIN theme."
+        run: echo "Publishing the authoritative native Shopify main menu."
 
       - name: Wait for native menu publisher
         run: |
@@ -97,7 +99,8 @@ jobs:
           test "${status}" -lt 300
           grep -q '"status":"completed"' "${result}"
           grep -q '"exactNativeMenuReadBack":true' "${result}"
-          grep -q '"boundMenuUpdated":true' "${result}"
+          grep -q '"primaryMainMenuUpdated":true' "${result}"
+          grep -q '"authoritativeMenuUpdated":true' "${result}"
           grep -q '"knowledgeLibraryRemoved":true' "${result}"
           grep -q '"absoluteUrlsUsed":true' "${result}"
           grep -q '"themeOverrideNotUsed":true' "${result}"
@@ -111,4 +114,4 @@ jobs:
             -o /dev/null \
             -w '%{http_code}' || true)"
           echo "Storefront delivery HTTP ${status:-unavailable}."
-          echo "Authoritative verification passed through exact native Shopify menu read-back."
+          echo "Authoritative verification passed through exact native Shopify main-menu read-back."
