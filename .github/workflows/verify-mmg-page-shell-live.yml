@@ -6,13 +6,13 @@ name: Verify MMG Page Shell Live
       - main
     paths:
       - deployments/run-mmg-page-shell-dom-verification.txt
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 permissions:
   contents: read
 
 concurrency:
-  group: verify-mmg-page-shell-live-${{ github.event.pull_request.number || github.run_id }}
+  group: verify-mmg-page-shell-live
   cancel-in-progress: true
 
 jobs:
