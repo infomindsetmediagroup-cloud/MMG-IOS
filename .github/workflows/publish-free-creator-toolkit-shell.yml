@@ -14,6 +14,7 @@ name: Publish Free Creator Toolkit Page Shell
 
 permissions:
   contents: read
+  statuses: write
 
 concurrency:
   group: publish-free-creator-toolkit-page-shell
@@ -29,7 +30,22 @@ jobs:
       WORKER_BASE_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
       STOREFRONT_URL: https://themindsetmediagroup.com
       PAGE_SHELL_BUILD: kairos-page-shell-publisher-20260719-1
+      STATUS_CONTEXT: mmg-free-creator-toolkit-shell
     steps:
+      - name: Mark deployment pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          payload="$(node -e 'process.stdout.write(JSON.stringify({state:"pending",context:process.env.STATUS_CONTEXT,description:"Deploying Free Creator Toolkit page shell",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          curl --fail --silent --show-error -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "${payload}"
+
       - name: Materialize exact release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -143,3 +159,26 @@ jobs:
             sleep 5
           done
           exit 1
+
+      - name: Report deployment result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          if [ "${JOB_STATUS}" = "success" ]; then
+            state="success"
+            description="Free Creator Toolkit page shell is live"
+          else
+            state="failure"
+            description="Free Creator Toolkit page-shell deployment failed"
+          fi
+          payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,context:process.env.STATUS_CONTEXT,description:process.env.DESCRIPTION,target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          curl --fail --silent --show-error -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "${payload}"
