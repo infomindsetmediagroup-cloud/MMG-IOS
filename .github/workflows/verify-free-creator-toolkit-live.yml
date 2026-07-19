@@ -1,0 +1,152 @@
+name: Verify Free Creator Toolkit Live DOM
+
+"on":
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/verify-free-creator-toolkit-live.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: verify-free-creator-toolkit-live
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      STOREFRONT_URL: https://themindsetmediagroup.com
+      EXPECTED_BUILD: kairos-page-shell-publisher-20260719-1
+      STATUS_CONTEXT: mmg-free-creator-toolkit-dom
+    steps:
+      - name: Install Playwright
+        run: |
+          set -euo pipefail
+          npm init -y >/dev/null
+          npm install --no-save --no-audit --no-fund playwright
+          npx playwright install --with-deps chromium
+
+      - name: Inspect desktop and mobile
+        id: inspect
+        continue-on-error: true
+        run: |
+          cat > verify.mjs <<'JS'
+          import fs from "node:fs";
+          import { chromium } from "playwright";
+
+          const origin = process.env.STOREFRONT_URL;
+          const expectedBuild = process.env.EXPECTED_BUILD;
+          const results = [];
+          const browser = await chromium.launch({ headless: true });
+          try {
+            for (const viewport of [
+              { name: "desktop", width: 1440, height: 1000 },
+              { name: "mobile", width: 390, height: 844 },
+            ]) {
+              const context = await browser.newContext({ viewport });
+              const page = await context.newPage();
+              const response = await page.goto(`${origin}/pages/free-creator-toolkit?dom_verify=${Date.now()}-${viewport.name}`, {
+                waitUntil: "domcontentloaded",
+                timeout: 60000,
+              });
+              let waitError = "";
+              try {
+                await page.waitForFunction((build) => document.documentElement.dataset.mmgPageShell === build, expectedBuild, { timeout: 20000 });
+                await page.waitForFunction(() => document.documentElement.dataset.mmgPageShellReady === "true", { timeout: 20000 });
+              } catch (error) {
+                waitError = error instanceof Error ? error.message : String(error);
+              }
+              await page.waitForTimeout(750);
+              const visibleH1 = (await page.locator("main h1:visible").allTextContents()).map((value) => value.replace(/\s+/g, " ").trim());
+              const titleHidden = await page.locator("main .mmg-native-page-title-hidden").count();
+              const miniNavigationHidden = await page.locator("main .mmg-page-mini-navigation-hidden").count();
+              const build = await page.locator("html").getAttribute("data-mmg-page-shell");
+              const ready = await page.locator("html").getAttribute("data-mmg-page-shell-ready");
+              const overflow = await page.evaluate(() => ({
+                viewport: document.documentElement.clientWidth,
+                document: document.documentElement.scrollWidth,
+                body: document.body.scrollWidth,
+              }));
+              const passed = Boolean(response?.ok()) &&
+                build === expectedBuild &&
+                ready === "true" &&
+                visibleH1.length === 1 &&
+                visibleH1[0] === "The Free Creator Toolkit." &&
+                titleHidden === 1 &&
+                miniNavigationHidden === 1 &&
+                Math.max(overflow.document, overflow.body) <= overflow.viewport + 2;
+              results.push({
+                viewport: viewport.name,
+                http: response?.status() || 0,
+                build,
+                ready,
+                visibleH1,
+                titleHidden,
+                miniNavigationHidden,
+                overflow,
+                waitError,
+                passed,
+              });
+              await page.screenshot({ path: `free-creator-toolkit-${viewport.name}.png`, fullPage: true });
+              await context.close();
+            }
+          } finally {
+            await browser.close();
+          }
+          const passed = results.every((item) => item.passed);
+          fs.writeFileSync("toolkit-dom-result.json", JSON.stringify({ passed, results }, null, 2));
+          console.log(JSON.stringify({ passed, results }, null, 2));
+          if (!passed) process.exitCode = 1;
+          JS
+          node verify.mjs
+
+      - name: Publish verification status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ -f toolkit-dom-result.json ]; then
+            read -r state description passed <<EOF
+          $(node -e '
+            const r=require("./toolkit-dom-result.json");
+            const d=r.results.find(x=>x.viewport==="desktop")||{};
+            const m=r.results.find(x=>x.viewport==="mobile")||{};
+            const description=r.passed
+              ? "Toolkit fixed: one H1 and legacy mini-nav removed"
+              : `FAIL d:H1=${(d.visibleH1||[]).length},title=${d.titleHidden||0},nav=${d.miniNavigationHidden||0}; m:H1=${(m.visibleH1||[]).length},title=${m.titleHidden||0},nav=${m.miniNavigationHidden||0}`;
+            process.stdout.write(`${r.passed?"success":"failure"} ${JSON.stringify(description)} ${r.passed?"true":"false"}`);
+          ')
+          EOF
+            description="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]))' "${description}")"
+          else
+            state="failure"
+            description="Toolkit DOM verification produced no result"
+            passed="false"
+          fi
+          payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,context:process.env.STATUS_CONTEXT,description:process.env.DESCRIPTION.slice(0,140),target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          curl --fail --silent --show-error -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "${payload}"
+          test "${passed}" = "true"
+
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: free-creator-toolkit-dom-${{ github.run_id }}
+          path: |
+            toolkit-dom-result.json
+            free-creator-toolkit-*.png
+          if-no-files-found: warn
+          retention-days: 14
