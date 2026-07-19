@@ -1,0 +1,110 @@
+name: Execute MMG Page Shell on PR
+
+"on":
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+
+concurrency:
+  group: execute-mmg-page-shell-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  execute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WORKER_BASE_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+      STOREFRONT_URL: https://themindsetmediagroup.com
+      TARGET_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Validate canonical shell source
+        run: |
+          set -euo pipefail
+          node --check cloudflare/mmg-ios/src/kairos-page-shell-publisher-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-canonical-navigation-page-shell-publisher-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
+
+      - name: Deploy Kairos Worker
+        working-directory: cloudflare/mmg-ios
+        run: |
+          set -euo pipefail
+          npm install
+          npx wrangler deploy \
+            --var "DEPLOYMENT_SHA:${TARGET_SHA}" \
+            --var "DEPLOYED_AT:$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+      - name: Wait for exact Worker deployment
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 40); do
+            body="${RUNNER_TEMP}/identity.json"
+            headers="${RUNNER_TEMP}/identity.headers"
+            status="$(curl --silent --show-error --max-time 30 -D "${headers}" \
+              "${WORKER_BASE_URL}/api/deployment/identity?sha=${TARGET_SHA}&attempt=${attempt}" \
+              -o "${body}" -w '%{http_code}' || true)"
+            if [ "${status}" = "200" ] \
+              && grep -q "\"deploymentSha\":\"${TARGET_SHA}\"" "${body}" \
+              && grep -qi 'x-mmg-page-shell: kairos-page-shell-publisher-20260719-1' "${headers}" \
+              && grep -qi 'x-mmg-canonical-shell: kairos-canonical-navigation-page-shell-20260719-1' "${headers}"; then
+              exit 0
+            fi
+            sleep 5
+          done
+          cat "${RUNNER_TEMP}/identity.json" || true
+          cat "${RUNNER_TEMP}/identity.headers" || true
+          exit 1
+
+      - name: Publish navigation and audited page shell
+        run: |
+          set -euo pipefail
+          result="${RUNNER_TEMP}/canonical-shell-result.json"
+          status="$(curl --silent --show-error --retry 4 --retry-delay 3 --max-time 240 \
+            -X POST "${WORKER_BASE_URL}/api/shopify/navigation/publish?sha=${TARGET_SHA}" \
+            -H 'Content-Type: application/json' \
+            --data '{"confirmation":"PUBLISH_MMG_NATIVE_MAIN_NAVIGATION"}' \
+            -o "${result}" -w '%{http_code}' || true)"
+          cat "${result}" || true
+          test "${status}" = "200"
+          grep -q '"status":"completed"' "${result}"
+          grep -q '"build":"kairos-native-navigation-theme-publisher-20260719-9"' "${result}"
+          grep -q '"pageShellPublished":true' "${result}"
+          grep -q '"pageShellExactThemeFileReadBack":true' "${result}"
+          grep -q '"pageShellLayoutInjectionPresent":true' "${result}"
+
+      - name: Verify both live pages carry the page shell
+        run: |
+          set -euo pipefail
+          for path in /pages/free-creator-toolkit /pages/publishing-services; do
+            passed=false
+            for attempt in $(seq 1 24); do
+              html="${RUNNER_TEMP}/$(echo "${path}" | tr '/' '-')-${attempt}.html"
+              status="$(curl --location --silent --show-error --max-time 45 \
+                -H 'Cache-Control: no-cache, no-store, must-revalidate' \
+                "${STOREFRONT_URL}${path}?mmg_page_shell=${TARGET_SHA}&attempt=${attempt}" \
+                -o "${html}" -w '%{http_code}' || true)"
+              if [ "${status}" = "200" ] \
+                && grep -q 'MMG_PAGE_SHELL_START' "${html}" \
+                && grep -q 'mmg-page-shell.js' "${html}" \
+                && grep -q 'mmg-page-shell.css' "${html}"; then
+                passed=true
+                break
+              fi
+              sleep 5
+            done
+            test "${passed}" = "true"
+          done
