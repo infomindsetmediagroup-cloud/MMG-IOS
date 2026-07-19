@@ -7,7 +7,7 @@ name: Emergency MMG Page Shell Publish
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: emergency-mmg-page-shell-publish
@@ -26,16 +26,20 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
 
       - name: Validate page-shell release source
+        id: validate
         run: |
           set -euo pipefail
           node --check cloudflare/mmg-ios/src/kairos-page-shell-publisher-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-canonical-navigation-page-shell-publisher-v1.js
           node --check cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
-          grep -q 'kairos-page-shell-publisher-v1.js' cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
+          grep -q 'kairos-canonical-navigation-page-shell-publisher-v1.js' cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
           grep -q 'kairos-page-shell-publisher-20260719-1' cloudflare/mmg-ios/src/kairos-page-shell-publisher-v1.js
 
       - name: Deploy Kairos Worker
+        id: deploy
         working-directory: cloudflare/mmg-ios
         run: |
           set -euo pipefail
@@ -45,6 +49,7 @@ jobs:
             --var "DEPLOYED_AT:$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
       - name: Wait for page-shell Worker
+        id: wait
         run: |
           set -euo pipefail
           for attempt in $(seq 1 36); do
@@ -65,6 +70,7 @@ jobs:
           exit 1
 
       - name: Publish page-shell reconciliation to Shopify MAIN theme
+        id: publish
         run: |
           set -euo pipefail
           result="${RUNNER_TEMP}/page-shell-result.json"
@@ -81,6 +87,7 @@ jobs:
           grep -q '"layoutInjectionPresent":true' "${result}"
 
       - name: Verify live page-shell assets
+        id: verify
         run: |
           set -euo pipefail
           for path in /pages/free-creator-toolkit /pages/publishing-services; do
@@ -102,3 +109,58 @@ jobs:
             done
             test "${passed}" = "true"
           done
+
+      - name: Record deployment receipt
+        if: always()
+        env:
+          VALIDATE_OUTCOME: ${{ steps.validate.outcome }}
+          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
+          WAIT_OUTCOME: ${{ steps.wait.outcome }}
+          PUBLISH_OUTCOME: ${{ steps.publish.outcome }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+        run: |
+          set -euo pipefail
+          receipt="${RUNNER_TEMP}/page-shell-latest.json"
+          node <<'NODE' > "${receipt}"
+          const fs = require("node:fs");
+          const resultPath = `${process.env.RUNNER_TEMP}/page-shell-result.json`;
+          let publication = null;
+          if (fs.existsSync(resultPath)) {
+            try { publication = JSON.parse(fs.readFileSync(resultPath, "utf8")); } catch {}
+          }
+          const steps = {
+            validate: process.env.VALIDATE_OUTCOME || "not-run",
+            deploy: process.env.DEPLOY_OUTCOME || "not-run",
+            wait: process.env.WAIT_OUTCOME || "not-run",
+            publish: process.env.PUBLISH_OUTCOME || "not-run",
+            verify: process.env.VERIFY_OUTCOME || "not-run",
+          };
+          const success = Object.values(steps).every((value) => value === "success");
+          process.stdout.write(JSON.stringify({
+            success,
+            sourceCommit: process.env.GITHUB_SHA,
+            workflowRunId: process.env.GITHUB_RUN_ID,
+            workflowRunUrl: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            recordedAt: new Date().toISOString(),
+            pageShellBuild: "kairos-page-shell-publisher-20260719-1",
+            canonicalShellBuild: "kairos-canonical-navigation-page-shell-20260719-1",
+            steps,
+            publication,
+          }, null, 2));
+          NODE
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout -B page-shell-receipt origin/main
+          mkdir -p .github/deployment-receipts
+          cp "${receipt}" .github/deployment-receipts/page-shell-latest.json
+          git add .github/deployment-receipts/page-shell-latest.json
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "[skip ci] Record MMG page-shell deployment ${GITHUB_SHA}"
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then exit 0; fi
+            git fetch origin main
+            git rebase origin/main
+          done
+          exit 1
