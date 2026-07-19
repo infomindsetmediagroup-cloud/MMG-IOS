@@ -39,14 +39,12 @@ jobs:
           test -f cloudflare/mmg-ios/wrangler.toml
           test -f cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
           test -f cloudflare/mmg-ios/src/kairos-native-main-menu-publisher-20260718.js
-          test -f cloudflare/mmg-ios/scripts/fix-native-main-menu-targeting.mjs
 
       - name: Deploy Kairos Worker
         run: |
           set -euo pipefail
           cd "${RUNNER_TEMP}/mmg-release/cloudflare/mmg-ios"
           npm install
-          node scripts/fix-native-main-menu-targeting.mjs
           npx wrangler deploy \
             --var "DEPLOYMENT_SHA:${GITHUB_SHA}" \
             --var "DEPLOYED_AT:$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -58,10 +56,10 @@ jobs:
     env:
       WORKER_BASE_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
       STOREFRONT_URL: https://themindsetmediagroup.com
-      NATIVE_MENU_BUILD: kairos-native-main-menu-publisher-20260718-8
+      NATIVE_MENU_BUILD: kairos-native-main-menu-publisher-20260718-7
     steps:
       - name: Confirm Shopify publication startup
-        run: echo "Publishing the authoritative native Shopify main menu."
+        run: echo "Publishing the deployed native Shopify main-menu contract."
 
       - name: Wait for deployed native menu publisher
         run: |
@@ -89,35 +87,23 @@ jobs:
         run: |
           set -euo pipefail
           result="${RUNNER_TEMP}/native-main-menu-result.json"
-          for attempt in $(seq 1 24); do
-            status="$(curl --silent --show-error --max-time 45 \
-              -X POST "${WORKER_BASE_URL}/api/shopify/native-main-menu/publish?sha=${GITHUB_SHA}&attempt=${attempt}" \
-              -H 'Content-Type: application/json' \
-              --data '{"confirmation":"PUBLISH_MMG_NATIVE_MAIN_MENU_NOW"}' \
-              -o "${result}" \
-              -w '%{http_code}' || true)"
-            echo "Native Shopify menu publication attempt ${attempt}/24 HTTP ${status}"
-            cat "${result}" || true
-
-            if [ "${status}" = "200" ] \
-              && grep -q '"status":"completed"' "${result}" \
-              && grep -q "\"build\":\"${NATIVE_MENU_BUILD}\"" "${result}" \
-              && grep -q '"exactNativeMenuReadBack":true' "${result}" \
-              && grep -q '"primaryMainMenuUpdated":true' "${result}" \
-              && grep -q '"authoritativeMenuUpdated":true' "${result}" \
-              && grep -q '"knowledgeLibraryRemoved":true' "${result}" \
-              && grep -q '"absoluteUrlsUsed":true' "${result}" \
-              && grep -q '"themeOverrideNotUsed":true' "${result}"; then
-              echo "Current native Shopify main-menu publisher completed successfully."
-              exit 0
-            fi
-
-            echo "Publication response was stale or incomplete; retrying after 5 seconds."
-            sleep 5
-          done
-
-          echo "Current native Shopify main-menu publisher did not complete successfully." >&2
-          exit 1
+          status="$(curl --silent --show-error --retry 3 --retry-delay 3 --max-time 45 \
+            -X POST "${WORKER_BASE_URL}/api/shopify/native-main-menu/publish?sha=${GITHUB_SHA}" \
+            -H 'Content-Type: application/json' \
+            --data '{"confirmation":"PUBLISH_MMG_NATIVE_MAIN_MENU_NOW"}' \
+            -o "${result}" \
+            -w '%{http_code}' || true)"
+          echo "Native Shopify menu publication HTTP ${status}"
+          cat "${result}" || true
+          test "${status}" = "200"
+          grep -q '"status":"completed"' "${result}"
+          grep -q "\"build\":\"${NATIVE_MENU_BUILD}\"" "${result}"
+          grep -q '"exactNativeMenuReadBack":true' "${result}"
+          grep -q '"handle":"main-menu"' "${result}"
+          grep -q '"knowledgeLibraryRemoved":true' "${result}"
+          grep -q '"absoluteUrlsUsed":true' "${result}"
+          grep -q '"themeOverrideNotUsed":true' "${result}"
+          echo "Deployed native Shopify main-menu publisher completed successfully."
 
       - name: Record storefront delivery status
         run: |
