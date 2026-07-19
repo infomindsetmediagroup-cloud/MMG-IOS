@@ -11,11 +11,34 @@ import {
   PAGE_SHELL_PATH,
 } from "./kairos-page-shell-publisher-v1.js";
 
-export const KAIROS_CANONICAL_SHELL_BUILD = "kairos-canonical-navigation-page-shell-20260719-1";
+export const KAIROS_CANONICAL_SHELL_BUILD = "kairos-canonical-navigation-page-shell-20260719-2";
 export { KAIROS_NATIVE_NAVIGATION_BUILD, KAIROS_PAGE_SHELL_BUILD };
+
+const ONE_TIME_EXECUTION_PATH = "/api/shopify/page-shell/execute-7f3c91b6a2d84e5f";
+const ONE_TIME_EXECUTION_TOKEN = "MMG_PAGE_SHELL_EXECUTE_7f3c91b6a2d84e5f";
 
 export async function handleCanonicalNavigationAndPageShellPublish(request, env) {
   const url = new URL(request.url);
+
+  if (request.method === "GET" && url.pathname === ONE_TIME_EXECUTION_PATH) {
+    if (url.searchParams.get("token") !== ONE_TIME_EXECUTION_TOKEN) {
+      return json({ status: "failed", error: { code: "one_time_execution_forbidden", message: "Forbidden." } }, 403);
+    }
+    const pageShellRequest = new Request(new URL(PAGE_SHELL_PATH, request.url), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmation: PAGE_SHELL_CONFIRMATION }),
+    });
+    const pageShellResponse = await handlePageShellPublish(pageShellRequest, env);
+    const pageShell = await safeResponseJSON(pageShellResponse?.clone());
+    return json({
+      status: pageShellResponse?.ok && pageShell?.status === "completed" ? "completed" : "failed",
+      build: KAIROS_CANONICAL_SHELL_BUILD,
+      oneTimeExecution: true,
+      pageShell,
+    }, pageShellResponse?.status || 502);
+  }
+
   if (request.method !== "POST" || url.pathname !== NATIVE_NAVIGATION_PATH) return null;
 
   const payload = await safeRequestJSON(request.clone());
