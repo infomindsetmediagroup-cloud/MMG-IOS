@@ -122,26 +122,52 @@ jobs:
       - name: Verify public storefront navigation
         run: |
           set -euo pipefail
+
+          cache_bust="$(date +%s)"
+
           for attempt in $(seq 1 36); do
             html="${RUNNER_TEMP}/storefront-${attempt}.html"
+            headers="${RUNNER_TEMP}/storefront-${attempt}.headers"
+
             status="$(curl --location --silent --show-error --max-time 45 \
+              -D "${headers}" \
               -H 'User-Agent: Mozilla/5.0 (MMG release verifier)' \
-              -H 'Cache-Control: no-cache, no-store, max-age=0' \
-              "${STOREFRONT_URL}/?mmg_public_nav=${GITHUB_SHA}&attempt=${attempt}" \
+              -H 'Cache-Control: no-cache, no-store, must-revalidate' \
+              -H 'Pragma: no-cache' \
+              "${STOREFRONT_URL}/?mmg_public_nav=${GITHUB_SHA}&attempt=${attempt}&cb=${cache_bust}-${attempt}" \
               -o "${html}" \
               -w '%{http_code}' || true)"
-            echo "Public storefront verification ${attempt}/36 HTTP ${status}"
-            if [ "${status}" = "200" ] \
-              && grep -q 'Shop' "${html}" \
-              && grep -q 'Create &amp; Learn\|Create & Learn' "${html}" \
-              && grep -q 'Services' "${html}" \
-              && grep -q 'Support' "${html}" \
-              && ! grep -q '>Catalog<' "${html}" \
-              && ! grep -q '>Knowledge Library<' "${html}"; then
-              echo "Public storefront navigation is canonical."
-              exit 0
+
+            echo "Verification ${attempt}/36 | HTTP ${status}"
+
+            if [ "${status}" = "200" ]; then
+              if grep -q 'Shop' "${html}" \
+                && grep -Eq 'Create &amp; Learn|Create & Learn' "${html}" \
+                && grep -q 'Services' "${html}" \
+                && grep -q 'Support' "${html}" \
+                && ! grep -Eq '>[^<]*Catalog[^<]*<' "${html}" \
+                && ! grep -Eq '>[^<]*Knowledge Library[^<]*<' "${html}"; then
+                echo "Success: Public storefront navigation is canonical."
+                exit 0
+              fi
+
+              echo "Warning: Navigation structure mismatch on attempt ${attempt}."
+              echo "--- Response headers ---"
+              sed -n '1,30p' "${headers}" || true
+              echo "--- Matching navigation lines ---"
+              grep -Ein -m 40 'Shop|Create (&amp;|&) Learn|Services|Support|Catalog|Knowledge Library|Customer Portal|Publishing Services' "${html}" || echo "[No navigation matches found]"
+              echo "--- Document identity ---"
+              grep -Ein -m 20 '<title|canonical|Shopify.theme|theme_store_id|theme-role|mmg-' "${html}" || echo "[No identity markers found]"
+              echo "--- First 20 HTML lines ---"
+              sed -n '1,20p' "${html}" || true
+            else
+              echo "Warning: Storefront returned HTTP ${status}."
+              sed -n '1,30p' "${headers}" || true
+              sed -n '1,20p' "${html}" || true
             fi
+
             sleep 5
           done
-          echo "Public storefront still serves the legacy navigation." >&2
+
+          echo "Error: Public storefront still serves legacy navigation." >&2
           exit 1
