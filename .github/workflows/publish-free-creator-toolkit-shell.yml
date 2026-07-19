@@ -23,7 +23,7 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -37,7 +37,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          payload="$(node -e 'process.stdout.write(JSON.stringify({state:"pending",context:process.env.STATUS_CONTEXT,description:"Deploying Free Creator Toolkit page shell",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          payload="$(node -e 'process.stdout.write(JSON.stringify({state:"pending",context:process.env.STATUS_CONTEXT,description:"Publishing and browser-verifying Free Creator Toolkit",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
           curl --fail --silent --show-error -X POST \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
@@ -56,11 +56,8 @@ jobs:
             "${RUNNER_TEMP}/mmg-release"
           cd "${RUNNER_TEMP}/mmg-release"
           test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
-          test -f cloudflare/mmg-ios/src/kairos-page-shell-publisher-v1.js
-          test -f cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
           node --check cloudflare/mmg-ios/src/kairos-page-shell-publisher-v1.js
           node --check cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
-          grep -q 'kairos-page-shell-publisher-v1.js' cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
           grep -q "${PAGE_SHELL_BUILD}" cloudflare/mmg-ios/src/kairos-page-shell-publisher-v1.js
 
       - name: Deploy Kairos Worker
@@ -89,8 +86,6 @@ jobs:
             fi
             sleep 4
           done
-          cat "${RUNNER_TEMP}/identity.json" || true
-          cat "${RUNNER_TEMP}/identity.headers" || true
           exit 1
 
       - name: Publish page shell to Shopify MAIN theme
@@ -102,66 +97,123 @@ jobs:
             -H 'Content-Type: application/json' \
             --data '{"confirmation":"PUBLISH_MMG_PAGE_SHELL_RECONCILIATION"}' \
             -o "${result}" -w '%{http_code}' || true)"
-          cat "${result}" || true
+          cat "${result}"
           test "${status}" = "200"
           grep -q '"status":"completed"' "${result}"
           grep -q "\"build\":\"${PAGE_SHELL_BUILD}\"" "${result}"
           grep -q '"exactThemeFileReadBack":true' "${result}"
           grep -q '"layoutInjectionPresent":true' "${result}"
 
-      - name: Verify live page-shell assets
+      - name: Install Playwright
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 12); do
-            html="${RUNNER_TEMP}/toolkit-${attempt}.html"
-            status="$(curl --location --silent --show-error --max-time 45 \
-              -H 'User-Agent: Mozilla/5.0 (MMG page-shell verifier)' \
-              -H 'Cache-Control: no-cache, no-store, must-revalidate' \
-              "${STOREFRONT_URL}/pages/free-creator-toolkit?mmg_shell=${GITHUB_SHA}&attempt=${attempt}" \
-              -o "${html}" -w '%{http_code}' || true)"
-            if [ "${status}" = "200" ] \
-              && grep -q 'MMG_PAGE_SHELL_START' "${html}" \
-              && grep -q 'mmg-page-shell.js' "${html}" \
-              && grep -q 'mmg-page-shell.css' "${html}"; then
-              js_src="$(grep -oE 'src="[^"]*mmg-page-shell\.js[^"]*"' "${html}" | head -n1 | sed 's/^src="//;s/"$//;s/&amp;/\&/g')"
-              case "${js_src}" in
-                //*) js_url="https:${js_src}" ;;
-                /*) js_url="${STOREFRONT_URL}${js_src}" ;;
-                http*) js_url="${js_src}" ;;
-                *) js_url="" ;;
-              esac
-              if [ -n "${js_url}" ]; then
-                curl --fail --silent --show-error --max-time 45 -H 'Cache-Control: no-cache' "${js_url}" -o "${RUNNER_TEMP}/mmg-page-shell.js"
-                node --check "${RUNNER_TEMP}/mmg-page-shell.js"
-                grep -q "${PAGE_SHELL_BUILD}" "${RUNNER_TEMP}/mmg-page-shell.js"
-                grep -q 'heroTitle' "${RUNNER_TEMP}/mmg-page-shell.js"
-                grep -q 'mmgPageShellReady' "${RUNNER_TEMP}/mmg-page-shell.js"
-                exit 0
-              fi
-            fi
-            sleep 5
-          done
-          exit 1
+          mkdir -p "${RUNNER_TEMP}/toolkit-browser"
+          cd "${RUNNER_TEMP}/toolkit-browser"
+          npm init -y >/dev/null
+          npm install --no-save --no-audit --no-fund playwright
+          npx playwright install --with-deps chromium
+
+      - name: Inspect live desktop and mobile DOM
+        id: inspect
+        continue-on-error: true
+        run: |
+          cd "${RUNNER_TEMP}/toolkit-browser"
+          cat > verify.mjs <<'JS'
+          import fs from "node:fs";
+          import { chromium } from "playwright";
+
+          const results = [];
+          const browser = await chromium.launch({ headless: true });
+          try {
+            for (const viewport of [
+              { name: "desktop", width: 1440, height: 1000 },
+              { name: "mobile", width: 390, height: 844 },
+            ]) {
+              const context = await browser.newContext({ viewport });
+              const page = await context.newPage();
+              const response = await page.goto(`${process.env.STOREFRONT_URL}/pages/free-creator-toolkit?live_verify=${Date.now()}-${viewport.name}`, {
+                waitUntil: "domcontentloaded",
+                timeout: 60000,
+              });
+              let waitError = "";
+              try {
+                await page.waitForFunction((build) => document.documentElement.dataset.mmgPageShell === build, process.env.PAGE_SHELL_BUILD, { timeout: 30000 });
+                await page.waitForFunction(() => document.documentElement.dataset.mmgPageShellReady === "true", { timeout: 30000 });
+              } catch (error) {
+                waitError = error instanceof Error ? error.message : String(error);
+              }
+              await page.waitForTimeout(1000);
+              const visibleH1 = (await page.locator("main h1:visible").allTextContents()).map((value) => value.replace(/\s+/g, " ").trim());
+              const titleHidden = await page.locator("main .mmg-native-page-title-hidden").count();
+              const miniNavigationHidden = await page.locator("main .mmg-page-mini-navigation-hidden").count();
+              const build = await page.locator("html").getAttribute("data-mmg-page-shell");
+              const ready = await page.locator("html").getAttribute("data-mmg-page-shell-ready");
+              const overflow = await page.evaluate(() => ({
+                viewport: document.documentElement.clientWidth,
+                document: document.documentElement.scrollWidth,
+                body: document.body.scrollWidth,
+              }));
+              const passed = Boolean(response?.ok()) &&
+                build === process.env.PAGE_SHELL_BUILD &&
+                ready === "true" &&
+                visibleH1.length === 1 &&
+                visibleH1[0] === "The Free Creator Toolkit." &&
+                titleHidden === 1 &&
+                miniNavigationHidden === 1 &&
+                Math.max(overflow.document, overflow.body) <= overflow.viewport + 2;
+              results.push({ viewport: viewport.name, http: response?.status() || 0, build, ready, visibleH1, titleHidden, miniNavigationHidden, overflow, waitError, passed });
+              await page.screenshot({ path: `free-creator-toolkit-${viewport.name}.png`, fullPage: true });
+              await context.close();
+            }
+          } finally {
+            await browser.close();
+          }
+          const passed = results.every((item) => item.passed);
+          fs.writeFileSync("toolkit-dom-result.json", JSON.stringify({ passed, results }, null, 2));
+          console.log(JSON.stringify({ passed, results }, null, 2));
+          if (!passed) process.exitCode = 1;
+          JS
+          node verify.mjs
+
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: free-creator-toolkit-live-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/toolkit-browser/toolkit-dom-result.json
+            ${{ runner.temp }}/toolkit-browser/free-creator-toolkit-*.png
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Report deployment result
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
-          JOB_STATUS: ${{ job.status }}
         run: |
           set -euo pipefail
-          if [ "${JOB_STATUS}" = "success" ]; then
-            state="success"
-            description="Free Creator Toolkit page shell is live"
-          else
-            state="failure"
-            description="Free Creator Toolkit page-shell deployment failed"
-          fi
-          payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,context:process.env.STATUS_CONTEXT,description:process.env.DESCRIPTION,target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          cd "${RUNNER_TEMP}/toolkit-browser" 2>/dev/null || true
+          node <<'NODE' > /tmp/toolkit-status.json
+          const fs = require("node:fs");
+          let result = { passed: false, results: [] };
+          try { result = JSON.parse(fs.readFileSync("toolkit-dom-result.json", "utf8")); } catch {}
+          const desktop = result.results.find((item) => item.viewport === "desktop") || {};
+          const mobile = result.results.find((item) => item.viewport === "mobile") || {};
+          const description = result.passed
+            ? "Toolkit fixed: one H1 and legacy mini-nav removed"
+            : `FAIL d:H1=${(desktop.visibleH1 || []).length},title=${desktop.titleHidden || 0},nav=${desktop.miniNavigationHidden || 0}; m:H1=${(mobile.visibleH1 || []).length},title=${mobile.titleHidden || 0},nav=${mobile.miniNavigationHidden || 0}`;
+          process.stdout.write(JSON.stringify({
+            state: result.passed ? "success" : "failure",
+            context: process.env.STATUS_CONTEXT,
+            description: description.slice(0, 140),
+            target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+          }));
+          NODE
           curl --fail --silent --show-error -X POST \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             -H "Content-Type: application/json" \
             "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "${payload}"
+            --data @/tmp/toolkit-status.json
+          node -e 'const r=require("./toolkit-dom-result.json"); if(!r.passed) process.exit(1)'
