@@ -39,10 +39,16 @@ jobs:
           test -f cloudflare/mmg-ios/wrangler.toml
           test -f cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
           test -f cloudflare/mmg-ios/src/kairos-native-navigation-theme-publisher-v9.js
+          test -f cloudflare/mmg-ios/src/kairos-page-shell-publisher-v1.js
+          test -f .github/scripts/verify-mmg-page-shell.mjs
           node --check cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
           node --check cloudflare/mmg-ios/src/kairos-native-navigation-theme-publisher-v9.js
+          node --check cloudflare/mmg-ios/src/kairos-page-shell-publisher-v1.js
+          node --check .github/scripts/verify-mmg-page-shell.mjs
           grep -q 'kairos-native-navigation-theme-publisher-v9.js' cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
+          grep -q 'kairos-page-shell-publisher-v1.js' cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
           grep -q 'kairos-native-navigation-theme-publisher-20260719-9' cloudflare/mmg-ios/src/kairos-native-navigation-theme-publisher-v9.js
+          grep -q 'kairos-page-shell-publisher-20260719-1' cloudflare/mmg-ios/src/kairos-page-shell-publisher-v1.js
 
       - name: Deploy Kairos Worker
         run: |
@@ -56,7 +62,7 @@ jobs:
   publish-shopify:
     needs: deploy-worker
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     env:
       WORKER_BASE_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
       STOREFRONT_URL: https://themindsetmediagroup.com
@@ -75,8 +81,9 @@ jobs:
             cat "${identity}" || true
             if [ "${status}" = "200" ] \
               && grep -q "\"deploymentSha\":\"${GITHUB_SHA}\"" "${identity}" \
-              && grep -qi 'x-mmg-native-navigation: kairos-native-navigation-theme-publisher-20260719-9' "${headers}"; then
-              echo "Canonical navigation v9 Worker is live."
+              && grep -qi 'x-mmg-native-navigation: kairos-native-navigation-theme-publisher-20260719-9' "${headers}" \
+              && grep -qi 'x-mmg-page-shell: kairos-page-shell-publisher-20260719-1' "${headers}"; then
+              echo "Canonical navigation and page-shell Worker are live."
               exit 0
             fi
             sleep 5
@@ -143,14 +150,52 @@ jobs:
           echo "CANONICAL_BUILD=${published_build}" >> "${GITHUB_ENV}"
           echo "Validated published build ${published_build}."
 
-      - name: Verify live storefront and executable canonical assets
+      - name: Publish shared MMG page shell
+        run: |
+          set -euo pipefail
+          result="${RUNNER_TEMP}/page-shell-result.json"
+          status="$(curl --silent --show-error --retry 3 --retry-delay 3 --max-time 180 \
+            -X POST "${WORKER_BASE_URL}/api/shopify/page-shell/publish?sha=${GITHUB_SHA}" \
+            -H 'Content-Type: application/json' \
+            --data '{"confirmation":"PUBLISH_MMG_PAGE_SHELL_RECONCILIATION"}' \
+            -o "${result}" -w '%{http_code}' || true)"
+          echo "MMG page-shell publication HTTP ${status}"
+          cat "${result}" || true
+          test "${status}" = "200"
+
+          python3 - "${result}" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as handle:
+              body = json.load(handle)
+          expected_pages = ["/pages/free-creator-toolkit", "/pages/publishing-services"]
+          verification = body.get("verification", {})
+          valid = (
+              body.get("status") == "completed"
+              and body.get("build") == "kairos-page-shell-publisher-20260719-1"
+              and verification.get("valid") is True
+              and verification.get("exactThemeFileReadBack") is True
+              and verification.get("layoutInjectionPresent") is True
+              and verification.get("targetPages") == expected_pages
+              and body.get("safeguards", {}).get("mainThemeRoleVerified") is True
+              and body.get("safeguards", {}).get("nativeFooterPreserved") is True
+          )
+          if not valid:
+              print(json.dumps(body, indent=2), file=sys.stderr)
+              raise SystemExit("MMG page-shell publication response failed validation.")
+          PY
+
+      - name: Verify live canonical assets are executable
         run: |
           set -euo pipefail
           for attempt in $(seq 1 8); do
             html="${RUNNER_TEMP}/storefront-${attempt}.html"
             headers="${RUNNER_TEMP}/storefront-${attempt}.headers"
-            js_file="${RUNNER_TEMP}/mmg-canonical-navigation-${attempt}.js"
-            css_file="${RUNNER_TEMP}/mmg-canonical-navigation-${attempt}.css"
+            nav_js="${RUNNER_TEMP}/mmg-canonical-navigation-${attempt}.js"
+            nav_css="${RUNNER_TEMP}/mmg-canonical-navigation-${attempt}.css"
+            shell_js="${RUNNER_TEMP}/mmg-page-shell-${attempt}.js"
+            shell_css="${RUNNER_TEMP}/mmg-page-shell-${attempt}.css"
 
             status="$(curl --location --silent --show-error --max-time 45 \
               -D "${headers}" \
@@ -158,55 +203,102 @@ jobs:
               -H 'Cache-Control: no-cache, no-store, must-revalidate' \
               "${STOREFRONT_URL}/?mmg_release=${GITHUB_SHA}&attempt=${attempt}" \
               -o "${html}" -w '%{http_code}' || true)"
-            echo "Verification ${attempt}/8 | HTTP ${status}"
+            echo "Asset verification ${attempt}/8 | HTTP ${status}"
 
             if [ "${status}" = "200" ] \
               && grep -q 'Shopify.theme = ' "${html}" \
               && grep -q 'MMG_CANONICAL_NAVIGATION_START' "${html}" \
+              && grep -q 'MMG_PAGE_SHELL_START' "${html}" \
               && grep -q 'mmg-canonical-navigation.css' "${html}" \
               && grep -q 'mmg-canonical-navigation.js' "${html}" \
+              && grep -q 'mmg-page-shell.css' "${html}" \
+              && grep -q 'mmg-page-shell.js' "${html}" \
               && ! grep -q 'MMG_THEME_MENU_HOTFIX_START' "${html}" \
               && ! grep -q 'MMG_ALL_THEME_NAV_START' "${html}"; then
 
-              js_src="$(grep -oE 'src="[^"]*mmg-canonical-navigation\.js[^"]*"' "${html}" | head -n1 | sed 's/^src="//;s/"$//;s/&amp;/\&/g')"
-              css_src="$(grep -oE 'href="[^"]*mmg-canonical-navigation\.css[^"]*"' "${html}" | head -n1 | sed 's/^href="//;s/"$//;s/&amp;/\&/g')"
+              nav_js_src="$(grep -oE 'src="[^"]*mmg-canonical-navigation\.js[^"]*"' "${html}" | head -n1 | sed 's/^src="//;s/"$//;s/&amp;/\&/g')"
+              nav_css_src="$(grep -oE 'href="[^"]*mmg-canonical-navigation\.css[^"]*"' "${html}" | head -n1 | sed 's/^href="//;s/"$//;s/&amp;/\&/g')"
+              shell_js_src="$(grep -oE 'src="[^"]*mmg-page-shell\.js[^"]*"' "${html}" | head -n1 | sed 's/^src="//;s/"$//;s/&amp;/\&/g')"
+              shell_css_src="$(grep -oE 'href="[^"]*mmg-page-shell\.css[^"]*"' "${html}" | head -n1 | sed 's/^href="//;s/"$//;s/&amp;/\&/g')"
 
-              case "${js_src}" in
-                //*) js_url="https:${js_src}" ;;
-                /*) js_url="${STOREFRONT_URL}${js_src}" ;;
-                http*) js_url="${js_src}" ;;
-                *) js_url="" ;;
-              esac
-              case "${css_src}" in
-                //*) css_url="https:${css_src}" ;;
-                /*) css_url="${STOREFRONT_URL}${css_src}" ;;
-                http*) css_url="${css_src}" ;;
-                *) css_url="" ;;
-              esac
+              normalize_url() {
+                case "$1" in
+                  //*) printf 'https:%s' "$1" ;;
+                  /*) printf '%s%s' "${STOREFRONT_URL}" "$1" ;;
+                  http*) printf '%s' "$1" ;;
+                  *) printf '' ;;
+                esac
+              }
 
-              if [ -n "${js_url}" ] && [ -n "${css_url}" ] \
-                && curl --fail --silent --show-error --max-time 45 -H 'Cache-Control: no-cache' "${js_url}" -o "${js_file}" \
-                && curl --fail --silent --show-error --max-time 45 -H 'Cache-Control: no-cache' "${css_url}" -o "${css_file}" \
-                && node --check "${js_file}" \
-                && grep -q "${CANONICAL_BUILD}" "${js_file}" \
-                && grep -q '"Shop"' "${js_file}" \
-                && grep -q '"Create & Learn"' "${js_file}" \
-                && grep -q '"Services"' "${js_file}" \
-                && grep -q '"Company"' "${js_file}" \
-                && grep -q '"Support"' "${js_file}" \
-                && ! grep -q 'kairos-native-navigation-theme-publisher-20260718-8' "${js_file}" \
-                && ! grep -q '"title":"Knowledge Library"' "${js_file}" \
-                && ! grep -q '"title":"Membership"' "${js_file}" \
-                && ! grep -q '"title":"Kairos"' "${js_file}"; then
-                echo "Success: storefront is HTTP 200 and canonical v9 JavaScript and CSS are live and executable."
+              nav_js_url="$(normalize_url "${nav_js_src}")"
+              nav_css_url="$(normalize_url "${nav_css_src}")"
+              shell_js_url="$(normalize_url "${shell_js_src}")"
+              shell_css_url="$(normalize_url "${shell_css_src}")"
+
+              if [ -n "${nav_js_url}" ] && [ -n "${nav_css_url}" ] && [ -n "${shell_js_url}" ] && [ -n "${shell_css_url}" ] \
+                && curl --fail --silent --show-error --max-time 45 -H 'Cache-Control: no-cache' "${nav_js_url}" -o "${nav_js}" \
+                && curl --fail --silent --show-error --max-time 45 -H 'Cache-Control: no-cache' "${nav_css_url}" -o "${nav_css}" \
+                && curl --fail --silent --show-error --max-time 45 -H 'Cache-Control: no-cache' "${shell_js_url}" -o "${shell_js}" \
+                && curl --fail --silent --show-error --max-time 45 -H 'Cache-Control: no-cache' "${shell_css_url}" -o "${shell_css}" \
+                && node --check "${nav_js}" \
+                && node --check "${shell_js}" \
+                && grep -q "${CANONICAL_BUILD}" "${nav_js}" \
+                && grep -q 'kairos-page-shell-publisher-20260719-1' "${shell_js}" \
+                && grep -q '"Shop"' "${nav_js}" \
+                && grep -q '"Create & Learn"' "${nav_js}" \
+                && grep -q '"Services"' "${nav_js}" \
+                && grep -q '"Company"' "${nav_js}" \
+                && grep -q '"Support"' "${nav_js}" \
+                && grep -q '/pages/free-creator-toolkit' "${shell_js}" \
+                && grep -q '/pages/publishing-services' "${shell_js}" \
+                && grep -q 'publishing-process' "${shell_js}"; then
+                echo "Success: canonical navigation and page-shell assets are live and executable."
                 exit 0
               fi
             fi
 
-            echo "--- live navigation markers ---"
-            grep -Ein -m 40 'Shopify.theme|MMG_CANONICAL_NAVIGATION|mmg-canonical-navigation|MMG_ALL_THEME_NAV|MMG_THEME_MENU_HOTFIX' "${html}" || true
+            echo "--- live shell markers ---"
+            grep -Ein -m 50 'Shopify.theme|MMG_CANONICAL_NAVIGATION|MMG_PAGE_SHELL|mmg-canonical-navigation|mmg-page-shell|MMG_ALL_THEME_NAV|MMG_THEME_MENU_HOTFIX' "${html}" || true
             retry_after="$(awk 'BEGIN{IGNORECASE=1} /^retry-after:/ {gsub("\r", "", $2); print $2; exit}' "${headers}")"
             if [ -n "${retry_after}" ] && [ "${retry_after}" -le 180 ] 2>/dev/null; then sleep "${retry_after}"; else sleep 15; fi
           done
-          echo "Error: canonical v9 storefront assets were not live and executable." >&2
+          echo "Error: canonical navigation and page-shell assets were not live and executable." >&2
           exit 1
+
+      - name: Materialize page-shell verifier
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch main \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "${RUNNER_TEMP}/mmg-verifier"
+          cd "${RUNNER_TEMP}/mmg-verifier"
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          test -f .github/scripts/verify-mmg-page-shell.mjs
+
+      - name: Install Playwright Chromium
+        run: |
+          set -euo pipefail
+          cd "${RUNNER_TEMP}/mmg-verifier"
+          npm init -y >/dev/null
+          npm install --no-save --no-audit --no-fund playwright
+          npx playwright install --with-deps chromium
+
+      - name: Verify Free Creator Toolkit and Publishing Services
+        env:
+          MMG_STOREFRONT_URL: https://themindsetmediagroup.com
+          MMG_PAGE_SHELL_OUTPUT: artifacts/mmg-page-shell
+        run: |
+          set -euo pipefail
+          cd "${RUNNER_TEMP}/mmg-verifier"
+          node .github/scripts/verify-mmg-page-shell.mjs
+
+      - name: Upload page-shell verification artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmg-page-shell-verification-${{ github.run_id }}
+          path: ${{ runner.temp }}/mmg-verifier/artifacts/mmg-page-shell
+          if-no-files-found: warn
+          retention-days: 14
