@@ -5,7 +5,7 @@ workers_dev = true
 keep_vars = true
 
 [build]
-command = "npm install --no-save --no-audit --no-fund playwright && npx playwright install --with-deps chromium && node scripts/verify-live-page-shell.mjs"
+command = "npm install --no-save --no-audit --no-fund puppeteer-core && node scripts/verify-live-page-shell.mjs"
 
 [assets]
 directory = "../../web/kairos-dashboard"
