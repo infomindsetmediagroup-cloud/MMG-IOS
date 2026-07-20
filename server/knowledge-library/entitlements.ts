@@ -143,11 +143,14 @@ const chooseCurrentWindow = (
 ): MMGEntitlementWindowInput | null => {
   const priority: Record<MMGEntitlementWindowStatus, number> = {
     open: 0,
-    scheduled: 1,
-    confirmed: 2,
-    closed: 3,
-    expired: 4,
-    canceled: 5,
+    recovery_required: 1,
+    scheduled: 2,
+    confirmed: 3,
+    delivery_ready: 4,
+    delivered: 5,
+    closed: 6,
+    expired: 7,
+    canceled: 8,
   };
 
   return (
@@ -175,11 +178,26 @@ export const buildMMGEntitlementCounter = (input: {
     throw new Error("MMG_ENTITLEMENT_CYCLE_PLAN_MISMATCH");
   }
 
+  const openedStatuses: readonly MMGEntitlementWindowStatus[] = [
+    "open",
+    "confirmed",
+    "delivery_ready",
+    "delivered",
+    "closed",
+    "expired",
+    "recovery_required",
+  ];
+  const confirmedStatuses: readonly MMGEntitlementWindowStatus[] = [
+    "confirmed",
+    "delivery_ready",
+    "delivered",
+  ];
+
   const opened = input.windows.filter((window) =>
-    ["open", "confirmed", "closed", "expired"].includes(window.status),
+    openedStatuses.includes(window.status),
   ).length;
-  const confirmed = input.windows.filter(
-    (window) => window.status === "confirmed",
+  const confirmed = input.windows.filter((window) =>
+    confirmedStatuses.includes(window.status),
   ).length;
   const selectedUnits = input.windows.reduce(
     (sum, window) => sum + unitsForState(window.selections, "selected"),
