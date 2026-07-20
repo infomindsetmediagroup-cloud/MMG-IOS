@@ -1,6 +1,6 @@
 {
   "contract_id": "mmg-commerce-contract-v1",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "status": "approved",
   "approved_date": "2026-07-20",
   "authority": "MMG executive approval",
@@ -34,6 +34,18 @@
     "canonical_asset_key": "mmg.asset_id",
     "server_authority": "Kairos",
     "seed_asset": "mmg-dd-ai-image-mastery-001"
+  },
+  "knowledge_library_picker_contract": {
+    "authority": "registry/knowledge-library/mmg-knowledge-library-picker-contract-v1.json",
+    "state_machine": "server/knowledge-library/picker.ts",
+    "service_boundary": "server/knowledge-library/picker-service.ts",
+    "logical_endpoint": "/api/knowledge-library/picker",
+    "storefront_component": "shopify/snippets/mmg-knowledge-library-picker.liquid",
+    "first_package_target_titles": 2,
+    "first_package_total_units": 2,
+    "optimistic_concurrency_field": "expectedWindowVersion",
+    "idempotency_field": "requestId",
+    "server_authority": "Kairos"
   },
   "product_types": {
     "digital_download": {
@@ -191,7 +203,13 @@
         "remove selection",
         "confirm package"
       ],
-      "authority": "Kairos revalidates customer-specific eligibility server-side."
+      "authority": "Kairos revalidates customer-specific eligibility server-side.",
+      "mutation_rules": [
+        "Customer, subscription, and window identity are derived from the authenticated server session.",
+        "Every mutation requires a request ID and expected window version.",
+        "Confirmation requires the exact target asset count and complete unit consumption.",
+        "Confirmed selections are locked and become delivery-grant inputs."
+      ]
     },
     "my_library": {
       "access": "authenticated customer",
@@ -248,7 +266,9 @@
       "Do not recommend an asset the customer already owns.",
       "Do not use Shopify Bundles as the subscription entitlement foundation.",
       "Use one canonical asset record across storefront, library, portal, recommendations, and delivery.",
-      "Treat storefront eligibility as provisional until Kairos revalidates the customer, ownership, entitlement window, and delivery readiness."
+      "Treat storefront eligibility as provisional until Kairos revalidates the customer, ownership, entitlement window, and delivery readiness.",
+      "Use optimistic concurrency and idempotency for every title-selection mutation.",
+      "Create confirmation and delivery grants transactionally."
     ]
   },
   "site_placements": {
