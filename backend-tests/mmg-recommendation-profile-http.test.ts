@@ -55,7 +55,7 @@ const validPayload = {
 };
 
 describe("MMG learning profile HTTP", () => {
-  it("loads the authenticated profile privately", async () => {
+  it("loads the authenticated profile privately without returning customer identity", async () => {
     const response = await handleMMGLearningProfileRequest(
       request("GET"),
       dependencies(),
@@ -63,7 +63,8 @@ describe("MMG learning profile HTTP", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toBe("no-store, private");
     const body = await response.json();
-    expect(body.profile.customerId).toBe("customer-1");
+    expect(body.profile.roleCode).toBe("creator");
+    expect(body.profile.customerId).toBeUndefined();
   });
 
   it("requires authentication", async () => {
@@ -107,6 +108,8 @@ describe("MMG learning profile HTTP", () => {
         }),
       }),
     );
+    const body = await response.json();
+    expect(body.profile.customerId).toBeUndefined();
   });
 
   it("rejects invalid experience values and unsupported methods", async () => {
