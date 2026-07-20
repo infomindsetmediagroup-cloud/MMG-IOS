@@ -9,6 +9,7 @@
 **Customer Portal subscription dashboard authority:** `registry/customer-portal/mmg-subscription-dashboard-contract-v1.json`  
 **Thank-you first-title handoff authority:** `registry/checkout/mmg-thank-you-first-title-handoff-contract-v1.json`  
 **My Library delivery authority:** `registry/customer-portal/mmg-my-library-delivery-contract-v1.json`  
+**Shopify subscription reconciliation authority:** `registry/shopify/mmg-subscription-webhook-reconciliation-contract-v1.json`  
 **Digital asset registry:** `registry/knowledge-library/digital-asset-registry-v1.json`  
 **Live URL authority:** `registry/site-pages/site-url-registry-current.json`
 
@@ -16,9 +17,9 @@
 
 | Product type | Shopify structure | Primary customer destination | Subscription behavior |
 |---|---|---|---|
-| Digital download | Individual product | My Library | Eligible only when `mmg.subscription_eligible` is true and every Knowledge Library selection gate passes. |
+| Digital download | Individual product | My Library | Eligible only when `mmg.subscription_eligible` is true and every Knowledge Library release and selection gate passes. |
 | Service | Product with Starter, Growth, and Professional variants | My Projects | Not included in subscription fulfillment. |
-| Subscription | MMG Knowledge Subscription™ with Monthly, Bi-weekly, and Weekly variants | Subscription Dashboard + My Library | Creates recurring digital-asset entitlements. |
+| Subscription | MMG Knowledge Subscription™ with Monthly, Bi-weekly, and Weekly variants | Subscription Dashboard + My Library | Shopify owns recurring billing; Kairos reconciles contracts, entitlements, packages, and delivery. |
 
 ## Active Live Products
 
@@ -35,19 +36,21 @@
 | MMG Knowledge Subscription™ | `mmg-knowledge-subscription` | Bi-weekly | $24.95/month | 2 | 2 | 4 |
 | MMG Knowledge Subscription™ | `mmg-knowledge-subscription` | Weekly | $39.95/month | 4 | 2 | 8 |
 
-Every variant is billed monthly. Monthly, Bi-weekly, and Weekly describe the digital-package cadence and entitlement, not separate billing intervals.
+Every variant is billed monthly. Monthly, Bi-weekly, and Weekly describe the digital-package cadence and entitlement, not separate Shopify billing intervals.
 
 **Provisioning authority:** `shopify/products/mmg-knowledge-subscription/product-contract.json`
 
+The canonical Shopify structure is one product, three cadence variants, and one shared monthly selling plan. Runtime product, variant, selling-plan-group, and selling-plan GIDs remain deployment values and must be verified before live reconciliation.
+
 ## Knowledge Library Asset Registry
 
-The canonical cross-system identity is `mmg.asset_id`. Shopify titles and handles are presentation and routing fields; they do not replace the permanent asset identity.
+The permanent cross-system identity is `mmg.asset_id`. Shopify titles and handles are presentation and routing fields; they do not replace the canonical asset identity.
 
 | Asset | Asset ID | Public catalog | Subscription selection | Current gate |
 |---|---|---:|---:|---|
-| AI Image Mastery™ | `mmg-dd-ai-image-mastery-001` | Active | Blocked pending provisioning | Verify square thumbnail, delivery package, Shopify metafields, and runtime IDs. |
+| AI Image Mastery™ | `mmg-dd-ai-image-mastery-001` | Active | Blocked pending provisioning | Verify square thumbnail, delivery package, Shopify metafields, runtime IDs, and secure delivery files. |
 
-A product may remain publicly purchasable while subscriber selection is blocked. This prevents the picker from offering a title that Kairos cannot yet package and deliver reliably.
+A product may remain publicly purchasable while subscriber selection is blocked. This prevents the picker from offering a title Kairos cannot yet package and deliver reliably.
 
 ## Live or Planned Product Families
 
@@ -63,7 +66,7 @@ A product may remain publicly purchasable while subscriber selection is blocked.
 | AI Mastery Series | Digital book series | `/products/ai-image-mastery` and future handles | Active / expanding | Includes AI Image Mastery and planned continuation titles. |
 | Micro-Packs | Digital short books | TBD | Planned | Compact creator-education product family. |
 | Publish-Ready Book Build Service™ | Service | TBD | Planned | Canonical multi-variant service-product pattern. |
-| MMG Knowledge Subscription™ | Subscription | `/products/mmg-knowledge-subscription` | Approved for provisioning | Canonical recurring product connecting the Knowledge Library, cart, Customer Portal, and Kairos entitlement system. |
+| MMG Knowledge Subscription™ | Subscription | `/products/mmg-knowledge-subscription` | Approved for provisioning | Canonical recurring product connecting Shopify billing, the Knowledge Library, Customer Portal, My Library, and Kairos entitlements. |
 
 ## Product-Image Rules
 
@@ -87,118 +90,93 @@ A product may remain publicly purchasable while subscriber selection is blocked.
 
 - Single-variant products use the normalized standard product-page base.
 - Multi-variant service products use the approved editorial premium UX framework.
-- Variant cards expose live purchase behavior inside the page body.
 - Digital-product pages preserve one-time purchase and add the reusable membership offer below the primary purchase area.
 - Service pages keep service conversion primary and place membership in Continue Your Journey.
 - The subscription product is subscription-only and must always add a valid selling plan to the cart line.
 - Public copy must not expose internal registry names, IDs, or production terminology.
 - Product source must be preserved in complete form.
 
-## Knowledge Library Rules
+## Knowledge Library and Ownership Rules
 
-The Knowledge Library is the shared digital catalog for:
+The Knowledge Library supports public discovery, authenticated subscriber selection, and customer-owned assets.
 
-1. Public discovery and individual purchase.
-2. Authenticated subscriber title selection.
-3. Customer-owned assets and downloads.
-
-Only active, approved, subscription-eligible digital downloads with complete verified selection metadata may enter subscriber selection. Kairos must exclude assets already owned by the customer and revalidate the active entitlement window server-side.
-
-The canonical Shopify metadata definitions are stored in:
-
-`shopify/metafields/mmg-knowledge-library-product-metafields.json`
-
-The public storefront may expose provisional eligibility hints, but it must not expose private ownership grants, subscription contract identifiers, or authoritative remaining-unit totals.
-
-The picker uses:
-
-- Server-derived customer, subscription, and window identity.
-- A two-title, two-unit first-package target.
-- `requestId` idempotency.
-- `expectedWindowVersion` optimistic concurrency.
-- Exact-capacity confirmation.
-- Locked confirmed selections.
-
-## Durable Entitlement and Ownership Rules
-
-- PostgreSQL-compatible persistence is defined by `database/migrations/20260720_001_mmg_knowledge_entitlements.sql`.
-- Subscription contracts, billing cycles, package windows, selections, request IDs, delivery grants, ownership grants, and audit events have separate durable records.
-- Active ownership is resolved from `customer_id + asset_id`, not from browser state or product titles.
-- The customer-facing My Library presents one asset per canonical `asset_id` even when historical grant records are retained.
-- Package confirmation uses one transaction for the window update, selections, request ID, delivery grants, ownership grants, cycle counters, and audit event.
-- Any failed version, capacity, ownership, delivery-package, or eligibility check rolls back the entire confirmation.
-- The reusable entitlement counter shows plan, billing cycle, package completion, asset capacity, current-window progress, and owned-asset count.
+- Only active, approved, subscription-eligible digital downloads with complete release metadata may enter subscriber selection.
+- Kairos excludes already-owned assets and revalidates the active entitlement window server-side.
+- The picker derives customer, subscription, and window identity from the authenticated server session.
+- First-package selection requires exactly two titles and two units.
+- Mutations use `requestId` idempotency and `expectedWindowVersion` optimistic concurrency.
+- Active ownership is resolved from durable `customer_id + asset_id` grants, not browser state or titles.
+- My Library presents one item per canonical `asset_id` even when historical grant records are retained.
+- Confirmation, delivery grants, ownership grants, cycle counters, and audit events commit or roll back together.
 
 ## Delivery Window Rules
 
-- Controller persistence is extended by `database/migrations/20260720_002_mmg_delivery_window_controller.sql`.
-- Monthly package openings: day 0.
+- Monthly package opening: day 0.
 - Bi-weekly package openings: days 0 and 14.
 - Weekly package openings: days 0, 7, 14, and 21.
-- Weekly remains four packages and eight assets even in a five-week calendar month.
+- Weekly remains four packages and eight assets in five-week calendar months.
 - Review windows are 24–48 hours, with 48 hours as the default.
-- The first package is customer-selected and is never auto-confirmed.
+- The first package is customer-selected and never auto-confirmed.
 - An expired first package moves to `recovery_required`.
-- Future packages are proposed by Kairos and may auto-confirm at expiry only when the exact two-title package passes server revalidation.
-- Incomplete, invalid, or uncuratable packages move to recovery without consuming entitlement incorrectly.
+- Future packages may auto-confirm only when the exact two-title package passes server revalidation.
 - Confirmed packages progress through `delivery_ready` to `delivered` using an idempotent dispatcher keyed by window ID.
 
-## Customer Portal Subscription Dashboard Rules
+## Customer Portal and My Library Rules
 
-- The canonical route remains `/pages/customer-portal`.
-- The dashboard is added to the existing portal and must not replace service-project, support, navigation, authentication, or other established portal modules.
-- The dashboard reads private customer state from `GET /api/customer-portal/subscription`.
-- Customer identity is derived from the authenticated server session.
-- The response is private, non-cacheable, and read-only.
-- The dashboard displays plan, price, billing dates, assets and packages remaining, current review window, selected or proposed titles, package timeline, recovery actions, My Library, the Subscription Member Guide, and account controls.
-- Package priority is `recovery_required`, `open`, `delivery_ready`, `confirmed`, `scheduled`, `delivered`, `closed`, `expired`, then `canceled`.
-- Internal provider contract IDs, dispatch IDs, delivery-package references, ownership-grant IDs, and audit payloads are never exposed.
-- Subscription selection remains owned by the Knowledge Library Picker; delivery lifecycle mutations remain owned by the Delivery Window Controller.
+- The canonical portal route remains `/pages/customer-portal`.
+- Subscription Dashboard and My Library are additive modules and do not replace projects, uploads, support, authentication, or navigation.
+- Private state is loaded through authenticated, non-cacheable server endpoints.
+- My Library is available at `/pages/customer-portal#my-library`.
+- Subscription-delivered assets remain `preparing` until the linked package window reaches `delivered`.
+- Secure read and download actions require active ownership, delivery revalidation, same-origin protection, CSRF validation, and a unique request ID.
+- Signed file URLs use HTTPS, expire within 60–600 seconds, and never expose permanent storage URLs or object keys.
 
 ## Thank-You First-Title Handoff Rules
 
-- The Thank you page uses the checkout UI extension target `purchase.thank-you.block.render`; it does not use legacy checkout scripts.
-- The extension obtains the completed order ID, checkout token, and a fresh Shopify extension session token.
-- Kairos reloads and verifies the order server-side before treating it as a subscription purchase.
-- The canonical subscription line must match the verified product identity, contain a selling-plan allocation, and include an approved `_mmg_subscription_plan_code` marker.
-- The raw checkout token is never persisted; only a SHA-256 hash is stored.
-- Order links are idempotent by `shop_domain + order_id` and remain pending until Shopify subscription webhook reconciliation assigns the durable entitlement.
-- Title selection never occurs inside checkout. The successful buyer is directed into **Choose Your First Two Titles** only after the first package window is available.
-- Guest buyers must authenticate in the Customer Portal before private entitlement, ownership, or selection state is disclosed.
-- Delayed order creation, subscription reconciliation, cycle creation, and window creation produce an activation-pending state rather than implying checkout failure.
-- Non-subscription orders render no MMG subscription handoff.
-- A recovery-required first package routes to Customer Service; a confirmed or delivered first package routes to My Library.
+- The Thank you page uses `purchase.thank-you.block.render`.
+- Kairos reloads and verifies the completed order server-side.
+- The canonical line must match the approved product, contain a selling-plan allocation, and carry the approved private plan marker.
+- Raw checkout tokens are never persisted; only SHA-256 hashes are stored.
+- Pending order links remain activation-pending until Shopify subscription reconciliation assigns a durable entitlement.
+- Title selection never occurs in checkout.
+- The buyer enters **Choose Your First Two Titles** only after the first package window is available.
 
-## My Library Delivery Rules
+## Shopify Subscription Reconciliation Rules
 
-- My Library is governed by `registry/customer-portal/mmg-my-library-delivery-contract-v1.json` and is added to the existing Customer Portal at `/pages/customer-portal#my-library`.
-- It displays one customer-facing item per canonical `asset_id`, while aggregating active purchase, subscription, bonus, and administrative grant sources.
-- Library state is loaded from `GET /api/customer-portal/my-library` through the authenticated server session.
-- Secure read and download requests use `POST /api/customer-portal/my-library/access` with same-origin validation, a session-bound CSRF token, and a unique request ID.
-- Subscription-delivered assets remain in `preparing` until the linked package window reaches `delivered`.
-- One-time purchases, bonuses, and administrative grants may become ready as soon as an active primary delivery file exists.
-- Delivery files are registered in `mmg_asset_delivery_files`; customer access requests and outcomes are audited without storing signed URLs.
-- Read links use inline disposition. Downloads use attachment disposition.
-- Signed URLs must use HTTPS and expire within 60–600 seconds; 300 seconds is the default.
-- Customer-facing responses never expose storage providers, object keys, permanent URLs, grant IDs, entitlement IDs, or delivery-package references.
+The reconciliation authority is `registry/shopify/mmg-subscription-webhook-reconciliation-contract-v1.json`.
+
+- The app-specific webhook surface uses Shopify API version `2026-07` and requires `read_own_subscription_contracts` plus protected subscription API access.
+- Accepted topics are contract create/update and billing-attempt success/failure/challenged.
+- The exact raw body is HMAC-verified before JSON parsing.
+- Deliveries are deduplicated by `X-Shopify-Webhook-Id`; the same ID with another payload hash is rejected.
+- The webhook payload is not the final authority. Kairos reloads the complete `SubscriptionContract` through Admin GraphQL.
+- Contract customer, product, variant, selling plan, quantity, currency, billing policy, delivery policy, and current period must pass canonical validation.
+- Contract statuses map to `active`, `paused`, `failed`, `canceled`, and `expired`.
+- Stale revisions and equal-revision older events are ignored.
+- A cycle is unique by entitlement and authoritative current-period start.
+- Plan capacity remains exactly 1/2/4 packages and 2/4/8 assets.
+- Matching pending Thank-you order links are connected to the durable entitlement.
+- Paused and terminal contracts cancel future scheduled cycles without revoking delivered ownership.
+- Raw webhook bodies, app secrets, Admin tokens, provider IDs, payload hashes, and billing-attempt internals are never exposed to storefront customers.
 
 ## Commerce Component Build State
 
-| Component | Repository status | Live storefront status | Next dependency |
+| Component | Repository status | Live storefront/runtime status | Next dependency |
 |---|---|---|---|
-| MMG commerce ecosystem contract | Merged | Governing only | Continue implementation sequence. |
+| MMG commerce ecosystem contract | Merged and advanced to v1.9 | Governing only | Continue implementation sequence. |
 | Subscription product and selling-plan contract | Merged | Not provisioned | Shopify runtime IDs. |
 | MMG Three-Plan Selector | Merged | Not installed | Subscription product provisioning. |
 | MMG Cart Subscription Controller | Merged | Not installed | Active theme cart integration and product provisioning. |
 | Knowledge Library eligibility metadata | Merged | Not installed | Shopify metafields and delivery packages. |
 | MMG Knowledge Library Picker | Merged | Not installed | Durable API adapter and verified assets. |
-| MMG Entitlement Counter and Ownership Persistence | Merged for staging | Not installed | Production PostgreSQL and Shopify contract reconciliation. |
-| MMG Delivery Window Controller | Merged for staging | Not scheduled live | Production scheduler, dispatcher, and reconciliation. |
+| MMG Entitlement Counter and Ownership Persistence | Merged for staging | Not installed | Production PostgreSQL. |
+| MMG Delivery Window Controller | Merged for staging | Not scheduled live | Production scheduler and dispatcher. |
 | MMG Customer Portal Subscription Dashboard | Merged for staging | Not installed | Authenticated endpoint routing and portal integration. |
-| MMG Thank-You First-Title Handoff | Merged for staging | Not installed | Shopify app extension deployment and webhook reconciliation. |
-| MMG My Library Delivery Interface | Implemented for staging | Not installed | Shopify subscription webhook reconciliation. |
+| MMG Thank-You First-Title Handoff | Merged for staging | Not installed | Shopify extension deployment. |
+| MMG My Library Delivery Interface | Merged for staging | Not installed | Storage signer and portal insertion. |
+| Shopify Subscription Webhook Reconciliation | Implemented for staging | Not registered or routed live | Kairos recommendation and curation ranking. |
 
-## Shopify Storage Contract
+## Shopify Product Storage Contract
 
 ```text
 shopify/products/{product-handle}/source.html
@@ -208,4 +186,4 @@ shopify/products/{product-handle}/qa.md
 shopify/products/{product-handle}/release-notes.md
 ```
 
-Canonical product, entitlement, delivery-window, Customer Portal, post-checkout handoff, My Library, and secure-delivery relationships must also be represented in the machine-readable commerce contract and relevant registries.
+Canonical product, entitlement, reconciliation, delivery-window, Customer Portal, post-checkout handoff, My Library, and secure-delivery relationships must also be represented in the machine-readable commerce contract and relevant registries.
