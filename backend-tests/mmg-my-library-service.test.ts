@@ -76,9 +76,11 @@ describe("MMG My Library service", () => {
       fileName: "AI-Image-Mastery.pdf",
       mediaType: "application/pdf",
     });
-    expect(repo.claimAccessRequest).toHaveBeenCalledBefore(
-      vi.mocked(repo.loadAccessibleFile),
-    );
+    const claimOrder = vi.mocked(repo.claimAccessRequest).mock.invocationCallOrder[0];
+    const loadOrder = vi.mocked(repo.loadAccessibleFile).mock.invocationCallOrder[0];
+    expect(claimOrder).toBeDefined();
+    expect(loadOrder).toBeDefined();
+    expect(claimOrder).toBeLessThan(loadOrder ?? Number.MAX_SAFE_INTEGER);
     expect(gateway.createSignedAccess).toHaveBeenCalledWith(
       expect.objectContaining({
         disposition: "attachment",
