@@ -1,0 +1,51 @@
+name: Validate Shopify AI Toolkit Governance
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".env.example"
+      - "docs/decisions/shopify-ai-toolkit-adoption.md"
+      - "docs/workflows/shopify-ai-toolkit-operations.md"
+      - "scripts/shopify-ai-toolkit-*.mjs"
+      - "scripts/shopify-store-execute.mjs"
+      - "shopify/ai-toolkit/**"
+      - "package.json"
+      - ".github/workflows/shopify-ai-toolkit-validation.yml"
+  pull_request:
+    paths:
+      - ".env.example"
+      - "docs/decisions/shopify-ai-toolkit-adoption.md"
+      - "docs/workflows/shopify-ai-toolkit-operations.md"
+      - "scripts/shopify-ai-toolkit-*.mjs"
+      - "scripts/shopify-store-execute.mjs"
+      - "shopify/ai-toolkit/**"
+      - "package.json"
+      - ".github/workflows/shopify-ai-toolkit-validation.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    name: Shopify toolkit policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.12.0"
+          cache: npm
+
+      - name: Install repository dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Validate Shopify toolkit governance
+        run: npm run shopify:toolkit:policy

@@ -44,6 +44,23 @@ Minimum deployment target: iOS 17.0.
 
 Use the repository make targets or XcodeGen configuration to generate and build the `MMGIOS` scheme on an iPhone simulator.
 
+## Shopify AI Toolkit
+
+Shopify development and controlled store operations use Shopify's official AI Toolkit and Shopify CLI under the MMG/Kairos governance wrapper.
+
+```bash
+npm run shopify:toolkit:install -- --install-cli
+npm run shopify:toolkit:doctor
+npm run shopify:toolkit:policy
+```
+
+Canonical policy and operating instructions:
+
+```text
+shopify/ai-toolkit/policy.json
+docs/workflows/shopify-ai-toolkit-operations.md
+```
+
 ## Validation
 
 Before promotion:
@@ -62,4 +79,5 @@ Production deployment is handled by `.github/workflows/deploy-cloudflare-product
 - GitHub is the canonical source of truth for code, approved assets, version history, and production governance.
 - Shopify customer-facing changes remain governed and staging-first.
 - Live publication, destructive changes, pricing, legal claims, and structural redesign require explicit executive approval.
+- Shopify mutations must run through the governed wrapper; direct mutation bypasses are prohibited.
 - New files must have a current production, validation, security, governance, or operational purpose.

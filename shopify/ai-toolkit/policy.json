@@ -1,0 +1,37 @@
+{
+  "contract_id": "mmg-shopify-ai-toolkit-governance-v1",
+  "version": "1.0.0",
+  "status": "approved",
+  "adopted_on": "2026-07-20",
+  "official_plugin": "shopify@openai-curated",
+  "minimum_node_version": "22.12.0",
+  "telemetry": {
+    "opt_out_required": true,
+    "environment_variables": {
+      "OPT_OUT_INSTRUMENTATION": "true",
+      "SHOPIFY_CLI_NO_ANALYTICS": "1"
+    }
+  },
+  "execution": {
+    "default_environment": "development",
+    "query_file_required": true,
+    "inline_graphql_disabled": true,
+    "direct_allow_mutations_disabled": true,
+    "receipt_directory": "artifacts/shopify-change-receipts"
+  },
+  "approval_policy": {
+    "documentation_generation_validation": "automatic",
+    "read_only_store_queries": "governed_automatic",
+    "development_mutations": "explicit_approval_and_rollback_plan",
+    "staging_mutations": "explicit_approval_and_rollback_plan",
+    "production_mutations": "executive_approval_change_id_rollback_plan_and_exact_confirmation"
+  },
+  "production_confirmation": "APPROVE_MMG_SHOPIFY_PRODUCTION_MUTATION",
+  "forbidden_repository_content": [
+    "Shopify Admin API access tokens",
+    "Shopify stored-auth material",
+    "OpenAI API keys",
+    "customer personal data",
+    "unredacted operation variables containing secrets"
+  ]
+}
