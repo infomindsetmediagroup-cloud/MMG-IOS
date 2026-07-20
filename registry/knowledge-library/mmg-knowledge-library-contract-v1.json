@@ -98,6 +98,7 @@
       "access": "authenticated customer with an active MMG Knowledge Subscription contract",
       "authoritative_filter": [
         "Public Catalog predicate passes.",
+        "mmg.product_type equals digital_download.",
         "mmg.subscription_eligible equals true.",
         "mmg.square_thumbnail is present.",
         "mmg.subscription_value is an integer greater than or equal to 1.",
