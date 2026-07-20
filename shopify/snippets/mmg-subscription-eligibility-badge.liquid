@@ -1,0 +1,27 @@
+{%- liquid
+  assign mmg_badge_product = mmg_badge_product | default: product
+  assign mmg_badge_product_type = mmg_badge_product.metafields.mmg.product_type.value | default: ''
+  assign mmg_badge_subscription_eligible = mmg_badge_product.metafields.mmg.subscription_eligible.value | default: false
+  assign mmg_badge_asset_status = mmg_badge_product.metafields.mmg.asset_status.value | default: ''
+  assign mmg_badge_asset_id = mmg_badge_product.metafields.mmg.asset_id.value | default: ''
+  assign mmg_badge_subscription_value = mmg_badge_product.metafields.mmg.subscription_value.value | default: 0
+  assign mmg_badge_delivery_package = mmg_badge_product.metafields.mmg.delivery_package.value | default: ''
+  assign mmg_badge_destination = mmg_badge_product.metafields.mmg.customer_destination.value | default: ''
+  assign mmg_badge_portrait = mmg_badge_product.metafields.mmg.portrait_cover.value
+  assign mmg_badge_square = mmg_badge_product.metafields.mmg.square_thumbnail.value
+  assign mmg_show_subscription_badge = false
+
+  if mmg_badge_product.available and mmg_badge_product_type == 'digital_download' and mmg_badge_subscription_eligible and mmg_badge_asset_status == 'active' and mmg_badge_asset_id != blank and mmg_badge_subscription_value >= 1 and mmg_badge_delivery_package != blank and mmg_badge_destination == 'my_library' and mmg_badge_portrait != blank and mmg_badge_square != blank
+    assign mmg_show_subscription_badge = true
+  endif
+-%}
+
+{%- if mmg_show_subscription_badge -%}
+  <span
+    class="mmg-subscription-eligibility-badge"
+    data-mmg-subscription-eligibility-badge
+    aria-label="This digital asset is included with an eligible MMG Knowledge Subscription plan"
+  >
+    Included with Membership
+  </span>
+{%- endif -%}
