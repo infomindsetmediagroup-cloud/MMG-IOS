@@ -20,9 +20,9 @@ The build does not treat “deploy” as one opaque command. It separates planni
 10. Insert the Subscription Dashboard, My Library, and learning-profile modules additively into the Customer Portal.
 11. Release app-specific subscription webhooks on Shopify API version `2026-07`.
 12. Activate the delivery scheduler, idempotent dispatcher, acknowledgement path, storage signer, and monitoring.
-13. Run the complete checkout-to-My-Library verification suite.
+13. Run the complete checkout-to-My-Library verification suite under the release's verification approval.
 14. Obtain a separate publication approval bound to the exact release commit.
-15. Activate the product and publish it only to the verified Online Store publication.
+15. Activate the product and publish it only to the verified Online Store publication while the matching verification evidence is still fresh.
 
 ## Shopify provisioning boundary
 
@@ -52,11 +52,11 @@ Applies non-publication phases. Production execution requires a valid release ap
 
 ### `verify`
 
-Runs the independent end-to-end suite. Verification cannot grant publication by itself.
+Runs the independent end-to-end suite. Production verification requires an action-bound approval because the suite may create a controlled test order and entitlement state. Verification cannot grant publication by itself.
 
 ### `publish`
 
-Activates and publishes the product only after all end-to-end checks pass. Publication always requires a separate approval.
+Activates and publishes the product only after all end-to-end checks pass. Publication always requires a separate approval. Evidence must match the same release ID and environment and must be no more than 24 hours old.
 
 ### `rollback`
 
@@ -92,13 +92,13 @@ The release verifier covers:
 - Privacy boundary
 - Pause, cancellation, and billing-failure behavior
 
-Only hashes of test order and test customer references may be persisted.
+Only hashes of test order and test customer references may be persisted. Publication accepts only a complete successful run for the same release ID and environment completed within the preceding 24 hours.
 
 ## GitHub release workflow
 
-`.github/workflows/mmg-commerce-release.yml` provides an explicit workflow-dispatch control plane. It checks out the exact requested commit, runs the repository contract validation, enters the selected GitHub Environment, and sends an authenticated command to the internal deployment endpoint.
+`.github/workflows/mmg-commerce-release.yml` provides an explicit workflow-dispatch control plane. It checks out the exact requested commit, runs the repository contract validation, enters the selected GitHub Environment, and sends one authenticated action to the internal deployment endpoint.
 
-The production GitHub Environment must require reviewer approval and expose only the internal deployment endpoint and bearer credential. Shopify, database, storage, and dispatcher secrets stay in the runtime that owns those integrations.
+Production `execute`, `verify`, `publish`, and `rollback` actions require the production GitHub Environment and the matching durable release approval. Shopify, database, storage, and dispatcher secrets stay in the runtime that owns those integrations.
 
 ## Rollback doctrine
 
@@ -112,4 +112,4 @@ The production GitHub Environment must require reviewer approval and expose only
 
 ## Production boundary
 
-The repository now contains the deployment control plane, but no live Shopify mutation, database migration, app-scope expansion, webhook release, portal installation, scheduler activation, checkout, or product publication occurs merely because this source is merged. Those actions require connected production adapters, encrypted secrets, GitHub Environment approval, and an explicit controlled release command.
+The repository now contains the deployment control plane, but no live Shopify mutation, database migration, app-scope expansion, webhook release, portal installation, scheduler activation, checkout, or product publication occurs merely because this source is merged. Those actions require connected production adapters, encrypted secrets, GitHub Environment approval, durable action-bound release approval, and an explicit controlled release command.
