@@ -7,6 +7,7 @@
 **Entitlement and ownership authority:** `registry/knowledge-library/mmg-entitlement-ownership-persistence-contract-v1.json`  
 **Delivery window authority:** `registry/knowledge-library/mmg-delivery-window-controller-contract-v1.json`  
 **Customer Portal subscription dashboard authority:** `registry/customer-portal/mmg-subscription-dashboard-contract-v1.json`  
+**Thank-you first-title handoff authority:** `registry/checkout/mmg-thank-you-first-title-handoff-contract-v1.json`  
 **Digital asset registry:** `registry/knowledge-library/digital-asset-registry-v1.json`  
 **Live URL authority:** `registry/site-pages/site-url-registry-current.json`
 
@@ -153,6 +154,20 @@ The picker uses:
 - Internal provider contract IDs, dispatch IDs, delivery-package references, ownership-grant IDs, and audit payloads are never exposed.
 - Subscription selection remains owned by the Knowledge Library Picker; delivery lifecycle mutations remain owned by the Delivery Window Controller.
 
+## Thank-You First-Title Handoff Rules
+
+- The Thank you page uses the checkout UI extension target `purchase.thank-you.block.render`; it does not use legacy checkout scripts.
+- The extension obtains the completed order ID, checkout token, and a fresh Shopify extension session token.
+- Kairos reloads and verifies the order server-side before treating it as a subscription purchase.
+- The canonical subscription line must match the verified product identity, contain a selling-plan allocation, and include an approved `_mmg_subscription_plan_code` marker.
+- The raw checkout token is never persisted; only a SHA-256 hash is stored.
+- Order links are idempotent by `shop_domain + order_id` and remain pending until Shopify subscription webhook reconciliation assigns the durable entitlement.
+- Title selection never occurs inside checkout. The successful buyer is directed into **Choose Your First Two Titles** only after the first package window is available.
+- Guest buyers must authenticate in the Customer Portal before private entitlement, ownership, or selection state is disclosed.
+- Delayed order creation, subscription reconciliation, cycle creation, and window creation produce an activation-pending state rather than implying checkout failure.
+- Non-subscription orders render no MMG subscription handoff.
+- A recovery-required first package routes to Customer Service; a confirmed or delivered first package routes to My Library.
+
 ## Commerce Component Build State
 
 | Component | Repository status | Live storefront status | Next dependency |
@@ -165,7 +180,8 @@ The picker uses:
 | MMG Knowledge Library Picker | Merged | Not installed | Durable API adapter and verified assets. |
 | MMG Entitlement Counter and Ownership Persistence | Merged for staging | Not installed | Production PostgreSQL and Shopify contract reconciliation. |
 | MMG Delivery Window Controller | Merged for staging | Not scheduled live | Production scheduler, dispatcher, and reconciliation. |
-| MMG Customer Portal Subscription Dashboard | Implemented for staging | Not installed | Thank-you page first-title handoff. |
+| MMG Customer Portal Subscription Dashboard | Merged for staging | Not installed | Authenticated endpoint routing and portal integration. |
+| MMG Thank-You First-Title Handoff | Implemented for staging | Not installed | My Library delivery interface. |
 
 ## Shopify Storage Contract
 
@@ -177,4 +193,4 @@ shopify/products/{product-handle}/qa.md
 shopify/products/{product-handle}/release-notes.md
 ```
 
-Canonical product, entitlement, delivery-window, and Customer Portal relationships must also be represented in the machine-readable commerce contract and relevant registries.
+Canonical product, entitlement, delivery-window, Customer Portal, and post-checkout handoff relationships must also be represented in the machine-readable commerce contract and relevant registries.
