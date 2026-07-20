@@ -12,7 +12,8 @@
     "asset_registry": "registry/knowledge-library/digital-asset-registry-v1.json",
     "eligibility_evaluator": "server/knowledge-library/eligibility.ts",
     "picker_state_machine": "server/knowledge-library/picker.ts",
-    "picker_service": "server/knowledge-library/picker-service.ts"
+    "picker_service": "server/knowledge-library/picker-service.ts",
+    "picker_http_handler": "server/knowledge-library/picker-http.ts"
   },
   "supported_window_types": [
     "first_package",
@@ -112,12 +113,15 @@
     "optimistic_concurrency_field": "expectedWindowVersion",
     "idempotency_field": "requestId",
     "credentials_mode": "same-origin",
-    "content_type": "application/json"
+    "content_type": "application/json",
+    "csrf_token_response_header": "X-MMG-CSRF-Token",
+    "csrf_token_request_header": "X-MMG-CSRF-Token"
   },
   "security_contract": {
     "customer_identity_source": "authenticated server session",
     "subscription_identity_source": "Kairos server lookup",
     "window_identity_source": "Kairos server lookup",
+    "csrf_acquisition": "The authenticated GET response issues or rotates the session-bound token through X-MMG-CSRF-Token; every POST returns the current token through the same header.",
     "forbidden_client_identity_fields": [
       "customerId",
       "customer_id",
@@ -235,7 +239,7 @@
     ]
   },
   "release_gates": [
-    "The authenticated picker endpoint exists and validates origin plus CSRF.",
+    "The secure HTTP handler is connected to the deployed authenticated API adapter.",
     "The server derives customer, subscription, and window identities from the session.",
     "The entitlement-window repository supports atomic versioned writes.",
     "Confirmation creates delivery grants transactionally and idempotently.",
