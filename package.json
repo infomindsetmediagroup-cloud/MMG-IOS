@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -12,9 +12,10 @@
     "shopify:toolkit:install": "node scripts/install-shopify-ai-toolkit.mjs",
     "shopify:toolkit:preflight": "node scripts/shopify-toolkit-preflight.mjs",
     "shopify:policy": "node scripts/shopify-toolkit-policy-check.mjs",
+    "shopify:self-test": "node scripts/shopify-toolkit-self-test.mjs",
     "shopify:store:read": "node scripts/shopify-store-operation.mjs read",
     "shopify:store:mutate": "node scripts/shopify-store-operation.mjs mutate",
-    "check": "npm run shopify:policy && npm run typecheck && npm test",
+    "check": "npm run shopify:policy && npm run shopify:self-test && npm run typecheck && npm test",
     "cf:dev": "wrangler dev",
     "cf:deploy": "wrangler deploy"
   },
