@@ -13,6 +13,7 @@ type PickerContract = {
     target_asset_count: number;
     total_units: number;
     selection_occurs_after_checkout: boolean;
+    customer_selects_titles: boolean;
   };
   command_contract: {
     endpoint: string;
@@ -41,6 +42,7 @@ type PickerContract = {
     stylesheet_asset: string;
     page_integration: string;
     provisional_metadata_source: string;
+    progressive_enhancement: string;
   };
   event_contract: Array<{
     name: string;
@@ -51,6 +53,7 @@ type PickerContract = {
     previous_component: string;
     current_component: string;
     next_component: string;
+    subsequent_components: string[];
   };
   release_gates: string[];
 };
@@ -227,10 +230,10 @@ describe("MMG Knowledge Library picker contract", () => {
     expect(integration).toContain("mmg-knowledge-library-picker");
   });
 
-  it("keeps release blocked until the authenticated endpoint and persistence exist", () => {
+  it("keeps release blocked until the secure API adapter and persistence exist", () => {
     expect(contract.release_gates).toEqual(
       expect.arrayContaining([
-        "The authenticated picker endpoint exists and validates origin plus CSRF.",
+        "The secure HTTP handler is connected to the deployed authenticated API adapter.",
         "The entitlement-window repository supports atomic versioned writes.",
         "Confirmation creates delivery grants transactionally and idempotently.",
         "At least two verified subscription-selectable digital assets exist.",
