@@ -38,6 +38,17 @@ type CommerceContract = {
     idempotency_field: string;
     server_authority: string;
   };
+  entitlement_ownership_persistence_contract: {
+    authority: string;
+    database_schema: string;
+    postgres_repository: string;
+    entitlement_counter: string;
+    ownership_resolution: string;
+    logical_entitlement_endpoint: string;
+    storefront_counter: string;
+    confirmation_transaction: string;
+    server_authority: string;
+  };
   product_types: {
     digital_download: {
       storefront: {
@@ -97,6 +108,9 @@ type CommerceContract = {
       authority: string;
       mutation_rules: string[];
     };
+    my_library: {
+      ownership_authority: string;
+    };
   };
   canonical_metadata: {
     namespace: string;
@@ -123,7 +137,7 @@ const contract = JSON.parse(
 describe("MMG commerce contract", () => {
   it("is the approved v1 authority", () => {
     expect(contract.contract_id).toBe("mmg-commerce-contract-v1");
-    expect(contract.version).toBe("1.3.0");
+    expect(contract.version).toBe("1.4.0");
     expect(contract.status).toBe("approved");
   });
 
@@ -311,7 +325,33 @@ describe("MMG commerce contract", () => {
     );
   });
 
-  it("forbids silent recurring-product insertion and provisional client authority", () => {
+  it("connects commerce to durable entitlement and ownership persistence", () => {
+    expect(contract.entitlement_ownership_persistence_contract).toEqual({
+      authority:
+        "registry/knowledge-library/mmg-entitlement-ownership-persistence-contract-v1.json",
+      database_schema:
+        "database/migrations/20260720_001_mmg_knowledge_entitlements.sql",
+      postgres_repository:
+        "server/knowledge-library/postgres-entitlement-repository.ts",
+      entitlement_counter: "server/knowledge-library/entitlements.ts",
+      ownership_resolution: "server/knowledge-library/ownership.ts",
+      logical_entitlement_endpoint: "/api/knowledge-library/entitlement",
+      storefront_counter: "shopify/snippets/mmg-entitlement-counter.liquid",
+      confirmation_transaction:
+        "window confirmation, delivery grants, ownership grants, cycle counters, and audit events commit or roll back together",
+      server_authority: "Kairos",
+    });
+    expect(
+      contract.knowledge_library_modes.subscription_selection.mutation_rules,
+    ).toContain(
+      "Confirmation, delivery grants, ownership grants, cycle accounting, and audit events are one atomic database transaction.",
+    );
+    expect(contract.knowledge_library_modes.my_library.ownership_authority).toContain(
+      "mmg_ownership_grants",
+    );
+  });
+
+  it("forbids silent recurring insertion, provisional authority, and entitlement overdraw", () => {
     expect(contract.offer_and_entitlement_engine.rules).toEqual(
       expect.arrayContaining([
         "Never silently add a recurring product to the cart.",
@@ -319,6 +359,8 @@ describe("MMG commerce contract", () => {
         "Treat storefront eligibility as provisional until Kairos revalidates the customer, ownership, entitlement window, and delivery readiness.",
         "Use optimistic concurrency and idempotency for every title-selection mutation.",
         "Create confirmation and delivery grants transactionally.",
+        "Resolve ownership from durable active grants rather than browser state.",
+        "Never allow entitlement units or package counts to exceed the locked plan contract.",
       ]),
     );
   });
