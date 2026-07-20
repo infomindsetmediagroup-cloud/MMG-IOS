@@ -1,0 +1,761 @@
+{%- liquid
+  assign mmg_subscription_product = mmg_selector_product
+  if mmg_subscription_product == blank
+    assign mmg_subscription_product = all_products['mmg-knowledge-subscription']
+  endif
+
+  assign mmg_selector_context = mmg_selector_context | default: 'subscription-product'
+  assign mmg_selector_heading = mmg_selector_heading | default: 'Choose your membership plan'
+  assign mmg_selector_intro = mmg_selector_intro | default: 'Build your Knowledge Library with recurring digital assets selected for your goals.'
+  assign mmg_selector_button_label = mmg_selector_button_label | default: 'Continue with membership'
+  assign mmg_selector_instance_base = section.id | default: 'global'
+  assign mmg_selector_instance = mmg_selector_instance_base | append: '-' | append: mmg_selector_context | handleize
+  assign mmg_selector_form_id = 'mmg-subscription-form-' | append: mmg_selector_instance
+  assign mmg_selector_legend_id = 'mmg-subscription-legend-' | append: mmg_selector_instance
+  assign mmg_shared_selling_plan_id = ''
+  assign mmg_rendered_plan_count = 0
+
+  if mmg_subscription_product != blank
+    for mmg_variant in mmg_subscription_product.variants
+      if mmg_variant.selling_plan_allocations.size > 0 and mmg_shared_selling_plan_id == blank
+        assign mmg_shared_selling_plan_id = mmg_variant.selling_plan_allocations.first.selling_plan.id
+      endif
+    endfor
+  endif
+-%}
+
+<section
+  id="mmg-three-plan-selector-{{ mmg_selector_instance }}"
+  class="mmg-three-plan-selector"
+  data-mmg-plan-selector
+  data-mmg-selector-context="{{ mmg_selector_context | escape }}"
+  data-mmg-product-handle="mmg-knowledge-subscription"
+  aria-labelledby="{{ mmg_selector_legend_id }}"
+>
+  <style>
+    #mmg-three-plan-selector-{{ mmg_selector_instance }},
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} * {
+      box-sizing: border-box;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} {
+      --mmg-selector-bg: #02050a;
+      --mmg-selector-panel: #07111f;
+      --mmg-selector-panel-soft: #0c1728;
+      --mmg-selector-text: #f8fbff;
+      --mmg-selector-copy: #b7c3d6;
+      --mmg-selector-muted: #7f8ca3;
+      --mmg-selector-border: rgba(255, 255, 255, 0.11);
+      --mmg-selector-blue: #14b8ff;
+      --mmg-selector-purple: #9b5cff;
+      --mmg-selector-gold: #ffbd3f;
+      --mmg-selector-focus: #ffffff;
+      width: 100%;
+      margin: 0;
+      padding: clamp(24px, 4vw, 48px);
+      color: var(--mmg-selector-text);
+      background:
+        radial-gradient(circle at 50% 0%, rgba(20, 184, 255, 0.12), transparent 38%),
+        linear-gradient(180deg, var(--mmg-selector-panel) 0%, var(--mmg-selector-bg) 100%);
+      border: 1px solid var(--mmg-selector-border);
+      border-radius: 28px;
+      overflow: clip;
+      font-family: inherit;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-three-plan-selector__header {
+      max-width: 760px;
+      margin: 0 auto 28px;
+      text-align: center;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-three-plan-selector__eyebrow {
+      margin: 0 0 10px;
+      color: var(--mmg-selector-blue);
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-three-plan-selector__title {
+      margin: 0;
+      color: var(--mmg-selector-text);
+      font-size: clamp(2rem, 5vw, 4.35rem);
+      line-height: 0.98;
+      letter-spacing: -0.045em;
+      text-wrap: balance;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-three-plan-selector__intro {
+      max-width: 650px;
+      margin: 16px auto 0;
+      color: var(--mmg-selector-copy);
+      font-size: clamp(1rem, 1.7vw, 1.15rem);
+      line-height: 1.65;
+      text-wrap: pretty;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-three-plan-selector__form,
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-three-plan-selector__fieldset {
+      margin: 0;
+      padding: 0;
+      border: 0;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-three-plan-selector__legend {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-three-plan-selector__grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-plan-card {
+      position: relative;
+      display: block;
+      min-width: 0;
+      cursor: pointer;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-plan-card__input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-plan-card__surface {
+      --mmg-plan-accent: var(--mmg-selector-blue);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      min-height: 100%;
+      padding: 24px;
+      background:
+        linear-gradient(145deg, color-mix(in srgb, var(--mmg-plan-accent) 10%, transparent), transparent 42%),
+        var(--mmg-selector-panel-soft);
+      border: 1px solid var(--mmg-selector-border);
+      border-radius: 22px;
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.24);
+      transition:
+        transform 180ms ease,
+        border-color 180ms ease,
+        box-shadow 180ms ease,
+        background-color 180ms ease;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-plan-card[data-plan-code="biweekly"] .mmg-plan-card__surface {
+      --mmg-plan-accent: var(--mmg-selector-purple);
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-plan-card[data-plan-code="weekly"] .mmg-plan-card__surface {
+      --mmg-plan-accent: var(--mmg-selector-gold);
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-plan-card:hover .mmg-plan-card__surface {
+      transform: translateY(-3px);
+      border-color: color-mix(in srgb, var(--mmg-plan-accent) 58%, white 8%);
+      box-shadow:
+        0 22px 56px rgba(0, 0, 0, 0.3),
+        0 0 34px color-mix(in srgb, var(--mmg-plan-accent) 18%, transparent);
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-plan-card__input:focus-visible + .mmg-plan-card__surface {
+      outline: 3px solid var(--mmg-selector-focus);
+      outline-offset: 4px;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-plan-card__input:checked + .mmg-plan-card__surface {
+      border-color: var(--mmg-plan-accent);
+      box-shadow:
+        0 24px 62px rgba(0, 0, 0, 0.32),
+        0 0 38px color-mix(in srgb, var(--mmg-plan-accent) 26%, transparent);
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-plan-card__input:disabled + .mmg-plan-card__surface {
+      cursor: not-allowed;
+      opacity: 0.54;
+      filter: grayscale(0.4);
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-plan-card__check {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      display: grid;
+      place-items: center;
+      width: 30px;
+      height: 30px;
+      color: #02050a;
+      background: var(--mmg-plan-accent);
+      border-radius: 999px;
+      opacity: 0;
+      transform: scale(0.75);
+      transition:
+        opacity 160ms ease,
+        transform 160ms ease;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-plan-card__input:checked + .mmg-plan-card__surface .mmg-plan-card__check {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-plan-card__kicker {
+      margin: 0 44px 10px 0;
+      color: var(--mmg-plan-accent);
+      font-size: 0.76rem;
+      font-weight: 850;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-plan-card__name {
+      margin: 0;
+      color: var(--mmg-selector-text);
+      font-size: clamp(1.5rem, 2.6vw, 2.15rem);
+      line-height: 1.05;
+      letter-spacing: -0.035em;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-plan-card__price {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      margin: 18px 0 8px;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-plan-card__amount {
+      color: var(--mmg-selector-text);
+      font-size: clamp(2rem, 3.4vw, 3rem);
+      font-weight: 900;
+      line-height: 1;
+      letter-spacing: -0.045em;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-plan-card__period {
+      color: var(--mmg-selector-muted);
+      font-size: 0.9rem;
+      font-weight: 700;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-plan-card__summary {
+      margin: 0 0 18px;
+      color: var(--mmg-selector-copy);
+      line-height: 1.55;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-plan-card__features {
+      display: grid;
+      gap: 11px;
+      margin: auto 0 0;
+      padding: 18px 0 0;
+      list-style: none;
+      border-top: 1px solid var(--mmg-selector-border);
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-plan-card__feature {
+      display: grid;
+      grid-template-columns: 18px minmax(0, 1fr);
+      gap: 9px;
+      align-items: start;
+      color: var(--mmg-selector-copy);
+      font-size: 0.94rem;
+      line-height: 1.45;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-plan-card__feature svg {
+      width: 18px;
+      height: 18px;
+      margin-top: 1px;
+      color: var(--mmg-plan-accent);
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-three-plan-selector__selection {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 18px;
+      align-items: center;
+      margin-top: 22px;
+      padding: 20px;
+      background: rgba(255, 255, 255, 0.045);
+      border: 1px solid var(--mmg-selector-border);
+      border-radius: 18px;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-three-plan-selector__selection[hidden] {
+      display: none;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-three-plan-selector__selection-label {
+      margin: 0 0 4px;
+      color: var(--mmg-selector-muted);
+      font-size: 0.76rem;
+      font-weight: 800;
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-three-plan-selector__selection-title {
+      margin: 0;
+      color: var(--mmg-selector-text);
+      font-size: 1.1rem;
+      font-weight: 850;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-three-plan-selector__selection-detail {
+      margin: 4px 0 0;
+      color: var(--mmg-selector-copy);
+      font-size: 0.92rem;
+      line-height: 1.45;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-three-plan-selector__selection-price {
+      color: var(--mmg-selector-text);
+      font-size: 1.15rem;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-three-plan-selector__consent {
+      display: grid;
+      grid-template-columns: 22px minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+      margin: 20px 0 0;
+      padding: 0;
+      color: var(--mmg-selector-copy);
+      cursor: pointer;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-three-plan-selector__consent input {
+      width: 20px;
+      height: 20px;
+      margin: 2px 0 0;
+      accent-color: var(--mmg-selector-blue);
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-three-plan-selector__consent a {
+      color: var(--mmg-selector-text);
+      text-decoration-thickness: 1px;
+      text-underline-offset: 3px;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-three-plan-selector__actions {
+      display: grid;
+      gap: 12px;
+      margin-top: 22px;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-three-plan-selector__submit {
+      width: 100%;
+      min-height: 56px;
+      padding: 15px 22px;
+      color: #00101a;
+      background: linear-gradient(135deg, #74e2ff 0%, var(--mmg-selector-blue) 45%, #3b7cff 100%);
+      border: 0;
+      border-radius: 999px;
+      box-shadow: 0 14px 34px rgba(20, 184, 255, 0.22);
+      font: inherit;
+      font-weight: 900;
+      text-align: center;
+      cursor: pointer;
+      transition:
+        transform 160ms ease,
+        filter 160ms ease,
+        opacity 160ms ease;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-three-plan-selector__submit:hover:not(:disabled) {
+      transform: translateY(-2px);
+      filter: brightness(1.07);
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-three-plan-selector__submit:focus-visible {
+      outline: 3px solid var(--mmg-selector-focus);
+      outline-offset: 4px;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-three-plan-selector__submit:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+      box-shadow: none;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-three-plan-selector__handoff {
+      margin: 0;
+      color: var(--mmg-selector-muted);
+      font-size: 0.88rem;
+      line-height: 1.5;
+      text-align: center;
+    }
+
+    #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-three-plan-selector__status {
+      padding: 22px;
+      color: var(--mmg-selector-copy);
+      background: rgba(255, 255, 255, 0.045);
+      border: 1px solid var(--mmg-selector-border);
+      border-radius: 18px;
+      text-align: center;
+    }
+
+    @media (max-width: 880px) {
+      #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-three-plan-selector__grid {
+        grid-template-columns: 1fr;
+      }
+
+      #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-plan-card__surface {
+        min-height: auto;
+      }
+    }
+
+    @media (max-width: 560px) {
+      #mmg-three-plan-selector-{{ mmg_selector_instance }} {
+        padding: 22px 16px;
+        border-radius: 22px;
+      }
+
+      #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-plan-card__surface {
+        padding: 21px;
+      }
+
+      #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-three-plan-selector__selection {
+        grid-template-columns: 1fr;
+      }
+
+      #mmg-three-plan-selector-{{ mmg_selector_instance }} .mmg-three-plan-selector__selection-price {
+        white-space: normal;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #mmg-three-plan-selector-{{ mmg_selector_instance }} *,
+      #mmg-three-plan-selector-{{ mmg_selector_instance }} *::before,
+      #mmg-three-plan-selector-{{ mmg_selector_instance }} *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+      }
+    }
+  </style>
+
+  <header class="mmg-three-plan-selector__header">
+    <p class="mmg-three-plan-selector__eyebrow">MMG Knowledge Subscription™</p>
+    <h2 id="{{ mmg_selector_legend_id }}" class="mmg-three-plan-selector__title">{{ mmg_selector_heading }}</h2>
+    <p class="mmg-three-plan-selector__intro">{{ mmg_selector_intro }}</p>
+  </header>
+
+  {%- if mmg_subscription_product != blank and mmg_shared_selling_plan_id != blank -%}
+    {%- form 'product', mmg_subscription_product, id: mmg_selector_form_id, class: 'mmg-three-plan-selector__form' -%}
+      <input type="hidden" name="quantity" value="1">
+      <input
+        type="hidden"
+        name="selling_plan"
+        value="{{ mmg_shared_selling_plan_id }}"
+        data-mmg-selling-plan-input
+      >
+
+      <fieldset class="mmg-three-plan-selector__fieldset">
+        <legend class="mmg-three-plan-selector__legend">Select one recurring membership plan</legend>
+
+        <div class="mmg-three-plan-selector__grid">
+          {%- for mmg_variant in mmg_subscription_product.variants -%}
+            {%- liquid
+              assign mmg_plan_key = mmg_variant.title | downcase | replace: '-', '' | replace: ' ', ''
+              assign mmg_plan_code = ''
+              assign mmg_plan_kicker = ''
+              assign mmg_plan_summary = ''
+              assign mmg_schedule_label = ''
+              assign mmg_fallback_packages = 0
+              assign mmg_fallback_assets = 0
+              assign mmg_is_supported_plan = false
+              assign mmg_variant_selling_plan_id = ''
+
+              case mmg_plan_key
+                when 'monthly'
+                  assign mmg_plan_code = 'monthly'
+                  assign mmg_plan_kicker = '2 assets'
+                  assign mmg_plan_summary = 'One curated two-title package each monthly billing cycle.'
+                  assign mmg_schedule_label = 'Delivered once each month'
+                  assign mmg_fallback_packages = 1
+                  assign mmg_fallback_assets = 2
+                  assign mmg_is_supported_plan = true
+                when 'biweekly'
+                  assign mmg_plan_code = 'biweekly'
+                  assign mmg_plan_kicker = '4 assets'
+                  assign mmg_plan_summary = 'Two curated packages of two titles each monthly billing cycle.'
+                  assign mmg_schedule_label = 'Two packages, approximately 14 days apart'
+                  assign mmg_fallback_packages = 2
+                  assign mmg_fallback_assets = 4
+                  assign mmg_is_supported_plan = true
+                when 'weekly'
+                  assign mmg_plan_code = 'weekly'
+                  assign mmg_plan_kicker = '8 assets'
+                  assign mmg_plan_summary = 'Four curated packages of two titles each monthly billing cycle.'
+                  assign mmg_schedule_label = 'Four weekly packages per billing cycle'
+                  assign mmg_fallback_packages = 4
+                  assign mmg_fallback_assets = 8
+                  assign mmg_is_supported_plan = true
+              endcase
+
+              assign mmg_packages = mmg_variant.metafields.mmg.packages_per_billing_cycle.value
+              if mmg_packages == blank
+                assign mmg_packages = mmg_fallback_packages
+              endif
+
+              assign mmg_assets = mmg_variant.metafields.mmg.assets_per_billing_cycle.value
+              if mmg_assets == blank
+                assign mmg_assets = mmg_fallback_assets
+              endif
+
+              if mmg_variant.selling_plan_allocations.size > 0
+                assign mmg_variant_selling_plan_id = mmg_variant.selling_plan_allocations.first.selling_plan.id
+              endif
+            -%}
+
+            {%- if mmg_is_supported_plan -%}
+              {%- assign mmg_rendered_plan_count = mmg_rendered_plan_count | plus: 1 -%}
+              <label
+                class="mmg-plan-card"
+                data-plan-code="{{ mmg_plan_code }}"
+                data-mmg-plan-card
+              >
+                <input
+                  class="mmg-plan-card__input"
+                  type="radio"
+                  name="id"
+                  value="{{ mmg_variant.id }}"
+                  required
+                  {% unless mmg_variant.available and mmg_variant_selling_plan_id != blank %}disabled{% endunless %}
+                  data-mmg-plan-input
+                  data-plan-code="{{ mmg_plan_code }}"
+                  data-plan-name="{{ mmg_variant.title | escape }}"
+                  data-plan-price="{{ mmg_variant.price | money | escape }}"
+                  data-plan-price-cents="{{ mmg_variant.price }}"
+                  data-plan-assets="{{ mmg_assets }}"
+                  data-plan-packages="{{ mmg_packages }}"
+                  data-selling-plan-id="{{ mmg_variant_selling_plan_id }}"
+                >
+                <span class="mmg-plan-card__surface">
+                  <span class="mmg-plan-card__check" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <path d="m6.5 12.5 3.4 3.4 7.7-8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </span>
+
+                  <span class="mmg-plan-card__kicker">{{ mmg_plan_kicker }} each month</span>
+                  <span class="mmg-plan-card__name">{{ mmg_variant.title }}</span>
+
+                  <span class="mmg-plan-card__price">
+                    <span class="mmg-plan-card__amount">{{ mmg_variant.price | money }}</span>
+                    <span class="mmg-plan-card__period">/ month</span>
+                  </span>
+
+                  <span class="mmg-plan-card__summary">{{ mmg_plan_summary }}</span>
+
+                  <ul class="mmg-plan-card__features">
+                    <li class="mmg-plan-card__feature">
+                      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="m5 12 4 4L19 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                      <span>{{ mmg_schedule_label }}</span>
+                    </li>
+                    <li class="mmg-plan-card__feature">
+                      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M6 4h12v16H6zM9 8h6M9 12h6M9 16h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                      <span>Two curated digital assets in every package</span>
+                    </li>
+                    <li class="mmg-plan-card__feature">
+                      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M12 3v18M3 12h18M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                      </svg>
+                      <span>First two titles chosen after checkout through the Knowledge Library</span>
+                    </li>
+                  </ul>
+                </span>
+              </label>
+            {%- endif -%}
+          {%- endfor -%}
+        </div>
+      </fieldset>
+
+      <div
+        class="mmg-three-plan-selector__selection"
+        data-mmg-selector-summary
+        aria-live="polite"
+        hidden
+      >
+        <div>
+          <p class="mmg-three-plan-selector__selection-label">Selected membership</p>
+          <p class="mmg-three-plan-selector__selection-title" data-mmg-selection-title></p>
+          <p class="mmg-three-plan-selector__selection-detail" data-mmg-selection-detail></p>
+        </div>
+        <div class="mmg-three-plan-selector__selection-price" data-mmg-selection-price></div>
+      </div>
+
+      <label class="mmg-three-plan-selector__consent">
+        <input
+          type="checkbox"
+          name="properties[_mmg_recurring_consent]"
+          value="confirmed"
+          required
+          data-mmg-recurring-consent
+        >
+        <span>
+          I understand that this subscription renews monthly at the selected price until canceled.
+          Plan management and cancellation terms are available through
+          <a href="/pages/customer-service">Customer Service</a>.
+        </span>
+      </label>
+
+      <div class="mmg-three-plan-selector__actions">
+        <button
+          class="mmg-three-plan-selector__submit"
+          type="submit"
+          data-mmg-selector-submit
+          data-default-label="{{ mmg_selector_button_label | escape }}"
+        >
+          Select a membership plan
+        </button>
+        <p class="mmg-three-plan-selector__handoff">
+          After checkout, continue to the Knowledge Library to choose your first two titles.
+        </p>
+      </div>
+
+      <noscript>
+        <p class="mmg-three-plan-selector__handoff">
+          Select a plan and confirm the recurring terms before continuing.
+        </p>
+      </noscript>
+    {%- endform -%}
+  {%- else -%}
+    <div class="mmg-three-plan-selector__status" role="status">
+      Membership enrollment is temporarily unavailable while the subscription product is being configured.
+    </div>
+  {%- endif -%}
+
+  <script>
+    (() => {
+      const root = document.getElementById('mmg-three-plan-selector-{{ mmg_selector_instance }}');
+      if (!root || root.dataset.mmgPlanSelectorReady === 'true') return;
+
+      root.dataset.mmgPlanSelectorReady = 'true';
+
+      const form = root.querySelector('.mmg-three-plan-selector__form');
+      if (!form) return;
+
+      const planInputs = Array.from(form.querySelectorAll('[data-mmg-plan-input]'));
+      const consent = form.querySelector('[data-mmg-recurring-consent]');
+      const sellingPlanInput = form.querySelector('[data-mmg-selling-plan-input]');
+      const submit = form.querySelector('[data-mmg-selector-submit]');
+      const summary = form.querySelector('[data-mmg-selector-summary]');
+      const summaryTitle = form.querySelector('[data-mmg-selection-title]');
+      const summaryDetail = form.querySelector('[data-mmg-selection-detail]');
+      const summaryPrice = form.querySelector('[data-mmg-selection-price]');
+
+      const selectedPlan = () => planInputs.find((input) => input.checked);
+
+      const updateSubmitState = () => {
+        const plan = selectedPlan();
+        const ready = Boolean(plan && consent && consent.checked);
+
+        if (submit) {
+          submit.disabled = !ready;
+          submit.textContent = plan
+            ? `Continue with ${plan.dataset.planName}`
+            : 'Select a membership plan';
+        }
+
+        root.dataset.selectedPlanCode = plan?.dataset.planCode || '';
+        root.dataset.recurringConsent = consent?.checked ? 'confirmed' : 'pending';
+      };
+
+      const renderSelection = (plan) => {
+        if (!plan || !summary || !summaryTitle || !summaryDetail || !summaryPrice) return;
+
+        const assets = Number(plan.dataset.planAssets || 0);
+        const packages = Number(plan.dataset.planPackages || 0);
+        const assetLabel = assets === 1 ? 'asset' : 'assets';
+        const packageLabel = packages === 1 ? 'package' : 'packages';
+
+        summary.hidden = false;
+        summaryTitle.textContent = `${plan.dataset.planName} membership`;
+        summaryDetail.textContent = `${assets} digital ${assetLabel} in ${packages} ${packageLabel} per monthly billing cycle.`;
+        summaryPrice.textContent = `${plan.dataset.planPrice} / month`;
+
+        if (sellingPlanInput && plan.dataset.sellingPlanId) {
+          sellingPlanInput.value = plan.dataset.sellingPlanId;
+        }
+
+        root.dispatchEvent(new CustomEvent('mmg:subscription-plan-selected', {
+          bubbles: true,
+          detail: {
+            context: root.dataset.mmgSelectorContext,
+            productHandle: root.dataset.mmgProductHandle,
+            planCode: plan.dataset.planCode,
+            planName: plan.dataset.planName,
+            variantId: plan.value,
+            sellingPlanId: plan.dataset.sellingPlanId,
+            price: plan.dataset.planPrice,
+            priceCents: Number(plan.dataset.planPriceCents || 0),
+            assetsPerBillingCycle: assets,
+            packagesPerBillingCycle: packages
+          }
+        }));
+      };
+
+      planInputs.forEach((input) => {
+        input.addEventListener('change', () => {
+          renderSelection(input);
+          updateSubmitState();
+        });
+      });
+
+      consent?.addEventListener('change', updateSubmitState);
+
+      form.addEventListener('submit', (event) => {
+        const plan = selectedPlan();
+
+        if (!plan) {
+          event.preventDefault();
+          planInputs.find((input) => !input.disabled)?.focus();
+          return;
+        }
+
+        if (!consent?.checked) {
+          event.preventDefault();
+          consent?.focus();
+          return;
+        }
+
+        if (!sellingPlanInput?.value) {
+          event.preventDefault();
+          root.dispatchEvent(new CustomEvent('mmg:subscription-selector-error', {
+            bubbles: true,
+            detail: {
+              code: 'MISSING_SELLING_PLAN',
+              planCode: plan.dataset.planCode
+            }
+          }));
+        }
+      });
+
+      updateSubmitState();
+    })();
+  </script>
+</section>
