@@ -1,0 +1,68 @@
+{
+  "registry_id": "mmg-digital-asset-registry-v1",
+  "version": "1.0.0",
+  "status": "active",
+  "recorded_date": "2026-07-20",
+  "authority": "registry/knowledge-library/mmg-knowledge-library-contract-v1.json",
+  "identity_key": "asset_id",
+  "records": [
+    {
+      "asset_id": "mmg-dd-ai-image-mastery-001",
+      "title": "AI Image Mastery™",
+      "shopify_handle": "ai-image-mastery",
+      "canonical_path": "/products/ai-image-mastery",
+      "canonical_url": "https://themindsetmediagroup.com/products/ai-image-mastery",
+      "shopify_product_gid": null,
+      "product_type": "digital_download",
+      "asset_status": "active",
+      "subscription_eligible": true,
+      "subscription_value": 1,
+      "topic": "ai_image_generation",
+      "experience_level": "beginner",
+      "format": "guide",
+      "series": "AI Mastery Series",
+      "series_order": 1,
+      "related_asset_ids": [],
+      "customer_destination": "my_library",
+      "media": {
+        "portrait_cover": {
+          "required": true,
+          "preferred_dimensions_px": [2048, 3072],
+          "shopify_file_gid": null,
+          "verified": false
+        },
+        "square_thumbnail": {
+          "required": true,
+          "preferred_dimensions_px": [2048, 2048],
+          "shopify_file_gid": null,
+          "verified": false
+        }
+      },
+      "delivery_package": {
+        "reference": null,
+        "status": "pending_verification"
+      },
+      "catalog_release": {
+        "public_catalog": true,
+        "subscription_selection": false,
+        "my_library_delivery": false,
+        "blocked_reason_codes": [
+          "MISSING_SQUARE_THUMBNAIL",
+          "MISSING_DELIVERY_PACKAGE"
+        ],
+        "release_rule": "The product remains publicly purchasable while subscriber selection stays blocked until required media, delivery-package verification, Shopify metafield writes, and runtime IDs are complete."
+      },
+      "source_authority": {
+        "live_route_registry": "registry/site-pages/site-url-registry-current.json",
+        "product_contract": "shopify/products/ai-image-mastery/product-contract.json"
+      }
+    }
+  ],
+  "registry_rules": [
+    "Only digital_download records may set subscription_eligible true.",
+    "asset_id is immutable and globally unique within MMG.",
+    "A public product may remain blocked from subscription selection until every selection release gate passes.",
+    "Retiring a record does not automatically remove an existing customer's ownership grant.",
+    "Do not add planned products as active records until their canonical handle, delivery package, and required media are verified."
+  ]
+}
