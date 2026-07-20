@@ -45,6 +45,19 @@ type CommerceContract = {
       canonical_product_title: string;
       canonical_handle: string;
       billing_currency: string;
+      shopify_structure: {
+        product_model: string;
+        variant_option_name: string;
+        variant_codes: string[];
+        requires_selling_plan: boolean;
+        requires_shipping: boolean;
+        inventory_tracking: boolean;
+        selling_plan_model: string;
+        selling_plan_group_merchant_code: string;
+        billing_owner: string;
+        intra_cycle_package_schedule_owner: string;
+        product_contract: string;
+      };
       plans: SubscriptionPlan[];
       first_delivery_flow: {
         initial_selection_count: number;
@@ -81,7 +94,7 @@ const contract = JSON.parse(
 describe("MMG commerce contract", () => {
   it("is the approved v1 authority", () => {
     expect(contract.contract_id).toBe("mmg-commerce-contract-v1");
-    expect(contract.version).toBe("1.0.0");
+    expect(contract.version).toBe("1.1.0");
     expect(contract.status).toBe("approved");
   });
 
@@ -108,6 +121,26 @@ describe("MMG commerce contract", () => {
         plan.packages_per_billing_cycle * plan.assets_per_package,
       );
     }
+  });
+
+  it("locks one subscription product with three variants and one shared monthly selling plan", () => {
+    const structure = contract.product_types.subscription.shopify_structure;
+
+    expect(structure.product_model).toBe("ONE_PRODUCT_THREE_CADENCE_VARIANTS");
+    expect(structure.variant_option_name).toBe("Delivery cadence");
+    expect(structure.variant_codes).toEqual(["monthly", "biweekly", "weekly"]);
+    expect(structure.requires_selling_plan).toBe(true);
+    expect(structure.requires_shipping).toBe(false);
+    expect(structure.inventory_tracking).toBe(false);
+    expect(structure.selling_plan_model).toBe("ONE_SHARED_MONTHLY_SELLING_PLAN");
+    expect(structure.selling_plan_group_merchant_code).toBe(
+      "mmg-knowledge-subscription-monthly-billing",
+    );
+    expect(structure.billing_owner).toBe("Shopify");
+    expect(structure.intra_cycle_package_schedule_owner).toBe("Kairos");
+    expect(structure.product_contract).toBe(
+      "shopify/products/mmg-knowledge-subscription/product-contract.json",
+    );
   });
 
   it("locks the subscription identity and post-purchase first selection", () => {

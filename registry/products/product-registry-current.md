@@ -1,7 +1,8 @@
 # MMG Product Registry — Current Canonical Baseline
 
 **Status:** Active  
-**Commerce authority:** `registry/products/mmg-commerce-contract-v1.json`
+**Commerce authority:** `registry/products/mmg-commerce-contract-v1.json`  
+**Live URL authority:** `registry/site-pages/site-url-registry-current.json`
 
 ## Canonical Product Types
 
@@ -9,31 +10,42 @@
 |---|---|---|---|
 | Digital download | Individual product | My Library | Eligible only when `mmg.subscription_eligible` is true |
 | Service | Product with Starter, Growth, and Professional variants | My Projects | Not included in subscription fulfillment |
-| Subscription | MMG Knowledge Subscription™ with Monthly, Bi-weekly, and Weekly plans | Subscription Dashboard + My Library | Creates recurring digital-asset entitlements |
+| Subscription | MMG Knowledge Subscription™ with Monthly, Bi-weekly, and Weekly variants | Subscription Dashboard + My Library | Creates recurring digital-asset entitlements |
+
+## Active Live Products
+
+| Product | Type | Canonical path | Status | Canonical role |
+|---|---|---|---|---|
+| AI Image Mastery™ | Digital download | `/products/ai-image-mastery` | Active | Current digital-product storefront reference. |
+| Professional Cover Design Service™ | Service | `/products/professional-cover-design-service` | Active | Current multi-variant service-product storefront reference. |
 
 ## Subscription Product
 
-| Product | Handle | Plan | Price | Assets per billing cycle |
-|---|---|---|---:|---:|
-| MMG Knowledge Subscription™ | `mmg-knowledge-subscription` | Monthly | $14.95/month | 2 |
-| MMG Knowledge Subscription™ | `mmg-knowledge-subscription` | Bi-weekly | $24.95/month | 4 |
-| MMG Knowledge Subscription™ | `mmg-knowledge-subscription` | Weekly | $39.95/month | 8 |
+| Product | Handle | Variant | Price | Packages per billing cycle | Assets per package | Assets per billing cycle |
+|---|---|---|---:|---:|---:|---:|
+| MMG Knowledge Subscription™ | `mmg-knowledge-subscription` | Monthly | $14.95/month | 1 | 2 | 2 |
+| MMG Knowledge Subscription™ | `mmg-knowledge-subscription` | Bi-weekly | $24.95/month | 2 | 2 | 4 |
+| MMG Knowledge Subscription™ | `mmg-knowledge-subscription` | Weekly | $39.95/month | 4 | 2 | 8 |
 
-Every scheduled package contains two digital assets. Monthly receives one package, Bi-weekly receives two packages, and Weekly receives four packages per monthly billing cycle.
+Every variant is billed monthly. Monthly, Bi-weekly, and Weekly describe the digital-package cadence and entitlement, not separate billing intervals.
+
+**Provisioning authority:** `shopify/products/mmg-knowledge-subscription/product-contract.json`
 
 ## Live or Planned Product Families
 
-| Product / Series | Type | Known Path / Handle | Notes |
-|---|---|---|---|
-| The Creator's Bible | Digital book | `/products/the-creators-bible` | Creator education title; subscription eligibility must be explicitly assigned. |
-| AI Prompting for Beginners | Digital education | `/products/ai-prompting-for-beginners` | Standard single-variant product-page source base. |
-| The Failure Advantage | Digital book | `/products/the-failure-advantage` | Mindset and recovery-aligned title. |
-| Go Viral This Week | Digital book | TBD | Ebook and future physical-format options previously discussed. |
-| Reset 365 | Digital book series | TBD | 365-day reset and mindset product family. |
-| AI Mastery Series | Digital book series | TBD | Includes AI Prompt Mastery, AI Image Mastery, and planned continuation titles. |
-| Micro-Packs | Digital short books | TBD | Compact creator-education product family. |
-| Publish-Ready Book Build Service™ | Service | TBD | Canonical multi-variant service-product pattern. |
-| MMG Knowledge Subscription™ | Subscription | `/products/mmg-knowledge-subscription` | Canonical recurring product connecting the Knowledge Library, cart, Customer Portal, and Kairos entitlement system. |
+| Product / Series | Type | Known Path / Handle | Status | Notes |
+|---|---|---|---|---|
+| AI Image Mastery™ | Digital guide | `/products/ai-image-mastery` | Active | AI Mastery Series title; subscription eligibility is controlled by metadata. |
+| Professional Cover Design Service™ | Service | `/products/professional-cover-design-service` | Active | Current service-product reference with Starter, Growth, and Professional variants. |
+| The Creator's Bible | Digital book | `/products/the-creators-bible` | Planned / prior reference | Creator education title; subscription eligibility must be explicitly assigned. |
+| AI Prompting for Beginners | Digital education | `/products/ai-prompting-for-beginners` | Planned / prior reference | Standard single-variant product-page source base. |
+| The Failure Advantage | Digital book | `/products/the-failure-advantage` | Planned / prior reference | Mindset and recovery-aligned title. |
+| Go Viral This Week | Digital book | TBD | Planned | Ebook and future physical-format options previously discussed. |
+| Reset 365 | Digital book series | TBD | Planned | 365-day reset and mindset product family. |
+| AI Mastery Series | Digital book series | `/products/ai-image-mastery` and future handles | Active / expanding | Includes AI Image Mastery and planned continuation titles. |
+| Micro-Packs | Digital short books | TBD | Planned | Compact creator-education product family. |
+| Publish-Ready Book Build Service™ | Service | TBD | Planned | Canonical multi-variant service-product pattern. |
+| MMG Knowledge Subscription™ | Subscription | `/products/mmg-knowledge-subscription` | Approved for provisioning | Canonical recurring product connecting the Knowledge Library, cart, Customer Portal, and Kairos entitlement system. |
 
 ## Product-Image Rules
 
@@ -60,6 +72,7 @@ Every scheduled package contains two digital assets. Monthly receives one packag
 - Variant cards expose live purchase behavior inside the page body.
 - Digital-product pages preserve one-time purchase and add the reusable membership offer below the primary purchase area.
 - Service pages keep service conversion primary and place membership in Continue Your Journey.
+- The subscription product is subscription-only and must always add a valid selling plan to the cart line.
 - Public copy must not expose internal registry names, IDs, or production terminology.
 - Product source must be preserved in complete form.
 
@@ -77,6 +90,7 @@ Only active, approved, subscription-eligible digital downloads may enter subscri
 
 ```text
 shopify/products/{product-handle}/source.html
+shopify/products/{product-handle}/product-contract.json
 shopify/products/{product-handle}/metadata.md
 shopify/products/{product-handle}/qa.md
 shopify/products/{product-handle}/release-notes.md

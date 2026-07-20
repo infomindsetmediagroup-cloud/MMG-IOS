@@ -1,0 +1,240 @@
+{
+  "contract_id": "mmg-knowledge-subscription-product-v1",
+  "version": "1.0.0",
+  "status": "approved_for_provisioning",
+  "approved_date": "2026-07-20",
+  "commerce_authority": "registry/products/mmg-commerce-contract-v1.json",
+  "product": {
+    "title": "MMG Knowledge Subscription™",
+    "handle": "mmg-knowledge-subscription",
+    "vendor": "Mindset Media Group™",
+    "product_type": "Subscription",
+    "requires_selling_plan": true,
+    "requires_shipping": false,
+    "taxable_default": false,
+    "inventory_tracking": false,
+    "publication_state": "DRAFT_UNTIL_RELEASE_APPROVAL",
+    "online_store_only": true,
+    "customer_destination": "Subscription Dashboard and My Library",
+    "option": {
+      "name": "Delivery cadence",
+      "values": [
+        "Monthly",
+        "Bi-weekly",
+        "Weekly"
+      ]
+    }
+  },
+  "variants": [
+    {
+      "plan_code": "monthly",
+      "title": "Monthly",
+      "sku": "MMG-KS-MONTHLY",
+      "price": "14.95",
+      "currency": "USD",
+      "billing_interval": "MONTH",
+      "billing_interval_count": 1,
+      "packages_per_billing_cycle": 1,
+      "assets_per_package": 2,
+      "assets_per_billing_cycle": 2,
+      "target_package_spacing_days": null,
+      "customer_label": "2 digital assets each month",
+      "entitlement_units": 2,
+      "position": 1
+    },
+    {
+      "plan_code": "biweekly",
+      "title": "Bi-weekly",
+      "sku": "MMG-KS-BIWEEKLY",
+      "price": "24.95",
+      "currency": "USD",
+      "billing_interval": "MONTH",
+      "billing_interval_count": 1,
+      "packages_per_billing_cycle": 2,
+      "assets_per_package": 2,
+      "assets_per_billing_cycle": 4,
+      "target_package_spacing_days": 14,
+      "customer_label": "4 digital assets each month in two packages",
+      "entitlement_units": 4,
+      "position": 2
+    },
+    {
+      "plan_code": "weekly",
+      "title": "Weekly",
+      "sku": "MMG-KS-WEEKLY",
+      "price": "39.95",
+      "currency": "USD",
+      "billing_interval": "MONTH",
+      "billing_interval_count": 1,
+      "packages_per_billing_cycle": 4,
+      "assets_per_package": 2,
+      "assets_per_billing_cycle": 8,
+      "target_package_spacing_days": 7,
+      "customer_label": "8 digital assets each month in four packages",
+      "entitlement_units": 8,
+      "position": 3,
+      "cadence_note": "The entitlement is fixed at four packages and eight assets per monthly billing cycle, including calendar months containing five weekly dates."
+    }
+  ],
+  "selling_plan_mapping": {
+    "architecture": "ONE_SHARED_MONTHLY_SELLING_PLAN_FOR_THREE_CADENCE_VARIANTS",
+    "reason": "All three variants bill monthly. The variant controls package cadence and asset entitlement while Kairos controls the intra-cycle delivery schedule.",
+    "group": {
+      "name": "MMG Knowledge Subscription",
+      "merchant_code": "mmg-knowledge-subscription-monthly-billing",
+      "options": [
+        "Billing frequency"
+      ],
+      "position": 1
+    },
+    "plan": {
+      "name": "Billed monthly",
+      "customer_option": "Monthly billing",
+      "category": "SUBSCRIPTION",
+      "billing_policy": {
+        "type": "RECURRING",
+        "interval": "MONTH",
+        "interval_count": 1,
+        "minimum_cycles": 1,
+        "maximum_cycles": null
+      },
+      "delivery_policy": {
+        "type": "RECURRING",
+        "interval": "MONTH",
+        "interval_count": 1,
+        "shopify_role": "One subscription fulfillment cycle per billing period. Kairos schedules the actual one, two, or four digital packages according to the selected variant."
+      },
+      "pricing_policy": {
+        "type": "NONE",
+        "reason": "Each variant stores its exact approved recurring price."
+      },
+      "inventory_policy": {
+        "reserve": "ON_SALE"
+      }
+    },
+    "associated_variant_codes": [
+      "monthly",
+      "biweekly",
+      "weekly"
+    ]
+  },
+  "product_metafields": [
+    {
+      "namespace": "mmg",
+      "key": "product_type",
+      "type": "single_line_text_field",
+      "value": "subscription"
+    },
+    {
+      "namespace": "mmg",
+      "key": "asset_status",
+      "type": "single_line_text_field",
+      "value": "approved"
+    },
+    {
+      "namespace": "mmg",
+      "key": "customer_destination",
+      "type": "single_line_text_field",
+      "value": "subscription_dashboard_and_my_library"
+    },
+    {
+      "namespace": "mmg",
+      "key": "first_selection_count",
+      "type": "number_integer",
+      "value": "2"
+    },
+    {
+      "namespace": "mmg",
+      "key": "review_window_min_hours",
+      "type": "number_integer",
+      "value": "24"
+    },
+    {
+      "namespace": "mmg",
+      "key": "review_window_max_hours",
+      "type": "number_integer",
+      "value": "48"
+    }
+  ],
+  "variant_metafield_template": [
+    {
+      "namespace": "mmg",
+      "key": "subscription_plan_code",
+      "type": "single_line_text_field",
+      "source": "variant.plan_code"
+    },
+    {
+      "namespace": "mmg",
+      "key": "packages_per_billing_cycle",
+      "type": "number_integer",
+      "source": "variant.packages_per_billing_cycle"
+    },
+    {
+      "namespace": "mmg",
+      "key": "assets_per_package",
+      "type": "number_integer",
+      "source": "variant.assets_per_package"
+    },
+    {
+      "namespace": "mmg",
+      "key": "assets_per_billing_cycle",
+      "type": "number_integer",
+      "source": "variant.assets_per_billing_cycle"
+    },
+    {
+      "namespace": "mmg",
+      "key": "entitlement_units",
+      "type": "number_integer",
+      "source": "variant.entitlement_units"
+    }
+  ],
+  "cart_contract": {
+    "selling_plan_required": true,
+    "explicit_customer_consent_required": true,
+    "default_preselected_plan_allowed": false,
+    "silent_cart_insertion_allowed": false,
+    "line_item_must_display": [
+      "product title",
+      "selected cadence variant",
+      "monthly recurring price",
+      "selling plan name",
+      "recurring billing disclosure"
+    ],
+    "duplicate_subscription_behavior": "Block a second MMG Knowledge Subscription line and offer plan replacement instead."
+  },
+  "kairos_entitlement_contract": {
+    "activation_trigger": "Confirmed Shopify subscription contract",
+    "first_action": "Choose Your First Two Titles",
+    "selection_surface": "/pages/knowledge-library in subscription-selection mode",
+    "ownership_filter_required": true,
+    "subscription_eligibility_filter_required": true,
+    "review_window_hours": {
+      "minimum": 24,
+      "maximum": 48
+    },
+    "authoritative_schedule_source": "selected Shopify variant plus this product contract"
+  },
+  "runtime_mapping": {
+    "product_gid": null,
+    "variant_gids": {
+      "monthly": null,
+      "biweekly": null,
+      "weekly": null
+    },
+    "selling_plan_group_gid": null,
+    "selling_plan_gid": null,
+    "provisioned_at": null,
+    "last_verified_at": null
+  },
+  "release_gates": [
+    "Product exists with exact canonical title and handle.",
+    "Product requires a selling plan and cannot be purchased as a one-time item.",
+    "All three variants exist with exact prices and SKUs.",
+    "All variants are associated with the shared monthly selling plan.",
+    "No variant requires shipping or inventory tracking.",
+    "Cart lines cannot be created without an explicit selling plan.",
+    "Knowledge Library and Customer Portal handoff routes are live.",
+    "Subscription terms, cancellation policy, privacy language, and customer support paths are approved.",
+    "Product page, cart controller, entitlement creation, and first-title selection pass end-to-end QA before publication."
+  ]
+}
