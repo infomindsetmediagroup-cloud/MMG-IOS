@@ -6,6 +6,7 @@
 **Knowledge Library picker authority:** `registry/knowledge-library/mmg-knowledge-library-picker-contract-v1.json`  
 **Entitlement and ownership authority:** `registry/knowledge-library/mmg-entitlement-ownership-persistence-contract-v1.json`  
 **Delivery window authority:** `registry/knowledge-library/mmg-delivery-window-controller-contract-v1.json`  
+**Customer Portal subscription dashboard authority:** `registry/customer-portal/mmg-subscription-dashboard-contract-v1.json`  
 **Digital asset registry:** `registry/knowledge-library/digital-asset-registry-v1.json`  
 **Live URL authority:** `registry/site-pages/site-url-registry-current.json`
 
@@ -140,6 +141,18 @@ The picker uses:
 - Incomplete, invalid, or uncuratable packages move to recovery without consuming entitlement incorrectly.
 - Confirmed packages progress through `delivery_ready` to `delivered` using an idempotent dispatcher keyed by window ID.
 
+## Customer Portal Subscription Dashboard Rules
+
+- The canonical route remains `/pages/customer-portal`.
+- The dashboard is added to the existing portal and must not replace service-project, support, navigation, authentication, or other established portal modules.
+- The dashboard reads private customer state from `GET /api/customer-portal/subscription`.
+- Customer identity is derived from the authenticated server session.
+- The response is private, non-cacheable, and read-only.
+- The dashboard displays plan, price, billing dates, assets and packages remaining, current review window, selected or proposed titles, package timeline, recovery actions, My Library, the Subscription Member Guide, and account controls.
+- Package priority is `recovery_required`, `open`, `delivery_ready`, `confirmed`, `scheduled`, `delivered`, `closed`, `expired`, then `canceled`.
+- Internal provider contract IDs, dispatch IDs, delivery-package references, ownership-grant IDs, and audit payloads are never exposed.
+- Subscription selection remains owned by the Knowledge Library Picker; delivery lifecycle mutations remain owned by the Delivery Window Controller.
+
 ## Commerce Component Build State
 
 | Component | Repository status | Live storefront status | Next dependency |
@@ -151,7 +164,8 @@ The picker uses:
 | Knowledge Library eligibility metadata | Merged | Not installed | Shopify metafields and delivery packages. |
 | MMG Knowledge Library Picker | Merged | Not installed | Durable API adapter and verified assets. |
 | MMG Entitlement Counter and Ownership Persistence | Merged for staging | Not installed | Production PostgreSQL and Shopify contract reconciliation. |
-| MMG Delivery Window Controller | Implemented for staging | Not scheduled live | Customer Portal subscription dashboard. |
+| MMG Delivery Window Controller | Merged for staging | Not scheduled live | Production scheduler, dispatcher, and reconciliation. |
+| MMG Customer Portal Subscription Dashboard | Implemented for staging | Not installed | Thank-you page first-title handoff. |
 
 ## Shopify Storage Contract
 
@@ -163,4 +177,4 @@ shopify/products/{product-handle}/qa.md
 shopify/products/{product-handle}/release-notes.md
 ```
 
-Canonical product and entitlement relationships must also be represented in the machine-readable commerce contract and relevant asset registries.
+Canonical product, entitlement, delivery-window, and Customer Portal relationships must also be represented in the machine-readable commerce contract and relevant registries.
