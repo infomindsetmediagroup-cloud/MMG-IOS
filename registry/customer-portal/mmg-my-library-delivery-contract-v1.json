@@ -1,0 +1,145 @@
+{
+  "contract_id": "mmg-my-library-delivery-interface-v1",
+  "version": "1.0.0",
+  "status": "approved_for_staging",
+  "approved_date": "2026-07-20",
+  "purpose": "Present one customer-facing record per canonical MMG asset ID and issue secure short-lived read or download access only after server-side ownership and delivery revalidation.",
+  "canonical_surface": {
+    "route": "/pages/customer-portal#my-library",
+    "storefront_component": "shopify/snippets/mmg-my-library.liquid",
+    "integration": "shopify/customer-portal/mmg-my-library-integration.liquid",
+    "javascript": "shopify/assets/mmg-my-library.js",
+    "stylesheet": "shopify/assets/mmg-my-library.css",
+    "additive_to_existing_customer_portal": true
+  },
+  "endpoint_contract": {
+    "library_endpoint": {
+      "method": "GET",
+      "path": "/api/customer-portal/my-library",
+      "authentication": "authenticated Customer Portal server session",
+      "cache_control": "no-store, private"
+    },
+    "access_endpoint": {
+      "method": "POST",
+      "path": "/api/customer-portal/my-library/access",
+      "authentication": "authenticated Customer Portal server session",
+      "same_origin_required": true,
+      "csrf_required": true,
+      "maximum_body_bytes": 4096,
+      "request_fields": [
+        "requestId",
+        "assetId",
+        "kind"
+      ],
+      "allowed_kinds": [
+        "read",
+        "download"
+      ],
+      "cache_control": "no-store, private"
+    }
+  },
+  "identity_contract": {
+    "canonical_asset_key": "mmg.asset_id",
+    "customer_facing_uniqueness": "one item per asset_id",
+    "ownership_authority": "active non-revoked mmg_ownership_grants record keyed by customer_id and asset_id",
+    "duplicate_grant_behavior": "Aggregate active grant sources and dates into one customer-facing item.",
+    "browser_ownership_authoritative": false
+  },
+  "delivery_contract": {
+    "migration": "database/migrations/20260720_004_mmg_my_library_delivery.sql",
+    "delivery_file_table": "mmg_asset_delivery_files",
+    "access_request_table": "mmg_library_access_requests",
+    "access_event_table": "mmg_library_access_events",
+    "primary_file_rule": "At most one active primary file per asset and access kind.",
+    "subscription_access_gate": "Subscription-delivered assets remain preparing until the linked entitlement window is delivered.",
+    "immediate_access_sources": [
+      "one_time_purchase",
+      "bonus",
+      "administrative"
+    ],
+    "delivery_states": [
+      "preparing",
+      "ready",
+      "delivered"
+    ]
+  },
+  "secure_access_contract": {
+    "signed_url_owner": "Kairos storage gateway",
+    "default_ttl_seconds": 300,
+    "minimum_ttl_seconds": 60,
+    "maximum_ttl_seconds": 600,
+    "https_required": true,
+    "read_disposition": "inline",
+    "download_disposition": "attachment",
+    "permanent_storage_urls_exposed": false,
+    "storage_object_keys_exposed": false,
+    "raw_delivery_package_references_exposed": false,
+    "request_id_required": true,
+    "replayed_request_behavior": "Reject with a customer-safe retryable response.",
+    "revalidation_sequence": [
+      "Authenticate the Customer Portal session.",
+      "Validate same-origin and CSRF protections.",
+      "Claim a unique request ID.",
+      "Revalidate active ownership for the customer and asset.",
+      "Revalidate subscription delivery completion when subscription_delivery is the only ownership source.",
+      "Resolve the active primary delivery file.",
+      "Issue a short-lived HTTPS signed URL.",
+      "Record the access result without storing the signed URL."
+    ]
+  },
+  "customer_experience": {
+    "shows": [
+      "square thumbnail or portrait cover",
+      "title and summary",
+      "topic and format",
+      "ownership source",
+      "date added",
+      "delivery status",
+      "read-online control when supported",
+      "download control when supported",
+      "resource detail link"
+    ],
+    "filters": [
+      "search",
+      "topic",
+      "format",
+      "ownership source",
+      "newest or title sorting"
+    ],
+    "empty_state": "Direct the customer to subscription selection and the public Knowledge Library.",
+    "preparing_state": "Show the asset in My Library while keeping read and download controls unavailable until delivery completes."
+  },
+  "privacy_contract": [
+    "Do not expose customer IDs.",
+    "Do not expose ownership-grant IDs.",
+    "Do not expose delivery-grant IDs or entitlement-window IDs.",
+    "Do not expose storage providers or object keys.",
+    "Do not expose permanent file URLs.",
+    "Do not expose internal delivery-package references.",
+    "Return private non-cacheable responses.",
+    "Use customer-safe error codes and messages."
+  ],
+  "release_gates": [
+    "Apply all entitlement, delivery-window, thank-you handoff, and My Library migrations.",
+    "Connect production PostgreSQL.",
+    "Configure the authenticated Customer Portal GET endpoint.",
+    "Configure same-origin and CSRF validation for the access endpoint.",
+    "Connect the production storage signer.",
+    "Populate verified active primary delivery files for every deliverable asset.",
+    "Verify subscription delivery windows reach delivered before file access is enabled.",
+    "Inject a session-bound CSRF token into the Customer Portal integration.",
+    "Capture the complete current Customer Portal source before insertion.",
+    "Insert My Library without replacing existing dashboard, project, upload, support, or navigation modules.",
+    "Test purchased, subscription-delivered, bonus, administrative, preparing, revoked, missing-file, replay, expired-link, and signer-failure cases.",
+    "Complete authentication, authorization, privacy, accessibility, mobile, storage, and download QA."
+  ],
+  "integration_sequence": {
+    "previous_component": "Thank-you page first-title handoff",
+    "current_component": "My Library delivery interface",
+    "next_component": "Shopify subscription webhook reconciliation",
+    "subsequent_components": [
+      "Kairos recommendation and curation ranking",
+      "Live Shopify provisioning and end-to-end deployment"
+    ]
+  }
+}

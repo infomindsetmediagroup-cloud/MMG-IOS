@@ -127,7 +127,7 @@
   "resource_links": {
     "knowledge_library": "/pages/knowledge-library",
     "subscription_selection": "/pages/knowledge-library#subscription-selection",
-    "my_library": "/pages/knowledge-library#my-library",
+    "my_library": "/pages/customer-portal#my-library",
     "membership_product": "/products/mmg-knowledge-subscription",
     "customer_service": "/pages/customer-service",
     "subscription_member_guide": "/pages/customer-portal#subscription-member-guide",

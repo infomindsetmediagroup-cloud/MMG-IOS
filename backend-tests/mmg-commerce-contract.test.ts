@@ -70,6 +70,26 @@ type CommerceContract = {
     raw_checkout_token_persisted: boolean;
     server_authority: string;
   };
+  my_library_delivery_interface_contract: {
+    authority: string;
+    domain_model: string;
+    service_boundary: string;
+    postgres_repository: string;
+    library_endpoint: string;
+    access_endpoint: string;
+    storefront_component: string;
+    canonical_route: string;
+    database_schema: string;
+    authentication: string;
+    same_origin_and_csrf_required: boolean;
+    signed_url_ttl_seconds: {
+      minimum: number;
+      default: number;
+      maximum: number;
+    };
+    permanent_file_urls_exposed: boolean;
+    server_authority: string;
+  };
   product_types: {
     digital_download: {
       storefront: {
@@ -128,6 +148,8 @@ type CommerceContract = {
     };
     my_library: {
       ownership_authority: string;
+      delivery_authority: string;
+      access_policy: string;
     };
   };
   canonical_metadata: {
@@ -152,9 +174,9 @@ const contract = JSON.parse(
 ) as CommerceContract;
 
 describe("MMG commerce contract", () => {
-  it("is the approved v1.7 authority", () => {
+  it("is the approved v1.8 authority", () => {
     expect(contract.contract_id).toBe("mmg-commerce-contract-v1");
-    expect(contract.version).toBe("1.7.0");
+    expect(contract.version).toBe("1.8.0");
     expect(contract.status).toBe("approved");
   });
 
@@ -330,12 +352,35 @@ describe("MMG commerce contract", () => {
     expect(contract.reusable_components).toContain(
       "MMG Thank-You First-Title Handoff",
     );
-    expect(contract.canonical_customer_flow).toEqual(
-      expect.arrayContaining([
-        "Checkout",
-        "Thank-you first-title handoff",
-        "Customer Portal",
-      ]),
+  });
+
+  it("connects commerce to the secure My Library delivery interface", () => {
+    expect(contract.my_library_delivery_interface_contract).toEqual({
+      authority:
+        "registry/customer-portal/mmg-my-library-delivery-contract-v1.json",
+      domain_model: "server/customer-portal/my-library.ts",
+      service_boundary: "server/customer-portal/my-library-service.ts",
+      postgres_repository: "server/customer-portal/my-library-repository.ts",
+      library_endpoint: "/api/customer-portal/my-library",
+      access_endpoint: "/api/customer-portal/my-library/access",
+      storefront_component: "shopify/snippets/mmg-my-library.liquid",
+      canonical_route: "/pages/customer-portal#my-library",
+      database_schema:
+        "database/migrations/20260720_004_mmg_my_library_delivery.sql",
+      authentication: "authenticated Customer Portal server session",
+      same_origin_and_csrf_required: true,
+      signed_url_ttl_seconds: { minimum: 60, default: 300, maximum: 600 },
+      permanent_file_urls_exposed: false,
+      server_authority: "Kairos",
+    });
+    expect(contract.knowledge_library_modes.my_library.delivery_authority).toBe(
+      "registry/customer-portal/mmg-my-library-delivery-contract-v1.json",
+    );
+    expect(contract.knowledge_library_modes.my_library.access_policy).toContain(
+      "short-lived HTTPS signed",
+    );
+    expect(contract.reusable_components).toContain(
+      "MMG My Library Delivery Interface",
     );
   });
 
@@ -356,7 +401,7 @@ describe("MMG commerce contract", () => {
     );
   });
 
-  it("keeps metadata, ownership, anti-overdraw, and handoff-verification rules", () => {
+  it("keeps metadata, ownership, anti-overdraw, handoff, and secure delivery rules", () => {
     expect(contract.canonical_metadata.namespace).toBe("mmg");
     expect(contract.canonical_metadata.fields).toEqual(
       expect.arrayContaining([
@@ -382,6 +427,17 @@ describe("MMG commerce contract", () => {
         "Expose Customer Portal subscription data only through an authenticated private read-only dashboard endpoint.",
         "Verify Thank you handoffs with a signed Shopify extension session token and a server-loaded order; never trust browser-supplied customer, product, plan, entitlement, or ownership data.",
         "Persist only a cryptographic hash of the checkout token.",
+        "Display one My Library item per canonical asset ID regardless of historical grant count.",
+        "Revalidate active ownership and delivered subscription state before issuing file access.",
+        "Issue only short-lived HTTPS signed file URLs; never expose permanent storage URLs or object keys.",
+      ]),
+    );
+    expect(contract.canonical_customer_flow).toEqual(
+      expect.arrayContaining([
+        "Checkout",
+        "Thank-you first-title handoff",
+        "Customer Portal",
+        "My Library or My Projects",
       ]),
     );
   });

@@ -1,10 +1,10 @@
 {
   "contract_id": "mmg-commerce-contract-v1",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "status": "approved",
   "approved_date": "2026-07-20",
   "authority": "MMG executive approval",
-  "purpose": "Canonical machine-readable contract connecting digital downloads, services, subscriptions, the Knowledge Library, Shopify cart and checkout behavior, the Thank you first-title handoff, customer entitlements, delivery windows, the Customer Portal, and Kairos fulfillment.",
+  "purpose": "Canonical machine-readable contract connecting digital downloads, services, subscriptions, the Knowledge Library, Shopify cart and checkout behavior, the Thank you first-title handoff, customer entitlements, delivery windows, secure My Library access, the Customer Portal, and Kairos fulfillment.",
   "system_boundaries": {
     "shopify": [
       "product catalog",
@@ -25,6 +25,7 @@
       "review windows",
       "delivery-window scheduling",
       "delivery packaging",
+      "secure owned-asset access",
       "customer progress",
       "portal orchestration"
     ],
@@ -105,6 +106,26 @@
     "raw_checkout_token_persisted": false,
     "server_authority": "Kairos"
   },
+  "my_library_delivery_interface_contract": {
+    "authority": "registry/customer-portal/mmg-my-library-delivery-contract-v1.json",
+    "domain_model": "server/customer-portal/my-library.ts",
+    "service_boundary": "server/customer-portal/my-library-service.ts",
+    "postgres_repository": "server/customer-portal/my-library-repository.ts",
+    "library_endpoint": "/api/customer-portal/my-library",
+    "access_endpoint": "/api/customer-portal/my-library/access",
+    "storefront_component": "shopify/snippets/mmg-my-library.liquid",
+    "canonical_route": "/pages/customer-portal#my-library",
+    "database_schema": "database/migrations/20260720_004_mmg_my_library_delivery.sql",
+    "authentication": "authenticated Customer Portal server session",
+    "same_origin_and_csrf_required": true,
+    "signed_url_ttl_seconds": {
+      "minimum": 60,
+      "default": 300,
+      "maximum": 600
+    },
+    "permanent_file_urls_exposed": false,
+    "server_authority": "Kairos"
+  },
   "product_types": {
     "digital_download": {
       "code": "digital_download",
@@ -125,7 +146,7 @@
           "readme_or_customer_instructions"
         ]
       },
-      "subscription_eligibility": "Per-product boolean metadata field; only approved digital downloads may enter the subscription catalog after all Knowledge Library release gates pass."
+      "subscription_eligibility": "Per-product boolean metadata field; only approved digital downloads may enter the subscription catalog after all Knowledge Library selection gates pass."
     },
     "service": {
       "code": "service",
@@ -286,7 +307,9 @@
         "download controls"
       ],
       "identity_rule": "Display one customer-facing entry per canonical asset_id.",
-      "ownership_authority": "An active non-revoked mmg_ownership_grants record keyed by customer_id and asset_id."
+      "ownership_authority": "An active non-revoked mmg_ownership_grants record keyed by customer_id and asset_id.",
+      "delivery_authority": "registry/customer-portal/mmg-my-library-delivery-contract-v1.json",
+      "access_policy": "Revalidate ownership and delivered subscription state before issuing a short-lived HTTPS signed read or download URL."
     }
   },
   "canonical_metadata": {
@@ -323,6 +346,7 @@
       "delivery limits",
       "delivery-window scheduling",
       "post-checkout handoffs",
+      "secure owned-asset access",
       "discount eligibility",
       "continuation pathways"
     ],
@@ -343,7 +367,10 @@
       "Require an idempotent delivery dispatcher keyed by window ID.",
       "Expose Customer Portal subscription data only through an authenticated private read-only dashboard endpoint.",
       "Verify Thank you handoffs with a signed Shopify extension session token and a server-loaded order; never trust browser-supplied customer, product, plan, entitlement, or ownership data.",
-      "Persist only a cryptographic hash of the checkout token."
+      "Persist only a cryptographic hash of the checkout token.",
+      "Display one My Library item per canonical asset ID regardless of historical grant count.",
+      "Revalidate active ownership and delivered subscription state before issuing file access.",
+      "Issue only short-lived HTTPS signed file URLs; never expose permanent storage URLs or object keys."
     ]
   },
   "site_placements": {
@@ -355,7 +382,7 @@
     "membership_landing_page": "Explain plans, entitlements, onboarding, first-title selection, curation, review windows, and My Library.",
     "cart_drawer_and_cart_page": "Show an unselected subscription invitation when no subscription is present; open the three-plan selector on customer action.",
     "thank_you_page": "Use the checkout UI extension to verify a completed canonical subscription order and direct the buyer to sign in, wait for activation, choose or finish the first two titles, resolve recovery, or open My Library according to the server-authoritative state.",
-    "customer_portal": "Use the authenticated subscription dashboard to show plan and price, billing cycle, package and asset progress, current review window, selected titles, delivery timeline, recovery actions, My Library, the Subscription Member Guide, and account controls without replacing existing portal workflows."
+    "customer_portal": "Use the authenticated subscription dashboard and My Library delivery interface to show membership progress, owned resources, delivery readiness, secure read and download controls, support pathways, and account controls without replacing existing portal workflows."
   },
   "reusable_components": [
     "MMG Subscription Offer Module",
@@ -368,7 +395,8 @@
     "MMG Ownership Filter",
     "MMG Delivery Window Controller",
     "MMG Customer Portal Subscription Dashboard",
-    "MMG Thank-You First-Title Handoff"
+    "MMG Thank-You First-Title Handoff",
+    "MMG My Library Delivery Interface"
   ],
   "canonical_customer_flow": [
     "Homepage",

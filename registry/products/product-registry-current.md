@@ -8,6 +8,7 @@
 **Delivery window authority:** `registry/knowledge-library/mmg-delivery-window-controller-contract-v1.json`  
 **Customer Portal subscription dashboard authority:** `registry/customer-portal/mmg-subscription-dashboard-contract-v1.json`  
 **Thank-you first-title handoff authority:** `registry/checkout/mmg-thank-you-first-title-handoff-contract-v1.json`  
+**My Library delivery authority:** `registry/customer-portal/mmg-my-library-delivery-contract-v1.json`  
 **Digital asset registry:** `registry/knowledge-library/digital-asset-registry-v1.json`  
 **Live URL authority:** `registry/site-pages/site-url-registry-current.json`
 
@@ -168,6 +169,19 @@ The picker uses:
 - Non-subscription orders render no MMG subscription handoff.
 - A recovery-required first package routes to Customer Service; a confirmed or delivered first package routes to My Library.
 
+## My Library Delivery Rules
+
+- My Library is governed by `registry/customer-portal/mmg-my-library-delivery-contract-v1.json` and is added to the existing Customer Portal at `/pages/customer-portal#my-library`.
+- It displays one customer-facing item per canonical `asset_id`, while aggregating active purchase, subscription, bonus, and administrative grant sources.
+- Library state is loaded from `GET /api/customer-portal/my-library` through the authenticated server session.
+- Secure read and download requests use `POST /api/customer-portal/my-library/access` with same-origin validation, a session-bound CSRF token, and a unique request ID.
+- Subscription-delivered assets remain in `preparing` until the linked package window reaches `delivered`.
+- One-time purchases, bonuses, and administrative grants may become ready as soon as an active primary delivery file exists.
+- Delivery files are registered in `mmg_asset_delivery_files`; customer access requests and outcomes are audited without storing signed URLs.
+- Read links use inline disposition. Downloads use attachment disposition.
+- Signed URLs must use HTTPS and expire within 60–600 seconds; 300 seconds is the default.
+- Customer-facing responses never expose storage providers, object keys, permanent URLs, grant IDs, entitlement IDs, or delivery-package references.
+
 ## Commerce Component Build State
 
 | Component | Repository status | Live storefront status | Next dependency |
@@ -181,7 +195,8 @@ The picker uses:
 | MMG Entitlement Counter and Ownership Persistence | Merged for staging | Not installed | Production PostgreSQL and Shopify contract reconciliation. |
 | MMG Delivery Window Controller | Merged for staging | Not scheduled live | Production scheduler, dispatcher, and reconciliation. |
 | MMG Customer Portal Subscription Dashboard | Merged for staging | Not installed | Authenticated endpoint routing and portal integration. |
-| MMG Thank-You First-Title Handoff | Implemented for staging | Not installed | My Library delivery interface. |
+| MMG Thank-You First-Title Handoff | Merged for staging | Not installed | Shopify app extension deployment and webhook reconciliation. |
+| MMG My Library Delivery Interface | Implemented for staging | Not installed | Shopify subscription webhook reconciliation. |
 
 ## Shopify Storage Contract
 
@@ -193,4 +208,4 @@ shopify/products/{product-handle}/qa.md
 shopify/products/{product-handle}/release-notes.md
 ```
 
-Canonical product, entitlement, delivery-window, Customer Portal, and post-checkout handoff relationships must also be represented in the machine-readable commerce contract and relevant registries.
+Canonical product, entitlement, delivery-window, Customer Portal, post-checkout handoff, My Library, and secure-delivery relationships must also be represented in the machine-readable commerce contract and relevant registries.
