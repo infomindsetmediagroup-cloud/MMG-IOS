@@ -253,16 +253,18 @@ export const buildMMGCustomerPortalSubscriptionDashboard = (input: {
       ).length,
   );
   const totalAssets = integer(cycle?.totalUnits ?? plan.assetsPerBillingCycle);
-  const committedAssets = integer(
-    cycle?.consumedUnits ??
-      windows.reduce(
-        (sum, window) =>
-          sum +
-          window.selections
-            .filter((selection) => selection.state === "confirmed")
-            .reduce((selectionSum, selection) => selectionSum + integer(selection.units), 0),
+  const selectionCommittedAssets = windows.reduce(
+    (sum, window) =>
+      sum +
+      window.selections.reduce(
+        (selectionSum, selection) => selectionSum + integer(selection.units),
         0,
       ),
+    0,
+  );
+  const committedAssets = Math.max(
+    integer(cycle?.consumedUnits ?? 0),
+    integer(selectionCommittedAssets),
   );
   const primaryAction = actionFor(input.subscription, currentWindow, input.links);
 
