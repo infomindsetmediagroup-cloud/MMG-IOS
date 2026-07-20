@@ -1,0 +1,7 @@
+query MMGShopifyToolkitReadiness {
+  shop {
+    id
+    name
+    myshopifyDomain
+  }
+}
