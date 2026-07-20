@@ -1,0 +1,184 @@
+{%- liquid
+  assign mmg_picker_context = mmg_picker_context | default: 'knowledge-library'
+  assign mmg_picker_instance_base = mmg_picker_instance_id | default: section.id | default: 'global'
+  assign mmg_picker_instance = mmg_picker_instance_base | append: '-' | append: mmg_picker_context | handleize
+  assign mmg_picker_endpoint = mmg_picker_endpoint | default: '/api/knowledge-library/picker'
+  assign mmg_picker_heading = mmg_picker_heading | default: 'Choose Your First Two Titles'
+  assign mmg_picker_intro = mmg_picker_intro | default: 'Select two eligible digital titles for your current membership package. Titles you already own are excluded automatically.'
+  assign mmg_picker_sign_in_url = mmg_picker_sign_in_url | default: '/pages/customer-portal'
+  assign mmg_picker_membership_url = mmg_picker_membership_url | default: '/products/mmg-knowledge-subscription'
+  assign mmg_picker_library_url = mmg_picker_library_url | default: '/pages/knowledge-library'
+-%}
+
+{{ 'mmg-knowledge-library-picker.css' | asset_url | stylesheet_tag }}
+
+<mmg-knowledge-library-picker
+  id="mmg-knowledge-library-picker-{{ mmg_picker_instance }}"
+  class="mmg-knowledge-library-picker"
+  data-endpoint="{{ mmg_picker_endpoint | escape }}"
+  data-context="{{ mmg_picker_context | escape }}"
+  data-sign-in-url="{{ mmg_picker_sign_in_url | escape }}"
+  data-membership-url="{{ mmg_picker_membership_url | escape }}"
+  data-library-url="{{ mmg_picker_library_url | escape }}"
+  data-csrf-token="{{ mmg_picker_csrf_token | default: '' | escape }}"
+  aria-labelledby="mmg-picker-title-{{ mmg_picker_instance }}"
+>
+  <section class="mmg-picker" data-mmg-picker-root>
+    <header class="mmg-picker__header">
+      <div class="mmg-picker__header-copy">
+        <p class="mmg-picker__eyebrow">MMG Knowledge Subscription™</p>
+        <h2 id="mmg-picker-title-{{ mmg_picker_instance }}" class="mmg-picker__title">
+          {{ mmg_picker_heading }}
+        </h2>
+        <p class="mmg-picker__intro">{{ mmg_picker_intro }}</p>
+      </div>
+
+      <div class="mmg-picker__counter" data-mmg-picker-counter aria-live="polite">
+        <span class="mmg-picker__counter-label">Current package</span>
+        <strong class="mmg-picker__counter-value" data-mmg-picker-counter-value>Loading…</strong>
+        <span class="mmg-picker__counter-detail" data-mmg-picker-counter-detail>
+          Checking your entitlement window
+        </span>
+      </div>
+    </header>
+
+    <div class="mmg-picker__status" data-mmg-picker-status role="status" aria-live="polite">
+      <span class="mmg-picker__spinner" aria-hidden="true"></span>
+      <span data-mmg-picker-status-text>Loading your eligible titles…</span>
+    </div>
+
+    <div class="mmg-picker__blocked" data-mmg-picker-blocked hidden>
+      <h3 data-mmg-picker-blocked-title>Selection is unavailable</h3>
+      <p data-mmg-picker-blocked-copy>
+        Your account or entitlement window could not be verified.
+      </p>
+      <div class="mmg-picker__blocked-actions">
+        <a class="mmg-picker__button mmg-picker__button--primary" href="{{ mmg_picker_sign_in_url }}" data-mmg-picker-blocked-primary>
+          Open Customer Portal
+        </a>
+        <a class="mmg-picker__button mmg-picker__button--secondary" href="{{ mmg_picker_membership_url }}" data-mmg-picker-blocked-secondary>
+          View Membership Plans
+        </a>
+      </div>
+    </div>
+
+    <div class="mmg-picker__workspace" data-mmg-picker-workspace hidden>
+      <form class="mmg-picker__filters" data-mmg-picker-filters role="search" novalidate>
+        <div class="mmg-picker__field mmg-picker__field--search">
+          <label for="mmg-picker-search-{{ mmg_picker_instance }}">Search titles</label>
+          <input
+            id="mmg-picker-search-{{ mmg_picker_instance }}"
+            type="search"
+            inputmode="search"
+            autocomplete="off"
+            placeholder="Search the Knowledge Library"
+            data-mmg-picker-search
+          >
+        </div>
+
+        <div class="mmg-picker__field">
+          <label for="mmg-picker-topic-{{ mmg_picker_instance }}">Topic</label>
+          <select id="mmg-picker-topic-{{ mmg_picker_instance }}" data-mmg-picker-topic>
+            <option value="">All topics</option>
+          </select>
+        </div>
+
+        <div class="mmg-picker__field">
+          <label for="mmg-picker-level-{{ mmg_picker_instance }}">Experience level</label>
+          <select id="mmg-picker-level-{{ mmg_picker_instance }}" data-mmg-picker-level>
+            <option value="">All levels</option>
+          </select>
+        </div>
+
+        <div class="mmg-picker__field">
+          <label for="mmg-picker-format-{{ mmg_picker_instance }}">Format</label>
+          <select id="mmg-picker-format-{{ mmg_picker_instance }}" data-mmg-picker-format>
+            <option value="">All formats</option>
+          </select>
+        </div>
+
+        <button class="mmg-picker__reset" type="button" data-mmg-picker-reset>
+          Reset filters
+        </button>
+      </form>
+
+      <div class="mmg-picker__summary" data-mmg-picker-summary>
+        <p data-mmg-picker-summary-text>Choose two titles to complete this package.</p>
+        <p class="mmg-picker__summary-note">
+          Every selection is verified by Kairos before it is confirmed.
+        </p>
+      </div>
+
+      <div class="mmg-picker__grid" data-mmg-picker-grid aria-busy="true"></div>
+
+      <div class="mmg-picker__empty" data-mmg-picker-empty hidden>
+        <h3>No matching titles</h3>
+        <p>Adjust the filters or clear your search to view more eligible resources.</p>
+        <button class="mmg-picker__button mmg-picker__button--secondary" type="button" data-mmg-picker-empty-reset>
+          Clear Filters
+        </button>
+      </div>
+
+      <aside class="mmg-picker__confirmation" data-mmg-picker-confirmation>
+        <div>
+          <p class="mmg-picker__confirmation-label">Package progress</p>
+          <h3 data-mmg-picker-confirmation-title>Choose two titles</h3>
+          <p data-mmg-picker-confirmation-copy>
+            Your package can be confirmed after all available units are filled.
+          </p>
+        </div>
+        <button
+          class="mmg-picker__button mmg-picker__button--confirm"
+          type="button"
+          data-mmg-picker-confirm
+          disabled
+        >
+          Confirm My Two Titles
+        </button>
+      </aside>
+    </div>
+
+    <div class="mmg-picker__confirmed" data-mmg-picker-confirmed hidden>
+      <p class="mmg-picker__eyebrow">Package confirmed</p>
+      <h3>Your titles are locked in.</h3>
+      <p>
+        Your confirmed resources will move into My Library through the MMG delivery workflow.
+      </p>
+      <div class="mmg-picker__blocked-actions">
+        <a class="mmg-picker__button mmg-picker__button--primary" href="{{ mmg_picker_sign_in_url }}">
+          Open Customer Portal
+        </a>
+        <a class="mmg-picker__button mmg-picker__button--secondary" href="{{ mmg_picker_library_url }}">
+          Browse the Knowledge Library
+        </a>
+      </div>
+    </div>
+
+    <div class="mmg-picker__provisional-data" hidden aria-hidden="true" data-mmg-picker-provisional-data>
+      {%- if mmg_picker_products != blank -%}
+        {%- for mmg_picker_product in mmg_picker_products -%}
+          {%- render 'mmg-knowledge-library-product-data', mmg_library_product: mmg_picker_product -%}
+        {%- endfor -%}
+      {%- endif -%}
+    </div>
+
+    <noscript>
+      <div class="mmg-picker__blocked">
+        <h3>JavaScript is required for subscription title selection.</h3>
+        <p>
+          Selection requires authenticated Kairos verification. You can still browse and purchase individual titles through the public Knowledge Library.
+        </p>
+        <div class="mmg-picker__blocked-actions">
+          <a class="mmg-picker__button mmg-picker__button--primary" href="{{ mmg_picker_sign_in_url }}">
+            Open Customer Portal
+          </a>
+          <a class="mmg-picker__button mmg-picker__button--secondary" href="{{ mmg_picker_library_url }}">
+            Browse Public Library
+          </a>
+        </div>
+      </div>
+    </noscript>
+  </section>
+</mmg-knowledge-library-picker>
+
+<script src="{{ 'mmg-knowledge-library-picker.js' | asset_url }}" defer></script>

@@ -1,0 +1,252 @@
+{
+  "contract_id": "mmg-knowledge-library-picker-v1",
+  "version": "1.0.0",
+  "status": "approved_for_staging",
+  "approved_date": "2026-07-20",
+  "authority": "MMG executive approval",
+  "canonical_route": "/pages/knowledge-library",
+  "purpose": "Canonical customer-facing title picker for authenticated MMG Knowledge Subscription entitlement windows.",
+  "dependencies": {
+    "commerce_contract": "registry/products/mmg-commerce-contract-v1.json",
+    "eligibility_contract": "registry/knowledge-library/mmg-knowledge-library-contract-v1.json",
+    "asset_registry": "registry/knowledge-library/digital-asset-registry-v1.json",
+    "eligibility_evaluator": "server/knowledge-library/eligibility.ts",
+    "picker_state_machine": "server/knowledge-library/picker.ts",
+    "picker_service": "server/knowledge-library/picker-service.ts",
+    "picker_http_handler": "server/knowledge-library/picker-http.ts"
+  },
+  "supported_window_types": [
+    "first_package",
+    "scheduled_package_review"
+  ],
+  "first_package_contract": {
+    "headline": "Choose Your First Two Titles",
+    "target_asset_count": 2,
+    "total_units": 2,
+    "selection_occurs_after_checkout": true,
+    "customer_selects_titles": true
+  },
+  "scheduled_package_contract": {
+    "target_asset_count": 2,
+    "total_units": 2,
+    "curation_owner": "Kairos",
+    "customer_actions": [
+      "accept proposed package",
+      "remove an unconfirmed title",
+      "select an eligible replacement",
+      "confirm package"
+    ],
+    "review_window_hours": {
+      "minimum": 24,
+      "maximum": 48
+    }
+  },
+  "snapshot_contract": {
+    "schema_version": "1.0.0",
+    "authoritative_source": "Kairos server",
+    "required_fields": [
+      "status",
+      "customerAuthenticated",
+      "subscriptionActive",
+      "window",
+      "items",
+      "selectedAssetIds",
+      "excluded",
+      "canConfirm",
+      "confirmedAt"
+    ],
+    "window_fields": [
+      "id",
+      "type",
+      "status",
+      "totalUnits",
+      "selectedUnits",
+      "reservedUnits",
+      "remainingUnits",
+      "targetAssetCount",
+      "selectedAssetCount",
+      "version",
+      "opensAt",
+      "closesAt"
+    ],
+    "item_fields": [
+      "assetId",
+      "shopifyProductId",
+      "handle",
+      "title",
+      "url",
+      "topic",
+      "experienceLevel",
+      "format",
+      "series",
+      "seriesOrder",
+      "portraitCoverUrl",
+      "squareThumbnailUrl",
+      "summary",
+      "subscriptionValue",
+      "eligibilityState",
+      "eligibilityReasonCodes",
+      "selectionState",
+      "canSelect",
+      "canRemove"
+    ]
+  },
+  "command_contract": {
+    "endpoint": "/api/knowledge-library/picker",
+    "read_method": "GET",
+    "mutation_method": "POST",
+    "actions": [
+      "select",
+      "remove",
+      "confirm"
+    ],
+    "required_mutation_fields": [
+      "action",
+      "requestId",
+      "expectedWindowVersion"
+    ],
+    "asset_actions_require_asset_id": [
+      "select",
+      "remove"
+    ],
+    "confirm_forbids_asset_id": true,
+    "optimistic_concurrency_field": "expectedWindowVersion",
+    "idempotency_field": "requestId",
+    "credentials_mode": "same-origin",
+    "content_type": "application/json",
+    "csrf_token_response_header": "X-MMG-CSRF-Token",
+    "csrf_token_request_header": "X-MMG-CSRF-Token"
+  },
+  "security_contract": {
+    "customer_identity_source": "authenticated server session",
+    "subscription_identity_source": "Kairos server lookup",
+    "window_identity_source": "Kairos server lookup",
+    "csrf_acquisition": "The authenticated GET response issues or rotates the session-bound token through X-MMG-CSRF-Token; every POST returns the current token through the same header.",
+    "forbidden_client_identity_fields": [
+      "customerId",
+      "customer_id",
+      "subscriptionId",
+      "subscription_id",
+      "windowId",
+      "window_id"
+    ],
+    "mutation_controls": [
+      "Validate same-origin request Origin header.",
+      "Require a session-bound CSRF token for every mutation.",
+      "Derive the customer, subscription, and active window server-side.",
+      "Revalidate every asset before select, remove, or confirm.",
+      "Use optimistic concurrency on the entitlement-window version.",
+      "Use request IDs for idempotency.",
+      "Persist a confirmation and its delivery grants transactionally.",
+      "Never trust browser ownership, entitlement totals, or eligibility decisions."
+    ]
+  },
+  "selection_rules": [
+    "Owned assets are excluded from selectable results.",
+    "Services and subscription products are excluded.",
+    "Incomplete delivery packages and missing required media are excluded.",
+    "A title may be selected only while the entitlement window is open.",
+    "A selected title consumes its integer mmg.subscription_value units.",
+    "Over-selection is prohibited.",
+    "The same asset may appear only once in a window.",
+    "Only unconfirmed selections may be removed.",
+    "Confirmation requires exactly the target asset count and all available units.",
+    "Confirmed selections are locked and become delivery-grant inputs."
+  ],
+  "picker_statuses": [
+    "ready",
+    "selection_complete",
+    "confirmed",
+    "blocked"
+  ],
+  "selection_states": [
+    "available",
+    "selected",
+    "reserved",
+    "confirmed",
+    "unavailable"
+  ],
+  "customer_states": {
+    "loading": "Fetch the authoritative snapshot and disable mutation controls.",
+    "unauthenticated": "Direct the customer to the Customer Portal sign-in flow.",
+    "subscription_inactive": "Show membership discovery without exposing selection controls.",
+    "window_unavailable": "Explain that no selection window is currently open.",
+    "ready": "Show eligible titles, filters, and remaining capacity.",
+    "selection_complete": "Enable package confirmation.",
+    "confirmed": "Lock selections and direct the customer to My Library or the subscription dashboard.",
+    "error": "Preserve the last server snapshot, announce the error, and offer a refresh."
+  },
+  "filter_contract": {
+    "client_side_display_filters": [
+      "search",
+      "topic",
+      "experienceLevel",
+      "format"
+    ],
+    "authority_rule": "Client-side filters alter presentation only and never change server eligibility.",
+    "default_sort": [
+      "selected titles first",
+      "series order ascending when applicable",
+      "title ascending as deterministic fallback"
+    ]
+  },
+  "storefront_implementation": {
+    "liquid_snippet": "shopify/snippets/mmg-knowledge-library-picker.liquid",
+    "javascript_asset": "shopify/assets/mmg-knowledge-library-picker.js",
+    "stylesheet_asset": "shopify/assets/mmg-knowledge-library-picker.css",
+    "page_integration": "shopify/knowledge-library/mmg-knowledge-library-picker-integration.liquid",
+    "provisional_metadata_source": "shopify/snippets/mmg-knowledge-library-product-data.liquid",
+    "progressive_enhancement": "Interactive subscription selection requires JavaScript and the authenticated Kairos endpoint. Public catalog links remain available without JavaScript."
+  },
+  "event_contract": [
+    {
+      "name": "mmg:knowledge-library-picker-ready",
+      "detail_fields": ["snapshot"]
+    },
+    {
+      "name": "mmg:knowledge-library-selection-updated",
+      "detail_fields": ["action", "assetId", "snapshot"]
+    },
+    {
+      "name": "mmg:knowledge-library-package-confirmed",
+      "detail_fields": ["snapshot"]
+    },
+    {
+      "name": "mmg:knowledge-library-picker-error",
+      "detail_fields": ["code", "message", "snapshot"]
+    }
+  ],
+  "accessibility_contract": {
+    "live_status_region": true,
+    "semantic_filter_controls": true,
+    "keyboard_operable_cards": true,
+    "visible_focus": true,
+    "selection_state_text_not_color_only": true,
+    "disabled_reason_text": true,
+    "confirm_summary": true,
+    "reduced_motion_support": true,
+    "mobile_single_column_support": true
+  },
+  "integration_sequence": {
+    "previous_component": "MMG Knowledge Library eligibility metadata and selection-mode contract",
+    "current_component": "MMG Knowledge Library Picker",
+    "next_component": "MMG Entitlement Counter and ownership-resolution persistence",
+    "subsequent_components": [
+      "MMG Delivery Window Controller",
+      "Customer Portal subscription dashboard",
+      "Thank-you page first-title handoff",
+      "Kairos recommendation ranking"
+    ]
+  },
+  "release_gates": [
+    "The secure HTTP handler is connected to the deployed authenticated API adapter.",
+    "The server derives customer, subscription, and window identities from the session.",
+    "The entitlement-window repository supports atomic versioned writes.",
+    "Confirmation creates delivery grants transactionally and idempotently.",
+    "At least two verified subscription-selectable digital assets exist.",
+    "Every displayed title has verified portrait and square media plus a delivery package.",
+    "Owned assets cannot be selected or re-delivered as new entitlement consumption.",
+    "The picker passes mobile, keyboard, screen-reader, concurrency, idempotency, and authorization QA.",
+    "The live Knowledge Library page is not replaced until its current source is captured and the picker is integrated without removing Public Catalog behavior."
+  ]
+}

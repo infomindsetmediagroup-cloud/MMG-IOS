@@ -1,0 +1,18 @@
+{%- liquid
+  assign mmg_picker_source_collection = mmg_picker_collection
+  if mmg_picker_source_collection == blank
+    assign mmg_picker_source_collection = collections['frontpage']
+  endif
+-%}
+
+{%- render 'mmg-knowledge-library-picker',
+  mmg_picker_products: mmg_picker_source_collection.products,
+  mmg_picker_context: 'subscription-selection',
+  mmg_picker_instance_id: 'knowledge-library-primary-picker',
+  mmg_picker_endpoint: '/api/knowledge-library/picker',
+  mmg_picker_heading: 'Choose Your First Two Titles',
+  mmg_picker_intro: 'Select two eligible digital titles for your current membership package. Titles you already own are excluded automatically.',
+  mmg_picker_sign_in_url: '/pages/customer-portal',
+  mmg_picker_membership_url: '/products/mmg-knowledge-subscription',
+  mmg_picker_library_url: '/pages/knowledge-library'
+-%}
