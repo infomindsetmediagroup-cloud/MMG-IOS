@@ -14,9 +14,12 @@ export type MMGEntitlementWindowStatus =
   | "scheduled"
   | "open"
   | "confirmed"
+  | "delivery_ready"
+  | "delivered"
   | "closed"
   | "expired"
-  | "canceled";
+  | "canceled"
+  | "recovery_required";
 
 export type MMGEligibilityReasonCode =
   | "ELIGIBLE"
