@@ -4,6 +4,7 @@ import type {
   MMGDeliveryWindowProposal,
 } from "./delivery-window-service.js";
 import type { MMGDeliveryWindowRuntimeState } from "./delivery-windows.js";
+import type { MMGRecommendationCandidateRepository } from "./recommendation-candidate-repository.js";
 import {
   MMG_RECOMMENDATION_RANKING_VERSION,
   rankMMGRecommendationPackage,
@@ -15,6 +16,7 @@ import {
 
 export interface MMGKairosRecommendationCuratorDependencies {
   repository: MMGRecommendationRepository;
+  candidateRepository: MMGRecommendationCandidateRepository;
   now(): Date;
 }
 
@@ -35,14 +37,17 @@ export class MMGKairosRecommendationCurator
     candidates: MMGDeliveryWindowCandidate[];
   }): Promise<MMGDeliveryWindowProposal | null> {
     const occurredAt = this.#dependencies.now();
-    const context = await loadMMGRecommendationContext({
-      repository: this.#dependencies.repository,
-      customerId: input.window.customerId,
-      asOf: occurredAt,
-    });
+    const [context, candidates] = await Promise.all([
+      loadMMGRecommendationContext({
+        repository: this.#dependencies.repository,
+        customerId: input.window.customerId,
+        asOf: occurredAt,
+      }),
+      this.#dependencies.candidateRepository.enrichCandidates(input.candidates),
+    ]);
 
     const result = rankMMGRecommendationPackage({
-      candidates: input.candidates,
+      candidates,
       profile: context.profile,
       history: context.history,
       targetAssetCount: input.window.targetAssetCount,
@@ -57,7 +62,7 @@ export class MMGKairosRecommendationCurator
       windowVersion: input.window.version,
       rankingVersion: MMG_RECOMMENDATION_RANKING_VERSION,
       profileVersion: context.profile?.profileVersion ?? null,
-      candidateCount: input.candidates.length,
+      candidateCount: candidates.length,
       source: "kairos_ranker",
       package: result.package,
       ranked: result.ranked,
@@ -75,19 +80,23 @@ export class MMGKairosRecommendationCurator
 
 export const buildMMGRecommendationPreview = async (input: {
   repository: MMGRecommendationRepository;
+  candidateRepository: MMGRecommendationCandidateRepository;
   customerId: string;
   candidates: MMGDeliveryWindowCandidate[];
   targetAssetCount: number;
   totalUnits: number;
   asOf: Date;
 }) => {
-  const context = await loadMMGRecommendationContext({
-    repository: input.repository,
-    customerId: input.customerId,
-    asOf: input.asOf,
-  });
+  const [context, candidates] = await Promise.all([
+    loadMMGRecommendationContext({
+      repository: input.repository,
+      customerId: input.customerId,
+      asOf: input.asOf,
+    }),
+    input.candidateRepository.enrichCandidates(input.candidates),
+  ]);
   return rankMMGRecommendationPackage({
-    candidates: input.candidates,
+    candidates,
     profile: context.profile,
     history: context.history,
     targetAssetCount: input.targetAssetCount,
