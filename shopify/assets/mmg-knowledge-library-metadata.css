@@ -1,0 +1,26 @@
+.mmg-subscription-eligibility-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  min-height: 30px;
+  padding: 6px 11px;
+  color: #001018;
+  background: linear-gradient(135deg, #74e2ff 0%, #14b8ff 48%, #3b7cff 100%);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  box-shadow: 0 8px 22px rgba(20, 184, 255, 0.2);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1.15;
+  letter-spacing: 0.02em;
+  text-align: center;
+  text-wrap: balance;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mmg-subscription-eligibility-badge {
+    transition: none !important;
+  }
+}

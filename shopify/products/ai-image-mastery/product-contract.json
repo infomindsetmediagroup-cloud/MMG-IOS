@@ -1,0 +1,74 @@
+{
+  "contract_id": "mmg-product-ai-image-mastery-v1",
+  "version": "1.0.0",
+  "status": "active_product_metadata_staged",
+  "recorded_date": "2026-07-20",
+  "title": "AI Image Mastery™",
+  "handle": "ai-image-mastery",
+  "canonical_path": "/products/ai-image-mastery",
+  "canonical_url": "https://themindsetmediagroup.com/products/ai-image-mastery",
+  "product_type": "digital_download",
+  "canonical_asset_id": "mmg-dd-ai-image-mastery-001",
+  "commerce_authority": "registry/products/mmg-commerce-contract-v1.json",
+  "knowledge_library_authority": "registry/knowledge-library/mmg-knowledge-library-contract-v1.json",
+  "runtime_ids": {
+    "shopify_product_gid": null,
+    "shopify_default_variant_gid": null,
+    "portrait_cover_file_gid": null,
+    "square_thumbnail_file_gid": null
+  },
+  "metafields": {
+    "mmg.product_type": "digital_download",
+    "mmg.subscription_eligible": true,
+    "mmg.asset_status": "active",
+    "mmg.asset_id": "mmg-dd-ai-image-mastery-001",
+    "mmg.topic": "ai_image_generation",
+    "mmg.experience_level": "beginner",
+    "mmg.format": "guide",
+    "mmg.series": "AI Mastery Series",
+    "mmg.series_order": 1,
+    "mmg.related_assets": [],
+    "mmg.square_thumbnail": null,
+    "mmg.portrait_cover": null,
+    "mmg.subscription_value": 1,
+    "mmg.delivery_package": null,
+    "mmg.customer_destination": "my_library"
+  },
+  "media_contract": {
+    "storefront_primary_role": "portrait_cover",
+    "portrait_cover": {
+      "preferred_dimensions_px": [2048, 3072],
+      "aspect_ratio": "2:3",
+      "existing_live_media_must_be_verified": true
+    },
+    "square_thumbnail": {
+      "preferred_dimensions_px": [2048, 2048],
+      "aspect_ratio": "1:1",
+      "required_for_subscription_selection": true
+    }
+  },
+  "subscription_catalog": {
+    "requested_eligibility": true,
+    "subscription_value": 1,
+    "current_release_status": "blocked_pending_provisioning",
+    "blocked_reason_codes": [
+      "MISSING_SQUARE_THUMBNAIL",
+      "MISSING_DELIVERY_PACKAGE"
+    ],
+    "release_requirements": [
+      "Verify and record Shopify product and variant GIDs.",
+      "Verify the portrait cover file reference.",
+      "Upload or verify the square thumbnail and record its file reference.",
+      "Create and verify the customer delivery package.",
+      "Write all canonical mmg product metafields.",
+      "Confirm the Knowledge Library provisional metadata predicate passes.",
+      "Confirm Kairos server-side eligibility, ownership, and entitlement checks pass."
+    ]
+  },
+  "customer_destination": "my_library",
+  "source_boundary": {
+    "live_product_is_active": true,
+    "source_html_present_in_repository": false,
+    "rule": "Do not infer or overwrite the live product-page source from this metadata contract. Product-page source must be captured separately before source-level changes."
+  }
+}

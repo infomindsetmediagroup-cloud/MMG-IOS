@@ -1,0 +1,81 @@
+{%- liquid
+  assign mmg_library_product = mmg_library_product | default: product
+  assign mmg_product_type = mmg_library_product.metafields.mmg.product_type.value | default: ''
+  assign mmg_subscription_eligible = mmg_library_product.metafields.mmg.subscription_eligible.value | default: false
+  assign mmg_asset_status = mmg_library_product.metafields.mmg.asset_status.value | default: ''
+  assign mmg_asset_id = mmg_library_product.metafields.mmg.asset_id.value | default: ''
+  assign mmg_topic = mmg_library_product.metafields.mmg.topic.value | default: ''
+  assign mmg_experience_level = mmg_library_product.metafields.mmg.experience_level.value | default: ''
+  assign mmg_format = mmg_library_product.metafields.mmg.format.value | default: ''
+  assign mmg_series = mmg_library_product.metafields.mmg.series.value | default: ''
+  assign mmg_series_order = mmg_library_product.metafields.mmg.series_order.value | default: 0
+  assign mmg_related_assets = mmg_library_product.metafields.mmg.related_assets.value
+  assign mmg_related_assets_json = '[]'
+  assign mmg_subscription_value = mmg_library_product.metafields.mmg.subscription_value.value | default: 0
+  assign mmg_delivery_package = mmg_library_product.metafields.mmg.delivery_package.value | default: ''
+  assign mmg_customer_destination = mmg_library_product.metafields.mmg.customer_destination.value | default: ''
+  assign mmg_portrait_file = mmg_library_product.metafields.mmg.portrait_cover.value
+  assign mmg_square_file = mmg_library_product.metafields.mmg.square_thumbnail.value
+  assign mmg_portrait_url = ''
+  assign mmg_square_url = ''
+  assign mmg_public_catalog_hint = false
+  assign mmg_subscription_selection_hint = false
+
+  if mmg_related_assets != blank
+    assign mmg_related_assets_json = mmg_related_assets | json
+  endif
+
+  if mmg_portrait_file != blank
+    assign mmg_portrait_url = mmg_portrait_file | image_url: width: 2048
+  endif
+
+  if mmg_square_file != blank
+    assign mmg_square_url = mmg_square_file | image_url: width: 2048
+  endif
+
+  if mmg_library_product.available and mmg_product_type == 'digital_download' and mmg_asset_status == 'active' and mmg_asset_id != blank and mmg_portrait_url != blank and mmg_customer_destination == 'my_library'
+    assign mmg_public_catalog_hint = true
+  endif
+
+  if mmg_public_catalog_hint and mmg_subscription_eligible and mmg_square_url != blank and mmg_subscription_value >= 1 and mmg_delivery_package != blank
+    assign mmg_subscription_selection_hint = true
+  endif
+-%}
+
+<script
+  type="application/json"
+  data-mmg-library-asset
+  data-mmg-asset-id="{{ mmg_asset_id | escape }}"
+  data-mmg-public-catalog-hint="{{ mmg_public_catalog_hint }}"
+  data-mmg-subscription-selection-hint="{{ mmg_subscription_selection_hint }}"
+>
+  {
+    "schemaVersion": "1.0.0",
+    "authority": "public_shopify_metadata_only",
+    "serverDecisionRequired": true,
+    "shopifyProductId": {{ mmg_library_product.id | json }},
+    "handle": {{ mmg_library_product.handle | json }},
+    "title": {{ mmg_library_product.title | json }},
+    "url": {{ mmg_library_product.url | json }},
+    "available": {{ mmg_library_product.available | json }},
+    "priceMin": {{ mmg_library_product.price_min | json }},
+    "currency": {{ cart.currency.iso_code | default: shop.currency | json }},
+    "productType": {{ mmg_product_type | json }},
+    "assetStatus": {{ mmg_asset_status | json }},
+    "assetId": {{ mmg_asset_id | json }},
+    "topic": {{ mmg_topic | json }},
+    "experienceLevel": {{ mmg_experience_level | json }},
+    "format": {{ mmg_format | json }},
+    "series": {{ mmg_series | json }},
+    "seriesOrder": {{ mmg_series_order | json }},
+    "relatedAssetIds": {{ mmg_related_assets_json }},
+    "subscriptionEligibleMetadata": {{ mmg_subscription_eligible | json }},
+    "subscriptionValue": {{ mmg_subscription_value | json }},
+    "deliveryPackagePresent": {% if mmg_delivery_package != blank %}true{% else %}false{% endif %},
+    "customerDestination": {{ mmg_customer_destination | json }},
+    "portraitCoverUrl": {{ mmg_portrait_url | json }},
+    "squareThumbnailUrl": {{ mmg_square_url | json }},
+    "publicCatalogHint": {{ mmg_public_catalog_hint | json }},
+    "subscriptionSelectionHint": {{ mmg_subscription_selection_hint | json }}
+  }
+</script>

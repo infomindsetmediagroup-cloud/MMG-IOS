@@ -1,0 +1,251 @@
+{
+  "contract_id": "mmg-knowledge-library-contract-v1",
+  "version": "1.0.0",
+  "status": "approved_for_staging",
+  "approved_date": "2026-07-20",
+  "authority": "MMG executive approval",
+  "canonical_route": "/pages/knowledge-library",
+  "canonical_url": "https://themindsetmediagroup.com/pages/knowledge-library",
+  "purpose": "Canonical eligibility, ownership, entitlement-window, and selection-mode contract for the shared MMG digital-asset catalog.",
+  "system_boundaries": {
+    "shopify": [
+      "public product catalog",
+      "product publication",
+      "product metafields",
+      "one-time purchases",
+      "subscription product and billing"
+    ],
+    "kairos": [
+      "authoritative subscription eligibility revalidation",
+      "customer authentication",
+      "active subscription verification",
+      "ownership resolution",
+      "entitlement-window accounting",
+      "selection confirmation",
+      "review-window enforcement",
+      "delivery grants",
+      "recommendation ranking"
+    ],
+    "knowledge_library": "One customer-facing surface with Public Catalog, Subscription Selection, and My Library modes backed by the same canonical asset identity."
+  },
+  "identity_contract": {
+    "canonical_asset_key": "mmg.asset_id",
+    "shopify_product_key": "Shopify product ID",
+    "customer_ownership_key": "customer_id + asset_id",
+    "selection_key": "entitlement_window_id + customer_id + asset_id",
+    "rules": [
+      "One asset_id represents one commercial digital asset across Shopify, Kairos, the Knowledge Library, the Customer Portal, and delivery records.",
+      "A Shopify product handle may change only when redirects and registry mappings are updated; asset_id remains stable.",
+      "Ownership, delivery, and recommendation systems must join on asset_id rather than product title."
+    ]
+  },
+  "shopify_metadata": {
+    "namespace": "mmg",
+    "definition_manifest": "shopify/metafields/mmg-knowledge-library-product-metafields.json",
+    "required_for_public_catalog": [
+      "product_type",
+      "asset_status",
+      "asset_id",
+      "topic",
+      "experience_level",
+      "format",
+      "portrait_cover",
+      "customer_destination"
+    ],
+    "required_for_subscription_selection": [
+      "product_type",
+      "subscription_eligible",
+      "asset_status",
+      "asset_id",
+      "topic",
+      "experience_level",
+      "format",
+      "square_thumbnail",
+      "portrait_cover",
+      "subscription_value",
+      "delivery_package",
+      "customer_destination"
+    ],
+    "allowed_values": {
+      "product_type": ["digital_download", "service", "subscription"],
+      "asset_status": ["draft", "approved", "active", "retired"],
+      "experience_level": ["beginner", "intermediate", "advanced", "all_levels"],
+      "format": ["book", "guide", "template", "workbook", "toolkit", "prompt_pack", "resource_pack"],
+      "customer_destination": ["my_library", "my_projects", "subscription_dashboard"]
+    },
+    "status_semantics": {
+      "draft": "Incomplete and excluded from every public or subscriber catalog.",
+      "approved": "Content approved but not yet released for active storefront or subscription delivery.",
+      "active": "Approved, published, customer-ready, and eligible for the modes allowed by the remaining metadata.",
+      "retired": "No longer selectable or purchasable; existing owners retain access unless an entitlement is explicitly revoked."
+    }
+  },
+  "mode_contract": {
+    "public_catalog": {
+      "access": "public",
+      "authoritative_filter": [
+        "Shopify product is published to the Online Store channel.",
+        "Shopify product is available.",
+        "mmg.product_type equals digital_download.",
+        "mmg.asset_status equals active.",
+        "mmg.asset_id is present and unique.",
+        "mmg.portrait_cover is present."
+      ],
+      "customer_actions": ["view product", "purchase once", "discover membership"],
+      "subscription_indicator_rule": "Show Included with Membership only when the complete subscription-selection metadata predicate also passes before customer-specific ownership and window checks."
+    },
+    "subscription_selection": {
+      "access": "authenticated customer with an active MMG Knowledge Subscription contract",
+      "authoritative_filter": [
+        "Public Catalog predicate passes.",
+        "mmg.product_type equals digital_download.",
+        "mmg.subscription_eligible equals true.",
+        "mmg.square_thumbnail is present.",
+        "mmg.subscription_value is an integer greater than or equal to 1.",
+        "mmg.delivery_package is present and verified.",
+        "mmg.customer_destination equals my_library.",
+        "Customer does not already own the asset.",
+        "The current entitlement window is open.",
+        "The asset subscription value does not exceed the customer's remaining unreserved units.",
+        "The asset is not already selected in the current entitlement window."
+      ],
+      "customer_actions": ["choose title", "remove unconfirmed selection", "confirm package"],
+      "client_rule": "Liquid and browser JavaScript may display a provisional eligibility hint, but Kairos must revalidate authentication, subscription status, ownership, entitlement capacity, delivery readiness, and window state before accepting a selection."
+    },
+    "my_library": {
+      "access": "authenticated customer",
+      "authoritative_sources": [
+        "completed one-time purchase grant",
+        "confirmed subscription delivery grant",
+        "approved bonus grant",
+        "approved administrative grant"
+      ],
+      "customer_actions": ["open asset", "download asset", "read online where supported", "view delivery history"],
+      "retention_rule": "Retired assets remain visible to existing owners unless the entitlement has been explicitly revoked."
+    }
+  },
+  "eligibility_reason_codes": [
+    "ELIGIBLE",
+    "NOT_DIGITAL_DOWNLOAD",
+    "NOT_PUBLISHED",
+    "NOT_AVAILABLE",
+    "ASSET_NOT_ACTIVE",
+    "MISSING_ASSET_ID",
+    "NOT_SUBSCRIPTION_ELIGIBLE",
+    "MISSING_PORTRAIT_COVER",
+    "MISSING_SQUARE_THUMBNAIL",
+    "INVALID_SUBSCRIPTION_VALUE",
+    "MISSING_DELIVERY_PACKAGE",
+    "WRONG_CUSTOMER_DESTINATION",
+    "CUSTOMER_NOT_AUTHENTICATED",
+    "SUBSCRIPTION_NOT_ACTIVE",
+    "ALREADY_OWNED",
+    "WINDOW_NOT_OPEN",
+    "INSUFFICIENT_REMAINING_UNITS",
+    "ALREADY_SELECTED",
+    "ASSET_RETIRED"
+  ],
+  "ownership_contract": {
+    "grant_sources": ["one_time_purchase", "subscription_delivery", "bonus", "administrative"],
+    "grant_statuses": ["pending", "active", "revoked"],
+    "owned_definition": "A customer owns an asset when at least one non-revoked active grant exists for the canonical asset_id.",
+    "deduplication_rule": "Multiple qualifying grants may be preserved for audit history, but the customer-facing library displays one asset entry per asset_id.",
+    "selection_rule": "An owned asset is never offered as a new subscription selection and consumes no additional entitlement units."
+  },
+  "entitlement_window_contract": {
+    "window_types": ["first_package", "scheduled_package_review", "manual_recovery_window"],
+    "statuses": ["scheduled", "open", "confirmed", "closed", "expired", "canceled"],
+    "unit_accounting": {
+      "total_units": "Units assigned to the current package window.",
+      "selected_units": "Units attached to confirmed or currently selected assets.",
+      "reserved_units": "Units temporarily held during confirmation.",
+      "remaining_units_formula": "total_units - selected_units - reserved_units",
+      "overdraft_allowed": false,
+      "default_asset_subscription_value": 1
+    },
+    "first_package": {
+      "post_purchase_action": "Choose Your First Two Titles",
+      "total_units": 2,
+      "target_asset_count": 2,
+      "selection_owner": "customer",
+      "checkout_selection_allowed": false
+    },
+    "scheduled_package_review": {
+      "proposed_assets_per_package": 2,
+      "curation_owner": "Kairos",
+      "review_window_hours": {"minimum": 24, "maximum": 48},
+      "customer_actions_while_open": ["accept proposed package", "swap eligible title", "confirm package"],
+      "close_behavior": "Confirmed assets receive active subscription-delivery grants and enter My Library."
+    },
+    "transaction_rule": "Selection confirmation must revalidate every asset and remaining units before creating delivery grants."
+  },
+  "selection_item_contract": {
+    "required_response_fields": [
+      "asset_id",
+      "shopify_product_id",
+      "handle",
+      "title",
+      "url",
+      "topic",
+      "experience_level",
+      "format",
+      "series",
+      "series_order",
+      "subscription_value",
+      "portrait_cover_url",
+      "square_thumbnail_url",
+      "eligibility_state",
+      "eligibility_reason_codes",
+      "ownership_state",
+      "selection_state"
+    ],
+    "eligibility_states": ["eligible", "ineligible", "blocked"],
+    "ownership_states": ["not_owned", "owned", "ownership_unknown"],
+    "selection_states": ["available", "selected", "reserved", "confirmed", "unavailable"],
+    "sort_defaults": [
+      "Kairos relevance score descending",
+      "series order ascending when applicable",
+      "title ascending as deterministic fallback"
+    ]
+  },
+  "storefront_integration": {
+    "liquid_data_snippet": "shopify/snippets/mmg-knowledge-library-product-data.liquid",
+    "membership_badge_snippet": "shopify/snippets/mmg-subscription-eligibility-badge.liquid",
+    "card_integration_assembly": "shopify/knowledge-library/mmg-knowledge-library-card-integration.liquid",
+    "data_role": "Expose public product metadata and a provisional catalog eligibility hint for the future picker without exposing private ownership or entitlement decisions.",
+    "security_rules": [
+      "Do not serialize customer ownership grants into public page source.",
+      "Do not serialize subscription contract identifiers into public page source.",
+      "Do not accept a browser-calculated remaining-unit total as authoritative.",
+      "Do not grant an asset from Liquid or storefront JavaScript."
+    ]
+  },
+  "asset_registry": {
+    "path": "registry/knowledge-library/digital-asset-registry-v1.json",
+    "seed_asset": "mmg-dd-ai-image-mastery-001",
+    "release_rule": "A registry record may be publicly discoverable while remaining blocked from subscription selection until all required media, delivery, Shopify metafield, and runtime identifier gates pass."
+  },
+  "integration_sequence": {
+    "previous_component": "MMG Cart Subscription Controller",
+    "current_component": "MMG Knowledge Library eligibility metadata and selection-mode contract",
+    "next_component": "MMG Knowledge Library Picker",
+    "subsequent_components": [
+      "MMG Entitlement Counter",
+      "MMG Ownership Filter service",
+      "MMG Delivery Window Controller",
+      "Customer Portal subscription dashboard"
+    ]
+  },
+  "release_gates": [
+    "Shopify metafield definitions exist and are pinned for product editors where appropriate.",
+    "Every selectable product has a unique stable asset_id.",
+    "Every selectable product passes the complete metadata and delivery-package predicate.",
+    "Kairos resolves active subscription status and ownership server-side.",
+    "Entitlement-window unit accounting rejects over-selection and duplicate confirmation.",
+    "The Knowledge Library does not expose services or the subscription product as selectable digital assets.",
+    "The customer cannot select an already-owned asset.",
+    "First-package selection is exactly two units and occurs after checkout.",
+    "Future package review windows remain between 24 and 48 hours.",
+    "Public catalog, subscription selection, and My Library mode boundaries pass end-to-end authorization QA."
+  ]
+}

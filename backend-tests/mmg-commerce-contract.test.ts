@@ -18,6 +18,14 @@ type CommerceContract = {
   contract_id: string;
   version: string;
   status: string;
+  knowledge_library_contract: {
+    eligibility_and_selection_authority: string;
+    digital_asset_registry: string;
+    shopify_metafield_manifest: string;
+    canonical_asset_key: string;
+    server_authority: string;
+    seed_asset: string;
+  };
   product_types: {
     digital_download: {
       storefront: {
@@ -71,14 +79,22 @@ type CommerceContract = {
       };
     };
   };
+  knowledge_library_modes: {
+    subscription_selection: {
+      filters: string[];
+      authority: string;
+    };
+  };
   canonical_metadata: {
     namespace: string;
+    definition_manifest: string;
     fields: string[];
   };
   offer_and_entitlement_engine: {
     rules: string[];
   };
   site_placements: Record<string, string>;
+  reusable_components: string[];
 };
 
 const currentFile = fileURLToPath(import.meta.url);
@@ -94,7 +110,7 @@ const contract = JSON.parse(
 describe("MMG commerce contract", () => {
   it("is the approved v1 authority", () => {
     expect(contract.contract_id).toBe("mmg-commerce-contract-v1");
-    expect(contract.version).toBe("1.1.0");
+    expect(contract.version).toBe("1.2.0");
     expect(contract.status).toBe("approved");
   });
 
@@ -197,6 +213,9 @@ describe("MMG commerce contract", () => {
 
   it("requires the canonical MMG metadata contract", () => {
     expect(contract.canonical_metadata.namespace).toBe("mmg");
+    expect(contract.canonical_metadata.definition_manifest).toBe(
+      "shopify/metafields/mmg-knowledge-library-product-metafields.json",
+    );
 
     const requiredFields = [
       "product_type",
@@ -223,11 +242,39 @@ describe("MMG commerce contract", () => {
     );
   });
 
-  it("forbids silent recurring-product insertion", () => {
+  it("connects the commerce contract to the Knowledge Library authority", () => {
+    expect(contract.knowledge_library_contract).toEqual({
+      eligibility_and_selection_authority:
+        "registry/knowledge-library/mmg-knowledge-library-contract-v1.json",
+      digital_asset_registry:
+        "registry/knowledge-library/digital-asset-registry-v1.json",
+      shopify_metafield_manifest:
+        "shopify/metafields/mmg-knowledge-library-product-metafields.json",
+      canonical_asset_key: "mmg.asset_id",
+      server_authority: "Kairos",
+      seed_asset: "mmg-dd-ai-image-mastery-001",
+    });
+    expect(contract.knowledge_library_modes.subscription_selection.filters).toEqual(
+      expect.arrayContaining([
+        "not already owned",
+        "within current entitlement window",
+        "sufficient remaining entitlement units",
+      ]),
+    );
+    expect(contract.knowledge_library_modes.subscription_selection.authority).toContain(
+      "server-side",
+    );
+    expect(contract.reusable_components).toContain(
+      "MMG Knowledge Library Eligibility Metadata",
+    );
+  });
+
+  it("forbids silent recurring-product insertion and provisional client authority", () => {
     expect(contract.offer_and_entitlement_engine.rules).toEqual(
       expect.arrayContaining([
         "Never silently add a recurring product to the cart.",
         "Never preselect subscription consent.",
+        "Treat storefront eligibility as provisional until Kairos revalidates the customer, ownership, entitlement window, and delivery readiness.",
       ]),
     );
   });

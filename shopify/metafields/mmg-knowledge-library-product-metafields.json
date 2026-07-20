@@ -1,0 +1,152 @@
+{
+  "manifest_id": "mmg-knowledge-library-product-metafields",
+  "version": "1.0.0",
+  "status": "approved_for_staging",
+  "owner_type": "PRODUCT",
+  "namespace": "mmg",
+  "purpose": "Canonical Shopify product metafield definitions used by the MMG Knowledge Library, subscription picker, Customer Portal, and Kairos asset registry.",
+  "definitions": [
+    {
+      "name": "MMG Product Type",
+      "key": "product_type",
+      "type": "single_line_text_field",
+      "description": "Canonical MMG commerce type.",
+      "required_for": ["public_catalog", "subscription_selection"],
+      "allowed_values": ["digital_download", "service", "subscription"],
+      "pinned": true
+    },
+    {
+      "name": "Subscription Eligible",
+      "key": "subscription_eligible",
+      "type": "boolean",
+      "description": "Whether an active digital download may enter subscriber selection after all remaining gates pass.",
+      "required_for": ["subscription_selection"],
+      "default": false,
+      "pinned": true
+    },
+    {
+      "name": "Asset Status",
+      "key": "asset_status",
+      "type": "single_line_text_field",
+      "description": "Lifecycle state for the canonical digital asset.",
+      "required_for": ["public_catalog", "subscription_selection"],
+      "allowed_values": ["draft", "approved", "active", "retired"],
+      "pinned": true
+    },
+    {
+      "name": "Asset ID",
+      "key": "asset_id",
+      "type": "single_line_text_field",
+      "description": "Permanent Kairos asset identifier. Stable even when the Shopify handle changes.",
+      "required_for": ["public_catalog", "subscription_selection", "my_library"],
+      "unique_in_registry": true,
+      "pinned": true
+    },
+    {
+      "name": "Primary Topic",
+      "key": "topic",
+      "type": "single_line_text_field",
+      "description": "Primary subject classification used for discovery and recommendations.",
+      "required_for": ["public_catalog", "subscription_selection"],
+      "pinned": true
+    },
+    {
+      "name": "Experience Level",
+      "key": "experience_level",
+      "type": "single_line_text_field",
+      "description": "Primary customer experience level.",
+      "required_for": ["public_catalog", "subscription_selection"],
+      "allowed_values": ["beginner", "intermediate", "advanced", "all_levels"],
+      "pinned": true
+    },
+    {
+      "name": "Digital Format",
+      "key": "format",
+      "type": "single_line_text_field",
+      "description": "Commercial format of the digital asset.",
+      "required_for": ["public_catalog", "subscription_selection"],
+      "allowed_values": ["book", "guide", "template", "workbook", "toolkit", "prompt_pack", "resource_pack"],
+      "pinned": true
+    },
+    {
+      "name": "Series",
+      "key": "series",
+      "type": "single_line_text_field",
+      "description": "Optional canonical series name.",
+      "required_for": [],
+      "pinned": false
+    },
+    {
+      "name": "Series Order",
+      "key": "series_order",
+      "type": "number_integer",
+      "description": "Optional one-based order within a series.",
+      "required_for": [],
+      "minimum": 1,
+      "pinned": false
+    },
+    {
+      "name": "Related Asset IDs",
+      "key": "related_assets",
+      "type": "list.single_line_text_field",
+      "description": "Canonical related mmg.asset_id values for continuation and recommendations.",
+      "required_for": [],
+      "pinned": false
+    },
+    {
+      "name": "Square Thumbnail",
+      "key": "square_thumbnail",
+      "type": "file_reference",
+      "description": "Required 2048 by 2048 square image used by subscription selection, portals, and square modules.",
+      "required_for": ["subscription_selection"],
+      "file_role": "image",
+      "preferred_dimensions_px": [2048, 2048],
+      "pinned": true
+    },
+    {
+      "name": "Portrait Cover",
+      "key": "portrait_cover",
+      "type": "file_reference",
+      "description": "Required 2048 by 3072 portrait storefront cover.",
+      "required_for": ["public_catalog", "subscription_selection"],
+      "file_role": "image",
+      "preferred_dimensions_px": [2048, 3072],
+      "pinned": true
+    },
+    {
+      "name": "Subscription Value",
+      "key": "subscription_value",
+      "type": "number_integer",
+      "description": "Number of entitlement units consumed when the asset is selected.",
+      "required_for": ["subscription_selection"],
+      "minimum": 1,
+      "default": 1,
+      "pinned": true
+    },
+    {
+      "name": "Delivery Package Reference",
+      "key": "delivery_package",
+      "type": "single_line_text_field",
+      "description": "Opaque Kairos delivery-package reference. Must resolve to a verified customer-ready package before subscriber selection.",
+      "required_for": ["subscription_selection", "my_library"],
+      "pinned": true
+    },
+    {
+      "name": "Customer Destination",
+      "key": "customer_destination",
+      "type": "single_line_text_field",
+      "description": "Primary authenticated destination for the purchased or delivered item.",
+      "required_for": ["public_catalog", "subscription_selection"],
+      "allowed_values": ["my_library", "my_projects", "subscription_dashboard"],
+      "pinned": true
+    }
+  ],
+  "provisioning_rules": [
+    "Create or reconcile definitions by namespace, key, owner type, and compatible type.",
+    "Do not change the type of a populated production metafield without an explicit migration.",
+    "Do not set subscription_eligible true for services or the subscription product.",
+    "Do not set asset_status active until the customer package and required media are ready.",
+    "Do not reuse an asset_id across different commercial assets.",
+    "A product is not subscriber-selectable until every required subscription-selection field is present and Kairos revalidation passes."
+  ]
+}
