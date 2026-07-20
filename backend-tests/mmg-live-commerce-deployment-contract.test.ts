@@ -30,22 +30,40 @@ describe("MMG live commerce deployment contract", () => {
     ]);
   });
 
-  it("keeps publication separate and approval-gated", () => {
+  it("keeps verification and publication separately approval-gated", () => {
     expect(contract.shopify_contract.provisioning_status).toBe("DRAFT");
     expect(contract.shopify_contract.publication_is_separate_action).toBe(true);
+    expect(contract.approval_contract.production_actions_requiring_approval).toEqual([
+      "execute",
+      "verify",
+      "publish",
+      "rollback",
+    ]);
     expect(contract.approval_contract.publication_always_requires_approval).toBe(
       true,
     );
     expect(contract.e2e_contract.publication_requires_all_checks_passed).toBe(
       true,
     );
+    expect(contract.e2e_contract.publication_evidence_release_id_must_match).toBe(
+      true,
+    );
+    expect(contract.e2e_contract.publication_evidence_maximum_age_hours).toBe(24);
   });
 
   it("preserves locked product economics", () => {
     expect(contract.locked_product_economics).toEqual(
       expect.objectContaining({
-        monthly: expect.objectContaining({ price: "14.95", packages: 1, assets: 2 }),
-        biweekly: expect.objectContaining({ price: "24.95", packages: 2, assets: 4 }),
+        monthly: expect.objectContaining({
+          price: "14.95",
+          packages: 1,
+          assets: 2,
+        }),
+        biweekly: expect.objectContaining({
+          price: "24.95",
+          packages: 2,
+          assets: 4,
+        }),
         weekly: expect.objectContaining({
           price: "39.95",
           packages: 4,
