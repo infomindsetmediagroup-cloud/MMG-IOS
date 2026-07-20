@@ -18,6 +18,11 @@ export interface MMGLearningProfileInput {
   onboardingVersion: string;
 }
 
+export type MMGLearningProfilePublicView = Omit<
+  MMGCustomerLearningProfile,
+  "customerId"
+>;
+
 export interface MMGLearningProfileRepository {
   load(customerId: string): Promise<MMGCustomerLearningProfile | null>;
   save(input: {
@@ -42,9 +47,13 @@ const identifier = (value: unknown, maximum = 100): string | null => {
 
 const list = (value: unknown, maximumItems: number): string[] => {
   if (!Array.isArray(value)) throw new Error("MMG_LEARNING_PROFILE_LIST_INVALID");
-  const values = value.map((item) => identifier(item)).filter((item): item is string => Boolean(item));
+  const values = value
+    .map((item) => identifier(item))
+    .filter((item): item is string => Boolean(item));
   const unique = [...new Set(values)];
-  if (unique.length > maximumItems) throw new Error("MMG_LEARNING_PROFILE_LIST_TOO_LARGE");
+  if (unique.length > maximumItems) {
+    throw new Error("MMG_LEARNING_PROFILE_LIST_TOO_LARGE");
+  }
   return unique;
 };
 
@@ -52,7 +61,11 @@ export const validateMMGLearningProfileInput = (
   input: Record<string, unknown>,
 ): MMGLearningProfileInput => {
   const experienceLevel = identifier(input.experienceLevel) ?? "beginner";
-  if (!["beginner", "intermediate", "advanced", "all_levels"].includes(experienceLevel)) {
+  if (
+    !["beginner", "intermediate", "advanced", "all_levels"].includes(
+      experienceLevel,
+    )
+  ) {
     throw new Error("MMG_LEARNING_PROFILE_EXPERIENCE_INVALID");
   }
   const onboardingVersion = String(input.onboardingVersion ?? "1.0.0").trim();
@@ -64,7 +77,8 @@ export const validateMMGLearningProfileInput = (
     roleCode: identifier(input.roleCode),
     primaryGoal: identifier(input.primaryGoal, 150),
     secondaryGoals: list(input.secondaryGoals ?? [], 8),
-    experienceLevel: experienceLevel as MMGLearningProfileInput["experienceLevel"],
+    experienceLevel:
+      experienceLevel as MMGLearningProfileInput["experienceLevel"],
     primaryTopics: list(input.primaryTopics ?? [], 12),
     secondaryTopics: list(input.secondaryTopics ?? [], 20),
     preferredFormats: list(input.preferredFormats ?? [], 12),
@@ -95,7 +109,8 @@ const map = (row: ProfileRow): MMGCustomerLearningProfile => ({
   roleCode: row.role_code,
   primaryGoal: row.primary_goal,
   secondaryGoals: strings(row.secondary_goals),
-  experienceLevel: row.experience_level as MMGCustomerLearningProfile["experienceLevel"],
+  experienceLevel:
+    row.experience_level as MMGCustomerLearningProfile["experienceLevel"],
   primaryTopics: strings(row.primary_topics),
   secondaryTopics: strings(row.secondary_topics),
   preferredFormats: strings(row.preferred_formats),
@@ -103,6 +118,14 @@ const map = (row: ProfileRow): MMGCustomerLearningProfile => ({
   profileVersion: row.onboarding_version,
   status: row.profile_status as MMGCustomerLearningProfile["status"],
 });
+
+const publicView = (
+  profile: MMGCustomerLearningProfile | null,
+): MMGLearningProfilePublicView | null => {
+  if (!profile) return null;
+  const { customerId: _customerId, ...safe } = profile;
+  return safe;
+};
 
 export class MMGPostgresLearningProfileRepository
   implements MMGLearningProfileRepository
@@ -135,8 +158,8 @@ export class MMGPostgresLearningProfileRepository
   }): Promise<MMGCustomerLearningProfile> {
     const completed = Boolean(
       input.profile.roleCode &&
-      input.profile.primaryGoal &&
-      input.profile.primaryTopics.length > 0,
+        input.profile.primaryGoal &&
+        input.profile.primaryTopics.length > 0,
     );
     const result = await this.#database.query<ProfileRow>(
       `
@@ -194,7 +217,7 @@ export const getMMGLearningProfile = async (input: {
   status: 200,
   body: {
     ok: true,
-    profile: await input.repository.load(input.principal.customerId),
+    profile: publicView(await input.repository.load(input.principal.customerId)),
   },
 });
 
@@ -203,14 +226,17 @@ export const saveMMGLearningProfile = async (input: {
   principal: MMGLearningProfilePrincipal;
   payload: Record<string, unknown>;
   occurredAt: Date;
-}) => ({
-  status: 200,
-  body: {
-    ok: true,
-    profile: await input.repository.save({
-      principal: input.principal,
-      profile: validateMMGLearningProfileInput(input.payload),
-      occurredAt: input.occurredAt,
-    }),
-  },
-});
+}) => {
+  const saved = await input.repository.save({
+    principal: input.principal,
+    profile: validateMMGLearningProfileInput(input.payload),
+    occurredAt: input.occurredAt,
+  });
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      profile: publicView(saved),
+    },
+  };
+};
