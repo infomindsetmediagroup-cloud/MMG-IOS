@@ -131,8 +131,9 @@ describe("MMG Thank-you first-title handoff contract", () => {
 
   it("keeps the extension customer-safe and checkout-compatible", () => {
     expect(extensionSource).toContain("shopify.sessionToken.get()");
-    expect(extensionSource).toContain("shopify.orderConfirmation.value?.id");
+    expect(extensionSource).toContain("shopify.orderConfirmation.value?.order.id");
     expect(extensionSource).toContain("shopify.checkoutToken.value");
+    expect(extensionSource).not.toContain("shopify.orderConfirmation.value?.id");
     expect(extensionSource).not.toContain("innerHTML");
     expect(extensionSource).not.toContain("document.querySelector");
     expect(extensionSource).not.toContain("window.location");
