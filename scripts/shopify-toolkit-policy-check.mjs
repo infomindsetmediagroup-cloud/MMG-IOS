@@ -9,6 +9,7 @@ const requiredFiles = [
   "docs/runbooks/shopify-ai-toolkit.md",
   "scripts/install-shopify-ai-toolkit.mjs",
   "scripts/shopify-toolkit-preflight.mjs",
+  "scripts/shopify-toolkit-self-test.mjs",
   "scripts/shopify-store-operation.mjs",
   "shopify/graphql/read/store-identity.graphql",
 ];
@@ -18,9 +19,9 @@ for (const relativePath of requiredFiles) {
   if (!existsSync(resolve(root, relativePath))) failures.push(`Missing required file: ${relativePath}`);
 }
 
-const packageJson = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
-if (packageJson.engines?.node !== ">=22.12.0") {
-  failures.push("package.json must require Node >=22.12.0 for current Shopify CLI compatibility.");
+const preflight = readFileSync(resolve(root, "scripts/shopify-toolkit-preflight.mjs"), "utf8");
+if (!preflight.includes("const MINIMUM_NODE = [22, 12, 0]")) {
+  failures.push("Shopify Toolkit preflight must enforce Node 22.12.0 or newer.");
 }
 
 const envExample = readFileSync(resolve(root, ".env.example"), "utf8");
