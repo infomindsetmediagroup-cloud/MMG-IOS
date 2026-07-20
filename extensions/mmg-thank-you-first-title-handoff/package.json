@@ -1,0 +1,10 @@
+{
+  "name": "mmg-thank-you-first-title-handoff",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "@shopify/ui-extensions": "^2026.7.0",
+    "preact": "^10.27.0"
+  }
+}
