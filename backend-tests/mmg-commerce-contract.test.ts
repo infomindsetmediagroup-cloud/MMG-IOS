@@ -26,6 +26,18 @@ type CommerceContract = {
     server_authority: string;
     seed_asset: string;
   };
+  knowledge_library_picker_contract: {
+    authority: string;
+    state_machine: string;
+    service_boundary: string;
+    logical_endpoint: string;
+    storefront_component: string;
+    first_package_target_titles: number;
+    first_package_total_units: number;
+    optimistic_concurrency_field: string;
+    idempotency_field: string;
+    server_authority: string;
+  };
   product_types: {
     digital_download: {
       storefront: {
@@ -83,6 +95,7 @@ type CommerceContract = {
     subscription_selection: {
       filters: string[];
       authority: string;
+      mutation_rules: string[];
     };
   };
   canonical_metadata: {
@@ -110,7 +123,7 @@ const contract = JSON.parse(
 describe("MMG commerce contract", () => {
   it("is the approved v1 authority", () => {
     expect(contract.contract_id).toBe("mmg-commerce-contract-v1");
-    expect(contract.version).toBe("1.2.0");
+    expect(contract.version).toBe("1.3.0");
     expect(contract.status).toBe("approved");
   });
 
@@ -269,12 +282,43 @@ describe("MMG commerce contract", () => {
     );
   });
 
+  it("connects the commerce contract to the implemented Knowledge Library picker", () => {
+    expect(contract.knowledge_library_picker_contract).toEqual({
+      authority:
+        "registry/knowledge-library/mmg-knowledge-library-picker-contract-v1.json",
+      state_machine: "server/knowledge-library/picker.ts",
+      service_boundary: "server/knowledge-library/picker-service.ts",
+      logical_endpoint: "/api/knowledge-library/picker",
+      storefront_component:
+        "shopify/snippets/mmg-knowledge-library-picker.liquid",
+      first_package_target_titles: 2,
+      first_package_total_units: 2,
+      optimistic_concurrency_field: "expectedWindowVersion",
+      idempotency_field: "requestId",
+      server_authority: "Kairos",
+    });
+    expect(
+      contract.knowledge_library_modes.subscription_selection.mutation_rules,
+    ).toEqual(
+      expect.arrayContaining([
+        "Customer, subscription, and window identity are derived from the authenticated server session.",
+        "Every mutation requires a request ID and expected window version.",
+        "Confirmation requires the exact target asset count and complete unit consumption.",
+      ]),
+    );
+    expect(contract.reusable_components).toContain(
+      "MMG Knowledge Library Picker",
+    );
+  });
+
   it("forbids silent recurring-product insertion and provisional client authority", () => {
     expect(contract.offer_and_entitlement_engine.rules).toEqual(
       expect.arrayContaining([
         "Never silently add a recurring product to the cart.",
         "Never preselect subscription consent.",
         "Treat storefront eligibility as provisional until Kairos revalidates the customer, ownership, entitlement window, and delivery readiness.",
+        "Use optimistic concurrency and idempotency for every title-selection mutation.",
+        "Create confirmation and delivery grants transactionally.",
       ]),
     );
   });
