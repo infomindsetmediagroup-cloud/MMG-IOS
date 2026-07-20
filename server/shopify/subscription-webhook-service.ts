@@ -8,6 +8,7 @@ import {
   type MMGShopifyBillingAttemptWebhookPayload,
   type MMGShopifyContractWebhookPayload,
   type MMGShopifySubscriptionContractSnapshot,
+  type MMGShopifySubscriptionReconciliationCommand,
   type MMGShopifySubscriptionRuntimeMapping,
   type MMGShopifyWebhookMetadata,
 } from "./subscription-webhook-reconciliation.js";
@@ -40,14 +41,16 @@ export class MMGShopifySubscriptionReconciliationError extends Error {
   }
 }
 
-const stringValue = (value: unknown): string =>
-  typeof value === "string" ? value.trim() : "";
+const scalarString = (value: unknown): string => {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) {
+    return String(value);
+  }
+  return "";
+};
 
 const numericOrderGid = (value: unknown): string | null => {
-  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) {
-    return `gid://shopify/Order/${value}`;
-  }
-  const string = stringValue(value);
+  const string = scalarString(value);
   return /^\d+$/.test(string) ? `gid://shopify/Order/${string}` : null;
 };
 
@@ -55,7 +58,7 @@ const billingOrderId = (
   payload: MMGShopifyBillingAttemptWebhookPayload | MMGShopifyContractWebhookPayload,
 ): string | null => {
   const attempt = payload as MMGShopifyBillingAttemptWebhookPayload;
-  const direct = stringValue(attempt.admin_graphql_api_order_id);
+  const direct = scalarString(attempt.admin_graphql_api_order_id);
   return direct || numericOrderGid(attempt.order_id);
 };
 
@@ -66,9 +69,9 @@ const assertPayloadSnapshotConsistency = (input: {
 }): void => {
   if (!input.topic.startsWith("subscription_contracts/")) return;
   const payload = input.payload as MMGShopifyContractWebhookPayload;
-  const customerId = stringValue(payload.admin_graphql_api_customer_id);
-  const originOrderId = stringValue(payload.admin_graphql_api_origin_order_id);
-  const revisionId = stringValue(payload.revision_id);
+  const customerId = scalarString(payload.admin_graphql_api_customer_id);
+  const originOrderId = scalarString(payload.admin_graphql_api_origin_order_id);
+  const revisionId = scalarString(payload.revision_id);
 
   if (customerId && customerId !== input.snapshot.customerId) {
     throw new MMGShopifySubscriptionReconciliationError(
@@ -88,6 +91,26 @@ const assertPayloadSnapshotConsistency = (input: {
       true,
     );
   }
+};
+
+const withBillingCapacityGate = (
+  command: MMGShopifySubscriptionReconciliationCommand,
+): MMGShopifySubscriptionReconciliationCommand => {
+  if (
+    !command.billingAttempt ||
+    (command.billingAttempt.state === "succeeded" && command.billingAttempt.ready)
+  ) {
+    return command;
+  }
+
+  return {
+    ...command,
+    contract: {
+      ...command.contract,
+      currentPeriodStart: null,
+      currentPeriodEnd: null,
+    },
+  };
 };
 
 export const reconcileMMGShopifySubscriptionWebhook = async (input: {
@@ -132,12 +155,14 @@ export const reconcileMMGShopifySubscriptionWebhook = async (input: {
   });
 
   try {
-    const command = buildMMGShopifySubscriptionReconciliationCommand({
-      metadata: input.metadata,
-      payload: input.payload,
-      contract: snapshot,
-      mapping: input.dependencies.runtimeMapping,
-    });
+    const command = withBillingCapacityGate(
+      buildMMGShopifySubscriptionReconciliationCommand({
+        metadata: input.metadata,
+        payload: input.payload,
+        contract: snapshot,
+        mapping: input.dependencies.runtimeMapping,
+      }),
+    );
     return await input.dependencies.repository.reconcileSubscription(command);
   } catch (error) {
     if (error instanceof MMGShopifySubscriptionReconciliationError) throw error;
