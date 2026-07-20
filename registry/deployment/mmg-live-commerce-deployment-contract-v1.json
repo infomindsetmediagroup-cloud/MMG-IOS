@@ -131,6 +131,12 @@
   ],
   "approval_contract": {
     "production_mutations_require_approval": true,
+    "production_actions_requiring_approval": [
+      "execute",
+      "verify",
+      "publish",
+      "rollback"
+    ],
     "approval_bound_to": [
       "release_id",
       "environment",
@@ -168,6 +174,9 @@
       "cancellation_pause_and_failure_safe"
     ],
     "publication_requires_all_checks_passed": true,
+    "publication_evidence_environment_must_match": true,
+    "publication_evidence_release_id_must_match": true,
+    "publication_evidence_maximum_age_hours": 24,
     "raw_test_order_id_persisted": false,
     "raw_test_customer_reference_persisted": false
   },
@@ -182,7 +191,9 @@
     "Never commit Shopify app secrets, Admin API tokens, database credentials, CSRF secrets, storage signing keys, or dispatcher secrets.",
     "Authenticate the deployment endpoint with a server-to-server credential and require the deployment role.",
     "Require an additional production release-manager role for production actions.",
+    "Require production verification approval because controlled end-to-end verification may create a live test order and mutate entitlement state.",
     "Do not accept live publication as part of general provisioning; publication is a separate approved action.",
+    "Require fresh release-bound and environment-bound end-to-end evidence before publication.",
     "Persist runtime GIDs and hashed test references, but never persist raw access tokens, checkout tokens, test customer references, or raw test order identifiers.",
     "Use idempotent request IDs and optimistic release versions for every action.",
     "Preserve immutable audit events for every phase transition and failure."
@@ -196,7 +207,7 @@
     "Customer Portal modules are inserted additively without replacing existing workflows.",
     "The app-specific subscription webhooks are released on API version 2026-07.",
     "The delivery scheduler, idempotent dispatcher, acknowledgement path, monitoring, and storage signer are active.",
-    "The full controlled end-to-end verification suite passes.",
+    "The full controlled end-to-end verification suite passes for the same release and environment within 24 hours of publication.",
     "Publication receives a distinct executive approval bound to the exact release commit."
   ],
   "integration_sequence": {
