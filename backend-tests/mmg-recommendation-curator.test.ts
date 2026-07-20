@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { MMGKairosRecommendationCurator } from "../server/knowledge-library/recommendation-curator.js";
+import type { MMGRecommendationCandidateRepository } from "../server/knowledge-library/recommendation-candidate-repository.js";
+import type { MMGRecommendationRepository } from "../server/knowledge-library/recommendation-repository.js";
+import type { MMGDeliveryWindowCandidate } from "../server/knowledge-library/delivery-window-service.js";
 import type { MMGDeliveryWindowRuntimeState } from "../server/knowledge-library/delivery-windows.js";
 
 const window: MMGDeliveryWindowRuntimeState = {
@@ -20,7 +23,7 @@ const window: MMGDeliveryWindowRuntimeState = {
   deliveryDispatchId: null,
 };
 
-const candidates = [
+const candidates: MMGDeliveryWindowCandidate[] = [
   {
     assetId: "asset-ai",
     title: "AI Images",
@@ -44,7 +47,7 @@ const candidates = [
 ];
 
 const build = () => {
-  const repository = {
+  const repository: MMGRecommendationRepository = {
     loadLearningProfile: vi.fn().mockResolvedValue({
       customerId: "customer-1",
       roleCode: "creator",
@@ -66,18 +69,19 @@ const build = () => {
     }),
     recordRecommendationRun: vi.fn().mockResolvedValue("recorded"),
   };
-  const candidateRepository = {
-    enrichCandidates: vi.fn().mockImplementation(async (values) =>
-      values.map((value) => ({
-        ...value,
-        roleTags: ["creator"],
-        goalTags: ["publish_book"],
-        secondaryTopics: [],
-        prerequisiteAssetIds: [],
-        complementaryAssetIds: [],
-        diversityGroup: value.topic,
-        recommendationPriority: 0,
-      })),
+  const candidateRepository: MMGRecommendationCandidateRepository = {
+    enrichCandidates: vi.fn().mockImplementation(
+      async (values: MMGDeliveryWindowCandidate[]) =>
+        values.map((value) => ({
+          ...value,
+          roleTags: ["creator"],
+          goalTags: ["publish_book"],
+          secondaryTopics: [],
+          prerequisiteAssetIds: [],
+          complementaryAssetIds: [],
+          diversityGroup: value.topic,
+          recommendationPriority: 0,
+        })),
     ),
   };
   return {
@@ -115,9 +119,7 @@ describe("MMG Kairos recommendation curator", () => {
     const { curator, repository } = build();
     const proposal = await curator.curate({
       window,
-      candidates: [
-        { ...candidates[0], subscriptionValue: 2 },
-      ],
+      candidates: [{ ...candidates[0], subscriptionValue: 2 }],
     });
 
     expect(proposal).toBeNull();
