@@ -29,6 +29,9 @@ type PersistenceContract = {
     grant_statuses: string[];
     active_uniqueness: string;
   };
+  entitlement_counter_contract: {
+    current_window_priority: string[];
+  };
   confirmation_transaction_contract: {
     required_checks: string[];
     atomic_writes: string[];
@@ -39,6 +42,7 @@ type PersistenceContract = {
     method: string;
     authentication: string;
     cache_control: string;
+    response_schema_version: string;
     customer_identity_from_browser_allowed: boolean;
   };
   storefront_component: {
@@ -52,7 +56,9 @@ type PersistenceContract = {
   integration_sequence: {
     previous_component: string;
     current_component: string;
+    completed_dependency: string;
     next_component: string;
+    subsequent_components: string[];
   };
   release_gates: string[];
 };
@@ -85,7 +91,7 @@ describe("MMG entitlement and ownership persistence contract", () => {
     expect(contract.contract_id).toBe(
       "mmg-entitlement-ownership-persistence-v1",
     );
-    expect(contract.version).toBe("1.0.0");
+    expect(contract.version).toBe("1.1.0");
     expect(contract.status).toBe("approved_for_staging");
     expect(contract.implementation.database_migration).toBe(
       "database/migrations/20260720_001_mmg_knowledge_entitlements.sql",
@@ -167,9 +173,9 @@ describe("MMG entitlement and ownership persistence contract", () => {
   });
 
   it("locks transactional confirmation and rollback behavior", () => {
-    expect(contract.confirmation_transaction_contract.required_checks.join(" ")).toContain(
-      "already actively owned",
-    );
+    expect(
+      contract.confirmation_transaction_contract.required_checks.join(" "),
+    ).toContain("already actively owned");
     expect(contract.confirmation_transaction_contract.atomic_writes).toEqual(
       expect.arrayContaining([
         "Create one delivery grant per selected asset.",
@@ -185,7 +191,9 @@ describe("MMG entitlement and ownership persistence contract", () => {
     expect(repository).toContain("FOR UPDATE");
     expect(repository).toContain("FOR SHARE");
     expect(repository).toContain("expectedPreviousVersion");
-    expect(repository).toContain("MMG_PERSISTENCE_CONFIRMATION_ASSET_ALREADY_OWNED");
+    expect(repository).toContain(
+      "MMG_PERSISTENCE_CONFIRMATION_ASSET_ALREADY_OWNED",
+    );
     expect(repository).toContain("INSERT INTO mmg_delivery_grants");
     expect(repository).toContain("INSERT INTO mmg_ownership_grants");
     expect(repository).toContain("UPDATE mmg_entitlement_cycles");
@@ -194,7 +202,9 @@ describe("MMG entitlement and ownership persistence contract", () => {
 
   it("persists picker idempotency keys and limits retained request IDs", () => {
     expect(repository).toContain("INSERT INTO mmg_picker_requests");
-    expect(repository).toContain("ON CONFLICT (window_id, request_id) DO NOTHING");
+    expect(repository).toContain(
+      "ON CONFLICT (window_id, request_id) DO NOTHING",
+    );
     expect(repository).toContain("LIMIT 100");
   });
 
@@ -207,6 +217,20 @@ describe("MMG entitlement and ownership persistence contract", () => {
       response_schema_version: "1.0.0",
       customer_identity_from_browser_allowed: false,
     });
+  });
+
+  it("includes delivery and recovery states in counter priority", () => {
+    expect(contract.entitlement_counter_contract.current_window_priority).toEqual([
+      "open",
+      "recovery_required",
+      "scheduled",
+      "confirmed",
+      "delivery_ready",
+      "delivered",
+      "closed",
+      "expired",
+      "canceled",
+    ]);
   });
 
   it("builds the reusable storefront counter without page-shell damage", () => {
@@ -232,15 +256,18 @@ describe("MMG entitlement and ownership persistence contract", () => {
     }
   });
 
-  it("advances the sequence to the Delivery Window Controller", () => {
+  it("records the completed controller and advances to the Customer Portal dashboard", () => {
     expect(contract.integration_sequence.previous_component).toBe(
       "MMG Knowledge Library Picker",
     );
     expect(contract.integration_sequence.current_component).toBe(
       "MMG Entitlement Counter and Ownership-Resolution Persistence",
     );
-    expect(contract.integration_sequence.next_component).toBe(
+    expect(contract.integration_sequence.completed_dependency).toBe(
       "MMG Delivery Window Controller",
+    );
+    expect(contract.integration_sequence.next_component).toBe(
+      "Customer Portal subscription dashboard",
     );
     expect(contract.release_gates).toContain(
       "Concurrent selection and confirmation tests pass against a real PostgreSQL transaction environment.",

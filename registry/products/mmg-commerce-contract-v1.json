@@ -1,10 +1,10 @@
 {
   "contract_id": "mmg-commerce-contract-v1",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "status": "approved",
   "approved_date": "2026-07-20",
   "authority": "MMG executive approval",
-  "purpose": "Canonical machine-readable contract connecting digital downloads, services, subscriptions, the Knowledge Library, Shopify cart behavior, customer entitlements, and Kairos fulfillment.",
+  "purpose": "Canonical machine-readable contract connecting digital downloads, services, subscriptions, the Knowledge Library, Shopify cart behavior, customer entitlements, delivery windows, and Kairos fulfillment.",
   "system_boundaries": {
     "shopify": [
       "product catalog",
@@ -21,6 +21,7 @@
       "title selection",
       "ownership filtering",
       "review windows",
+      "delivery-window scheduling",
       "delivery packaging",
       "customer progress",
       "portal orchestration"
@@ -56,6 +57,23 @@
     "logical_entitlement_endpoint": "/api/knowledge-library/entitlement",
     "storefront_counter": "shopify/snippets/mmg-entitlement-counter.liquid",
     "confirmation_transaction": "window confirmation, delivery grants, ownership grants, cycle counters, and audit events commit or roll back together",
+    "server_authority": "Kairos"
+  },
+  "delivery_window_controller_contract": {
+    "authority": "registry/knowledge-library/mmg-delivery-window-controller-contract-v1.json",
+    "domain_controller": "server/knowledge-library/delivery-windows.ts",
+    "orchestration_service": "server/knowledge-library/delivery-window-service.ts",
+    "postgres_repository": "server/knowledge-library/postgres-delivery-window-repository.ts",
+    "internal_endpoint": "/api/internal/knowledge-library/delivery-windows/run",
+    "database_schema": "database/migrations/20260720_002_mmg_delivery_window_controller.sql",
+    "review_window_hours": {
+      "minimum": 24,
+      "maximum": 48,
+      "default": 48
+    },
+    "weekly_package_offsets_days": [0, 7, 14, 21],
+    "first_package_expiry": "recovery_required",
+    "future_package_expiry": "auto-confirm an exact valid two-title package; otherwise recovery_required",
     "server_authority": "Kairos"
   },
   "product_types": {
@@ -164,16 +182,19 @@
         "checkout_selection": "Customer selects the subscription plan only; title selection does not occur inside checkout.",
         "post_purchase_action": "Choose Your First Two Titles",
         "selection_surface": "Knowledge Library subscription-selection mode",
-        "initial_selection_count": 2
+        "initial_selection_count": 2,
+        "expiry_policy": "Never auto-confirm; move to recovery_required."
       },
       "future_delivery_flow": {
         "curation_owner": "Kairos",
         "assets_per_package": 2,
         "review_window_hours": {
           "minimum": 24,
-          "maximum": 48
+          "maximum": 48,
+          "default": 48
         },
-        "customer_action": "Review and swap eligible titles before delivery closes."
+        "customer_action": "Review and swap eligible titles before delivery closes.",
+        "expiry_policy": "Auto-confirm the exact current two-title package only after server revalidation; otherwise move to recovery_required."
       },
       "customer_destination": "Subscription Dashboard and My Library"
     }
@@ -220,7 +241,9 @@
         "Every mutation requires a request ID and expected window version.",
         "Confirmation requires the exact target asset count and complete unit consumption.",
         "Confirmed selections are locked and become delivery-grant inputs.",
-        "Confirmation, delivery grants, ownership grants, cycle accounting, and audit events are one atomic database transaction."
+        "Confirmation, delivery grants, ownership grants, cycle accounting, and audit events are one atomic database transaction.",
+        "The delivery-window controller never auto-confirms the first customer-selected package.",
+        "A future curated package may auto-confirm at expiry only when the exact current package passes full server revalidation."
       ]
     },
     "my_library": {
@@ -269,6 +292,7 @@
       "customer ownership",
       "subscription entitlements",
       "delivery limits",
+      "delivery-window scheduling",
       "discount eligibility",
       "continuation pathways"
     ],
@@ -283,7 +307,10 @@
       "Use optimistic concurrency and idempotency for every title-selection mutation.",
       "Create confirmation and delivery grants transactionally.",
       "Resolve ownership from durable active grants rather than browser state.",
-      "Never allow entitlement units or package counts to exceed the locked plan contract."
+      "Never allow entitlement units or package counts to exceed the locked plan contract.",
+      "Create exactly one, two, or four package windows per monthly billing cycle for the Monthly, Bi-weekly, and Weekly plans.",
+      "Never create a fifth Weekly package in a five-week calendar month.",
+      "Require an idempotent delivery dispatcher keyed by window ID."
     ]
   },
   "site_placements": {

@@ -1,6 +1,6 @@
 {
   "contract_id": "mmg-entitlement-ownership-persistence-v1",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "status": "approved_for_staging",
   "approved_date": "2026-07-20",
   "authority": "MMG executive approval",
@@ -9,6 +9,7 @@
     "commerce_contract": "registry/products/mmg-commerce-contract-v1.json",
     "knowledge_library_contract": "registry/knowledge-library/mmg-knowledge-library-contract-v1.json",
     "picker_contract": "registry/knowledge-library/mmg-knowledge-library-picker-contract-v1.json",
+    "delivery_window_contract": "registry/knowledge-library/mmg-delivery-window-controller-contract-v1.json",
     "picker_state_machine": "server/knowledge-library/picker.ts",
     "picker_service": "server/knowledge-library/picker-service.ts"
   },
@@ -94,8 +95,11 @@
     "package_counter": "remaining packages = total packages - confirmed packages",
     "current_window_priority": [
       "open",
+      "recovery_required",
       "scheduled",
       "confirmed",
+      "delivery_ready",
+      "delivered",
       "closed",
       "expired",
       "canceled"
@@ -174,9 +178,9 @@
   "integration_sequence": {
     "previous_component": "MMG Knowledge Library Picker",
     "current_component": "MMG Entitlement Counter and Ownership-Resolution Persistence",
-    "next_component": "MMG Delivery Window Controller",
+    "completed_dependency": "MMG Delivery Window Controller",
+    "next_component": "Customer Portal subscription dashboard",
     "subsequent_components": [
-      "Customer Portal subscription dashboard",
       "Thank-you page first-title handoff",
       "My Library delivery interface",
       "Shopify subscription webhook reconciliation",
@@ -188,7 +192,7 @@
     "A production SQL pool is connected to MMGPostgresDatabase through server-only environment configuration.",
     "The deployed authenticated API adapter maps the session to the canonical customer ID.",
     "Shopify subscription contracts are reconciled into mmg_subscription_entitlements.",
-    "Billing cycles and package windows are created from the locked plan contract.",
+    "Billing cycles and package windows are created from the locked plan contract through the Delivery Window Controller.",
     "The asset projection is synchronized from verified Shopify and Kairos metadata.",
     "At least two subscription-selectable assets have verified delivery packages.",
     "Concurrent selection and confirmation tests pass against a real PostgreSQL transaction environment.",

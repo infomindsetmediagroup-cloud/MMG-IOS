@@ -5,6 +5,7 @@
 **Knowledge Library authority:** `registry/knowledge-library/mmg-knowledge-library-contract-v1.json`  
 **Knowledge Library picker authority:** `registry/knowledge-library/mmg-knowledge-library-picker-contract-v1.json`  
 **Entitlement and ownership authority:** `registry/knowledge-library/mmg-entitlement-ownership-persistence-contract-v1.json`  
+**Delivery window authority:** `registry/knowledge-library/mmg-delivery-window-controller-contract-v1.json`  
 **Digital asset registry:** `registry/knowledge-library/digital-asset-registry-v1.json`  
 **Live URL authority:** `registry/site-pages/site-url-registry-current.json`
 
@@ -125,6 +126,20 @@ The picker uses:
 - Any failed version, capacity, ownership, delivery-package, or eligibility check rolls back the entire confirmation.
 - The reusable entitlement counter shows plan, billing cycle, package completion, asset capacity, current-window progress, and owned-asset count.
 
+## Delivery Window Rules
+
+- Controller persistence is extended by `database/migrations/20260720_002_mmg_delivery_window_controller.sql`.
+- Monthly package openings: day 0.
+- Bi-weekly package openings: days 0 and 14.
+- Weekly package openings: days 0, 7, 14, and 21.
+- Weekly remains four packages and eight assets even in a five-week calendar month.
+- Review windows are 24–48 hours, with 48 hours as the default.
+- The first package is customer-selected and is never auto-confirmed.
+- An expired first package moves to `recovery_required`.
+- Future packages are proposed by Kairos and may auto-confirm at expiry only when the exact two-title package passes server revalidation.
+- Incomplete, invalid, or uncuratable packages move to recovery without consuming entitlement incorrectly.
+- Confirmed packages progress through `delivery_ready` to `delivered` using an idempotent dispatcher keyed by window ID.
+
 ## Commerce Component Build State
 
 | Component | Repository status | Live storefront status | Next dependency |
@@ -134,8 +149,9 @@ The picker uses:
 | MMG Three-Plan Selector | Merged | Not installed | Subscription product provisioning. |
 | MMG Cart Subscription Controller | Merged | Not installed | Active theme cart integration and product provisioning. |
 | Knowledge Library eligibility metadata | Merged | Not installed | Shopify metafields and delivery packages. |
-| MMG Knowledge Library Picker | Merged | Not installed | Durable API adapter and persistence. |
-| MMG Entitlement Counter and Ownership Persistence | Implemented for staging | Not installed | Production PostgreSQL connection, Shopify contract reconciliation, and Delivery Window Controller. |
+| MMG Knowledge Library Picker | Merged | Not installed | Durable API adapter and verified assets. |
+| MMG Entitlement Counter and Ownership Persistence | Merged for staging | Not installed | Production PostgreSQL and Shopify contract reconciliation. |
+| MMG Delivery Window Controller | Implemented for staging | Not scheduled live | Customer Portal subscription dashboard. |
 
 ## Shopify Storage Contract
 

@@ -1,0 +1,192 @@
+{
+  "contract_id": "mmg-delivery-window-controller-v1",
+  "version": "1.0.0",
+  "status": "approved_for_staging",
+  "approved_date": "2026-07-20",
+  "authority": "MMG executive approval",
+  "purpose": "Canonical lifecycle, scheduling, curation, expiry, recovery, delivery-dispatch, and billing-cycle controller for MMG Knowledge Subscription packages.",
+  "dependencies": {
+    "commerce_contract": "registry/products/mmg-commerce-contract-v1.json",
+    "picker_contract": "registry/knowledge-library/mmg-knowledge-library-picker-contract-v1.json",
+    "persistence_contract": "registry/knowledge-library/mmg-entitlement-ownership-persistence-contract-v1.json",
+    "domain_controller": "server/knowledge-library/delivery-windows.ts",
+    "orchestration_service": "server/knowledge-library/delivery-window-service.ts",
+    "postgres_repository": "server/knowledge-library/postgres-delivery-window-repository.ts",
+    "internal_http_handler": "server/knowledge-library/delivery-window-http.ts",
+    "database_migration": "database/migrations/20260720_002_mmg_delivery_window_controller.sql"
+  },
+  "plan_schedule_contract": [
+    {
+      "plan_code": "monthly",
+      "packages_per_billing_cycle": 1,
+      "assets_per_package": 2,
+      "assets_per_billing_cycle": 2,
+      "package_open_offsets_days": [0]
+    },
+    {
+      "plan_code": "biweekly",
+      "packages_per_billing_cycle": 2,
+      "assets_per_package": 2,
+      "assets_per_billing_cycle": 4,
+      "package_open_offsets_days": [0, 14]
+    },
+    {
+      "plan_code": "weekly",
+      "packages_per_billing_cycle": 4,
+      "assets_per_package": 2,
+      "assets_per_billing_cycle": 8,
+      "package_open_offsets_days": [0, 7, 14, 21],
+      "five_week_month_rule": "The entitlement remains four packages and eight assets. No fifth package is created."
+    }
+  ],
+  "review_window_contract": {
+    "minimum_hours": 24,
+    "maximum_hours": 48,
+    "default_hours": 48,
+    "first_package": {
+      "window_type": "first_package",
+      "selection_owner": "customer",
+      "opens_immediately_after_subscription_activation": true,
+      "auto_confirm_on_expiry": false,
+      "expiry_result": "recovery_required",
+      "recovery_reason": "FIRST_PACKAGE_CUSTOMER_SELECTION_EXPIRED"
+    },
+    "future_packages": {
+      "window_type": "scheduled_package_review",
+      "proposal_owner": "Kairos",
+      "proposed_assets": 2,
+      "customer_actions": [
+        "accept proposed package",
+        "remove an unconfirmed title",
+        "select an eligible replacement",
+        "confirm package"
+      ],
+      "auto_confirm_on_expiry": true,
+      "auto_confirm_preconditions": [
+        "exactly two current titles",
+        "exactly two current entitlement units",
+        "every title revalidates as subscription eligible",
+        "no title is already owned",
+        "window version is current"
+      ],
+      "incomplete_or_invalid_expiry_result": "recovery_required"
+    }
+  },
+  "window_lifecycle": {
+    "primary_states": [
+      "scheduled",
+      "open",
+      "confirmed",
+      "delivery_ready",
+      "delivered"
+    ],
+    "exception_states": [
+      "closed",
+      "expired",
+      "canceled",
+      "recovery_required"
+    ],
+    "allowed_transitions": {
+      "scheduled": ["open", "canceled", "recovery_required"],
+      "open": ["confirmed", "closed", "expired", "canceled", "recovery_required"],
+      "confirmed": ["delivery_ready", "recovery_required"],
+      "delivery_ready": ["delivered", "recovery_required"],
+      "delivered": [],
+      "closed": ["recovery_required"],
+      "expired": ["recovery_required"],
+      "canceled": [],
+      "recovery_required": ["open", "canceled"]
+    }
+  },
+  "controller_run_contract": {
+    "logical_endpoint": "/api/internal/knowledge-library/delivery-windows/run",
+    "method": "POST",
+    "authorization": "server-to-server internal authorization",
+    "idempotency_field": "runId",
+    "idempotency_storage": "mmg_delivery_controller_runs",
+    "maximum_batch_size": 500,
+    "actions": [
+      "tick",
+      "mark_delivered",
+      "reopen_recovery"
+    ],
+    "tick_order": [
+      "reconcile active Shopify subscription periods",
+      "create or resolve the billing cycle",
+      "create the exact plan package windows",
+      "open due first-package windows",
+      "curate and open due future-package windows",
+      "apply expiry policy",
+      "queue confirmed packages for delivery",
+      "record failures and audit events"
+    ]
+  },
+  "curation_contract": {
+    "server_authority": "Kairos",
+    "required_title_count": 2,
+    "required_unit_count": 2,
+    "eligibility_revalidation": true,
+    "owned_assets_excluded": true,
+    "current_window_duplicates_excluded": true,
+    "deterministic_fallback": {
+      "available": true,
+      "sort": [
+        "series ascending",
+        "series order ascending",
+        "title ascending"
+      ],
+      "purpose": "Temporary deterministic selection until Kairos recommendation ranking is implemented."
+    },
+    "no_complete_proposal_result": "recovery_required"
+  },
+  "delivery_contract": {
+    "confirmation_source": "MMG Knowledge Library Picker or expiry auto-confirmation",
+    "confirmation_is_atomic": true,
+    "queue_idempotency_key": "window_id",
+    "confirmed_to_delivery_ready": "A delivery dispatcher accepts the package and returns a dispatch ID.",
+    "delivery_ready_to_delivered": "The delivery adapter acknowledges a customer-visible delivery reference.",
+    "my_library_ownership": "Active ownership and delivery grants are created by the atomic confirmation transaction."
+  },
+  "cycle_rollover_contract": {
+    "period_source": "Shopify subscription contract reconciliation",
+    "period_identity": "subscription_entitlement_id + current_period_start",
+    "cycle_creation": "Idempotent",
+    "prior_cycle_rule": "Prior scheduled or active cycles whose end is at or before the next period start are completed.",
+    "capacity_reset": "The new cycle receives exactly the locked plan package and asset totals.",
+    "plan_change_rule": "The cycle is generated from the reconciled Shopify plan code for that billing period."
+  },
+  "security_contract": [
+    "Do not expose the controller endpoint as a public customer mutation surface.",
+    "Require server-to-server authorization for every controller action.",
+    "Never accept customer identity, subscription identity, cycle capacity, or entitlement totals from the browser.",
+    "Use parameterized SQL and database transactions for every state transition.",
+    "Use expected window versions for concurrent state changes.",
+    "Use controller run IDs, picker request IDs, window IDs, and dispatch IDs as idempotency boundaries.",
+    "Return private no-store responses from the internal HTTP handler.",
+    "Record lifecycle transitions, recovery requirements, dispatches, deliveries, and failures as entitlement audit events."
+  ],
+  "integration_sequence": {
+    "previous_component": "MMG Entitlement Counter and Ownership-Resolution Persistence",
+    "current_component": "MMG Delivery Window Controller",
+    "next_component": "Customer Portal subscription dashboard",
+    "subsequent_components": [
+      "Thank-you page first-title handoff",
+      "My Library delivery interface",
+      "Shopify subscription webhook reconciliation",
+      "Kairos recommendation ranking",
+      "Live Shopify provisioning and end-to-end deployment"
+    ]
+  },
+  "release_gates": [
+    "The delivery-window database migration is reviewed, backed up, and applied.",
+    "The internal controller endpoint is connected to a protected scheduled runtime.",
+    "Shopify subscription contract reconciliation populates current period start, current period end, and plan code.",
+    "The production delivery dispatcher is idempotent by window ID.",
+    "The production delivery adapter can acknowledge a customer-visible delivery reference.",
+    "The first-package recovery workflow is available to authorized support or Kairos operations.",
+    "At least two verified subscription-selectable digital assets exist for every package opening.",
+    "Weekly cycles create exactly four packages, including five-week calendar months.",
+    "Expiry auto-confirmation passes eligibility, ownership, version, idempotency, and rollback tests against real PostgreSQL.",
+    "Observability alerts on controller failures, recovery-required windows, delivery queue failures, and stale scheduled windows are active."
+  ]
+}
