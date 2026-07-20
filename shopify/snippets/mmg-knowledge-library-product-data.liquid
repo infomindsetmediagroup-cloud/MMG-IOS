@@ -10,6 +10,7 @@
   assign mmg_series = mmg_library_product.metafields.mmg.series.value | default: ''
   assign mmg_series_order = mmg_library_product.metafields.mmg.series_order.value | default: 0
   assign mmg_related_assets = mmg_library_product.metafields.mmg.related_assets.value
+  assign mmg_related_assets_json = '[]'
   assign mmg_subscription_value = mmg_library_product.metafields.mmg.subscription_value.value | default: 0
   assign mmg_delivery_package = mmg_library_product.metafields.mmg.delivery_package.value | default: ''
   assign mmg_customer_destination = mmg_library_product.metafields.mmg.customer_destination.value | default: ''
@@ -19,6 +20,10 @@
   assign mmg_square_url = ''
   assign mmg_public_catalog_hint = false
   assign mmg_subscription_selection_hint = false
+
+  if mmg_related_assets != blank
+    assign mmg_related_assets_json = mmg_related_assets | json
+  endif
 
   if mmg_portrait_file != blank
     assign mmg_portrait_url = mmg_portrait_file | image_url: width: 2048
@@ -65,7 +70,7 @@
     "format": {{ mmg_format | json }},
     "series": {{ mmg_series | json }},
     "seriesOrder": {{ mmg_series_order | json }},
-    "relatedAssetIds": {{ mmg_related_assets | default: empty | json }},
+    "relatedAssetIds": {{ mmg_related_assets_json }},
     "subscriptionEligibleMetadata": {{ mmg_subscription_eligible | json }},
     "subscriptionValue": {{ mmg_subscription_value | json }},
     "deliveryPackagePresent": {% if mmg_delivery_package != blank %}true{% else %}false{% endif %},
