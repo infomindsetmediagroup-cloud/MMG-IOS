@@ -163,7 +163,10 @@ export const MMG_SUBSCRIPTION_PRODUCT_ACTIVATE_MUTATION = `#graphql
 export const MMG_SUBSCRIPTION_PRODUCT_PUBLISH_MUTATION = `#graphql
   mutation MMGSubscriptionProductPublish($id: ID!, $input: [PublicationInput!]!) {
     publishablePublish(id: $id, input: $input) {
-      publishable { publishedOnPublication(publicationId: $publicationId) }
+      publishable {
+        availablePublicationsCount { count }
+        resourcePublicationsCount { count }
+      }
       userErrors { field message }
     }
   }
@@ -196,11 +199,36 @@ const variantInput = (input: {
     requiresShipping: false,
   },
   metafields: [
-    { namespace: "mmg", key: "subscription_plan_code", type: "single_line_text_field", value: input.planCode },
-    { namespace: "mmg", key: "packages_per_billing_cycle", type: "number_integer", value: String(input.packages) },
-    { namespace: "mmg", key: "assets_per_package", type: "number_integer", value: "2" },
-    { namespace: "mmg", key: "assets_per_billing_cycle", type: "number_integer", value: String(input.assets) },
-    { namespace: "mmg", key: "entitlement_units", type: "number_integer", value: String(input.assets) },
+    {
+      namespace: "mmg",
+      key: "subscription_plan_code",
+      type: "single_line_text_field",
+      value: input.planCode,
+    },
+    {
+      namespace: "mmg",
+      key: "packages_per_billing_cycle",
+      type: "number_integer",
+      value: String(input.packages),
+    },
+    {
+      namespace: "mmg",
+      key: "assets_per_package",
+      type: "number_integer",
+      value: "2",
+    },
+    {
+      namespace: "mmg",
+      key: "assets_per_billing_cycle",
+      type: "number_integer",
+      value: String(input.assets),
+    },
+    {
+      namespace: "mmg",
+      key: "entitlement_units",
+      type: "number_integer",
+      value: String(input.assets),
+    },
   ],
 });
 
@@ -218,7 +246,8 @@ export const buildMMGShopifySubscriptionProvisioningPlan = (input: {
       mutation: null,
       destructive: false,
       requiresRuntimeValues: [],
-      purpose: "Find the canonical product by exact handle, detect duplicates, inspect variants, selling plans, metafields, and the Online Store publication.",
+      purpose:
+        "Find the canonical product by exact handle, detect duplicates, inspect variants, selling plans, metafields, and the Online Store publication.",
       variables: { query: "handle:mmg-knowledge-subscription" },
     },
     {
@@ -227,7 +256,8 @@ export const buildMMGShopifySubscriptionProvisioningPlan = (input: {
       mutation: "productCreate",
       destructive: true,
       requiresRuntimeValues: [],
-      purpose: "Create the canonical subscription-only product as DRAFT with the complete Delivery cadence option. Never publish during provisioning.",
+      purpose:
+        "Create the canonical subscription-only product as DRAFT with the complete Delivery cadence option. Never publish during provisioning.",
       variables: {
         product: {
           title: "MMG Knowledge Subscription™",
@@ -239,16 +269,50 @@ export const buildMMGShopifySubscriptionProvisioningPlan = (input: {
           productOptions: [
             {
               name: "Delivery cadence",
-              values: [{ name: "Monthly" }, { name: "Bi-weekly" }, { name: "Weekly" }],
+              values: [
+                { name: "Monthly" },
+                { name: "Bi-weekly" },
+                { name: "Weekly" },
+              ],
             },
           ],
           metafields: [
-            { namespace: "mmg", key: "product_type", type: "single_line_text_field", value: "subscription" },
-            { namespace: "mmg", key: "asset_status", type: "single_line_text_field", value: "approved" },
-            { namespace: "mmg", key: "customer_destination", type: "single_line_text_field", value: "subscription_dashboard_and_my_library" },
-            { namespace: "mmg", key: "first_selection_count", type: "number_integer", value: "2" },
-            { namespace: "mmg", key: "review_window_min_hours", type: "number_integer", value: "24" },
-            { namespace: "mmg", key: "review_window_max_hours", type: "number_integer", value: "48" },
+            {
+              namespace: "mmg",
+              key: "product_type",
+              type: "single_line_text_field",
+              value: "subscription",
+            },
+            {
+              namespace: "mmg",
+              key: "asset_status",
+              type: "single_line_text_field",
+              value: "approved",
+            },
+            {
+              namespace: "mmg",
+              key: "customer_destination",
+              type: "single_line_text_field",
+              value: "subscription_dashboard_and_my_library",
+            },
+            {
+              namespace: "mmg",
+              key: "first_selection_count",
+              type: "number_integer",
+              value: "2",
+            },
+            {
+              namespace: "mmg",
+              key: "review_window_min_hours",
+              type: "number_integer",
+              value: "24",
+            },
+            {
+              namespace: "mmg",
+              key: "review_window_max_hours",
+              type: "number_integer",
+              value: "48",
+            },
           ],
         },
       },
@@ -259,10 +323,21 @@ export const buildMMGShopifySubscriptionProvisioningPlan = (input: {
       mutation: "productVariantsBulkUpdate",
       destructive: true,
       requiresRuntimeValues: ["productGid", "monthlyVariantGid"],
-      purpose: "Configure the initial Monthly variant with the exact SKU, price, digital fulfillment flags, and private MMG entitlement metadata.",
+      purpose:
+        "Configure the initial Monthly variant with the exact SKU, price, digital fulfillment flags, and private MMG entitlement metadata.",
       variables: {
         productId: existing?.productGid ?? "${productGid}",
-        variants: [variantInput({ id: existing?.variantGids.monthly ?? "${monthlyVariantGid}", optionValue: "Monthly", sku: "MMG-KS-MONTHLY", price: "14.95", planCode: "monthly", packages: 1, assets: 2 })],
+        variants: [
+          variantInput({
+            id: existing?.variantGids.monthly ?? "${monthlyVariantGid}",
+            optionValue: "Monthly",
+            sku: "MMG-KS-MONTHLY",
+            price: "14.95",
+            planCode: "monthly",
+            packages: 1,
+            assets: 2,
+          }),
+        ],
       },
     },
     {
@@ -271,12 +346,27 @@ export const buildMMGShopifySubscriptionProvisioningPlan = (input: {
       mutation: "productVariantsBulkCreate",
       destructive: true,
       requiresRuntimeValues: ["productGid"],
-      purpose: "Create the Bi-weekly and Weekly variants with exact locked prices and capacity metadata.",
+      purpose:
+        "Create the Bi-weekly and Weekly variants with exact locked prices and capacity metadata.",
       variables: {
         productId: existing?.productGid ?? "${productGid}",
         variants: [
-          variantInput({ optionValue: "Bi-weekly", sku: "MMG-KS-BIWEEKLY", price: "24.95", planCode: "biweekly", packages: 2, assets: 4 }),
-          variantInput({ optionValue: "Weekly", sku: "MMG-KS-WEEKLY", price: "39.95", planCode: "weekly", packages: 4, assets: 8 }),
+          variantInput({
+            optionValue: "Bi-weekly",
+            sku: "MMG-KS-BIWEEKLY",
+            price: "24.95",
+            planCode: "biweekly",
+            packages: 2,
+            assets: 4,
+          }),
+          variantInput({
+            optionValue: "Weekly",
+            sku: "MMG-KS-WEEKLY",
+            price: "39.95",
+            planCode: "weekly",
+            packages: 4,
+            assets: 8,
+          }),
         ],
       },
     },
@@ -285,8 +375,13 @@ export const buildMMGShopifySubscriptionProvisioningPlan = (input: {
       code: "CREATE_SHARED_MONTHLY_SELLING_PLAN",
       mutation: "sellingPlanGroupCreate",
       destructive: true,
-      requiresRuntimeValues: ["monthlyVariantGid", "biweeklyVariantGid", "weeklyVariantGid"],
-      purpose: "Create one shared monthly selling plan and associate all three cadence variants. Shopify bills monthly; Kairos owns package timing.",
+      requiresRuntimeValues: [
+        "monthlyVariantGid",
+        "biweeklyVariantGid",
+        "weeklyVariantGid",
+      ],
+      purpose:
+        "Create one shared monthly selling plan and associate all three cadence variants. Shopify bills monthly; Kairos owns package timing.",
       variables: {
         input: {
           name: "MMG Knowledge Subscription",
@@ -299,8 +394,12 @@ export const buildMMGShopifySubscriptionProvisioningPlan = (input: {
               options: ["Monthly billing"],
               position: 1,
               category: "SUBSCRIPTION",
-              billingPolicy: { recurring: { interval: "MONTH", intervalCount: 1 } },
-              deliveryPolicy: { recurring: { interval: "MONTH", intervalCount: 1 } },
+              billingPolicy: {
+                recurring: { interval: "MONTH", intervalCount: 1 },
+              },
+              deliveryPolicy: {
+                recurring: { interval: "MONTH", intervalCount: 1 },
+              },
               inventoryPolicy: { reserve: "ON_SALE" },
               pricingPolicies: [],
             },
@@ -308,7 +407,11 @@ export const buildMMGShopifySubscriptionProvisioningPlan = (input: {
         },
         resources: {
           productIds: [],
-          productVariantIds: ["${monthlyVariantGid}", "${biweeklyVariantGid}", "${weeklyVariantGid}"],
+          productVariantIds: [
+            "${monthlyVariantGid}",
+            "${biweeklyVariantGid}",
+            "${weeklyVariantGid}",
+          ],
         },
       },
     },
@@ -318,7 +421,8 @@ export const buildMMGShopifySubscriptionProvisioningPlan = (input: {
       mutation: null,
       destructive: false,
       requiresRuntimeValues: [],
-      purpose: "Reload Shopify and verify exact title, handle, option, SKUs, prices, selling-plan association, nonshipping flags, metafields, and unique runtime GIDs while the product remains DRAFT.",
+      purpose:
+        "Reload Shopify and verify exact title, handle, option, SKUs, prices, selling-plan association, nonshipping flags, metafields, and unique runtime GIDs while the product remains DRAFT.",
       variables: { query: "handle:mmg-knowledge-subscription" },
     },
   ];
