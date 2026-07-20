@@ -1,0 +1,245 @@
+{
+  "contract_id": "mmg-commerce-contract-v1",
+  "version": "1.0.0",
+  "status": "approved",
+  "approved_date": "2026-07-20",
+  "authority": "MMG executive approval",
+  "purpose": "Canonical machine-readable contract connecting digital downloads, services, subscriptions, the Knowledge Library, Shopify cart behavior, customer entitlements, and Kairos fulfillment.",
+  "system_boundaries": {
+    "shopify": [
+      "product catalog",
+      "variants",
+      "selling plans",
+      "cart",
+      "checkout",
+      "payments",
+      "recurring billing"
+    ],
+    "kairos": [
+      "recommendations",
+      "subscription entitlements",
+      "title selection",
+      "ownership filtering",
+      "review windows",
+      "delivery packaging",
+      "customer progress",
+      "portal orchestration"
+    ],
+    "knowledge_library": "Shared digital-asset catalog and selection surface used by the public storefront, subscribers, and authenticated customer libraries."
+  },
+  "product_types": {
+    "digital_download": {
+      "code": "digital_download",
+      "storefront": {
+        "primary_image_role": "portrait_cover",
+        "preferred_portrait_size_px": [2048, 3072],
+        "portrait_aspect_ratio": "2:3",
+        "square_thumbnail_size_px": [2048, 2048],
+        "square_thumbnail_aspect_ratio": "1:1"
+      },
+      "delivery_package": {
+        "required_image_assets": [
+          "portrait_cover",
+          "square_thumbnail"
+        ],
+        "required_customer_files": [
+          "primary_digital_asset",
+          "readme_or_customer_instructions"
+        ]
+      },
+      "subscription_eligibility": "Per-product boolean metadata field; only approved digital downloads may enter the subscription catalog."
+    },
+    "service": {
+      "code": "service",
+      "default_media_role": "service_specific_cover",
+      "variants": [
+        {
+          "name": "Starter",
+          "color_identity": "electric_blue",
+          "variant_image_role": "starter_tier_image"
+        },
+        {
+          "name": "Growth",
+          "color_identity": "purple",
+          "variant_image_role": "growth_tier_image"
+        },
+        {
+          "name": "Professional",
+          "color_identity": "gold",
+          "variant_image_role": "professional_tier_image"
+        }
+      ],
+      "media_behavior": {
+        "default": "Show the service-specific cover.",
+        "variant_selected": "Replace the primary product media with the selected tier image.",
+        "gallery_rule": "Do not display all three tier images as permanent gallery thumbnails.",
+        "cart_rule": "Use the selected tier image for the cart line and checkout line where Shopify supports variant media."
+      },
+      "customer_destination": "My Projects"
+    },
+    "subscription": {
+      "code": "subscription",
+      "canonical_product_title": "MMG Knowledge Subscription™",
+      "canonical_handle": "mmg-knowledge-subscription",
+      "billing_currency": "USD",
+      "plans": [
+        {
+          "plan_code": "monthly",
+          "display_name": "Monthly",
+          "price": 14.95,
+          "billing_interval": "month",
+          "packages_per_billing_cycle": 1,
+          "assets_per_package": 2,
+          "assets_per_billing_cycle": 2
+        },
+        {
+          "plan_code": "biweekly",
+          "display_name": "Bi-weekly",
+          "price": 24.95,
+          "billing_interval": "month",
+          "packages_per_billing_cycle": 2,
+          "assets_per_package": 2,
+          "assets_per_billing_cycle": 4
+        },
+        {
+          "plan_code": "weekly",
+          "display_name": "Weekly",
+          "price": 39.95,
+          "billing_interval": "month",
+          "packages_per_billing_cycle": 4,
+          "assets_per_package": 2,
+          "assets_per_billing_cycle": 8,
+          "cadence_note": "Four scheduled packages per monthly billing cycle; entitlement does not vary in five-week calendar months."
+        }
+      ],
+      "first_delivery_flow": {
+        "checkout_selection": "Customer selects the subscription plan only; title selection does not occur inside checkout.",
+        "post_purchase_action": "Choose Your First Two Titles",
+        "selection_surface": "Knowledge Library subscription-selection mode",
+        "initial_selection_count": 2
+      },
+      "future_delivery_flow": {
+        "curation_owner": "Kairos",
+        "assets_per_package": 2,
+        "review_window_hours": {
+          "minimum": 24,
+          "maximum": 48
+        },
+        "customer_action": "Review and swap eligible titles before delivery closes."
+      },
+      "customer_destination": "Subscription Dashboard and My Library"
+    }
+  },
+  "knowledge_library_modes": {
+    "public_catalog": {
+      "access": "public",
+      "shows": [
+        "active digital-download products",
+        "individual purchase controls",
+        "subscription eligibility indicators",
+        "membership introduction"
+      ]
+    },
+    "subscription_selection": {
+      "access": "authenticated active subscriber",
+      "filters": [
+        "subscription eligible",
+        "approved and active",
+        "not already owned",
+        "within current entitlement window"
+      ],
+      "actions": [
+        "choose title",
+        "remove selection",
+        "confirm package"
+      ]
+    },
+    "my_library": {
+      "access": "authenticated customer",
+      "shows": [
+        "individual purchases",
+        "subscription selections",
+        "curated subscription deliveries",
+        "bonuses",
+        "read-online controls where supported",
+        "download controls"
+      ]
+    }
+  },
+  "canonical_metadata": {
+    "namespace": "mmg",
+    "fields": [
+      "product_type",
+      "subscription_eligible",
+      "asset_status",
+      "asset_id",
+      "topic",
+      "experience_level",
+      "format",
+      "series",
+      "series_order",
+      "related_assets",
+      "square_thumbnail",
+      "portrait_cover",
+      "subscription_value",
+      "delivery_package",
+      "customer_destination"
+    ]
+  },
+  "offer_and_entitlement_engine": {
+    "name": "Kairos Offer & Entitlement Engine",
+    "responsibilities": [
+      "subscription offers",
+      "digital-product bundles",
+      "service add-ons",
+      "related resources",
+      "cart recommendations",
+      "customer ownership",
+      "subscription entitlements",
+      "delivery limits",
+      "discount eligibility",
+      "continuation pathways"
+    ],
+    "rules": [
+      "Never silently add a recurring product to the cart.",
+      "Never preselect subscription consent.",
+      "Require an explicit customer plan selection and confirmation.",
+      "Do not recommend an asset the customer already owns.",
+      "Do not use Shopify Bundles as the subscription entitlement foundation.",
+      "Use one canonical asset record across storefront, library, portal, recommendations, and delivery."
+    ]
+  },
+  "site_placements": {
+    "homepage": "Present digital resources, professional services, and membership as three connected paths.",
+    "knowledge_library": "Primary subscription discovery and title-selection surface.",
+    "digital_product_page": "Offer one-time purchase and a reusable build-your-library membership module.",
+    "service_product_page": "Keep the service conversion primary; place membership in Continue Your Journey.",
+    "publishing_services_landing_page": "Lead with service outcomes and connect to relevant education and membership secondarily.",
+    "membership_landing_page": "Explain plans, entitlements, onboarding, first-title selection, curation, review windows, and My Library.",
+    "cart_drawer_and_cart_page": "Show an unselected subscription invitation when no subscription is present; open the three-plan selector on customer action.",
+    "thank_you_page": "For new subscribers, direct the customer to choose the first two titles.",
+    "customer_portal": "Show plan, next delivery, current entitlement, review window, selected titles, delivered titles, My Library, and account controls."
+  },
+  "reusable_components": [
+    "MMG Subscription Offer Module",
+    "MMG Three-Plan Selector",
+    "MMG Cart Subscription Controller",
+    "MMG Knowledge Library Picker",
+    "MMG Entitlement Counter",
+    "MMG Related Journey Module",
+    "MMG Ownership Filter",
+    "MMG Delivery Window Controller"
+  ],
+  "canonical_customer_flow": [
+    "Homepage",
+    "Objective-based pathway",
+    "Knowledge Library, Services, or Membership",
+    "Product decision",
+    "Cart subscription offer",
+    "Checkout",
+    "Customer Portal",
+    "Title selection or project intake",
+    "My Library or My Projects",
+    "Continue Your Journey"
+  ]
+}
