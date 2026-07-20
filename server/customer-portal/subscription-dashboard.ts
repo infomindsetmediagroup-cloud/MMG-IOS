@@ -81,6 +81,13 @@ export type MMGPortalActionCode =
   | "renew_membership"
   | "manage_membership";
 
+export interface MMGPortalDashboardAction {
+  code: MMGPortalActionCode;
+  label: string;
+  description: string;
+  href: string;
+}
+
 export interface MMGCustomerPortalSubscriptionDashboard {
   schemaVersion: "1.0.0";
   serverAuthority: "Kairos";
@@ -108,6 +115,7 @@ export interface MMGCustomerPortalSubscriptionDashboard {
     remainingAssets: number;
     totalOwnedAssets: number;
   };
+  primaryAction: MMGPortalDashboardAction;
   currentPackage: {
     id: string;
     packageSequence: number;
@@ -124,12 +132,7 @@ export interface MMGCustomerPortalSubscriptionDashboard {
     selectedUnits: number;
     totalUnits: number;
     selections: MMGPortalSelectionRecord[];
-    action: {
-      code: MMGPortalActionCode;
-      label: string;
-      description: string;
-      href: string;
-    };
+    action: MMGPortalDashboardAction;
   } | null;
   packages: Array<{
     id: string;
@@ -174,11 +177,7 @@ const actionFor = (
   subscription: MMGPortalSubscriptionRecord,
   window: MMGPortalWindowRecord | null,
   links: MMGPortalDashboardLinks,
-): MMGCustomerPortalSubscriptionDashboard["currentPackage"] extends infer Current
-  ? Current extends { action: infer Action }
-    ? Action
-    : never
-  : never => {
+): MMGPortalDashboardAction => {
   if (subscription.status !== "active") {
     return {
       code: "renew_membership",
@@ -265,6 +264,7 @@ export const buildMMGCustomerPortalSubscriptionDashboard = (input: {
         0,
       ),
   );
+  const primaryAction = actionFor(input.subscription, currentWindow, input.links);
 
   return {
     schemaVersion: "1.0.0",
@@ -293,6 +293,7 @@ export const buildMMGCustomerPortalSubscriptionDashboard = (input: {
       remainingAssets: Math.max(0, totalAssets - committedAssets),
       totalOwnedAssets: integer(input.subscription.totalOwnedAssets),
     },
+    primaryAction,
     currentPackage: currentWindow
       ? {
           id: currentWindow.id,
@@ -313,7 +314,7 @@ export const buildMMGCustomerPortalSubscriptionDashboard = (input: {
           ),
           totalUnits: integer(currentWindow.totalUnits),
           selections: currentWindow.selections,
-          action: actionFor(input.subscription, currentWindow, input.links),
+          action: primaryAction,
         }
       : null,
     packages: [...windows]
