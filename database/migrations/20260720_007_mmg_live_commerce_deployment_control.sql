@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS mmg_commerce_release_approvals (
   CHECK (release_commit_sha ~ '^[a-f0-9]{40}$'),
   CHECK (expires_at > approved_at),
   CHECK (cardinality(approved_actions) >= 1),
-  CHECK (approved_actions <@ ARRAY['execute', 'publish', 'rollback']::text[])
+  CHECK (approved_actions <@ ARRAY['execute', 'verify', 'publish', 'rollback']::text[])
 );
 
 CREATE INDEX IF NOT EXISTS mmg_commerce_release_approvals_active_idx
