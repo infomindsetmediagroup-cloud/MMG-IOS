@@ -1,0 +1,175 @@
+{%- liquid
+  assign mmg_learning_profile_endpoint = mmg_learning_profile_endpoint | default: '/api/customer-portal/learning-profile'
+  assign mmg_learning_profile_login_url = mmg_learning_profile_login_url | default: routes.account_login_url
+  assign mmg_learning_profile_support_url = mmg_learning_profile_support_url | default: '/pages/customer-service'
+  assign mmg_learning_profile_csrf_token = mmg_learning_profile_csrf_token | default: ''
+  assign mmg_learning_profile_instance_seed = mmg_learning_profile_instance_id | default: section.id | default: 'customer-portal'
+  assign mmg_learning_profile_instance = mmg_learning_profile_instance_seed | append: '-learning-profile' | handleize
+-%}
+
+{{ 'mmg-learning-profile.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'mmg-learning-profile.js' | asset_url }}" defer></script>
+
+<mmg-learning-profile
+  id="mmg-learning-profile-{{ mmg_learning_profile_instance }}"
+  class="mmg-learning-profile"
+  data-endpoint="{{ mmg_learning_profile_endpoint | escape }}"
+  data-login-url="{{ mmg_learning_profile_login_url | escape }}"
+  data-support-url="{{ mmg_learning_profile_support_url | escape }}"
+  data-csrf-token="{{ mmg_learning_profile_csrf_token | escape }}"
+  aria-labelledby="mmg-learning-profile-title-{{ mmg_learning_profile_instance }}"
+>
+  <section id="learning-profile" class="mmg-learning-profile__shell" data-mmg-learning-profile-root>
+    <header class="mmg-learning-profile__header">
+      <div>
+        <p class="mmg-learning-profile__eyebrow">Customer Portal · Personalization</p>
+        <h2 id="mmg-learning-profile-title-{{ mmg_learning_profile_instance }}" class="mmg-learning-profile__title">
+          Shape your Knowledge Library
+        </h2>
+        <p class="mmg-learning-profile__intro">
+          Tell Kairos what you are building, what you want to learn, and where you are in the process. These preferences guide future curated packages; they never override ownership, eligibility, or delivery safeguards.
+        </p>
+      </div>
+      <span class="mmg-learning-profile__privacy">Private account preference</span>
+    </header>
+
+    <div class="mmg-learning-profile__status" data-mmg-learning-profile-status role="status" aria-live="polite">
+      <span class="mmg-learning-profile__spinner" aria-hidden="true"></span>
+      <span data-mmg-learning-profile-status-text>Loading your learning profile…</span>
+    </div>
+
+    <div class="mmg-learning-profile__blocked" data-mmg-learning-profile-blocked hidden>
+      <p class="mmg-learning-profile__blocked-kicker">Secure personalization</p>
+      <h3 data-mmg-learning-profile-blocked-title>Sign in to manage your profile</h3>
+      <p data-mmg-learning-profile-blocked-copy>Your learning preferences are private Customer Portal data.</p>
+      <div class="mmg-learning-profile__actions">
+        <a class="mmg-learning-profile__button mmg-learning-profile__button--primary" data-mmg-learning-profile-login href="{{ mmg_learning_profile_login_url }}">Sign in</a>
+        <a class="mmg-learning-profile__button mmg-learning-profile__button--secondary" href="{{ mmg_learning_profile_support_url }}">Customer Service</a>
+      </div>
+    </div>
+
+    <form class="mmg-learning-profile__form" data-mmg-learning-profile-form hidden novalidate>
+      <div class="mmg-learning-profile__grid">
+        <label class="mmg-learning-profile__field">
+          <span>Your role</span>
+          <select name="roleCode" required>
+            <option value="">Choose your role</option>
+            <option value="creator">Creator</option>
+            <option value="author">Author</option>
+            <option value="entrepreneur">Entrepreneur</option>
+            <option value="small_business_owner">Small-business owner</option>
+            <option value="marketer">Marketer</option>
+            <option value="educator">Educator</option>
+            <option value="student">Student</option>
+            <option value="professional">Working professional</option>
+          </select>
+        </label>
+
+        <label class="mmg-learning-profile__field">
+          <span>Primary goal</span>
+          <select name="primaryGoal" required>
+            <option value="">Choose your main objective</option>
+            <option value="publish_book">Publish a book</option>
+            <option value="create_visual_assets">Create stronger visual assets</option>
+            <option value="grow_audience">Grow an audience</option>
+            <option value="improve_content">Improve content quality</option>
+            <option value="build_business">Build or grow a business</option>
+            <option value="learn_ai">Learn practical AI</option>
+            <option value="increase_productivity">Increase productivity</option>
+          </select>
+        </label>
+
+        <label class="mmg-learning-profile__field">
+          <span>Experience level</span>
+          <select name="experienceLevel" required>
+            <option value="beginner">Beginner</option>
+            <option value="intermediate">Intermediate</option>
+            <option value="advanced">Advanced</option>
+            <option value="all_levels">Open to all levels</option>
+          </select>
+        </label>
+      </div>
+
+      <fieldset class="mmg-learning-profile__fieldset" data-profile-group="primaryTopics">
+        <legend>Primary topics</legend>
+        <p>Select the areas most important to your current objective.</p>
+        <div class="mmg-learning-profile__choices">
+          <label><input type="checkbox" value="ai_image_generation"> AI image generation</label>
+          <label><input type="checkbox" value="prompt_engineering"> Prompt engineering</label>
+          <label><input type="checkbox" value="publishing"> Publishing</label>
+          <label><input type="checkbox" value="content_strategy"> Content strategy</label>
+          <label><input type="checkbox" value="social_media"> Social media</label>
+          <label><input type="checkbox" value="business_growth"> Business growth</label>
+          <label><input type="checkbox" value="design"> Design</label>
+          <label><input type="checkbox" value="ecommerce"> E-commerce</label>
+          <label><input type="checkbox" value="mindset"> Mindset</label>
+          <label><input type="checkbox" value="recovery"> Recovery</label>
+        </div>
+      </fieldset>
+
+      <fieldset class="mmg-learning-profile__fieldset" data-profile-group="secondaryTopics">
+        <legend>Secondary interests</legend>
+        <p>Choose adjacent areas Kairos may use to diversify future packages.</p>
+        <div class="mmg-learning-profile__choices">
+          <label><input type="checkbox" value="ai_image_generation"> AI image generation</label>
+          <label><input type="checkbox" value="prompt_engineering"> Prompt engineering</label>
+          <label><input type="checkbox" value="publishing"> Publishing</label>
+          <label><input type="checkbox" value="content_strategy"> Content strategy</label>
+          <label><input type="checkbox" value="social_media"> Social media</label>
+          <label><input type="checkbox" value="business_growth"> Business growth</label>
+          <label><input type="checkbox" value="design"> Design</label>
+          <label><input type="checkbox" value="ecommerce"> E-commerce</label>
+          <label><input type="checkbox" value="mindset"> Mindset</label>
+          <label><input type="checkbox" value="recovery"> Recovery</label>
+        </div>
+      </fieldset>
+
+      <fieldset class="mmg-learning-profile__fieldset" data-profile-group="preferredFormats">
+        <legend>Preferred formats</legend>
+        <p>Format preferences are ranking signals, not hard restrictions.</p>
+        <div class="mmg-learning-profile__choices mmg-learning-profile__choices--compact">
+          <label><input type="checkbox" value="guide"> Guides</label>
+          <label><input type="checkbox" value="book"> Books</label>
+          <label><input type="checkbox" value="workbook"> Workbooks</label>
+          <label><input type="checkbox" value="template"> Templates</label>
+          <label><input type="checkbox" value="toolkit"> Toolkits</label>
+          <label><input type="checkbox" value="prompt_pack"> Prompt packs</label>
+          <label><input type="checkbox" value="resource_pack"> Resource packs</label>
+        </div>
+      </fieldset>
+
+      <fieldset class="mmg-learning-profile__fieldset mmg-learning-profile__fieldset--exclude" data-profile-group="excludedTopics">
+        <legend>Topics to exclude</legend>
+        <p>Excluded topics are removed from automated future-package recommendations.</p>
+        <div class="mmg-learning-profile__choices">
+          <label><input type="checkbox" value="ai_image_generation"> AI image generation</label>
+          <label><input type="checkbox" value="prompt_engineering"> Prompt engineering</label>
+          <label><input type="checkbox" value="publishing"> Publishing</label>
+          <label><input type="checkbox" value="content_strategy"> Content strategy</label>
+          <label><input type="checkbox" value="social_media"> Social media</label>
+          <label><input type="checkbox" value="business_growth"> Business growth</label>
+          <label><input type="checkbox" value="design"> Design</label>
+          <label><input type="checkbox" value="ecommerce"> E-commerce</label>
+          <label><input type="checkbox" value="mindset"> Mindset</label>
+          <label><input type="checkbox" value="recovery"> Recovery</label>
+        </div>
+      </fieldset>
+
+      <div class="mmg-learning-profile__footer">
+        <div>
+          <strong data-mmg-learning-profile-completion>Complete the required fields</strong>
+          <p>Your profile can be updated whenever your objectives change.</p>
+        </div>
+        <button class="mmg-learning-profile__button mmg-learning-profile__button--primary" type="submit" data-mmg-learning-profile-save>
+          Save learning profile
+        </button>
+      </div>
+
+      <p class="mmg-learning-profile__message" data-mmg-learning-profile-message role="status" aria-live="polite" hidden></p>
+    </form>
+
+    <noscript>
+      <p class="mmg-learning-profile__noscript">JavaScript is required to load and securely save private learning preferences.</p>
+    </noscript>
+  </section>
+</mmg-learning-profile>
