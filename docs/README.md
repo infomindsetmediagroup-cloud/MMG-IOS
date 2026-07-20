@@ -33,3 +33,11 @@ workflows/      Repeatable production workflows and execution procedures.
 ## Active Standards Records
 
 - `standards/kairos-production-session-standard.md` — Defines the standard operating process for MMG/Kairos production sessions, including repository context loading, coherent commits, indexing, exact reporting, and continuous process improvement.
+
+## Active Decision Records
+
+- `decisions/shopify-ai-toolkit-adoption.md` — Adopts Shopify's official AI Toolkit and Codex plugin as the canonical Shopify engineering layer while preserving Kairos runtime and mutation-governance boundaries.
+
+## Active Workflow Records
+
+- `workflows/shopify-ai-toolkit-operations.md` — Defines installation, privacy controls, least-privilege authentication, validation, governed execution, receipts, rollback, production gates, and troubleshooting for Shopify AI Toolkit operations.
