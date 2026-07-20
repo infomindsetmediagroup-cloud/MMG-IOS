@@ -72,7 +72,7 @@ describe("MMG commerce operations HTTP boundary", () => {
       }),
       unauthenticated as any,
     );
-    expect(authResponse.status).toBe(409);
+    expect(authResponse.status).toBe(403);
 
     const crossOrigin = new Request(
       "https://kairos.internal/api/internal/commerce/operations",
