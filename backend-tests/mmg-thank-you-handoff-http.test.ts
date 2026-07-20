@@ -50,7 +50,10 @@ const request = (input?: {
   body?: string;
 }): Request => {
   const headers = new Headers({ "Content-Type": "application/json" });
-  const authorization = input?.authorization ?? "Bearer signed-shopify-session-token";
+  const authorization =
+    input && Object.prototype.hasOwnProperty.call(input, "authorization")
+      ? input.authorization
+      : "Bearer signed-shopify-session-token";
   if (authorization) headers.set("Authorization", authorization);
 
   return new Request(endpoint, {
