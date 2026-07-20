@@ -1,0 +1,198 @@
+{
+  "contract_id": "mmg-entitlement-ownership-persistence-v1",
+  "version": "1.0.0",
+  "status": "approved_for_staging",
+  "approved_date": "2026-07-20",
+  "authority": "MMG executive approval",
+  "purpose": "Canonical durable persistence, entitlement counter, ownership resolution, and transactional delivery-grant foundation for the MMG Knowledge Subscription ecosystem.",
+  "dependencies": {
+    "commerce_contract": "registry/products/mmg-commerce-contract-v1.json",
+    "knowledge_library_contract": "registry/knowledge-library/mmg-knowledge-library-contract-v1.json",
+    "picker_contract": "registry/knowledge-library/mmg-knowledge-library-picker-contract-v1.json",
+    "picker_state_machine": "server/knowledge-library/picker.ts",
+    "picker_service": "server/knowledge-library/picker-service.ts"
+  },
+  "implementation": {
+    "domain_counter": "server/knowledge-library/entitlements.ts",
+    "ownership_resolution": "server/knowledge-library/ownership.ts",
+    "persistence_ports": "server/knowledge-library/persistence.ts",
+    "postgres_repository": "server/knowledge-library/postgres-entitlement-repository.ts",
+    "dashboard_service": "server/knowledge-library/entitlement-service.ts",
+    "http_handler": "server/knowledge-library/entitlement-http.ts",
+    "database_migration": "database/migrations/20260720_001_mmg_knowledge_entitlements.sql"
+  },
+  "subscription_plan_contract": [
+    {
+      "plan_code": "monthly",
+      "display_name": "Monthly",
+      "monthly_price": 14.95,
+      "packages_per_billing_cycle": 1,
+      "assets_per_package": 2,
+      "assets_per_billing_cycle": 2
+    },
+    {
+      "plan_code": "biweekly",
+      "display_name": "Bi-weekly",
+      "monthly_price": 24.95,
+      "packages_per_billing_cycle": 2,
+      "assets_per_package": 2,
+      "assets_per_billing_cycle": 4
+    },
+    {
+      "plan_code": "weekly",
+      "display_name": "Weekly",
+      "monthly_price": 39.95,
+      "packages_per_billing_cycle": 4,
+      "assets_per_package": 2,
+      "assets_per_billing_cycle": 8
+    }
+  ],
+  "database_contract": {
+    "engine": "PostgreSQL-compatible SQL",
+    "transaction_requirement": "Every picker mutation and every confirmation grant set is persisted inside one database transaction.",
+    "tables": [
+      "mmg_knowledge_assets",
+      "mmg_subscription_entitlements",
+      "mmg_entitlement_cycles",
+      "mmg_entitlement_windows",
+      "mmg_entitlement_selections",
+      "mmg_picker_requests",
+      "mmg_delivery_grants",
+      "mmg_ownership_grants",
+      "mmg_entitlement_events"
+    ],
+    "versioned_records": [
+      "mmg_subscription_entitlements.version",
+      "mmg_entitlement_cycles.version",
+      "mmg_entitlement_windows.version"
+    ],
+    "canonical_asset_key": "asset_id",
+    "customer_ownership_key": "customer_id + asset_id",
+    "selection_key": "window_id + asset_id",
+    "idempotency_key": "window_id + request_id"
+  },
+  "ownership_contract": {
+    "grant_sources": [
+      "one_time_purchase",
+      "subscription_delivery",
+      "bonus",
+      "administrative"
+    ],
+    "grant_statuses": [
+      "pending",
+      "active",
+      "revoked"
+    ],
+    "owned_definition": "A customer owns an asset when at least one active non-revoked grant exists for the canonical asset_id.",
+    "deduplication_rule": "The customer-facing library displays one entry per asset_id even if audit history contains multiple historical grants.",
+    "selection_rule": "An actively owned asset is excluded from subscription selection and consumes no new entitlement units.",
+    "active_uniqueness": "At most one active ownership grant may exist per customer_id and asset_id."
+  },
+  "entitlement_counter_contract": {
+    "formula": "remaining units = total units - selected units - reserved units - confirmed units",
+    "overdraft_allowed": false,
+    "package_counter": "remaining packages = total packages - confirmed packages",
+    "current_window_priority": [
+      "open",
+      "scheduled",
+      "confirmed",
+      "closed",
+      "expired",
+      "canceled"
+    ],
+    "dashboard_fields": [
+      "plan",
+      "cycle",
+      "packages",
+      "assets",
+      "currentWindow",
+      "totalOwnedAssets"
+    ]
+  },
+  "confirmation_transaction_contract": {
+    "required_checks": [
+      "The entitlement window row is locked and its version equals expectedPreviousVersion.",
+      "The exact target title count is present.",
+      "The exact window unit total is consumed.",
+      "Every selected asset remains an active published available digital download.",
+      "Every selected asset remains subscription eligible.",
+      "Every selected asset has verified portrait and square media.",
+      "Every selected asset has a verified delivery package reference.",
+      "No selected asset is already actively owned by the customer.",
+      "The cycle retains sufficient package and unit capacity."
+    ],
+    "atomic_writes": [
+      "Confirm the entitlement window.",
+      "Persist confirmed selections.",
+      "Persist the picker request ID.",
+      "Create one delivery grant per selected asset.",
+      "Create one active ownership grant per selected asset.",
+      "Increment cycle confirmed-package and consumed-unit counters.",
+      "Write an entitlement audit event."
+    ],
+    "rollback_rule": "Any failed eligibility, ownership, capacity, grant, or version check rolls back the entire confirmation transaction."
+  },
+  "picker_repository_contract": {
+    "interface": "MMGPickerStateRepository",
+    "load_behavior": "Resolve the authenticated customer's active subscription, current entitlement window, selections, recent idempotency keys, active ownership grants, and current catalog projection.",
+    "save_behavior": "Use row locking and expected-version comparison before synchronizing selections and request IDs.",
+    "version_conflict_result": "version_conflict",
+    "processed_request_retention": 100
+  },
+  "entitlement_api_contract": {
+    "logical_endpoint": "/api/knowledge-library/entitlement",
+    "method": "GET",
+    "authentication": "Authenticated server session",
+    "cache_control": "no-store, private",
+    "response_schema_version": "1.0.0",
+    "customer_identity_from_browser_allowed": false
+  },
+  "storefront_component": {
+    "liquid_snippet": "shopify/snippets/mmg-entitlement-counter.liquid",
+    "javascript_asset": "shopify/assets/mmg-entitlement-counter.js",
+    "stylesheet_asset": "shopify/assets/mmg-entitlement-counter.css",
+    "knowledge_library_integration": "shopify/knowledge-library/mmg-entitlement-counter-integration.liquid",
+    "refresh_events": [
+      "mmg:knowledge-library-picker-ready",
+      "mmg:knowledge-library-selection-updated",
+      "mmg:knowledge-library-package-confirmed"
+    ],
+    "emitted_events": [
+      "mmg:entitlement-counter-ready",
+      "mmg:entitlement-counter-error"
+    ]
+  },
+  "security_contract": [
+    "Derive customer identity exclusively from the authenticated server session.",
+    "Never accept customer, subscription, cycle, or window identity from public Liquid or browser calculations.",
+    "Use parameterized SQL for all customer and asset values.",
+    "Use database row locks and expected versions for concurrent writes.",
+    "Keep entitlement responses private and non-cacheable.",
+    "Preserve audit history for grants, requests, and entitlement events.",
+    "Never represent client-side counters as authoritative."
+  ],
+  "integration_sequence": {
+    "previous_component": "MMG Knowledge Library Picker",
+    "current_component": "MMG Entitlement Counter and Ownership-Resolution Persistence",
+    "next_component": "MMG Delivery Window Controller",
+    "subsequent_components": [
+      "Customer Portal subscription dashboard",
+      "Thank-you page first-title handoff",
+      "My Library delivery interface",
+      "Shopify subscription webhook reconciliation",
+      "Kairos recommendation ranking"
+    ]
+  },
+  "release_gates": [
+    "The PostgreSQL migration has been reviewed, backed up, and applied in the production data environment.",
+    "A production SQL pool is connected to MMGPostgresDatabase through server-only environment configuration.",
+    "The deployed authenticated API adapter maps the session to the canonical customer ID.",
+    "Shopify subscription contracts are reconciled into mmg_subscription_entitlements.",
+    "Billing cycles and package windows are created from the locked plan contract.",
+    "The asset projection is synchronized from verified Shopify and Kairos metadata.",
+    "At least two subscription-selectable assets have verified delivery packages.",
+    "Concurrent selection and confirmation tests pass against a real PostgreSQL transaction environment.",
+    "The entitlement counter is integrated without replacing the existing Public Catalog experience.",
+    "Backup, rollback, observability, and grant-repair procedures are approved before live customer use."
+  ]
+}
