@@ -4,6 +4,7 @@
 **Commerce authority:** `registry/products/mmg-commerce-contract-v1.json`  
 **Knowledge Library authority:** `registry/knowledge-library/mmg-knowledge-library-contract-v1.json`  
 **Knowledge Library picker authority:** `registry/knowledge-library/mmg-knowledge-library-picker-contract-v1.json`  
+**Entitlement and ownership authority:** `registry/knowledge-library/mmg-entitlement-ownership-persistence-contract-v1.json`  
 **Digital asset registry:** `registry/knowledge-library/digital-asset-registry-v1.json`  
 **Live URL authority:** `registry/site-pages/site-url-registry-current.json`
 
@@ -114,6 +115,16 @@ The picker uses:
 - Exact-capacity confirmation.
 - Locked confirmed selections.
 
+## Durable Entitlement and Ownership Rules
+
+- PostgreSQL-compatible persistence is defined by `database/migrations/20260720_001_mmg_knowledge_entitlements.sql`.
+- Subscription contracts, billing cycles, package windows, selections, request IDs, delivery grants, ownership grants, and audit events have separate durable records.
+- Active ownership is resolved from `customer_id + asset_id`, not from browser state or product titles.
+- The customer-facing My Library presents one asset per canonical `asset_id` even when historical grant records are retained.
+- Package confirmation uses one transaction for the window update, selections, request ID, delivery grants, ownership grants, cycle counters, and audit event.
+- Any failed version, capacity, ownership, delivery-package, or eligibility check rolls back the entire confirmation.
+- The reusable entitlement counter shows plan, billing cycle, package completion, asset capacity, current-window progress, and owned-asset count.
+
 ## Commerce Component Build State
 
 | Component | Repository status | Live storefront status | Next dependency |
@@ -123,7 +134,8 @@ The picker uses:
 | MMG Three-Plan Selector | Merged | Not installed | Subscription product provisioning. |
 | MMG Cart Subscription Controller | Merged | Not installed | Active theme cart integration and product provisioning. |
 | Knowledge Library eligibility metadata | Merged | Not installed | Shopify metafields and delivery packages. |
-| MMG Knowledge Library Picker | Implemented for staging | Not installed | Entitlement Counter and ownership-resolution persistence. |
+| MMG Knowledge Library Picker | Merged | Not installed | Durable API adapter and persistence. |
+| MMG Entitlement Counter and Ownership Persistence | Implemented for staging | Not installed | Production PostgreSQL connection, Shopify contract reconciliation, and Delivery Window Controller. |
 
 ## Shopify Storage Contract
 

@@ -1,6 +1,6 @@
 {
   "contract_id": "mmg-commerce-contract-v1",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "status": "approved",
   "approved_date": "2026-07-20",
   "authority": "MMG executive approval",
@@ -45,6 +45,17 @@
     "first_package_total_units": 2,
     "optimistic_concurrency_field": "expectedWindowVersion",
     "idempotency_field": "requestId",
+    "server_authority": "Kairos"
+  },
+  "entitlement_ownership_persistence_contract": {
+    "authority": "registry/knowledge-library/mmg-entitlement-ownership-persistence-contract-v1.json",
+    "database_schema": "database/migrations/20260720_001_mmg_knowledge_entitlements.sql",
+    "postgres_repository": "server/knowledge-library/postgres-entitlement-repository.ts",
+    "entitlement_counter": "server/knowledge-library/entitlements.ts",
+    "ownership_resolution": "server/knowledge-library/ownership.ts",
+    "logical_entitlement_endpoint": "/api/knowledge-library/entitlement",
+    "storefront_counter": "shopify/snippets/mmg-entitlement-counter.liquid",
+    "confirmation_transaction": "window confirmation, delivery grants, ownership grants, cycle counters, and audit events commit or roll back together",
     "server_authority": "Kairos"
   },
   "product_types": {
@@ -208,7 +219,8 @@
         "Customer, subscription, and window identity are derived from the authenticated server session.",
         "Every mutation requires a request ID and expected window version.",
         "Confirmation requires the exact target asset count and complete unit consumption.",
-        "Confirmed selections are locked and become delivery-grant inputs."
+        "Confirmed selections are locked and become delivery-grant inputs.",
+        "Confirmation, delivery grants, ownership grants, cycle accounting, and audit events are one atomic database transaction."
       ]
     },
     "my_library": {
@@ -221,7 +233,8 @@
         "read-online controls where supported",
         "download controls"
       ],
-      "identity_rule": "Display one customer-facing entry per canonical asset_id."
+      "identity_rule": "Display one customer-facing entry per canonical asset_id.",
+      "ownership_authority": "An active non-revoked mmg_ownership_grants record keyed by customer_id and asset_id."
     }
   },
   "canonical_metadata": {
@@ -268,12 +281,14 @@
       "Use one canonical asset record across storefront, library, portal, recommendations, and delivery.",
       "Treat storefront eligibility as provisional until Kairos revalidates the customer, ownership, entitlement window, and delivery readiness.",
       "Use optimistic concurrency and idempotency for every title-selection mutation.",
-      "Create confirmation and delivery grants transactionally."
+      "Create confirmation and delivery grants transactionally.",
+      "Resolve ownership from durable active grants rather than browser state.",
+      "Never allow entitlement units or package counts to exceed the locked plan contract."
     ]
   },
   "site_placements": {
     "homepage": "Present digital resources, professional services, and membership as three connected paths.",
-    "knowledge_library": "Primary subscription discovery and title-selection surface.",
+    "knowledge_library": "Primary subscription discovery and title-selection surface with the reusable entitlement counter.",
     "digital_product_page": "Offer one-time purchase and a reusable build-your-library membership module.",
     "service_product_page": "Keep the service conversion primary; place membership in Continue Your Journey.",
     "publishing_services_landing_page": "Lead with service outcomes and connect to relevant education and membership secondarily.",

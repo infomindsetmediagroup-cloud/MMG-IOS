@@ -1,6 +1,6 @@
 {
   "contract_id": "mmg-knowledge-library-picker-v1",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "status": "approved_for_staging",
   "approved_date": "2026-07-20",
   "authority": "MMG executive approval",
@@ -13,7 +13,8 @@
     "eligibility_evaluator": "server/knowledge-library/eligibility.ts",
     "picker_state_machine": "server/knowledge-library/picker.ts",
     "picker_service": "server/knowledge-library/picker-service.ts",
-    "picker_http_handler": "server/knowledge-library/picker-http.ts"
+    "picker_http_handler": "server/knowledge-library/picker-http.ts",
+    "entitlement_ownership_persistence": "registry/knowledge-library/mmg-entitlement-ownership-persistence-contract-v1.json"
   },
   "supported_window_types": [
     "first_package",
@@ -230,9 +231,9 @@
   "integration_sequence": {
     "previous_component": "MMG Knowledge Library eligibility metadata and selection-mode contract",
     "current_component": "MMG Knowledge Library Picker",
-    "next_component": "MMG Entitlement Counter and ownership-resolution persistence",
+    "completed_dependency": "MMG Entitlement Counter and Ownership-Resolution Persistence",
+    "next_component": "MMG Delivery Window Controller",
     "subsequent_components": [
-      "MMG Delivery Window Controller",
       "Customer Portal subscription dashboard",
       "Thank-you page first-title handoff",
       "Kairos recommendation ranking"
@@ -241,8 +242,9 @@
   "release_gates": [
     "The secure HTTP handler is connected to the deployed authenticated API adapter.",
     "The server derives customer, subscription, and window identities from the session.",
+    "The PostgreSQL entitlement and ownership migration is applied.",
     "The entitlement-window repository supports atomic versioned writes.",
-    "Confirmation creates delivery grants transactionally and idempotently.",
+    "Confirmation creates delivery grants and ownership grants transactionally and idempotently.",
     "At least two verified subscription-selectable digital assets exist.",
     "Every displayed title has verified portrait and square media plus a delivery package.",
     "Owned assets cannot be selected or re-delivered as new entitlement consumption.",

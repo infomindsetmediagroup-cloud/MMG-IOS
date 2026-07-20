@@ -1,0 +1,312 @@
+mmg-entitlement-counter,
+mmg-entitlement-counter * {
+  box-sizing: border-box;
+}
+
+mmg-entitlement-counter {
+  --mmg-entitlement-bg: #02050a;
+  --mmg-entitlement-panel: #07111f;
+  --mmg-entitlement-panel-soft: #0c1728;
+  --mmg-entitlement-text: #f8fbff;
+  --mmg-entitlement-copy: #b7c3d6;
+  --mmg-entitlement-muted: #7f8ca3;
+  --mmg-entitlement-border: rgba(255, 255, 255, 0.11);
+  --mmg-entitlement-blue: #14b8ff;
+  display: block;
+  width: 100%;
+  color: var(--mmg-entitlement-text);
+  font-family: inherit;
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__shell {
+  width: 100%;
+  padding: clamp(22px, 4vw, 42px);
+  background:
+    radial-gradient(circle at 85% 0%, rgba(20, 184, 255, 0.14), transparent 34%),
+    linear-gradient(180deg, var(--mmg-entitlement-panel) 0%, var(--mmg-entitlement-bg) 100%);
+  border: 1px solid var(--mmg-entitlement-border);
+  border-radius: 26px;
+  overflow: clip;
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 22px;
+  align-items: start;
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__eyebrow,
+mmg-entitlement-counter .mmg-entitlement-counter__label {
+  display: block;
+  margin: 0;
+  color: var(--mmg-entitlement-blue);
+  font-size: 0.76rem;
+  font-weight: 850;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__title {
+  margin: 8px 0 0;
+  color: var(--mmg-entitlement-text);
+  font-size: clamp(1.8rem, 4vw, 3.35rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__intro {
+  max-width: 680px;
+  margin: 14px 0 0;
+  color: var(--mmg-entitlement-copy);
+  line-height: 1.65;
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__portal-link,
+mmg-entitlement-counter .mmg-entitlement-counter__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  font-weight: 850;
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+  transition: transform 160ms ease, filter 160ms ease, border-color 160ms ease;
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__portal-link,
+mmg-entitlement-counter .mmg-entitlement-counter__button--secondary {
+  color: var(--mmg-entitlement-text);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--mmg-entitlement-border);
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__button--primary {
+  color: #00101a;
+  background: linear-gradient(135deg, #7ce7ff 0%, var(--mmg-entitlement-blue) 50%, #3b7cff 100%);
+  border: 1px solid transparent;
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__portal-link:hover,
+mmg-entitlement-counter .mmg-entitlement-counter__button:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.07);
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__portal-link:focus-visible,
+mmg-entitlement-counter .mmg-entitlement-counter__button:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 3px;
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__status,
+mmg-entitlement-counter .mmg-entitlement-counter__blocked {
+  margin-top: 24px;
+  padding: 24px;
+  color: var(--mmg-entitlement-copy);
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--mmg-entitlement-border);
+  border-radius: 20px;
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__status {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__spinner {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--mmg-entitlement-blue);
+  border-radius: 50%;
+  animation: mmg-entitlement-spin 800ms linear infinite;
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__blocked h3 {
+  margin: 0;
+  color: var(--mmg-entitlement-text);
+  font-size: 1.35rem;
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__blocked p {
+  margin: 10px 0 0;
+  line-height: 1.6;
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__dashboard {
+  margin-top: 24px;
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__plan-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: end;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--mmg-entitlement-border);
+  border-radius: 18px;
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__plan,
+mmg-entitlement-counter .mmg-entitlement-counter__cycle strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--mmg-entitlement-text);
+  font-size: 1.12rem;
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__cycle {
+  text-align: right;
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__stat {
+  min-width: 0;
+  padding: 20px;
+  background: var(--mmg-entitlement-panel-soft);
+  border: 1px solid var(--mmg-entitlement-border);
+  border-radius: 18px;
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__stat strong {
+  display: block;
+  margin-top: 12px;
+  color: var(--mmg-entitlement-text);
+  font-size: clamp(1.7rem, 3vw, 2.6rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__stat > span:last-child {
+  display: block;
+  margin-top: 9px;
+  color: var(--mmg-entitlement-copy);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__progress-group {
+  margin-top: 14px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--mmg-entitlement-border);
+  border-radius: 18px;
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__progress-copy {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--mmg-entitlement-copy);
+  font-size: 0.92rem;
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__progress-copy strong {
+  color: var(--mmg-entitlement-text);
+  text-align: right;
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__track {
+  height: 12px;
+  margin-top: 13px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.09);
+  border-radius: 999px;
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__fill {
+  display: block;
+  width: var(--mmg-entitlement-progress, 0%);
+  height: 100%;
+  background: linear-gradient(90deg, var(--mmg-entitlement-blue), #7568ff);
+  border-radius: inherit;
+  transition: width 220ms ease;
+}
+
+mmg-entitlement-counter .mmg-entitlement-counter__noscript {
+  margin: 20px 0 0;
+  color: var(--mmg-entitlement-copy);
+  line-height: 1.6;
+}
+
+mmg-entitlement-counter [hidden] {
+  display: none !important;
+}
+
+@keyframes mmg-entitlement-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 900px) {
+  mmg-entitlement-counter .mmg-entitlement-counter__stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  mmg-entitlement-counter .mmg-entitlement-counter__shell {
+    padding: 20px 15px;
+    border-radius: 22px;
+  }
+
+  mmg-entitlement-counter .mmg-entitlement-counter__header,
+  mmg-entitlement-counter .mmg-entitlement-counter__plan-row {
+    grid-template-columns: 1fr;
+  }
+
+  mmg-entitlement-counter .mmg-entitlement-counter__portal-link {
+    width: 100%;
+  }
+
+  mmg-entitlement-counter .mmg-entitlement-counter__cycle {
+    text-align: left;
+  }
+
+  mmg-entitlement-counter .mmg-entitlement-counter__stats {
+    grid-template-columns: 1fr;
+  }
+
+  mmg-entitlement-counter .mmg-entitlement-counter__actions {
+    display: grid;
+  }
+
+  mmg-entitlement-counter .mmg-entitlement-counter__progress-copy {
+    display: grid;
+  }
+
+  mmg-entitlement-counter .mmg-entitlement-counter__progress-copy strong {
+    text-align: left;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  mmg-entitlement-counter *,
+  mmg-entitlement-counter *::before,
+  mmg-entitlement-counter *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

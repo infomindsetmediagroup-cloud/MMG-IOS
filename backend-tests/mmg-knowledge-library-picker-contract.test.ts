@@ -8,6 +8,7 @@ type PickerContract = {
   version: string;
   status: string;
   canonical_route: string;
+  dependencies: Record<string, string>;
   first_package_contract: {
     headline: string;
     target_asset_count: number;
@@ -52,6 +53,7 @@ type PickerContract = {
   integration_sequence: {
     previous_component: string;
     current_component: string;
+    completed_dependency: string;
     next_component: string;
     subsequent_components: string[];
   };
@@ -76,9 +78,12 @@ const integration = read(
 describe("MMG Knowledge Library picker contract", () => {
   it("is the approved staged picker for the canonical Knowledge Library route", () => {
     expect(contract.contract_id).toBe("mmg-knowledge-library-picker-v1");
-    expect(contract.version).toBe("1.0.0");
+    expect(contract.version).toBe("1.1.0");
     expect(contract.status).toBe("approved_for_staging");
     expect(contract.canonical_route).toBe("/pages/knowledge-library");
+    expect(contract.dependencies.entitlement_ownership_persistence).toBe(
+      "registry/knowledge-library/mmg-entitlement-ownership-persistence-contract-v1.json",
+    );
     expect(contract.storefront_implementation).toEqual({
       liquid_snippet: "shopify/snippets/mmg-knowledge-library-picker.liquid",
       javascript_asset: "shopify/assets/mmg-knowledge-library-picker.js",
@@ -230,12 +235,13 @@ describe("MMG Knowledge Library picker contract", () => {
     expect(integration).toContain("mmg-knowledge-library-picker");
   });
 
-  it("keeps release blocked until the secure API adapter and persistence exist", () => {
+  it("keeps live release blocked while advancing to the Delivery Window Controller", () => {
     expect(contract.release_gates).toEqual(
       expect.arrayContaining([
         "The secure HTTP handler is connected to the deployed authenticated API adapter.",
+        "The PostgreSQL entitlement and ownership migration is applied.",
         "The entitlement-window repository supports atomic versioned writes.",
-        "Confirmation creates delivery grants transactionally and idempotently.",
+        "Confirmation creates delivery grants and ownership grants transactionally and idempotently.",
         "At least two verified subscription-selectable digital assets exist.",
       ]),
     );
@@ -243,10 +249,10 @@ describe("MMG Knowledge Library picker contract", () => {
       previous_component:
         "MMG Knowledge Library eligibility metadata and selection-mode contract",
       current_component: "MMG Knowledge Library Picker",
-      next_component:
-        "MMG Entitlement Counter and ownership-resolution persistence",
+      completed_dependency:
+        "MMG Entitlement Counter and Ownership-Resolution Persistence",
+      next_component: "MMG Delivery Window Controller",
       subsequent_components: [
-        "MMG Delivery Window Controller",
         "Customer Portal subscription dashboard",
         "Thank-you page first-title handoff",
         "Kairos recommendation ranking",
