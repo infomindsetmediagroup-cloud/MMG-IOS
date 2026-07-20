@@ -3,6 +3,7 @@
 **Status:** Active  
 **Commerce authority:** `registry/products/mmg-commerce-contract-v1.json`  
 **Knowledge Library authority:** `registry/knowledge-library/mmg-knowledge-library-contract-v1.json`  
+**Knowledge Library picker authority:** `registry/knowledge-library/mmg-knowledge-library-picker-contract-v1.json`  
 **Digital asset registry:** `registry/knowledge-library/digital-asset-registry-v1.json`  
 **Live URL authority:** `registry/site-pages/site-url-registry-current.json`
 
@@ -103,6 +104,26 @@ The canonical Shopify metadata definitions are stored in:
 `shopify/metafields/mmg-knowledge-library-product-metafields.json`
 
 The public storefront may expose provisional eligibility hints, but it must not expose private ownership grants, subscription contract identifiers, or authoritative remaining-unit totals.
+
+The picker uses:
+
+- Server-derived customer, subscription, and window identity.
+- A two-title, two-unit first-package target.
+- `requestId` idempotency.
+- `expectedWindowVersion` optimistic concurrency.
+- Exact-capacity confirmation.
+- Locked confirmed selections.
+
+## Commerce Component Build State
+
+| Component | Repository status | Live storefront status | Next dependency |
+|---|---|---|---|
+| MMG commerce ecosystem contract | Merged | Governing only | Continue implementation sequence. |
+| Subscription product and selling-plan contract | Merged | Not provisioned | Shopify runtime IDs. |
+| MMG Three-Plan Selector | Merged | Not installed | Subscription product provisioning. |
+| MMG Cart Subscription Controller | Merged | Not installed | Active theme cart integration and product provisioning. |
+| Knowledge Library eligibility metadata | Merged | Not installed | Shopify metafields and delivery packages. |
+| MMG Knowledge Library Picker | Implemented for staging | Not installed | Entitlement Counter and ownership-resolution persistence. |
 
 ## Shopify Storage Contract
 
