@@ -1,10 +1,10 @@
 {
   "contract_id": "mmg-commerce-contract-v1",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "status": "approved",
   "approved_date": "2026-07-20",
   "authority": "MMG executive approval",
-  "purpose": "Canonical machine-readable contract connecting digital downloads, services, subscriptions, the Knowledge Library, Shopify cart and checkout behavior, the Thank you first-title handoff, customer entitlements, delivery windows, secure My Library access, the Customer Portal, and Kairos fulfillment.",
+  "purpose": "Canonical machine-readable contract connecting digital downloads, services, subscriptions, Shopify subscription reconciliation, the Knowledge Library, cart and checkout behavior, the Thank you first-title handoff, customer entitlements, delivery windows, secure My Library access, the Customer Portal, and Kairos fulfillment.",
   "system_boundaries": {
     "shopify": [
       "product catalog",
@@ -14,10 +14,13 @@
       "checkout",
       "Thank you page extension host",
       "payments",
-      "recurring billing"
+      "recurring billing",
+      "subscription-contract lifecycle webhooks",
+      "subscription billing-attempt webhooks"
     ],
     "kairos": [
       "recommendations",
+      "Shopify subscription reconciliation",
       "subscription entitlements",
       "post-checkout first-title handoff",
       "title selection",
@@ -69,11 +72,7 @@
     "postgres_repository": "server/knowledge-library/postgres-delivery-window-repository.ts",
     "internal_endpoint": "/api/internal/knowledge-library/delivery-windows/run",
     "database_schema": "database/migrations/20260720_002_mmg_delivery_window_controller.sql",
-    "review_window_hours": {
-      "minimum": 24,
-      "maximum": 48,
-      "default": 48
-    },
+    "review_window_hours": { "minimum": 24, "maximum": 48, "default": 48 },
     "weekly_package_offsets_days": [0, 7, 14, 21],
     "first_package_expiry": "recovery_required",
     "future_package_expiry": "auto-confirm an exact valid two-title package; otherwise recovery_required",
@@ -118,12 +117,23 @@
     "database_schema": "database/migrations/20260720_004_mmg_my_library_delivery.sql",
     "authentication": "authenticated Customer Portal server session",
     "same_origin_and_csrf_required": true,
-    "signed_url_ttl_seconds": {
-      "minimum": 60,
-      "default": 300,
-      "maximum": 600
-    },
+    "signed_url_ttl_seconds": { "minimum": 60, "default": 300, "maximum": 600 },
     "permanent_file_urls_exposed": false,
+    "server_authority": "Kairos"
+  },
+  "shopify_subscription_webhook_reconciliation_contract": {
+    "authority": "registry/shopify/mmg-subscription-webhook-reconciliation-contract-v1.json",
+    "domain_model": "server/shopify/subscription-webhook-reconciliation.ts",
+    "service_boundary": "server/shopify/subscription-webhook-service.ts",
+    "postgres_repository": "server/shopify/subscription-webhook-repository.ts",
+    "shopify_gateway": "server/shopify/shopify-subscription-contract-gateway.ts",
+    "logical_endpoint": "/api/shopify/webhooks/subscriptions",
+    "webhook_manifest": "shopify/webhooks/mmg-subscription-webhooks.shopify.app.toml",
+    "database_schema": "database/migrations/20260720_005_mmg_shopify_subscription_reconciliation.sql",
+    "api_version": "2026-07",
+    "required_scope": "read_own_subscription_contracts",
+    "hmac_required": true,
+    "deduplication_header": "X-Shopify-Webhook-Id",
     "server_authority": "Kairos"
   },
   "product_types": {
@@ -137,14 +147,8 @@
         "square_thumbnail_aspect_ratio": "1:1"
       },
       "delivery_package": {
-        "required_image_assets": [
-          "portrait_cover",
-          "square_thumbnail"
-        ],
-        "required_customer_files": [
-          "primary_digital_asset",
-          "readme_or_customer_instructions"
-        ]
+        "required_image_assets": ["portrait_cover", "square_thumbnail"],
+        "required_customer_files": ["primary_digital_asset", "readme_or_customer_instructions"]
       },
       "subscription_eligibility": "Per-product boolean metadata field; only approved digital downloads may enter the subscription catalog after all Knowledge Library selection gates pass."
     },
@@ -152,21 +156,9 @@
       "code": "service",
       "default_media_role": "service_specific_cover",
       "variants": [
-        {
-          "name": "Starter",
-          "color_identity": "electric_blue",
-          "variant_image_role": "starter_tier_image"
-        },
-        {
-          "name": "Growth",
-          "color_identity": "purple",
-          "variant_image_role": "growth_tier_image"
-        },
-        {
-          "name": "Professional",
-          "color_identity": "gold",
-          "variant_image_role": "professional_tier_image"
-        }
+        { "name": "Starter", "color_identity": "electric_blue", "variant_image_role": "starter_tier_image" },
+        { "name": "Growth", "color_identity": "purple", "variant_image_role": "growth_tier_image" },
+        { "name": "Professional", "color_identity": "gold", "variant_image_role": "professional_tier_image" }
       ],
       "media_behavior": {
         "default": "Show the service-specific cover.",
@@ -184,11 +176,7 @@
       "shopify_structure": {
         "product_model": "ONE_PRODUCT_THREE_CADENCE_VARIANTS",
         "variant_option_name": "Delivery cadence",
-        "variant_codes": [
-          "monthly",
-          "biweekly",
-          "weekly"
-        ],
+        "variant_codes": ["monthly", "biweekly", "weekly"],
         "requires_selling_plan": true,
         "requires_shipping": false,
         "inventory_tracking": false,
@@ -238,11 +226,7 @@
       "future_delivery_flow": {
         "curation_owner": "Kairos",
         "assets_per_package": 2,
-        "review_window_hours": {
-          "minimum": 24,
-          "maximum": 48,
-          "default": 48
-        },
+        "review_window_hours": { "minimum": 24, "maximum": 48, "default": 48 },
         "customer_action": "Review and swap eligible titles before delivery closes.",
         "expiry_policy": "Auto-confirm the exact current two-title package only after server revalidation; otherwise move to recovery_required."
       },
@@ -252,19 +236,8 @@
   "knowledge_library_modes": {
     "public_catalog": {
       "access": "public",
-      "shows": [
-        "active digital-download products",
-        "individual purchase controls",
-        "subscription eligibility indicators",
-        "membership introduction"
-      ],
-      "filters": [
-        "published and available",
-        "product_type equals digital_download",
-        "asset_status equals active",
-        "unique asset_id",
-        "portrait cover present"
-      ]
+      "shows": ["active digital-download products", "individual purchase controls", "subscription eligibility indicators", "membership introduction"],
+      "filters": ["published and available", "product_type equals digital_download", "asset_status equals active", "unique asset_id", "portrait cover present"]
     },
     "subscription_selection": {
       "access": "authenticated active subscriber",
@@ -280,11 +253,7 @@
         "sufficient remaining entitlement units",
         "not already selected"
       ],
-      "actions": [
-        "choose title",
-        "remove selection",
-        "confirm package"
-      ],
+      "actions": ["choose title", "remove selection", "confirm package"],
       "authority": "Kairos revalidates customer-specific eligibility server-side.",
       "mutation_rules": [
         "Customer, subscription, and window identity are derived from the authenticated server session.",
@@ -298,14 +267,7 @@
     },
     "my_library": {
       "access": "authenticated customer",
-      "shows": [
-        "individual purchases",
-        "subscription selections",
-        "curated subscription deliveries",
-        "bonuses",
-        "read-online controls where supported",
-        "download controls"
-      ],
+      "shows": ["individual purchases", "subscription selections", "curated subscription deliveries", "bonuses", "read-online controls where supported", "download controls"],
       "identity_rule": "Display one customer-facing entry per canonical asset_id.",
       "ownership_authority": "An active non-revoked mmg_ownership_grants record keyed by customer_id and asset_id.",
       "delivery_authority": "registry/customer-portal/mmg-my-library-delivery-contract-v1.json",
@@ -342,6 +304,7 @@
       "related resources",
       "cart recommendations",
       "customer ownership",
+      "Shopify subscription reconciliation",
       "subscription entitlements",
       "delivery limits",
       "delivery-window scheduling",
@@ -370,7 +333,14 @@
       "Persist only a cryptographic hash of the checkout token.",
       "Display one My Library item per canonical asset ID regardless of historical grant count.",
       "Revalidate active ownership and delivered subscription state before issuing file access.",
-      "Issue only short-lived HTTPS signed file URLs; never expose permanent storage URLs or object keys."
+      "Issue only short-lived HTTPS signed file URLs; never expose permanent storage URLs or object keys.",
+      "Verify Shopify webhooks against the exact raw-body HMAC before parsing JSON.",
+      "Deduplicate Shopify webhook deliveries by X-Shopify-Webhook-Id and reject webhook-ID payload collisions.",
+      "Reload the authoritative Shopify SubscriptionContract before mutating entitlements.",
+      "Ignore stale subscription revisions and equal-revision events with an older or equal Shopify triggered-at timestamp.",
+      "Create at most one entitlement cycle per subscription and authoritative current-period start.",
+      "Link pending Thank-you orders to durable entitlements only when shop, origin order, and plan match.",
+      "Never persist raw Shopify webhook bodies, app client secrets, or Admin API access tokens."
     ]
   },
   "site_placements": {
@@ -396,7 +366,8 @@
     "MMG Delivery Window Controller",
     "MMG Customer Portal Subscription Dashboard",
     "MMG Thank-You First-Title Handoff",
-    "MMG My Library Delivery Interface"
+    "MMG My Library Delivery Interface",
+    "MMG Shopify Subscription Webhook Reconciliation"
   ],
   "canonical_customer_flow": [
     "Homepage",
@@ -406,6 +377,7 @@
     "Cart subscription offer",
     "Checkout",
     "Thank-you first-title handoff",
+    "Shopify subscription webhook reconciliation",
     "Customer Portal",
     "Title selection or project intake",
     "My Library or My Projects",

@@ -1,0 +1,17 @@
+# Canonical app-specific webhook block for the MMG Partner Dashboard app.
+# Merge this block into the deployed shopify.app.toml only after the app has
+# protected subscription API access and the read_own_subscription_contracts scope.
+
+[webhooks]
+api_version = "2026-07"
+
+[[webhooks.subscriptions]]
+name = "mmg-subscription-reconciliation"
+topics = [
+  "subscription_contracts/create",
+  "subscription_contracts/update",
+  "subscription_billing_attempts/success",
+  "subscription_billing_attempts/failure",
+  "subscription_billing_attempts/challenged"
+]
+uri = "/api/shopify/webhooks/subscriptions"

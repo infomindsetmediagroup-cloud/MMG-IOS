@@ -1,0 +1,177 @@
+{
+  "contract_id": "mmg-shopify-subscription-webhook-reconciliation-v1",
+  "version": "1.0.0",
+  "status": "approved_for_staging",
+  "approved_date": "2026-07-20",
+  "authority": "MMG executive approval",
+  "purpose": "Reconcile Shopify subscription-contract and billing-attempt webhooks into durable MMG entitlements, billing cycles, package windows, Thank-you order links, and Customer Portal state without trusting webhook payloads as the final subscription authority.",
+  "dependencies": {
+    "commerce_contract": "registry/products/mmg-commerce-contract-v1.json",
+    "subscription_product_contract": "shopify/products/mmg-knowledge-subscription/product-contract.json",
+    "entitlement_schema": "database/migrations/20260720_001_mmg_knowledge_entitlements.sql",
+    "delivery_window_schema": "database/migrations/20260720_002_mmg_delivery_window_controller.sql",
+    "thank_you_handoff_schema": "database/migrations/20260720_003_mmg_thank_you_first_title_handoff.sql",
+    "reconciliation_schema": "database/migrations/20260720_005_mmg_shopify_subscription_reconciliation.sql"
+  },
+  "shopify_contract": {
+    "api_version": "2026-07",
+    "logical_endpoint": "/api/shopify/webhooks/subscriptions",
+    "manifest": "shopify/webhooks/mmg-subscription-webhooks.shopify.app.toml",
+    "required_scope": "read_own_subscription_contracts",
+    "protected_subscription_api_access_required": true,
+    "topics": [
+      "subscription_contracts/create",
+      "subscription_contracts/update",
+      "subscription_billing_attempts/success",
+      "subscription_billing_attempts/failure",
+      "subscription_billing_attempts/challenged"
+    ],
+    "required_headers": [
+      "X-Shopify-Hmac-Sha256",
+      "X-Shopify-Shop-Domain",
+      "X-Shopify-Topic",
+      "X-Shopify-API-Version",
+      "X-Shopify-Webhook-Id",
+      "X-Shopify-Triggered-At"
+    ],
+    "optional_correlation_headers": [
+      "X-Shopify-Event-Id",
+      "X-Shopify-Name"
+    ],
+    "maximum_body_bytes": 65536
+  },
+  "verification_contract": {
+    "hmac_algorithm": "HMAC-SHA256",
+    "hmac_encoding": "base64",
+    "hmac_input": "exact raw request body before JSON parsing",
+    "comparison": "constant-time byte comparison",
+    "allowed_shop": "configured canonical myshopify.com domain only",
+    "api_version_must_match_deployment": true,
+    "payload_authoritative": false,
+    "authoritative_reload": "Reload the SubscriptionContract through the Shopify Admin GraphQL API after HMAC verification and before entitlement mutation.",
+    "runtime_mapping_required": [
+      "canonical product GID",
+      "canonical shared selling-plan GID",
+      "Monthly variant GID",
+      "Bi-weekly variant GID",
+      "Weekly variant GID"
+    ]
+  },
+  "idempotency_contract": {
+    "delivery_key": "X-Shopify-Webhook-Id",
+    "payload_collision_rule": "The same webhook ID with a different SHA-256 payload hash is rejected.",
+    "processed_duplicate_rule": "Return HTTP 200 without applying the event again.",
+    "retry_rule": "Failed retryable deliveries may reclaim the same webhook record and re-run reconciliation.",
+    "billing_attempt_key": "shop_domain + idempotency_key",
+    "cycle_key": "subscription_entitlement_id + current_period_start",
+    "order_link_key": "shop_domain + origin_order_id",
+    "raw_body_persisted": false,
+    "payload_hash_persisted": true
+  },
+  "authoritative_contract_requirements": {
+    "product": "MMG Knowledge Subscription™",
+    "product_handle": "mmg-knowledge-subscription",
+    "line_count": 1,
+    "quantity": 1,
+    "requires_shipping": false,
+    "currency": "USD",
+    "billing_interval": "MONTH",
+    "billing_interval_count": 1,
+    "delivery_interval": "MONTH",
+    "delivery_interval_count": 1,
+    "selling_plan": "canonical shared monthly selling plan",
+    "variant_plan_mapping": {
+      "monthly": {
+        "price": 14.95,
+        "packages_per_billing_cycle": 1,
+        "assets_per_package": 2,
+        "assets_per_billing_cycle": 2,
+        "window_offsets_days": [0]
+      },
+      "biweekly": {
+        "price": 24.95,
+        "packages_per_billing_cycle": 2,
+        "assets_per_package": 2,
+        "assets_per_billing_cycle": 4,
+        "window_offsets_days": [0, 14]
+      },
+      "weekly": {
+        "price": 39.95,
+        "packages_per_billing_cycle": 4,
+        "assets_per_package": 2,
+        "assets_per_billing_cycle": 8,
+        "window_offsets_days": [0, 7, 14, 21]
+      }
+    }
+  },
+  "status_mapping": {
+    "ACTIVE": "active",
+    "PAUSED": "paused",
+    "FAILED": "failed",
+    "CANCELLED": "canceled",
+    "EXPIRED": "expired"
+  },
+  "reconciliation_contract": {
+    "stale_event_rule": "Ignore an event when the persisted contract revision is newer, or when revision IDs are equal and the persisted Shopify triggered-at timestamp is equal or newer.",
+    "customer_identity_rule": "A provider contract cannot move to a different Shopify customer ID.",
+    "plan_change_rule": "A valid canonical variant change updates the entitlement plan for the authoritative period; existing historical cycles retain their original capacity.",
+    "cycle_creation_rule": "Create at most one cycle for each authoritative current-period start and only when the contract is active and both period boundaries are valid.",
+    "first_cycle_rule": "The first package of the first entitlement cycle is customer-selected, uses manual recovery fallback, and may open immediately for 48 hours.",
+    "future_package_rule": "All later packages are scheduled-package-review windows with a 48-hour review period and auto-confirm-current-selection fallback subject to existing server revalidation.",
+    "weekly_rule": "Create exactly four package windows at offsets 0, 7, 14, and 21; never create a fifth package in a five-week calendar month.",
+    "pause_and_terminal_rule": "Paused, failed, canceled, or expired contracts cancel future scheduled entitlement cycles without revoking already delivered ownership grants.",
+    "thank_you_link_rule": "Link a verified pending Thank-you order record to the durable entitlement when shop domain, origin order ID, and plan code match.",
+    "transaction_rule": "Entitlement, contract snapshot, order link, billing attempt, cycle, windows, and entitlement audit event commit or roll back together."
+  },
+  "billing_attempt_contract": {
+    "success": "Persist the successful attempt and allow idempotent current-period cycle creation after authoritative contract reload.",
+    "failure": "Persist the failed attempt and billing failure metadata; do not fabricate a new paid entitlement cycle.",
+    "challenged": "Persist the challenged state for support and reconciliation visibility without granting new entitlement capacity.",
+    "terminal_precedence": "A recorded succeeded state cannot be downgraded by a later duplicate failure or challenge for the same idempotency key.",
+    "customer_file_access_rule": "Existing ownership grants remain durable; access to subscription-selected files still requires delivered-window authorization."
+  },
+  "persistence_contract": {
+    "webhook_inbox": "mmg_shopify_webhook_deliveries",
+    "contract_snapshot": "mmg_shopify_subscription_contracts",
+    "billing_attempts": "mmg_shopify_subscription_billing_attempts",
+    "entitlements": "mmg_subscription_entitlements",
+    "cycles": "mmg_entitlement_cycles",
+    "windows": "mmg_entitlement_windows",
+    "thank_you_order_links": "mmg_subscription_order_links",
+    "audit_events": "mmg_entitlement_events"
+  },
+  "privacy_and_security_contract": [
+    "Never process the JSON body before raw-body HMAC verification.",
+    "Never accept the shop domain, contract identity, customer identity, product identity, plan identity, billing period, or entitlement capacity from browser input.",
+    "Never persist the Shopify app client secret or Admin API access token.",
+    "Never persist the raw webhook body.",
+    "Never expose provider contract IDs, billing-attempt IDs, webhook IDs, access tokens, payload hashes, or reconciliation event payloads to the storefront.",
+    "Use parameterized SQL and a database transaction for reconciliation mutations.",
+    "Return HTTP 200 for processed duplicates and permanently noncanonical events so Shopify does not retry them indefinitely.",
+    "Return a non-2xx response only for retryable processing failures."
+  ],
+  "release_gates": [
+    "The Shopify app has protected subscription API access.",
+    "The deployed app has the read_own_subscription_contracts scope.",
+    "The canonical product, three variants, shared selling plan, and runtime GIDs are provisioned and verified.",
+    "The app-specific webhook manifest is merged into the deployed shopify.app.toml and released.",
+    "The endpoint is routed through the deployed Kairos runtime.",
+    "The Shopify app client secret is available only to the server-side HMAC verifier.",
+    "A secure per-shop Admin API token provider is connected to the authoritative contract gateway.",
+    "Migrations 001 through 005 are applied to production PostgreSQL.",
+    "Create, update, success, failure, challenged, duplicate, stale, replay, payload-collision, wrong-shop, wrong-version, invalid-HMAC, and Admin API outage cases pass.",
+    "Monthly, Bi-weekly, and Weekly subscriptions create exactly one, two, and four windows with two assets each.",
+    "A five-week calendar month never creates a fifth Weekly package.",
+    "The Thank-you handoff resolves from activation-pending to the first-title selection state after reconciliation.",
+    "The Customer Portal reflects active, paused, failed, canceled, and expired membership states without exposing provider internals.",
+    "No live webhook registration or entitlement mutation occurs before explicit production release approval."
+  ],
+  "integration_sequence": {
+    "previous_component": "My Library delivery interface",
+    "current_component": "Shopify subscription webhook reconciliation",
+    "next_component": "Kairos recommendation and curation ranking",
+    "subsequent_components": [
+      "Live Shopify provisioning and end-to-end deployment"
+    ]
+  }
+}
