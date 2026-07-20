@@ -1,0 +1,20 @@
+{%- comment -%}
+  MMG Customer Portal Subscription Dashboard integration assembly.
+
+  Insert this render inside the existing Customer Portal page source without
+  removing its current service-project, support, authentication, or navigation
+  modules. The secure endpoint remains authoritative for private membership data.
+{%- endcomment -%}
+
+{%- render 'mmg-customer-portal-subscription-dashboard',
+  mmg_portal_instance_id: 'customer-portal-primary',
+  mmg_portal_endpoint: '/api/customer-portal/subscription',
+  mmg_portal_login_url: routes.account_login_url,
+  mmg_portal_manage_url: routes.account_url,
+  mmg_portal_membership_url: '/products/mmg-knowledge-subscription',
+  mmg_portal_library_url: '/pages/knowledge-library',
+  mmg_portal_selection_url: '/pages/knowledge-library#subscription-selection',
+  mmg_portal_my_library_url: '/pages/knowledge-library#my-library',
+  mmg_portal_support_url: '/pages/customer-service',
+  mmg_portal_guide_url: '/pages/customer-portal#subscription-member-guide'
+-%}

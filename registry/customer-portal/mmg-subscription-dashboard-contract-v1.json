@@ -1,0 +1,210 @@
+{
+  "contract_id": "mmg-customer-portal-subscription-dashboard-v1",
+  "version": "1.0.0",
+  "status": "approved_for_staging",
+  "approved_date": "2026-07-20",
+  "authority": "MMG executive approval",
+  "canonical_route": "/pages/customer-portal",
+  "purpose": "Canonical authenticated Customer Portal dashboard for MMG Knowledge Subscription plan status, entitlement progress, package windows, title selections, deliveries, recovery actions, My Library access, and membership controls.",
+  "dependencies": {
+    "commerce_contract": "registry/products/mmg-commerce-contract-v1.json",
+    "entitlement_persistence_contract": "registry/knowledge-library/mmg-entitlement-ownership-persistence-contract-v1.json",
+    "delivery_window_contract": "registry/knowledge-library/mmg-delivery-window-controller-contract-v1.json",
+    "dashboard_domain": "server/customer-portal/subscription-dashboard.ts",
+    "dashboard_repository": "server/customer-portal/subscription-dashboard-repository.ts",
+    "dashboard_service": "server/customer-portal/subscription-dashboard-service.ts",
+    "dashboard_http_handler": "server/customer-portal/subscription-dashboard-http.ts"
+  },
+  "endpoint_contract": {
+    "logical_endpoint": "/api/customer-portal/subscription",
+    "method": "GET",
+    "authentication": "Authenticated Customer Portal server session",
+    "customer_identity_source": "server session only",
+    "cache_control": "no-store, private",
+    "response_schema_version": "1.0.0",
+    "provider_contract_id_exposed": false,
+    "raw_grant_ids_exposed": false,
+    "delivery_package_reference_exposed": false
+  },
+  "membership_contract": {
+    "display_fields": [
+      "status",
+      "plan code",
+      "plan display name",
+      "monthly price",
+      "packages per billing cycle",
+      "assets per package",
+      "assets per billing cycle",
+      "current period start",
+      "current period end"
+    ],
+    "locked_plans": [
+      {
+        "plan_code": "monthly",
+        "monthly_price": 14.95,
+        "packages_per_billing_cycle": 1,
+        "assets_per_billing_cycle": 2
+      },
+      {
+        "plan_code": "biweekly",
+        "monthly_price": 24.95,
+        "packages_per_billing_cycle": 2,
+        "assets_per_billing_cycle": 4
+      },
+      {
+        "plan_code": "weekly",
+        "monthly_price": 39.95,
+        "packages_per_billing_cycle": 4,
+        "assets_per_billing_cycle": 8
+      }
+    ]
+  },
+  "progress_contract": {
+    "fields": [
+      "total packages",
+      "completed packages",
+      "remaining packages",
+      "total assets",
+      "committed assets",
+      "remaining assets",
+      "total owned assets"
+    ],
+    "remaining_packages_formula": "total packages - completed packages",
+    "remaining_assets_formula": "total assets - committed assets",
+    "overdraft_allowed": false,
+    "ownership_authority": "active non-revoked ownership grants keyed by customer_id + asset_id"
+  },
+  "current_package_contract": {
+    "priority_order": [
+      "recovery_required",
+      "open",
+      "delivery_ready",
+      "confirmed",
+      "scheduled",
+      "delivered",
+      "closed",
+      "expired",
+      "canceled"
+    ],
+    "display_fields": [
+      "package sequence",
+      "package type",
+      "status",
+      "opens at",
+      "closes at",
+      "confirmed at",
+      "delivery ready at",
+      "delivered at",
+      "selected asset count",
+      "target asset count",
+      "selected units",
+      "total units",
+      "selected or proposed titles"
+    ],
+    "open_first_package_action": "Choose your first two titles",
+    "open_future_package_action": "Review this package",
+    "recovery_action": "Resolve this package through Customer Service or an authorized recovery workflow",
+    "confirmed_or_delivered_action": "Open My Library",
+    "countdown_source": "server-provided closesAt rendered by the customer-facing runtime"
+  },
+  "package_timeline_contract": {
+    "sort": "package_sequence ascending",
+    "statuses": [
+      "scheduled",
+      "open",
+      "confirmed",
+      "delivery_ready",
+      "delivered",
+      "closed",
+      "expired",
+      "canceled",
+      "recovery_required"
+    ],
+    "customer_visible_delivery_reference_allowed": true,
+    "internal_dispatch_id_exposed": false,
+    "historical_cycles_in_initial_release": false
+  },
+  "resource_links": {
+    "knowledge_library": "/pages/knowledge-library",
+    "subscription_selection": "/pages/knowledge-library#subscription-selection",
+    "my_library": "/pages/knowledge-library#my-library",
+    "membership_product": "/products/mmg-knowledge-subscription",
+    "customer_service": "/pages/customer-service",
+    "subscription_member_guide": "/pages/customer-portal#subscription-member-guide",
+    "manage_membership": "Shopify customer account URL supplied by Liquid or the authenticated server adapter"
+  },
+  "storefront_implementation": {
+    "liquid_snippet": "shopify/snippets/mmg-customer-portal-subscription-dashboard.liquid",
+    "javascript_asset": "shopify/assets/mmg-customer-portal-subscription-dashboard.js",
+    "stylesheet_asset": "shopify/assets/mmg-customer-portal-subscription-dashboard.css",
+    "portal_integration": "shopify/customer-portal/mmg-subscription-dashboard-integration.liquid",
+    "integration_rule": "Add the dashboard to the existing Customer Portal without replacing service-project, support, authentication, navigation, or other established portal workflows.",
+    "progressive_enhancement": "Private subscription data requires JavaScript and the authenticated endpoint; existing portal navigation and support links remain available without JavaScript."
+  },
+  "event_contract": [
+    {
+      "name": "mmg:customer-portal-subscription-ready",
+      "detail_fields": ["dashboard"]
+    },
+    {
+      "name": "mmg:customer-portal-subscription-error",
+      "detail_fields": ["code", "message"]
+    }
+  ],
+  "refresh_events": [
+    "mmg:knowledge-library-selection-updated",
+    "mmg:knowledge-library-package-confirmed",
+    "mmg:entitlement-counter-ready"
+  ],
+  "customer_states": {
+    "loading": "Announce that the secure membership dashboard is loading and disable private content.",
+    "unauthenticated": "Direct the customer to the Shopify account sign-in flow without exposing subscription data.",
+    "no_subscription": "Present membership discovery and preserve access to public portal resources.",
+    "active": "Show the complete plan, progress, package, timeline, and resource dashboard.",
+    "inactive": "Show the latest membership record and direct the customer to renew or manage the account.",
+    "recovery_required": "Prominently direct the customer to the governed recovery path.",
+    "error": "Preserve the page shell, announce the error, and direct the customer to refresh or contact support."
+  },
+  "security_contract": [
+    "Derive customer identity exclusively from the authenticated server session.",
+    "Never accept customer ID, subscription ID, cycle capacity, package status, ownership, or entitlement totals from Liquid or browser input.",
+    "Return private no-store responses and vary on the authenticated session cookie.",
+    "Do not expose Shopify provider contract IDs, internal delivery dispatch IDs, delivery package references, ownership-grant IDs, or entitlement-event payloads.",
+    "Use parameterized SQL for customer and cycle lookups.",
+    "Keep all package mutations in the Knowledge Library Picker or protected Delivery Window Controller; the initial dashboard endpoint is read-only.",
+    "Treat links as server-configured or Shopify-generated routes rather than browser-authoritative commerce state."
+  ],
+  "accessibility_contract": {
+    "semantic_sections": true,
+    "loading_and_error_live_regions": true,
+    "countdown_role_timer": true,
+    "status_text_not_color_only": true,
+    "keyboard_operable_links": true,
+    "visible_focus": true,
+    "mobile_single_column_support": true,
+    "reduced_motion_support": true
+  },
+  "integration_sequence": {
+    "previous_component": "MMG Delivery Window Controller",
+    "current_component": "Customer Portal subscription dashboard",
+    "next_component": "Thank-you page first-title handoff",
+    "subsequent_components": [
+      "My Library delivery interface",
+      "Shopify subscription webhook reconciliation",
+      "Kairos recommendation ranking",
+      "Live Shopify provisioning and end-to-end deployment"
+    ]
+  },
+  "release_gates": [
+    "The authenticated Customer Portal session is mapped to the canonical customer ID server-side.",
+    "The dashboard endpoint is routed through the deployed MMG runtime with private no-store headers.",
+    "Both entitlement database migrations are applied and the production PostgreSQL connection is active.",
+    "Live Shopify subscription contracts are reconciled into the entitlement tables.",
+    "The Delivery Window Controller creates and advances package windows in production.",
+    "At least two verified subscription-selectable assets exist and display complete square thumbnails.",
+    "The existing live Customer Portal source is captured before integration.",
+    "The dashboard is inserted without removing current portal workflows or weakening authenticated boundaries.",
+    "Mobile, keyboard, screen-reader, countdown, inactive-membership, recovery, delivery, and error-state QA passes.",
+    "Repository and production observability can distinguish dashboard API failures from unrelated page-shell workflows."
+  ]
+}

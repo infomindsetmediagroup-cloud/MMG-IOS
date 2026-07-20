@@ -1,10 +1,10 @@
 {
   "contract_id": "mmg-commerce-contract-v1",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "status": "approved",
   "approved_date": "2026-07-20",
   "authority": "MMG executive approval",
-  "purpose": "Canonical machine-readable contract connecting digital downloads, services, subscriptions, the Knowledge Library, Shopify cart behavior, customer entitlements, delivery windows, and Kairos fulfillment.",
+  "purpose": "Canonical machine-readable contract connecting digital downloads, services, subscriptions, the Knowledge Library, Shopify cart behavior, customer entitlements, delivery windows, the Customer Portal, and Kairos fulfillment.",
   "system_boundaries": {
     "shopify": [
       "product catalog",
@@ -74,6 +74,19 @@
     "weekly_package_offsets_days": [0, 7, 14, 21],
     "first_package_expiry": "recovery_required",
     "future_package_expiry": "auto-confirm an exact valid two-title package; otherwise recovery_required",
+    "server_authority": "Kairos"
+  },
+  "customer_portal_subscription_dashboard_contract": {
+    "authority": "registry/customer-portal/mmg-subscription-dashboard-contract-v1.json",
+    "domain_model": "server/customer-portal/subscription-dashboard.ts",
+    "postgres_repository": "server/customer-portal/subscription-dashboard-repository.ts",
+    "service_boundary": "server/customer-portal/subscription-dashboard-service.ts",
+    "logical_endpoint": "/api/customer-portal/subscription",
+    "storefront_component": "shopify/snippets/mmg-customer-portal-subscription-dashboard.liquid",
+    "canonical_route": "/pages/customer-portal",
+    "authentication": "authenticated server session",
+    "mutation_mode": "read_only",
+    "private_response": true,
     "server_authority": "Kairos"
   },
   "product_types": {
@@ -310,7 +323,8 @@
       "Never allow entitlement units or package counts to exceed the locked plan contract.",
       "Create exactly one, two, or four package windows per monthly billing cycle for the Monthly, Bi-weekly, and Weekly plans.",
       "Never create a fifth Weekly package in a five-week calendar month.",
-      "Require an idempotent delivery dispatcher keyed by window ID."
+      "Require an idempotent delivery dispatcher keyed by window ID.",
+      "Expose Customer Portal subscription data only through an authenticated private read-only dashboard endpoint."
     ]
   },
   "site_placements": {
@@ -322,7 +336,7 @@
     "membership_landing_page": "Explain plans, entitlements, onboarding, first-title selection, curation, review windows, and My Library.",
     "cart_drawer_and_cart_page": "Show an unselected subscription invitation when no subscription is present; open the three-plan selector on customer action.",
     "thank_you_page": "For new subscribers, direct the customer to choose the first two titles.",
-    "customer_portal": "Show plan, next delivery, current entitlement, review window, selected titles, delivered titles, My Library, and account controls."
+    "customer_portal": "Use the authenticated subscription dashboard to show plan and price, billing cycle, package and asset progress, current review window, selected titles, delivery timeline, recovery actions, My Library, the Subscription Member Guide, and account controls without replacing existing portal workflows."
   },
   "reusable_components": [
     "MMG Subscription Offer Module",
@@ -333,7 +347,8 @@
     "MMG Entitlement Counter",
     "MMG Related Journey Module",
     "MMG Ownership Filter",
-    "MMG Delivery Window Controller"
+    "MMG Delivery Window Controller",
+    "MMG Customer Portal Subscription Dashboard"
   ],
   "canonical_customer_flow": [
     "Homepage",
