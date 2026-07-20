@@ -1,0 +1,206 @@
+{
+  "contract_id": "mmg-recommendation-curation-ranking-v1",
+  "version": "1.0.0",
+  "status": "approved_for_staging",
+  "approved_date": "2026-07-20",
+  "authority": "MMG executive approval",
+  "purpose": "Rank server-eligible future subscription titles using authenticated customer learning preferences, series progression, ownership-safe interaction history, exact entitlement capacity, and package diversity while preserving deterministic and explainable outcomes.",
+  "dependencies": {
+    "commerce_contract": "registry/products/mmg-commerce-contract-v1.json",
+    "eligibility_contract": "registry/knowledge-library/mmg-knowledge-library-contract-v1.json",
+    "picker_contract": "registry/knowledge-library/mmg-knowledge-library-picker-contract-v1.json",
+    "delivery_window_contract": "registry/knowledge-library/mmg-delivery-window-controller-contract-v1.json",
+    "database_schema": "database/migrations/20260720_006_mmg_recommendation_curation_ranking.sql"
+  },
+  "implementation": {
+    "ranking_engine": "server/knowledge-library/recommendation-ranking.ts",
+    "curator_adapter": "server/knowledge-library/recommendation-curator.ts",
+    "context_repository": "server/knowledge-library/recommendation-repository.ts",
+    "candidate_repository": "server/knowledge-library/recommendation-candidate-repository.ts",
+    "learning_profile_service": "server/knowledge-library/recommendation-profile.ts",
+    "learning_profile_endpoint": "/api/customer-portal/learning-profile",
+    "ranking_version": "1.0.0",
+    "delivery_window_source": "kairos"
+  },
+  "learning_profile_contract": {
+    "identity": "authenticated Customer Portal customer",
+    "fields": [
+      "role_code",
+      "primary_goal",
+      "secondary_goals",
+      "experience_level",
+      "primary_topics",
+      "secondary_topics",
+      "preferred_formats",
+      "excluded_topics",
+      "onboarding_version"
+    ],
+    "experience_levels": [
+      "beginner",
+      "intermediate",
+      "advanced",
+      "all_levels"
+    ],
+    "minimum_complete_profile": [
+      "role_code",
+      "primary_goal",
+      "at least one primary topic"
+    ],
+    "read_method": "GET",
+    "write_method": "PUT",
+    "authentication": "authenticated Customer Portal server session",
+    "same_origin_write_required": true,
+    "csrf_write_required": true,
+    "maximum_body_bytes": 8192,
+    "browser_customer_identity_authoritative": false
+  },
+  "candidate_hard_gates": [
+    "digital download",
+    "active",
+    "published",
+    "available",
+    "catalog visible",
+    "subscription eligible",
+    "portrait cover present",
+    "square thumbnail present",
+    "verified delivery package",
+    "customer destination equals my_library",
+    "not already owned",
+    "not already selected in the current window",
+    "not in a customer-excluded topic",
+    "no unmet prerequisite",
+    "not explicitly disliked"
+  ],
+  "asset_metadata": {
+    "existing_fields": [
+      "topic",
+      "experience_level",
+      "format",
+      "series",
+      "series_order",
+      "subscription_value"
+    ],
+    "recommendation_fields": [
+      "secondary_topics",
+      "role_tags",
+      "goal_tags",
+      "prerequisite_asset_ids",
+      "complementary_asset_ids",
+      "diversity_group",
+      "recommendation_priority",
+      "estimated_minutes"
+    ]
+  },
+  "score_contract": {
+    "primary_topic_match": 30,
+    "secondary_topic_match": 14,
+    "goal_match_maximum": 24,
+    "role_match": 16,
+    "experience_exact": 12,
+    "experience_all_levels": 8,
+    "experience_stretch": 2,
+    "experience_too_advanced": -18,
+    "preferred_format": 8,
+    "next_series_title": 20,
+    "series_gap": -12,
+    "complements_recent_asset": 10,
+    "topic_novelty": 4,
+    "recent_topic_fatigue_maximum": -18,
+    "interaction_signal_range": [-50, 40],
+    "editorial_priority_range": [-20, 20],
+    "tie_break_order": [
+      "total score descending",
+      "recommendation priority descending",
+      "title ascending",
+      "asset ID ascending"
+    ]
+  },
+  "package_contract": {
+    "target_asset_count_source": "entitlement window",
+    "total_units_source": "entitlement window",
+    "exact_count_required": true,
+    "exact_units_required": true,
+    "topic_diversity_bonus": 12,
+    "duplicate_topic_penalty": -10,
+    "diversity_group_bonus": 8,
+    "format_diversity_bonus": 4,
+    "primary_objective_coverage_bonus": 8,
+    "secondary_interest_exploration_bonus": 6,
+    "sequential_series_pair_bonus": 4,
+    "series_concentration_penalty": -8,
+    "no_complete_package_behavior": "Return null so the Delivery Window Controller moves the package to recovery_required.",
+    "first_package_behavior": "The first package remains customer-selected and never uses automated curation.",
+    "future_package_behavior": "Rank and propose exactly two eligible titles for the review window."
+  },
+  "interaction_contract": {
+    "supported_signals": [
+      "viewed",
+      "selected",
+      "reserved",
+      "confirmed",
+      "delivered",
+      "completed",
+      "swapped_out",
+      "dismissed",
+      "liked",
+      "disliked"
+    ],
+    "history_window_days": 180,
+    "explicit_dislike_is_hard_exclusion": true,
+    "swap_and_dismissal_are_negative_signals": true,
+    "like_and_completion_are_positive_signals": true,
+    "recent_topic_repetition_is_penalized": true
+  },
+  "explainability_contract": {
+    "deterministic": true,
+    "reason_codes_required": true,
+    "score_components_persisted": true,
+    "selected_package_rationale_persisted": true,
+    "raw_model_prompt_persisted": false,
+    "external_model_required": false,
+    "browser_score_authoritative": false,
+    "customer_facing_internal_scores": false
+  },
+  "persistence_contract": {
+    "learning_profiles": "mmg_customer_learning_profiles",
+    "asset_interactions": "mmg_customer_asset_interactions",
+    "recommendation_runs": "mmg_recommendation_runs",
+    "recommendation_scores": "mmg_recommendation_scores",
+    "run_id": "recommendation:{window_id}:{window_version}",
+    "run_uniqueness": "window_id + window_version",
+    "maximum_persisted_candidate_scores_per_run": 250
+  },
+  "privacy_and_security_contract": [
+    "Derive customer identity from the authenticated server session.",
+    "Never expose customer IDs, profile records, interaction history, raw score components, or recommendation-run IDs in public Liquid.",
+    "Require same-origin and CSRF validation for profile writes.",
+    "Use parameterized SQL.",
+    "Do not allow ranking to bypass Knowledge Library eligibility or ownership gates.",
+    "Do not allow recommendation scores to grant entitlement capacity or ownership.",
+    "Revalidate proposed assets when the Delivery Window Controller opens the package.",
+    "Store explainable reason codes and components without storing private model prompts."
+  ],
+  "release_gates": [
+    "Migration 006 is applied after migrations 001 through 005.",
+    "Production PostgreSQL is connected.",
+    "The Customer Portal learning-profile GET and PUT route is authenticated.",
+    "Same-origin and session-bound CSRF validation is active for profile updates.",
+    "Subscription onboarding writes role, goal, experience, primary topics, and secondary interests into the learning profile.",
+    "Every selectable asset has reviewed recommendation metadata or an approved neutral default.",
+    "The Delivery Window Controller uses MMGKairosRecommendationCurator instead of the deterministic fallback in production.",
+    "Owned and currently selected assets remain excluded before and after ranking.",
+    "Monthly, Bi-weekly, and Weekly windows preserve exact two-title package capacity.",
+    "Excluded topics, prerequisites, dislikes, series progression, recent-topic fatigue, swaps, and diversity cases pass.",
+    "Recommendation runs are idempotent by window and version.",
+    "The selected package is revalidated transactionally before the window opens.",
+    "No customer-facing surface exposes private scores, customer IDs, interaction history, or internal run identifiers."
+  ],
+  "integration_sequence": {
+    "previous_component": "Shopify subscription webhook reconciliation",
+    "current_component": "Kairos recommendation and curation ranking",
+    "next_component": "Live Shopify provisioning and end-to-end deployment",
+    "subsequent_components": [
+      "Operational monitoring and controlled production rollout"
+    ]
+  }
+}
