@@ -54,14 +54,16 @@
   data-subscription-line-count="{{ mmg_existing_subscription_count }}"
 >
   <section class="mmg-cart-subscription" aria-labelledby="mmg-cart-subscription-title-{{ mmg_cart_instance }}">
+    <h2 id="mmg-cart-subscription-title-{{ mmg_cart_instance }}" class="mmg-cart-subscription__sr-only">
+      MMG Knowledge Subscription cart options
+    </h2>
+
     {%- if mmg_subscription_product == blank -%}
       <div class="mmg-cart-subscription__state">
         <div class="mmg-cart-subscription__header">
           <div>
             <p class="mmg-cart-subscription__eyebrow">MMG Knowledge Subscription™</p>
-            <h2 id="mmg-cart-subscription-title-{{ mmg_cart_instance }}" class="mmg-cart-subscription__title">
-              Membership enrollment is being prepared
-            </h2>
+            <h3 class="mmg-cart-subscription__title">Membership enrollment is being prepared</h3>
             <p class="mmg-cart-subscription__copy">
               The subscription product must be provisioned before this optional cart offer can accept enrollment.
             </p>
@@ -77,9 +79,7 @@
         <div class="mmg-cart-subscription__header">
           <div>
             <p class="mmg-cart-subscription__eyebrow">Optional membership</p>
-            <h2 id="mmg-cart-subscription-title-{{ mmg_cart_instance }}" class="mmg-cart-subscription__title">
-              Build Your Knowledge Library
-            </h2>
+            <h3 class="mmg-cart-subscription__title">Build Your Knowledge Library</h3>
             <p class="mmg-cart-subscription__copy">
               Receive 2, 4, or 8 curated digital assets each monthly billing cycle. Choose your first two titles after checkout.
             </p>
@@ -112,7 +112,7 @@
         <div class="mmg-cart-subscription__header">
           <div>
             <p class="mmg-cart-subscription__eyebrow">Membership added</p>
-            <h2 class="mmg-cart-subscription__title">Your Knowledge Subscription</h2>
+            <h3 class="mmg-cart-subscription__title">Your Knowledge Subscription</h3>
             <p class="mmg-cart-subscription__copy">
               Your selected plan renews monthly. You can change or remove it before checkout.
             </p>
@@ -221,6 +221,28 @@
           -%}
         </div>
       </details>
+
+      <noscript>
+        <style>
+          #mmg-cart-subscription-controller-{{ mmg_cart_instance }} [data-mmg-open-plans],
+          #mmg-cart-subscription-controller-{{ mmg_cart_instance }} [data-mmg-request-remove],
+          #mmg-cart-subscription-controller-{{ mmg_cart_instance }} [data-mmg-close-plans] {
+            display: none !important;
+          }
+
+          {%- if mmg_existing_subscription_count > 0 -%}
+            #mmg-cart-subscription-controller-{{ mmg_cart_instance }} [data-mmg-cart-plan-panel] {
+              display: none !important;
+            }
+          {%- endif -%}
+        </style>
+
+        {%- if mmg_existing_subscription_count > 0 -%}
+          <p class="mmg-cart-subscription__status" data-tone="neutral">
+            To change plans without JavaScript, first use the cart line-item removal control to remove the current membership, then reload the cart and select a new plan.
+          </p>
+        {%- endif -%}
+      </noscript>
     {%- endif -%}
 
     <div
