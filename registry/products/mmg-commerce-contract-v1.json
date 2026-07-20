@@ -1,6 +1,6 @@
 {
   "contract_id": "mmg-commerce-contract-v1",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "status": "approved",
   "approved_date": "2026-07-20",
   "authority": "MMG executive approval",
@@ -27,6 +27,14 @@
     ],
     "knowledge_library": "Shared digital-asset catalog and selection surface used by the public storefront, subscribers, and authenticated customer libraries."
   },
+  "knowledge_library_contract": {
+    "eligibility_and_selection_authority": "registry/knowledge-library/mmg-knowledge-library-contract-v1.json",
+    "digital_asset_registry": "registry/knowledge-library/digital-asset-registry-v1.json",
+    "shopify_metafield_manifest": "shopify/metafields/mmg-knowledge-library-product-metafields.json",
+    "canonical_asset_key": "mmg.asset_id",
+    "server_authority": "Kairos",
+    "seed_asset": "mmg-dd-ai-image-mastery-001"
+  },
   "product_types": {
     "digital_download": {
       "code": "digital_download",
@@ -47,7 +55,7 @@
           "readme_or_customer_instructions"
         ]
       },
-      "subscription_eligibility": "Per-product boolean metadata field; only approved digital downloads may enter the subscription catalog."
+      "subscription_eligibility": "Per-product boolean metadata field; only approved digital downloads may enter the subscription catalog after all Knowledge Library release gates pass."
     },
     "service": {
       "code": "service",
@@ -155,21 +163,35 @@
         "individual purchase controls",
         "subscription eligibility indicators",
         "membership introduction"
+      ],
+      "filters": [
+        "published and available",
+        "product_type equals digital_download",
+        "asset_status equals active",
+        "unique asset_id",
+        "portrait cover present"
       ]
     },
     "subscription_selection": {
       "access": "authenticated active subscriber",
       "filters": [
+        "public catalog predicate passes",
         "subscription eligible",
         "approved and active",
+        "square thumbnail present",
+        "verified delivery package present",
+        "valid subscription value",
         "not already owned",
-        "within current entitlement window"
+        "within current entitlement window",
+        "sufficient remaining entitlement units",
+        "not already selected"
       ],
       "actions": [
         "choose title",
         "remove selection",
         "confirm package"
-      ]
+      ],
+      "authority": "Kairos revalidates customer-specific eligibility server-side."
     },
     "my_library": {
       "access": "authenticated customer",
@@ -180,11 +202,13 @@
         "bonuses",
         "read-online controls where supported",
         "download controls"
-      ]
+      ],
+      "identity_rule": "Display one customer-facing entry per canonical asset_id."
     }
   },
   "canonical_metadata": {
     "namespace": "mmg",
+    "definition_manifest": "shopify/metafields/mmg-knowledge-library-product-metafields.json",
     "fields": [
       "product_type",
       "subscription_eligible",
@@ -223,7 +247,8 @@
       "Require an explicit customer plan selection and confirmation.",
       "Do not recommend an asset the customer already owns.",
       "Do not use Shopify Bundles as the subscription entitlement foundation.",
-      "Use one canonical asset record across storefront, library, portal, recommendations, and delivery."
+      "Use one canonical asset record across storefront, library, portal, recommendations, and delivery.",
+      "Treat storefront eligibility as provisional until Kairos revalidates the customer, ownership, entitlement window, and delivery readiness."
     ]
   },
   "site_placements": {
@@ -241,6 +266,7 @@
     "MMG Subscription Offer Module",
     "MMG Three-Plan Selector",
     "MMG Cart Subscription Controller",
+    "MMG Knowledge Library Eligibility Metadata",
     "MMG Knowledge Library Picker",
     "MMG Entitlement Counter",
     "MMG Related Journey Module",
