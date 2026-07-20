@@ -1,6 +1,7 @@
 import type { MMGSubscriptionPlanCode } from "../knowledge-library/entitlements.js";
 import type {
   MMGThankYouEntitlementSnapshot,
+  MMGThankYouFirstWindowSnapshot,
   MMGVerifiedThankYouOrder,
 } from "./thank-you-first-title-handoff.js";
 import type { MMGSQLExecutor, MMGTransactionalDatabase } from "../knowledge-library/persistence.js";
@@ -59,6 +60,51 @@ const iso = (value: unknown): string | null => {
 const planCode = (value: unknown): MMGSubscriptionPlanCode => {
   if (value === "monthly" || value === "biweekly" || value === "weekly") return value;
   throw new Error("The linked subscription entitlement has an invalid plan code.");
+};
+
+const entitlementStatus = (
+  value: unknown,
+): MMGThankYouEntitlementSnapshot["status"] => {
+  if (
+    value === "pending" ||
+    value === "active" ||
+    value === "paused" ||
+    value === "canceled" ||
+    value === "expired"
+  ) {
+    return value;
+  }
+  throw new Error("The linked subscription entitlement has an invalid status.");
+};
+
+const windowType = (value: unknown): MMGThankYouFirstWindowSnapshot["type"] => {
+  if (
+    value === "first_package" ||
+    value === "scheduled_package_review" ||
+    value === "manual_recovery_window"
+  ) {
+    return value;
+  }
+  throw new Error("The linked first-package window has an invalid type.");
+};
+
+const windowStatus = (
+  value: unknown,
+): MMGThankYouFirstWindowSnapshot["status"] => {
+  if (
+    value === "scheduled" ||
+    value === "open" ||
+    value === "confirmed" ||
+    value === "delivery_ready" ||
+    value === "delivered" ||
+    value === "closed" ||
+    value === "expired" ||
+    value === "canceled" ||
+    value === "recovery_required"
+  ) {
+    return value;
+  }
+  throw new Error("The linked first-package window has an invalid status.");
 };
 
 export class MMGPostgresThankYouHandoffRepository
@@ -177,21 +223,13 @@ export class MMGPostgresThankYouHandoffRepository
       return {
         entitlementId: entitlement.id,
         customerId: entitlement.customer_id,
-        status: entitlement.status as MMGThankYouEntitlementSnapshot["status"],
+        status: entitlementStatus(entitlement.status),
         planCode: planCode(entitlement.plan_code),
         firstWindow: window
           ? {
               id: window.id,
-              type: window.window_type as MMGThankYouEntitlementSnapshot["firstWindow"] extends infer Window
-                ? Window extends { type: infer Type }
-                  ? Type
-                  : never
-                : never,
-              status: window.status as MMGThankYouEntitlementSnapshot["firstWindow"] extends infer Window
-                ? Window extends { status: infer Status }
-                  ? Status
-                  : never
-                : never,
+              type: windowType(window.window_type),
+              status: windowStatus(window.status),
               selectedAssetCount: integer(window.selected_asset_count),
               targetAssetCount: integer(window.target_asset_count),
               closesAt: iso(window.closes_at),
