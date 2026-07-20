@@ -15,10 +15,17 @@
   "implementation": {
     "ranking_engine": "server/knowledge-library/recommendation-ranking.ts",
     "curator_adapter": "server/knowledge-library/recommendation-curator.ts",
+    "runtime_factory": "server/knowledge-library/recommendation-runtime.ts",
     "context_repository": "server/knowledge-library/recommendation-repository.ts",
     "candidate_repository": "server/knowledge-library/recommendation-candidate-repository.ts",
     "learning_profile_service": "server/knowledge-library/recommendation-profile.ts",
+    "learning_profile_http": "server/knowledge-library/recommendation-profile-http.ts",
     "learning_profile_endpoint": "/api/customer-portal/learning-profile",
+    "learning_profile_route": "/pages/customer-portal#learning-profile",
+    "learning_profile_storefront_component": "shopify/snippets/mmg-learning-profile.liquid",
+    "learning_profile_javascript": "shopify/assets/mmg-learning-profile.js",
+    "learning_profile_stylesheet": "shopify/assets/mmg-learning-profile.css",
+    "learning_profile_integration": "shopify/customer-portal/mmg-learning-profile-integration.liquid",
     "ranking_version": "1.0.0",
     "delivery_window_source": "kairos"
   },
@@ -52,7 +59,9 @@
     "same_origin_write_required": true,
     "csrf_write_required": true,
     "maximum_body_bytes": 8192,
-    "browser_customer_identity_authoritative": false
+    "browser_customer_identity_authoritative": false,
+    "customer_id_returned_to_browser": false,
+    "additive_to_existing_customer_portal": true
   },
   "candidate_hard_gates": [
     "digital download",
@@ -172,6 +181,7 @@
   },
   "privacy_and_security_contract": [
     "Derive customer identity from the authenticated server session.",
+    "Never return the internal customer ID in the learning-profile browser response.",
     "Never expose customer IDs, profile records, interaction history, raw score components, or recommendation-run IDs in public Liquid.",
     "Require same-origin and CSRF validation for profile writes.",
     "Use parameterized SQL.",
@@ -186,6 +196,8 @@
     "The Customer Portal learning-profile GET and PUT route is authenticated.",
     "Same-origin and session-bound CSRF validation is active for profile updates.",
     "Subscription onboarding writes role, goal, experience, primary topics, and secondary interests into the learning profile.",
+    "The learning-profile component is inserted additively without replacing dashboard, project, upload, My Library, support, authentication, or navigation modules.",
+    "The server injects a session-bound CSRF token into the learning-profile integration.",
     "Every selectable asset has reviewed recommendation metadata or an approved neutral default.",
     "The Delivery Window Controller uses MMGKairosRecommendationCurator instead of the deterministic fallback in production.",
     "Owned and currently selected assets remain excluded before and after ranking.",
@@ -193,7 +205,8 @@
     "Excluded topics, prerequisites, dislikes, series progression, recent-topic fatigue, swaps, and diversity cases pass.",
     "Recommendation runs are idempotent by window and version.",
     "The selected package is revalidated transactionally before the window opens.",
-    "No customer-facing surface exposes private scores, customer IDs, interaction history, or internal run identifiers."
+    "No customer-facing surface exposes private scores, customer IDs, interaction history, or internal run identifiers.",
+    "Profile loading, saving, keyboard operation, mobile layout, reduced motion, and error states pass Customer Portal QA."
   ],
   "integration_sequence": {
     "previous_component": "Shopify subscription webhook reconciliation",
