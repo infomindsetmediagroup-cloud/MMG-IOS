@@ -1,0 +1,318 @@
+{
+  "contract_id": "mmg-commerce-operations-control-v1",
+  "version": "1.0.0",
+  "status": "approved_for_staging_integration",
+  "approved_date": "2026-07-20",
+  "authority": "MMG executive approval",
+  "purpose": "Provide health monitoring, incident response, consistency auditing, customer-safe containment, kill switches, deterministic cohorts, and approval-gated staged rollout for the canonical MMG subscription-commerce system.",
+  "dependencies": {
+    "commerce_contract": "registry/products/mmg-commerce-contract-v1.json",
+    "deployment_contract": "registry/deployment/mmg-live-commerce-deployment-contract-v1.json",
+    "database_schema": "database/migrations/20260720_008_mmg_commerce_operations_control.sql"
+  },
+  "implementation": {
+    "domain": "server/operations/commerce-operations-control.ts",
+    "service": "server/operations/commerce-operations-service.ts",
+    "http_boundary": "server/operations/commerce-operations-http.ts",
+    "postgres_repository": "server/operations/postgres-commerce-operations-repository.ts",
+    "metrics_collector": "server/operations/commerce-metrics-collector.ts",
+    "consistency_audit": "server/operations/commerce-consistency-audit.ts",
+    "cohort_assignment": "server/operations/commerce-rollout-cohort.ts",
+    "alert_routing": "server/operations/commerce-alert-routing.ts",
+    "safe_bootstrap": "server/operations/commerce-operations-bootstrap.ts",
+    "logical_endpoint": "/api/internal/commerce/operations",
+    "workflow": ".github/workflows/mmg-commerce-operations.yml"
+  },
+  "actions": [
+    "inspect",
+    "evaluate",
+    "run_consistency_audit",
+    "acknowledge_incident",
+    "apply_mitigation",
+    "resolve_incident",
+    "close_incident",
+    "set_control",
+    "advance_rollout",
+    "pause_rollout"
+  ],
+  "health_signals": {
+    "database_connectivity_ratio": {
+      "direction": "low_is_bad",
+      "warning": 0.999,
+      "critical": 0.95,
+      "minimum_sample_size": 5,
+      "critical_severity": "SEV1"
+    },
+    "runtime_route_availability_ratio": {
+      "direction": "low_is_bad",
+      "warning": 0.99,
+      "critical": 0.95,
+      "minimum_sample_size": 10,
+      "critical_severity": "SEV1"
+    },
+    "webhook_delivery_failure_rate": {
+      "direction": "high_is_bad",
+      "warning": 0.02,
+      "critical": 0.05,
+      "minimum_sample_size": 20,
+      "critical_severity": "SEV2"
+    },
+    "webhook_oldest_processing_age_seconds": {
+      "direction": "high_is_bad",
+      "warning": 300,
+      "critical": 900,
+      "critical_severity": "SEV2"
+    },
+    "subscription_reconciliation_lag_seconds": {
+      "direction": "high_is_bad",
+      "warning": 600,
+      "critical": 1800,
+      "critical_severity": "SEV2"
+    },
+    "scheduler_last_success_age_seconds": {
+      "direction": "high_is_bad",
+      "warning": 900,
+      "critical": 1800,
+      "critical_severity": "SEV2"
+    },
+    "dispatcher_backlog_count": {
+      "direction": "high_is_bad",
+      "warning": 25,
+      "critical": 100,
+      "critical_severity": "SEV2"
+    },
+    "dispatcher_failure_rate": {
+      "direction": "high_is_bad",
+      "warning": 0.02,
+      "critical": 0.05,
+      "minimum_sample_size": 20,
+      "critical_severity": "SEV2"
+    },
+    "recovery_required_rate": {
+      "direction": "high_is_bad",
+      "warning": 0.1,
+      "critical": 0.2,
+      "minimum_sample_size": 10,
+      "critical_severity": "SEV2"
+    },
+    "signed_access_failure_rate": {
+      "direction": "high_is_bad",
+      "warning": 0.02,
+      "critical": 0.05,
+      "minimum_sample_size": 20,
+      "critical_severity": "SEV2"
+    },
+    "entitlement_consistency_failure_count": {
+      "direction": "high_is_bad",
+      "warning": 1,
+      "critical": 2,
+      "critical_severity": "SEV1"
+    },
+    "ownership_duplicate_conflict_count": {
+      "direction": "high_is_bad",
+      "warning": 1,
+      "critical": 1,
+      "critical_severity": "SEV1"
+    },
+    "e2e_evidence_age_seconds": {
+      "direction": "high_is_bad",
+      "warning": 64800,
+      "critical": 86400,
+      "critical_severity": "SEV2"
+    }
+  },
+  "incident_contract": {
+    "severity_levels": {
+      "SEV1": {
+        "meaning": "Customer rights, billing, ownership, capacity, database, or broad runtime integrity is at immediate risk.",
+        "acknowledgement_target_minutes": 15,
+        "mitigation_target_minutes": 30,
+        "repeat_alert_minutes": 5,
+        "suppressible": false
+      },
+      "SEV2": {
+        "meaning": "A material customer journey or delivery subsystem is degraded and may create delayed or failed service.",
+        "acknowledgement_target_minutes": 30,
+        "mitigation_target_minutes": 120,
+        "repeat_alert_minutes": 15,
+        "suppressible": false
+      },
+      "SEV3": {
+        "meaning": "Degradation is measurable but customer impact is limited or recoverable without emergency containment.",
+        "acknowledgement_target_minutes": 240,
+        "mitigation_target_minutes": 1440,
+        "repeat_alert_minutes": 60,
+        "suppressible": true
+      },
+      "SEV4": {
+        "meaning": "Telemetry is incomplete, low-confidence, or informational and requires investigation.",
+        "acknowledgement_target_minutes": 1440,
+        "mitigation_target_minutes": 2880,
+        "repeat_alert_minutes": 1440,
+        "suppressible": true
+      }
+    },
+    "states": [
+      "detected",
+      "acknowledged",
+      "mitigating",
+      "monitoring",
+      "resolved",
+      "closed"
+    ],
+    "open_incident_blocks_rollout": ["SEV1", "SEV2"],
+    "customer_identifiers_in_alerts_allowed": false,
+    "raw_provider_payloads_in_alerts_allowed": false
+  },
+  "control_contract": {
+    "controls": [
+      "product_publication",
+      "subscription_checkout",
+      "webhook_ingestion",
+      "delivery_scheduler",
+      "delivery_dispatcher",
+      "recommendation_automation",
+      "signed_library_access",
+      "thank_you_handoff"
+    ],
+    "modes": ["enabled", "disabled", "observe_only", "drain_only"],
+    "safe_initial_state": {
+      "product_publication": "disabled",
+      "subscription_checkout": "disabled",
+      "webhook_ingestion": "enabled",
+      "delivery_scheduler": "disabled",
+      "delivery_dispatcher": "disabled",
+      "recommendation_automation": "observe_only",
+      "signed_library_access": "disabled",
+      "thank_you_handoff": "observe_only"
+    },
+    "automatic_containment": {
+      "eligible_severities": ["SEV1", "SEV2"],
+      "requires_monitor_role": true,
+      "pause_rollout": true,
+      "disable_checkout": true,
+      "recommendations_mode": "observe_only",
+      "webhook_ingestion_disable_allowed": false,
+      "automatic_unpublish_allowed": false,
+      "automatic_customer_data_deletion_allowed": false,
+      "automatic_delivered_ownership_revocation_allowed": false
+    },
+    "manual_rules": [
+      "The operations endpoint cannot enable or publish the product; publication remains owned by the deployment control plane.",
+      "Webhook ingestion cannot be disabled because verified event evidence must remain durable during containment.",
+      "Dispatcher drain-only mode may finish already-confirmed safe work but must not accept unsafe new work.",
+      "Every control change requires an idempotent request, actor identity, reason, timestamp, and optimistic version when supplied."
+    ]
+  },
+  "rollout_contract": {
+    "stages": {
+      "internal": {
+        "cohort_percentage": 0,
+        "allowlist_only": true,
+        "minimum_observation_hours": 24
+      },
+      "pilot": {
+        "cohort_percentage": 5,
+        "allowlist_only": false,
+        "minimum_observation_hours": 24
+      },
+      "limited": {
+        "cohort_percentage": 25,
+        "allowlist_only": false,
+        "minimum_observation_hours": 48
+      },
+      "expanded": {
+        "cohort_percentage": 50,
+        "allowlist_only": false,
+        "minimum_observation_hours": 72,
+        "executive_approval_required": true
+      },
+      "full": {
+        "cohort_percentage": 100,
+        "allowlist_only": false,
+        "minimum_observation_hours": 72,
+        "executive_approval_required": true
+      },
+      "paused": {
+        "cohort_percentage": 0,
+        "customer_entry_allowed": false
+      }
+    },
+    "assignment": {
+      "method": "SHA-256 deterministic bucket using release salt and private customer reference",
+      "bucket_count": 10000,
+      "raw_customer_reference_persisted": false,
+      "stage_skip_allowed": false
+    },
+    "advancement_gates": [
+      "Current observation window is complete.",
+      "No open SEV1 incident exists.",
+      "No open SEV2 incident exists.",
+      "Latest health is not critical or unknown.",
+      "Latest consistency audit passed.",
+      "End-to-end evidence is fresh and complete.",
+      "Expanded and full stages have a stage-specific approval."
+    ]
+  },
+  "consistency_audit_contract": {
+    "checks": [
+      "BILLING_CYCLE_CAPACITY",
+      "WINDOW_CAPACITY",
+      "ACTIVE_OWNERSHIP_UNIQUENESS",
+      "DELIVERY_GRANT_REFERENTIAL_INTEGRITY",
+      "DELIVERED_WINDOW_OWNERSHIP_COMPLETENESS",
+      "OWNERSHIP_ASSET_INTEGRITY",
+      "DELIVERY_WINDOW_PROGRESS",
+      "WEBHOOK_RECONCILIATION_COMPLETENESS"
+    ],
+    "failed_sev1_checks_pause_rollout": true,
+    "destructive_automatic_repair_allowed": false,
+    "delivered_ownership_revocation_allowed": false,
+    "database_repair_mode": "forward repair or reviewed manual reconciliation"
+  },
+  "persistence": {
+    "tables": [
+      "mmg_commerce_operations_requests",
+      "mmg_commerce_monitor_runs",
+      "mmg_commerce_health_snapshots",
+      "mmg_commerce_incidents",
+      "mmg_commerce_incident_events",
+      "mmg_commerce_controls",
+      "mmg_commerce_rollout_state",
+      "mmg_commerce_rollout_history",
+      "mmg_commerce_rollout_approvals",
+      "mmg_commerce_consistency_audits",
+      "mmg_commerce_alert_deliveries",
+      "mmg_commerce_operations_events"
+    ],
+    "idempotency_field": "requestId",
+    "optimistic_concurrency_fields": ["expectedVersion", "incident version", "control version", "rollout version"],
+    "raw_customer_identifiers_in_monitoring_tables_allowed": false,
+    "raw_alert_destinations_allowed": false,
+    "secret_material_allowed": false
+  },
+  "security_contract": [
+    "Require a protected server-to-server operations credential and the mmg-commerce-operator role.",
+    "Require the mmg-incident-commander role for production mutations.",
+    "Require the mmg-production-release-manager role for production rollout advancement.",
+    "Require the mmg-commerce-monitor role before automated containment can execute.",
+    "Return private non-cacheable responses.",
+    "Never expose customer IDs, subscription contract IDs, entitlement IDs, storage keys, tokens, or raw provider payloads in alerts or operations responses.",
+    "Never interpret rollback or incident containment as authorization to revoke legitimate delivered ownership."
+  ],
+  "release_gates": [
+    "Migration 008 is applied after migrations 001 through 007.",
+    "The operations endpoint is routed behind server-to-server authentication.",
+    "Every telemetry adapter returns bounded, timestamped, environment-specific metrics.",
+    "Alert destinations are stored as encrypted configuration and only hashed destination references are persisted.",
+    "Kill switches are connected to the actual checkout, scheduler, dispatcher, recommendation, signed-access, and Thank-you runtime boundaries.",
+    "The initial production state is paused with customer-affecting controls disabled or observe-only.",
+    "A staging incident drill proves alerting, containment, recovery, audit preservation, and no customer-rights deletion.",
+    "A full staging rollout rehearsal passes internal, pilot, limited, expanded, and full gate evaluation before production rollout begins."
+  ],
+  "integration_sequence": {
+    "previous_component": "Live Shopify provisioning and end-to-end deployment control",
+    "current_component": "Operational monitoring, incident response, and controlled rollout",
+    "next_component": "Production adapter wiring, staging incident drill, and first controlled release rehearsal"
+  }
+}
