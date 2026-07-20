@@ -65,6 +65,12 @@ const planCode = (value: unknown): MMGSubscriptionPlanCode => {
 const entitlementStatus = (
   value: unknown,
 ): MMGThankYouEntitlementSnapshot["status"] => {
+  if (value === "failed") {
+    // The Thank-you snapshot predates the richer Customer Portal status set. A
+    // failed Shopify contract is surfaced through the existing non-active
+    // attention path without disclosing provider billing internals.
+    return "paused";
+  }
   if (
     value === "pending" ||
     value === "active" ||
