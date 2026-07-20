@@ -1,0 +1,45 @@
+{%- liquid
+  assign mmg_property_line_item = mmg_line_item | default: item | default: line_item
+  assign mmg_property_list_class = mmg_property_list_class | default: 'mmg-line-item-properties'
+  assign mmg_has_public_properties = false
+
+  if mmg_property_line_item != blank
+    for mmg_property in mmg_property_line_item.properties
+      assign mmg_property_name = mmg_property.first
+      assign mmg_property_value = mmg_property.last
+      assign mmg_property_first_character = mmg_property_name | slice: 0
+
+      if mmg_property_first_character != '_' and mmg_property_value != blank
+        assign mmg_has_public_properties = true
+        break
+      endif
+    endfor
+  endif
+-%}
+
+{%- if mmg_has_public_properties -%}
+  <dl class="{{ mmg_property_list_class | escape }}">
+    {%- for mmg_property in mmg_property_line_item.properties -%}
+      {%- liquid
+        assign mmg_property_name = mmg_property.first
+        assign mmg_property_value = mmg_property.last
+        assign mmg_property_first_character = mmg_property_name | slice: 0
+      -%}
+
+      {%- if mmg_property_first_character != '_' and mmg_property_value != blank -%}
+        <div class="{{ mmg_property_list_class | escape }}__item">
+          <dt class="{{ mmg_property_list_class | escape }}__name">{{ mmg_property_name | escape }}</dt>
+          <dd class="{{ mmg_property_list_class | escape }}__value">
+            {%- if mmg_property_value contains '/uploads/' -%}
+              <a href="{{ mmg_property_value }}" target="_blank" rel="noopener">
+                {{ mmg_property_value | split: '/' | last | escape }}
+              </a>
+            {%- else -%}
+              {{ mmg_property_value | escape }}
+            {%- endif -%}
+          </dd>
+        </div>
+      {%- endif -%}
+    {%- endfor -%}
+  </dl>
+{%- endif -%}

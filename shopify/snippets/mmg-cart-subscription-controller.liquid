@@ -1,0 +1,263 @@
+{%- liquid
+  assign mmg_subscription_product = mmg_cart_subscription_product
+  if mmg_subscription_product == blank
+    assign mmg_subscription_product = all_products['mmg-knowledge-subscription']
+  endif
+
+  assign mmg_cart_context = mmg_cart_context | default: 'cart'
+  assign mmg_cart_instance_base = mmg_cart_instance_id | default: section.id | default: 'global-cart'
+  assign mmg_cart_instance = mmg_cart_instance_base | append: '-' | append: mmg_cart_context | handleize
+  assign mmg_cart_sections = mmg_cart_sections | default: 'cart-drawer,cart-icon-bubble,main-cart-items,main-cart-footer,cart-live-region-text'
+  assign mmg_cart_sections_url = mmg_cart_sections_url | default: request.path | default: '/cart'
+  assign mmg_existing_subscription_count = 0
+  assign mmg_existing_subscription_line = blank
+  assign mmg_existing_plan_assets = 0
+  assign mmg_existing_plan_packages = 0
+
+  if mmg_subscription_product != blank
+    for mmg_cart_item in cart.items
+      if mmg_cart_item.product.id == mmg_subscription_product.id
+        assign mmg_existing_subscription_count = mmg_existing_subscription_count | plus: 1
+        if mmg_existing_subscription_line == blank
+          assign mmg_existing_subscription_line = mmg_cart_item
+        endif
+      endif
+    endfor
+  endif
+
+  if mmg_existing_subscription_line != blank
+    assign mmg_existing_plan_key = mmg_existing_subscription_line.variant.title | downcase | replace: '-', '' | replace: ' ', ''
+    case mmg_existing_plan_key
+      when 'monthly'
+        assign mmg_existing_plan_assets = 2
+        assign mmg_existing_plan_packages = 1
+      when 'biweekly'
+        assign mmg_existing_plan_assets = 4
+        assign mmg_existing_plan_packages = 2
+      when 'weekly'
+        assign mmg_existing_plan_assets = 8
+        assign mmg_existing_plan_packages = 4
+    endcase
+  endif
+-%}
+
+{{ 'mmg-cart-subscription-controller.css' | asset_url | stylesheet_tag }}
+
+<mmg-cart-subscription-controller
+  id="mmg-cart-subscription-controller-{{ mmg_cart_instance }}"
+  data-product-id="{{ mmg_subscription_product.id }}"
+  data-product-handle="mmg-knowledge-subscription"
+  data-context="{{ mmg_cart_context | escape }}"
+  data-sections="{{ mmg_cart_sections | escape }}"
+  data-sections-url="{{ mmg_cart_sections_url | escape }}"
+  data-has-subscription="{% if mmg_existing_subscription_count > 0 %}true{% else %}false{% endif %}"
+  data-subscription-line-count="{{ mmg_existing_subscription_count }}"
+>
+  <section class="mmg-cart-subscription" aria-labelledby="mmg-cart-subscription-title-{{ mmg_cart_instance }}">
+    <h2 id="mmg-cart-subscription-title-{{ mmg_cart_instance }}" class="mmg-cart-subscription__sr-only">
+      MMG Knowledge Subscription cart options
+    </h2>
+
+    {%- if mmg_subscription_product == blank -%}
+      <div class="mmg-cart-subscription__state">
+        <div class="mmg-cart-subscription__header">
+          <div>
+            <p class="mmg-cart-subscription__eyebrow">MMG Knowledge Subscription™</p>
+            <h3 class="mmg-cart-subscription__title">Membership enrollment is being prepared</h3>
+            <p class="mmg-cart-subscription__copy">
+              The subscription product must be provisioned before this optional cart offer can accept enrollment.
+            </p>
+          </div>
+        </div>
+      </div>
+    {%- else -%}
+      <div
+        class="mmg-cart-subscription__state"
+        data-mmg-cart-state="offer"
+        {% if mmg_existing_subscription_count > 0 %}hidden{% endif %}
+      >
+        <div class="mmg-cart-subscription__header">
+          <div>
+            <p class="mmg-cart-subscription__eyebrow">Optional membership</p>
+            <h3 class="mmg-cart-subscription__title">Build Your Knowledge Library</h3>
+            <p class="mmg-cart-subscription__copy">
+              Receive 2, 4, or 8 curated digital assets each monthly billing cycle. Choose your first two titles after checkout.
+            </p>
+          </div>
+          <span class="mmg-cart-subscription__badge">From $14.95/month</span>
+        </div>
+
+        <div class="mmg-cart-subscription__actions">
+          <button
+            class="mmg-cart-subscription__button mmg-cart-subscription__button--primary"
+            type="button"
+            data-mmg-open-plans
+          >
+            Explore Membership Plans
+          </button>
+          <a
+            class="mmg-cart-subscription__button mmg-cart-subscription__button--secondary"
+            href="/pages/knowledge-library"
+          >
+            View the Knowledge Library
+          </a>
+        </div>
+      </div>
+
+      <div
+        class="mmg-cart-subscription__state"
+        data-mmg-cart-state="active"
+        {% if mmg_existing_subscription_count == 0 %}hidden{% endif %}
+      >
+        <div class="mmg-cart-subscription__header">
+          <div>
+            <p class="mmg-cart-subscription__eyebrow">Membership added</p>
+            <h3 class="mmg-cart-subscription__title">Your Knowledge Subscription</h3>
+            <p class="mmg-cart-subscription__copy">
+              Your selected plan renews monthly. You can change or remove it before checkout.
+            </p>
+          </div>
+          <span class="mmg-cart-subscription__badge">Recurring</span>
+        </div>
+
+        <div class="mmg-cart-subscription__active-grid">
+          <div>
+            <p class="mmg-cart-subscription__active-label">Selected plan</p>
+            <p class="mmg-cart-subscription__active-name" data-mmg-current-plan-name>
+              {%- if mmg_existing_subscription_line != blank -%}
+                {{ mmg_existing_subscription_line.variant.title }} membership
+              {%- endif -%}
+            </p>
+            <p class="mmg-cart-subscription__active-detail" data-mmg-current-entitlement>
+              {%- if mmg_existing_plan_assets > 0 -%}
+                {{ mmg_existing_plan_assets }} digital assets in {{ mmg_existing_plan_packages }}
+                {% if mmg_existing_plan_packages == 1 %}package{% else %}packages{% endif %}
+                per monthly billing cycle
+              {%- endif -%}
+            </p>
+            <p class="mmg-cart-subscription__active-detail" data-mmg-current-selling-plan>
+              {%- if mmg_existing_subscription_line.selling_plan_allocation != blank -%}
+                {{ mmg_existing_subscription_line.selling_plan_allocation.selling_plan.name }}
+              {%- else -%}
+                Monthly billing
+              {%- endif -%}
+            </p>
+          </div>
+          <div class="mmg-cart-subscription__active-price">
+            <span data-mmg-current-plan-price>
+              {%- if mmg_existing_subscription_line != blank -%}
+                {{ mmg_existing_subscription_line.final_price | money }}
+              {%- endif -%}
+            </span>
+            <span aria-hidden="true"> / month</span>
+            <span class="mmg-cart-subscription__sr-only"> per month</span>
+          </div>
+        </div>
+
+        <div
+          class="mmg-cart-subscription__duplicate-warning"
+          data-mmg-duplicate-warning
+          {% if mmg_existing_subscription_count <= 1 %}hidden{% endif %}
+        >
+          Multiple MMG memberships were detected. Selecting a plan below will consolidate them into one subscription line.
+        </div>
+
+        <div class="mmg-cart-subscription__actions">
+          <button
+            class="mmg-cart-subscription__button mmg-cart-subscription__button--primary"
+            type="button"
+            data-mmg-open-plans
+          >
+            Change Plan
+          </button>
+          <button
+            class="mmg-cart-subscription__button mmg-cart-subscription__button--danger"
+            type="button"
+            data-mmg-request-remove
+          >
+            Remove Membership
+          </button>
+        </div>
+
+        <div class="mmg-cart-subscription__remove-confirmation" data-mmg-remove-confirmation hidden>
+          <p>
+            Remove the MMG Knowledge Subscription from this cart? This does not affect any separate subscription contract already created by a completed order.
+          </p>
+          <div class="mmg-cart-subscription__actions">
+            <button
+              class="mmg-cart-subscription__button mmg-cart-subscription__button--danger"
+              type="button"
+              data-mmg-confirm-remove
+            >
+              Confirm Removal
+            </button>
+            <button
+              class="mmg-cart-subscription__button mmg-cart-subscription__button--secondary"
+              type="button"
+              data-mmg-cancel-remove
+            >
+              Keep Membership
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <details class="mmg-cart-subscription__plans" data-mmg-cart-plan-panel>
+        <summary>Membership plan selector</summary>
+        <div class="mmg-cart-subscription__plans-body">
+          <div class="mmg-cart-subscription__plans-close">
+            <button
+              class="mmg-cart-subscription__button mmg-cart-subscription__button--secondary"
+              type="button"
+              data-mmg-close-plans
+            >
+              Close Plans
+            </button>
+          </div>
+
+          {%- render 'mmg-three-plan-selector',
+            mmg_selector_product: mmg_subscription_product,
+            mmg_selector_context: mmg_cart_context,
+            mmg_selector_instance_id: mmg_cart_instance,
+            mmg_selector_heading: 'Choose your membership plan',
+            mmg_selector_intro: 'Select the recurring plan that matches the pace of your learning and growth.',
+            mmg_selector_button_label: 'Update cart with membership'
+          -%}
+        </div>
+      </details>
+
+      <noscript>
+        <style>
+          #mmg-cart-subscription-controller-{{ mmg_cart_instance }} [data-mmg-open-plans],
+          #mmg-cart-subscription-controller-{{ mmg_cart_instance }} [data-mmg-request-remove],
+          #mmg-cart-subscription-controller-{{ mmg_cart_instance }} [data-mmg-close-plans] {
+            display: none !important;
+          }
+
+          {%- if mmg_existing_subscription_count > 0 -%}
+            #mmg-cart-subscription-controller-{{ mmg_cart_instance }} [data-mmg-cart-plan-panel] {
+              display: none !important;
+            }
+          {%- endif -%}
+        </style>
+
+        {%- if mmg_existing_subscription_count > 0 -%}
+          <p class="mmg-cart-subscription__status" data-tone="neutral">
+            To change plans without JavaScript, first use the cart line-item removal control to remove the current membership, then reload the cart and select a new plan.
+          </p>
+        {%- endif -%}
+      </noscript>
+    {%- endif -%}
+
+    <div
+      class="mmg-cart-subscription__status"
+      data-mmg-cart-live-region
+      data-tone="neutral"
+      role="status"
+      aria-live="polite"
+      hidden
+    ></div>
+  </section>
+</mmg-cart-subscription-controller>
+
+<script src="{{ 'mmg-cart-subscription-controller.js' | asset_url }}" defer></script>

@@ -1,0 +1,173 @@
+{
+  "component_id": "mmg-cart-subscription-controller-v1",
+  "version": "1.0.0",
+  "status": "approved_for_staging",
+  "approved_date": "2026-07-20",
+  "liquid_source": "shopify/snippets/mmg-cart-subscription-controller.liquid",
+  "javascript_source": "shopify/assets/mmg-cart-subscription-controller.js",
+  "stylesheet_source": "shopify/assets/mmg-cart-subscription-controller.css",
+  "selector_dependency": "shopify/snippets/mmg-three-plan-selector.liquid",
+  "product_contract": "shopify/products/mmg-knowledge-subscription/product-contract.json",
+  "product_handle": "mmg-knowledge-subscription",
+  "purpose": "Reusable optional cart offer and subscription-line controller for adding, replacing, consolidating, or explicitly removing the MMG Knowledge Subscription without silently enrolling the customer.",
+  "supported_surfaces": [
+    "cart_drawer",
+    "full_cart_page"
+  ],
+  "customer_states": [
+    {
+      "state": "offer",
+      "condition": "No MMG Knowledge Subscription line exists in the current cart.",
+      "behavior": "Shows an optional membership invitation and does not select or add a plan automatically."
+    },
+    {
+      "state": "active",
+      "condition": "Exactly one MMG Knowledge Subscription line exists in the current cart.",
+      "behavior": "Shows the selected cadence, recurring price, selling-plan name, entitlement, change-plan action, and explicit remove action."
+    },
+    {
+      "state": "duplicate_warning",
+      "condition": "More than one MMG Knowledge Subscription line exists in the current cart.",
+      "behavior": "Warns the customer and consolidates the lines only after the customer explicitly selects and confirms a replacement plan."
+    },
+    {
+      "state": "unavailable",
+      "condition": "The canonical subscription product is missing or its selling-plan allocations are unavailable.",
+      "behavior": "Displays a safe unavailable state and blocks broken enrollment."
+    }
+  ],
+  "render_parameters": {
+    "mmg_cart_subscription_product": "Optional Shopify product object. Falls back to all_products['mmg-knowledge-subscription'].",
+    "mmg_cart_context": "Stable surface identifier such as cart-drawer or cart-page.",
+    "mmg_cart_instance_id": "Unique instance seed for duplicate-safe DOM IDs.",
+    "mmg_cart_sections": "Comma-separated section IDs requested through bundled section rendering. Maximum five.",
+    "mmg_cart_sections_url": "Locale-aware page path used as the section-rendering context."
+  },
+  "consent_contract": {
+    "silent_insertion_allowed": false,
+    "preselected_plan_allowed": false,
+    "prechecked_recurring_consent_allowed": false,
+    "explicit_open_action_required": true,
+    "explicit_plan_selection_required": true,
+    "explicit_recurring_consent_required": true,
+    "explicit_remove_confirmation_required": true
+  },
+  "cart_api_contract": {
+    "transport": "Shopify Ajax Cart API",
+    "locale_aware_root": "window.Shopify.routes.root",
+    "read_endpoint": "cart.js",
+    "add_endpoint": "cart/add.js",
+    "replace_removal_endpoint": "cart/update.js",
+    "single_line_rollback_endpoint": "cart/change.js",
+    "add_payload_fields": [
+      "items[].id",
+      "items[].quantity",
+      "items[].selling_plan",
+      "items[].properties"
+    ],
+    "private_properties": [
+      "_mmg_subscription_plan_code",
+      "_mmg_recurring_consent",
+      "_mmg_cart_offer_context",
+      "_mmg_replacement_token"
+    ],
+    "bundled_section_rendering": true,
+    "maximum_requested_sections": 5
+  },
+  "duplicate_prevention_contract": {
+    "identity_field": "Ajax cart item product_id matched against the canonical Shopify product ID rendered by Liquid.",
+    "add_behavior_when_existing_line_found": "Run the replacement path instead of adding a second persistent subscription line.",
+    "replacement_sequence": [
+      "Read and snapshot all existing subscription lines.",
+      "Add the explicitly selected replacement variant with its selling plan and a private replacement token.",
+      "Remove every prior subscription line in one cart/update.js request keyed by line-item key.",
+      "Rollback the replacement line if prior-line removal fails.",
+      "Fetch and verify that exactly one subscription line remains with the selected variant."
+    ],
+    "same_plan_behavior": "When exactly one existing line already matches the selected variant and selling plan, perform no mutation and report that the plan is already present."
+  },
+  "removal_contract": {
+    "first_action": "Reveal an inline confirmation panel.",
+    "confirmed_action": "Remove all MMG Knowledge Subscription lines in one cart/update.js request.",
+    "scope_notice": "Clarify that cart removal does not cancel a separate subscription contract created by an earlier completed order."
+  },
+  "section_refresh_contract": {
+    "default_sections": [
+      "cart-drawer",
+      "cart-icon-bubble",
+      "main-cart-items",
+      "main-cart-footer",
+      "cart-live-region-text"
+    ],
+    "replacement_strategy": "Replace matching shopify-section wrappers from bundled section HTML when present.",
+    "fallback_events": [
+      "mmg:cart-subscription-updated",
+      "cart:updated",
+      "cart:refresh"
+    ]
+  },
+  "event_contract": [
+    {
+      "name": "mmg:cart-subscription-updated",
+      "bubbles": true,
+      "actions": [
+        "add",
+        "replace",
+        "remove"
+      ],
+      "detail_fields": [
+        "source",
+        "context",
+        "action",
+        "cart",
+        "selection"
+      ]
+    },
+    {
+      "name": "mmg:cart-subscription-error",
+      "bubbles": true,
+      "codes": [
+        "MISSING_VARIANT_OR_SELLING_PLAN",
+        "CART_MUTATION_FAILED"
+      ]
+    },
+    {
+      "name": "mmg:cart-subscription-critical-error",
+      "bubbles": true,
+      "codes": [
+        "REPLACEMENT_ROLLBACK_FAILED"
+      ]
+    }
+  ],
+  "accessibility_contract": {
+    "live_status_region": true,
+    "keyboard_operable_controls": true,
+    "visible_focus": true,
+    "inline_remove_confirmation": true,
+    "reduced_motion_support": true,
+    "responsive_single_column_mobile": true,
+    "native_details_fallback": true
+  },
+  "integration_sequence": {
+    "current_component": "MMG Cart Subscription Controller",
+    "previous_component": "MMG Three-Plan Selector",
+    "next_component": "MMG Knowledge Library eligibility metadata and selection-mode contract",
+    "subsequent_components": [
+      "MMG Knowledge Library Picker",
+      "MMG Entitlement Counter",
+      "MMG Delivery Window Controller",
+      "Customer Portal subscription dashboard"
+    ]
+  },
+  "release_gates": [
+    "The subscription product and all three variants are provisioned with verified selling-plan allocations.",
+    "The controller is inserted once in the cart drawer and once in the full cart page at the approved positions.",
+    "Private underscore-prefixed line-item properties are filtered from storefront property displays.",
+    "No plan or recurring-consent control is preselected.",
+    "Add, same-plan no-op, replacement, duplicate consolidation, rollback, and explicit removal pass QA.",
+    "Bundled section rendering refreshes the active theme cart surfaces without duplicate UI updates.",
+    "The recurring price and selling-plan name remain visible on the cart line and at checkout.",
+    "Mobile, keyboard, screen-reader, reduced-motion, and no-JavaScript behavior pass QA.",
+    "End-to-end checkout confirms a subscription contract and hands the customer to the Knowledge Library for the first two titles."
+  ]
+}
