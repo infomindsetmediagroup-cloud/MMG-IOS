@@ -5,7 +5,7 @@
 - [ ] Release ID is immutable and unique.
 - [ ] Exact 40-character commit SHA matches the checked-out source.
 - [ ] Production actions use the `mmg-commerce-production` GitHub Environment.
-- [ ] Production `execute`, `publish`, and `rollback` actions have an active approval bound to the exact environment, action, SHA, and approval window.
+- [ ] Production `execute`, `verify`, `publish`, and `rollback` actions have an active approval bound to the exact environment, action, SHA, and approval window.
 - [ ] `publish` approval is distinct from general provisioning approval.
 - [ ] Duplicate request IDs return the completed outcome.
 - [ ] Request-ID payload collisions are rejected.
@@ -88,6 +88,7 @@
 
 - [ ] At least two verified subscription-selectable assets exist.
 - [ ] All end-to-end checks are passed, not skipped.
+- [ ] Verification evidence belongs to the same release ID and environment and is no more than 24 hours old.
 - [ ] Publication approval matches the exact release commit.
 - [ ] Product status changes to `ACTIVE` only during `publish`.
 - [ ] Product is published only to the verified Online Store publication.
