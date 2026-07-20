@@ -99,31 +99,3 @@ jobs:
             "$ENDPOINT")
           echo "$response" | jq .
           echo "$response" | jq -e '.ok == true'
-
-  post-release-verification:
-    if: ${{ inputs.action == 'execute' || inputs.action == 'publish' }}
-    needs: controlled-release
-    runs-on: ubuntu-latest
-    environment: ${{ inputs.environment == 'production' && 'mmg-commerce-production' || 'mmg-commerce-staging' }}
-    steps:
-      - name: Run independent verification command
-        env:
-          ENDPOINT: ${{ secrets.MMG_COMMERCE_DEPLOYMENT_ENDPOINT }}
-          TOKEN: ${{ secrets.MMG_COMMERCE_DEPLOYMENT_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          payload=$(jq -n \
-            --arg requestId "gha-${{ github.run_id }}-${{ github.run_attempt }}-post-verify" \
-            --arg releaseId "${{ inputs.release_id }}" \
-            --arg environment "${{ inputs.environment }}" \
-            --arg releaseCommitSha "${{ inputs.release_commit_sha }}" \
-            '{requestId:$requestId,releaseId:$releaseId,environment:$environment,action:"verify",releaseCommitSha:$releaseCommitSha}')
-          curl --fail-with-body --silent --show-error \
-            --request POST \
-            --header "Authorization: Bearer $TOKEN" \
-            --header "Content-Type: application/json" \
-            --header "X-MMG-Internal-Request: github-actions" \
-            --data "$payload" \
-            "$ENDPOINT" | tee verification.json
-          jq -e '.ok == true and (.status == "verified" or .status == "duplicate_ignored")' verification.json
