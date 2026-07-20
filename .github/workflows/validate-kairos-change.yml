@@ -42,7 +42,7 @@ jobs:
 
       - name: Install Kairos Worker dependencies
         working-directory: cloudflare/mmg-ios
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Run Kairos Worker tests
         working-directory: cloudflare/mmg-ios
