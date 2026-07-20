@@ -1,0 +1,35 @@
+name: Shopify Toolkit Policy
+
+on:
+  pull_request:
+    paths:
+      - "AGENTS.md"
+      - ".env.example"
+      - "package.json"
+      - "scripts/shopify-*.mjs"
+      - "shopify/**"
+      - "docs/runbooks/shopify-ai-toolkit.md"
+      - ".github/workflows/shopify-toolkit-policy.yml"
+  push:
+    branches: [main]
+    paths:
+      - "AGENTS.md"
+      - ".env.example"
+      - "package.json"
+      - "scripts/shopify-*.mjs"
+      - "shopify/**"
+      - "docs/runbooks/shopify-ai-toolkit.md"
+      - ".github/workflows/shopify-toolkit-policy.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.12.0"
+      - run: npm run shopify:policy
