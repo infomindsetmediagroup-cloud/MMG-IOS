@@ -143,10 +143,14 @@
               {%- endif -%}
             </p>
           </div>
-          <div class="mmg-cart-subscription__active-price" data-mmg-current-plan-price>
-            {%- if mmg_existing_subscription_line != blank -%}
-              {{ mmg_existing_subscription_line.final_price | money }} / month
-            {%- endif -%}
+          <div class="mmg-cart-subscription__active-price">
+            <span data-mmg-current-plan-price>
+              {%- if mmg_existing_subscription_line != blank -%}
+                {{ mmg_existing_subscription_line.final_price | money }}
+              {%- endif -%}
+            </span>
+            <span aria-hidden="true"> / month</span>
+            <span class="mmg-cart-subscription__sr-only"> per month</span>
           </div>
         </div>
 
