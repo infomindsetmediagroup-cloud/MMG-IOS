@@ -1,0 +1,10 @@
+{%- render 'mmg-my-library',
+  mmg_my_library_instance_id: 'customer-portal-primary',
+  mmg_my_library_endpoint: '/api/customer-portal/my-library',
+  mmg_my_library_access_endpoint: '/api/customer-portal/my-library/access',
+  mmg_my_library_login_url: routes.account_login_url,
+  mmg_my_library_catalog_url: '/pages/knowledge-library',
+  mmg_my_library_support_url: '/pages/customer-service',
+  mmg_my_library_selection_url: '/pages/knowledge-library#subscription-selection',
+  mmg_my_library_csrf_token: mmg_customer_portal_csrf_token
+-%}
