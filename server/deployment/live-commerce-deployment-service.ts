@@ -167,7 +167,7 @@ const assertPrincipal = (
 const actionNeedsApproval = (command: MMGCommerceDeploymentCommand): boolean =>
   command.action === "publish" ||
   (command.environment === "production" &&
-    ["execute", "rollback"].includes(command.action));
+    (command.action === "execute" || command.action === "rollback"));
 
 const loadApproval = async (input: {
   repository: MMGCommerceDeploymentRepository;
@@ -205,7 +205,7 @@ export const executeMMGCommerceDeploymentCommand = async (input: {
 }): Promise<{ status: number; body: Record<string, unknown> }> => {
   const command = validateCommand(input.command);
   assertPrincipal(input.principal, command);
-  const now = input.dependencies.now();
+  const occurredAt = input.dependencies.now();
   const payloadHash = input.dependencies.hashPayload(command);
   if (!/^[a-f0-9]{64}$/.test(payloadHash)) {
     throw new Error("MMG_DEPLOYMENT_PAYLOAD_HASH_INVALID");
@@ -216,7 +216,7 @@ export const executeMMGCommerceDeploymentCommand = async (input: {
     releaseId: command.releaseId,
     action: command.action,
     payloadHash,
-    occurredAt: now,
+    occurredAt,
   });
   if (claim === "collision") {
     throw new Error("MMG_DEPLOYMENT_REQUEST_ID_COLLISION");
@@ -241,7 +241,7 @@ export const executeMMGCommerceDeploymentCommand = async (input: {
       releaseId: command.releaseId,
       environment: command.environment,
       releaseCommitSha: command.releaseCommitSha,
-      generatedAt: now,
+      generatedAt: occurredAt,
       probe,
       includePublication:
         command.includePublication === true || command.action === "publish",
@@ -252,7 +252,7 @@ export const executeMMGCommerceDeploymentCommand = async (input: {
         requestId: command.requestId,
         releaseId: command.releaseId,
         outcome: { status: "planned", blockers: plan.blockers },
-        occurredAt: now,
+        occurredAt,
       });
       return { status: 200, body: { ok: true, status: "planned", plan } };
     }
@@ -260,7 +260,7 @@ export const executeMMGCommerceDeploymentCommand = async (input: {
     const approval = await loadApproval({
       repository: input.dependencies.repository,
       command,
-      now,
+      now: occurredAt,
     });
     const currentVersion =
       await input.dependencies.repository.loadReleaseVersion(command.releaseId);
@@ -273,21 +273,19 @@ export const executeMMGCommerceDeploymentCommand = async (input: {
     }
 
     if (command.action === "publish") {
-      const prerequisiteBlockers = publicationPrerequisiteBlockers(plan);
-      if (prerequisiteBlockers.length > 0) {
-        throw new Error(
-          `MMG_DEPLOYMENT_PUBLICATION_BLOCKED:${prerequisiteBlockers.join(",")}`,
-        );
+      const blockers = publicationPrerequisiteBlockers(plan);
+      if (blockers.length > 0) {
+        throw new Error(`MMG_DEPLOYMENT_PUBLICATION_BLOCKED:${blockers.join(",")}`);
       }
-      const publishStep = plan.steps.find(
-        (entry) => entry.phase === "publication",
-      );
-      if (publishStep?.status === "completed") {
+      if (
+        plan.steps.find((entry) => entry.phase === "publication")?.status ===
+        "completed"
+      ) {
         await input.dependencies.repository.completeRequest({
           requestId: command.requestId,
           releaseId: command.releaseId,
           outcome: { status: "already_published" },
-          occurredAt: now,
+          occurredAt,
         });
         return {
           status: 200,
@@ -296,12 +294,13 @@ export const executeMMGCommerceDeploymentCommand = async (input: {
       }
     }
 
-    let release = await input.dependencies.repository.beginRelease({
+    const release = await input.dependencies.repository.beginRelease({
       command,
       principal: input.principal,
       plan,
-      occurredAt: now,
+      occurredAt,
     });
+    let releaseVersion = release.version;
     const results: Array<Record<string, unknown>> = [];
 
     for (const phase of phasesFor(command)) {
@@ -313,14 +312,16 @@ export const executeMMGCommerceDeploymentCommand = async (input: {
         continue;
       }
 
-      release = await input.dependencies.repository.recordStep({
-        releaseId: command.releaseId,
-        expectedReleaseVersion: release.version,
-        phase,
-        status: "running",
-        result: {},
-        occurredAt: input.dependencies.now(),
-      });
+      releaseVersion = (
+        await input.dependencies.repository.recordStep({
+          releaseId: command.releaseId,
+          expectedReleaseVersion: releaseVersion,
+          phase,
+          status: "running",
+          result: {},
+          occurredAt: input.dependencies.now(),
+        })
+      ).version;
 
       try {
         if (command.action === "rollback") {
@@ -332,14 +333,16 @@ export const executeMMGCommerceDeploymentCommand = async (input: {
             approval,
             occurredAt: input.dependencies.now(),
           });
-          release = await input.dependencies.repository.recordStep({
-            releaseId: command.releaseId,
-            expectedReleaseVersion: release.version,
-            phase,
-            status: "rolled_back",
-            result: rolledBack.result,
-            occurredAt: input.dependencies.now(),
-          });
+          releaseVersion = (
+            await input.dependencies.repository.recordStep({
+              releaseId: command.releaseId,
+              expectedReleaseVersion: releaseVersion,
+              phase,
+              status: "rolled_back",
+              result: rolledBack.result,
+              occurredAt: input.dependencies.now(),
+            })
+          ).version;
           results.push({ phase, ...rolledBack });
           continue;
         }
@@ -366,19 +369,21 @@ export const executeMMGCommerceDeploymentCommand = async (input: {
             occurredAt: input.dependencies.now(),
           });
         }
-        release = await input.dependencies.repository.recordStep({
-          releaseId: command.releaseId,
-          expectedReleaseVersion: release.version,
-          phase,
-          status: "completed",
-          result: applied.result,
-          occurredAt: input.dependencies.now(),
-        });
+        releaseVersion = (
+          await input.dependencies.repository.recordStep({
+            releaseId: command.releaseId,
+            expectedReleaseVersion: releaseVersion,
+            phase,
+            status: "completed",
+            result: applied.result,
+            occurredAt: input.dependencies.now(),
+          })
+        ).version;
         results.push({ phase, ...applied });
       } catch (error) {
         await input.dependencies.repository.recordStep({
           releaseId: command.releaseId,
-          expectedReleaseVersion: release.version,
+          expectedReleaseVersion: releaseVersion,
           phase,
           status: "failed",
           result: {
@@ -406,7 +411,6 @@ export const executeMMGCommerceDeploymentCommand = async (input: {
       includePublication:
         command.action === "publish" || command.includePublication === true,
     });
-
     const status =
       command.action === "rollback"
         ? "rolled_back"
@@ -417,6 +421,7 @@ export const executeMMGCommerceDeploymentCommand = async (input: {
             : finalPlan.blockers.length > 0
               ? "executed_with_blockers"
               : "executed";
+
     await input.dependencies.repository.completeRequest({
       requestId: command.requestId,
       releaseId: command.releaseId,
@@ -425,13 +430,7 @@ export const executeMMGCommerceDeploymentCommand = async (input: {
     });
     return {
       status: 200,
-      body: {
-        ok: true,
-        status,
-        releaseVersion: release.version,
-        results,
-        plan: finalPlan,
-      },
+      body: { ok: true, status, releaseVersion, results, plan: finalPlan },
     };
   } catch (error) {
     const errorCode =
