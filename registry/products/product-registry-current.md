@@ -2,21 +2,23 @@
 
 **Status:** Active  
 **Commerce authority:** `registry/products/mmg-commerce-contract-v1.json`  
+**Knowledge Library authority:** `registry/knowledge-library/mmg-knowledge-library-contract-v1.json`  
+**Digital asset registry:** `registry/knowledge-library/digital-asset-registry-v1.json`  
 **Live URL authority:** `registry/site-pages/site-url-registry-current.json`
 
 ## Canonical Product Types
 
 | Product type | Shopify structure | Primary customer destination | Subscription behavior |
 |---|---|---|---|
-| Digital download | Individual product | My Library | Eligible only when `mmg.subscription_eligible` is true |
-| Service | Product with Starter, Growth, and Professional variants | My Projects | Not included in subscription fulfillment |
-| Subscription | MMG Knowledge Subscription™ with Monthly, Bi-weekly, and Weekly variants | Subscription Dashboard + My Library | Creates recurring digital-asset entitlements |
+| Digital download | Individual product | My Library | Eligible only when `mmg.subscription_eligible` is true and every Knowledge Library selection gate passes. |
+| Service | Product with Starter, Growth, and Professional variants | My Projects | Not included in subscription fulfillment. |
+| Subscription | MMG Knowledge Subscription™ with Monthly, Bi-weekly, and Weekly variants | Subscription Dashboard + My Library | Creates recurring digital-asset entitlements. |
 
 ## Active Live Products
 
 | Product | Type | Canonical path | Status | Canonical role |
 |---|---|---|---|---|
-| AI Image Mastery™ | Digital download | `/products/ai-image-mastery` | Active | Current digital-product storefront reference. |
+| AI Image Mastery™ | Digital download | `/products/ai-image-mastery` | Active | Current digital-product storefront reference and first canonical Knowledge Library asset. |
 | Professional Cover Design Service™ | Service | `/products/professional-cover-design-service` | Active | Current multi-variant service-product storefront reference. |
 
 ## Subscription Product
@@ -31,11 +33,21 @@ Every variant is billed monthly. Monthly, Bi-weekly, and Weekly describe the dig
 
 **Provisioning authority:** `shopify/products/mmg-knowledge-subscription/product-contract.json`
 
+## Knowledge Library Asset Registry
+
+The canonical cross-system identity is `mmg.asset_id`. Shopify titles and handles are presentation and routing fields; they do not replace the permanent asset identity.
+
+| Asset | Asset ID | Public catalog | Subscription selection | Current gate |
+|---|---|---:|---:|---|
+| AI Image Mastery™ | `mmg-dd-ai-image-mastery-001` | Active | Blocked pending provisioning | Verify square thumbnail, delivery package, Shopify metafields, and runtime IDs. |
+
+A product may remain publicly purchasable while subscriber selection is blocked. This prevents the picker from offering a title that Kairos cannot yet package and deliver reliably.
+
 ## Live or Planned Product Families
 
 | Product / Series | Type | Known Path / Handle | Status | Notes |
 |---|---|---|---|---|
-| AI Image Mastery™ | Digital guide | `/products/ai-image-mastery` | Active | AI Mastery Series title; subscription eligibility is controlled by metadata. |
+| AI Image Mastery™ | Digital guide | `/products/ai-image-mastery` | Active | AI Mastery Series title; canonical asset ID `mmg-dd-ai-image-mastery-001`. |
 | Professional Cover Design Service™ | Service | `/products/professional-cover-design-service` | Active | Current service-product reference with Starter, Growth, and Professional variants. |
 | The Creator's Bible | Digital book | `/products/the-creators-bible` | Planned / prior reference | Creator education title; subscription eligibility must be explicitly assigned. |
 | AI Prompting for Beginners | Digital education | `/products/ai-prompting-for-beginners` | Planned / prior reference | Standard single-variant product-page source base. |
@@ -84,7 +96,13 @@ The Knowledge Library is the shared digital catalog for:
 2. Authenticated subscriber title selection.
 3. Customer-owned assets and downloads.
 
-Only active, approved, subscription-eligible digital downloads may enter subscriber selection. Kairos must exclude assets already owned by the customer.
+Only active, approved, subscription-eligible digital downloads with complete verified selection metadata may enter subscriber selection. Kairos must exclude assets already owned by the customer and revalidate the active entitlement window server-side.
+
+The canonical Shopify metadata definitions are stored in:
+
+`shopify/metafields/mmg-knowledge-library-product-metafields.json`
+
+The public storefront may expose provisional eligibility hints, but it must not expose private ownership grants, subscription contract identifiers, or authoritative remaining-unit totals.
 
 ## Shopify Storage Contract
 
