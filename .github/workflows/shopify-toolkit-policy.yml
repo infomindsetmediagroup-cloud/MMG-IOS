@@ -1,0 +1,52 @@
+name: Shopify Toolkit Policy
+
+on:
+  pull_request:
+    paths:
+      - "AGENTS.md"
+      - ".env.example"
+      - "package.json"
+      - "scripts/shopify-*.mjs"
+      - "shopify/**"
+      - "docs/runbooks/shopify-ai-toolkit.md"
+      - ".github/workflows/shopify-toolkit-policy.yml"
+  push:
+    branches: [main]
+    paths:
+      - "AGENTS.md"
+      - ".env.example"
+      - "package.json"
+      - "scripts/shopify-*.mjs"
+      - "shopify/**"
+      - "docs/runbooks/shopify-ai-toolkit.md"
+      - ".github/workflows/shopify-toolkit-policy.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Materialize repository source
+        env:
+          REPOSITORY: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          git init .
+          git fetch --depth=1 "https://github.com/${REPOSITORY}.git" "${HEAD_SHA}"
+          git checkout --detach FETCH_HEAD
+
+      - name: Verify runner prerequisites
+        run: |
+          set -euo pipefail
+          node --version
+          npm --version
+
+      - name: Validate Shopify Toolkit policy
+        run: npm run shopify:policy
+
+      - name: Exercise Shopify operation guards
+        run: npm run shopify:self-test

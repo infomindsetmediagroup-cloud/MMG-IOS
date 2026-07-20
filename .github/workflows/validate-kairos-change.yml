@@ -14,26 +14,35 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - name: Materialize repository source
+        env:
+          REPOSITORY: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git init .
+          git fetch --depth=1 "https://github.com/${REPOSITORY}.git" "${HEAD_SHA}"
+          git checkout --detach FETCH_HEAD
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: npm
-          cache-dependency-path: cloudflare/mmg-ios/package-lock.json
+      - name: Verify runner prerequisites
+        run: |
+          set -euo pipefail
+          node --version
+          npm --version
 
       - name: Validate repository automation
         run: |
+          set -euo pipefail
           node --check scripts/prep-changes.mjs
           test -f cloudflare/mmg-ios/wrangler.toml
           test -f cloudflare/mmg-ios/src/kairos-theme-menu-hotfix-publisher-20260718.js
           grep -q 'kairos-theme-menu-hotfix-20260718-3' cloudflare/mmg-ios/src/kairos-theme-menu-hotfix-publisher-20260718.js
+          npm run shopify:policy
+          npm run shopify:self-test
 
       - name: Install Kairos Worker dependencies
         working-directory: cloudflare/mmg-ios
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Run Kairos Worker tests
         working-directory: cloudflare/mmg-ios
