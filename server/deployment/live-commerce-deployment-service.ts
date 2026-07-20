@@ -113,6 +113,8 @@ export interface MMGCommerceDeploymentServiceDependencies {
   hashPayload(command: MMGCommerceDeploymentCommand): string;
 }
 
+const MAX_E2E_EVIDENCE_AGE_MS = 24 * 60 * 60 * 1000;
+
 const executablePhases: MMGCommerceDeploymentPhase[] = [
   "application_scopes",
   "database_migrations",
@@ -167,7 +169,9 @@ const assertPrincipal = (
 const actionNeedsApproval = (command: MMGCommerceDeploymentCommand): boolean =>
   command.action === "publish" ||
   (command.environment === "production" &&
-    (command.action === "execute" || command.action === "rollback"));
+    (command.action === "execute" ||
+      command.action === "verify" ||
+      command.action === "rollback"));
 
 const loadApproval = async (input: {
   repository: MMGCommerceDeploymentRepository;
@@ -197,6 +201,35 @@ const publicationPrerequisiteBlockers = (
   plan: MMGCommerceDeploymentPlan,
 ): string[] =>
   plan.blockers.filter((code) => code !== "PUBLICATION_NOT_COMPLETED");
+
+const assertFreshReleaseEvidence = (input: {
+  evidence: MMGCommerceE2EEvidence | null;
+  command: MMGCommerceDeploymentCommand;
+  now: Date;
+}): void => {
+  const evidence = input.evidence;
+  if (!evidence) throw new Error("MMG_DEPLOYMENT_PUBLICATION_REQUIRES_E2E");
+  if (evidence.environment !== input.command.environment) {
+    throw new Error("MMG_DEPLOYMENT_E2E_ENVIRONMENT_MISMATCH");
+  }
+  if (!evidence.runId.startsWith(`e2e:${input.command.releaseId}:`)) {
+    throw new Error("MMG_DEPLOYMENT_E2E_RELEASE_MISMATCH");
+  }
+  const completedAt = Date.parse(evidence.completedAt);
+  if (
+    !Number.isFinite(completedAt) ||
+    completedAt > input.now.getTime() ||
+    input.now.getTime() - completedAt > MAX_E2E_EVIDENCE_AGE_MS
+  ) {
+    throw new Error("MMG_DEPLOYMENT_E2E_EVIDENCE_STALE");
+  }
+  if (
+    Object.keys(evidence.checks).length === 0 ||
+    Object.values(evidence.checks).some((status) => status !== "passed")
+  ) {
+    throw new Error("MMG_DEPLOYMENT_E2E_EVIDENCE_INCOMPLETE");
+  }
+};
 
 export const executeMMGCommerceDeploymentCommand = async (input: {
   command: MMGCommerceDeploymentCommand;
@@ -273,6 +306,11 @@ export const executeMMGCommerceDeploymentCommand = async (input: {
     }
 
     if (command.action === "publish") {
+      assertFreshReleaseEvidence({
+        evidence: probe.e2eEvidence,
+        command,
+        now: occurredAt,
+      });
       const blockers = publicationPrerequisiteBlockers(plan);
       if (blockers.length > 0) {
         throw new Error(`MMG_DEPLOYMENT_PUBLICATION_BLOCKED:${blockers.join(",")}`);
