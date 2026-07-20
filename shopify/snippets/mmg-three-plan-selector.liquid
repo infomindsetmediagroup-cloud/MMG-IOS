@@ -8,7 +8,7 @@
   assign mmg_selector_heading = mmg_selector_heading | default: 'Choose your membership plan'
   assign mmg_selector_intro = mmg_selector_intro | default: 'Build your Knowledge Library with recurring digital assets selected for your goals.'
   assign mmg_selector_button_label = mmg_selector_button_label | default: 'Continue with membership'
-  assign mmg_selector_instance_base = section.id | default: 'global'
+  assign mmg_selector_instance_base = mmg_selector_instance_id | default: section.id | default: 'global'
   assign mmg_selector_instance = mmg_selector_instance_base | append: '-' | append: mmg_selector_context | handleize
   assign mmg_selector_form_id = 'mmg-subscription-form-' | append: mmg_selector_instance
   assign mmg_selector_legend_id = 'mmg-subscription-legend-' | append: mmg_selector_instance
@@ -628,7 +628,8 @@
           class="mmg-three-plan-selector__submit"
           type="submit"
           data-mmg-selector-submit
-          data-default-label="{{ mmg_selector_button_label | escape }}"
+          data-selected-label="{{ mmg_selector_button_label | escape }}"
+          data-unselected-label="Select a membership plan"
         >
           Select a membership plan
         </button>
@@ -669,6 +670,8 @@
       const summaryPrice = form.querySelector('[data-mmg-selection-price]');
 
       const selectedPlan = () => planInputs.find((input) => input.checked);
+      const selectedLabel = submit?.dataset.selectedLabel || 'Continue with membership';
+      const unselectedLabel = submit?.dataset.unselectedLabel || 'Select a membership plan';
 
       const updateSubmitState = () => {
         const plan = selectedPlan();
@@ -677,8 +680,8 @@
         if (submit) {
           submit.disabled = !ready;
           submit.textContent = plan
-            ? `Continue with ${plan.dataset.planName}`
-            : 'Select a membership plan';
+            ? `${selectedLabel}: ${plan.dataset.planName}`
+            : unselectedLabel;
         }
 
         root.dataset.selectedPlanCode = plan?.dataset.planCode || '';
