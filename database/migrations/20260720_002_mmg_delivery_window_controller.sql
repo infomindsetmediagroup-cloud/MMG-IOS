@@ -63,6 +63,35 @@ CREATE UNIQUE INDEX IF NOT EXISTS mmg_entitlement_windows_delivery_dispatch_idx
 CREATE INDEX IF NOT EXISTS mmg_entitlement_windows_controller_action_idx
   ON mmg_entitlement_windows (status, opens_at, closes_at, package_sequence);
 
+CREATE OR REPLACE FUNCTION mmg_guard_delivery_window_opening()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW.status = 'open' AND OLD.status <> 'open' THEN
+    IF EXISTS (
+      SELECT 1
+      FROM mmg_entitlement_windows existing
+      WHERE existing.cycle_id = NEW.cycle_id
+        AND existing.id <> NEW.id
+        AND existing.status IN ('open', 'recovery_required')
+    ) THEN
+      RETURN NULL;
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS mmg_entitlement_windows_open_guard
+  ON mmg_entitlement_windows;
+
+CREATE TRIGGER mmg_entitlement_windows_open_guard
+BEFORE UPDATE OF status ON mmg_entitlement_windows
+FOR EACH ROW
+EXECUTE FUNCTION mmg_guard_delivery_window_opening();
+
 CREATE TABLE IF NOT EXISTS mmg_delivery_controller_runs (
   run_id text PRIMARY KEY,
   status text NOT NULL CHECK (status IN ('running', 'completed', 'failed')),
