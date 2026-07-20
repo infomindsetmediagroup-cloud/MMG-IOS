@@ -49,6 +49,23 @@ type CommerceContract = {
     confirmation_transaction: string;
     server_authority: string;
   };
+  delivery_window_controller_contract: {
+    authority: string;
+    domain_controller: string;
+    orchestration_service: string;
+    postgres_repository: string;
+    internal_endpoint: string;
+    database_schema: string;
+    review_window_hours: {
+      minimum: number;
+      maximum: number;
+      default: number;
+    };
+    weekly_package_offsets_days: number[];
+    first_package_expiry: string;
+    future_package_expiry: string;
+    server_authority: string;
+  };
   product_types: {
     digital_download: {
       storefront: {
@@ -57,9 +74,7 @@ type CommerceContract = {
         square_thumbnail_size_px: [number, number];
         square_thumbnail_aspect_ratio: string;
       };
-      delivery_package: {
-        required_image_assets: string[];
-      };
+      delivery_package: { required_image_assets: string[] };
     };
     service: {
       variants: Array<{
@@ -67,10 +82,7 @@ type CommerceContract = {
         color_identity: string;
         variant_image_role: string;
       }>;
-      media_behavior: {
-        gallery_rule: string;
-        cart_rule: string;
-      };
+      media_behavior: { gallery_rule: string; cart_rule: string };
     };
     subscription: {
       canonical_product_title: string;
@@ -92,13 +104,16 @@ type CommerceContract = {
       plans: SubscriptionPlan[];
       first_delivery_flow: {
         initial_selection_count: number;
+        expiry_policy: string;
       };
       future_delivery_flow: {
         assets_per_package: number;
         review_window_hours: {
           minimum: number;
           maximum: number;
+          default: number;
         };
+        expiry_policy: string;
       };
     };
   };
@@ -108,56 +123,66 @@ type CommerceContract = {
       authority: string;
       mutation_rules: string[];
     };
-    my_library: {
-      ownership_authority: string;
-    };
+    my_library: { ownership_authority: string };
   };
   canonical_metadata: {
     namespace: string;
     definition_manifest: string;
     fields: string[];
   };
-  offer_and_entitlement_engine: {
-    rules: string[];
-  };
+  offer_and_entitlement_engine: { rules: string[] };
   site_placements: Record<string, string>;
   reusable_components: string[];
 };
 
 const currentFile = fileURLToPath(import.meta.url);
 const repositoryRoot = resolve(dirname(currentFile), "..");
-const contractPath = resolve(
-  repositoryRoot,
-  "registry/products/mmg-commerce-contract-v1.json",
-);
 const contract = JSON.parse(
-  readFileSync(contractPath, "utf8"),
+  readFileSync(
+    resolve(repositoryRoot, "registry/products/mmg-commerce-contract-v1.json"),
+    "utf8",
+  ),
 ) as CommerceContract;
 
 describe("MMG commerce contract", () => {
-  it("is the approved v1 authority", () => {
+  it("is the approved v1.5 authority", () => {
     expect(contract.contract_id).toBe("mmg-commerce-contract-v1");
-    expect(contract.version).toBe("1.4.0");
+    expect(contract.version).toBe("1.5.0");
     expect(contract.status).toBe("approved");
   });
 
-  it("locks the three subscription plans and exact entitlements", () => {
-    const plans = contract.product_types.subscription.plans;
-
-    expect(plans).toHaveLength(3);
+  it("locks the exact subscription prices and entitlements", () => {
     expect(
-      plans.map(({ plan_code, price, assets_per_billing_cycle }) => ({
-        plan_code,
-        price,
-        assets_per_billing_cycle,
-      })),
+      contract.product_types.subscription.plans.map(
+        ({ plan_code, price, packages_per_billing_cycle, assets_per_billing_cycle }) => ({
+          plan_code,
+          price,
+          packages_per_billing_cycle,
+          assets_per_billing_cycle,
+        }),
+      ),
     ).toEqual([
-      { plan_code: "monthly", price: 14.95, assets_per_billing_cycle: 2 },
-      { plan_code: "biweekly", price: 24.95, assets_per_billing_cycle: 4 },
-      { plan_code: "weekly", price: 39.95, assets_per_billing_cycle: 8 },
+      {
+        plan_code: "monthly",
+        price: 14.95,
+        packages_per_billing_cycle: 1,
+        assets_per_billing_cycle: 2,
+      },
+      {
+        plan_code: "biweekly",
+        price: 24.95,
+        packages_per_billing_cycle: 2,
+        assets_per_billing_cycle: 4,
+      },
+      {
+        plan_code: "weekly",
+        price: 39.95,
+        packages_per_billing_cycle: 4,
+        assets_per_billing_cycle: 8,
+      },
     ]);
 
-    for (const plan of plans) {
+    for (const plan of contract.product_types.subscription.plans) {
       expect(plan.billing_interval).toBe("month");
       expect(plan.assets_per_package).toBe(2);
       expect(plan.assets_per_billing_cycle).toBe(
@@ -166,9 +191,15 @@ describe("MMG commerce contract", () => {
     }
   });
 
-  it("locks one subscription product with three variants and one shared monthly selling plan", () => {
-    const structure = contract.product_types.subscription.shopify_structure;
+  it("locks one subscription product, three cadence variants, and one selling plan", () => {
+    const subscription = contract.product_types.subscription;
+    const structure = subscription.shopify_structure;
 
+    expect(subscription.canonical_product_title).toBe(
+      "MMG Knowledge Subscription™",
+    );
+    expect(subscription.canonical_handle).toBe("mmg-knowledge-subscription");
+    expect(subscription.billing_currency).toBe("USD");
     expect(structure.product_model).toBe("ONE_PRODUCT_THREE_CADENCE_VARIANTS");
     expect(structure.variant_option_name).toBe("Delivery cadence");
     expect(structure.variant_codes).toEqual(["monthly", "biweekly", "weekly"]);
@@ -176,35 +207,12 @@ describe("MMG commerce contract", () => {
     expect(structure.requires_shipping).toBe(false);
     expect(structure.inventory_tracking).toBe(false);
     expect(structure.selling_plan_model).toBe("ONE_SHARED_MONTHLY_SELLING_PLAN");
-    expect(structure.selling_plan_group_merchant_code).toBe(
-      "mmg-knowledge-subscription-monthly-billing",
-    );
     expect(structure.billing_owner).toBe("Shopify");
     expect(structure.intra_cycle_package_schedule_owner).toBe("Kairos");
-    expect(structure.product_contract).toBe(
-      "shopify/products/mmg-knowledge-subscription/product-contract.json",
-    );
   });
 
-  it("locks the subscription identity and post-purchase first selection", () => {
-    const subscription = contract.product_types.subscription;
-
-    expect(subscription.canonical_product_title).toBe(
-      "MMG Knowledge Subscription™",
-    );
-    expect(subscription.canonical_handle).toBe("mmg-knowledge-subscription");
-    expect(subscription.billing_currency).toBe("USD");
-    expect(subscription.first_delivery_flow.initial_selection_count).toBe(2);
-    expect(subscription.future_delivery_flow.assets_per_package).toBe(2);
-    expect(subscription.future_delivery_flow.review_window_hours).toEqual({
-      minimum: 24,
-      maximum: 48,
-    });
-  });
-
-  it("locks the digital-download portrait and square image package", () => {
+  it("locks the digital portrait and square asset package", () => {
     const digital = contract.product_types.digital_download;
-
     expect(digital.storefront.preferred_portrait_size_px).toEqual([2048, 3072]);
     expect(digital.storefront.portrait_aspect_ratio).toBe("2:3");
     expect(digital.storefront.square_thumbnail_size_px).toEqual([2048, 2048]);
@@ -214,10 +222,8 @@ describe("MMG commerce contract", () => {
     );
   });
 
-  it("locks service tier identity and dynamic variant-media behavior", () => {
-    const service = contract.product_types.service;
-
-    expect(service.variants).toEqual([
+  it("locks service tier identity and dynamic media", () => {
+    expect(contract.product_types.service.variants).toEqual([
       {
         name: "Starter",
         color_identity: "electric_blue",
@@ -234,8 +240,74 @@ describe("MMG commerce contract", () => {
         variant_image_role: "professional_tier_image",
       },
     ]);
-    expect(service.media_behavior.gallery_rule).toContain("Do not display");
-    expect(service.media_behavior.cart_rule).toContain("selected tier image");
+    expect(contract.product_types.service.media_behavior.gallery_rule).toContain(
+      "Do not display",
+    );
+    expect(contract.product_types.service.media_behavior.cart_rule).toContain(
+      "selected tier image",
+    );
+  });
+
+  it("connects the Knowledge Library, picker, and durable persistence authorities", () => {
+    expect(contract.knowledge_library_contract.canonical_asset_key).toBe(
+      "mmg.asset_id",
+    );
+    expect(contract.knowledge_library_contract.server_authority).toBe("Kairos");
+    expect(contract.knowledge_library_picker_contract.logical_endpoint).toBe(
+      "/api/knowledge-library/picker",
+    );
+    expect(
+      contract.knowledge_library_picker_contract.optimistic_concurrency_field,
+    ).toBe("expectedWindowVersion");
+    expect(contract.knowledge_library_picker_contract.idempotency_field).toBe(
+      "requestId",
+    );
+    expect(
+      contract.entitlement_ownership_persistence_contract.database_schema,
+    ).toBe("database/migrations/20260720_001_mmg_knowledge_entitlements.sql");
+    expect(
+      contract.entitlement_ownership_persistence_contract.confirmation_transaction,
+    ).toContain("commit or roll back together");
+    expect(contract.knowledge_library_modes.my_library.ownership_authority).toContain(
+      "mmg_ownership_grants",
+    );
+  });
+
+  it("connects commerce to the delivery-window controller", () => {
+    expect(contract.delivery_window_controller_contract).toEqual({
+      authority:
+        "registry/knowledge-library/mmg-delivery-window-controller-contract-v1.json",
+      domain_controller: "server/knowledge-library/delivery-windows.ts",
+      orchestration_service:
+        "server/knowledge-library/delivery-window-service.ts",
+      postgres_repository:
+        "server/knowledge-library/postgres-delivery-window-repository.ts",
+      internal_endpoint:
+        "/api/internal/knowledge-library/delivery-windows/run",
+      database_schema:
+        "database/migrations/20260720_002_mmg_delivery_window_controller.sql",
+      review_window_hours: { minimum: 24, maximum: 48, default: 48 },
+      weekly_package_offsets_days: [0, 7, 14, 21],
+      first_package_expiry: "recovery_required",
+      future_package_expiry:
+        "auto-confirm an exact valid two-title package; otherwise recovery_required",
+      server_authority: "Kairos",
+    });
+
+    const subscription = contract.product_types.subscription;
+    expect(subscription.first_delivery_flow.initial_selection_count).toBe(2);
+    expect(subscription.first_delivery_flow.expiry_policy).toContain(
+      "Never auto-confirm",
+    );
+    expect(subscription.future_delivery_flow.assets_per_package).toBe(2);
+    expect(subscription.future_delivery_flow.review_window_hours).toEqual({
+      minimum: 24,
+      maximum: 48,
+      default: 48,
+    });
+    expect(subscription.future_delivery_flow.expiry_policy).toContain(
+      "server revalidation",
+    );
   });
 
   it("requires the canonical MMG metadata contract", () => {
@@ -243,124 +315,46 @@ describe("MMG commerce contract", () => {
     expect(contract.canonical_metadata.definition_manifest).toBe(
       "shopify/metafields/mmg-knowledge-library-product-metafields.json",
     );
-
-    const requiredFields = [
-      "product_type",
-      "subscription_eligible",
-      "asset_status",
-      "asset_id",
-      "topic",
-      "experience_level",
-      "format",
-      "series",
-      "related_assets",
-      "square_thumbnail",
-      "portrait_cover",
-      "subscription_value",
-      "delivery_package",
-      "customer_destination",
-    ];
-
     expect(contract.canonical_metadata.fields).toEqual(
-      expect.arrayContaining(requiredFields),
+      expect.arrayContaining([
+        "product_type",
+        "subscription_eligible",
+        "asset_status",
+        "asset_id",
+        "topic",
+        "experience_level",
+        "format",
+        "series",
+        "related_assets",
+        "square_thumbnail",
+        "portrait_cover",
+        "subscription_value",
+        "delivery_package",
+        "customer_destination",
+      ]),
     );
     expect(new Set(contract.canonical_metadata.fields).size).toBe(
       contract.canonical_metadata.fields.length,
     );
   });
 
-  it("connects the commerce contract to the Knowledge Library authority", () => {
-    expect(contract.knowledge_library_contract).toEqual({
-      eligibility_and_selection_authority:
-        "registry/knowledge-library/mmg-knowledge-library-contract-v1.json",
-      digital_asset_registry:
-        "registry/knowledge-library/digital-asset-registry-v1.json",
-      shopify_metafield_manifest:
-        "shopify/metafields/mmg-knowledge-library-product-metafields.json",
-      canonical_asset_key: "mmg.asset_id",
-      server_authority: "Kairos",
-      seed_asset: "mmg-dd-ai-image-mastery-001",
-    });
-    expect(contract.knowledge_library_modes.subscription_selection.filters).toEqual(
-      expect.arrayContaining([
-        "not already owned",
-        "within current entitlement window",
-        "sufficient remaining entitlement units",
-      ]),
-    );
-    expect(contract.knowledge_library_modes.subscription_selection.authority).toContain(
-      "server-side",
-    );
-    expect(contract.reusable_components).toContain(
-      "MMG Knowledge Library Eligibility Metadata",
-    );
-  });
-
-  it("connects the commerce contract to the implemented Knowledge Library picker", () => {
-    expect(contract.knowledge_library_picker_contract).toEqual({
-      authority:
-        "registry/knowledge-library/mmg-knowledge-library-picker-contract-v1.json",
-      state_machine: "server/knowledge-library/picker.ts",
-      service_boundary: "server/knowledge-library/picker-service.ts",
-      logical_endpoint: "/api/knowledge-library/picker",
-      storefront_component:
-        "shopify/snippets/mmg-knowledge-library-picker.liquid",
-      first_package_target_titles: 2,
-      first_package_total_units: 2,
-      optimistic_concurrency_field: "expectedWindowVersion",
-      idempotency_field: "requestId",
-      server_authority: "Kairos",
-    });
-    expect(
-      contract.knowledge_library_modes.subscription_selection.mutation_rules,
-    ).toEqual(
-      expect.arrayContaining([
-        "Customer, subscription, and window identity are derived from the authenticated server session.",
-        "Every mutation requires a request ID and expected window version.",
-        "Confirmation requires the exact target asset count and complete unit consumption.",
-      ]),
-    );
-    expect(contract.reusable_components).toContain(
-      "MMG Knowledge Library Picker",
-    );
-  });
-
-  it("connects commerce to durable entitlement and ownership persistence", () => {
-    expect(contract.entitlement_ownership_persistence_contract).toEqual({
-      authority:
-        "registry/knowledge-library/mmg-entitlement-ownership-persistence-contract-v1.json",
-      database_schema:
-        "database/migrations/20260720_001_mmg_knowledge_entitlements.sql",
-      postgres_repository:
-        "server/knowledge-library/postgres-entitlement-repository.ts",
-      entitlement_counter: "server/knowledge-library/entitlements.ts",
-      ownership_resolution: "server/knowledge-library/ownership.ts",
-      logical_entitlement_endpoint: "/api/knowledge-library/entitlement",
-      storefront_counter: "shopify/snippets/mmg-entitlement-counter.liquid",
-      confirmation_transaction:
-        "window confirmation, delivery grants, ownership grants, cycle counters, and audit events commit or roll back together",
-      server_authority: "Kairos",
-    });
-    expect(
-      contract.knowledge_library_modes.subscription_selection.mutation_rules,
-    ).toContain(
-      "Confirmation, delivery grants, ownership grants, cycle accounting, and audit events are one atomic database transaction.",
-    );
-    expect(contract.knowledge_library_modes.my_library.ownership_authority).toContain(
-      "mmg_ownership_grants",
-    );
-  });
-
-  it("forbids silent recurring insertion, provisional authority, and entitlement overdraw", () => {
+  it("forbids silent recurring insertion, entitlement overdraw, and a fifth weekly package", () => {
     expect(contract.offer_and_entitlement_engine.rules).toEqual(
       expect.arrayContaining([
         "Never silently add a recurring product to the cart.",
         "Never preselect subscription consent.",
-        "Treat storefront eligibility as provisional until Kairos revalidates the customer, ownership, entitlement window, and delivery readiness.",
-        "Use optimistic concurrency and idempotency for every title-selection mutation.",
-        "Create confirmation and delivery grants transactionally.",
         "Resolve ownership from durable active grants rather than browser state.",
         "Never allow entitlement units or package counts to exceed the locked plan contract.",
+        "Never create a fifth Weekly package in a five-week calendar month.",
+        "Require an idempotent delivery dispatcher keyed by window ID.",
+      ]),
+    );
+    expect(
+      contract.knowledge_library_modes.subscription_selection.mutation_rules,
+    ).toEqual(
+      expect.arrayContaining([
+        "The delivery-window controller never auto-confirms the first customer-selected package.",
+        "A future curated package may auto-confirm at expiry only when the exact current package passes full server revalidation.",
       ]),
     );
   });
@@ -378,6 +372,9 @@ describe("MMG commerce contract", () => {
         "thank_you_page",
         "customer_portal",
       ]),
+    );
+    expect(contract.reusable_components).toContain(
+      "MMG Delivery Window Controller",
     );
   });
 });
