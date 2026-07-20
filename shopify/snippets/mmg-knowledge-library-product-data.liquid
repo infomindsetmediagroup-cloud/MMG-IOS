@@ -27,8 +27,6 @@
 
   if mmg_portrait_file != blank
     assign mmg_portrait_url = mmg_portrait_file | image_url: width: 2048
-  elsif mmg_library_product.featured_image != blank
-    assign mmg_portrait_url = mmg_library_product.featured_image | image_url: width: 2048
   endif
 
   if mmg_square_file != blank
