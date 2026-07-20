@@ -1,0 +1,129 @@
+name: MMG Commerce Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: Immutable MMG release identifier
+        required: true
+        type: string
+      environment:
+        description: Deployment environment
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      action:
+        description: Controlled release action
+        required: true
+        type: choice
+        options:
+          - plan
+          - execute
+          - verify
+          - publish
+          - rollback
+      release_commit_sha:
+        description: Exact 40-character commit SHA approved for deployment
+        required: true
+        type: string
+      expected_release_version:
+        description: Optional optimistic release version
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mmg-commerce-${{ inputs.environment }}-${{ inputs.release_id }}
+  cancel-in-progress: false
+
+jobs:
+  contract-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_commit_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - name: Validate immutable release SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ inputs.release_commit_sha }}"
+          [[ "${{ inputs.release_commit_sha }}" =~ ^[a-f0-9]{40}$ ]]
+
+  controlled-release:
+    needs: contract-validation
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment == 'production' && 'mmg-commerce-production' || 'mmg-commerce-staging' }}
+    steps:
+      - name: Execute protected deployment command
+        env:
+          ENDPOINT: ${{ secrets.MMG_COMMERCE_DEPLOYMENT_ENDPOINT }}
+          TOKEN: ${{ secrets.MMG_COMMERCE_DEPLOYMENT_TOKEN }}
+          RELEASE_ID: ${{ inputs.release_id }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          ACTION: ${{ inputs.action }}
+          RELEASE_SHA: ${{ inputs.release_commit_sha }}
+          EXPECTED_VERSION: ${{ inputs.expected_release_version }}
+          REQUEST_ID: gha-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.action }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ENDPOINT"
+          test -n "$TOKEN"
+          payload=$(jq -n \
+            --arg requestId "$REQUEST_ID" \
+            --arg releaseId "$RELEASE_ID" \
+            --arg environment "$ENVIRONMENT" \
+            --arg action "$ACTION" \
+            --arg releaseCommitSha "$RELEASE_SHA" \
+            --arg expected "$EXPECTED_VERSION" \
+            '{requestId:$requestId,releaseId:$releaseId,environment:$environment,action:$action,releaseCommitSha:$releaseCommitSha}
+             + (if $expected == "" then {} else {expectedReleaseVersion:($expected|tonumber)} end)
+             + (if $action == "publish" then {includePublication:true} else {} end)')
+          response=$(curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $TOKEN" \
+            --header "Content-Type: application/json" \
+            --header "X-MMG-Internal-Request: github-actions" \
+            --data "$payload" \
+            "$ENDPOINT")
+          echo "$response" | jq .
+          echo "$response" | jq -e '.ok == true'
+
+  post-release-verification:
+    if: ${{ inputs.action == 'execute' || inputs.action == 'publish' }}
+    needs: controlled-release
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment == 'production' && 'mmg-commerce-production' || 'mmg-commerce-staging' }}
+    steps:
+      - name: Run independent verification command
+        env:
+          ENDPOINT: ${{ secrets.MMG_COMMERCE_DEPLOYMENT_ENDPOINT }}
+          TOKEN: ${{ secrets.MMG_COMMERCE_DEPLOYMENT_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload=$(jq -n \
+            --arg requestId "gha-${{ github.run_id }}-${{ github.run_attempt }}-post-verify" \
+            --arg releaseId "${{ inputs.release_id }}" \
+            --arg environment "${{ inputs.environment }}" \
+            --arg releaseCommitSha "${{ inputs.release_commit_sha }}" \
+            '{requestId:$requestId,releaseId:$releaseId,environment:$environment,action:"verify",releaseCommitSha:$releaseCommitSha}')
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $TOKEN" \
+            --header "Content-Type: application/json" \
+            --header "X-MMG-Internal-Request: github-actions" \
+            --data "$payload" \
+            "$ENDPOINT" | tee verification.json
+          jq -e '.ok == true and (.status == "verified" or .status == "duplicate_ignored")' verification.json
