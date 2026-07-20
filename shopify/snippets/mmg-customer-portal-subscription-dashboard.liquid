@@ -1,0 +1,167 @@
+{%- liquid
+  assign mmg_portal_endpoint = mmg_portal_endpoint | default: '/api/customer-portal/subscription'
+  assign mmg_portal_login_url = mmg_portal_login_url | default: routes.account_login_url
+  assign mmg_portal_manage_url = mmg_portal_manage_url | default: routes.account_url
+  assign mmg_portal_membership_url = mmg_portal_membership_url | default: '/products/mmg-knowledge-subscription'
+  assign mmg_portal_library_url = mmg_portal_library_url | default: '/pages/knowledge-library'
+  assign mmg_portal_selection_url = mmg_portal_selection_url | default: '/pages/knowledge-library#subscription-selection'
+  assign mmg_portal_my_library_url = mmg_portal_my_library_url | default: '/pages/knowledge-library#my-library'
+  assign mmg_portal_support_url = mmg_portal_support_url | default: '/pages/customer-service'
+  assign mmg_portal_guide_url = mmg_portal_guide_url | default: '/pages/customer-portal#subscription-member-guide'
+  assign mmg_portal_instance_seed = mmg_portal_instance_id | default: section.id | default: 'customer-portal'
+  assign mmg_portal_instance = mmg_portal_instance_seed | append: '-subscription-dashboard' | handleize
+-%}
+
+{{ 'mmg-customer-portal-subscription-dashboard.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'mmg-customer-portal-subscription-dashboard.js' | asset_url }}" defer></script>
+
+<mmg-customer-portal-subscription-dashboard
+  id="mmg-customer-portal-subscription-dashboard-{{ mmg_portal_instance }}"
+  class="mmg-portal-subscription"
+  data-endpoint="{{ mmg_portal_endpoint | escape }}"
+  data-login-url="{{ mmg_portal_login_url | escape }}"
+  data-manage-url="{{ mmg_portal_manage_url | escape }}"
+  data-membership-url="{{ mmg_portal_membership_url | escape }}"
+  data-library-url="{{ mmg_portal_library_url | escape }}"
+  data-selection-url="{{ mmg_portal_selection_url | escape }}"
+  data-my-library-url="{{ mmg_portal_my_library_url | escape }}"
+  data-support-url="{{ mmg_portal_support_url | escape }}"
+  data-guide-url="{{ mmg_portal_guide_url | escape }}"
+  aria-labelledby="mmg-portal-subscription-title-{{ mmg_portal_instance }}"
+>
+  <section class="mmg-portal-subscription__shell" data-mmg-portal-root>
+    <header class="mmg-portal-subscription__header">
+      <div>
+        <p class="mmg-portal-subscription__eyebrow">MMG Knowledge Subscription™</p>
+        <h2 id="mmg-portal-subscription-title-{{ mmg_portal_instance }}" class="mmg-portal-subscription__title">
+          Your membership dashboard
+        </h2>
+        <p class="mmg-portal-subscription__intro">
+          Track your plan, package windows, selected titles, deliveries, and growing Knowledge Library from one place.
+        </p>
+      </div>
+      <a class="mmg-portal-subscription__header-link" href="{{ mmg_portal_manage_url }}">
+        Manage account
+      </a>
+    </header>
+
+    <div class="mmg-portal-subscription__status" data-mmg-portal-status role="status" aria-live="polite">
+      <span class="mmg-portal-subscription__spinner" aria-hidden="true"></span>
+      <span data-mmg-portal-status-text>Loading your membership dashboard…</span>
+    </div>
+
+    <div class="mmg-portal-subscription__blocked" data-mmg-portal-blocked hidden>
+      <p class="mmg-portal-subscription__blocked-kicker" data-mmg-portal-blocked-kicker>Secure portal access</p>
+      <h3 data-mmg-portal-blocked-title>Sign in to view your membership</h3>
+      <p data-mmg-portal-blocked-copy>
+        Your subscription, ownership, and delivery information is available only through your authenticated Customer Portal session.
+      </p>
+      <div class="mmg-portal-subscription__actions">
+        <a class="mmg-portal-subscription__button mmg-portal-subscription__button--primary" data-mmg-portal-login-link href="{{ mmg_portal_login_url }}">
+          Sign in
+        </a>
+        <a class="mmg-portal-subscription__button mmg-portal-subscription__button--secondary" href="{{ mmg_portal_membership_url }}">
+          View membership plans
+        </a>
+      </div>
+    </div>
+
+    <div class="mmg-portal-subscription__dashboard" data-mmg-portal-dashboard hidden>
+      <section class="mmg-portal-subscription__membership" aria-labelledby="mmg-portal-membership-heading-{{ mmg_portal_instance }}">
+        <div class="mmg-portal-subscription__membership-copy">
+          <div class="mmg-portal-subscription__membership-topline">
+            <span class="mmg-portal-subscription__status-pill" data-mmg-portal-membership-status>—</span>
+            <span class="mmg-portal-subscription__price" data-mmg-portal-price>—</span>
+          </div>
+          <h3 id="mmg-portal-membership-heading-{{ mmg_portal_instance }}" data-mmg-portal-plan>—</h3>
+          <p data-mmg-portal-plan-detail>—</p>
+          <p class="mmg-portal-subscription__cycle" data-mmg-portal-cycle>—</p>
+        </div>
+        <div class="mmg-portal-subscription__membership-action">
+          <a class="mmg-portal-subscription__button mmg-portal-subscription__button--primary" data-mmg-portal-primary-action href="{{ mmg_portal_library_url }}">
+            Continue membership
+          </a>
+          <p data-mmg-portal-primary-action-copy>—</p>
+        </div>
+      </section>
+
+      <section class="mmg-portal-subscription__stats" aria-label="Membership progress">
+        <article class="mmg-portal-subscription__stat">
+          <span>Assets remaining</span>
+          <strong data-mmg-portal-assets-remaining>—</strong>
+          <small data-mmg-portal-assets-detail>—</small>
+        </article>
+        <article class="mmg-portal-subscription__stat">
+          <span>Packages completed</span>
+          <strong data-mmg-portal-packages-completed>—</strong>
+          <small data-mmg-portal-packages-detail>—</small>
+        </article>
+        <article class="mmg-portal-subscription__stat">
+          <span>Current package</span>
+          <strong data-mmg-portal-current-progress>—</strong>
+          <small data-mmg-portal-current-detail>—</small>
+        </article>
+        <article class="mmg-portal-subscription__stat">
+          <span>My Library</span>
+          <strong data-mmg-portal-owned-assets>—</strong>
+          <small>Owned digital assets</small>
+        </article>
+      </section>
+
+      <section class="mmg-portal-subscription__current" data-mmg-portal-current-section aria-labelledby="mmg-portal-current-heading-{{ mmg_portal_instance }}">
+        <div class="mmg-portal-subscription__section-heading">
+          <div>
+            <p class="mmg-portal-subscription__section-kicker">Current package</p>
+            <h3 id="mmg-portal-current-heading-{{ mmg_portal_instance }}" data-mmg-portal-current-title>—</h3>
+          </div>
+          <span class="mmg-portal-subscription__countdown" data-mmg-portal-countdown role="timer">—</span>
+        </div>
+        <p class="mmg-portal-subscription__current-copy" data-mmg-portal-current-copy>—</p>
+        <div class="mmg-portal-subscription__title-grid" data-mmg-portal-title-grid></div>
+        <div class="mmg-portal-subscription__current-actions">
+          <a class="mmg-portal-subscription__button mmg-portal-subscription__button--primary" data-mmg-portal-current-action href="{{ mmg_portal_selection_url }}">
+            Open package
+          </a>
+          <a class="mmg-portal-subscription__text-link" href="{{ mmg_portal_support_url }}">
+            Get help with this package
+          </a>
+        </div>
+      </section>
+
+      <section class="mmg-portal-subscription__timeline" aria-labelledby="mmg-portal-timeline-heading-{{ mmg_portal_instance }}">
+        <div class="mmg-portal-subscription__section-heading">
+          <div>
+            <p class="mmg-portal-subscription__section-kicker">Billing-cycle timeline</p>
+            <h3 id="mmg-portal-timeline-heading-{{ mmg_portal_instance }}">Your package schedule</h3>
+          </div>
+        </div>
+        <ol class="mmg-portal-subscription__timeline-list" data-mmg-portal-timeline></ol>
+      </section>
+
+      <nav class="mmg-portal-subscription__resources" aria-label="Membership resources">
+        <a href="{{ mmg_portal_my_library_url }}">
+          <strong>My Library</strong>
+          <span>Open delivered and owned digital resources.</span>
+        </a>
+        <a href="{{ mmg_portal_library_url }}">
+          <strong>Knowledge Library</strong>
+          <span>Browse the catalog and discover future selections.</span>
+        </a>
+        <a href="{{ mmg_portal_guide_url }}">
+          <strong>Subscription Member Guide</strong>
+          <span>Review onboarding, delivery, and membership instructions.</span>
+        </a>
+        <a href="{{ mmg_portal_support_url }}">
+          <strong>Customer Service</strong>
+          <span>Get help with billing, access, or package recovery.</span>
+        </a>
+      </nav>
+    </div>
+
+    <noscript>
+      <p class="mmg-portal-subscription__noscript">
+        JavaScript is required to load private membership data. Sign in to your Shopify account or contact Customer Service for assistance.
+      </p>
+    </noscript>
+  </section>
+</mmg-customer-portal-subscription-dashboard>
