@@ -201,6 +201,31 @@ const selectionContext = (state: MMGPickerState): MMGSubscriptionSelectionContex
   };
 };
 
+const selectionContextWithoutCurrent = (
+  state: MMGPickerState,
+  current: MMGPickerSelection,
+): MMGSubscriptionSelectionContext => {
+  const context = selectionContext(state);
+  const currentUnits = Math.max(0, Math.trunc(current.units));
+
+  return {
+    ...context,
+    selectedUnits:
+      current.state === "selected" || current.state === "confirmed"
+        ? Math.max(0, context.selectedUnits - currentUnits)
+        : context.selectedUnits,
+    reservedUnits:
+      current.state === "reserved"
+        ? Math.max(0, context.reservedUnits - currentUnits)
+        : context.reservedUnits,
+    selectedAssetIds: new Set(
+      [...context.selectedAssetIds].filter(
+        (assetId) => assetId !== current.assetId,
+      ),
+    ),
+  };
+};
+
 const isMetadataIncomplete = (
   reasons: readonly MMGEligibilityReasonCode[],
 ): boolean =>
@@ -251,39 +276,46 @@ export const buildPickerSnapshot = (state: MMGPickerState): MMGPickerSnapshot =>
   let ownedCount = 0;
   let nonCatalogCount = 0;
   let incompleteMetadataCount = 0;
+  let selectedItemsStillEligible = true;
 
   for (const asset of state.assets) {
     const assetId = normalizeAssetId(asset.assetId ?? undefined);
-    const publicDecision = evaluatePublicCatalogEligibility(asset);
-
-    if (!publicDecision.eligible || !assetId) {
+    if (!assetId) {
       nonCatalogCount += 1;
       continue;
     }
 
-    if (ownedAssetIds.has(assetId)) {
+    const selection = selectionByAssetId.get(assetId);
+    const publicDecision = evaluatePublicCatalogEligibility(asset);
+
+    if (!publicDecision.eligible && !selection) {
+      nonCatalogCount += 1;
+      continue;
+    }
+
+    if (!selection && ownedAssetIds.has(assetId)) {
       ownedCount += 1;
       continue;
     }
 
-    const selection = selectionByAssetId.get(assetId);
     let decision: MMGEligibilityDecision;
     let selectionState: MMGPickerSelectionState = "available";
     let canSelect = false;
     let canRemove = false;
 
     if (selection) {
-      decision = {
-        state: "eligible",
-        eligible: true,
-        reasonCodes: ["ELIGIBLE"],
-        remainingUnits,
-        requiredUnits: selection.units,
-        serverDecisionRequired: true,
-      };
+      decision = evaluateSubscriptionSelectionEligibility(
+        asset,
+        selectionContextWithoutCurrent(state, selection),
+      );
       selectionState = selection.state;
       canRemove =
         state.window.status === "open" && selection.state === "selected";
+      selectedItemsStillEligible &&= decision.eligible;
+
+      if (isMetadataIncomplete(decision.reasonCodes)) {
+        incompleteMetadataCount += 1;
+      }
     } else {
       decision = evaluateSubscriptionSelectionEligibility(asset, context);
       selectionState = decision.eligible ? "available" : "unavailable";
@@ -335,6 +367,7 @@ export const buildPickerSnapshot = (state: MMGPickerState): MMGPickerSnapshot =>
   const selectedAssetCount = selectedAssetIds.length;
   const canConfirm =
     state.window.status === "open" &&
+    selectedItemsStillEligible &&
     selectedUnits + reservedUnits === state.window.totalUnits &&
     selectedAssetCount === state.window.targetAssetCount &&
     state.selections.every((selection) => selection.state === "selected");
