@@ -19,7 +19,8 @@
     "mmg_selector_context": "Stable placement identifier used in data attributes and emitted events.",
     "mmg_selector_heading": "Optional visible heading.",
     "mmg_selector_intro": "Optional supporting copy.",
-    "mmg_selector_button_label": "Optional base submit label."
+    "mmg_selector_button_label": "Optional base submit label.",
+    "mmg_selector_instance_id": "Optional unique instance seed when more than one selector is rendered in the same section and context."
   },
   "plans": [
     {
