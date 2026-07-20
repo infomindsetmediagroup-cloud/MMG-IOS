@@ -181,7 +181,7 @@ const OWNED_ASSETS_SQL = `
     AND ownership.granted_at <= $2
     AND (ownership.revoked_at IS NULL OR ownership.revoked_at > $2)
     AND asset.product_type = 'digital_download'
-    AND asset.asset_status IN ('approved', 'active')
+    AND asset.asset_status IN ('approved', 'active', 'retired')
   ORDER BY ownership.granted_at DESC, asset.title ASC
 `;
 
