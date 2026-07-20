@@ -1,0 +1,130 @@
+{
+  "component_id": "mmg-three-plan-selector-v1",
+  "version": "1.0.0",
+  "status": "approved_for_staging",
+  "approved_date": "2026-07-20",
+  "source": "shopify/snippets/mmg-three-plan-selector.liquid",
+  "commerce_authority": "registry/products/mmg-commerce-contract-v1.json",
+  "product_contract": "shopify/products/mmg-knowledge-subscription/product-contract.json",
+  "product_handle": "mmg-knowledge-subscription",
+  "purpose": "Reusable accessible selector for the three MMG Knowledge Subscription cadence variants across the subscription product page, membership landing page, cart invitation workflow, and future customer plan-change surfaces.",
+  "supported_contexts": [
+    "subscription_product_page",
+    "membership_landing_page",
+    "cart_subscription_offer",
+    "customer_portal_plan_change"
+  ],
+  "render_parameters": {
+    "mmg_selector_product": "Optional Shopify product object. Falls back to all_products['mmg-knowledge-subscription'].",
+    "mmg_selector_context": "Stable placement identifier used in data attributes and emitted events.",
+    "mmg_selector_heading": "Optional visible heading.",
+    "mmg_selector_intro": "Optional supporting copy.",
+    "mmg_selector_button_label": "Optional base submit label."
+  },
+  "plans": [
+    {
+      "plan_code": "monthly",
+      "variant_title": "Monthly",
+      "price": "14.95",
+      "billing_interval": "MONTH",
+      "assets_per_package": 2,
+      "packages_per_billing_cycle": 1,
+      "assets_per_billing_cycle": 2,
+      "color_identity": "electric_blue"
+    },
+    {
+      "plan_code": "biweekly",
+      "variant_title": "Bi-weekly",
+      "price": "24.95",
+      "billing_interval": "MONTH",
+      "assets_per_package": 2,
+      "packages_per_billing_cycle": 2,
+      "assets_per_billing_cycle": 4,
+      "color_identity": "purple"
+    },
+    {
+      "plan_code": "weekly",
+      "variant_title": "Weekly",
+      "price": "39.95",
+      "billing_interval": "MONTH",
+      "assets_per_package": 2,
+      "packages_per_billing_cycle": 4,
+      "assets_per_billing_cycle": 8,
+      "color_identity": "gold"
+    }
+  ],
+  "selection_contract": {
+    "default_plan_selected": false,
+    "explicit_plan_selection_required": true,
+    "explicit_recurring_consent_required": true,
+    "one_time_purchase_available": false,
+    "selling_plan_input_name": "selling_plan",
+    "variant_input_name": "id",
+    "quantity": 1,
+    "natural_product_form_submission": true,
+    "ajax_cart_addition_owned_by": "MMG Cart Subscription Controller",
+    "duplicate_subscription_handling_owned_by": "MMG Cart Subscription Controller"
+  },
+  "event_contract": [
+    {
+      "name": "mmg:subscription-plan-selected",
+      "bubbles": true,
+      "detail_fields": [
+        "context",
+        "productHandle",
+        "planCode",
+        "planName",
+        "variantId",
+        "sellingPlanId",
+        "price",
+        "priceCents",
+        "assetsPerBillingCycle",
+        "packagesPerBillingCycle"
+      ]
+    },
+    {
+      "name": "mmg:subscription-selector-error",
+      "bubbles": true,
+      "detail_fields": [
+        "code",
+        "planCode"
+      ]
+    }
+  ],
+  "accessibility_contract": {
+    "semantic_group": "fieldset_and_legend",
+    "selection_control": "required_radio_inputs",
+    "recurring_consent_control": "required_checkbox",
+    "keyboard_support": true,
+    "focus_visible_support": true,
+    "live_selection_summary": true,
+    "reduced_motion_support": true
+  },
+  "progressive_enhancement": {
+    "without_javascript": "Native required radio and checkbox validation submits the Shopify product form with id and selling_plan.",
+    "with_javascript": "Updates the selected-plan summary, selling-plan value, submit state, and integration events.",
+    "missing_product_or_selling_plan": "Renders a customer-safe temporarily unavailable status and does not expose a broken purchase form."
+  },
+  "integration_sequence": {
+    "current_component": "MMG Three-Plan Selector",
+    "next_component": "MMG Cart Subscription Controller",
+    "subsequent_components": [
+      "MMG Knowledge Library eligibility metadata",
+      "MMG Knowledge Library Picker",
+      "MMG Entitlement Counter",
+      "MMG Delivery Window Controller",
+      "Customer Portal subscription dashboard"
+    ]
+  },
+  "release_gates": [
+    "The Shopify subscription product is provisioned with the exact canonical handle.",
+    "All three variants exist with exact titles, prices, and entitlements.",
+    "Every variant has an available selling plan allocation.",
+    "No plan is selected by default.",
+    "Recurring consent is unchecked and required.",
+    "The selected variant and selling plan submit through the Shopify product form.",
+    "The component works in one-column mobile and three-column desktop layouts.",
+    "Keyboard, focus, live-region, reduced-motion, and no-JavaScript behavior pass QA.",
+    "The component is not published before subscription terms and customer-service language are approved."
+  ]
+}
