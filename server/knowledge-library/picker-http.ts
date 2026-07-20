@@ -175,7 +175,21 @@ const handlePost = async (
 
     return jsonResponse(serviceResponse, { csrfToken });
   } catch (error) {
-    return parseErrorResponse(error);
+    if (error instanceof SyntaxError) {
+      return failure(
+        400,
+        "PICKER_INVALID_JSON",
+        "The title-selection request contained invalid JSON.",
+        false,
+      );
+    }
+
+    const code = error instanceof Error ? error.message : "";
+    if (code.startsWith("PICKER_")) {
+      return parseErrorResponse(error);
+    }
+
+    throw error;
   }
 };
 
