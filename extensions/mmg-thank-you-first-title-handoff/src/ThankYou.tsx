@@ -85,7 +85,7 @@ export default function extension() {
 
 function Extension() {
   const [view, setView] = useState<ViewState>({ kind: "loading" });
-  const orderId = shopify.orderConfirmation.value?.id;
+  const orderId = shopify.orderConfirmation.value?.order.id;
   const checkoutToken = shopify.checkoutToken.value;
   const endpoint = setting("handoff_api_url");
   const portalUrl = setting("customer_portal_url") || DEFAULT_PORTAL_URL;
