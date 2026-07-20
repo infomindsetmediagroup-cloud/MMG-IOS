@@ -56,6 +56,20 @@ type CommerceContract = {
     private_response: boolean;
     server_authority: string;
   };
+  thank_you_first_title_handoff_contract: {
+    authority: string;
+    domain_model: string;
+    service_boundary: string;
+    postgres_repository: string;
+    logical_endpoint: string;
+    extension_config: string;
+    extension_source: string;
+    extension_target: string;
+    database_schema: string;
+    authentication: string;
+    raw_checkout_token_persisted: boolean;
+    server_authority: string;
+  };
   product_types: {
     digital_download: {
       storefront: {
@@ -125,6 +139,7 @@ type CommerceContract = {
   };
   site_placements: Record<string, string>;
   reusable_components: string[];
+  canonical_customer_flow: string[];
 };
 
 const currentFile = fileURLToPath(import.meta.url);
@@ -137,9 +152,9 @@ const contract = JSON.parse(
 ) as CommerceContract;
 
 describe("MMG commerce contract", () => {
-  it("is the approved v1.6 authority", () => {
+  it("is the approved v1.7 authority", () => {
     expect(contract.contract_id).toBe("mmg-commerce-contract-v1");
-    expect(contract.version).toBe("1.6.0");
+    expect(contract.version).toBe("1.7.0");
     expect(contract.status).toBe("approved");
   });
 
@@ -289,6 +304,41 @@ describe("MMG commerce contract", () => {
     );
   });
 
+  it("connects commerce to the Shopify Thank you first-title handoff", () => {
+    expect(contract.thank_you_first_title_handoff_contract).toEqual({
+      authority:
+        "registry/checkout/mmg-thank-you-first-title-handoff-contract-v1.json",
+      domain_model: "server/checkout/thank-you-first-title-handoff.ts",
+      service_boundary: "server/checkout/thank-you-handoff-service.ts",
+      postgres_repository: "server/checkout/thank-you-handoff-repository.ts",
+      logical_endpoint: "/api/checkout/thank-you/subscription-handoff",
+      extension_config:
+        "extensions/mmg-thank-you-first-title-handoff/shopify.extension.toml",
+      extension_source:
+        "extensions/mmg-thank-you-first-title-handoff/src/ThankYou.tsx",
+      extension_target: "purchase.thank-you.block.render",
+      database_schema:
+        "database/migrations/20260720_003_mmg_thank_you_first_title_handoff.sql",
+      authentication:
+        "Shopify checkout extension session token plus server-verified order context",
+      raw_checkout_token_persisted: false,
+      server_authority: "Kairos",
+    });
+    expect(contract.site_placements.thank_you_page).toContain(
+      "checkout UI extension",
+    );
+    expect(contract.reusable_components).toContain(
+      "MMG Thank-You First-Title Handoff",
+    );
+    expect(contract.canonical_customer_flow).toEqual(
+      expect.arrayContaining([
+        "Checkout",
+        "Thank-you first-title handoff",
+        "Customer Portal",
+      ]),
+    );
+  });
+
   it("preserves first-package choice and governed future expiry", () => {
     const subscription = contract.product_types.subscription;
     expect(subscription.first_delivery_flow.initial_selection_count).toBe(2);
@@ -306,7 +356,7 @@ describe("MMG commerce contract", () => {
     );
   });
 
-  it("keeps metadata, ownership, and anti-overdraw rules", () => {
+  it("keeps metadata, ownership, anti-overdraw, and handoff-verification rules", () => {
     expect(contract.canonical_metadata.namespace).toBe("mmg");
     expect(contract.canonical_metadata.fields).toEqual(
       expect.arrayContaining([
@@ -330,6 +380,8 @@ describe("MMG commerce contract", () => {
         "Never allow entitlement units or package counts to exceed the locked plan contract.",
         "Never create a fifth Weekly package in a five-week calendar month.",
         "Expose Customer Portal subscription data only through an authenticated private read-only dashboard endpoint.",
+        "Verify Thank you handoffs with a signed Shopify extension session token and a server-loaded order; never trust browser-supplied customer, product, plan, entitlement, or ownership data.",
+        "Persist only a cryptographic hash of the checkout token.",
       ]),
     );
   });

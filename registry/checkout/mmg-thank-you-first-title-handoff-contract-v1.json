@@ -1,0 +1,133 @@
+{
+  "contract_id": "mmg-thank-you-first-title-handoff-v1",
+  "version": "1.0.0",
+  "status": "approved_for_staging",
+  "approved_date": "2026-07-20",
+  "purpose": "Detect a completed MMG Knowledge Subscription order on Shopify's Thank you page and route the buyer into the governed first two-title workflow without placing title selection inside checkout.",
+  "shopify_surface": {
+    "page": "Thank you",
+    "extension_target": "purchase.thank-you.block.render",
+    "default_placement": "ORDER_STATUS1",
+    "api_version": "2026-07",
+    "extension_source": "extensions/mmg-thank-you-first-title-handoff/src/ThankYou.tsx",
+    "extension_config": "extensions/mmg-thank-you-first-title-handoff/shopify.extension.toml",
+    "network_access_required": true,
+    "write_access_to_order": false
+  },
+  "endpoint_contract": {
+    "logical_endpoint": "/api/checkout/thank-you/subscription-handoff",
+    "method": "POST",
+    "preflight_method": "OPTIONS",
+    "authentication": "Shopify checkout extension session token",
+    "request_fields": [
+      "orderId",
+      "checkoutToken"
+    ],
+    "maximum_body_bytes": 4096,
+    "cache_control": "no-store, private",
+    "cors_allow_origin": "*",
+    "customer_identity_source": "verified Shopify order and signed session-token claims only",
+    "browser_line_hints_authoritative": false,
+    "raw_checkout_token_persisted": false,
+    "order_verification_required": true
+  },
+  "subscription_detection": {
+    "trusted_data_source": "Shopify order loaded by the server-side order gateway",
+    "required_predicates": [
+      "The line matches the canonical MMG Knowledge Subscription product ID or handle.",
+      "The line has a Shopify selling-plan allocation.",
+      "The line has an approved _mmg_subscription_plan_code value of monthly, biweekly, or weekly."
+    ],
+    "non_subscription_order_behavior": "Return not_applicable and render no extension UI."
+  },
+  "handoff_states": [
+    {
+      "state": "not_applicable",
+      "behavior": "Render nothing for orders without the canonical subscription product."
+    },
+    {
+      "state": "sign_in_required",
+      "behavior": "Direct guest buyers to sign in through the Customer Portal with the checkout email before private entitlement data is shown."
+    },
+    {
+      "state": "activation_pending",
+      "behavior": "Confirm that checkout succeeded while Shopify subscription reconciliation, cycle creation, or first-window creation is still pending."
+    },
+    {
+      "state": "ready",
+      "behavior": "Direct an authenticated subscriber into Choose Your First Two Titles."
+    },
+    {
+      "state": "selection_in_progress",
+      "behavior": "Return the customer to the open first-package window to finish exactly two titles."
+    },
+    {
+      "state": "recovery_required",
+      "behavior": "Direct the customer to the governed recovery and Customer Service path."
+    },
+    {
+      "state": "completed",
+      "behavior": "Direct the customer to My Library or membership progress after the first package is confirmed or delivered."
+    }
+  ],
+  "first_package_contract": {
+    "selection_surface": "/pages/knowledge-library?mode=subscription-selection&handoff=first-package",
+    "target_titles": 2,
+    "target_units": 2,
+    "customer_selects_titles": true,
+    "selection_inside_checkout": false,
+    "first_package_auto_confirmation": false,
+    "expired_first_package_state": "recovery_required"
+  },
+  "persistence_contract": {
+    "migration": "database/migrations/20260720_003_mmg_thank_you_first_title_handoff.sql",
+    "order_link_table": "mmg_subscription_order_links",
+    "event_table": "mmg_thank_you_handoff_events",
+    "order_link_key": "shop_domain + order_id",
+    "checkout_token_storage": "SHA-256 hash only",
+    "entitlement_link_owner": "Shopify subscription webhook reconciliation",
+    "duplicate_order_behavior": "Idempotent upsert; never create a second order-link record."
+  },
+  "security_contract": [
+    "Require a fresh Shopify checkout extension session token on every request.",
+    "Verify the session-token signature, audience, destination shop, expiry, not-before time, and token ID in the runtime adapter.",
+    "Load the order server-side and verify its order ID, shop domain, and checkout token.",
+    "Never trust browser-supplied customer IDs, plan codes, product IDs, entitlement IDs, package counts, or ownership state.",
+    "Do not expose provider subscription-contract IDs, entitlement IDs, delivery package references, grant IDs, checkout tokens, or customer IDs.",
+    "Guest buyers must authenticate before private entitlement or title-selection state is disclosed.",
+    "Return Access-Control-Allow-Origin: * because checkout UI extension origins are not stable, while authorizing the request with the signed session token and verified order context.",
+    "The Thank you extension is read-only and cannot mutate the completed order."
+  ],
+  "storefront_copy_contract": {
+    "primary_action": "Choose your first two titles",
+    "pending_action": "Open Customer Portal",
+    "guest_action": "Sign in to choose your titles",
+    "completed_action": "Open My Library",
+    "recovery_action": "Resolve this package",
+    "internal_ids_visible": false
+  },
+  "release_gates": [
+    "Create or connect the Shopify app project that owns the checkout UI extension.",
+    "Assign the extension UID through Shopify CLI rather than inventing a production UID.",
+    "Approve network access for the checkout UI extension in the Shopify Partner or Dev Dashboard.",
+    "Configure the absolute HTTPS handoff API URL in the checkout and accounts editor.",
+    "Route the authenticated endpoint in the production Kairos runtime.",
+    "Implement and verify the Shopify Admin API order gateway.",
+    "Verify session-token validation against the production Shopify app client ID and secret.",
+    "Apply entitlement, delivery-window, and thank-you handoff database migrations.",
+    "Connect Shopify subscription webhook reconciliation to mmg_subscription_order_links.",
+    "Provision the canonical subscription product and verified runtime IDs.",
+    "Test logged-in and guest subscription checkouts, non-subscription orders, delayed order creation, retries, duplicate requests, recovery, and completed first packages.",
+    "Add and publish the app block through the checkout and accounts editor only after end-to-end QA passes."
+  ],
+  "integration_sequence": {
+    "previous_component": "Customer Portal subscription dashboard",
+    "current_component": "Thank-you page first-title handoff",
+    "next_component": "My Library delivery interface",
+    "subsequent_components": [
+      "Shopify subscription webhook reconciliation",
+      "Kairos recommendation and curation ranking",
+      "Live Shopify provisioning and end-to-end deployment"
+    ]
+  }
+}
