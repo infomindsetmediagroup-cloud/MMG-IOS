@@ -31,14 +31,12 @@ jobs:
     steps:
       - name: Materialize repository source
         env:
-          GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           git init .
-          git -c http.extraheader="AUTHORIZATION: bearer ${GH_TOKEN}" \
-            fetch --depth=1 "https://github.com/${REPOSITORY}.git" "${HEAD_SHA}"
+          git fetch --depth=1 "https://github.com/${REPOSITORY}.git" "${HEAD_SHA}"
           git checkout --detach FETCH_HEAD
 
       - name: Verify runner prerequisites
