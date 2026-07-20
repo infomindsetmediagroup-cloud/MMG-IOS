@@ -1,0 +1,246 @@
+{
+  "registry_id": "mmg-live-site-url-registry",
+  "version": "1.0.0",
+  "status": "approved",
+  "recorded_date": "2026-07-20",
+  "canonical_domain": "https://themindsetmediagroup.com",
+  "governance": {
+    "route_authority": "MMG executive approval",
+    "preserve_https_non_www": true,
+    "handle_changes_require_redirects": true,
+    "portal_boundaries_must_be_preserved": true,
+    "live_reference_does_not_replace_source_control": true
+  },
+  "routes": [
+    {
+      "id": "home",
+      "title": "MMG Homepage",
+      "resource_type": "homepage",
+      "path": "/",
+      "url": "https://themindsetmediagroup.com/",
+      "status": "active",
+      "access": "public",
+      "role": "canonical_visual_and_ecosystem_entry"
+    },
+    {
+      "id": "product-ai-image-mastery",
+      "title": "AI Image Mastery™",
+      "resource_type": "product",
+      "product_type": "digital_download",
+      "path": "/products/ai-image-mastery",
+      "url": "https://themindsetmediagroup.com/products/ai-image-mastery",
+      "status": "active",
+      "access": "public",
+      "role": "canonical_active_digital_product_reference"
+    },
+    {
+      "id": "product-professional-cover-design-service",
+      "title": "Professional Cover Design Service™",
+      "resource_type": "product",
+      "product_type": "service",
+      "path": "/products/professional-cover-design-service",
+      "url": "https://themindsetmediagroup.com/products/professional-cover-design-service",
+      "status": "active",
+      "access": "public",
+      "role": "canonical_active_service_product_reference"
+    },
+    {
+      "id": "page-contact",
+      "title": "Contact",
+      "resource_type": "page",
+      "page_class": "support",
+      "path": "/pages/contact",
+      "url": "https://themindsetmediagroup.com/pages/contact",
+      "status": "active",
+      "access": "public"
+    },
+    {
+      "id": "page-data-sharing-opt-out",
+      "title": "Data Sharing Opt-Out",
+      "resource_type": "page",
+      "page_class": "privacy",
+      "path": "/pages/data-sharing-opt-out",
+      "url": "https://themindsetmediagroup.com/pages/data-sharing-opt-out",
+      "status": "active",
+      "access": "public"
+    },
+    {
+      "id": "page-free-creator-toolkit",
+      "title": "Free Creator Toolkit",
+      "resource_type": "page",
+      "page_class": "lead_resource",
+      "path": "/pages/free-creator-toolkit",
+      "url": "https://themindsetmediagroup.com/pages/free-creator-toolkit",
+      "status": "active",
+      "access": "public"
+    },
+    {
+      "id": "page-capcut-templates",
+      "title": "CapCut Templates",
+      "resource_type": "page",
+      "page_class": "creator_resource",
+      "path": "/pages/capcut-templates",
+      "url": "https://themindsetmediagroup.com/pages/capcut-templates",
+      "status": "active",
+      "access": "public"
+    },
+    {
+      "id": "page-mmg-creator-merch",
+      "title": "MMG Creator Merch",
+      "resource_type": "page",
+      "page_class": "merchandising",
+      "path": "/pages/mmg-creator-merch",
+      "url": "https://themindsetmediagroup.com/pages/mmg-creator-merch",
+      "status": "active",
+      "access": "public"
+    },
+    {
+      "id": "page-tiktok-secret-sauce",
+      "title": "TikTok Secret Sauce",
+      "resource_type": "page",
+      "page_class": "creator_education",
+      "path": "/pages/tiktok-secret-sauce",
+      "url": "https://themindsetmediagroup.com/pages/tiktok-secret-sauce",
+      "status": "active",
+      "access": "public"
+    },
+    {
+      "id": "page-publishing-services",
+      "title": "Publishing Services",
+      "resource_type": "page",
+      "page_class": "services_landing_page",
+      "path": "/pages/publishing-services",
+      "url": "https://themindsetmediagroup.com/pages/publishing-services",
+      "status": "active",
+      "access": "public",
+      "role": "primary_publishing_services_entry"
+    },
+    {
+      "id": "page-customer-portal",
+      "title": "Customer Portal",
+      "resource_type": "page",
+      "page_class": "portal",
+      "path": "/pages/customer-portal",
+      "url": "https://themindsetmediagroup.com/pages/customer-portal",
+      "status": "active",
+      "access": "customer_facing_authenticated_workflows",
+      "role": "customer_operations_hub"
+    },
+    {
+      "id": "page-admin-portal",
+      "title": "Admin Portal",
+      "resource_type": "page",
+      "page_class": "portal",
+      "path": "/pages/admin-portal",
+      "url": "https://themindsetmediagroup.com/pages/admin-portal",
+      "status": "active",
+      "access": "restricted_administrative",
+      "role": "internal_operations_control_surface"
+    },
+    {
+      "id": "page-customer-service",
+      "title": "Customer Service",
+      "resource_type": "page",
+      "page_class": "policy_and_support",
+      "path": "/pages/customer-service",
+      "url": "https://themindsetmediagroup.com/pages/customer-service",
+      "status": "active",
+      "access": "public"
+    },
+    {
+      "id": "page-about",
+      "title": "About",
+      "resource_type": "page",
+      "page_class": "company",
+      "path": "/pages/about",
+      "url": "https://themindsetmediagroup.com/pages/about",
+      "status": "active",
+      "access": "public"
+    },
+    {
+      "id": "page-our-standards",
+      "title": "Our Standards",
+      "resource_type": "page",
+      "page_class": "trust_and_standards",
+      "path": "/pages/our-standards",
+      "url": "https://themindsetmediagroup.com/pages/our-standards",
+      "status": "active",
+      "access": "public"
+    },
+    {
+      "id": "page-publishing-philosophy",
+      "title": "Publishing Philosophy",
+      "resource_type": "page",
+      "page_class": "brand_doctrine",
+      "path": "/pages/publishing-philosophy",
+      "url": "https://themindsetmediagroup.com/pages/publishing-philosophy",
+      "status": "active",
+      "access": "public"
+    },
+    {
+      "id": "page-knowledge-library",
+      "title": "Knowledge Library",
+      "resource_type": "page",
+      "page_class": "catalog_and_learning",
+      "path": "/pages/knowledge-library",
+      "url": "https://themindsetmediagroup.com/pages/knowledge-library",
+      "status": "active",
+      "access": "public_and_authenticated_modes",
+      "role": "shared_catalog_subscription_picker_and_library_entry"
+    },
+    {
+      "id": "page-founder",
+      "title": "Founder",
+      "resource_type": "page",
+      "page_class": "company",
+      "path": "/pages/founder",
+      "url": "https://themindsetmediagroup.com/pages/founder",
+      "status": "active",
+      "access": "public"
+    },
+    {
+      "id": "page-mmg-promise",
+      "title": "MMG Promise",
+      "resource_type": "page",
+      "page_class": "trust",
+      "path": "/pages/mmg-promise",
+      "url": "https://themindsetmediagroup.com/pages/mmg-promise",
+      "status": "active",
+      "access": "public"
+    },
+    {
+      "id": "page-project-guide",
+      "title": "Project Guide",
+      "resource_type": "page",
+      "page_class": "customer_onboarding",
+      "path": "/pages/project-guide",
+      "url": "https://themindsetmediagroup.com/pages/project-guide",
+      "status": "active",
+      "access": "public"
+    },
+    {
+      "id": "collection-frontpage",
+      "title": "Frontpage Collection",
+      "resource_type": "collection",
+      "path": "/collections/frontpage",
+      "url": "https://themindsetmediagroup.com/collections/frontpage",
+      "status": "active",
+      "access": "public",
+      "role": "active_shopify_product_grid_reference"
+    }
+  ],
+  "superseded_route_assumptions": [
+    {
+      "old_path": "/pages/about-mindset-media-group",
+      "canonical_path": "/pages/about"
+    },
+    {
+      "old_path": "/pages/the-mmg-promise",
+      "canonical_path": "/pages/mmg-promise"
+    },
+    {
+      "old_path": "/collections/all",
+      "canonical_path": "/collections/frontpage"
+    }
+  ]
+}
