@@ -16,11 +16,13 @@ CREATE TABLE IF NOT EXISTS mmg_commerce_release_approvals (
   CHECK (char_length(release_id) BETWEEN 8 AND 128),
   CHECK (release_commit_sha ~ '^[a-f0-9]{40}$'),
   CHECK (expires_at > approved_at),
+  CHECK (cardinality(approved_actions) >= 1),
   CHECK (approved_actions <@ ARRAY['execute', 'publish', 'rollback']::text[])
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS mmg_commerce_release_approvals_active_idx
-  ON mmg_commerce_release_approvals (release_id, approved_environment, release_commit_sha)
+CREATE INDEX IF NOT EXISTS mmg_commerce_release_approvals_active_idx
+  ON mmg_commerce_release_approvals
+    (release_id, approved_environment, release_commit_sha, approved_at DESC)
   WHERE status = 'active';
 
 CREATE TABLE IF NOT EXISTS mmg_commerce_releases (
