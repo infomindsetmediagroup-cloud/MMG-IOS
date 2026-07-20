@@ -1,0 +1,145 @@
+{%- liquid
+  assign mmg_my_library_endpoint = mmg_my_library_endpoint | default: '/api/customer-portal/my-library'
+  assign mmg_my_library_access_endpoint = mmg_my_library_access_endpoint | default: '/api/customer-portal/my-library/access'
+  assign mmg_my_library_login_url = mmg_my_library_login_url | default: routes.account_login_url
+  assign mmg_my_library_catalog_url = mmg_my_library_catalog_url | default: '/pages/knowledge-library'
+  assign mmg_my_library_support_url = mmg_my_library_support_url | default: '/pages/customer-service'
+  assign mmg_my_library_selection_url = mmg_my_library_selection_url | default: '/pages/knowledge-library#subscription-selection'
+  assign mmg_my_library_csrf_token = mmg_my_library_csrf_token | default: ''
+  assign mmg_my_library_instance_seed = mmg_my_library_instance_id | default: section.id | default: 'customer-portal'
+  assign mmg_my_library_instance = mmg_my_library_instance_seed | append: '-my-library' | handleize
+-%}
+
+{{ 'mmg-my-library.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'mmg-my-library.js' | asset_url }}" defer></script>
+
+<mmg-my-library
+  id="mmg-my-library-{{ mmg_my_library_instance }}"
+  class="mmg-my-library"
+  data-endpoint="{{ mmg_my_library_endpoint | escape }}"
+  data-access-endpoint="{{ mmg_my_library_access_endpoint | escape }}"
+  data-login-url="{{ mmg_my_library_login_url | escape }}"
+  data-catalog-url="{{ mmg_my_library_catalog_url | escape }}"
+  data-support-url="{{ mmg_my_library_support_url | escape }}"
+  data-selection-url="{{ mmg_my_library_selection_url | escape }}"
+  data-csrf-token="{{ mmg_my_library_csrf_token | escape }}"
+  aria-labelledby="mmg-my-library-title-{{ mmg_my_library_instance }}"
+>
+  <section class="mmg-my-library__shell" data-mmg-library-root>
+    <header class="mmg-my-library__header">
+      <div>
+        <p class="mmg-my-library__eyebrow">Customer Portal · My Library</p>
+        <h2 id="mmg-my-library-title-{{ mmg_my_library_instance }}" class="mmg-my-library__title">
+          Your digital library
+        </h2>
+        <p class="mmg-my-library__intro">
+          Open the books, guides, templates, and resources you own through one secure MMG library.
+        </p>
+      </div>
+      <a class="mmg-my-library__header-link" href="{{ mmg_my_library_catalog_url }}">
+        Browse Knowledge Library
+      </a>
+    </header>
+
+    <div class="mmg-my-library__status" data-mmg-library-status role="status" aria-live="polite">
+      <span class="mmg-my-library__spinner" aria-hidden="true"></span>
+      <span data-mmg-library-status-text>Loading your digital library…</span>
+    </div>
+
+    <div class="mmg-my-library__blocked" data-mmg-library-blocked hidden>
+      <p class="mmg-my-library__blocked-kicker">Secure customer access</p>
+      <h3>Sign in to open My Library</h3>
+      <p>Your owned resources and secure file controls are available only through your authenticated Customer Portal session.</p>
+      <div class="mmg-my-library__actions">
+        <a class="mmg-my-library__button mmg-my-library__button--primary" href="{{ mmg_my_library_login_url }}">Sign in</a>
+        <a class="mmg-my-library__button mmg-my-library__button--secondary" href="{{ mmg_my_library_catalog_url }}">Browse resources</a>
+      </div>
+    </div>
+
+    <div class="mmg-my-library__workspace" data-mmg-library-workspace hidden>
+      <section class="mmg-my-library__summary" aria-label="Library summary">
+        <div>
+          <span>Owned digital assets</span>
+          <strong data-mmg-library-total>0</strong>
+        </div>
+        <p data-mmg-library-summary-copy>Your owned resources will appear here as they are delivered.</p>
+      </section>
+
+      <form class="mmg-my-library__controls" data-mmg-library-controls role="search">
+        <label class="mmg-my-library__search">
+          <span>Search My Library</span>
+          <input type="search" data-mmg-library-search placeholder="Search titles, series, or topics" autocomplete="off">
+        </label>
+        <label>
+          <span>Topic</span>
+          <select data-mmg-library-topic>
+            <option value="">All topics</option>
+          </select>
+        </label>
+        <label>
+          <span>Format</span>
+          <select data-mmg-library-format>
+            <option value="">All formats</option>
+          </select>
+        </label>
+        <label>
+          <span>Source</span>
+          <select data-mmg-library-source>
+            <option value="">All sources</option>
+          </select>
+        </label>
+        <label>
+          <span>Sort</span>
+          <select data-mmg-library-sort>
+            <option value="newest">Newest first</option>
+            <option value="title">Title A–Z</option>
+          </select>
+        </label>
+      </form>
+
+      <div class="mmg-my-library__result-line" aria-live="polite">
+        <span data-mmg-library-result-count>0 resources</span>
+        <button type="button" class="mmg-my-library__clear" data-mmg-library-clear>Clear filters</button>
+      </div>
+
+      <div class="mmg-my-library__empty" data-mmg-library-empty hidden>
+        <h3 data-mmg-library-empty-title>Your library is ready for its first resource</h3>
+        <p data-mmg-library-empty-copy>Purchased and delivered digital products will appear here automatically.</p>
+        <div class="mmg-my-library__actions">
+          <a class="mmg-my-library__button mmg-my-library__button--primary" href="{{ mmg_my_library_selection_url }}">Choose subscription titles</a>
+          <a class="mmg-my-library__button mmg-my-library__button--secondary" href="{{ mmg_my_library_catalog_url }}">Browse Knowledge Library</a>
+        </div>
+      </div>
+
+      <div class="mmg-my-library__grid" data-mmg-library-grid></div>
+    </div>
+
+    <template data-mmg-library-card-template>
+      <article class="mmg-my-library-card">
+        <div class="mmg-my-library-card__media">
+          <img data-mmg-library-card-image loading="lazy" alt="">
+          <span class="mmg-my-library-card__delivery" data-mmg-library-card-delivery></span>
+        </div>
+        <div class="mmg-my-library-card__body">
+          <div class="mmg-my-library-card__meta" data-mmg-library-card-meta></div>
+          <h3 data-mmg-library-card-title></h3>
+          <p class="mmg-my-library-card__summary" data-mmg-library-card-summary></p>
+          <p class="mmg-my-library-card__owned" data-mmg-library-card-owned></p>
+          <div class="mmg-my-library-card__actions">
+            <button type="button" class="mmg-my-library__button mmg-my-library__button--primary" data-mmg-library-access="read">Read online</button>
+            <button type="button" class="mmg-my-library__button mmg-my-library__button--secondary" data-mmg-library-access="download">Download</button>
+          </div>
+          <a class="mmg-my-library-card__product-link" data-mmg-library-card-product-link>View resource details</a>
+        </div>
+      </article>
+    </template>
+
+    <p class="mmg-my-library__access-status" data-mmg-library-access-status role="status" aria-live="assertive" hidden></p>
+
+    <noscript>
+      <p class="mmg-my-library__noscript">
+        JavaScript is required to load private library records and issue secure file links. Contact Customer Service for access assistance.
+      </p>
+    </noscript>
+  </section>
+</mmg-my-library>
