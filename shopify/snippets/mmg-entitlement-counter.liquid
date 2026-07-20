@@ -1,0 +1,110 @@
+{%- liquid
+  assign mmg_counter_endpoint = mmg_counter_endpoint | default: '/api/knowledge-library/entitlement'
+  assign mmg_counter_portal_url = mmg_counter_portal_url | default: '/pages/customer-portal'
+  assign mmg_counter_membership_url = mmg_counter_membership_url | default: '/products/mmg-knowledge-subscription'
+  assign mmg_counter_context = mmg_counter_context | default: 'knowledge-library'
+  assign mmg_counter_instance_seed = mmg_counter_instance_id | default: section.id | default: 'global'
+  assign mmg_counter_instance = mmg_counter_instance_seed | append: '-' | append: mmg_counter_context | handleize
+-%}
+
+{{ 'mmg-entitlement-counter.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'mmg-entitlement-counter.js' | asset_url }}" defer></script>
+
+<mmg-entitlement-counter
+  id="mmg-entitlement-counter-{{ mmg_counter_instance }}"
+  class="mmg-entitlement-counter"
+  data-endpoint="{{ mmg_counter_endpoint | escape }}"
+  data-portal-url="{{ mmg_counter_portal_url | escape }}"
+  data-membership-url="{{ mmg_counter_membership_url | escape }}"
+  data-context="{{ mmg_counter_context | escape }}"
+  aria-labelledby="mmg-entitlement-counter-title-{{ mmg_counter_instance }}"
+>
+  <section class="mmg-entitlement-counter__shell" data-mmg-entitlement-root>
+    <header class="mmg-entitlement-counter__header">
+      <div>
+        <p class="mmg-entitlement-counter__eyebrow">MMG Knowledge Subscription™</p>
+        <h2 id="mmg-entitlement-counter-title-{{ mmg_counter_instance }}" class="mmg-entitlement-counter__title">
+          Your membership progress
+        </h2>
+        <p class="mmg-entitlement-counter__intro">
+          Track your current package, monthly entitlement, and growing Knowledge Library.
+        </p>
+      </div>
+      <a class="mmg-entitlement-counter__portal-link" href="{{ mmg_counter_portal_url }}">
+        Open Customer Portal
+      </a>
+    </header>
+
+    <div class="mmg-entitlement-counter__status" data-mmg-entitlement-status role="status" aria-live="polite">
+      <span class="mmg-entitlement-counter__spinner" aria-hidden="true"></span>
+      <span data-mmg-entitlement-status-text>Loading your membership progress…</span>
+    </div>
+
+    <div class="mmg-entitlement-counter__blocked" data-mmg-entitlement-blocked hidden>
+      <h3 data-mmg-entitlement-blocked-title>Membership progress is unavailable</h3>
+      <p data-mmg-entitlement-blocked-copy>
+        Sign in through the Customer Portal or choose a membership plan to begin building your library.
+      </p>
+      <div class="mmg-entitlement-counter__actions">
+        <a class="mmg-entitlement-counter__button mmg-entitlement-counter__button--primary" href="{{ mmg_counter_portal_url }}">
+          Open Customer Portal
+        </a>
+        <a class="mmg-entitlement-counter__button mmg-entitlement-counter__button--secondary" href="{{ mmg_counter_membership_url }}">
+          View Membership Plans
+        </a>
+      </div>
+    </div>
+
+    <div class="mmg-entitlement-counter__dashboard" data-mmg-entitlement-dashboard hidden>
+      <div class="mmg-entitlement-counter__plan-row">
+        <div>
+          <span class="mmg-entitlement-counter__label">Current plan</span>
+          <strong class="mmg-entitlement-counter__plan" data-mmg-entitlement-plan>—</strong>
+        </div>
+        <div class="mmg-entitlement-counter__cycle">
+          <span class="mmg-entitlement-counter__label">Billing cycle</span>
+          <strong data-mmg-entitlement-cycle>—</strong>
+        </div>
+      </div>
+
+      <div class="mmg-entitlement-counter__stats">
+        <article class="mmg-entitlement-counter__stat">
+          <span class="mmg-entitlement-counter__label">Assets remaining</span>
+          <strong data-mmg-entitlement-assets-remaining>—</strong>
+          <span data-mmg-entitlement-assets-detail>—</span>
+        </article>
+        <article class="mmg-entitlement-counter__stat">
+          <span class="mmg-entitlement-counter__label">Packages completed</span>
+          <strong data-mmg-entitlement-packages-complete>—</strong>
+          <span data-mmg-entitlement-packages-detail>—</span>
+        </article>
+        <article class="mmg-entitlement-counter__stat">
+          <span class="mmg-entitlement-counter__label">Current package</span>
+          <strong data-mmg-entitlement-window-progress>—</strong>
+          <span data-mmg-entitlement-window-detail>—</span>
+        </article>
+        <article class="mmg-entitlement-counter__stat">
+          <span class="mmg-entitlement-counter__label">My Library</span>
+          <strong data-mmg-entitlement-owned>—</strong>
+          <span>Owned digital assets</span>
+        </article>
+      </div>
+
+      <div class="mmg-entitlement-counter__progress-group">
+        <div class="mmg-entitlement-counter__progress-copy">
+          <span>Monthly entitlement progress</span>
+          <strong data-mmg-entitlement-progress-label>—</strong>
+        </div>
+        <div class="mmg-entitlement-counter__track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-mmg-entitlement-progress>
+          <span class="mmg-entitlement-counter__fill" data-mmg-entitlement-progress-fill></span>
+        </div>
+      </div>
+    </div>
+
+    <noscript>
+      <p class="mmg-entitlement-counter__noscript">
+        Open the Customer Portal to review your current membership entitlement and delivered resources.
+      </p>
+    </noscript>
+  </section>
+</mmg-entitlement-counter>
