@@ -5,7 +5,10 @@ import type {
   MMGRecommendationHistory,
   MMGRecommendationPackage,
 } from "./recommendation-ranking.js";
-import type { MMGSQLExecutor, MMGTransactionalDatabase } from "./persistence.js";
+import type {
+  MMGSQLExecutor,
+  MMGTransactionalDatabase,
+} from "./persistence.js";
 
 export interface MMGRecommendationRunRecord {
   runId: string;
@@ -24,12 +27,16 @@ export interface MMGRecommendationRunRecord {
 }
 
 export interface MMGRecommendationRepository {
-  loadLearningProfile(customerId: string): Promise<MMGCustomerLearningProfile | null>;
+  loadLearningProfile(
+    customerId: string,
+  ): Promise<MMGCustomerLearningProfile | null>;
   loadRecommendationHistory(
     customerId: string,
     asOf: Date,
   ): Promise<MMGRecommendationHistory>;
-  recordRecommendationRun(record: MMGRecommendationRunRecord): Promise<"recorded" | "duplicate">;
+  recordRecommendationRun(
+    record: MMGRecommendationRunRecord,
+  ): Promise<"recorded" | "duplicate">;
 }
 
 interface ProfileRow extends Record<string, unknown> {
@@ -46,11 +53,12 @@ interface ProfileRow extends Record<string, unknown> {
   profile_status: string;
 }
 
-interface RecentDeliveryRow extends Record<string, unknown> {
+interface OwnedAssetRow extends Record<string, unknown> {
   asset_id: string;
   topic: string;
   series: string | null;
   series_order: number | string | null;
+  granted_at: Date | string;
 }
 
 interface InteractionRow extends Record<string, unknown> {
@@ -64,6 +72,12 @@ const integer = (value: unknown): number => {
   return Number.isFinite(parsed) ? Math.max(0, Math.trunc(parsed)) : 0;
 };
 
+const timestamp = (value: unknown): number => {
+  if (value instanceof Date) return value.getTime();
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 const stringArray = (value: unknown): string[] =>
   Array.isArray(value)
     ? value.map((item) => String(item).trim()).filter(Boolean)
@@ -74,7 +88,8 @@ const mapProfile = (row: ProfileRow): MMGCustomerLearningProfile => ({
   roleCode: row.role_code,
   primaryGoal: row.primary_goal,
   secondaryGoals: stringArray(row.secondary_goals),
-  experienceLevel: row.experience_level as MMGCustomerLearningProfile["experienceLevel"],
+  experienceLevel:
+    row.experience_level as MMGCustomerLearningProfile["experienceLevel"],
   primaryTopics: stringArray(row.primary_topics),
   secondaryTopics: stringArray(row.secondary_topics),
   preferredFormats: stringArray(row.preferred_formats),
@@ -100,13 +115,27 @@ const applyInteraction = (
   count: number,
 ): void => {
   switch (type) {
-    case "viewed": signal.viewedCount += count; break;
-    case "delivered": signal.deliveredCount += count; break;
-    case "completed": signal.completedCount += count; break;
-    case "swapped_out": signal.swappedOutCount += count; break;
-    case "dismissed": signal.dismissedCount += count; break;
-    case "liked": signal.likedCount += count; break;
-    case "disliked": signal.dislikedCount += count; break;
+    case "viewed":
+      signal.viewedCount += count;
+      break;
+    case "delivered":
+      signal.deliveredCount += count;
+      break;
+    case "completed":
+      signal.completedCount += count;
+      break;
+    case "swapped_out":
+      signal.swappedOutCount += count;
+      break;
+    case "dismissed":
+      signal.dismissedCount += count;
+      break;
+    case "liked":
+      signal.likedCount += count;
+      break;
+    case "disliked":
+      signal.dislikedCount += count;
+      break;
   }
 };
 
@@ -151,45 +180,48 @@ export class MMGPostgresRecommendationRepository
   ): Promise<MMGRecommendationHistory> {
     return this.#database.transaction(async (transaction) => {
       const historyStart = new Date(asOf.getTime() - 180 * 86_400_000);
-      const [deliveries, interactions] = await Promise.all([
-        transaction.query<RecentDeliveryRow>(
-          `
-            SELECT DISTINCT
-              asset.asset_id,
-              asset.topic,
-              asset.series,
-              asset.series_order
-            FROM mmg_ownership_grants ownership
-            JOIN mmg_knowledge_assets asset ON asset.asset_id = ownership.asset_id
-            WHERE ownership.customer_id = $1
-              AND ownership.status = 'active'
-              AND ownership.granted_at <= $2
-              AND (ownership.revoked_at IS NULL OR ownership.revoked_at > $2)
-              AND ownership.granted_at >= $3
-            ORDER BY asset.asset_id
-          `,
-          [customerId, asOf, historyStart],
-        ),
-        transaction.query<InteractionRow>(
-          `
-            SELECT asset_id, interaction_type, COUNT(*)::integer AS interaction_count
-            FROM mmg_customer_asset_interactions
-            WHERE customer_id = $1
-              AND occurred_at <= $2
-              AND occurred_at >= $3
-            GROUP BY asset_id, interaction_type
-          `,
-          [customerId, asOf, historyStart],
-        ),
-      ]);
+      const ownership = await transaction.query<OwnedAssetRow>(
+        `
+          SELECT DISTINCT ON (asset.asset_id)
+            asset.asset_id,
+            asset.topic,
+            asset.series,
+            asset.series_order,
+            ownership.granted_at
+          FROM mmg_ownership_grants ownership
+          JOIN mmg_knowledge_assets asset ON asset.asset_id = ownership.asset_id
+          WHERE ownership.customer_id = $1
+            AND ownership.status = 'active'
+            AND ownership.granted_at <= $2
+            AND (ownership.revoked_at IS NULL OR ownership.revoked_at > $2)
+          ORDER BY asset.asset_id, ownership.granted_at DESC
+        `,
+        [customerId, asOf],
+      );
+      const interactions = await transaction.query<InteractionRow>(
+        `
+          SELECT asset_id, interaction_type, COUNT(*)::integer AS interaction_count
+          FROM mmg_customer_asset_interactions
+          WHERE customer_id = $1
+            AND occurred_at <= $2
+            AND occurred_at >= $3
+          GROUP BY asset_id, interaction_type
+        `,
+        [customerId, asOf, historyStart],
+      );
 
       const recentDeliveredAssetIds: string[] = [];
       const recentDeliveredTopicCounts: Record<string, number> = {};
       const ownedSeriesProgress: Record<string, number> = {};
-      for (const row of deliveries.rows) {
+      for (const row of ownership.rows) {
+        // This list intentionally represents all currently owned assets. The existing
+        // name is retained for compatibility with the v1 ranker contract and is used
+        // for prerequisite and complementary-asset checks.
         recentDeliveredAssetIds.push(row.asset_id);
-        recentDeliveredTopicCounts[row.topic] =
-          integer(recentDeliveredTopicCounts[row.topic]) + 1;
+        if (timestamp(row.granted_at) >= historyStart.getTime()) {
+          recentDeliveredTopicCounts[row.topic] =
+            integer(recentDeliveredTopicCounts[row.topic]) + 1;
+        }
         if (row.series && row.series_order !== null) {
           ownedSeriesProgress[row.series] = Math.max(
             integer(ownedSeriesProgress[row.series]),
@@ -201,7 +233,11 @@ export class MMGPostgresRecommendationRepository
       const assetSignals: Record<string, MMGCustomerAssetSignal> = {};
       for (const row of interactions.rows) {
         const signal = assetSignals[row.asset_id] ?? emptySignal(row.asset_id);
-        applyInteraction(signal, row.interaction_type, integer(row.interaction_count));
+        applyInteraction(
+          signal,
+          row.interaction_type,
+          integer(row.interaction_count),
+        );
         assetSignals[row.asset_id] = signal;
       }
 
@@ -263,7 +299,8 @@ export class MMGPostgresRecommendationRepository
           record.package?.totalUnits ?? 0,
           record.package?.score ?? null,
           record.source,
-          record.package?.rationale ?? "No complete eligible package could be ranked.",
+          record.package?.rationale ??
+            "No complete eligible package could be ranked.",
           status,
           record.failureCode ?? null,
           record.occurredAt,
@@ -298,7 +335,7 @@ export class MMGPostgresRecommendationRepository
               excluded: item.excluded,
               exclusionCodes: item.exclusionCodes,
             }),
-            item.reasonCodes,
+            [...new Set([...item.reasonCodes, ...item.exclusionCodes])],
             selected.has(item.candidate.assetId),
             record.occurredAt,
           ],
