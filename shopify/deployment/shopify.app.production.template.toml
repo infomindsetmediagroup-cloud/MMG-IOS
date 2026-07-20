@@ -1,0 +1,33 @@
+# Controlled production template for the canonical MMG Shopify app.
+# Replace only deployment placeholders through the governed release process.
+# Do not commit client secrets, Admin API tokens, database URLs, or signing keys.
+
+name = "MMG Kairos Commerce"
+client_id = "${SHOPIFY_APP_CLIENT_ID}"
+application_url = "${MMG_KAIROS_APPLICATION_URL}"
+embedded = true
+
+[access_scopes]
+scopes = "read_products,write_products,read_publications,write_publications,read_themes,write_themes,read_own_subscription_contracts,write_own_subscription_contracts"
+
+[auth]
+redirect_urls = [
+  "${MMG_KAIROS_APPLICATION_URL}/api/shopify/auth/callback"
+]
+
+[webhooks]
+api_version = "2026-07"
+
+[[webhooks.subscriptions]]
+name = "mmg-subscription-reconciliation"
+topics = [
+  "subscription_contracts/create",
+  "subscription_contracts/update",
+  "subscription_billing_attempts/success",
+  "subscription_billing_attempts/failure",
+  "subscription_billing_attempts/challenged"
+]
+uri = "/api/shopify/webhooks/subscriptions"
+
+# App Store distributions must also configure all mandatory privacy/compliance
+# topics required for their distribution model before release.

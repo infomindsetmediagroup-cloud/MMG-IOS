@@ -11,6 +11,7 @@
 **My Library delivery authority:** `registry/customer-portal/mmg-my-library-delivery-contract-v1.json`  
 **Shopify subscription reconciliation authority:** `registry/shopify/mmg-subscription-webhook-reconciliation-contract-v1.json`  
 **Recommendation and curation authority:** `registry/knowledge-library/mmg-recommendation-curation-ranking-contract-v1.json`  
+**Controlled deployment authority:** `registry/deployment/mmg-live-commerce-deployment-contract-v1.json`  
 **Digital asset registry:** `registry/knowledge-library/digital-asset-registry-v1.json`  
 **Live URL authority:** `registry/site-pages/site-url-registry-current.json`
 
@@ -41,7 +42,7 @@ Every variant is billed monthly. Monthly, Bi-weekly, and Weekly describe the dig
 
 **Provisioning authority:** `shopify/products/mmg-knowledge-subscription/product-contract.json`
 
-The canonical Shopify structure is one product, three cadence variants, and one shared monthly selling plan. Runtime product, variant, selling-plan-group, and selling-plan GIDs remain deployment values and must be verified before live reconciliation.
+The canonical Shopify structure is one product, three cadence variants, and one shared monthly selling plan. Runtime product, variant, selling-plan-group, selling-plan, and Online Store publication GIDs remain deployment values and must be verified before live reconciliation or publication.
 
 ## Knowledge Library Asset Registry
 
@@ -69,7 +70,7 @@ AI Image Mastery™ now carries approved recommendation metadata for AI creation
 | AI Mastery Series | Digital book series | `/products/ai-image-mastery` and future handles | Active / expanding | Includes AI Image Mastery and planned continuation titles. |
 | Micro-Packs | Digital short books | TBD | Planned | Compact creator-education product family. |
 | Publish-Ready Book Build Service™ | Service | TBD | Planned | Canonical multi-variant service-product pattern. |
-| MMG Knowledge Subscription™ | Subscription | `/products/mmg-knowledge-subscription` | Approved for provisioning | Canonical recurring product connecting Shopify billing, the Knowledge Library, Customer Portal, My Library, and Kairos entitlements. |
+| MMG Knowledge Subscription™ | Subscription | `/products/mmg-knowledge-subscription` | Approved for controlled provisioning | Canonical recurring product connecting Shopify billing, the Knowledge Library, Customer Portal, My Library, and Kairos entitlements. It remains unpublished until controlled release gates pass. |
 
 ## Product-Image Rules
 
@@ -180,11 +181,25 @@ The recommendation authority is `registry/knowledge-library/mmg-recommendation-c
 - Internal scores, profile records, interaction history, customer IDs, and recommendation-run IDs are never public storefront data.
 - Every selected package is revalidated by the Delivery Window Controller before the review window opens.
 
+## Controlled Shopify Provisioning and Release Rules
+
+The controlled deployment authority is `registry/deployment/mmg-live-commerce-deployment-contract-v1.json`.
+
+- `plan`, `execute`, `verify`, `publish`, and `rollback` are separate release actions.
+- Product provisioning creates or configures the subscription product as `DRAFT`; provisioning does not imply publication.
+- Runtime mapping stores the product, three variants, selling-plan group, selling plan, and Online Store publication GIDs without storing Admin credentials.
+- Production execute, publish, and rollback operations require authorization bound to the release ID, environment, action, exact commit SHA, and approval window.
+- Every action uses an idempotent `requestId` and optional optimistic `expectedReleaseVersion`.
+- Migrations 001–007, required runtime routes, app scopes, protected subscription access, webhooks, portal modules, scheduler, dispatcher, storage signer, and two verified selectable assets are release gates.
+- Publication is a separate action after every controlled checkout-to-My-Library verification check passes.
+- Only hashes of test order and test customer references may be persisted.
+- Rollback may unpublish or return the product to draft but cannot revoke delivered ownership, delete subscription contracts, or erase webhook and audit history.
+
 ## Commerce Component Build State
 
 | Component | Repository status | Live storefront/runtime status | Next dependency |
 |---|---|---|---|
-| MMG commerce ecosystem contract | Merged and advanced to v2.0 | Governing only | Complete deployment sequence. |
+| MMG commerce ecosystem contract | Merged and advanced to v2.0 | Governing only | Controlled deployment execution. |
 | Subscription product and selling-plan contract | Merged | Not provisioned | Shopify runtime IDs. |
 | MMG Three-Plan Selector | Merged | Not installed | Subscription product provisioning. |
 | MMG Cart Subscription Controller | Merged | Not installed | Active theme cart integration and product provisioning. |
@@ -196,7 +211,8 @@ The recommendation authority is `registry/knowledge-library/mmg-recommendation-c
 | MMG Thank-You First-Title Handoff | Merged for staging | Not installed | Shopify extension deployment. |
 | MMG My Library Delivery Interface | Merged for staging | Not installed | Storage signer and portal insertion. |
 | Shopify Subscription Webhook Reconciliation | Merged for staging | Not registered or routed live | Protected API access and webhook deployment. |
-| Kairos Recommendation and Curation Ranking | Implemented for staging | Not wired into production controller | Live Shopify provisioning and end-to-end deployment. |
+| Kairos Recommendation and Curation Ranking | Merged for staging | Not wired into production controller | Production runtime adapter. |
+| Live Shopify Provisioning and End-to-End Deployment Control | Implemented for controlled release | No live mutation, migration, installation, checkout, or publication performed | Operational monitoring, incident response, and controlled production rollout. |
 
 ## Shopify Product Storage Contract
 
@@ -208,4 +224,4 @@ shopify/products/{product-handle}/qa.md
 shopify/products/{product-handle}/release-notes.md
 ```
 
-Canonical product, entitlement, reconciliation, recommendation, delivery-window, Customer Portal, post-checkout handoff, My Library, and secure-delivery relationships must also be represented in the machine-readable commerce contract and relevant registries.
+Canonical product, entitlement, reconciliation, recommendation, deployment, delivery-window, Customer Portal, post-checkout handoff, My Library, and secure-delivery relationships must also be represented in the machine-readable commerce contract and relevant registries.
