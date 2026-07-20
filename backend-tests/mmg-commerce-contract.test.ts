@@ -12,9 +12,9 @@ const contract = JSON.parse(
 ) as Record<string, any>;
 
 describe("MMG commerce contract", () => {
-  it("is the approved v1.9 authority", () => {
+  it("is the approved v2.0 authority", () => {
     expect(contract.contract_id).toBe("mmg-commerce-contract-v1");
-    expect(contract.version).toBe("1.9.0");
+    expect(contract.version).toBe("2.0.0");
     expect(contract.status).toBe("approved");
   });
 
@@ -177,12 +177,33 @@ describe("MMG commerce contract", () => {
     expect(contract.reusable_components).toContain(
       "MMG Shopify Subscription Webhook Reconciliation",
     );
+  });
+
+  it("connects future packages to explainable recommendation ranking", () => {
+    expect(contract.recommendation_curation_ranking_contract).toEqual({
+      authority:
+        "registry/knowledge-library/mmg-recommendation-curation-ranking-contract-v1.json",
+      ranking_engine: "server/knowledge-library/recommendation-ranking.ts",
+      curator_adapter: "server/knowledge-library/recommendation-curator.ts",
+      context_repository: "server/knowledge-library/recommendation-repository.ts",
+      candidate_repository:
+        "server/knowledge-library/recommendation-candidate-repository.ts",
+      learning_profile_endpoint: "/api/customer-portal/learning-profile",
+      database_schema:
+        "database/migrations/20260720_006_mmg_recommendation_curation_ranking.sql",
+      ranking_version: "1.0.0",
+      deterministic: true,
+      exact_package_capacity_required: true,
+      server_authority: "Kairos",
+    });
+    expect(contract.reusable_components).toContain(
+      "MMG Kairos Recommendation and Curation Ranking",
+    );
     expect(contract.canonical_customer_flow).toEqual(
       expect.arrayContaining([
-        "Checkout",
-        "Thank-you first-title handoff",
         "Shopify subscription webhook reconciliation",
-        "Customer Portal",
+        "Customer Portal learning profile",
+        "Kairos recommendation and curation ranking",
       ]),
     );
   });
@@ -204,7 +225,7 @@ describe("MMG commerce contract", () => {
     );
   });
 
-  it("keeps metadata, ownership, security, and anti-overdraw rules", () => {
+  it("keeps metadata, ownership, security, anti-overdraw, and ranking rules", () => {
     expect(contract.canonical_metadata.namespace).toBe("mmg");
     expect(contract.canonical_metadata.fields).toEqual(
       expect.arrayContaining([
@@ -234,6 +255,9 @@ describe("MMG commerce contract", () => {
         "Reload the authoritative Shopify SubscriptionContract before mutating entitlements.",
         "Create at most one entitlement cycle per subscription and authoritative current-period start.",
         "Never persist raw Shopify webhook bodies, app client secrets, or Admin API access tokens.",
+        "Rank only the server-eligible candidate set and never let ranking bypass ownership, delivery, or entitlement gates.",
+        "Require exact target title count and exact entitlement units for every curated package.",
+        "Revalidate every ranked proposal before opening the customer review window.",
       ]),
     );
   });

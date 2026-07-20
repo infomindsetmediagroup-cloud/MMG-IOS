@@ -10,6 +10,7 @@
 **Thank-you first-title handoff authority:** `registry/checkout/mmg-thank-you-first-title-handoff-contract-v1.json`  
 **My Library delivery authority:** `registry/customer-portal/mmg-my-library-delivery-contract-v1.json`  
 **Shopify subscription reconciliation authority:** `registry/shopify/mmg-subscription-webhook-reconciliation-contract-v1.json`  
+**Recommendation and curation authority:** `registry/knowledge-library/mmg-recommendation-curation-ranking-contract-v1.json`  
 **Digital asset registry:** `registry/knowledge-library/digital-asset-registry-v1.json`  
 **Live URL authority:** `registry/site-pages/site-url-registry-current.json`
 
@@ -19,7 +20,7 @@
 |---|---|---|---|
 | Digital download | Individual product | My Library | Eligible only when `mmg.subscription_eligible` is true and every Knowledge Library release and selection gate passes. |
 | Service | Product with Starter, Growth, and Professional variants | My Projects | Not included in subscription fulfillment. |
-| Subscription | MMG Knowledge Subscription™ with Monthly, Bi-weekly, and Weekly variants | Subscription Dashboard + My Library | Shopify owns recurring billing; Kairos reconciles contracts, entitlements, packages, and delivery. |
+| Subscription | MMG Knowledge Subscription™ with Monthly, Bi-weekly, and Weekly variants | Subscription Dashboard + My Library | Shopify owns recurring billing; Kairos reconciles contracts, entitlements, packages, curation, and delivery. |
 
 ## Active Live Products
 
@@ -51,6 +52,8 @@ The permanent cross-system identity is `mmg.asset_id`. Shopify titles and handle
 | AI Image Mastery™ | `mmg-dd-ai-image-mastery-001` | Active | Blocked pending provisioning | Verify square thumbnail, delivery package, Shopify metafields, runtime IDs, and secure delivery files. |
 
 A product may remain publicly purchasable while subscriber selection is blocked. This prevents the picker from offering a title Kairos cannot yet package and deliver reliably.
+
+AI Image Mastery™ now carries approved recommendation metadata for AI creation, creators, authors, entrepreneurs, visual-asset creation, publishing, audience growth, beginner experience, guide format, series order, and editorial priority. Recommendation metadata remains advisory and cannot bypass release, ownership, entitlement, or delivery gates.
 
 ## Live or Planned Product Families
 
@@ -124,7 +127,7 @@ The Knowledge Library supports public discovery, authenticated subscriber select
 ## Customer Portal and My Library Rules
 
 - The canonical portal route remains `/pages/customer-portal`.
-- Subscription Dashboard and My Library are additive modules and do not replace projects, uploads, support, authentication, or navigation.
+- Subscription Dashboard, learning profile, and My Library are additive modules and do not replace projects, uploads, support, authentication, or navigation.
 - Private state is loaded through authenticated, non-cacheable server endpoints.
 - My Library is available at `/pages/customer-portal#my-library`.
 - Subscription-delivered assets remain `preparing` until the linked package window reaches `delivered`.
@@ -159,11 +162,29 @@ The reconciliation authority is `registry/shopify/mmg-subscription-webhook-recon
 - Paused and terminal contracts cancel future scheduled cycles without revoking delivered ownership.
 - Raw webhook bodies, app secrets, Admin tokens, provider IDs, payload hashes, and billing-attempt internals are never exposed to storefront customers.
 
+## Kairos Recommendation and Curation Rules
+
+The recommendation authority is `registry/knowledge-library/mmg-recommendation-curation-ranking-contract-v1.json`.
+
+- The first package remains customer-selected. Automated curation applies only to future scheduled package-review windows.
+- The authenticated learning profile stores role, primary goal, secondary goals, experience, primary topics, secondary interests, preferred formats, and excluded topics.
+- Profile writes use `PUT /api/customer-portal/learning-profile` with authenticated session identity, same-origin validation, and a session-bound CSRF token.
+- Ranking starts only from the server-eligible candidate set and cannot restore owned, selected, unavailable, or delivery-incomplete assets.
+- Explicitly excluded topics, explicit dislikes, and unmet prerequisites are hard exclusions.
+- Explainable positive signals include primary-topic fit, goal fit, role fit, experience fit, preferred format, next-series progression, complementary assets, prior likes, and completion.
+- Explainable negative signals include experience mismatch, series gaps, recent-topic fatigue, swaps, dismissals, duplicate topics, and package concentration.
+- A package must match the window's exact title count and exact entitlement units.
+- Package optimization rewards topic, format, and diversity-group variety while preserving primary-objective coverage and secondary-interest exploration.
+- Ranking is deterministic. Ties resolve by total score, editorial priority, title, and canonical asset ID.
+- Recommendation runs, score components, reason codes, and selected rationale are persisted by window and version.
+- Internal scores, profile records, interaction history, customer IDs, and recommendation-run IDs are never public storefront data.
+- Every selected package is revalidated by the Delivery Window Controller before the review window opens.
+
 ## Commerce Component Build State
 
 | Component | Repository status | Live storefront/runtime status | Next dependency |
 |---|---|---|---|
-| MMG commerce ecosystem contract | Merged and advanced to v1.9 | Governing only | Continue implementation sequence. |
+| MMG commerce ecosystem contract | Merged and advanced to v2.0 | Governing only | Complete deployment sequence. |
 | Subscription product and selling-plan contract | Merged | Not provisioned | Shopify runtime IDs. |
 | MMG Three-Plan Selector | Merged | Not installed | Subscription product provisioning. |
 | MMG Cart Subscription Controller | Merged | Not installed | Active theme cart integration and product provisioning. |
@@ -174,7 +195,8 @@ The reconciliation authority is `registry/shopify/mmg-subscription-webhook-recon
 | MMG Customer Portal Subscription Dashboard | Merged for staging | Not installed | Authenticated endpoint routing and portal integration. |
 | MMG Thank-You First-Title Handoff | Merged for staging | Not installed | Shopify extension deployment. |
 | MMG My Library Delivery Interface | Merged for staging | Not installed | Storage signer and portal insertion. |
-| Shopify Subscription Webhook Reconciliation | Implemented for staging | Not registered or routed live | Kairos recommendation and curation ranking. |
+| Shopify Subscription Webhook Reconciliation | Merged for staging | Not registered or routed live | Protected API access and webhook deployment. |
+| Kairos Recommendation and Curation Ranking | Implemented for staging | Not wired into production controller | Live Shopify provisioning and end-to-end deployment. |
 
 ## Shopify Product Storage Contract
 
@@ -186,4 +208,4 @@ shopify/products/{product-handle}/qa.md
 shopify/products/{product-handle}/release-notes.md
 ```
 
-Canonical product, entitlement, reconciliation, delivery-window, Customer Portal, post-checkout handoff, My Library, and secure-delivery relationships must also be represented in the machine-readable commerce contract and relevant registries.
+Canonical product, entitlement, reconciliation, recommendation, delivery-window, Customer Portal, post-checkout handoff, My Library, and secure-delivery relationships must also be represented in the machine-readable commerce contract and relevant registries.

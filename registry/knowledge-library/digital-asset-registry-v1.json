@@ -1,9 +1,10 @@
 {
   "registry_id": "mmg-digital-asset-registry-v1",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "status": "active",
   "recorded_date": "2026-07-20",
   "authority": "registry/knowledge-library/mmg-knowledge-library-contract-v1.json",
+  "recommendation_authority": "registry/knowledge-library/mmg-recommendation-curation-ranking-contract-v1.json",
   "identity_key": "asset_id",
   "records": [
     {
@@ -24,6 +25,29 @@
       "series_order": 1,
       "related_asset_ids": [],
       "customer_destination": "my_library",
+      "recommendation": {
+        "secondary_topics": [
+          "prompt_engineering",
+          "visual_content_creation"
+        ],
+        "role_tags": [
+          "creator",
+          "author",
+          "entrepreneur",
+          "small_business_owner"
+        ],
+        "goal_tags": [
+          "create_visual_assets",
+          "publish_book",
+          "grow_audience"
+        ],
+        "prerequisite_asset_ids": [],
+        "complementary_asset_ids": [],
+        "diversity_group": "ai_creation",
+        "recommendation_priority": 10,
+        "estimated_minutes": 90,
+        "metadata_status": "approved"
+      },
       "media": {
         "portrait_cover": {
           "required": true,
@@ -63,6 +87,8 @@
     "asset_id is immutable and globally unique within MMG.",
     "A public product may remain blocked from subscription selection until every selection release gate passes.",
     "Retiring a record does not automatically remove an existing customer's ownership grant.",
-    "Do not add planned products as active records until their canonical handle, delivery package, and required media are verified."
+    "Do not add planned products as active records until their canonical handle, delivery package, and required media are verified.",
+    "Recommendation metadata is editorial input only and never bypasses eligibility, ownership, entitlement, or delivery gates.",
+    "Every recommendation-enabled asset requires reviewed topic, experience, role, goal, diversity, and series metadata or approved neutral defaults."
   ]
 }

@@ -1,0 +1,17 @@
+{%- comment -%}
+  MMG Customer Portal learning-profile integration.
+
+  Insert this render into the authenticated Customer Portal after the membership
+  summary and before My Library. The runtime adapter must provide a session-bound
+  CSRF token; never generate or trust that token in browser JavaScript.
+{%- endcomment -%}
+
+<section class="mmg-customer-portal__learning-profile" aria-label="Knowledge Library personalization">
+  {% render 'mmg-learning-profile',
+    mmg_learning_profile_endpoint: '/api/customer-portal/learning-profile',
+    mmg_learning_profile_login_url: routes.account_login_url,
+    mmg_learning_profile_support_url: '/pages/customer-service',
+    mmg_learning_profile_csrf_token: mmg_customer_portal_csrf_token,
+    mmg_learning_profile_instance_id: 'customer-portal'
+  %}
+</section>

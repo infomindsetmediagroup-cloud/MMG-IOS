@@ -1,10 +1,10 @@
 {
   "contract_id": "mmg-commerce-contract-v1",
-  "version": "1.9.0",
+  "version": "2.0.0",
   "status": "approved",
   "approved_date": "2026-07-20",
   "authority": "MMG executive approval",
-  "purpose": "Canonical machine-readable contract connecting digital downloads, services, subscriptions, Shopify subscription reconciliation, the Knowledge Library, cart and checkout behavior, the Thank you first-title handoff, customer entitlements, delivery windows, secure My Library access, the Customer Portal, and Kairos fulfillment.",
+  "purpose": "Canonical machine-readable contract connecting digital downloads, services, subscriptions, Shopify subscription reconciliation, explainable Kairos recommendation ranking, the Knowledge Library, cart and checkout behavior, the Thank you first-title handoff, customer entitlements, delivery windows, secure My Library access, the Customer Portal, and Kairos fulfillment.",
   "system_boundaries": {
     "shopify": [
       "product catalog",
@@ -20,6 +20,8 @@
     ],
     "kairos": [
       "recommendations",
+      "customer learning profiles",
+      "explainable package ranking",
       "Shopify subscription reconciliation",
       "subscription entitlements",
       "post-checkout first-title handoff",
@@ -134,6 +136,19 @@
     "required_scope": "read_own_subscription_contracts",
     "hmac_required": true,
     "deduplication_header": "X-Shopify-Webhook-Id",
+    "server_authority": "Kairos"
+  },
+  "recommendation_curation_ranking_contract": {
+    "authority": "registry/knowledge-library/mmg-recommendation-curation-ranking-contract-v1.json",
+    "ranking_engine": "server/knowledge-library/recommendation-ranking.ts",
+    "curator_adapter": "server/knowledge-library/recommendation-curator.ts",
+    "context_repository": "server/knowledge-library/recommendation-repository.ts",
+    "candidate_repository": "server/knowledge-library/recommendation-candidate-repository.ts",
+    "learning_profile_endpoint": "/api/customer-portal/learning-profile",
+    "database_schema": "database/migrations/20260720_006_mmg_recommendation_curation_ranking.sql",
+    "ranking_version": "1.0.0",
+    "deterministic": true,
+    "exact_package_capacity_required": true,
     "server_authority": "Kairos"
   },
   "product_types": {
@@ -303,6 +318,8 @@
       "service add-ons",
       "related resources",
       "cart recommendations",
+      "customer learning profiles",
+      "explainable package ranking",
       "customer ownership",
       "Shopify subscription reconciliation",
       "subscription entitlements",
@@ -340,7 +357,12 @@
       "Ignore stale subscription revisions and equal-revision events with an older or equal Shopify triggered-at timestamp.",
       "Create at most one entitlement cycle per subscription and authoritative current-period start.",
       "Link pending Thank-you orders to durable entitlements only when shop, origin order, and plan match.",
-      "Never persist raw Shopify webhook bodies, app client secrets, or Admin API access tokens."
+      "Never persist raw Shopify webhook bodies, app client secrets, or Admin API access tokens.",
+      "Rank only the server-eligible candidate set and never let ranking bypass ownership, delivery, or entitlement gates.",
+      "Use authenticated onboarding preferences, experience fit, series progression, interaction history, and package diversity as explainable signals.",
+      "Require exact target title count and exact entitlement units for every curated package.",
+      "Persist deterministic score components and reason codes without exposing private scores to the storefront.",
+      "Revalidate every ranked proposal before opening the customer review window."
     ]
   },
   "site_placements": {
@@ -352,7 +374,7 @@
     "membership_landing_page": "Explain plans, entitlements, onboarding, first-title selection, curation, review windows, and My Library.",
     "cart_drawer_and_cart_page": "Show an unselected subscription invitation when no subscription is present; open the three-plan selector on customer action.",
     "thank_you_page": "Use the checkout UI extension to verify a completed canonical subscription order and direct the buyer to sign in, wait for activation, choose or finish the first two titles, resolve recovery, or open My Library according to the server-authoritative state.",
-    "customer_portal": "Use the authenticated subscription dashboard and My Library delivery interface to show membership progress, owned resources, delivery readiness, secure read and download controls, support pathways, and account controls without replacing existing portal workflows."
+    "customer_portal": "Use the authenticated subscription dashboard, learning profile, and My Library delivery interface to show membership progress, owned resources, delivery readiness, secure read and download controls, support pathways, and account controls without replacing existing portal workflows."
   },
   "reusable_components": [
     "MMG Subscription Offer Module",
@@ -367,7 +389,8 @@
     "MMG Customer Portal Subscription Dashboard",
     "MMG Thank-You First-Title Handoff",
     "MMG My Library Delivery Interface",
-    "MMG Shopify Subscription Webhook Reconciliation"
+    "MMG Shopify Subscription Webhook Reconciliation",
+    "MMG Kairos Recommendation and Curation Ranking"
   ],
   "canonical_customer_flow": [
     "Homepage",
@@ -378,7 +401,8 @@
     "Checkout",
     "Thank-you first-title handoff",
     "Shopify subscription webhook reconciliation",
-    "Customer Portal",
+    "Customer Portal learning profile",
+    "Kairos recommendation and curation ranking",
     "Title selection or project intake",
     "My Library or My Projects",
     "Continue Your Journey"
