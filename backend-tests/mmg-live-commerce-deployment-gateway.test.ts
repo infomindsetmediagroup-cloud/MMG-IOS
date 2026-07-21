@@ -64,11 +64,13 @@ const build = () => {
       schedulerActive: false,
       dispatcherActive: false,
       storageSignerActive: false,
+      stagingRehearsalPassed: true,
     }),
     activate: vi.fn().mockResolvedValue({
       schedulerActive: true,
       dispatcherActive: true,
       storageSignerActive: true,
+      stagingRehearsalPassed: true,
     }),
     deactivate: vi.fn().mockResolvedValue(undefined),
   };
@@ -125,6 +127,15 @@ describe("MMG composite commerce deployment gateway", () => {
     expect(probe.canonicalShopDomain).toBe("example.myshopify.com");
     expect(probe.runtimeMapping?.productStatus).toBe("DRAFT");
     expect(probe.schedulerActive).toBe(false);
+    expect(probe.stagingRehearsalPassed).toBe(true);
+  });
+
+  it("applies commerce migrations through migration 010", async () => {
+    const { gateway, database } = build();
+    await gateway.applyPhase({ ...baseInput, phase: "database_migrations" });
+    expect(database.applyCommerceMigrations).toHaveBeenCalledWith({
+      through: "20260721_010_mmg_production_adapters_staging_rehearsal",
+    });
   });
 
   it("maps product, verification, and publication phases to their adapters", async () => {
@@ -143,6 +154,31 @@ describe("MMG composite commerce deployment gateway", () => {
     await expect(
       gateway.applyPhase({ ...baseInput, phase: "publication" }),
     ).rejects.toThrow("MMG_DEPLOYMENT_PUBLICATION_APPROVAL_REQUIRED");
+  });
+
+  it("requires rehearsal evidence even when publication has approval", async () => {
+    const { gateway, operations } = build();
+    operations.inspect.mockResolvedValueOnce({
+      schedulerActive: true,
+      dispatcherActive: true,
+      storageSignerActive: true,
+      stagingRehearsalPassed: false,
+    });
+    await expect(
+      gateway.applyPhase({
+        ...baseInput,
+        phase: "publication",
+        approval: {
+          approvalId: "approval-publish-12345678",
+          approvedBy: "executive-1",
+          approvedAt: "2026-07-20T22:00:00.000Z",
+          expiresAt: "2026-07-21T01:00:00.000Z",
+          approvedActions: ["publish"],
+          approvedEnvironment: "staging",
+          releaseCommitSha: baseInput.releaseCommitSha,
+        },
+      }),
+    ).rejects.toThrow("MMG_DEPLOYMENT_STAGING_REHEARSAL_REQUIRED");
   });
 
   it("uses safe rollback policies", async () => {
