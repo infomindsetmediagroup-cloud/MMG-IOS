@@ -1,0 +1,11 @@
+{
+  "sections": {
+    "main": {
+      "type": "mmg-ai-image-mastery",
+      "settings": {}
+    }
+  },
+  "order": [
+    "main"
+  ]
+}

@@ -1,0 +1,77 @@
+{
+  "schemaVersion": "1.0.0",
+  "recordId": "shopify-ai-image-mastery-staging-20260720",
+  "sourceChangeSetId": "shopify-canonical-digital-download-ai-image-mastery-20260721",
+  "state": "historical-staged-theme-and-server-verified-before-publication",
+  "observedAt": "2026-07-21T03:46:00Z",
+  "productGid": "gid://shopify/Product/9022950998170",
+  "candidateTheme": {
+    "id": "gid://shopify/OnlineStoreTheme/155338309786",
+    "name": "MMG Digital Download Candidate 2026-07-20",
+    "role": "UNPUBLISHED",
+    "prefix": "/t/18",
+    "createdAt": "2026-07-21T03:37:06Z",
+    "updatedAt": "2026-07-21T03:46:00Z",
+    "processing": false,
+    "processingFailed": false
+  },
+  "duplicatedFrom": {
+    "id": "gid://shopify/OnlineStoreTheme/155336671386",
+    "role": "MAIN",
+    "prefix": "/t/17"
+  },
+  "stagedFiles": [
+    {
+      "filename": "assets/mmg-ai-image-mastery.css",
+      "contentType": "text/css",
+      "checksumMd5": "5a749b91c5078360f9a64d642ef268be",
+      "size": 10471,
+      "updatedAt": "2026-07-21T03:43:15Z"
+    },
+    {
+      "filename": "assets/mmg-ai-image-mastery.js",
+      "contentType": "application/javascript",
+      "checksumMd5": "2653b8a8d87c8f5852f653b7580c405d",
+      "size": 5665,
+      "updatedAt": "2026-07-21T03:44:06Z"
+    },
+    {
+      "filename": "sections/mmg-ai-image-mastery.liquid",
+      "contentType": "application/x-liquid",
+      "checksumMd5": "52893c2bc11789b613424ec296d838d0",
+      "size": 14700,
+      "updatedAt": "2026-07-21T03:45:47Z"
+    },
+    {
+      "filename": "templates/product.mmg-ai-image-mastery.json",
+      "contentType": "application/json",
+      "checksumMd5": "f767d9a33d9c4afb1ebee3c899e58768",
+      "size": 132,
+      "updatedAt": "2026-07-21T03:46:00Z",
+      "semanticVerification": "single main section type mmg-ai-image-mastery; order contains main only"
+    }
+  ],
+  "semanticVerification": {
+    "templateSingleSection": true,
+    "templateSectionType": "mmg-ai-image-mastery",
+    "templateOrder": [
+      "main"
+    ],
+    "sectionHasExactlyOneH1": true,
+    "sectionLoadsDedicatedCss": true,
+    "sectionLoadsDedicatedJavascript": true,
+    "cssRootScoped": true,
+    "cssContainsNo100vw": true,
+    "imageObjectFit": "contain",
+    "customerClickCartMutation": true,
+    "adminApiPatternsAbsent": true
+  },
+  "preview": {
+    "themePrefix": "/t/18",
+    "templateSuffix": "mmg-ai-image-mastery",
+    "authenticatedOwnerAcceptance": "pending"
+  },
+  "productionMutationOccurred": false,
+  "historicalRecord": true,
+  "subsequentPublicationObservedAt": "2026-07-21T04:03:16Z"
+}

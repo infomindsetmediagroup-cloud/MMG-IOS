@@ -1,0 +1,23 @@
+name: Validate Canonical Digital Download Product
+
+on:
+  pull_request:
+    paths:
+      - 'shopify/products/ai-image-mastery/**'
+      - 'scripts/validate-canonical-digital-download-product.mjs'
+      - '.github/workflows/validate-canonical-digital-download-product.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate digital-download contract and source
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download repository source
+        uses: actions/checkout@v4
+
+      - name: Validate canonical digital-download product
+        run: node scripts/validate-canonical-digital-download-product.mjs
