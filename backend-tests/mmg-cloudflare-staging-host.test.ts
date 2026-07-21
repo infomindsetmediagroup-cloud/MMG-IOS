@@ -23,7 +23,8 @@ const environment = () => ({
   MMG_COMMERCE_ENVIRONMENT: "staging",
   MMG_COMMERCE_RELEASE_ID: "release-staging-20260721-002",
   MMG_COMMERCE_RELEASE_COMMIT_SHA: "a".repeat(40),
-  MMG_COMMERCE_RUNTIME_ORIGIN: "https://mmg-commerce-staging.example.workers.dev",
+  MMG_COMMERCE_RUNTIME_ORIGIN:
+    "https://mmg-commerce-staging.example.workers.dev",
   MMG_COMMERCE_REQUEST_TIMEOUT_MS: "8000",
   MMG_COMMERCE_ROUTE_PROBE_PATHS:
     "/api/internal/commerce/staging-readiness,/api/internal/commerce/staging-integration",
@@ -54,6 +55,7 @@ describe("MMG Cloudflare commerce staging host", () => {
       environment: "staging",
       releaseId: "release-staging-20260721-002",
       releaseCommitSha: "a".repeat(40),
+      upstreamConfigured: false,
       publicationAllowed: false,
       liveCustomerDataAllowed: false,
     });
@@ -93,6 +95,57 @@ describe("MMG Cloudflare commerce staging host", () => {
         }),
       ),
     ).resolves.toBeNull();
+  });
+
+  it("forwards application routes only through the configured staging upstream", async () => {
+    const host = buildMMGCloudflareCommerceStagingHost({
+      ...environment(),
+      MMG_COMMERCE_UPSTREAM: {
+        async fetch(request: Request) {
+          return Response.json(
+            {
+              ok: true,
+              upstreamPath: new URL(request.url).pathname,
+              environment: "staging",
+            },
+            { status: 401 },
+          );
+        },
+      },
+    });
+    const response = await host.fetch(
+      new Request(
+        "https://mmg-commerce-staging.example.workers.dev/api/knowledge-library/picker",
+      ),
+    );
+    expect(response.status).toBe(401);
+    expect(response.headers.get("x-mmg-upstream-routed")).toBe("true");
+    expect(response.headers.get("x-mmg-publication-allowed")).toBe("false");
+    await expect(response.json()).resolves.toMatchObject({
+      upstreamPath: "/api/knowledge-library/picker",
+      environment: "staging",
+    });
+  });
+
+  it("rejects unauthenticated provider-heartbeat refresh before database access", async () => {
+    const host = buildMMGCloudflareCommerceStagingHost(environment());
+    const response = await host.fetch(
+      new Request(
+        "https://mmg-commerce-staging.example.workers.dev/api/internal/commerce/provider-heartbeats/refresh",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token("x")}`,
+            "X-MMG-Internal-Request": "test",
+          },
+        },
+      ),
+    );
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: { code: "MMG_HEARTBEAT_AUTH_REQUIRED" },
+    });
   });
 
   it("records only exact-release remote provider health as healthy", async () => {
@@ -158,7 +211,7 @@ describe("MMG Cloudflare commerce staging host", () => {
     expect(recorded).toHaveLength(8);
   });
 
-  it("generates a staging-only Wrangler config with Hyperdrive and required secrets", async () => {
+  it("generates a staging-only Wrangler config with Hyperdrive, service binding, and required secrets", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "mmg-staging-host-"));
     const output = path.join(directory, "wrangler.jsonc");
     try {
@@ -173,6 +226,8 @@ describe("MMG Cloudflare commerce staging host", () => {
             MMG_COMMERCE_RELEASE_COMMIT_SHA: "a".repeat(40),
             MMG_CLOUDFLARE_STAGING_HYPERDRIVE_ID:
               "12345678-1234-1234-1234-123456789abc",
+            MMG_CLOUDFLARE_STAGING_UPSTREAM_SERVICE:
+              "mmg-commerce-api-staging",
             MMG_COMMERCE_STAGING_RUNTIME_ORIGIN:
               "https://mmg-commerce-staging.example.workers.dev",
             MMG_STAGING_WRANGLER_OUTPUT: output,
@@ -186,6 +241,12 @@ describe("MMG Cloudflare commerce staging host", () => {
         {
           binding: "HYPERDRIVE",
           id: "12345678-1234-1234-1234-123456789abc",
+        },
+      ]);
+      expect(config.services).toEqual([
+        {
+          binding: "MMG_COMMERCE_UPSTREAM",
+          service: "mmg-commerce-api-staging",
         },
       ]);
       expect(config.secrets.required).toHaveLength(8);
