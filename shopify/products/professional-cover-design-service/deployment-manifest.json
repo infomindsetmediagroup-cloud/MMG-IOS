@@ -1,10 +1,11 @@
 {
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "changeSetId": "shopify-canonical-service-product-source-20260721",
-  "state": "prepared-not-approved-not-executed",
+  "state": "approved-preflight-passed-theme-publish-blocked-manual-action-required",
   "productGid": "gid://shopify/Product/9024288620698",
   "preferredDeployment": "unpublished-theme-product-template",
   "fallbackDeployment": "approved-description-html-replacement",
+  "selectedDeployment": "publish-verified-staging-theme-then-assign-product-template",
   "requiredArtifacts": [
     "contract.json",
     "source/section.html",
@@ -12,13 +13,18 @@
     "source/behavior.js",
     "qa.md",
     "deployment.md",
-    "graphql/preflight.graphql"
+    "graphql/preflight.graphql",
+    "staging-record-2026-07-20.json",
+    "local-browser-qa-2026-07-20.json",
+    "production-checkpoint-2026-07-20.json"
   ],
   "preflight": {
     "abortOnMismatch": true,
     "captureDescriptionHtmlForRollback": true,
     "validateReservedRedirects": true,
-    "shopifyToolkitValidationRequired": true
+    "shopifyToolkitValidationRequired": true,
+    "latestProductionPreflightPassed": true,
+    "latestProductUpdatedAt": "2026-07-21T00:56:35Z"
   },
   "prohibitedChanges": [
     "product-title",
@@ -36,11 +42,32 @@
   ],
   "approval": {
     "required": true,
-    "mustNameChangeSetId": true
+    "mustNameChangeSetId": true,
+    "granted": true,
+    "exactInstruction": "Approve production deployment: shopify-canonical-service-product-source-20260721",
+    "observedAt": "2026-07-21T02:04:11Z"
+  },
+  "execution": {
+    "themePublishSchemaValidation": "passed",
+    "themePublishAttempted": true,
+    "themePublishExecuted": false,
+    "themePublishBlockedByHostPolicy": true,
+    "manualThemePublicationRequired": true,
+    "productTemplateAssignmentSchemaValidation": "passed",
+    "productTemplateAssignmentAttempted": false,
+    "productTemplateAssignmentExecuted": false,
+    "descriptionHtmlFallbackAttempted": false
+  },
+  "manualBoundary": {
+    "adminPath": "https://admin.shopify.com/store/07kd8e-qw/themes",
+    "publishThemeName": "MMG Service Staging 2026-07-20",
+    "publishThemeGid": "gid://shopify/OnlineStoreTheme/155335557274",
+    "postPublicationTemplateSuffix": "mmg-professional-cover-design"
   },
   "rollback": {
     "descriptionDeployment": "restore-exact-preflight-description-html",
-    "templateDeployment": "restore-prior-template-and-unpublish-candidate",
+    "templateDeployment": "restore-prior-template-and-republish-former-main-theme",
+    "formerMainThemeGid": "gid://shopify/OnlineStoreTheme/155242856602",
     "postRollbackVerificationRequired": true
   }
 }
