@@ -17,9 +17,16 @@ const contract = JSON.parse(
 describe("MMG commerce operations contract", () => {
   it("locks the protected operations implementation", () => {
     expect(contract.contract_id).toBe("mmg-commerce-operations-control-v1");
+    expect(contract.version).toBe("1.1.0");
     expect(contract.status).toBe("approved_for_staging_integration");
     expect(contract.implementation.logical_endpoint).toBe(
       "/api/internal/commerce/operations",
+    );
+    expect(contract.implementation.rollout_service).toContain(
+      "commerce-rollout-service.ts",
+    );
+    expect(contract.implementation.rollout_evidence).toContain(
+      "commerce-rollout-evidence.ts",
     );
     expect(contract.actions).toContain("evaluate");
     expect(contract.actions).toContain("pause_rollout");
@@ -37,6 +44,9 @@ describe("MMG commerce operations contract", () => {
       "SEV1",
       "SEV2",
     ]);
+    expect(contract.incident_contract.active_incident_severity_downgrade_allowed).toBe(
+      false,
+    );
   });
 
   it("starts safely and forbids destructive containment", () => {
@@ -58,19 +68,27 @@ describe("MMG commerce operations contract", () => {
     ).toBe(false);
   });
 
-  it("locks deterministic staged rollout", () => {
+  it("locks deterministic staged rollout and release-bound evidence", () => {
     expect(contract.rollout_contract.stages.pilot.cohort_percentage).toBe(5);
     expect(contract.rollout_contract.stages.limited.cohort_percentage).toBe(25);
     expect(contract.rollout_contract.stages.expanded.cohort_percentage).toBe(50);
     expect(contract.rollout_contract.stages.full.cohort_percentage).toBe(100);
     expect(contract.rollout_contract.assignment.stage_skip_allowed).toBe(false);
-    expect(contract.rollout_contract.advancement_gates).toContain(
-      "Latest consistency audit passed.",
+    expect(contract.rollout_contract.resume_from_paused.automatic_resume_allowed).toBe(
+      false,
+    );
+    expect(contract.rollout_contract.advancement_gates.join(" ")).toContain(
+      "belongs to the active release",
     );
   });
 
-  it("requires migration 008 and a staging incident drill", () => {
-    expect(contract.dependencies.database_schema).toContain("20260720_008");
+  it("requires migrations 008 and 009 plus a staging incident drill", () => {
+    expect(contract.dependencies.database_schemas).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("20260720_008"),
+        expect.stringContaining("20260720_009"),
+      ]),
+    );
     expect(contract.release_gates.join(" ")).toContain("staging incident drill");
     expect(contract.integration_sequence.next_component).toContain(
       "Production adapter wiring",
