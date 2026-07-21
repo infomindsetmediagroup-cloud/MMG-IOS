@@ -1,0 +1,12 @@
+client_id = "13551d4b9b290845899b0e34ccd29b15"
+name = "MMG Customer Account"
+handle = "mmg-customer-account"
+application_url = "https://shopify.dev/apps/default-app-home"
+embedded = false
+
+[build]
+automatically_update_urls_on_dev = false
+include_config_on_deploy = true
+
+[access_scopes]
+scopes = "customer_read_customers,customer_read_orders"
