@@ -52,6 +52,10 @@ After publication, Kairos must:
 5. Assign `templateSuffix: mmg-professional-cover-design` only to product `gid://shopify/Product/9024288620698`.
 6. Verify the live product and record the exact production result.
 
+## Repository validation
+
+This checkpoint is enforced by the canonical service-product validator. The validation PR exists only to execute the repository’s Shopify governance checks against the approved-but-blocked production state; it does not contain or authorize a Shopify mutation.
+
 ## Current production state
 
 No production product, description, template assignment, price, SKU, inventory, shipping, publication, or redirect field was changed by this execution.
