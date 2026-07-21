@@ -196,7 +196,7 @@ export const buildMMGCloudflareCommerceStagingHost = (
       releaseId: config.releaseId,
       runtimeOrigin: config.runtimeOrigin,
       runtimeProbeToken: tokens.integration,
-      adminTokenConfigured,
+      adminToken: environment.MMG_COMMERCE_STAGING_ADMIN_DASHBOARD_TOKEN,
       targets: providerTargets,
       fetcher: options.fetcher,
       timeoutMs: config.requestTimeoutMs,
@@ -285,7 +285,7 @@ export const buildMMGCloudflareCommerceStagingHost = (
           upstream: false,
         });
       }
-      if (environment.MMG_COMMERCE_UPSTREAM) {
+      if (pathname.startsWith("/api/") && environment.MMG_COMMERCE_UPSTREAM) {
         const upstreamResponse = await environment.MMG_COMMERCE_UPSTREAM.fetch(
           request.clone(),
         );
