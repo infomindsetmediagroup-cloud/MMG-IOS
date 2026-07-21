@@ -46,6 +46,7 @@ const completeProbe = {
   schedulerActive: true,
   dispatcherActive: true,
   storageSignerActive: true,
+  stagingRehearsalPassed: true,
   e2eEvidence: {
     runId: "e2e-release-12345678",
     completedAt: "2026-07-20T23:00:00.000Z",

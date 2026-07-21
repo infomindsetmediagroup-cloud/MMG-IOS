@@ -1,0 +1,34 @@
+name: Validate MMG Production Adapters
+
+on:
+  pull_request:
+    paths:
+      - "server/operations/**"
+      - "server/deployment/**"
+      - "database/migrations/20260721_010_mmg_production_adapters_staging_rehearsal.sql"
+      - "registry/operations/mmg-production-adapters-staging-rehearsal-contract-v1.json"
+      - "registry/deployment/mmg-live-commerce-deployment-contract-v1.json"
+      - "backend-tests/mmg-production-*.test.ts"
+      - "backend-tests/mmg-commerce-staging-rehearsal*.test.ts"
+      - "backend-tests/mmg-commerce-rehearsal-evidence.test.ts"
+      - "backend-tests/mmg-commerce-deployment-operations-adapter.test.ts"
+      - ".github/workflows/mmg-commerce-staging-rehearsal.yml"
+      - ".github/workflows/mmg-production-adapters-validate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install validation dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+      - run: npm run typecheck
+      - run: npm test

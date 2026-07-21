@@ -1,0 +1,165 @@
+{
+  "contract_id": "mmg-production-adapters-staging-rehearsal-v1",
+  "version": "1.0.0",
+  "status": "approved_for_staging_integration",
+  "approved_date": "2026-07-21",
+  "authority": "MMG executive approval",
+  "purpose": "Connect the commerce operations control plane to concrete PostgreSQL, runtime-route, reversible-control, alert-delivery, authentication, release-evidence, and staging-rehearsal adapters without enabling publication or using live customer data.",
+  "dependencies": {
+    "operations_contract": "registry/operations/mmg-commerce-operations-control-contract-v1.json",
+    "deployment_contract": "registry/deployment/mmg-live-commerce-deployment-contract-v1.json",
+    "database_schema": "database/migrations/20260721_010_mmg_production_adapters_staging_rehearsal.sql"
+  },
+  "implementation": {
+    "configuration": "server/operations/production-adapter-config.ts",
+    "route_probe": "server/operations/http-commerce-route-probe.ts",
+    "postgres_telemetry": "server/operations/postgres-commerce-production-telemetry.ts",
+    "runtime_controls": "server/operations/http-commerce-control-adapter.ts",
+    "alert_delivery": "server/operations/webhook-commerce-alert-adapter.ts",
+    "composition_root": "server/operations/production-operations-runtime.ts",
+    "rehearsal_runner": "server/operations/commerce-staging-rehearsal.ts",
+    "rehearsal_http": "server/operations/commerce-staging-rehearsal-http.ts",
+    "rehearsal_gateway": "server/operations/http-commerce-staging-rehearsal-gateway.ts",
+    "rehearsal_repository": "server/operations/postgres-commerce-rehearsal-repository.ts",
+    "rehearsal_endpoint": "/api/internal/commerce/rehearsal",
+    "rehearsal_adapter_endpoint": "/api/internal/commerce/rehearsal/adapter"
+  },
+  "production_adapter_contract": {
+    "configuration_rules": [
+      "The runtime environment must be explicitly staging or production.",
+      "The active immutable release ID is required.",
+      "Production runtime and alert destinations require HTTPS.",
+      "The internal bearer credential must contain at least 32 characters and must never be logged or returned.",
+      "Configuration inspection returns only a redacted snapshot."
+    ],
+    "telemetry_sources": [
+      "PostgreSQL connectivity",
+      "authenticated runtime route probes",
+      "Shopify webhook delivery records",
+      "subscription reconciliation state",
+      "delivery controller runs and window state",
+      "secure My Library access requests",
+      "entitlement and ownership consistency queries",
+      "release-bound end-to-end evidence"
+    ],
+    "route_probe_success_statuses": [
+      "2xx",
+      "3xx",
+      "401",
+      "403",
+      "405"
+    ],
+    "route_probe_failure_statuses": [
+      "404",
+      "5xx",
+      "network error",
+      "timeout"
+    ],
+    "control_rules": [
+      "Runtime controls use authenticated server-to-server POST requests.",
+      "Webhook ingestion cannot be disabled.",
+      "Product publication cannot be enabled through the operations adapter.",
+      "Rollout percentages must remain between zero and one hundred.",
+      "Every applied runtime control produces an auditable receipt outside browser state."
+    ],
+    "alert_rules": [
+      "Alert bodies contain operational incident and signal data only.",
+      "Customer, contract, entitlement, ownership, token, storage, and raw provider payload data is forbidden.",
+      "Only destination and provider-reference hashes may be persisted.",
+      "Missing or failed SEV1 and SEV2 destinations fail the alert operation rather than silently suppressing it.",
+      "All alert destinations require HTTPS."
+    ],
+    "authentication_rules": [
+      "The operations endpoint uses a dedicated server-to-server bearer credential.",
+      "The Admin Portal dashboard uses a separate authenticated MMG operator session.",
+      "The composition root never returns the bearer credential.",
+      "Scheduled evaluation uses the active release ID and automatic containment role."
+    ]
+  },
+  "staging_rehearsal_contract": {
+    "environment": "staging_only",
+    "live_customer_data_allowed": false,
+    "publication_allowed": false,
+    "delivered_ownership_revocation_allowed": false,
+    "parallel_fixture_runs_allowed": false,
+    "required_scenarios": [
+      "database_connectivity_sev1",
+      "webhook_failure_sev2"
+    ],
+    "required_checks": [
+      "BASELINE_RIGHTS_CAPTURED",
+      "SAFE_STATE_PAUSED",
+      "SAFE_STATE_CONTROLS",
+      "SEV1_INCIDENT_OPENED",
+      "SEV1_CONTAINMENT_APPLIED",
+      "SEV1_RECOVERY_REVIEWED",
+      "SEV2_INCIDENT_OPENED",
+      "WEBHOOK_EVIDENCE_PRESERVED",
+      "SEV2_RECOVERY_REVIEWED",
+      "CONSISTENCY_AUDIT_PASSED",
+      "ROLLOUT_INTERNAL_ENTERED",
+      "ROLLOUT_PILOT_ENTERED",
+      "ROLLOUT_LIMITED_ENTERED",
+      "ROLLOUT_EXPANDED_ENTERED",
+      "ROLLOUT_FULL_ENTERED",
+      "CUSTOMER_RIGHTS_PRESERVED"
+    ],
+    "rollout_sequence": [
+      "paused",
+      "internal",
+      "pilot",
+      "limited",
+      "expanded",
+      "full"
+    ],
+    "minimum_observation_hours": {
+      "internal": 24,
+      "pilot": 24,
+      "limited": 48,
+      "expanded": 72,
+      "full": 72
+    },
+    "approval_rules": [
+      "Internal resume from paused does not require a stage approval.",
+      "Pilot, Limited, Expanded, and Full rehearsal transitions require explicit fixture approvals.",
+      "Fixture approvals are valid only inside the isolated staging rehearsal namespace.",
+      "No rehearsal approval authorizes production rollout or Shopify publication."
+    ],
+    "rights_preservation": [
+      "Capture a cryptographic digest of active ownership, active delivery grants, delivered windows, and active entitlements before the drill.",
+      "Capture the same digest after the full rehearsal.",
+      "The rehearsal fails if customer-right counts or the rights digest changes.",
+      "Fixture teardown cannot delete or revoke legitimate customer records."
+    ]
+  },
+  "persistence": {
+    "tables": [
+      "mmg_commerce_adapter_heartbeats",
+      "mmg_commerce_rehearsal_runs",
+      "mmg_commerce_rehearsal_checks",
+      "mmg_commerce_rehearsal_fixture_leases",
+      "mmg_commerce_runtime_control_receipts"
+    ],
+    "rehearsal_run_idempotency_key": "run_id",
+    "check_uniqueness": "run_id + check_code",
+    "fixture_exclusivity": "one active staging fixture lease",
+    "secret_material_allowed": false,
+    "raw_customer_identifiers_allowed": false
+  },
+  "release_gates": [
+    "Migration 010 is applied after migrations 001 through 009.",
+    "The production operations composition root is mounted through the deployed runtime.",
+    "The internal operations, Admin Portal operations, rehearsal, rehearsal-adapter, and runtime-control routes are available.",
+    "The database, route probe, runtime control, alert, scheduler, dispatcher, storage signer, and Admin authentication adapters report healthy heartbeats.",
+    "Alert destinations are configured outside source control and SEV1/SEV2 delivery is verified.",
+    "The staging fixture namespace is isolated from live customers and production Shopify resources.",
+    "The complete SEV1, SEV2, consistency, rights-preservation, and staged-rollout rehearsal passes for the exact release ID.",
+    "The rehearsal evidence is fresh and reviewable before any production release execution.",
+    "Publication remains a separate executive-approved deployment action."
+  ],
+  "integration_sequence": {
+    "previous_component": "Operational monitoring, incident response, and controlled rollout",
+    "current_component": "Production adapter wiring and controlled staging rehearsal",
+    "next_component": "Apply staging migrations, deploy runtime routes, connect secrets and providers, and execute the first real staging rehearsal"
+  }
+}
