@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "1.0.0",
+  "changeSetId": "shopify-temporary-dead-link-redirects-20260720",
+  "state": "prepared-not-approved-not-executed",
+  "observedAt": "2026-07-20",
+  "storeDomain": "themindsetmediagroup.com",
+  "approvalLevel": 3,
+  "requiredScopes": [
+    "read_products",
+    "read_online_store_navigation",
+    "write_online_store_navigation"
+  ],
+  "preconditions": {
+    "abortOnAnyMismatch": true,
+    "target": "/collections/all",
+    "requiredSourceState": "no-live-product-and-no-existing-source-redirect",
+    "paths": [
+      "/products/publish-ready-book-build-service",
+      "/products/listing-optimization-service",
+      "/products/visual-asset-production-service",
+      "/products/research-content-enhancement-service",
+      "/products/the-creators-bible",
+      "/products/ai-prompting-for-beginners"
+    ]
+  },
+  "forward": {
+    "operation": "urlRedirectCreate",
+    "target": "/collections/all",
+    "captureReturnedRedirectGids": true,
+    "allOrRollback": true
+  },
+  "rollback": {
+    "operation": "urlRedirectDelete",
+    "identifierSource": "captured-forward-response",
+    "deleteOnlyCreatedRedirects": true,
+    "requiredVerification": "all-six-source-paths-have-no-redirect"
+  },
+  "retirementRule": {
+    "trigger": "before-creating-a-product-at-a-reserved-handle",
+    "requiredAction": "delete-and-verify-corresponding-temporary-redirect"
+  },
+  "routes": [
+    {
+      "path": "/products/publish-ready-book-build-service",
+      "target": "/collections/all",
+      "referencedFrom": "professional-cover-design-service"
+    },
+    {
+      "path": "/products/listing-optimization-service",
+      "target": "/collections/all",
+      "referencedFrom": "professional-cover-design-service"
+    },
+    {
+      "path": "/products/visual-asset-production-service",
+      "target": "/collections/all",
+      "referencedFrom": "professional-cover-design-service"
+    },
+    {
+      "path": "/products/research-content-enhancement-service",
+      "target": "/collections/all",
+      "referencedFrom": "professional-cover-design-service"
+    },
+    {
+      "path": "/products/the-creators-bible",
+      "target": "/collections/all",
+      "referencedFrom": "ai-image-mastery"
+    },
+    {
+      "path": "/products/ai-prompting-for-beginners",
+      "target": "/collections/all",
+      "referencedFrom": "ai-image-mastery"
+    }
+  ]
+}
