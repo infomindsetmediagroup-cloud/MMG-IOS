@@ -1,0 +1,139 @@
+{
+  "schemaVersion": "1.0.0",
+  "observedAt": "2026-07-20",
+  "store": {
+    "name": "Mindset Media Group",
+    "primaryDomain": "themindsetmediagroup.com",
+    "currency": "USD",
+    "timezone": "PDT",
+    "country": "United States"
+  },
+  "governance": {
+    "sourceOfTruth": {
+      "liveState": "connected-shopify-store",
+      "approvedSourceAndHistory": "github"
+    },
+    "shopifyToolkitValidationRequired": true,
+    "telemetryOptOutDefault": true,
+    "readOnlyInspection": "governed-automatic",
+    "mutations": "explicit-approval-or-approved-workflow",
+    "productionRequirements": [
+      "live-read",
+      "pre-change-snapshot",
+      "validation",
+      "change-record",
+      "rollback-plan",
+      "explicit-approval",
+      "post-change-verification"
+    ]
+  },
+  "liveProducts": [
+    {
+      "archetype": "service",
+      "title": "Professional Cover Design Service™",
+      "handle": "professional-cover-design-service",
+      "productGid": "gid://shopify/Product/9024288620698",
+      "status": "ACTIVE",
+      "vendor": "Mindset Media Group",
+      "productType": null,
+      "inventoryPolicy": "not-tracked",
+      "pageSourceLocation": "shopify-description-html",
+      "onboardingGuide": "MMG Project Guide™ Customer Handbook",
+      "portalRequirement": "customer-portal-required",
+      "purchaseModel": "one-purchase-one-project",
+      "variants": [
+        {
+          "name": "Starter",
+          "variantGid": "gid://shopify/ProductVariant/48658205376666",
+          "price": "97.95",
+          "currency": "USD",
+          "sku": null
+        },
+        {
+          "name": "Growth",
+          "variantGid": "gid://shopify/ProductVariant/48658205409434",
+          "price": "197.95",
+          "currency": "USD",
+          "sku": null
+        },
+        {
+          "name": "Professional",
+          "variantGid": "gid://shopify/ProductVariant/48658205442202",
+          "price": "397.95",
+          "currency": "USD",
+          "sku": null
+        }
+      ]
+    },
+    {
+      "archetype": "digital-download",
+      "title": "AI Image Mastery™",
+      "handle": "ai-image-mastery",
+      "productGid": "gid://shopify/Product/9022950998170",
+      "status": "ACTIVE",
+      "vendor": "Mindset Media Group",
+      "productType": null,
+      "inventoryPolicy": "not-tracked",
+      "pageSourceLocation": "shopify-description-html",
+      "fulfillmentMode": "automatic-digital-delivery",
+      "purchaseModel": "one-time",
+      "variants": [
+        {
+          "name": "Default Title",
+          "variantGid": "gid://shopify/ProductVariant/48655433498778",
+          "price": "9.95",
+          "currency": "USD",
+          "sku": null
+        }
+      ]
+    }
+  ],
+  "liveCollections": [
+    {
+      "title": "Catalog",
+      "handle": "frontpage",
+      "collectionGid": "gid://shopify/Collection/361394503834",
+      "type": "manual",
+      "sortOrder": "BEST_SELLING",
+      "productCount": 2
+    }
+  ],
+  "targetProducts": [
+    {
+      "archetype": "subscription",
+      "state": "approved-not-live",
+      "fulfillmentMode": "recurring-digital-delivery",
+      "onboardingGuide": "MMG Subscription Member Guide",
+      "profileRequirement": "required-before-first-package",
+      "subscriptionVerification": "required-before-delivery",
+      "inventoryPolicy": "not-tracked",
+      "plans": [
+        {
+          "cadence": "monthly",
+          "price": "14.95",
+          "currency": "USD",
+          "digitalAssetsPerCadence": 2
+        },
+        {
+          "cadence": "bi-weekly",
+          "price": "24.95",
+          "currency": "USD",
+          "digitalAssetsPerCadence": 4
+        },
+        {
+          "cadence": "weekly",
+          "price": "39.95",
+          "currency": "USD",
+          "digitalAssetsPerCadence": 8
+        }
+      ]
+    }
+  ],
+  "openGaps": [
+    "live-product-type-fields-blank",
+    "live-variant-skus-missing",
+    "executable-page-source-stored-in-description-html",
+    "internal-links-reference-non-live-catalog-items",
+    "subscription-product-not-created"
+  ]
+}
