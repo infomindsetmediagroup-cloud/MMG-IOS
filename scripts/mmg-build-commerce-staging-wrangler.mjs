@@ -36,6 +36,14 @@ if (!/^[a-f0-9-]{32,64}$/i.test(hyperdriveId)) {
   throw new Error("MMG_STAGING_WRANGLER_HYPERDRIVE_ID_INVALID");
 }
 
+const upstreamService = optional("MMG_CLOUDFLARE_STAGING_UPSTREAM_SERVICE");
+if (
+  upstreamService &&
+  !/^[a-z0-9][a-z0-9-]{1,62}-staging$/i.test(upstreamService)
+) {
+  throw new Error("MMG_STAGING_WRANGLER_UPSTREAM_SERVICE_INVALID");
+}
+
 const timeout = Number(optional("MMG_COMMERCE_REQUEST_TIMEOUT_MS", "8000"));
 if (!Number.isInteger(timeout) || timeout < 1000 || timeout > 30000) {
   throw new Error("MMG_STAGING_WRANGLER_TIMEOUT_INVALID");
@@ -101,6 +109,16 @@ const config = {
       id: hyperdriveId,
     },
   ],
+  ...(upstreamService
+    ? {
+        services: [
+          {
+            binding: "MMG_COMMERCE_UPSTREAM",
+            service: upstreamService,
+          },
+        ],
+      }
+    : {}),
   vars: {
     MMG_COMMERCE_ENVIRONMENT: "staging",
     MMG_COMMERCE_RELEASE_ID: releaseId,
@@ -148,6 +166,8 @@ await writeFile(
       releaseCommitSha,
       runtimeOrigin: config.vars.MMG_COMMERCE_RUNTIME_ORIGIN,
       hyperdriveConfigured: true,
+      upstreamServiceConfigured: Boolean(upstreamService),
+      upstreamServiceName: upstreamService || null,
       secretNames,
       providerHealthEndpointsConfigured: Object.fromEntries(
         Object.entries(providerEndpoints).map(([name, value]) => [
@@ -173,6 +193,7 @@ console.log(
     workerName: config.name,
     releaseId,
     releaseCommitSha,
+    upstreamServiceConfigured: Boolean(upstreamService),
     secretCount: secretNames.length,
     publicationAllowed: false,
     liveCustomerDataAllowed: false,
