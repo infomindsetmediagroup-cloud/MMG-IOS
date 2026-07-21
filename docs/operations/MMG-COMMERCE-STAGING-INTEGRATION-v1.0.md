@@ -51,14 +51,14 @@ The safe staging baseline is:
 
 | Control | Mode |
 |---|---|
-| Product publication | Observe only |
+| Product publication | Disabled |
 | Subscription checkout | Disabled |
 | Webhook ingestion | Enabled |
 | Delivery scheduler | Disabled |
 | Delivery dispatcher | Disabled |
 | Recommendation automation | Observe only |
 | Signed library access | Disabled |
-| Thank-you handoff | Disabled |
+| Thank-you handoff | Observe only |
 | Rollout | Paused, 0% |
 
 Webhook evidence ingestion cannot be disabled. Product publication cannot be enabled through this control plane.
@@ -82,8 +82,9 @@ The staging integration endpoint supports `inspect`, `bootstrap`, and `verify`. 
 - eight exact-release healthy adapter heartbeats;
 - exact safe controls;
 - Paused 0% rollout for the exact release;
-- no publication or live-customer capability; and
-- complete release-bound rehearsal evidence when required by the deployment gate.
+- complete release-bound rehearsal evidence;
+- no publication capability; and
+- no live-customer capability.
 
 ## Workflow
 
