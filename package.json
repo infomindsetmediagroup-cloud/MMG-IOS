@@ -11,12 +11,17 @@
     "test": "vitest run",
     "validate:shopify": "node scripts/validate-shopify-governance.mjs",
     "validate:service-product": "node shopify/products/professional-cover-design-service/validate.mjs",
+    "validate:commerce-staging-host": "vitest run backend-tests/mmg-cloudflare-staging-host.test.ts",
     "check": "npm run typecheck && npm test && npm run validate:shopify && npm run validate:service-product",
     "cf:dev": "wrangler dev",
     "cf:deploy": "wrangler deploy"
   },
+  "dependencies": {
+    "pg": "^8.22.0"
+  },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "@types/pg": "^8.20.0",
     "typescript": "^5.8.0",
     "vitest": "^3.2.0",
     "wrangler": "^4.24.3"
