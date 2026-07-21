@@ -43,7 +43,7 @@ const snapshot = (): MMGStagingIntegrationSnapshot => ({
     stage: "paused",
     cohortPercentage: 0,
   },
-  rehearsalEvidencePassed: false,
+  rehearsalEvidencePassed: true,
   publicationAllowed: false,
   liveCustomerDataAllowed: false,
   inspectedAt: "2026-07-21T20:00:00.000Z",
@@ -68,7 +68,9 @@ class MemoryIntegrationRepository implements MMGStagingIntegrationRepository {
   }
 }
 
-const command = (action: MMGStagingIntegrationCommand["action"]): MMGStagingIntegrationCommand => ({
+const command = (
+  action: MMGStagingIntegrationCommand["action"],
+): MMGStagingIntegrationCommand => ({
   requestId: `request-staging-${action}`,
   integrationRunId: "integration-run-20260721-001",
   releaseId: "release-staging-20260721-001",
@@ -81,7 +83,7 @@ describe("MMG staging integration", () => {
     expect(stagingIntegrationBlockers(snapshot())).toEqual([]);
   });
 
-  it("fails closed for a missing migration, unsafe control, and release-mismatched heartbeat", () => {
+  it("fails closed for a missing migration, unsafe control, release-mismatched heartbeat, and missing rehearsal evidence", () => {
     const value = snapshot();
     value.migrationIds = value.migrationIds.slice(0, -1);
     value.controls.subscription_checkout = "enabled";
@@ -89,6 +91,7 @@ describe("MMG staging integration", () => {
       ...value.heartbeats[0],
       releaseId: "another-release-20260721-001",
     };
+    value.rehearsalEvidencePassed = false;
     expect(stagingIntegrationBlockers(value)).toContain(
       "MISSING_MIGRATION:20260721_011_mmg_staging_integration_execution",
     );
@@ -97,6 +100,9 @@ describe("MMG staging integration", () => {
     );
     expect(stagingIntegrationBlockers(value)).toContain(
       "ADAPTER_RELEASE_MISMATCH:database",
+    );
+    expect(stagingIntegrationBlockers(value)).toContain(
+      "STAGING_REHEARSAL_EVIDENCE_REQUIRED",
     );
   });
 
@@ -125,7 +131,9 @@ describe("MMG staging integration", () => {
     expect(bootstrapped).toBe(true);
     expect(result.status).toBe(200);
     expect(repository.completed).toEqual(["planned"]);
-    expect((result.body.snapshot as MMGStagingIntegrationSnapshot).publicationAllowed).toBe(false);
+    expect(
+      (result.body.snapshot as MMGStagingIntegrationSnapshot).publicationAllowed,
+    ).toBe(false);
   });
 
   it("blocks verification when required staging evidence is absent", async () => {
@@ -143,7 +151,7 @@ describe("MMG staging integration", () => {
             async bootstrapSafeState() {},
             async inspect() {
               const value = snapshot();
-              value.routeProbe = { successes: 16, total: 17 };
+              value.rehearsalEvidencePassed = false;
               return value;
             },
           },
@@ -187,7 +195,11 @@ describe("MMG staging integration", () => {
         if (text.includes("mmg_staging_runtime_controls")) {
           return {
             rows: [
-              { control_code: "subscription_checkout", mode: "enabled", version: 1 },
+              {
+                control_code: "subscription_checkout",
+                mode: "enabled",
+                version: 1,
+              },
             ] as unknown as Row[],
             rowCount: 1,
           };
