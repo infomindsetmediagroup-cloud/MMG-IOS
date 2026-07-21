@@ -6,9 +6,8 @@ import {
   type MMGCommerceOperationsDashboardAuthenticator,
 } from "./commerce-operations-dashboard-http.js";
 import { handleMMGCommerceOperationsRequest } from "./commerce-operations-http.js";
-import type {
-  MMGCommerceOperationsPrincipal,
-} from "./commerce-operations-service.js";
+import type { MMGCommerceOperationsPrincipal } from "./commerce-operations-service.js";
+import { MMGPostgresRolloutEvidenceAdapter } from "./commerce-rollout-evidence.js";
 import {
   MMGHTTPCommerceControlAdapter,
   MMGPostgresCommerceRuntimeControlReceiptStore,
@@ -17,15 +16,20 @@ import { MMGHTTPCommerceRouteProbe } from "./http-commerce-route-probe.js";
 import { MMGHTTPCommerceStagingRehearsalGateway } from "./http-commerce-staging-rehearsal-gateway.js";
 import { MMGPostgresCommerceOperationsRepository } from "./postgres-commerce-operations-repository.js";
 import { MMGPostgresCommerceProductionTelemetry } from "./postgres-commerce-production-telemetry.js";
+import { MMGPostgresCommerceRehearsalEvidenceAdapter } from "./postgres-commerce-rehearsal-evidence.js";
 import { MMGPostgresCommerceRehearsalRepository } from "./postgres-commerce-rehearsal-repository.js";
 import { MMGPostgresCommerceStagingFixtureExecutor } from "./postgres-commerce-staging-fixture-executor.js";
-import { MMGPostgresRolloutEvidenceAdapter } from "./commerce-rollout-evidence.js";
+import { MMGPostgresStagingIntegrationGateway } from "./postgres-staging-integration-gateway.js";
+import {
+  MMGPostgresStagingIntegrationRepository,
+  recordMMGStagingAdapterHeartbeat,
+} from "./postgres-staging-integration-repository.js";
+import { MMGPostgresStagingRuntimeControlBoundary } from "./postgres-staging-runtime-control-boundary.js";
 import {
   routeMMGProductionOperationsRequest,
   type MMGProductionOperationsRuntimeHandlers,
 } from "./production-operations-router.js";
 import type { MMGCommerceProductionAdapterConfig } from "./production-adapter-config.js";
-import { MMGPostgresStagingRuntimeControlBoundary } from "./postgres-staging-runtime-control-boundary.js";
 import {
   MMGPostgresCommerceAlertDeliveryStore,
   MMGWebhookCommerceAlertAdapter,
@@ -37,6 +41,7 @@ export interface MMGStagingIntegrationTokens {
   rehearsal: string;
   rehearsalAdapter: string;
   runtimeControl: string;
+  integration: string;
 }
 
 export interface MMGStagingIntegrationRuntimeDependencies {
@@ -112,7 +117,9 @@ export const buildMMGStagingIntegrationRuntime = (
     dependencies.config.runtimeOrigin,
     ...(dependencies.allowedOrigins ?? []),
   ]);
-  const repository = new MMGPostgresCommerceOperationsRepository(dependencies.database);
+  const repository = new MMGPostgresCommerceOperationsRepository(
+    dependencies.database,
+  );
   const routeProbe = new MMGHTTPCommerceRouteProbe({
     runtimeOrigin: dependencies.config.runtimeOrigin,
     internalToken: dependencies.tokens.operations,
@@ -208,6 +215,11 @@ export const buildMMGStagingIntegrationRuntime = (
     actorId: "staging-runtime-control",
     roles: ["mmg-runtime-control"],
   });
+  const integrationAuthenticator = new TokenAuthenticator({
+    token: dependencies.tokens.integration,
+    actorId: "staging-commerce-integrator",
+    roles: ["mmg-commerce-staging-integrator"],
+  });
   const runtime: MMGProductionOperationsRuntimeHandlers = {
     handleOperations(request: Request): Promise<Response> {
       return handleMMGCommerceOperationsRequest(request, {
@@ -224,6 +236,21 @@ export const buildMMGStagingIntegrationRuntime = (
       });
     },
   };
+  const bootstrapSafeState = async (): Promise<void> => {
+    const principal: MMGCommerceOperationsPrincipal = {
+      actorId: "staging-commerce-bootstrap",
+      sessionId: "internal:staging-commerce-bootstrap",
+      roles: ["mmg-commerce-operator", "mmg-commerce-monitor"],
+    };
+    await bootstrapMMGCommerceOperations({
+      environment: "staging",
+      releaseId: dependencies.config.releaseId,
+      principal,
+      repository,
+      controls,
+      occurredAt: now(),
+    });
+  };
   const fixtureExecutor = new MMGPostgresCommerceStagingFixtureExecutor({
     database: dependencies.database,
     operations: common,
@@ -231,11 +258,22 @@ export const buildMMGStagingIntegrationRuntime = (
   const rehearsalRepository = new MMGPostgresCommerceRehearsalRepository(
     dependencies.database,
   );
+  const rehearsalEvidence = new MMGPostgresCommerceRehearsalEvidenceAdapter(
+    dependencies.database,
+  );
   const rehearsalGateway = new MMGHTTPCommerceStagingRehearsalGateway({
     runtimeOrigin: dependencies.config.runtimeOrigin,
     internalToken: dependencies.tokens.rehearsalAdapter,
     requestTimeoutMs: dependencies.config.requestTimeoutMs,
     fetcher,
+  });
+  const stagingIntegrationRepository =
+    new MMGPostgresStagingIntegrationRepository(dependencies.database);
+  const stagingIntegrationGateway = new MMGPostgresStagingIntegrationGateway({
+    database: dependencies.database,
+    routeProbe,
+    runtime: { bootstrapSafeState },
+    rehearsal: rehearsalEvidence,
   });
 
   return {
@@ -256,26 +294,21 @@ export const buildMMGStagingIntegrationRuntime = (
         },
         runtimeControl: {
           authenticator: runtimeControlAuthenticator,
-          boundary: new MMGPostgresStagingRuntimeControlBoundary(dependencies.database),
+          boundary: new MMGPostgresStagingRuntimeControlBoundary(
+            dependencies.database,
+          ),
           allowedOrigins,
+        },
+        stagingIntegration: {
+          authenticator: integrationAuthenticator,
+          repository: stagingIntegrationRepository,
+          gateway: stagingIntegrationGateway,
+          allowedOrigins,
+          now,
         },
       });
     },
-    async bootstrapSafeState(): Promise<void> {
-      const principal: MMGCommerceOperationsPrincipal = {
-        actorId: "staging-commerce-bootstrap",
-        sessionId: "internal:staging-commerce-bootstrap",
-        roles: ["mmg-commerce-operator", "mmg-commerce-monitor"],
-      };
-      await bootstrapMMGCommerceOperations({
-        environment: "staging",
-        releaseId: dependencies.config.releaseId,
-        principal,
-        repository,
-        controls,
-        occurredAt: now(),
-      });
-    },
+    bootstrapSafeState,
     async runScheduledEvaluation(requestId: string): Promise<Response> {
       return runtime.handleOperations(
         new Request(
@@ -298,6 +331,19 @@ export const buildMMGStagingIntegrationRuntime = (
           },
         ),
       );
+    },
+    async recordAdapterHeartbeat(input: {
+      adapterCode: string;
+      status: "healthy" | "degraded" | "unavailable" | "unknown";
+      details?: Record<string, unknown>;
+    }): Promise<void> {
+      await recordMMGStagingAdapterHeartbeat(dependencies.database, {
+        adapterCode: input.adapterCode,
+        releaseId: dependencies.config.releaseId,
+        status: input.status,
+        details: input.details,
+        observedAt: now(),
+      });
     },
   };
 };
