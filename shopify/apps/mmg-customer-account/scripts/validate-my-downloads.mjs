@@ -28,17 +28,20 @@ const extension = read('extensions/mmg-my-downloads/shopify.extension.toml');
 const ui = read('extensions/mmg-my-downloads/src/MyDownloads.tsx');
 const library = read('extensions/mmg-my-downloads/src/library.mjs');
 const contract = JSON.parse(read('contract.json'));
+const extensionUid = 'c2a4f88e-ecb7-4d3e-94c8-21fa813d9e11';
 
 assert(app.includes('api_version = "2026-07"'), 'App API version must be 2026-07');
 assert(app.includes('customer_read_customers'), 'Missing customer_read_customers scope');
 assert(app.includes('customer_read_orders'), 'Missing customer_read_orders scope');
 assert(extension.includes('target = "customer-account.page.render"'), 'Full-page customer account target missing');
 assert(extension.includes('handle = "mmg-my-downloads"'), 'Extension handle mismatch');
+assert(extension.includes(`uid = "${extensionUid}"`), 'Stable extension UID missing');
 assert(extension.includes('api_access = true'), 'Customer Account API access must be enabled');
 assert(!extension.includes('network_access'), 'External network access is not permitted for this extension');
 assert(ui.includes('shopify://customer-account/api/${API_VERSION}/graphql.json'), 'Customer Account API endpoint missing');
 assert(ui.includes('statusPageUrl'), 'Secure order status entitlement URL missing');
 assert(ui.includes('lineItems(first: 250)'), 'Cross-order line item query missing');
+assert(ui.includes('sortKey: PROCESSED_AT'), 'Deterministic order sorting missing');
 assert(ui.includes("shopify:customer-account/orders"), 'Native orders navigation missing');
 assert(library.includes("sku.startsWith('MMG-DIG-')"), 'MMG digital SKU gate missing');
 assert(library.includes("productType === 'digital download'"), 'Digital Download product-type gate missing');
@@ -48,6 +51,7 @@ assert(!/cdn\.shopify\.com\/s\/files\/.+\.(pdf|zip|epub)/i.test(ui + library), '
 assert(!/admin\/api|X-Shopify-Access-Token|SHOPIFY_ADMIN_ACCESS_TOKEN/.test(ui), 'Client source contains prohibited Admin API credentials');
 assert(contract.changeSetId === 'shopify-customer-account-my-downloads-library-20260721', 'Contract change-set mismatch');
 assert(contract.state === 'source-complete-shopify-app-link-and-deploy-required', 'Contract state mismatch');
+assert(contract.extension?.uid === extensionUid, 'Contract extension UID mismatch');
 assert(contract.security?.fileUrlsStored === false, 'File URLs must not be stored');
 assert(contract.security?.entitlementSource === 'shopify-paid-order-history', 'Entitlement source mismatch');
 
