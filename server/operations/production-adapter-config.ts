@@ -30,7 +30,10 @@ const identifier = (value: string | undefined, code: string): string => {
   return normalized;
 };
 
-const origin = (value: string | undefined, environment: MMGCommerceOperationsEnvironment): string => {
+const origin = (
+  value: string | undefined,
+  environment: MMGCommerceOperationsEnvironment,
+): string => {
   const normalized = String(value ?? "").trim();
   let parsed: URL;
   try {
@@ -56,6 +59,7 @@ const paths = (value: string | undefined): string[] => {
     "/api/internal/commerce/deployment",
     "/api/internal/commerce/operations",
     "/api/admin/commerce/operations",
+    "/api/internal/commerce/staging-integration",
     "/api/internal/commerce/rehearsal",
     "/api/internal/commerce/rehearsal/adapter",
     "/api/internal/runtime-controls/control",
@@ -113,15 +117,21 @@ const alertDestinations = (
 export const parseMMGCommerceProductionAdapterConfig = (
   environmentValues: MMGCommerceProductionAdapterEnvironment,
 ): MMGCommerceProductionAdapterConfig => {
-  const environment = String(environmentValues.MMG_COMMERCE_ENVIRONMENT ?? "").trim();
+  const environment = String(
+    environmentValues.MMG_COMMERCE_ENVIRONMENT ?? "",
+  ).trim();
   if (environment !== "staging" && environment !== "production") {
     throw new Error("MMG_PRODUCTION_ENVIRONMENT_INVALID");
   }
-  const timeout = Number(environmentValues.MMG_COMMERCE_REQUEST_TIMEOUT_MS ?? "8000");
+  const timeout = Number(
+    environmentValues.MMG_COMMERCE_REQUEST_TIMEOUT_MS ?? "8000",
+  );
   if (!Number.isInteger(timeout) || timeout < 1000 || timeout > 30000) {
     throw new Error("MMG_PRODUCTION_REQUEST_TIMEOUT_INVALID");
   }
-  const internalToken = String(environmentValues.MMG_COMMERCE_INTERNAL_TOKEN ?? "").trim();
+  const internalToken = String(
+    environmentValues.MMG_COMMERCE_INTERNAL_TOKEN ?? "",
+  ).trim();
   if (internalToken.length < 32) throw new Error("MMG_PRODUCTION_INTERNAL_TOKEN_INVALID");
   return {
     schemaVersion: MMG_PRODUCTION_ADAPTER_VERSION,
@@ -130,7 +140,10 @@ export const parseMMGCommerceProductionAdapterConfig = (
       environmentValues.MMG_COMMERCE_RELEASE_ID,
       "MMG_PRODUCTION_RELEASE_ID_INVALID",
     ),
-    runtimeOrigin: origin(environmentValues.MMG_COMMERCE_RUNTIME_ORIGIN, environment),
+    runtimeOrigin: origin(
+      environmentValues.MMG_COMMERCE_RUNTIME_ORIGIN,
+      environment,
+    ),
     internalToken,
     requestTimeoutMs: timeout,
     routeProbePaths: paths(environmentValues.MMG_COMMERCE_ROUTE_PROBE_PATHS),

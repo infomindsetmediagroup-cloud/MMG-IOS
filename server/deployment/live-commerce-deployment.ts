@@ -1,6 +1,6 @@
 import type { MMGSubscriptionPlanCode } from "../knowledge-library/entitlements.js";
 
-export const MMG_COMMERCE_DEPLOYMENT_VERSION = "1.1.0" as const;
+export const MMG_COMMERCE_DEPLOYMENT_VERSION = "1.2.0" as const;
 export const MMG_SHOPIFY_API_VERSION = "2026-07" as const;
 
 export type MMGCommerceDeploymentEnvironment = "staging" | "production";
@@ -127,6 +127,7 @@ export const MMG_REQUIRED_MIGRATIONS = Object.freeze([
   "20260720_008_mmg_commerce_operations_control",
   "20260720_009_mmg_commerce_operations_integrity",
   "20260721_010_mmg_production_adapters_staging_rehearsal",
+  "20260721_011_mmg_staging_integration_execution",
 ]);
 
 export const MMG_REQUIRED_RUNTIME_ENDPOINTS = Object.freeze([
@@ -142,6 +143,7 @@ export const MMG_REQUIRED_RUNTIME_ENDPOINTS = Object.freeze([
   "/api/internal/commerce/deployment",
   "/api/internal/commerce/operations",
   "/api/admin/commerce/operations",
+  "/api/internal/commerce/staging-integration",
   "/api/internal/commerce/rehearsal",
   "/api/internal/commerce/rehearsal/adapter",
   "/api/internal/runtime-controls/control",
@@ -265,14 +267,14 @@ export const buildMMGCommerceDeploymentPlan = (input: {
     step(
       "database_migrations",
       migrationBlockers.length === 0,
-      "Commerce migrations 001 through 010 are applied in order.",
+      "Commerce migrations 001 through 011 are applied in order.",
       migrationBlockers.map((migration) => `MISSING_MIGRATION:${migration}`),
       { destructive: true, requiresApproval: input.environment === "production" },
     ),
     step(
       "runtime_routes",
       routeBlockers.length === 0,
-      "All private, webhook, Customer Portal, deployment, operations, rehearsal, and runtime-control routes are available through the deployed Kairos runtime.",
+      "All private, webhook, Customer Portal, deployment, operations, staging-integration, rehearsal, and runtime-control routes are available through the deployed Kairos runtime.",
       routeBlockers.map((route) => `MISSING_ROUTE:${route}`),
     ),
     step(

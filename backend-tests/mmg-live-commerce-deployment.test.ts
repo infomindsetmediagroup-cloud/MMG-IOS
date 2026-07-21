@@ -61,6 +61,7 @@ describe("MMG live commerce deployment", () => {
     });
     expect(plan.blockers).toEqual([]);
     expect(plan.publishIncluded).toBe(false);
+    expect(plan.schemaVersion).toBe("1.2.0");
     expect(plan.steps.find((step) => step.phase === "publication")?.status).toBe(
       "not_applicable",
     );
@@ -113,10 +114,10 @@ describe("MMG live commerce deployment", () => {
     });
     expect(plan.blockers).toContain("MISSING_SCOPE:write_products");
     expect(plan.blockers).toContain(
-      "MISSING_MIGRATION:20260721_010_mmg_production_adapters_staging_rehearsal",
+      "MISSING_MIGRATION:20260721_011_mmg_staging_integration_execution",
     );
     expect(plan.blockers).toContain(
-      "MISSING_ROUTE:/api/internal/commerce/deployment",
+      "MISSING_ROUTE:/api/internal/commerce/staging-integration",
     );
     expect(plan.blockers).toContain("INSUFFICIENT_VERIFIED_SELECTABLE_ASSETS");
     expect(plan.blockers).toContain("DELIVERY_SCHEDULER_INACTIVE");

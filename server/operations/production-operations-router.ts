@@ -4,6 +4,8 @@ import type { MMGCommerceStagingRehearsalAdapterHTTPDependencies } from "./comme
 import { handleMMGCommerceStagingRehearsalAdapterRequest } from "./commerce-staging-rehearsal-adapter-http.js";
 import type { MMGRuntimeControlHTTPDependencies } from "./runtime-control-http.js";
 import { handleMMGRuntimeControlRequest } from "./runtime-control-http.js";
+import type { MMGStagingIntegrationHTTPDependencies } from "./staging-integration-http.js";
+import { handleMMGStagingIntegrationRequest } from "./staging-integration-http.js";
 
 export interface MMGProductionOperationsRuntimeHandlers {
   handleOperations(request: Request): Promise<Response>;
@@ -15,6 +17,7 @@ export interface MMGProductionOperationsRouterDependencies {
   rehearsal: MMGCommerceStagingRehearsalHTTPDependencies;
   rehearsalAdapter: MMGCommerceStagingRehearsalAdapterHTTPDependencies;
   runtimeControl: MMGRuntimeControlHTTPDependencies;
+  stagingIntegration?: MMGStagingIntegrationHTTPDependencies;
 }
 
 export const MMG_PRODUCTION_OPERATIONS_ROUTE_MANIFEST = Object.freeze({
@@ -22,6 +25,7 @@ export const MMG_PRODUCTION_OPERATIONS_ROUTE_MANIFEST = Object.freeze({
   dashboard: "/api/admin/commerce/operations",
   rehearsal: "/api/internal/commerce/rehearsal",
   rehearsalAdapter: "/api/internal/commerce/rehearsal/adapter",
+  stagingIntegration: "/api/internal/commerce/staging-integration",
   control: "/api/internal/runtime-controls/control",
   rollout: "/api/internal/runtime-controls/rollout",
 });
@@ -44,6 +48,29 @@ export const routeMMGProductionOperationsRequest = async (
     return handleMMGCommerceStagingRehearsalAdapterRequest(
       request,
       dependencies.rehearsalAdapter,
+    );
+  }
+  if (pathname === MMG_PRODUCTION_OPERATIONS_ROUTE_MANIFEST.stagingIntegration) {
+    if (!dependencies.stagingIntegration) {
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          status: "disabled",
+          error: { code: "MMG_STAGING_INTEGRATION_STAGING_ONLY" },
+        }),
+        {
+          status: 405,
+          headers: {
+            "Content-Type": "application/json; charset=utf-8",
+            "Cache-Control": "no-store, private, max-age=0",
+            Allow: "HEAD",
+          },
+        },
+      );
+    }
+    return handleMMGStagingIntegrationRequest(
+      request,
+      dependencies.stagingIntegration,
     );
   }
   if (
