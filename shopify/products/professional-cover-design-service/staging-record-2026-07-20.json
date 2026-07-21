@@ -1,0 +1,237 @@
+{
+  "schemaVersion": "1.0.0",
+  "recordId": "shopify-canonical-service-product-staging-20260720",
+  "sourceChangeSetId": "shopify-canonical-service-product-source-20260721",
+  "state": "staged-static-and-server-verified-render-qa-pending",
+  "storeDomain": "themindsetmediagroup.com",
+  "stagedAt": "2026-07-21T01:21:57Z",
+  "lastVerifiedAt": "2026-07-21T01:33:16Z",
+  "productionAuthorization": {
+    "granted": false,
+    "required": true,
+    "mustNameChangeSetId": true,
+    "changeSetId": "shopify-canonical-service-product-source-20260721"
+  },
+  "productionState": {
+    "productMutated": false,
+    "productTemplateSuffix": null,
+    "descriptionHtmlReplaced": false,
+    "mainThemePublishedOrReplaced": false,
+    "priceChanged": false,
+    "skuChanged": false,
+    "inventoryChanged": false,
+    "shippingChanged": false,
+    "publicationChanged": false,
+    "redirectChanged": false
+  },
+  "themes": {
+    "main": {
+      "id": "gid://shopify/OnlineStoreTheme/155242856602",
+      "name": "Kairos Staging",
+      "role": "MAIN",
+      "prefix": "/t/10",
+      "processing": false,
+      "processingFailed": false,
+      "observedUpdatedAt": "2026-07-21T01:33:16Z",
+      "writtenByThisChangeSet": false
+    },
+    "staging": {
+      "id": "gid://shopify/OnlineStoreTheme/155335557274",
+      "name": "MMG Service Staging 2026-07-20",
+      "role": "UNPUBLISHED",
+      "prefix": "/t/16",
+      "processing": false,
+      "processingFailed": false,
+      "observedUpdatedAt": "2026-07-21T01:30:58Z",
+      "duplicatedFromThemeId": "gid://shopify/OnlineStoreTheme/155242856602"
+    }
+  },
+  "preview": {
+    "path": "/t/16/products/professional-cover-design-service?view=mmg-professional-cover-design",
+    "templateSuffix": "mmg-professional-cover-design",
+    "browserRenderedQa": "pending",
+    "pendingReason": "available browser and download tools rejected the authenticated unpublished-theme route at their URL safety gate before retrieval",
+    "routeFailureObserved": false
+  },
+  "preflight": {
+    "productId": "gid://shopify/Product/9024288620698",
+    "handle": "professional-cover-design-service",
+    "previousContractUpdatedAt": "2026-07-21T00:26:42Z",
+    "reconciledUpdatedAt": "2026-07-21T00:56:35Z",
+    "timestampMismatchReconciled": true,
+    "reconciliation": {
+      "productIdentityUnchanged": true,
+      "seoUnchanged": true,
+      "pricesUnchanged": true,
+      "skusUnchanged": true,
+      "optionsUnchanged": true,
+      "publicationUnchanged": true,
+      "collectionMembershipUnchanged": true,
+      "inventoryUnchanged": true,
+      "shippingUnchanged": true,
+      "mediaIdsAndDimensionsUnchanged": true,
+      "observedMetadataChanges": [
+        {
+          "mediaId": "gid://shopify/MediaImage/37559744790682",
+          "filename": "starter.png",
+          "change": "descriptive alt text and CDN filename"
+        },
+        {
+          "mediaId": "gid://shopify/MediaImage/37559748755610",
+          "filename": "growth.png",
+          "change": "descriptive alt text and CDN filename"
+        },
+        {
+          "mediaId": "gid://shopify/MediaImage/37559753310362",
+          "filename": "professional.png",
+          "change": "descriptive alt text and CDN filename"
+        }
+      ]
+    }
+  },
+  "stagedFiles": [
+    {
+      "filename": "assets/mmg-professional-cover-design.css",
+      "contentType": "text/css",
+      "checksumMd5": "19a0676ec927c3e649db64a6e11a9c98",
+      "size": 11943,
+      "updatedAt": "2026-07-21T01:29:34Z"
+    },
+    {
+      "filename": "assets/mmg-professional-cover-design.js",
+      "contentType": "application/javascript",
+      "checksumMd5": "db464655bddaf9a73906e49df8762a66",
+      "size": 6549,
+      "updatedAt": "2026-07-21T01:21:57Z"
+    },
+    {
+      "filename": "sections/mmg-professional-cover-design.liquid",
+      "contentType": "application/x-liquid",
+      "checksumMd5": "f5090c30a9e202c056cf8c3a40b690ff",
+      "size": 13480,
+      "updatedAt": "2026-07-21T01:30:58Z"
+    },
+    {
+      "filename": "templates/product.mmg-professional-cover-design.json",
+      "contentType": "application/json",
+      "checksumMd5": "d8804eeb80b0f2aa7a1eb1c373841b21",
+      "size": 140,
+      "updatedAt": "2026-07-21T01:21:57Z"
+    }
+  ],
+  "productVerification": {
+    "id": "gid://shopify/Product/9024288620698",
+    "title": "Professional Cover Design Service™",
+    "handle": "professional-cover-design-service",
+    "status": "ACTIVE",
+    "productType": "Publishing Service",
+    "templateSuffix": null,
+    "updatedAt": "2026-07-21T00:56:35Z",
+    "descriptionHtmlStillLegacySource": true,
+    "variants": [
+      {
+        "name": "Starter",
+        "id": "gid://shopify/ProductVariant/48658205376666",
+        "legacyResourceId": "48658205376666",
+        "sku": "MMG-SVC-PCD-STA",
+        "price": "97.95",
+        "availableForSale": true,
+        "tracked": false,
+        "requiresShipping": false,
+        "requiresComponents": false
+      },
+      {
+        "name": "Growth",
+        "id": "gid://shopify/ProductVariant/48658205409434",
+        "legacyResourceId": "48658205409434",
+        "sku": "MMG-SVC-PCD-GRO",
+        "price": "197.95",
+        "availableForSale": true,
+        "tracked": false,
+        "requiresShipping": false,
+        "requiresComponents": false
+      },
+      {
+        "name": "Professional",
+        "id": "gid://shopify/ProductVariant/48658205442202",
+        "legacyResourceId": "48658205442202",
+        "sku": "MMG-SVC-PCD-PRO",
+        "price": "397.95",
+        "availableForSale": true,
+        "tracked": false,
+        "requiresShipping": false,
+        "requiresComponents": false
+      }
+    ]
+  },
+  "routeVerification": {
+    "pages": [
+      {
+        "id": "gid://shopify/Page/127626608794",
+        "handle": "customer-portal",
+        "published": true
+      },
+      {
+        "id": "gid://shopify/Page/127629197466",
+        "handle": "customer-service",
+        "published": true
+      }
+    ],
+    "temporaryRedirects": [
+      {
+        "id": "gid://shopify/UrlRedirect/444925313178",
+        "path": "/products/publish-ready-book-build-service",
+        "target": "/collections/all"
+      },
+      {
+        "id": "gid://shopify/UrlRedirect/444925345946",
+        "path": "/products/listing-optimization-service",
+        "target": "/collections/all"
+      },
+      {
+        "id": "gid://shopify/UrlRedirect/444925378714",
+        "path": "/products/visual-asset-production-service",
+        "target": "/collections/all"
+      },
+      {
+        "id": "gid://shopify/UrlRedirect/444925411482",
+        "path": "/products/research-content-enhancement-service",
+        "target": "/collections/all"
+      }
+    ]
+  },
+  "qa": {
+    "graphqlSchemaValidation": "passed",
+    "themeDuplication": "passed",
+    "themeProcessing": "passed",
+    "themeFileWrites": "passed-zero-user-errors",
+    "themeFileReadback": "passed-zero-user-errors",
+    "staticHeadingAndSectionContract": "passed",
+    "rootScopedCss": "passed-after-staging-hardening",
+    "portraitContainment": "passed-static",
+    "responsiveBreakpoints": "passed-static",
+    "reducedMotion": "passed-static",
+    "liquidFeaturedImageFallback": "passed-static",
+    "liveVariantMapping": "passed-server",
+    "customerClickOnlyCartMutation": "passed-static",
+    "unresolvedVariantSubmissionBlocked": "passed-static",
+    "canonicalPortalRoutes": "passed-server",
+    "reservedRedirectIntegrity": "passed-server",
+    "productionUnchanged": "passed-server",
+    "renderedResponsiveOverflow": "pending-browser-retrieval",
+    "renderedHeaderFooter": "pending-browser-retrieval",
+    "renderedKeyboardAndFocus": "pending-browser-retrieval",
+    "renderedCartNetworkRequest": "pending-browser-retrieval"
+  },
+  "rollback": {
+    "stagingOnly": true,
+    "deleteOnlyTheseFiles": [
+      "assets/mmg-professional-cover-design.css",
+      "assets/mmg-professional-cover-design.js",
+      "sections/mmg-professional-cover-design.liquid",
+      "templates/product.mmg-professional-cover-design.json"
+    ],
+    "deleteStagingThemePermittedAfterEvidenceRetention": true,
+    "productionRollbackRequiredAtThisStage": false
+  }
+}
