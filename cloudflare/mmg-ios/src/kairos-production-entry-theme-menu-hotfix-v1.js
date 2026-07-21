@@ -23,7 +23,7 @@ import { handleKairosMcp, KAIROS_MCP_BUILD } from "./kairos-mcp-server-v1.js";
 import { handleKairosCommerceOrchestrator, KAIROS_COMMERCE_ORCHESTRATOR_BUILD } from "./kairos-commerce-orchestrator-v1.js";
 
 // Canonical source remains kairos-native-navigation-theme-publisher-v9.js.
-const BUILD = "kairos-production-entry-canonical-navigation-20260721-10";
+const BUILD = "kairos-production-entry-canonical-navigation-20260721-11";
 export { KairosProject };
 
 export default {
@@ -80,13 +80,38 @@ export default {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ confirmation: PAGE_SHELL_CONFIRMATION }),
       });
-      const response = await handleAuditedPageShellPublish(request, env);
-      const body = await safeResponseJSON(response?.clone());
-      if (!response?.ok || body?.status !== "completed" || body?.verification?.exactPageReadBack !== true) {
-        throw new Error(`Scheduled audited page repair returned HTTP ${response?.status || 500}.`);
+
+      try {
+        const response = await handleAuditedPageShellPublish(request, env);
+        const body = await safeResponseJSON(response?.clone());
+        if (!response?.ok || body?.status !== "completed" || body?.verification?.exactPageReadBack !== true) {
+          const message = body?.error?.message || body?.message || `Scheduled audited page repair returned HTTP ${response?.status || 500}.`;
+          if (isShopifyPageAccessDenied(message)) {
+            console.warn("Scheduled audited page repair skipped: Shopify page access is not authorized.");
+          } else {
+            throw new Error(message);
+          }
+        }
+      } catch (error) {
+        if (isShopifyPageAccessDenied(error?.message)) {
+          console.warn("Scheduled audited page repair skipped: Shopify page access is not authorized.");
+        } else {
+          throw error;
+        }
       }
     }
-    if (typeof previousRuntime.scheduled === "function") return previousRuntime.scheduled(controller, env, ctx);
+
+    if (typeof previousRuntime.scheduled === "function") {
+      try {
+        return await previousRuntime.scheduled(controller, env, ctx);
+      } catch (error) {
+        if (isShopifyPageAccessDenied(error?.message)) {
+          console.warn("Legacy scheduled page repair skipped: Shopify page access is not authorized.");
+          return;
+        }
+        throw error;
+      }
+    }
   }
 };
 
@@ -136,6 +161,10 @@ async function handleAuditedPageShellPublish(request, env) {
         nativePageRepair.verification?.nativeTitleSuppressionInstalled === true,
     },
   });
+}
+
+function isShopifyPageAccessDenied(message) {
+  return /access denied for pages field/i.test(String(message || ""));
 }
 
 function stamp(response) {
