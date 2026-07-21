@@ -48,6 +48,9 @@ export interface MMGCloudflareCommerceStagingHost {
   scheduled(cron: string): Promise<void>;
 }
 
+const HEARTBEAT_REFRESH_PATH =
+  "/api/internal/commerce/provider-heartbeats/refresh";
+
 const sha256 = (value: string): string =>
   createHash("sha256").update(value).digest("hex");
 
@@ -57,6 +60,25 @@ const releaseCommit = (value: string): string => {
     throw new Error("MMG_STAGING_HOST_COMMIT_SHA_INVALID");
   }
   return normalized;
+};
+
+const tokenEquals = (left: string, right: string): boolean => {
+  const encoder = new TextEncoder();
+  const a = encoder.encode(left);
+  const b = encoder.encode(right);
+  const length = Math.max(a.length, b.length);
+  let mismatch = a.length ^ b.length;
+  for (let index = 0; index < length; index += 1) {
+    mismatch |= (a[index] ?? 0) ^ (b[index] ?? 0);
+  }
+  return mismatch === 0;
+};
+
+const bearer = (request: Request): string => {
+  const authorization = request.headers.get("authorization") ?? "";
+  return authorization.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length).trim()
+    : "";
 };
 
 const safeHealth = (input: {
@@ -182,7 +204,8 @@ export const buildMMGCloudflareCommerceStagingHost = (
     releaseId: config.releaseId,
     releaseCommitSha,
     async fetch(request: Request): Promise<Response> {
-      const pathname = new URL(request.url).pathname;
+      const url = new URL(request.url);
+      const pathname = url.pathname;
       if (pathname === "/healthz" || pathname === "/api/internal/healthz") {
         if (request.method !== "GET" && request.method !== "HEAD") {
           return new Response(null, {
@@ -202,6 +225,55 @@ export const buildMMGCloudflareCommerceStagingHost = (
               headers: response.headers,
             })
           : response;
+      }
+      if (pathname === HEARTBEAT_REFRESH_PATH) {
+        if (request.method !== "POST") {
+          return new Response(null, {
+            status: 405,
+            headers: { Allow: "POST", "Cache-Control": "no-store" },
+          });
+        }
+        if (!request.headers.get("x-mmg-internal-request")) {
+          return Response.json(
+            { ok: false, error: { code: "MMG_INTERNAL_MARKER_REQUIRED" } },
+            { status: 403, headers: { "Cache-Control": "no-store" } },
+          );
+        }
+        const origin = request.headers.get("origin");
+        if (origin && origin !== config.runtimeOrigin) {
+          return Response.json(
+            { ok: false, error: { code: "MMG_HEARTBEAT_ORIGIN_FORBIDDEN" } },
+            { status: 403, headers: { "Cache-Control": "no-store" } },
+          );
+        }
+        if (!tokenEquals(bearer(request), tokens.integration)) {
+          return Response.json(
+            { ok: false, error: { code: "MMG_HEARTBEAT_AUTH_REQUIRED" } },
+            { status: 403, headers: { "Cache-Control": "no-store" } },
+          );
+        }
+        const summary = await heartbeatCoordinator.refresh();
+        return Response.json(
+          {
+            ok: summary.results.every((entry) => entry.status === "healthy"),
+            status: summary.results.every(
+              (entry) => entry.status === "healthy",
+            )
+              ? "healthy"
+              : "blocked",
+            summary,
+            publicationAllowed: false,
+            liveCustomerDataAllowed: false,
+          },
+          {
+            status: 200,
+            headers: {
+              "Cache-Control": "no-store, private, max-age=0",
+              "X-Content-Type-Options": "nosniff",
+              "X-MMG-Release-Id": config.releaseId,
+            },
+          },
+        );
       }
       const routed = await runtime.route(request);
       if (routed) {
