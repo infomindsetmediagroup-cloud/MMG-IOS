@@ -1,0 +1,137 @@
+{
+  "schemaVersion": "1.1.0",
+  "changeSetId": "shopify-temporary-dead-link-redirects-20260720",
+  "state": "executed-verified",
+  "observedAt": "2026-07-20",
+  "executedAt": "2026-07-21T00:26:43Z",
+  "verifiedAt": "2026-07-21T00:26:43Z",
+  "storeDomain": "themindsetmediagroup.com",
+  "approvalLevel": 3,
+  "authorization": {
+    "approvedBy": "user",
+    "instruction": "Push thru",
+    "scope": "both-prepared-change-sets"
+  },
+  "requiredScopes": [
+    "read_products",
+    "read_online_store_navigation",
+    "write_online_store_navigation"
+  ],
+  "preconditions": {
+    "abortOnAnyMismatch": true,
+    "matched": true,
+    "target": "/collections/all",
+    "requiredSourceState": "no-live-product-and-no-existing-source-redirect",
+    "paths": [
+      "/products/publish-ready-book-build-service",
+      "/products/listing-optimization-service",
+      "/products/visual-asset-production-service",
+      "/products/research-content-enhancement-service",
+      "/products/the-creators-bible",
+      "/products/ai-prompting-for-beginners"
+    ]
+  },
+  "forward": {
+    "operation": "urlRedirectCreate",
+    "target": "/collections/all",
+    "captureReturnedRedirectGids": true,
+    "allOrRollback": true
+  },
+  "execution": {
+    "shopifyUserErrors": 0,
+    "redirects": [
+      {
+        "id": "gid://shopify/UrlRedirect/444925313178",
+        "path": "/products/publish-ready-book-build-service",
+        "target": "/collections/all"
+      },
+      {
+        "id": "gid://shopify/UrlRedirect/444925345946",
+        "path": "/products/listing-optimization-service",
+        "target": "/collections/all"
+      },
+      {
+        "id": "gid://shopify/UrlRedirect/444925378714",
+        "path": "/products/visual-asset-production-service",
+        "target": "/collections/all"
+      },
+      {
+        "id": "gid://shopify/UrlRedirect/444925411482",
+        "path": "/products/research-content-enhancement-service",
+        "target": "/collections/all"
+      },
+      {
+        "id": "gid://shopify/UrlRedirect/444925444250",
+        "path": "/products/the-creators-bible",
+        "target": "/collections/all"
+      },
+      {
+        "id": "gid://shopify/UrlRedirect/444925477018",
+        "path": "/products/ai-prompting-for-beginners",
+        "target": "/collections/all"
+      }
+    ]
+  },
+  "rollback": {
+    "operation": "urlRedirectDelete",
+    "identifierSource": "captured-forward-response",
+    "redirectGids": [
+      "gid://shopify/UrlRedirect/444925313178",
+      "gid://shopify/UrlRedirect/444925345946",
+      "gid://shopify/UrlRedirect/444925378714",
+      "gid://shopify/UrlRedirect/444925411482",
+      "gid://shopify/UrlRedirect/444925444250",
+      "gid://shopify/UrlRedirect/444925477018"
+    ],
+    "deleteOnlyCreatedRedirects": true,
+    "requiredVerification": "all-six-source-paths-have-no-redirect"
+  },
+  "retirementRule": {
+    "trigger": "before-creating-a-product-at-a-reserved-handle",
+    "requiredAction": "delete-and-verify-corresponding-temporary-redirect"
+  },
+  "routes": [
+    {
+      "path": "/products/publish-ready-book-build-service",
+      "target": "/collections/all",
+      "referencedFrom": "professional-cover-design-service",
+      "redirectGid": "gid://shopify/UrlRedirect/444925313178"
+    },
+    {
+      "path": "/products/listing-optimization-service",
+      "target": "/collections/all",
+      "referencedFrom": "professional-cover-design-service",
+      "redirectGid": "gid://shopify/UrlRedirect/444925345946"
+    },
+    {
+      "path": "/products/visual-asset-production-service",
+      "target": "/collections/all",
+      "referencedFrom": "professional-cover-design-service",
+      "redirectGid": "gid://shopify/UrlRedirect/444925378714"
+    },
+    {
+      "path": "/products/research-content-enhancement-service",
+      "target": "/collections/all",
+      "referencedFrom": "professional-cover-design-service",
+      "redirectGid": "gid://shopify/UrlRedirect/444925411482"
+    },
+    {
+      "path": "/products/the-creators-bible",
+      "target": "/collections/all",
+      "referencedFrom": "ai-image-mastery",
+      "redirectGid": "gid://shopify/UrlRedirect/444925444250"
+    },
+    {
+      "path": "/products/ai-prompting-for-beginners",
+      "target": "/collections/all",
+      "referencedFrom": "ai-image-mastery",
+      "redirectGid": "gid://shopify/UrlRedirect/444925477018"
+    }
+  ],
+  "postconditions": {
+    "verified": true,
+    "redirectCount": 6,
+    "allTargets": "/collections/all"
+  },
+  "executionRecord": "shopify/operations/executions/2026-07-20-production-change-sets.md"
+}

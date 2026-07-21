@@ -1,0 +1,242 @@
+{
+  "schemaVersion": "1.2.0",
+  "observedAt": "2026-07-20",
+  "verifiedAt": "2026-07-21T00:26:43Z",
+  "store": {
+    "name": "Mindset Media Group",
+    "primaryDomain": "themindsetmediagroup.com",
+    "currency": "USD",
+    "timezone": "PDT",
+    "country": "United States"
+  },
+  "governance": {
+    "sourceOfTruth": {
+      "liveState": "connected-shopify-store",
+      "approvedSourceAndHistory": "github"
+    },
+    "shopifyToolkitValidationRequired": true,
+    "telemetryOptOutDefault": true,
+    "readOnlyInspection": "governed-automatic",
+    "mutations": "explicit-approval-or-approved-workflow",
+    "productionRequirements": [
+      "live-read",
+      "pre-change-snapshot",
+      "validation",
+      "change-record",
+      "rollback-plan",
+      "explicit-approval",
+      "post-change-verification"
+    ]
+  },
+  "skuContract": {
+    "pattern": "MMG-{ARCHETYPE}-{PRODUCT_CODE}-{VARIANT_CODE}",
+    "regex": "^MMG-(SVC|DIG|SUB)-[A-Z0-9]+-[A-Z0-9]+$",
+    "immutableAfterAssignment": true,
+    "priceIndependent": true
+  },
+  "liveProducts": [
+    {
+      "archetype": "service",
+      "title": "Professional Cover Design Service™",
+      "handle": "professional-cover-design-service",
+      "productGid": "gid://shopify/Product/9024288620698",
+      "status": "ACTIVE",
+      "vendor": "Mindset Media Group",
+      "productType": "Publishing Service",
+      "canonicalProductType": "Publishing Service",
+      "updatedAt": "2026-07-21T00:26:42Z",
+      "inventoryPolicy": "not-tracked",
+      "requiresShipping": false,
+      "pageSourceLocation": "shopify-description-html",
+      "onboardingGuide": "MMG Project Guide™ Customer Handbook",
+      "portalRequirement": "customer-portal-required",
+      "purchaseModel": "one-purchase-one-project",
+      "variants": [
+        {
+          "name": "Starter",
+          "variantGid": "gid://shopify/ProductVariant/48658205376666",
+          "inventoryItemGid": "gid://shopify/InventoryItem/50674230755482",
+          "price": "97.95",
+          "currency": "USD",
+          "sku": "MMG-SVC-PCD-STA",
+          "canonicalSku": "MMG-SVC-PCD-STA",
+          "tracked": false,
+          "requiresShipping": false
+        },
+        {
+          "name": "Growth",
+          "variantGid": "gid://shopify/ProductVariant/48658205409434",
+          "inventoryItemGid": "gid://shopify/InventoryItem/50674230788250",
+          "price": "197.95",
+          "currency": "USD",
+          "sku": "MMG-SVC-PCD-GRO",
+          "canonicalSku": "MMG-SVC-PCD-GRO",
+          "tracked": false,
+          "requiresShipping": false
+        },
+        {
+          "name": "Professional",
+          "variantGid": "gid://shopify/ProductVariant/48658205442202",
+          "inventoryItemGid": "gid://shopify/InventoryItem/50674230821018",
+          "price": "397.95",
+          "currency": "USD",
+          "sku": "MMG-SVC-PCD-PRO",
+          "canonicalSku": "MMG-SVC-PCD-PRO",
+          "tracked": false,
+          "requiresShipping": false
+        }
+      ]
+    },
+    {
+      "archetype": "digital-download",
+      "title": "AI Image Mastery™",
+      "handle": "ai-image-mastery",
+      "productGid": "gid://shopify/Product/9022950998170",
+      "status": "ACTIVE",
+      "vendor": "Mindset Media Group",
+      "productType": "Digital Download",
+      "canonicalProductType": "Digital Download",
+      "updatedAt": "2026-07-21T00:26:43Z",
+      "inventoryPolicy": "not-tracked",
+      "requiresShipping": false,
+      "pageSourceLocation": "shopify-description-html",
+      "fulfillmentMode": "automatic-digital-delivery",
+      "purchaseModel": "one-time",
+      "variants": [
+        {
+          "name": "Default Title",
+          "variantGid": "gid://shopify/ProductVariant/48655433498778",
+          "inventoryItemGid": "gid://shopify/InventoryItem/50671454027930",
+          "price": "9.95",
+          "currency": "USD",
+          "sku": "MMG-DIG-AIM-STD",
+          "canonicalSku": "MMG-DIG-AIM-STD",
+          "tracked": false,
+          "requiresShipping": false
+        }
+      ]
+    }
+  ],
+  "liveCollections": [
+    {
+      "title": "Catalog",
+      "handle": "frontpage",
+      "collectionGid": "gid://shopify/Collection/361394503834",
+      "type": "manual",
+      "sortOrder": "BEST_SELLING",
+      "productCount": 2
+    }
+  ],
+  "targetProducts": [
+    {
+      "archetype": "subscription",
+      "state": "approved-not-live",
+      "proposedProductType": "Subscription Membership",
+      "fulfillmentMode": "recurring-digital-delivery",
+      "onboardingGuide": "MMG Subscription Member Guide",
+      "profileRequirement": "required-before-first-package",
+      "subscriptionVerification": "required-before-delivery",
+      "inventoryPolicy": "not-tracked",
+      "plans": [
+        {
+          "cadence": "monthly",
+          "price": "14.95",
+          "currency": "USD",
+          "digitalAssetsPerCadence": 2,
+          "proposedSkuSuffix": "MON"
+        },
+        {
+          "cadence": "bi-weekly",
+          "price": "24.95",
+          "currency": "USD",
+          "digitalAssetsPerCadence": 4,
+          "proposedSkuSuffix": "BI"
+        },
+        {
+          "cadence": "weekly",
+          "price": "39.95",
+          "currency": "USD",
+          "digitalAssetsPerCadence": 8,
+          "proposedSkuSuffix": "WEE"
+        }
+      ]
+    }
+  ],
+  "linkAudit": {
+    "observedAt": "2026-07-20",
+    "verifiedAt": "2026-07-21T00:26:43Z",
+    "livePageRoutes": [
+      "/pages/free-creator-toolkit",
+      "/pages/capcut-templates"
+    ],
+    "nonLiveProductRoutes": [
+      "/products/publish-ready-book-build-service",
+      "/products/listing-optimization-service",
+      "/products/visual-asset-production-service",
+      "/products/research-content-enhancement-service",
+      "/products/the-creators-bible",
+      "/products/ai-prompting-for-beginners"
+    ],
+    "exactSourceRedirectsPresent": true,
+    "interimTarget": "/collections/all",
+    "redirectRecords": [
+      {
+        "id": "gid://shopify/UrlRedirect/444925313178",
+        "path": "/products/publish-ready-book-build-service",
+        "target": "/collections/all"
+      },
+      {
+        "id": "gid://shopify/UrlRedirect/444925345946",
+        "path": "/products/listing-optimization-service",
+        "target": "/collections/all"
+      },
+      {
+        "id": "gid://shopify/UrlRedirect/444925378714",
+        "path": "/products/visual-asset-production-service",
+        "target": "/collections/all"
+      },
+      {
+        "id": "gid://shopify/UrlRedirect/444925411482",
+        "path": "/products/research-content-enhancement-service",
+        "target": "/collections/all"
+      },
+      {
+        "id": "gid://shopify/UrlRedirect/444925444250",
+        "path": "/products/the-creators-bible",
+        "target": "/collections/all"
+      },
+      {
+        "id": "gid://shopify/UrlRedirect/444925477018",
+        "path": "/products/ai-prompting-for-beginners",
+        "target": "/collections/all"
+      }
+    ]
+  },
+  "changeSets": [
+    {
+      "id": "shopify-product-normalization-20260720",
+      "state": "executed-verified",
+      "approvedBy": "user",
+      "approvalInstruction": "Push thru",
+      "executedAt": "2026-07-21T00:26:42Z",
+      "verifiedAt": "2026-07-21T00:26:43Z",
+      "manifest": "shopify/operations/manifests/product-normalization-2026-07-20.json",
+      "executionRecord": "shopify/operations/executions/2026-07-20-production-change-sets.md"
+    },
+    {
+      "id": "shopify-temporary-dead-link-redirects-20260720",
+      "state": "executed-verified",
+      "approvedBy": "user",
+      "approvalInstruction": "Push thru",
+      "executedAt": "2026-07-21T00:26:43Z",
+      "verifiedAt": "2026-07-21T00:26:43Z",
+      "manifest": "shopify/operations/manifests/temporary-dead-link-redirects-2026-07-20.json",
+      "executionRecord": "shopify/operations/executions/2026-07-20-production-change-sets.md"
+    }
+  ],
+  "openGaps": [
+    "executable-page-source-stored-in-description-html",
+    "internal-links-reference-non-live-catalog-items",
+    "subscription-product-not-created"
+  ]
+}

@@ -1,0 +1,47 @@
+query MMGProductNormalizationPreflight {
+  service: product(id: "gid://shopify/Product/9024288620698") {
+    id
+    handle
+    title
+    productType
+    status
+    updatedAt
+    variants(first: 10) {
+      nodes {
+        id
+        title
+        sku
+        price
+        inventoryItem {
+          id
+          sku
+          tracked
+          requiresShipping
+        }
+      }
+    }
+  }
+
+  digital: product(id: "gid://shopify/Product/9022950998170") {
+    id
+    handle
+    title
+    productType
+    status
+    updatedAt
+    variants(first: 10) {
+      nodes {
+        id
+        title
+        sku
+        price
+        inventoryItem {
+          id
+          sku
+          tracked
+          requiresShipping
+        }
+      }
+    }
+  }
+}

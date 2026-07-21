@@ -1,0 +1,27 @@
+# Prepared change-set only. Do not execute without explicit approval.
+mutation MMGCreateTemporaryCatalogRedirects {
+  publishReadyBookBuild: urlRedirectCreate(urlRedirect: { path: "/products/publish-ready-book-build-service", target: "/collections/all" }) {
+    urlRedirect { id path target }
+    userErrors { field message }
+  }
+  listingOptimization: urlRedirectCreate(urlRedirect: { path: "/products/listing-optimization-service", target: "/collections/all" }) {
+    urlRedirect { id path target }
+    userErrors { field message }
+  }
+  visualAssetProduction: urlRedirectCreate(urlRedirect: { path: "/products/visual-asset-production-service", target: "/collections/all" }) {
+    urlRedirect { id path target }
+    userErrors { field message }
+  }
+  researchContentEnhancement: urlRedirectCreate(urlRedirect: { path: "/products/research-content-enhancement-service", target: "/collections/all" }) {
+    urlRedirect { id path target }
+    userErrors { field message }
+  }
+  creatorsBible: urlRedirectCreate(urlRedirect: { path: "/products/the-creators-bible", target: "/collections/all" }) {
+    urlRedirect { id path target }
+    userErrors { field message }
+  }
+  aiPromptingForBeginners: urlRedirectCreate(urlRedirect: { path: "/products/ai-prompting-for-beginners", target: "/collections/all" }) {
+    urlRedirect { id path target }
+    userErrors { field message }
+  }
+}
