@@ -9,7 +9,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "check": "npm run typecheck && npm test",
+    "validate:shopify": "node scripts/validate-shopify-governance.mjs",
+    "check": "npm run typecheck && npm test && npm run validate:shopify",
     "cf:dev": "wrangler dev",
     "cf:deploy": "wrangler deploy"
   },
