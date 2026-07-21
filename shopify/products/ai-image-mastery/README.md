@@ -8,17 +8,24 @@ This directory defines the first canonical MMG digital-download product contract
 
 ## Current state
 
-- Theme `/t/18` is now MAIN and contains the verified digital-download files plus the preserved canonical service files.
-- The former MAIN theme `/t/17` is retained unpublished for rollback.
-- AI Image Mastery™ remains active, commercially unchanged, and still has `templateSuffix: null`.
-- The product continues to render its legacy `descriptionHtml` until the dedicated template is assigned.
-- The authoritative variant is `48655433498778` with SKU `MMG-DIG-AIM-STD`, price `$9.95`, policy `DENY`, no tracking, and no shipping.
-- Local browser QA passed from 320 px through 1440 px against the authoritative variant.
-- Product-template assignment remains blocked until the exact change-set approval is granted.
+- Theme `/t/18` is MAIN and contains the checksum-verified digital-download files plus the preserved canonical service files.
+- Former MAIN `/t/17` remains UNPUBLISHED for rollback.
+- The exact production approval was received and recorded.
+- AI Image Mastery™ now has `templateSuffix: mmg-ai-image-mastery`.
+- Shopify returned zero mutation errors and independently confirmed the assigned suffix.
+- Product title, handle, status, type, price, SKU, variant, inventory, shipping, SEO, tags, media, and legacy `descriptionHtml` were preserved.
+- The public edge response observed immediately after assignment still contained the pre-assignment shell; this is tracked as cache/template propagation and does not alter the verified Admin deployment state.
 
-## Required approval
+## Authoritative product contract
 
-`Approve production deployment: shopify-canonical-digital-download-ai-image-mastery-20260721`
+- Product: `gid://shopify/Product/9022950998170`
+- Variant: `gid://shopify/ProductVariant/48655433498778`
+- Inventory item: `gid://shopify/InventoryItem/50671454027930`
+- Price: `$9.95`
+- SKU: `MMG-DIG-AIM-STD`
+- Inventory policy: `DENY`
+- Inventory tracking: disabled
+- Shipping: disabled
 
 ## Canonical digital-download rules
 
@@ -31,4 +38,4 @@ This directory defines the first canonical MMG digital-download product contract
 7. Missing-delivery and access recovery route through Customer Service.
 8. Legacy `descriptionHtml` remains untouched as rollback source.
 9. Product title, handle, price, SKU, inventory, shipping, media, SEO, tags, and publication are protected fields.
-10. Post-assignment verification is mandatory before the digital-download standard is declared deployed.
+10. Product rollback sets `templateSuffix` back to `null`.

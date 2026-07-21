@@ -1,28 +1,20 @@
 {
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "changeSetId": "shopify-canonical-digital-download-ai-image-mastery-20260721",
-  "state": "theme-published-product-assignment-pending-explicit-approval",
+  "state": "deployed-admin-verified-storefront-edge-propagation-observed",
   "productGid": "gid://shopify/Product/9022950998170",
-  "preferredDeployment": "published-theme-product-template",
-  "fallbackDeployment": "explicitly-approved-description-html-replacement",
-  "selectedDeployment": "published-verified-current-main-then-assign-product-template",
+  "selectedDeployment": "published-verified-current-main-product-template-assignment",
   "templateSuffix": "mmg-ai-image-mastery",
   "requiredArtifacts": [
     "README.md",
     "contract.json",
-    "live-baseline.md",
-    "qa.md",
     "deployment.md",
     "deployment-manifest.json",
-    "graphql/preflight.graphql",
     "production-checkpoint-2026-07-20.json",
-    "production-checkpoint-2026-07-20.md",
-    "staging-record-2026-07-20.json",
-    "staging-record-2026-07-20.md",
     "publication-checkpoint-2026-07-20.json",
-    "publication-checkpoint-2026-07-20.md",
+    "production-execution-2026-07-20.json",
+    "production-execution-2026-07-20.md",
     "local-browser-qa-2026-07-20.json",
-    "local-browser-qa-2026-07-20.md",
     "source/section.html",
     "source/styles.css",
     "source/behavior.js",
@@ -31,122 +23,44 @@
     "theme/assets/mmg-ai-image-mastery.js",
     "theme/templates/product.mmg-ai-image-mastery.json"
   ],
-  "preflight": {
-    "abortOnMismatch": true,
-    "captureDescriptionHtmlForRollback": true,
-    "validateCustomerRoutes": true,
-    "shopifyToolkitValidationRequired": true,
-    "latestProductionPreflightPassed": true,
-    "latestProductUpdatedAt": "2026-07-21T00:26:43Z",
-    "currentMainThemeObservedAt": "2026-07-21T04:03:16Z",
-    "candidateFilesVerifiedAt": "2026-07-21T03:46:00Z",
-    "localBrowserQaPassedAt": "2026-07-21T04:03:16Z"
-  },
-  "prohibitedChanges": [
-    "product-title",
-    "handle",
-    "status",
-    "vendor",
-    "product-type",
-    "variant-identity",
-    "sku",
-    "price",
-    "compare-at-price",
-    "inventory-policy",
-    "inventory",
-    "shipping",
-    "media-removal",
-    "publication",
-    "seo",
-    "tags",
-    "description-html"
-  ],
   "approval": {
     "required": true,
     "mustNameChangeSetId": true,
-    "granted": false,
-    "exactInstructionRequired": "Approve production deployment: shopify-canonical-digital-download-ai-image-mastery-20260721"
+    "granted": true,
+    "instructionReceived": "Approve production deployment: shopify-canonical-digital-download-ai-image-mastery-20260721"
   },
   "execution": {
     "themeDuplicatedFromCurrentMain": true,
     "candidateFilesInstalled": true,
     "candidateFilesVerified": true,
     "localBrowserQaPassed": true,
-    "themePublishAttemptedByAssistant": false,
     "themePublishExecuted": true,
-    "themePublicationObservedExternally": true,
     "themePublishedByAssistant": false,
-    "productTemplateAssignmentSchemaValidation": "pending-explicit-approval",
-    "productTemplateAssignmentAttempted": false,
-    "productTemplateAssignmentExecuted": false,
+    "productTemplateAssignmentSchemaValidation": "passed",
+    "productTemplateAssignmentAttempted": true,
+    "productTemplateAssignmentExecuted": true,
+    "productTemplateAssignmentExecutedAt": "2026-07-21T04:29:15Z",
+    "productTemplateAssignmentUserErrors": [],
     "descriptionHtmlFallbackAttempted": false,
-    "productionProductMutationOccurred": false
+    "productionProductMutationOccurred": true,
+    "soleProductFieldChanged": "templateSuffix",
+    "protectedCommercialFieldsPreserved": true,
+    "postMutationAdminReadbackPassed": true,
+    "storefrontEdgePropagationObserved": true,
+    "storefrontRenderAcceptanceComplete": false
   },
   "productionTheme": {
     "id": "gid://shopify/OnlineStoreTheme/155338309786",
     "name": "MMG Digital Download Candidate 2026-07-20",
     "role": "MAIN",
     "prefix": "/t/18",
-    "createdAt": "2026-07-21T03:37:06Z",
-    "updatedAt": "2026-07-21T04:03:16Z",
     "processing": false,
     "processingFailed": false,
     "files": [
-      {
-        "filename": "assets/mmg-ai-image-mastery.css",
-        "contentType": "text/css",
-        "checksumMd5": "5a749b91c5078360f9a64d642ef268be",
-        "size": 10471,
-        "updatedAt": "2026-07-21T03:43:15Z"
-      },
-      {
-        "filename": "assets/mmg-ai-image-mastery.js",
-        "contentType": "application/javascript",
-        "checksumMd5": "2653b8a8d87c8f5852f653b7580c405d",
-        "size": 5665,
-        "updatedAt": "2026-07-21T03:44:06Z"
-      },
-      {
-        "filename": "sections/mmg-ai-image-mastery.liquid",
-        "contentType": "application/x-liquid",
-        "checksumMd5": "52893c2bc11789b613424ec296d838d0",
-        "size": 14700,
-        "updatedAt": "2026-07-21T03:45:47Z"
-      },
-      {
-        "filename": "templates/product.mmg-ai-image-mastery.json",
-        "contentType": "application/json",
-        "checksumMd5": "f767d9a33d9c4afb1ebee3c899e58768",
-        "size": 132,
-        "updatedAt": "2026-07-21T03:46:00Z",
-        "semanticVerification": "single main section type mmg-ai-image-mastery; order contains main only"
-      }
-    ],
-    "preservedCanonicalServiceFiles": [
-      {
-        "filename": "assets/mmg-professional-cover-design.css",
-        "checksumMd5": "19a0676ec927c3e649db64a6e11a9c98",
-        "size": 11943,
-        "updatedAt": "2026-07-21T03:37:29Z"
-      },
-      {
-        "filename": "assets/mmg-professional-cover-design.js",
-        "checksumMd5": "db464655bddaf9a73906e49df8762a66",
-        "size": 6549,
-        "updatedAt": "2026-07-21T03:37:29Z"
-      },
-      {
-        "filename": "sections/mmg-professional-cover-design.liquid",
-        "checksumMd5": "f5090c30a9e202c056cf8c3a40b690ff",
-        "size": 13480,
-        "updatedAt": "2026-07-21T03:37:29Z"
-      },
-      {
-        "filename": "templates/product.mmg-professional-cover-design.json",
-        "checksumMd5": "6935d2e46128a36c8d5578ac1e62d50b",
-        "size": 503,
-        "updatedAt": "2026-07-21T03:37:29Z"
-      }
+      {"filename":"assets/mmg-ai-image-mastery.css","checksumMd5":"5a749b91c5078360f9a64d642ef268be","size":10471},
+      {"filename":"assets/mmg-ai-image-mastery.js","checksumMd5":"2653b8a8d87c8f5852f653b7580c405d","size":5665},
+      {"filename":"sections/mmg-ai-image-mastery.liquid","checksumMd5":"52893c2bc11789b613424ec296d838d0","size":14700},
+      {"filename":"templates/product.mmg-ai-image-mastery.json","checksumMd5":"f767d9a33d9c4afb1ebee3c899e58768","size":132}
     ]
   },
   "formerMainTheme": {
@@ -154,8 +68,6 @@
     "name": "MMG Service Production Candidate 2026-07-20",
     "role": "UNPUBLISHED",
     "prefix": "/t/17",
-    "createdAt": "2026-07-21T02:15:40Z",
-    "updatedAt": "2026-07-21T03:53:35Z",
     "processing": false,
     "processingFailed": false
   },
@@ -163,29 +75,44 @@
     "id": "gid://shopify/OnlineStoreTheme/155242856602",
     "name": "Kairos Staging",
     "role": "UNPUBLISHED",
-    "prefix": "/t/10",
-    "updatedAt": "2026-07-21T02:54:29Z"
+    "prefix": "/t/10"
   },
   "productContract": {
+    "updatedAt": "2026-07-21T04:29:15Z",
     "variantId": "gid://shopify/ProductVariant/48655433498778",
     "inventoryItemId": "gid://shopify/InventoryItem/50671454027930",
     "price": "9.95",
+    "compareAtPrice": null,
     "sku": "MMG-DIG-AIM-STD",
     "inventoryPolicy": "DENY",
+    "inventoryQuantity": 0,
     "tracked": false,
     "requiresShipping": false,
     "availableForSale": true
   },
-  "manualBoundary": {
-    "remainingAction": "grant exact product-template-assignment approval",
-    "exactInstruction": "Approve production deployment: shopify-canonical-digital-download-ai-image-mastery-20260721",
-    "postApprovalTemplateSuffix": "mmg-ai-image-mastery",
-    "postApprovalProductGid": "gid://shopify/Product/9022950998170"
+  "protectedFields": {
+    "title": "preserved",
+    "handle": "preserved",
+    "status": "preserved",
+    "vendor": "preserved",
+    "productType": "preserved",
+    "variantIdentity": "preserved",
+    "sku": "preserved",
+    "price": "preserved",
+    "compareAtPrice": "preserved",
+    "inventoryPolicy": "preserved",
+    "inventory": "preserved",
+    "shipping": "preserved",
+    "media": "preserved",
+    "publication": "preserved",
+    "seo": "preserved",
+    "tags": "preserved",
+    "descriptionHtml": "preserved"
   },
   "rollback": {
     "productTemplate": "set-templateSuffix-null",
     "descriptionDeployment": "legacy-description-html-remains-unchanged",
-    "themeDeployment": "republish-former-main-theme-if-production-publish-is-reversed",
+    "themeDeployment": "republish-former-main-theme-if-required",
     "formerMainThemeGid": "gid://shopify/OnlineStoreTheme/155336671386",
     "secondaryRollbackThemeGid": "gid://shopify/OnlineStoreTheme/155242856602",
     "postRollbackVerificationRequired": true
