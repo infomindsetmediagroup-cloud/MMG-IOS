@@ -1,8 +1,12 @@
 name: Validate Shopify Governance
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: {}
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
     paths:
       - "shopify/**"
       - "registry/shopify-product-contracts.json"
@@ -31,15 +35,33 @@ jobs:
     name: Validate registry and controls
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
+      - name: Download repository source
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p repository
+          curl --fail --show-error --silent --location \
+            --connect-timeout 15 \
+            --max-time 90 \
+            --retry 2 \
+            --retry-delay 2 \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/tarball/${SOURCE_SHA}" \
+            --output repository.tar.gz
+          tar -xzf repository.tar.gz --strip-components=1 -C repository
 
       - name: Validate Shopify governance
-        run: npm run validate:shopify
+        shell: bash
+        working-directory: repository
+        run: |
+          set -euo pipefail
+          node --version
+          node scripts/validate-shopify-governance.mjs
