@@ -77,7 +77,14 @@ jobs:
         working-directory: repository/shopify/apps/mmg-customer-account
         run: |
           set -euo pipefail
-          npm install --no-audit --no-fund
+          npm install --no-audit --no-fund --silent
+
+      - name: Validate Shopify configuration
+        shell: bash
+        working-directory: repository/shopify/apps/mmg-customer-account
+        run: |
+          set -o pipefail
+          npx shopify app config validate --config production 2>&1 | tee /tmp/shopify-config-validation.log
 
       - name: Run governed validation and entitlement tests
         shell: bash
@@ -85,13 +92,6 @@ jobs:
         run: |
           set -euo pipefail
           npm run check
-
-      - name: Validate Shopify configuration
-        shell: bash
-        working-directory: repository/shopify/apps/mmg-customer-account
-        run: |
-          set -euo pipefail
-          npx shopify app config validate --config production
 
       - name: Deploy and release My Downloads
         shell: bash
