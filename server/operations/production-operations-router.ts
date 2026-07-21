@@ -1,5 +1,9 @@
 import type { MMGCommerceStagingRehearsalHTTPDependencies } from "./commerce-staging-rehearsal-http.js";
 import { handleMMGCommerceStagingRehearsalRequest } from "./commerce-staging-rehearsal-http.js";
+import type { MMGCommerceStagingRehearsalAdapterHTTPDependencies } from "./commerce-staging-rehearsal-adapter-http.js";
+import { handleMMGCommerceStagingRehearsalAdapterRequest } from "./commerce-staging-rehearsal-adapter-http.js";
+import type { MMGRuntimeControlHTTPDependencies } from "./runtime-control-http.js";
+import { handleMMGRuntimeControlRequest } from "./runtime-control-http.js";
 
 export interface MMGProductionOperationsRuntimeHandlers {
   handleOperations(request: Request): Promise<Response>;
@@ -9,6 +13,8 @@ export interface MMGProductionOperationsRuntimeHandlers {
 export interface MMGProductionOperationsRouterDependencies {
   runtime: MMGProductionOperationsRuntimeHandlers;
   rehearsal: MMGCommerceStagingRehearsalHTTPDependencies;
+  rehearsalAdapter: MMGCommerceStagingRehearsalAdapterHTTPDependencies;
+  runtimeControl: MMGRuntimeControlHTTPDependencies;
 }
 
 export const MMG_PRODUCTION_OPERATIONS_ROUTE_MANIFEST = Object.freeze({
@@ -33,6 +39,18 @@ export const routeMMGProductionOperationsRequest = async (
   }
   if (pathname === MMG_PRODUCTION_OPERATIONS_ROUTE_MANIFEST.rehearsal) {
     return handleMMGCommerceStagingRehearsalRequest(request, dependencies.rehearsal);
+  }
+  if (pathname === MMG_PRODUCTION_OPERATIONS_ROUTE_MANIFEST.rehearsalAdapter) {
+    return handleMMGCommerceStagingRehearsalAdapterRequest(
+      request,
+      dependencies.rehearsalAdapter,
+    );
+  }
+  if (
+    pathname === MMG_PRODUCTION_OPERATIONS_ROUTE_MANIFEST.control ||
+    pathname === MMG_PRODUCTION_OPERATIONS_ROUTE_MANIFEST.rollout
+  ) {
+    return handleMMGRuntimeControlRequest(request, dependencies.runtimeControl);
   }
   return null;
 };
