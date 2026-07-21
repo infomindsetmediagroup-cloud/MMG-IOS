@@ -29,14 +29,14 @@ const snapshot = (): MMGStagingIntegrationSnapshot => ({
     observedAt: "2026-07-21T20:00:00.000Z",
   })),
   controls: {
-    product_publication: "observe_only",
+    product_publication: "disabled",
     subscription_checkout: "disabled",
     webhook_ingestion: "enabled",
     delivery_scheduler: "disabled",
     delivery_dispatcher: "disabled",
     recommendation_automation: "observe_only",
     signed_library_access: "disabled",
-    thank_you_handoff: "disabled",
+    thank_you_handoff: "observe_only",
   },
   rollout: {
     releaseId: "release-staging-20260721-001",
