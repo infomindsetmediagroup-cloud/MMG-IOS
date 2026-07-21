@@ -9,15 +9,16 @@ This build converts the existing operations and rehearsal framework into an exec
 1. Check out the exact release commit.
 2. Run TypeScript, test, Shopify-governance, and canonical service-product validation.
 3. Reconcile migrations 001–011 against the staging PostgreSQL database.
-4. Deploy and mount the staging integration runtime.
-5. Configure five distinct server credentials and separate Admin Portal authentication.
-6. Configure nonproduction alert destinations and all host adapters.
-7. Record exact-release healthy heartbeats for database, routes, controls, alerts, scheduler, dispatcher, storage signer, and Admin authentication.
-8. Bootstrap the canonical safe controls and Paused 0% rollout state.
-9. Run the database-connectivity SEV1 and webhook-failure SEV2 drills.
-10. Run the consistency audit and Paused → Internal → Pilot → Limited → Expanded → Full rehearsal using the isolated virtual clock.
-11. Compare customer-rights digests before and after the rehearsal.
-12. Verify the exact release and archive sanitized evidence.
+4. Register the exact staging release ID and commit SHA for release-bound rehearsal evidence.
+5. Deploy and mount the staging integration runtime.
+6. Configure five distinct server credentials and separate Admin Portal authentication.
+7. Configure nonproduction alert destinations and all host adapters.
+8. Record exact-release healthy heartbeats for database, routes, controls, alerts, scheduler, dispatcher, storage signer, and Admin authentication.
+9. Bootstrap the canonical safe controls and Paused 0% rollout state.
+10. Run the database-connectivity SEV1 and webhook-failure SEV2 drills.
+11. Run the consistency audit and Paused → Internal → Pilot → Limited → Expanded → Full rehearsal using the isolated virtual clock.
+12. Compare customer-rights digests before and after the rehearsal.
+13. Verify the exact release and archive sanitized evidence.
 
 ## Migration discipline
 
@@ -31,6 +32,8 @@ This build converts the existing operations and rehearsal framework into an exec
 - records the hash and actor only after the migration succeeds;
 - never echoes the database URL; and
 - never performs an automatic down migration.
+
+After migration reconciliation, `scripts/mmg-commerce-register-staging-release.sh` records the exact staging release identity in the deployment ledger. It fails closed when an existing release ID belongs to another environment or commit SHA. Registration authorizes rehearsal evidence storage only; it does not execute deployment phases or authorize publication.
 
 ## Runtime authorities
 
@@ -79,7 +82,7 @@ The staging integration endpoint supports `inspect`, `bootstrap`, and `verify`. 
 
 - all 11 migration ledger entries;
 - every configured route probe successful;
-- eight exact-release healthy adapter heartbeats;
+- eight exact-release healthy adapter heartbeats no more than 15 minutes old;
 - exact safe controls;
 - Paused 0% rollout for the exact release;
 - complete release-bound rehearsal evidence;
@@ -88,7 +91,7 @@ The staging integration endpoint supports `inspect`, `bootstrap`, and `verify`. 
 
 ## Workflow
 
-`.github/workflows/mmg-commerce-staging-integration.yml` supports `plan`, `execute`, `verify`, and `rehearse`. It uses the `mmg-commerce-staging` GitHub Environment, checks out the exact commit, installs dependencies without assuming a lockfile, applies migrations only for execution actions, calls protected endpoints with environment secrets, and uploads sanitized JSON evidence for 30 days.
+`.github/workflows/mmg-commerce-staging-integration.yml` supports `plan`, `execute`, `verify`, and `rehearse`. It uses the `mmg-commerce-staging` GitHub Environment, checks out the exact commit, installs dependencies without assuming a lockfile, reconciles and registers the staging release for execution actions, calls protected endpoints with environment secrets, and uploads sanitized JSON evidence for 30 days.
 
 ## Non-actions
 
@@ -96,6 +99,7 @@ Merging this source does not:
 
 - connect a staging database;
 - apply any migration;
+- register a staging release;
 - deploy a runtime;
 - configure secrets or alert destinations;
 - register heartbeats;
