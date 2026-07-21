@@ -1,0 +1,103 @@
+name: MMG Commerce Operations
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Operations environment
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      action:
+        description: Safe operations action
+        required: true
+        type: choice
+        options:
+          - inspect
+          - evaluate
+          - run_consistency_audit
+          - pause_rollout
+      release_id:
+        description: Current immutable commerce release ID
+        required: true
+        type: string
+      allow_automatic_containment:
+        description: Permit preapproved reversible containment during evaluation
+        required: true
+        type: boolean
+        default: false
+  schedule:
+    - cron: "*/15 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mmg-commerce-operations-${{ github.event_name == 'schedule' && 'production-monitor' || inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  operations:
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.MMG_COMMERCE_MONITOR_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'schedule' && 'mmg-commerce-production-monitor' || (inputs.environment == 'production' && 'mmg-commerce-production' || 'mmg-commerce-staging') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install validation dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+      - run: npm run check
+      - name: Execute protected operations command
+        env:
+          ENDPOINT: ${{ secrets.MMG_COMMERCE_OPERATIONS_ENDPOINT }}
+          TOKEN: ${{ secrets.MMG_COMMERCE_OPERATIONS_TOKEN }}
+          SCHEDULED_RELEASE_ID: ${{ vars.MMG_COMMERCE_ACTIVE_RELEASE_ID }}
+          INPUT_ENVIRONMENT: ${{ inputs.environment }}
+          INPUT_ACTION: ${{ inputs.action }}
+          INPUT_RELEASE_ID: ${{ inputs.release_id }}
+          INPUT_AUTO_CONTAIN: ${{ inputs.allow_automatic_containment }}
+          EVENT_NAME: ${{ github.event_name }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ENDPOINT"
+          test -n "$TOKEN"
+
+          if [ "$EVENT_NAME" = "schedule" ]; then
+            environment="production"
+            action="evaluate"
+            release_id="$SCHEDULED_RELEASE_ID"
+            automatic="true"
+          else
+            environment="$INPUT_ENVIRONMENT"
+            action="$INPUT_ACTION"
+            release_id="$INPUT_RELEASE_ID"
+            automatic="$INPUT_AUTO_CONTAIN"
+          fi
+
+          test -n "$release_id"
+          request_id="gha-ops-${RUN_ID}-${RUN_ATTEMPT}-${action}"
+          payload=$(jq -n \
+            --arg requestId "$request_id" \
+            --arg environment "$environment" \
+            --arg action "$action" \
+            --arg releaseId "$release_id" \
+            --argjson automatic "$automatic" \
+            '{requestId:$requestId,environment:$environment,action:$action,releaseId:$releaseId,allowAutomaticContainment:$automatic}')
+
+          response=$(curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $TOKEN" \
+            --header "Content-Type: application/json" \
+            --header "X-MMG-Internal-Request: github-actions-operations" \
+            --data "$payload" \
+            "$ENDPOINT")
+
+          echo "$response" | jq .
+          echo "$response" | jq -e '.ok == true'

@@ -1,0 +1,13 @@
+{%- comment -%}
+  Additive MMG Admin Portal integration.
+
+  The browser receives read-only operational state through an authenticated admin
+  session endpoint. Mutations, incident transitions, control changes, and rollout
+  advancement remain server-to-server operations and are not exposed here.
+{%- endcomment -%}
+
+{%- render 'mmg-commerce-operations-dashboard',
+  mmg_operations_endpoint: '/api/admin/commerce/operations',
+  mmg_operations_environment: 'production',
+  mmg_operations_instance_id: 'admin-portal'
+-%}

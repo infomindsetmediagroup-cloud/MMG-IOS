@@ -1,0 +1,52 @@
+{
+  "contract_id": "mmg-commerce-operations-dashboard-v1",
+  "version": "1.0.0",
+  "status": "approved_for_staging_integration",
+  "approved_date": "2026-07-20",
+  "authority": "registry/operations/mmg-commerce-operations-control-contract-v1.json",
+  "purpose": "Provide authenticated MMG operators a read-only release-health dashboard without exposing operational mutations, customer identifiers, credentials, provider payloads, or storage references to the browser.",
+  "implementation": {
+    "domain": "server/operations/commerce-operations-dashboard.ts",
+    "http_boundary": "server/operations/commerce-operations-dashboard-http.ts",
+    "logical_endpoint": "/api/admin/commerce/operations",
+    "shopify_snippet": "shopify/snippets/mmg-commerce-operations-dashboard.liquid",
+    "javascript": "shopify/assets/mmg-commerce-operations-dashboard.js",
+    "stylesheet": "shopify/assets/mmg-commerce-operations-dashboard.css",
+    "admin_portal_integration": "shopify/admin-portal/mmg-commerce-operations-dashboard-integration.liquid"
+  },
+  "authentication": {
+    "session": "authenticated MMG admin session",
+    "required_role": "mmg-commerce-operator",
+    "environment_parameter": ["staging", "production"],
+    "response_cache": "no-store private"
+  },
+  "display_contract": [
+    "overall health and evaluation time",
+    "health signal values, states, reason codes, and sample counts",
+    "active release and rollout stage",
+    "cohort percentage and observation window",
+    "open incident severity, state, summary, timestamps, and version",
+    "current operational controls and modes",
+    "latest consistency audit status and failed check codes",
+    "advisory fresh-verification indicator"
+  ],
+  "browser_mutations_allowed": false,
+  "private_fields_excluded": [
+    "customer identifiers",
+    "Shopify contract identifiers",
+    "entitlement and ownership grant identifiers",
+    "raw webhook payloads",
+    "raw test order or customer references",
+    "access tokens and secrets",
+    "storage object keys",
+    "alert destinations",
+    "provider response payloads"
+  ],
+  "release_gates": [
+    "The admin endpoint is routed behind an authenticated operator session.",
+    "The dashboard remains read-only and cannot call the internal mutation endpoint from the browser.",
+    "The component is inserted additively into the authenticated Admin Portal.",
+    "Unauthorized, empty, degraded, critical, and network-failure states pass QA.",
+    "Mobile, keyboard, focus-visible, screen-reader status, and reduced-motion behavior pass QA."
+  ]
+}

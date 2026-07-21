@@ -12,6 +12,7 @@
 **Shopify subscription reconciliation authority:** `registry/shopify/mmg-subscription-webhook-reconciliation-contract-v1.json`  
 **Recommendation and curation authority:** `registry/knowledge-library/mmg-recommendation-curation-ranking-contract-v1.json`  
 **Controlled deployment authority:** `registry/deployment/mmg-live-commerce-deployment-contract-v1.json`  
+**Operational control authority:** `registry/operations/mmg-commerce-operations-control-contract-v1.json`  
 **Digital asset registry:** `registry/knowledge-library/digital-asset-registry-v1.json`  
 **Live URL authority:** `registry/site-pages/site-url-registry-current.json`
 
@@ -188,12 +189,27 @@ The controlled deployment authority is `registry/deployment/mmg-live-commerce-de
 - `plan`, `execute`, `verify`, `publish`, and `rollback` are separate release actions.
 - Product provisioning creates or configures the subscription product as `DRAFT`; provisioning does not imply publication.
 - Runtime mapping stores the product, three variants, selling-plan group, selling plan, and Online Store publication GIDs without storing Admin credentials.
-- Production execute, publish, and rollback operations require authorization bound to the release ID, environment, action, exact commit SHA, and approval window.
+- Production execute, verify, publish, and rollback operations require authorization bound to the release ID, environment, action, exact commit SHA, and approval window.
 - Every action uses an idempotent `requestId` and optional optimistic `expectedReleaseVersion`.
 - Migrations 001–007, required runtime routes, app scopes, protected subscription access, webhooks, portal modules, scheduler, dispatcher, storage signer, and two verified selectable assets are release gates.
-- Publication is a separate action after every controlled checkout-to-My-Library verification check passes.
+- Publication is a separate action after every controlled checkout-to-My-Library verification check passes for the same release and environment within 24 hours.
 - Only hashes of test order and test customer references may be persisted.
 - Rollback may unpublish or return the product to draft but cannot revoke delivered ownership, delete subscription contracts, or erase webhook and audit history.
+
+## Operational Monitoring, Incident Response, and Rollout Rules
+
+The operational control authority is `registry/operations/mmg-commerce-operations-control-contract-v1.json`.
+
+- Migrations 008 and 009 add monitoring, incidents, controls, staged rollout, consistency audits, alert evidence, release-bound verification, and active-severity protection.
+- The protected operations route is `/api/internal/commerce/operations`.
+- Health evaluates database, routes, webhooks, reconciliation, scheduler, dispatcher, recovery, signed access, entitlement consistency, ownership uniqueness, and verification freshness.
+- SEV1 and SEV2 incidents block rollout advancement and may invoke preapproved reversible containment.
+- Automatic containment may pause rollout and disable or drain customer-affecting subsystems but cannot unpublish, disable webhook evidence ingestion, delete records, or revoke delivered ownership.
+- Rollout stages are Internal allowlist, Pilot 5%, Limited 25%, Expanded 50%, Full 100%, and Paused 0%.
+- Stage skipping is prohibited, observation windows are enforced, and Expanded and Full require stage-specific approval.
+- Health snapshots, consistency audits, and end-to-end evidence used for rollout must belong to the active release and environment.
+- A paused rollout never resumes automatically; the target stage must be explicit.
+- Production remains paused until runtime adapters, alert destinations, kill switches, staging incident drills, and a complete rollout rehearsal are verified.
 
 ## Commerce Component Build State
 
@@ -212,7 +228,8 @@ The controlled deployment authority is `registry/deployment/mmg-live-commerce-de
 | MMG My Library Delivery Interface | Merged for staging | Not installed | Storage signer and portal insertion. |
 | Shopify Subscription Webhook Reconciliation | Merged for staging | Not registered or routed live | Protected API access and webhook deployment. |
 | Kairos Recommendation and Curation Ranking | Merged for staging | Not wired into production controller | Production runtime adapter. |
-| Live Shopify Provisioning and End-to-End Deployment Control | Implemented for controlled release | No live mutation, migration, installation, checkout, or publication performed | Operational monitoring, incident response, and controlled production rollout. |
+| Live Shopify Provisioning and End-to-End Deployment Control | Merged for controlled release | No live mutation, migration, installation, checkout, or publication performed | Operations adapter wiring. |
+| MMG Operational Monitoring, Incident Response, and Controlled Rollout | Implemented for staging integration | No monitoring schedule, alert, kill switch, migration, incident drill, or customer rollout activated | Production adapter wiring, staging incident drill, and controlled release rehearsal. |
 
 ## Shopify Product Storage Contract
 
@@ -224,4 +241,4 @@ shopify/products/{product-handle}/qa.md
 shopify/products/{product-handle}/release-notes.md
 ```
 
-Canonical product, entitlement, reconciliation, recommendation, deployment, delivery-window, Customer Portal, post-checkout handoff, My Library, and secure-delivery relationships must also be represented in the machine-readable commerce contract and relevant registries.
+Canonical product, entitlement, reconciliation, recommendation, deployment, operations, delivery-window, Customer Portal, post-checkout handoff, My Library, and secure-delivery relationships must also be represented in the machine-readable commerce contract and relevant registries.
