@@ -1,4 +1,4 @@
-# MMG Commerce Operations Control v1.0
+# MMG Commerce Operations Control v1.1
 
 ## Purpose
 
@@ -27,7 +27,7 @@ Supported actions are:
 - `advance_rollout`
 - `pause_rollout`
 
-All requests require a unique request ID. Mutations may also provide an expected version. Request collisions and stale versions are rejected.
+All requests require a unique request ID. Mutations may also provide an expected version. Request collisions and stale versions are rejected. Rollout commands use a dedicated service that requires an explicit target stage, checks the current release ID, and refuses to use health, consistency, or end-to-end evidence belonging to another release.
 
 ## Health model
 
@@ -76,7 +76,7 @@ Incident lifecycle:
 detected → acknowledged → mitigating → monitoring → resolved → closed
 ```
 
-A resolved or closed incident can reopen when the same governed signal breaches policy again.
+A resolved or closed incident can reopen when the same governed signal breaches policy again. An active incident cannot be downgraded to a lower severity merely because a later observation is less severe; migration 009 preserves the highest active severity until the incident reaches a terminal state.
 
 ## Customer-safe containment
 
@@ -98,7 +98,7 @@ Automatic containment cannot:
 - Revoke delivered ownership.
 - Reverse legitimate deliveries.
 
-Publication remains owned by the separate deployment control plane.
+Manual control actions may move a subsystem into a safer mode. Re-enabling customer-affecting controls is owned by the staged rollout adapter rather than an isolated control command. Publication remains owned by the separate deployment control plane.
 
 ## Safe initial state
 
@@ -135,12 +135,12 @@ Stage advancement requires:
 1. The current observation window has completed.
 2. No open SEV1 incident exists.
 3. No open SEV2 incident exists.
-4. Current health is neither critical nor unknown.
-5. The latest consistency audit passed.
-6. End-to-end evidence is fresh and complete.
+4. Current health is neither critical nor unknown and belongs to the active release.
+5. The latest consistency audit passed and belongs to the active release.
+6. End-to-end evidence is fresh, complete, and belongs to the active release and environment.
 7. A stage-specific approval exists for Expanded and Full.
 
-Stage skipping is prohibited.
+Stage skipping is prohibited. A paused rollout never resumes automatically. Internal resume requires an explicit target and complete release-bound evidence; direct resume to Pilot or higher also requires a matching stage approval.
 
 ## Consistency audits
 
@@ -155,7 +155,7 @@ The audit checks:
 - Delivery windows are progressing rather than remaining stuck.
 - Failed webhook reconciliation is accounted for and repairable.
 
-Repairs are forward-only or manually reconciled. The audit never authorizes destructive automated repair.
+Repairs are forward-only or manually reconciled. The audit never authorizes destructive automated repair. A failed SEV1 consistency check opens a governed incident and can apply the same reversible containment used by critical health signals.
 
 ## Persistence
 
@@ -170,21 +170,28 @@ Migration `20260720_008_mmg_commerce_operations_control.sql` adds durable record
 - Alert delivery evidence
 - Operations audit events
 
+Migration `20260720_009_mmg_commerce_operations_integrity.sql` adds:
+
+- Active-incident severity preservation
+- A release-and-environment index for passed end-to-end evidence
+- Release foreign-key boundaries for health snapshots and consistency audits
+
 Alert destinations and provider references are represented only by cryptographic hashes. Customer identifiers, tokens, raw webhook bodies, storage keys, and raw provider payloads are excluded.
 
 ## Production activation sequence
 
-1. Apply migration 008 after migrations 001–007.
+1. Apply migrations 008 and 009 after migrations 001–007.
 2. Route the operations endpoint behind a server-to-server credential.
 3. Connect every telemetry adapter to its authoritative runtime and database source.
-4. Connect every kill switch to the real runtime boundary.
-5. Configure alert destinations outside source control.
-6. Bootstrap the safe paused state.
-7. Run a staging SEV1/SEV2 incident drill.
-8. Verify containment, alerting, recovery, and audit preservation.
-9. Rehearse Internal → Pilot → Limited → Expanded → Full in staging.
-10. Begin the first production release only after the deployment and operations gates both pass.
+4. Connect the release-bound end-to-end evidence adapter.
+5. Connect every kill switch to the real runtime boundary.
+6. Configure alert destinations outside source control.
+7. Bootstrap the safe paused state.
+8. Run a staging SEV1/SEV2 incident drill.
+9. Verify containment, alerting, recovery, and audit preservation.
+10. Rehearse Internal → Pilot → Limited → Expanded → Full in staging.
+11. Begin the first production release only after the deployment and operations gates both pass.
 
 ## Next dependency
 
-The next implementation step is production adapter wiring, the staging incident drill, and the first controlled release rehearsal. The control plane is not considered operational until the abstract metrics, control, alert, consistency, and authentication adapters are connected to deployed infrastructure.
+The next implementation step is production adapter wiring, the staging incident drill, and the first controlled release rehearsal. The control plane is not considered operational until the abstract metrics, control, alert, consistency, rollout-evidence, and authentication adapters are connected to deployed infrastructure.
