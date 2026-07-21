@@ -1,6 +1,6 @@
 import type { MMGSubscriptionPlanCode } from "../knowledge-library/entitlements.js";
 
-export const MMG_COMMERCE_DEPLOYMENT_VERSION = "1.2.0" as const;
+export const MMG_COMMERCE_DEPLOYMENT_VERSION = "1.3.0" as const;
 export const MMG_SHOPIFY_API_VERSION = "2026-07" as const;
 
 export type MMGCommerceDeploymentEnvironment = "staging" | "production";
@@ -144,6 +144,8 @@ export const MMG_REQUIRED_RUNTIME_ENDPOINTS = Object.freeze([
   "/api/internal/commerce/operations",
   "/api/admin/commerce/operations",
   "/api/internal/commerce/staging-integration",
+  "/api/internal/commerce/staging-readiness",
+  "/api/internal/commerce/provider-heartbeats/refresh",
   "/api/internal/commerce/rehearsal",
   "/api/internal/commerce/rehearsal/adapter",
   "/api/internal/runtime-controls/control",
@@ -274,7 +276,7 @@ export const buildMMGCommerceDeploymentPlan = (input: {
     step(
       "runtime_routes",
       routeBlockers.length === 0,
-      "All private, webhook, Customer Portal, deployment, operations, staging-integration, rehearsal, and runtime-control routes are available through the deployed Kairos runtime.",
+      "All private, webhook, Customer Portal, deployment, operations, readiness, provider-heartbeat, staging-integration, rehearsal, and runtime-control routes are available through the deployed Kairos runtime.",
       routeBlockers.map((route) => `MISSING_ROUTE:${route}`),
     ),
     step(
