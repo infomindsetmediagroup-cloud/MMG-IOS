@@ -1,0 +1,142 @@
+{
+  "schemaVersion": "1.0.0",
+  "changeSetId": "shopify-product-normalization-20260720",
+  "state": "prepared-not-approved-not-executed",
+  "observedAt": "2026-07-20",
+  "storeDomain": "themindsetmediagroup.com",
+  "approvalLevel": 3,
+  "requiredScopes": [
+    "read_products",
+    "read_inventory",
+    "write_products"
+  ],
+  "preflight": {
+    "artifact": "shopify/operations/graphql/product-normalization-preflight.graphql",
+    "abortOnAnyMismatch": true,
+    "products": [
+      {
+        "productGid": "gid://shopify/Product/9024288620698",
+        "handle": "professional-cover-design-service",
+        "expectedUpdatedAt": "2026-07-20T18:15:29Z",
+        "expectedStatus": "ACTIVE",
+        "expectedProductType": "",
+        "variants": [
+          {
+            "variantGid": "gid://shopify/ProductVariant/48658205376666",
+            "inventoryItemGid": "gid://shopify/InventoryItem/50674230755482",
+            "title": "Starter",
+            "expectedPrice": "97.95",
+            "expectedSku": null,
+            "expectedTracked": false,
+            "expectedRequiresShipping": false
+          },
+          {
+            "variantGid": "gid://shopify/ProductVariant/48658205409434",
+            "inventoryItemGid": "gid://shopify/InventoryItem/50674230788250",
+            "title": "Growth",
+            "expectedPrice": "197.95",
+            "expectedSku": null,
+            "expectedTracked": false,
+            "expectedRequiresShipping": false
+          },
+          {
+            "variantGid": "gid://shopify/ProductVariant/48658205442202",
+            "inventoryItemGid": "gid://shopify/InventoryItem/50674230821018",
+            "title": "Professional",
+            "expectedPrice": "397.95",
+            "expectedSku": null,
+            "expectedTracked": false,
+            "expectedRequiresShipping": false
+          }
+        ]
+      },
+      {
+        "productGid": "gid://shopify/Product/9022950998170",
+        "handle": "ai-image-mastery",
+        "expectedUpdatedAt": "2026-07-20T17:49:52Z",
+        "expectedStatus": "ACTIVE",
+        "expectedProductType": "",
+        "variants": [
+          {
+            "variantGid": "gid://shopify/ProductVariant/48655433498778",
+            "inventoryItemGid": "gid://shopify/InventoryItem/50671454027930",
+            "title": "Default Title",
+            "expectedPrice": "9.95",
+            "expectedSku": null,
+            "expectedTracked": false,
+            "expectedRequiresShipping": false
+          }
+        ]
+      }
+    ]
+  },
+  "forward": {
+    "artifact": "shopify/operations/graphql/product-normalization-forward.graphql",
+    "productTypes": {
+      "professional-cover-design-service": "Publishing Service",
+      "ai-image-mastery": "Digital Download"
+    },
+    "skus": {
+      "gid://shopify/ProductVariant/48658205376666": "MMG-SVC-PCD-STA",
+      "gid://shopify/ProductVariant/48658205409434": "MMG-SVC-PCD-GRO",
+      "gid://shopify/ProductVariant/48658205442202": "MMG-SVC-PCD-PRO",
+      "gid://shopify/ProductVariant/48655433498778": "MMG-DIG-AIM-STD"
+    },
+    "allowPartialUpdates": false,
+    "untouchedFields": [
+      "title",
+      "handle",
+      "descriptionHtml",
+      "vendor",
+      "tags",
+      "status",
+      "price",
+      "options",
+      "media",
+      "inventoryTracking",
+      "inventoryQuantity",
+      "requiresShipping",
+      "collections",
+      "publications",
+      "sellingPlans"
+    ]
+  },
+  "rollback": {
+    "strategy": "restore-exact-preflight-values",
+    "productTypes": {
+      "professional-cover-design-service": "",
+      "ai-image-mastery": ""
+    },
+    "skus": {
+      "gid://shopify/ProductVariant/48658205376666": null,
+      "gid://shopify/ProductVariant/48658205409434": null,
+      "gid://shopify/ProductVariant/48658205442202": null,
+      "gid://shopify/ProductVariant/48655433498778": null
+    },
+    "requiredVerification": [
+      "product-types-blank",
+      "skus-null",
+      "prices-unchanged",
+      "handles-unchanged",
+      "statuses-active",
+      "inventory-tracking-false",
+      "requires-shipping-false"
+    ]
+  },
+  "postconditions": {
+    "productTypes": {
+      "professional-cover-design-service": "Publishing Service",
+      "ai-image-mastery": "Digital Download"
+    },
+    "skuPattern": "^MMG-(SVC|DIG|SUB)-[A-Z0-9]+-[A-Z0-9]+$",
+    "uniqueSkusRequired": true,
+    "pricesMustRemain": [
+      "97.95",
+      "197.95",
+      "397.95",
+      "9.95"
+    ],
+    "inventoryTrackingMustRemain": false,
+    "requiresShippingMustRemain": false
+  }
+}
