@@ -1,6 +1,6 @@
 {
   "contract_id": "mmg-commerce-operations-control-v1",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "status": "approved_for_staging_integration",
   "approved_date": "2026-07-20",
   "authority": "MMG executive approval",
@@ -8,11 +8,16 @@
   "dependencies": {
     "commerce_contract": "registry/products/mmg-commerce-contract-v1.json",
     "deployment_contract": "registry/deployment/mmg-live-commerce-deployment-contract-v1.json",
-    "database_schema": "database/migrations/20260720_008_mmg_commerce_operations_control.sql"
+    "database_schemas": [
+      "database/migrations/20260720_008_mmg_commerce_operations_control.sql",
+      "database/migrations/20260720_009_mmg_commerce_operations_integrity.sql"
+    ]
   },
   "implementation": {
     "domain": "server/operations/commerce-operations-control.ts",
     "service": "server/operations/commerce-operations-service.ts",
+    "rollout_service": "server/operations/commerce-rollout-service.ts",
+    "rollout_evidence": "server/operations/commerce-rollout-evidence.ts",
     "http_boundary": "server/operations/commerce-operations-http.ts",
     "postgres_repository": "server/operations/postgres-commerce-operations-repository.ts",
     "metrics_collector": "server/operations/commerce-metrics-collector.ts",
@@ -161,6 +166,7 @@
       "closed"
     ],
     "open_incident_blocks_rollout": ["SEV1", "SEV2"],
+    "active_incident_severity_downgrade_allowed": false,
     "customer_identifiers_in_alerts_allowed": false,
     "raw_provider_payloads_in_alerts_allowed": false
   },
@@ -244,13 +250,19 @@
       "raw_customer_reference_persisted": false,
       "stage_skip_allowed": false
     },
+    "resume_from_paused": {
+      "automatic_resume_allowed": false,
+      "explicit_target_stage_required": true,
+      "internal_resume_requires_stage_approval": false,
+      "pilot_or_higher_resume_requires_stage_approval": true
+    },
     "advancement_gates": [
       "Current observation window is complete.",
       "No open SEV1 incident exists.",
       "No open SEV2 incident exists.",
-      "Latest health is not critical or unknown.",
-      "Latest consistency audit passed.",
-      "End-to-end evidence is fresh and complete.",
+      "Latest health is not critical or unknown and belongs to the active release.",
+      "Latest consistency audit passed and belongs to the active release.",
+      "End-to-end evidence is fresh, complete, and belongs to the active release and environment.",
       "Expanded and full stages have a stage-specific approval."
     ]
   },
@@ -301,9 +313,10 @@
     "Never interpret rollback or incident containment as authorization to revoke legitimate delivered ownership."
   ],
   "release_gates": [
-    "Migration 008 is applied after migrations 001 through 007.",
+    "Migrations 008 and 009 are applied after migrations 001 through 007.",
     "The operations endpoint is routed behind server-to-server authentication.",
     "Every telemetry adapter returns bounded, timestamped, environment-specific metrics.",
+    "Every rollout decision verifies release-bound health, consistency, and end-to-end evidence.",
     "Alert destinations are stored as encrypted configuration and only hashed destination references are persisted.",
     "Kill switches are connected to the actual checkout, scheduler, dispatcher, recommendation, signed-access, and Thank-you runtime boundaries.",
     "The initial production state is paused with customer-affecting controls disabled or observe-only.",
