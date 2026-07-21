@@ -54,17 +54,12 @@ const origin = (
   return parsed.toString().replace(/\/$/, "");
 };
 
-const paths = (
-  value: string | undefined,
-  environment: MMGCommerceOperationsEnvironment,
-): string[] => {
+const paths = (value: string | undefined): string[] => {
   const defaults = [
     "/api/internal/commerce/deployment",
     "/api/internal/commerce/operations",
     "/api/admin/commerce/operations",
-    ...(environment === "staging"
-      ? ["/api/internal/commerce/staging-integration"]
-      : []),
+    "/api/internal/commerce/staging-integration",
     "/api/internal/commerce/rehearsal",
     "/api/internal/commerce/rehearsal/adapter",
     "/api/internal/runtime-controls/control",
@@ -86,12 +81,6 @@ const paths = (
   const resolved = entries.length > 0 ? entries : defaults;
   if (resolved.some((entry) => !/^\/api\/[a-z0-9/_-]+$/i.test(entry))) {
     throw new Error("MMG_PRODUCTION_ROUTE_PROBE_PATH_INVALID");
-  }
-  if (
-    environment === "production" &&
-    resolved.includes("/api/internal/commerce/staging-integration")
-  ) {
-    throw new Error("MMG_PRODUCTION_STAGING_ROUTE_PROBE_FORBIDDEN");
   }
   return [...new Set(resolved)];
 };
@@ -157,10 +146,7 @@ export const parseMMGCommerceProductionAdapterConfig = (
     ),
     internalToken,
     requestTimeoutMs: timeout,
-    routeProbePaths: paths(
-      environmentValues.MMG_COMMERCE_ROUTE_PROBE_PATHS,
-      environment,
-    ),
+    routeProbePaths: paths(environmentValues.MMG_COMMERCE_ROUTE_PROBE_PATHS),
     alertDestinations: alertDestinations(
       environmentValues.MMG_COMMERCE_ALERT_DESTINATIONS,
     ),
