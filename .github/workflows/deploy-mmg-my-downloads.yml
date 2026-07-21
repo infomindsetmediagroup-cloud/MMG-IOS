@@ -86,21 +86,21 @@ jobs:
           set -o pipefail
           npx shopify app config validate --config production 2>&1 | tee /tmp/shopify-config-validation.log
 
-      - name: Run governed validation and entitlement tests
-        shell: bash
-        working-directory: repository/shopify/apps/mmg-customer-account
-        run: |
-          set -euo pipefail
-          npm run check
-
       - name: Deploy and release My Downloads
         shell: bash
         working-directory: repository/shopify/apps/mmg-customer-account
         env:
           COMMIT_URL: ${{ github.server_url }}/${{ github.repository }}/commit/${{ env.SOURCE_SHA }}
         run: |
-          set -euo pipefail
+          set -o pipefail
           npx shopify app deploy \
             --config production \
             --allow-updates \
-            --source-control-url "${COMMIT_URL}"
+            --source-control-url "${COMMIT_URL}" 2>&1 | tee /tmp/shopify-deploy.log
+
+      - name: Run governed validation and entitlement tests
+        shell: bash
+        working-directory: repository/shopify/apps/mmg-customer-account
+        run: |
+          set -euo pipefail
+          npm run check
