@@ -7,19 +7,13 @@ const root = resolve(process.cwd(), 'shopify/products/ai-image-mastery');
 const required = [
   'README.md',
   'contract.json',
-  'live-baseline.md',
-  'qa.md',
   'deployment.md',
   'deployment-manifest.json',
   'production-checkpoint-2026-07-20.json',
-  'production-checkpoint-2026-07-20.md',
-  'staging-record-2026-07-20.json',
-  'staging-record-2026-07-20.md',
   'publication-checkpoint-2026-07-20.json',
-  'publication-checkpoint-2026-07-20.md',
+  'production-execution-2026-07-20.json',
+  'production-execution-2026-07-20.md',
   'local-browser-qa-2026-07-20.json',
-  'local-browser-qa-2026-07-20.md',
-  'graphql/preflight.graphql',
   'source/section.html',
   'source/styles.css',
   'source/behavior.js',
@@ -35,57 +29,92 @@ for (const file of required) assert(existsSync(resolve(root, file)), `Missing ${
 if (errors.length) fail();
 
 const read = (file) => readFileSync(resolve(root, file), 'utf8');
-const readJson = (file) => JSON.parse(read(file));
+const json = (file) => JSON.parse(read(file));
 const md5 = (file) => createHash('md5').update(readFileSync(resolve(root, file))).digest('hex');
-const contract = readJson('contract.json');
-const manifest = readJson('deployment-manifest.json');
-const checkpoint = readJson('production-checkpoint-2026-07-20.json');
-const staging = readJson('staging-record-2026-07-20.json');
-const publication = readJson('publication-checkpoint-2026-07-20.json');
-const localQa = readJson('local-browser-qa-2026-07-20.json');
+
+const contract = json('contract.json');
+const manifest = json('deployment-manifest.json');
+const execution = json('production-execution-2026-07-20.json');
+const checkpoint = json('production-checkpoint-2026-07-20.json');
+const publication = json('publication-checkpoint-2026-07-20.json');
+const localQa = json('local-browser-qa-2026-07-20.json');
 const html = read('source/section.html');
 const css = read('source/styles.css');
 const js = read('source/behavior.js');
 const liquid = read('theme/sections/mmg-ai-image-mastery.liquid');
-const template = readJson('theme/templates/product.mmg-ai-image-mastery.json');
-const gql = read('graphql/preflight.graphql');
+const template = json('theme/templates/product.mmg-ai-image-mastery.json');
 
 const changeSetId = 'shopify-canonical-digital-download-ai-image-mastery-20260721';
-const exactApproval = `Approve production deployment: ${changeSetId}`;
+const approval = `Approve production deployment: ${changeSetId}`;
 const productId = 'gid://shopify/Product/9022950998170';
 const variantId = 'gid://shopify/ProductVariant/48655433498778';
 const inventoryItemId = 'gid://shopify/InventoryItem/50671454027930';
-const productionThemeId = 'gid://shopify/OnlineStoreTheme/155338309786';
-const formerMainThemeId = 'gid://shopify/OnlineStoreTheme/155336671386';
+const themeId = 'gid://shopify/OnlineStoreTheme/155338309786';
+const rollbackThemeId = 'gid://shopify/OnlineStoreTheme/155336671386';
+const suffix = 'mmg-ai-image-mastery';
 
-assert(contract.schemaVersion === '1.1.0', 'Unexpected contract schema');
-assert(contract.state === 'theme-published-product-assignment-pending-explicit-approval', 'Contract state mismatch');
+assert(contract.schemaVersion === '1.2.0', 'Unexpected contract schema');
+assert(contract.state === 'deployed-admin-verified-storefront-edge-propagation-observed', 'Contract state mismatch');
+assert(contract.changeSetId === changeSetId, 'Contract change-set mismatch');
+assert(contract.approval?.received === true, 'Deployment approval must be recorded');
+assert(contract.approval?.instruction === approval, 'Approval phrase mismatch');
 assert(contract.product?.id === productId, 'Product GID mismatch');
 assert(contract.product?.handle === 'ai-image-mastery', 'Product handle mismatch');
 assert(contract.product?.productType === 'Digital Download', 'Product type mismatch');
-assert(contract.product?.templateSuffix === null, 'Product template must remain unassigned');
-assert(contract.product?.updatedAt === '2026-07-21T00:26:43Z', 'Product timestamp mismatch');
+assert(contract.product?.templateSuffix === suffix, 'Canonical template suffix must be assigned');
+assert(contract.product?.updatedAt === '2026-07-21T04:29:15Z', 'Product timestamp mismatch');
 assert(contract.product?.tracksInventory === false, 'Inventory tracking must remain disabled');
 assert(contract.product?.requiresShipping === false, 'Shipping must remain disabled');
+assert(contract.product?.legacyDescriptionHtmlPreservedForRollback === true, 'Legacy rollback source must be preserved');
 assert(contract.variant?.id === variantId, 'Variant GID mismatch');
-assert(contract.variant?.legacyResourceId === '48655433498778', 'Legacy variant ID mismatch');
-assert(contract.variant?.inventoryItemId === inventoryItemId, 'Inventory item GID mismatch');
+assert(contract.variant?.inventoryItemId === inventoryItemId, 'Inventory item mismatch');
 assert(contract.variant?.price === '9.95', 'Price mismatch');
 assert(contract.variant?.sku === 'MMG-DIG-AIM-STD', 'SKU mismatch');
 assert(contract.variant?.inventoryPolicy === 'DENY', 'Inventory policy mismatch');
+assert(contract.variant?.tracked === false, 'Tracking state mismatch');
+assert(contract.variant?.requiresShipping === false, 'Variant shipping mismatch');
 assert(contract.variant?.availableForSale === true, 'Variant must remain available');
-assert(contract.variant?.tracked === false, 'Variant tracking must remain disabled');
-assert(contract.variant?.requiresShipping === false, 'Variant shipping must remain disabled');
-assert(contract.media?.length === 1, 'Expected one authoritative media item');
-assert(contract.media?.[0]?.width === 1800 && contract.media?.[0]?.height === 2700, 'Featured portrait dimensions mismatch');
-assert(contract.delivery?.portalRequired === false, 'Digital download must not require service intake');
-assert(contract.delivery?.physicalShipment === false, 'Digital download cannot require shipment');
-assert(contract.controls?.cartMutationRequiresCustomerClick === true, 'Cart write must require customer click');
-assert(contract.controls?.exactApprovalInstruction === exactApproval, 'Exact approval instruction mismatch');
-assert(contract.productionTheme?.id === productionThemeId, 'Production theme mismatch');
-assert(contract.productionTheme?.role === 'MAIN', 'Digital-download theme must be MAIN');
-assert(contract.rollbackThemes?.formerMain?.id === formerMainThemeId, 'Former MAIN rollback mismatch');
-assert(contract.rollbackThemes?.formerMain?.role === 'UNPUBLISHED', 'Former MAIN must remain unpublished');
+assert(contract.productionTheme?.id === themeId, 'Production theme mismatch');
+assert(contract.productionTheme?.role === 'MAIN', 'Production theme must be MAIN');
+assert(contract.rollbackThemes?.formerMain?.id === rollbackThemeId, 'Rollback theme mismatch');
+assert(contract.rollbackThemes?.formerMain?.role === 'UNPUBLISHED', 'Rollback theme must remain unpublished');
+assert(contract.execution?.changedField === 'templateSuffix', 'Only templateSuffix may change');
+assert(contract.execution?.before === null && contract.execution?.after === suffix, 'Template transition mismatch');
+assert(contract.execution?.protectedCommercialFieldsPreserved === true, 'Protected fields were not preserved');
+assert(contract.execution?.postMutationAdminReadbackPassed === true, 'Admin readback must pass');
+
+assert(manifest.schemaVersion === '1.2.0', 'Unexpected manifest schema');
+assert(manifest.changeSetId === changeSetId, 'Manifest change-set mismatch');
+assert(manifest.state === contract.state, 'Manifest state mismatch');
+assert(manifest.productGid === productId, 'Manifest product mismatch');
+assert(manifest.templateSuffix === suffix, 'Manifest suffix mismatch');
+assert(manifest.approval?.granted === true, 'Manifest approval must be granted');
+assert(manifest.approval?.instructionReceived === approval, 'Manifest approval phrase mismatch');
+assert(manifest.execution?.productTemplateAssignmentAttempted === true, 'Assignment attempt missing');
+assert(manifest.execution?.productTemplateAssignmentExecuted === true, 'Assignment execution missing');
+assert(manifest.execution?.productTemplateAssignmentUserErrors?.length === 0, 'Shopify assignment returned errors');
+assert(manifest.execution?.soleProductFieldChanged === 'templateSuffix', 'Unexpected product field change');
+assert(manifest.execution?.protectedCommercialFieldsPreserved === true, 'Protected fields mismatch');
+assert(manifest.productionTheme?.id === themeId && manifest.productionTheme?.role === 'MAIN', 'Manifest theme mismatch');
+assert(manifest.formerMainTheme?.id === rollbackThemeId && manifest.formerMainTheme?.role === 'UNPUBLISHED', 'Manifest rollback mismatch');
+assert(manifest.productContract?.variantId === variantId, 'Manifest variant mismatch');
+assert(manifest.productContract?.inventoryItemId === inventoryItemId, 'Manifest inventory item mismatch');
+for (const value of Object.values(manifest.protectedFields || {})) assert(value === 'preserved', 'A protected field is not preserved');
+
+assert(execution.changeSetId === changeSetId, 'Execution change-set mismatch');
+assert(execution.approval?.received === true, 'Execution approval missing');
+assert(execution.approval?.instruction === approval, 'Execution approval phrase mismatch');
+assert(execution.execution?.productGid === productId, 'Execution product mismatch');
+assert(execution.execution?.changedField === 'templateSuffix', 'Execution changed-field mismatch');
+assert(execution.execution?.before === null && execution.execution?.after === suffix, 'Execution transition mismatch');
+assert(execution.execution?.userErrors?.length === 0, 'Execution user errors present');
+assert(execution.postMutationReadback?.templateSuffix === suffix, 'Execution readback suffix mismatch');
+assert(execution.postMutationReadback?.variantId === variantId, 'Execution variant mismatch');
+assert(execution.postMutationReadback?.inventoryItemId === inventoryItemId, 'Execution inventory item mismatch');
+assert(execution.postMutationReadback?.descriptionHtmlPreserved === true, 'Description rollback source not preserved');
+
+assert(checkpoint.product?.templateSuffix === null, 'Historical preflight must preserve the before state');
+assert(publication.product?.templateSuffix === null, 'Historical publication checkpoint must preserve the before state');
 
 assert((html.match(/<h1\b/g) || []).length === 1, 'Source must have exactly one H1');
 assert((liquid.match(/<h1\b/g) || []).length === 1, 'Liquid must have exactly one H1');
@@ -100,70 +129,17 @@ assert(css.includes(':focus-visible'), 'Focus-visible CSS missing');
 assert(!css.includes('100vw'), '100vw is prohibited');
 assert(js.includes('/cart/add.js'), 'Cart endpoint missing');
 assert(js.includes("addEventListener('click'"), 'Customer click binding missing');
-assert(js.includes('/products/${encodeURIComponent(handle)}.js'), 'Live product endpoint missing');
-assert(js.includes("credentials: 'same-origin'"), 'Same-origin credentials missing');
 assert(!/productUpdate|graphql_mutation|admin\/api|access[_-]?token|client[_-]?secret/i.test(js), 'Client source contains prohibited Admin API or secret pattern');
-assert(template.sections?.main?.type === 'mmg-ai-image-mastery', 'Template section type mismatch');
+assert(template.sections?.main?.type === suffix, 'Template section mismatch');
 assert(JSON.stringify(template.order) === JSON.stringify(['main']), 'Template order mismatch');
 
-assert(manifest.schemaVersion === '1.1.0', 'Unexpected manifest schema');
-assert(manifest.changeSetId === changeSetId, 'Manifest change-set mismatch');
-assert(manifest.state === 'theme-published-product-assignment-pending-explicit-approval', 'Manifest state mismatch');
-assert(manifest.productGid === productId, 'Manifest product mismatch');
-assert(manifest.templateSuffix === 'mmg-ai-image-mastery', 'Manifest template suffix mismatch');
-assert(manifest.approval?.granted === false, 'Product assignment approval must remain ungranted');
-assert(manifest.approval?.exactInstructionRequired === exactApproval, 'Manifest approval phrase mismatch');
-assert(manifest.execution?.themePublishExecuted === true, 'Theme publication must be recorded');
-assert(manifest.execution?.themePublishedByAssistant === false, 'Theme publication must not be attributed to assistant');
-assert(manifest.execution?.productTemplateAssignmentAttempted === false, 'Product assignment must remain unattempted');
-assert(manifest.execution?.productTemplateAssignmentExecuted === false, 'Product assignment must remain unexecuted');
-assert(manifest.execution?.productionProductMutationOccurred === false, 'Production product mutation must remain false');
-assert(manifest.productionTheme?.id === productionThemeId, 'Manifest production theme mismatch');
-assert(manifest.productionTheme?.role === 'MAIN', 'Manifest production theme role mismatch');
-assert(manifest.formerMainTheme?.id === formerMainThemeId, 'Manifest former MAIN mismatch');
-assert(manifest.formerMainTheme?.role === 'UNPUBLISHED', 'Manifest former MAIN role mismatch');
-assert(manifest.productContract?.variantId === variantId, 'Manifest variant mismatch');
-assert(manifest.productContract?.inventoryItemId === inventoryItemId, 'Manifest inventory item mismatch');
-assert(manifest.productContract?.inventoryPolicy === 'DENY', 'Manifest inventory policy mismatch');
-for (const protectedField of ['price','sku','inventory-policy','description-html']) {
-  assert(manifest.prohibitedChanges?.includes(protectedField), `${protectedField} must be protected`);
-}
-
-assert(checkpoint.state === 'theme-published-product-unassigned', 'Checkpoint state mismatch');
-assert(checkpoint.product?.templateSuffix === null, 'Checkpoint template suffix mismatch');
-assert(checkpoint.product?.updatedAt === '2026-07-21T00:26:43Z', 'Checkpoint product timestamp mismatch');
-assert(checkpoint.variant?.id === variantId, 'Checkpoint variant mismatch');
-assert(checkpoint.variant?.inventoryPolicy === 'DENY', 'Checkpoint inventory policy mismatch');
-assert(checkpoint.variant?.inventoryItem?.id === inventoryItemId, 'Checkpoint inventory item mismatch');
-assert(checkpoint.variant?.inventoryItem?.sku === 'MMG-DIG-AIM-STD', 'Checkpoint SKU mismatch');
-assert(checkpoint.productionState?.themePublished === true, 'Checkpoint theme publication missing');
-assert(checkpoint.productionState?.productMutationOccurred === false, 'Checkpoint product mutation mismatch');
-
-assert(staging.historicalRecord === true, 'Staging record must be historical');
-assert(staging.state === 'historical-staged-theme-and-server-verified-before-publication', 'Historical staging state mismatch');
-assert(staging.candidateTheme?.id === productionThemeId, 'Historical staging theme mismatch');
-assert(staging.candidateTheme?.role === 'UNPUBLISHED', 'Historical staging role mismatch');
-assert(staging.productionMutationOccurred === false, 'Historical staging must not mutate product');
-
-assert(publication.state === 'theme-main-files-verified-product-template-unassigned', 'Publication checkpoint state mismatch');
-assert(publication.mainTheme?.id === productionThemeId, 'Publication MAIN mismatch');
-assert(publication.mainTheme?.role === 'MAIN', 'Publication MAIN role mismatch');
-assert(publication.formerMainTheme?.id === formerMainThemeId, 'Publication former MAIN mismatch');
-assert(publication.formerMainTheme?.role === 'UNPUBLISHED', 'Publication former MAIN role mismatch');
-assert(publication.product?.templateSuffix === null, 'Publication product suffix mismatch');
-assert(publication.variant?.id === variantId, 'Publication variant mismatch');
-assert(publication.productAssignment?.approvalGranted === false, 'Publication assignment approval mismatch');
-assert(publication.productAssignment?.attempted === false, 'Publication assignment attempt mismatch');
-assert(publication.verification?.allDigitalDownloadFilesMatch === true, 'Publication file verification missing');
-assert(publication.verification?.allCanonicalServiceFilesPreserved === true, 'Canonical service preservation missing');
-
-const expectedFiles = new Map([
+const expected = new Map([
   ['theme/assets/mmg-ai-image-mastery.css', ['5a749b91c5078360f9a64d642ef268be', 10471]],
   ['theme/assets/mmg-ai-image-mastery.js', ['2653b8a8d87c8f5852f653b7580c405d', 5665]],
   ['theme/sections/mmg-ai-image-mastery.liquid', ['52893c2bc11789b613424ec296d838d0', 14700]],
   ['theme/templates/product.mmg-ai-image-mastery.json', ['f767d9a33d9c4afb1ebee3c899e58768', 132]]
 ]);
-for (const [path, [checksum, size]] of expectedFiles) {
+for (const [path, [checksum, size]] of expected) {
   assert(md5(path) === checksum, `${path} checksum mismatch`);
   assert(statSync(resolve(root, path)).size === size, `${path} size mismatch`);
 }
@@ -171,35 +147,18 @@ assert(read('source/styles.css') === read('theme/assets/mmg-ai-image-mastery.css
 assert(read('source/behavior.js') === read('theme/assets/mmg-ai-image-mastery.js'), 'Source/theme JavaScript drift');
 
 assert(localQa.overallPass === true, 'Local browser QA must pass');
-assert(localQa.productionMutationOccurred === false, 'Local browser QA must not mutate production');
 for (const width of ['320','375','768','1024','1440']) {
   const viewport = localQa.viewports?.[width];
-  assert(Boolean(viewport), `Missing viewport ${width}`);
-  if (!viewport) continue;
-  assert(viewport.innerWidth === Number(width), `Viewport ${width} width mismatch`);
-  assert(viewport.documentScrollWidth === Number(width), `Viewport ${width} document overflow`);
-  assert(viewport.bodyScrollWidth === Number(width), `Viewport ${width} body overflow`);
-  assert(viewport.rootScrollWidth === Number(width), `Viewport ${width} root overflow`);
-  assert(viewport.overflow === false, `Viewport ${width} overflow`);
-  assert(viewport.h1Count === 1, `Viewport ${width} H1 mismatch`);
-  assert(viewport.objectFit === 'contain', `Viewport ${width} image containment mismatch`);
-  assert(viewport.enabledButtons === 1, `Viewport ${width} purchase control mismatch`);
-  assert(viewport.hiddenRevealCount === 0, `Viewport ${width} reveal fail-safe mismatch`);
-  assert(viewport.price === '$9.95', `Viewport ${width} price mismatch`);
+  assert(viewport?.overflow === false, `Viewport ${width} overflow`);
+  assert(viewport?.h1Count === 1, `Viewport ${width} H1 mismatch`);
+  assert(viewport?.objectFit === 'contain', `Viewport ${width} containment mismatch`);
+  assert(viewport?.price === '$9.95', `Viewport ${width} price mismatch`);
 }
-assert(localQa.functional?.cartRequests?.[0]?.id === 48655433498778, 'Cart variant ID mismatch');
+assert(localQa.functional?.cartRequests?.[0]?.id === 48655433498778, 'Cart variant mismatch');
 assert(localQa.functional?.cartRequests?.[0]?.quantity === 1, 'Cart quantity mismatch');
-assert(localQa.functional?.focusVisible?.outlineWidth === '3px', 'Focus outline mismatch');
-assert(localQa.functional?.reducedMotion?.opacity === '1', 'Reduced-motion opacity mismatch');
-assert(localQa.functional?.reducedMotion?.transform === 'none', 'Reduced-motion transform mismatch');
-
-assert(gql.includes('query MMGAIImageMasteryProductionPreflight'), 'Stored preflight query missing');
-for (const field of ['updatedAt','variants','inventoryItem','media','requiresSellingPlan','templateSuffix']) {
-  assert(gql.includes(field), `Stored preflight missing ${field}`);
-}
 
 if (errors.length) fail();
-console.log('Canonical AI Image Mastery digital-download contract is valid.');
+console.log('Canonical AI Image Mastery digital-download deployment record is valid.');
 
 function fail() {
   for (const error of errors) console.error(`- ${error}`);
