@@ -60,6 +60,7 @@ const paths = (value: string | undefined): string[] => {
     "/api/internal/commerce/operations",
     "/api/admin/commerce/operations",
     "/api/internal/commerce/staging-integration",
+    "/api/internal/commerce/staging-readiness",
     "/api/internal/commerce/rehearsal",
     "/api/internal/commerce/rehearsal/adapter",
     "/api/internal/runtime-controls/control",

@@ -14,6 +14,10 @@ import {
 } from "./http-commerce-control-adapter.js";
 import { MMGHTTPCommerceRouteProbe } from "./http-commerce-route-probe.js";
 import { MMGHTTPCommerceStagingRehearsalGateway } from "./http-commerce-staging-rehearsal-gateway.js";
+import {
+  MMGHTTPStagingReadinessRouteProbe,
+  type MMGStagingReadinessRouteTarget,
+} from "./http-staging-readiness-route-probe.js";
 import { MMGPostgresCommerceOperationsRepository } from "./postgres-commerce-operations-repository.js";
 import { MMGPostgresCommerceProductionTelemetry } from "./postgres-commerce-production-telemetry.js";
 import { MMGPostgresCommerceRehearsalEvidenceAdapter } from "./postgres-commerce-rehearsal-evidence.js";
@@ -24,6 +28,7 @@ import {
   MMGPostgresStagingIntegrationRepository,
   recordMMGStagingAdapterHeartbeat,
 } from "./postgres-staging-integration-repository.js";
+import { MMGPostgresStagingReadinessGateway } from "./postgres-staging-readiness-gateway.js";
 import { MMGPostgresStagingRuntimeControlBoundary } from "./postgres-staging-runtime-control-boundary.js";
 import {
   routeMMGProductionOperationsRequest,
@@ -46,9 +51,12 @@ export interface MMGStagingIntegrationTokens {
 
 export interface MMGStagingIntegrationRuntimeDependencies {
   config: MMGCommerceProductionAdapterConfig;
+  releaseCommitSha: string;
   tokens: MMGStagingIntegrationTokens;
   database: MMGTransactionalDatabase;
   dashboardAuthenticator: MMGCommerceOperationsDashboardAuthenticator;
+  adminAuthenticationConfigured: boolean;
+  alertEnvironmentLabel: string;
   alertHasher: MMGCommerceAlertHasher;
   hashPayloadSync(value: unknown): string;
   createControlReceiptId?(): string;
@@ -77,6 +85,27 @@ const validateTokens = (tokens: MMGStagingIntegrationTokens): void => {
   if (new Set(values).size !== values.length) {
     throw new Error("MMG_STAGING_INTEGRATION_TOKENS_MUST_BE_DISTINCT");
   }
+};
+
+const readinessCredential = (
+  path: string,
+): MMGStagingReadinessRouteTarget["credential"] => {
+  if (
+    path === "/api/internal/commerce/staging-integration" ||
+    path === "/api/internal/commerce/staging-readiness"
+  ) {
+    return "integration";
+  }
+  if (path === "/api/internal/commerce/rehearsal/adapter") {
+    return "rehearsalAdapter";
+  }
+  if (path === "/api/internal/commerce/rehearsal") {
+    return "rehearsal";
+  }
+  if (path.startsWith("/api/internal/runtime-controls/")) {
+    return "runtimeControl";
+  }
+  return "operations";
 };
 
 class TokenAuthenticator {
@@ -110,6 +139,15 @@ export const buildMMGStagingIntegrationRuntime = (
   if (dependencies.config.environment !== "staging") {
     throw new Error("MMG_STAGING_INTEGRATION_RUNTIME_STAGING_ONLY");
   }
+  if (!/^[a-f0-9]{40}$/.test(dependencies.releaseCommitSha)) {
+    throw new Error("MMG_STAGING_INTEGRATION_COMMIT_SHA_INVALID");
+  }
+  if (!dependencies.adminAuthenticationConfigured) {
+    throw new Error("MMG_STAGING_ADMIN_AUTHENTICATION_REQUIRED");
+  }
+  if (dependencies.alertEnvironmentLabel.trim().toLowerCase() !== "staging") {
+    throw new Error("MMG_STAGING_ALERT_ENVIRONMENT_INVALID");
+  }
   validateTokens(dependencies.tokens);
   const now = dependencies.now ?? (() => new Date());
   const fetcher = dependencies.fetcher ?? fetch;
@@ -125,6 +163,17 @@ export const buildMMGStagingIntegrationRuntime = (
     internalToken: dependencies.tokens.operations,
     requestTimeoutMs: dependencies.config.requestTimeoutMs,
     targets: dependencies.config.routeProbePaths.map((path) => ({ path })),
+    fetcher,
+  });
+  const detailedRouteProbe = new MMGHTTPStagingReadinessRouteProbe({
+    runtimeOrigin: dependencies.config.runtimeOrigin,
+    requestTimeoutMs: dependencies.config.requestTimeoutMs,
+    tokens: dependencies.tokens,
+    targets: dependencies.config.routeProbePaths.map((path) => ({
+      path,
+      method: "HEAD",
+      credential: readinessCredential(path),
+    })),
     fetcher,
   });
   const telemetry = new MMGPostgresCommerceProductionTelemetry({
@@ -275,6 +324,41 @@ export const buildMMGStagingIntegrationRuntime = (
     runtime: { bootstrapSafeState },
     rehearsal: rehearsalEvidence,
   });
+  const alertDestinations = Object.values(
+    dependencies.config.alertDestinations,
+  ).filter((value): value is string => typeof value === "string");
+  const stagingReadinessGateway = new MMGPostgresStagingReadinessGateway({
+    database: dependencies.database,
+    routes: detailedRouteProbe,
+    config: {
+      releaseId: dependencies.config.releaseId,
+      releaseCommitSha: dependencies.releaseCommitSha,
+      runtimeOrigin: dependencies.config.runtimeOrigin,
+      credentials: {
+        operationsConfigured: dependencies.tokens.operations.length >= 32,
+        integrationConfigured: dependencies.tokens.integration.length >= 32,
+        rehearsalConfigured: dependencies.tokens.rehearsal.length >= 32,
+        rehearsalAdapterConfigured:
+          dependencies.tokens.rehearsalAdapter.length >= 32,
+        runtimeControlConfigured:
+          dependencies.tokens.runtimeControl.length >= 32,
+        adminAuthenticationConfigured:
+          dependencies.adminAuthenticationConfigured,
+        distinctServerCredentials:
+          new Set(Object.values(dependencies.tokens)).size === 5,
+      },
+      alertChannels: Object.keys(dependencies.config.alertDestinations),
+      requiredAlertChannels: [
+        "on_call_pager",
+        "operations_email",
+        "operations_chat",
+      ],
+      alertDestinationsUseHttps:
+        alertDestinations.length >= 3 &&
+        alertDestinations.every((value) => new URL(value).protocol === "https:"),
+      alertEnvironmentLabel: dependencies.alertEnvironmentLabel,
+    },
+  });
 
   return {
     async route(request: Request): Promise<Response | null> {
@@ -303,6 +387,12 @@ export const buildMMGStagingIntegrationRuntime = (
           authenticator: integrationAuthenticator,
           repository: stagingIntegrationRepository,
           gateway: stagingIntegrationGateway,
+          allowedOrigins,
+          now,
+        },
+        stagingReadiness: {
+          authenticator: integrationAuthenticator,
+          gateway: stagingReadinessGateway,
           allowedOrigins,
           now,
         },

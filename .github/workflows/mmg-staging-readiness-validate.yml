@@ -1,0 +1,48 @@
+name: Validate MMG Staging Readiness
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/mmg-commerce-staging-readiness.yml"
+      - ".github/workflows/mmg-staging-readiness-validate.yml"
+      - "backend-tests/mmg-staging-readiness-inspector.test.ts"
+      - "deployment/mmg-commerce-staging.env.example"
+      - "docs/operations/MMG-COMMERCE-STAGING-READINESS-INSPECTOR-v1.0.md"
+      - "registry/deployment/mmg-commerce-staging-readiness-contract-v1.json"
+      - "scripts/mmg-commerce-staging-readiness.mjs"
+      - "server/deployment/live-commerce-deployment.ts"
+      - "server/operations/**"
+      - "shopify/qa/mmg-commerce-staging-readiness-inspector-qa.md"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install validation dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Run focused tests
+        run: npx vitest run backend-tests/mmg-staging-readiness-inspector.test.ts backend-tests/mmg-staging-integration.test.ts
+      - name: Validate contracts, scripts, and workflow boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m json.tool registry/deployment/mmg-commerce-staging-readiness-contract-v1.json >/dev/null
+          node --check scripts/mmg-commerce-staging-readiness.mjs
+          grep -Fq '/api/internal/commerce/staging-readiness' server/operations/production-operations-router.ts
+          grep -Fq '/api/internal/commerce/staging-readiness' server/operations/production-adapter-config.ts
+          grep -Fq 'publicationAllowed:false' .github/workflows/mmg-commerce-staging-readiness.yml
+          grep -Fq 'liveCustomerDataAllowed:false' .github/workflows/mmg-commerce-staging-readiness.yml
+          ! grep -R --line-number -E 'postgres(ql)?://[^[:space:]]+:[^[:space:]@]+@|Bearer [A-Za-z0-9_-]{24,}' \
+            registry/deployment/mmg-commerce-staging-readiness-contract-v1.json \
+            deployment/mmg-commerce-staging.env.example \
+            docs/operations/MMG-COMMERCE-STAGING-READINESS-INSPECTOR-v1.0.md

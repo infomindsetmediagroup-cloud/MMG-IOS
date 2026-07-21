@@ -1,0 +1,178 @@
+{
+  "contract_id": "mmg-commerce-staging-readiness-contract-v1",
+  "version": "1.0.0",
+  "status": "approved_for_staging",
+  "approved_date": "2026-07-21",
+  "authority": "MMG executive approval",
+  "purpose": "Provide a fail-closed, read-only readiness inspection before any staging execute or rehearse action by verifying immutable release identity, protected environment configuration, database prerequisites, route mounts, provider health, canonical safe controls, migration tooling, and the absence of publication or live-customer capability.",
+  "dependencies": {
+    "staging_integration_contract": "registry/deployment/mmg-commerce-staging-integration-contract-v1.json",
+    "deployment_contract": "registry/deployment/mmg-live-commerce-deployment-contract-v1.json",
+    "operations_contract": "registry/operations/mmg-commerce-operations-control-contract-v1.json"
+  },
+  "implementation": {
+    "domain": "server/operations/staging-readiness-inspector.ts",
+    "service": "server/operations/staging-readiness-service.ts",
+    "http_boundary": "server/operations/staging-readiness-http.ts",
+    "postgres_gateway": "server/operations/postgres-staging-readiness-gateway.ts",
+    "detailed_route_probe": "server/operations/http-staging-readiness-route-probe.ts",
+    "runtime_composition": "server/operations/staging-integration-runtime.ts",
+    "logical_endpoint": "/api/internal/commerce/staging-readiness",
+    "local_inspector": "scripts/mmg-commerce-staging-readiness.mjs",
+    "workflow": ".github/workflows/mmg-commerce-staging-readiness.yml",
+    "environment_contract": "deployment/mmg-commerce-staging.env.example"
+  },
+  "authority_boundary": {
+    "environment": "staging_only",
+    "authentication_role": "mmg-commerce-staging-integrator",
+    "credential": "staging integration server credential",
+    "same_origin_required": true,
+    "internal_request_marker_required": true,
+    "response_cache": "no-store, private",
+    "mutation_mode": "read_only",
+    "shopify_mutation_allowed": false,
+    "database_mutation_allowed": false,
+    "runtime_control_mutation_allowed": false,
+    "publication_allowed": false,
+    "live_customer_data_allowed": false
+  },
+  "release_identity_checks": [
+    "requested release ID is valid",
+    "requested release commit is a lowercase 40-character SHA",
+    "checked-out source commit matches the requested commit",
+    "configured runtime release ID matches the requested release",
+    "configured runtime release commit matches the requested commit"
+  ],
+  "protected_environment_checks": [
+    "GitHub Environment name is mmg-commerce-staging",
+    "all required protected values are present",
+    "five server credentials are at least 32 characters",
+    "five server credentials are mutually distinct",
+    "Admin Portal authentication is separately configured",
+    "runtime origin and protected endpoints use HTTPS",
+    "protected endpoints belong to the staging runtime origin",
+    "alert environment is explicitly staging",
+    "required alert channels are configured through HTTPS"
+  ],
+  "database_checks": {
+    "required": [
+      "staging PostgreSQL is reachable",
+      "pgcrypto is available"
+    ],
+    "pre_execution_warnings": [
+      "migration ledger is not yet available",
+      "one or more migrations 001 through 011 are not yet applied"
+    ],
+    "post_execution_requirement": "The execute and rehearse actions continue to require all migrations to be reconciled through the SHA-256 ledger."
+  },
+  "runtime_route_checks": {
+    "accepted_statuses": [
+      "2xx",
+      "3xx",
+      "401",
+      "403",
+      "405"
+    ],
+    "blocking_statuses": [
+      "404",
+      "5xx",
+      "timeout",
+      "network failure"
+    ],
+    "required_route": "/api/internal/commerce/staging-readiness",
+    "credential_aware": true,
+    "raw_credentials_exposed": false
+  },
+  "provider_checks": {
+    "required_adapters": [
+      "database",
+      "runtime_routes",
+      "runtime_controls",
+      "alerts",
+      "scheduler",
+      "dispatcher",
+      "storage_signer",
+      "admin_auth"
+    ],
+    "required_status": "healthy",
+    "required_release_binding": true,
+    "maximum_heartbeat_age_minutes": 15,
+    "missing_heartbeat_status": "unknown_and_blocking"
+  },
+  "canonical_safe_state": {
+    "product_publication": "disabled",
+    "subscription_checkout": "disabled",
+    "webhook_ingestion": "enabled",
+    "delivery_scheduler": "disabled",
+    "delivery_dispatcher": "disabled",
+    "recommendation_automation": "observe_only",
+    "signed_library_access": "disabled",
+    "thank_you_handoff": "observe_only",
+    "rollout_stage": "paused",
+    "rollout_percentage": 0
+  },
+  "tooling_checks": [
+    "Node.js major version is at least 22",
+    "psql is available",
+    "sha256sum is available",
+    "migration runner is present",
+    "release-registration script is present",
+    "staging integration workflow is present"
+  ],
+  "report_contract": {
+    "statuses": [
+      "ready",
+      "blocked"
+    ],
+    "check_statuses": [
+      "passed",
+      "failed",
+      "warning",
+      "unknown",
+      "not_applicable"
+    ],
+    "unknown_critical_check_blocks": true,
+    "warning_blocks": false,
+    "includes_remediation": true,
+    "includes_sanitized_evidence": true,
+    "secrets_in_report_allowed": false,
+    "database_url_in_report_allowed": false,
+    "alert_destination_url_in_report_allowed": false,
+    "customer_identifier_in_report_allowed": false
+  },
+  "workflow_contract": {
+    "github_environment": "mmg-commerce-staging",
+    "manual_dispatch_only": true,
+    "exact_commit_checkout_required": true,
+    "local_inspection_runs_first": true,
+    "runtime_inspection_runs_only_after_local_pass": true,
+    "sanitized_artifact_retention_days": 30,
+    "readiness_blockers_fail_workflow": true,
+    "execute_or_rehearse_triggered": false
+  },
+  "release_gates": [
+    "The local protected-environment inspection returns ready with zero blockers.",
+    "The protected runtime inspection returns ready with zero blockers.",
+    "The requested release and configured runtime are bound to the same exact commit.",
+    "PostgreSQL and pgcrypto are reachable before execute.",
+    "All required routes, credentials, alert channels, provider heartbeats, and safe controls pass.",
+    "The customer rollout is paused at zero percent.",
+    "The report confirms publicationAllowed=false and liveCustomerDataAllowed=false.",
+    "Only after readiness passes may the existing staging integration workflow execute migrations or run the rehearsal."
+  ],
+  "non_actions": [
+    "does not apply migrations",
+    "does not register a release",
+    "does not bootstrap controls",
+    "does not run incident drills",
+    "does not mutate Shopify",
+    "does not enable checkout",
+    "does not expose a customer cohort",
+    "does not publish the subscription product"
+  ],
+  "integration_sequence": {
+    "previous_component": "Staging integration execution runtime and evidence control",
+    "current_component": "Staging readiness inspector",
+    "next_component": "Configure the protected mmg-commerce-staging environment, deploy the staging runtime, run readiness, then execute the first exact-release staging integration and rehearsal"
+  }
+}
