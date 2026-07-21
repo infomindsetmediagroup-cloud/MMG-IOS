@@ -97,11 +97,13 @@ describe("MMG Cloudflare commerce staging host", () => {
     ).resolves.toBeNull();
   });
 
-  it("forwards application routes only through the configured staging upstream", async () => {
+  it("forwards API routes only through the configured staging upstream", async () => {
+    const forwarded: string[] = [];
     const host = buildMMGCloudflareCommerceStagingHost({
       ...environment(),
       MMG_COMMERCE_UPSTREAM: {
         async fetch(request: Request) {
+          forwarded.push(new URL(request.url).pathname);
           return Response.json(
             {
               ok: true,
@@ -113,18 +115,24 @@ describe("MMG Cloudflare commerce staging host", () => {
         },
       },
     });
-    const response = await host.fetch(
+    const apiResponse = await host.fetch(
       new Request(
         "https://mmg-commerce-staging.example.workers.dev/api/knowledge-library/picker",
       ),
     );
-    expect(response.status).toBe(401);
-    expect(response.headers.get("x-mmg-upstream-routed")).toBe("true");
-    expect(response.headers.get("x-mmg-publication-allowed")).toBe("false");
-    await expect(response.json()).resolves.toMatchObject({
+    expect(apiResponse.status).toBe(401);
+    expect(apiResponse.headers.get("x-mmg-upstream-routed")).toBe("true");
+    expect(apiResponse.headers.get("x-mmg-publication-allowed")).toBe("false");
+    await expect(apiResponse.json()).resolves.toMatchObject({
       upstreamPath: "/api/knowledge-library/picker",
       environment: "staging",
     });
+
+    const pageResponse = await host.fetch(
+      new Request("https://mmg-commerce-staging.example.workers.dev/private-page"),
+    );
+    expect(pageResponse.status).toBe(404);
+    expect(forwarded).toEqual(["/api/knowledge-library/picker"]);
   });
 
   it("rejects unauthenticated provider-heartbeat refresh before database access", async () => {
@@ -148,7 +156,7 @@ describe("MMG Cloudflare commerce staging host", () => {
     });
   });
 
-  it("records only exact-release remote provider health as healthy", async () => {
+  it("records only exact-release provider health as healthy", async () => {
     const recorded: Array<{ adapterCode: string; status: string }> = [];
     const database: MMGSQLExecutor = {
       async query<Row extends Record<string, unknown>>(text: string) {
@@ -174,7 +182,7 @@ describe("MMG Cloudflare commerce staging host", () => {
       releaseId: "release-staging-20260721-002",
       runtimeOrigin: "https://runtime.example.test",
       runtimeProbeToken: token("i"),
-      adminTokenConfigured: true,
+      adminToken: token("d"),
       targets: parseMMGStagingProviderTargets({
         alertEndpoint: "https://provider.example.test/alerts",
         schedulerEndpoint: "https://provider.example.test/scheduler",
@@ -186,6 +194,15 @@ describe("MMG Cloudflare commerce staging host", () => {
         const url = String(input);
         if (url.includes("staging-readiness")) {
           return new Response(null, { status: 405 });
+        }
+        if (url.includes("/api/admin/commerce/operations")) {
+          return Response.json(
+            {
+              ok: true,
+              releaseId: "release-staging-20260721-002",
+            },
+            { status: 200 },
+          );
         }
         const mismatch = url.includes("dispatcher");
         return Response.json(
@@ -202,6 +219,9 @@ describe("MMG Cloudflare commerce staging host", () => {
     });
     const summary = await coordinator.refresh();
     expect(summary.results).toHaveLength(8);
+    expect(
+      summary.results.find((entry) => entry.adapterCode === "admin_auth"),
+    ).toMatchObject({ status: "healthy" });
     expect(
       summary.results.find((entry) => entry.adapterCode === "dispatcher"),
     ).toMatchObject({ status: "degraded" });
