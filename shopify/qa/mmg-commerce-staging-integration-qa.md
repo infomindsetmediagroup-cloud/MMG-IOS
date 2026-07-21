@@ -34,12 +34,13 @@
 
 ## Safe runtime state
 
-- [ ] Product publication is `observe_only`.
+- [ ] Product publication is `disabled`.
 - [ ] Subscription checkout is `disabled`.
 - [ ] Webhook ingestion is `enabled`.
 - [ ] Delivery scheduler and dispatcher are `disabled`.
 - [ ] Recommendation automation is `observe_only`.
-- [ ] Signed library access and Thank-you handoff are `disabled`.
+- [ ] Signed library access is `disabled`.
+- [ ] Thank-you handoff is `observe_only`.
 - [ ] Rollout is `paused` at 0% for the exact release.
 - [ ] Webhook ingestion cannot be disabled.
 - [ ] Publication cannot be enabled from the operations or runtime-control route.
