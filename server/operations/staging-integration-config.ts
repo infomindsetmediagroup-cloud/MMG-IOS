@@ -1,11 +1,22 @@
+import {
+  parseMMGCommerceProductionAdapterConfig,
+  type MMGCommerceProductionAdapterConfig,
+  type MMGCommerceProductionAdapterEnvironment,
+} from "./production-adapter-config.js";
 import type { MMGStagingIntegrationTokens } from "./staging-integration-runtime.js";
 
-export interface MMGStagingIntegrationEnvironment {
+export interface MMGStagingIntegrationEnvironment
+  extends MMGCommerceProductionAdapterEnvironment {
   MMG_COMMERCE_STAGING_OPERATIONS_TOKEN?: string;
   MMG_COMMERCE_STAGING_REHEARSAL_TOKEN?: string;
   MMG_COMMERCE_STAGING_REHEARSAL_ADAPTER_TOKEN?: string;
   MMG_COMMERCE_STAGING_RUNTIME_CONTROL_TOKEN?: string;
   MMG_COMMERCE_STAGING_INTEGRATION_TOKEN?: string;
+}
+
+export interface MMGStagingIntegrationRuntimeConfig {
+  config: MMGCommerceProductionAdapterConfig;
+  tokens: MMGStagingIntegrationTokens;
 }
 
 const secret = (value: string | undefined, code: string): string => {
@@ -43,6 +54,21 @@ export const parseMMGStagingIntegrationTokens = (
     throw new Error("MMG_STAGING_INTEGRATION_TOKENS_MUST_BE_DISTINCT");
   }
   return tokens;
+};
+
+export const parseMMGStagingIntegrationRuntimeConfig = (
+  environment: MMGStagingIntegrationEnvironment,
+): MMGStagingIntegrationRuntimeConfig => {
+  const tokens = parseMMGStagingIntegrationTokens(environment);
+  const config = parseMMGCommerceProductionAdapterConfig({
+    ...environment,
+    MMG_COMMERCE_ENVIRONMENT: "staging",
+    MMG_COMMERCE_INTERNAL_TOKEN: tokens.operations,
+  });
+  if (config.environment !== "staging") {
+    throw new Error("MMG_STAGING_INTEGRATION_RUNTIME_STAGING_ONLY");
+  }
+  return { config, tokens };
 };
 
 export const redactMMGStagingIntegrationTokens = (
