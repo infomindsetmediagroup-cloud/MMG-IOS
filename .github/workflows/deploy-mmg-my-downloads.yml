@@ -92,11 +92,15 @@ jobs:
         env:
           COMMIT_URL: ${{ github.server_url }}/${{ github.repository }}/commit/${{ env.SOURCE_SHA }}
         run: |
-          set -o pipefail
+          set +e
           npx shopify app deploy \
             --config production \
             --allow-updates \
-            --source-control-url "${COMMIT_URL}" 2>&1 | tee /tmp/shopify-deploy.log
+            --source-control-url "${COMMIT_URL}" \
+            > /tmp/shopify-deploy.log 2>&1
+          status=$?
+          tail -n 80 /tmp/shopify-deploy.log
+          exit $status
 
       - name: Run governed validation and entitlement tests
         shell: bash
