@@ -1,0 +1,67 @@
+name: Validate MMG Commerce Staging Host
+
+on:
+  pull_request:
+    paths:
+      - "cloudflare/mmg-commerce-staging-worker.ts"
+      - "server/runtime/cloudflare-*.ts"
+      - "server/operations/staging-*.ts"
+      - "server/operations/production-adapter-config.ts"
+      - "scripts/mmg-build-commerce-staging-wrangler.mjs"
+      - "scripts/mmg-commerce-staging-readiness.mjs"
+      - ".github/workflows/mmg-commerce-staging-runtime-deploy.yml"
+      - ".github/workflows/mmg-commerce-staging-integration.yml"
+      - ".github/workflows/mmg-commerce-staging-readiness.yml"
+      - "backend-tests/mmg-cloudflare-staging-host.test.ts"
+      - "registry/deployment/mmg-commerce-staging-host-runtime-contract-v1.json"
+      - "deployment/mmg-commerce-staging.env.example"
+      - "package.json"
+      - "tsconfig.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+
+      - name: TypeScript validation
+        run: npm run typecheck
+
+      - name: Focused staging-host tests
+        run: npm run validate:commerce-staging-host
+
+      - name: Validate governing contract JSON
+        run: |
+          set -euo pipefail
+          jq -e '
+            .contract_id == "mmg-commerce-staging-host-runtime-contract-v1" and
+            .version == "1.0.0" and
+            .status == "approved_for_staging_deployment" and
+            .platform_contract.environment == "staging_only" and
+            .safety_contract.product_publication_enabled == false and
+            .safety_contract.subscription_checkout_enabled == false and
+            .safety_contract.live_customer_cohort_exposed == false and
+            (.required_secrets | length) == 8 and
+            (.provider_heartbeat_contract.required_adapters | length) == 8
+          ' registry/deployment/mmg-commerce-staging-host-runtime-contract-v1.json
+
+      - name: Validate deployment workflow boundary
+        run: |
+          set -euo pipefail
+          grep -q 'environment: mmg-commerce-staging' .github/workflows/mmg-commerce-staging-runtime-deploy.yml
+          grep -q 'MMG_CLOUDFLARE_STAGING_HYPERDRIVE_ID' .github/workflows/mmg-commerce-staging-runtime-deploy.yml
+          grep -q 'MMG_CLOUDFLARE_STAGING_UPSTREAM_SERVICE' .github/workflows/mmg-commerce-staging-runtime-deploy.yml
+          grep -q 'publicationAllowed == false' .github/workflows/mmg-commerce-staging-runtime-deploy.yml
+          grep -q 'liveCustomerDataAllowed == false' .github/workflows/mmg-commerce-staging-runtime-deploy.yml
