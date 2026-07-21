@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "1.0.0",
+  "recordId": "shopify-canonical-service-local-browser-qa-20260720",
+  "sourceChangeSetId": "shopify-canonical-service-product-source-20260721",
+  "stagingThemeId": "gid://shopify/OnlineStoreTheme/155335557274",
+  "stagingThemeRole": "UNPUBLISHED",
+  "executedAt": "2026-07-21T01:52:00Z",
+  "environment": "local Chromium harness using exact staged CSS and JavaScript with representative Liquid-rendered markup",
+  "evidenceClassification": "supplemental-local-browser-evidence-not-live-preview-acceptance",
+  "livePreviewAcceptance": "pending",
+  "limitations": [
+    "The authenticated Shopify unpublished preview was not rendered.",
+    "Native header and footer were represented by local shell elements.",
+    "Product hydration and cart endpoints were intercepted mocks; no real cart mutation occurred."
+  ],
+  "viewports": {
+    "320": {"innerWidth":320,"documentScrollWidth":320,"bodyScrollWidth":320,"rootScrollWidth":320,"overflow":false,"h1Count":1,"objectFit":"contain","growthSelected":true,"enabledButtons":3,"availability":"Available now","hiddenRevealCount":0},
+    "375": {"innerWidth":375,"documentScrollWidth":375,"bodyScrollWidth":375,"rootScrollWidth":375,"overflow":false,"h1Count":1,"objectFit":"contain","growthSelected":true,"enabledButtons":3,"availability":"Available now","hiddenRevealCount":0},
+    "768": {"innerWidth":768,"documentScrollWidth":768,"bodyScrollWidth":768,"rootScrollWidth":768,"overflow":false,"h1Count":1,"objectFit":"contain","growthSelected":true,"enabledButtons":3,"availability":"Available now","hiddenRevealCount":0},
+    "1024": {"innerWidth":1024,"documentScrollWidth":1024,"bodyScrollWidth":1024,"rootScrollWidth":1024,"overflow":false,"h1Count":1,"objectFit":"contain","growthSelected":true,"enabledButtons":3,"availability":"Available now","hiddenRevealCount":0},
+    "1440": {"innerWidth":1440,"documentScrollWidth":1440,"bodyScrollWidth":1440,"rootScrollWidth":1440,"overflow":false,"h1Count":1,"objectFit":"contain","growthSelected":true,"enabledButtons":3,"availability":"Available now","hiddenRevealCount":0}
+  },
+  "functional": {
+    "focusVisible": {"insideRoot":true,"tag":"A","text":"Start Your Cover · From $97.95","outlineWidth":"3px","outlineStyle":"solid","outlineColor":"rgba(0, 123, 255, 0.4)"},
+    "growthKeyboardSelection": true,
+    "cartRequest": {"id":48658205409434,"quantity":1},
+    "cartSuccessMessage": "Growth was added to your cart.",
+    "reducedMotion": {"matches":true,"opacity":"1","transform":"none","transitionDuration":"1e-05s"}
+  },
+  "checks": {
+    "noOverflowAllViewports": true,
+    "oneH1AllViewports": true,
+    "containedImageAllViewports": true,
+    "hydrationAllViewports": true,
+    "revealFailSafeAllViewports": true,
+    "focusVisibleInsideRoot": true,
+    "cartRequestExactGrowth": true,
+    "cartSuccessMessage": true,
+    "reducedMotionSafe": true
+  },
+  "overallPass": true,
+  "productionMutationOccurred": false,
+  "productionAuthorizationGranted": false
+}
