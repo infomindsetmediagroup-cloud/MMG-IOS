@@ -1,0 +1,37 @@
+name: Validate MMG My Downloads
+
+on:
+  pull_request:
+    paths:
+      - 'shopify/apps/mmg-customer-account/**'
+      - '.github/workflows/validate-mmg-my-downloads.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'shopify/apps/mmg-customer-account/**'
+      - '.github/workflows/validate-mmg-my-downloads.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: shopify/apps/mmg-customer-account
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate governed contract
+        run: node scripts/validate-my-downloads.mjs
+
+      - name: Test entitlement model
+        run: node --test extensions/mmg-my-downloads/tests/*.test.mjs
