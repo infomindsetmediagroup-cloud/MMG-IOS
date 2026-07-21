@@ -1,17 +1,19 @@
 import {
   executeMMGCommerceOperationsCommand,
   type MMGCommerceOperationsCommand,
-  type MMGCommerceOperationsDependencies,
   type MMGCommerceOperationsPrincipal,
 } from "./commerce-operations-service.js";
-import { executeMMGCommerceRolloutCommand } from "./commerce-rollout-service.js";
+import {
+  executeMMGCommerceRolloutCommand,
+  type MMGCommerceRolloutDependencies,
+} from "./commerce-rollout-service.js";
 
 export interface MMGCommerceOperationsAuthenticator {
   authenticate(request: Request): Promise<MMGCommerceOperationsPrincipal | null>;
 }
 
 export interface MMGCommerceOperationsHTTPDependencies
-  extends MMGCommerceOperationsDependencies {
+  extends MMGCommerceRolloutDependencies {
   authenticator: MMGCommerceOperationsAuthenticator;
   allowedOrigins: ReadonlySet<string>;
 }
