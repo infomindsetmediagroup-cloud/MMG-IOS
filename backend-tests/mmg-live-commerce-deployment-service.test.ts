@@ -51,6 +51,7 @@ const probe = (
   schedulerActive: complete,
   dispatcherActive: complete,
   storageSignerActive: complete,
+  stagingRehearsalPassed: complete,
   e2eEvidence: complete
     ? {
         runId: `e2e:${releaseId}:${now.toISOString()}`,
@@ -185,7 +186,7 @@ describe("MMG live commerce deployment service", () => {
     ).rejects.toThrow("MMG_DEPLOYMENT_APPROVAL_REQUIRED");
   });
 
-  it("publishes only after fresh release-bound evidence and approval", async () => {
+  it("publishes only after fresh release-bound evidence, rehearsal, and approval", async () => {
     const releaseId = "release-20260720-publish";
     const repo = repository(true);
     let published = false;
