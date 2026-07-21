@@ -1,0 +1,78 @@
+name: MMG Commerce Staging Rehearsal
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: Exact immutable staging commerce release ID
+        required: true
+        type: string
+      release_commit_sha:
+        description: Exact 40-character commit SHA under rehearsal
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mmg-commerce-staging-rehearsal
+  cancel-in-progress: false
+
+jobs:
+  rehearse:
+    runs-on: ubuntu-latest
+    environment: mmg-commerce-staging
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_commit_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate release identity
+        env:
+          RELEASE_ID: ${{ inputs.release_id }}
+          RELEASE_COMMIT_SHA: ${{ inputs.release_commit_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$ ]]
+          [[ "$RELEASE_COMMIT_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT_SHA"
+      - name: Install validation dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+      - run: npm run check
+      - name: Execute protected staging rehearsal
+        env:
+          ENDPOINT: ${{ secrets.MMG_COMMERCE_REHEARSAL_ENDPOINT }}
+          TOKEN: ${{ secrets.MMG_COMMERCE_REHEARSAL_TOKEN }}
+          RELEASE_ID: ${{ inputs.release_id }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ENDPOINT"
+          test -n "$TOKEN"
+          request_id="rehearsal-${RUN_ID}-${RUN_ATTEMPT}"
+          payload=$(jq -n \
+            --arg runId "$request_id" \
+            --arg releaseId "$RELEASE_ID" \
+            '{runId:$runId,releaseId:$releaseId,environment:"staging",publicationAllowed:false,liveCustomerDataAllowed:false}')
+          response=$(curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $TOKEN" \
+            --header "Content-Type: application/json" \
+            --header "X-MMG-Internal-Request: github-actions-staging-rehearsal" \
+            --data "$payload" \
+            "$ENDPOINT")
+          echo "$response" | jq . > mmg-commerce-staging-rehearsal-evidence.json
+          echo "$response" | jq -e '.ok == true and .status == "passed" and .evidence.publicationAttempted == false and .evidence.liveCustomerDataUsed == false'
+      - name: Upload sanitized rehearsal evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmg-commerce-staging-rehearsal-${{ github.run_id }}
+          path: mmg-commerce-staging-rehearsal-evidence.json
+          if-no-files-found: error
+          retention-days: 30
