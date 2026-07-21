@@ -157,14 +157,19 @@ export const buildMMGCloudflareCommerceStagingHost = (
     statementTimeoutMs: 15_000,
     connectionTimeoutMs: config.requestTimeoutMs,
   });
+  const adminTokenConfigured =
+    environment.MMG_COMMERCE_STAGING_ADMIN_DASHBOARD_TOKEN.trim().length >= 32;
   const adminAuthenticator = new MMGCloudflareStagingAdminAuthenticator(
     environment.MMG_COMMERCE_STAGING_ADMIN_DASHBOARD_TOKEN,
   );
   const runtime = buildMMGStagingIntegrationRuntime({
     config,
+    releaseCommitSha,
     tokens,
     database,
     dashboardAuthenticator: adminAuthenticator,
+    adminAuthenticationConfigured: adminTokenConfigured,
+    alertEnvironmentLabel: "staging",
     alertHasher: {
       async sha256(value: string) {
         return sha256(value);
@@ -191,9 +196,7 @@ export const buildMMGCloudflareCommerceStagingHost = (
       releaseId: config.releaseId,
       runtimeOrigin: config.runtimeOrigin,
       runtimeProbeToken: tokens.integration,
-      adminTokenConfigured:
-        environment.MMG_COMMERCE_STAGING_ADMIN_DASHBOARD_TOKEN.trim().length >=
-        32,
+      adminTokenConfigured,
       targets: providerTargets,
       fetcher: options.fetcher,
       timeoutMs: config.requestTimeoutMs,
@@ -253,14 +256,13 @@ export const buildMMGCloudflareCommerceStagingHost = (
           );
         }
         const summary = await heartbeatCoordinator.refresh();
+        const healthy = summary.results.every(
+          (entry) => entry.status === "healthy",
+        );
         return Response.json(
           {
-            ok: summary.results.every((entry) => entry.status === "healthy"),
-            status: summary.results.every(
-              (entry) => entry.status === "healthy",
-            )
-              ? "healthy"
-              : "blocked",
+            ok: healthy,
+            status: healthy ? "healthy" : "blocked",
             summary,
             publicationAllowed: false,
             liveCustomerDataAllowed: false,
