@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "recordId": "shopify-canonical-service-production-checkpoint-20260720",
   "changeSetId": "shopify-canonical-service-product-source-20260721",
   "state": "approved-preflight-passed-theme-publish-blocked-manual-action-required",
@@ -13,7 +13,7 @@
     "granted": true,
     "exactInstruction": "Approve production deployment: shopify-canonical-service-product-source-20260721",
     "observedAt": "2026-07-21T02:04:11Z",
-    "architecture": "publish-verified-staging-theme-then-assign-product-template"
+    "architecture": "publish-verified-current-main-clone-then-assign-product-template"
   },
   "preflight": {
     "passed": true,
@@ -35,20 +35,33 @@
       "id": "gid://shopify/OnlineStoreTheme/155242856602",
       "name": "Kairos Staging",
       "role": "MAIN",
+      "prefix": "/t/10",
+      "updatedAt": "2026-07-21T02:03:16Z",
       "candidateFilesPresent": false
     },
-    "candidate": {
+    "supersededCandidate": {
       "id": "gid://shopify/OnlineStoreTheme/155335557274",
       "name": "MMG Service Staging 2026-07-20",
       "role": "UNPUBLISHED",
       "prefix": "/t/16",
+      "publishPermitted": false,
+      "reason": "The MAIN theme changed after this clone was created; publishing it could overwrite newer storefront work."
+    },
+    "candidate": {
+      "id": "gid://shopify/OnlineStoreTheme/155336671386",
+      "name": "MMG Service Production Candidate 2026-07-20",
+      "role": "UNPUBLISHED",
+      "prefix": "/t/17",
+      "duplicatedFromThemeId": "gid://shopify/OnlineStoreTheme/155242856602",
+      "duplicatedAt": "2026-07-21T02:15:40Z",
       "processing": false,
       "processingFailed": false,
+      "verifiedAt": "2026-07-21T02:24:03Z",
       "files": [
-        {"filename":"assets/mmg-professional-cover-design.css","checksumMd5":"19a0676ec927c3e649db64a6e11a9c98","size":11943},
-        {"filename":"assets/mmg-professional-cover-design.js","checksumMd5":"db464655bddaf9a73906e49df8762a66","size":6549},
-        {"filename":"sections/mmg-professional-cover-design.liquid","checksumMd5":"f5090c30a9e202c056cf8c3a40b690ff","size":13480},
-        {"filename":"templates/product.mmg-professional-cover-design.json","checksumMd5":"d8804eeb80b0f2aa7a1eb1c373841b21","size":140}
+        {"filename":"assets/mmg-professional-cover-design.css","contentType":"text/css","checksumMd5":"19a0676ec927c3e649db64a6e11a9c98","size":11943},
+        {"filename":"assets/mmg-professional-cover-design.js","contentType":"application/javascript","checksumMd5":"db464655bddaf9a73906e49df8762a66","size":6549},
+        {"filename":"sections/mmg-professional-cover-design.liquid","contentType":"application/x-liquid","checksumMd5":"f5090c30a9e202c056cf8c3a40b690ff","size":13480},
+        {"filename":"templates/product.mmg-professional-cover-design.json","contentType":"application/json","checksumMd5":"6935d2e46128a36c8d5578ac1e62d50b","size":503,"semanticVerification":"main section type mmg-professional-cover-design; order contains main only"}
       ]
     }
   },
@@ -58,18 +71,26 @@
     "themePublishExecuted": false,
     "themePublishBlockedByHostPolicy": true,
     "blockReason": "Publishing a theme is blocked — making a theme live must be done manually in Shopify admin to prevent accidental storefront changes.",
+    "currentMainDriftDetectedAfterOriginalClone": true,
+    "staleCandidateSuperseded": true,
+    "staleCandidatePublicationProhibited": true,
+    "freshCandidateDuplicatedFromCurrentMain": true,
+    "freshCandidateFilesInstalled": true,
+    "freshCandidateFilesVerified": true,
     "productTemplateAssignmentSchemaValidation": "passed",
     "productTemplateAssignmentAttempted": false,
     "productTemplateAssignmentExecuted": false,
-    "reasonAssignmentNotAttempted": "The current MAIN theme does not contain the alternate product template. Assigning the suffix before successful theme publication would create an unsafe production dependency.",
+    "reasonAssignmentNotAttempted": "The verified alternate product template is still on an unpublished theme. Assigning the suffix before successful theme publication would create an unsafe production dependency.",
     "fallbackDescriptionHtmlDeploymentAttempted": false,
     "fallbackReason": "The approved path uses the preferred dedicated-template architecture; no silent fallback to coupled descriptionHtml source is permitted."
   },
   "manualBoundary": {
     "required": true,
     "adminPath": "https://admin.shopify.com/store/07kd8e-qw/themes",
-    "action": "Publish theme MMG Service Staging 2026-07-20",
-    "themeId": "gid://shopify/OnlineStoreTheme/155335557274",
+    "action": "Publish theme MMG Service Production Candidate 2026-07-20",
+    "themeId": "gid://shopify/OnlineStoreTheme/155336671386",
+    "themePrefix": "/t/17",
+    "prohibitedThemeId": "gid://shopify/OnlineStoreTheme/155335557274",
     "afterAction": "Re-run role and checksum verification, then assign templateSuffix mmg-professional-cover-design only to product gid://shopify/Product/9024288620698."
   },
   "productionState": {
