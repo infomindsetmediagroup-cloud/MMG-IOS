@@ -29,7 +29,7 @@ concurrency:
 jobs:
   deploy:
     name: Validate and deploy customer-account extension
-    if: github.event_name != 'pull_request' || github.head_ref == 'codex/diagnose-mmg-my-downloads-deploy'
+    if: github.event_name != 'pull_request' || github.head_ref == 'codex/my-downloads-deploy-check'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
