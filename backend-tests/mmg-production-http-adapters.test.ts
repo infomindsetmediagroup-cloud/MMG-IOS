@@ -120,7 +120,8 @@ describe("MMG production HTTP adapters", () => {
         status: "delivered",
       }),
     );
-    const payload = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body));
+    const firstInit = fetcher.mock.calls[0]?.[1] as RequestInit;
+    const payload = JSON.parse(String(firstInit.body));
     expect(payload.customerDataIncluded).toBe(false);
     expect(payload).not.toHaveProperty("customerId");
   });
