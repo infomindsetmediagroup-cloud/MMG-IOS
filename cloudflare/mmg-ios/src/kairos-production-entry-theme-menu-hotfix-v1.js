@@ -20,14 +20,18 @@ import { handleThemeMenuHotfixPublish, KAIROS_THEME_MENU_HOTFIX_BUILD } from "./
 import { handleLiveHeaderNavigationPublish, KAIROS_LIVE_HEADER_BUILD } from "./kairos-live-header-navigation-publisher-20260719.js";
 import { handleAllThemeNavigationPublish, KAIROS_ALL_THEME_NAVIGATION_BUILD } from "./kairos-all-theme-navigation-publisher-20260719.js";
 import { handleKairosMcp, KAIROS_MCP_BUILD } from "./kairos-mcp-server-v1.js";
+import { handleKairosCommerceOrchestrator, KAIROS_COMMERCE_ORCHESTRATOR_BUILD } from "./kairos-commerce-orchestrator-v1.js";
 
 // Canonical source remains kairos-native-navigation-theme-publisher-v9.js.
-const BUILD = "kairos-production-entry-canonical-navigation-20260719-9";
+const BUILD = "kairos-production-entry-canonical-navigation-20260721-10";
 export { KairosProject };
 
 export default {
   async fetch(request, env, ctx) {
     try {
+      const commerceResponse = await handleKairosCommerceOrchestrator(request, env);
+      if (commerceResponse) return stamp(commerceResponse);
+
       const mcpResponse = await handleKairosMcp(request, env);
       if (mcpResponse) return stamp(mcpResponse);
 
@@ -58,12 +62,13 @@ export default {
         pageShell: KAIROS_PAGE_SHELL_BUILD,
         nativePageRepair: KAIROS_NATIVE_PAGE_REPAIR_BUILD,
         mcpBuild: KAIROS_MCP_BUILD,
+        commerceOrchestrator: KAIROS_COMMERCE_ORCHESTRATOR_BUILD,
         allThemeNavigation: KAIROS_ALL_THEME_NAVIGATION_BUILD,
         liveHeaderNavigation: KAIROS_LIVE_HEADER_BUILD,
         themeMenuHotfix: KAIROS_THEME_MENU_HOTFIX_BUILD,
         error: {
           code: error?.code || "canonical_navigation_entry_failed",
-          message: error instanceof Error ? error.message : "Canonical navigation or page repair failed."
+          message: error instanceof Error ? error.message : "Canonical navigation, commerce orchestration, or page repair failed."
         }
       }, Number(error?.status || 500));
     }
@@ -144,6 +149,7 @@ function stamp(response) {
   headers.set("X-MMG-Live-Header-Navigation", KAIROS_LIVE_HEADER_BUILD);
   headers.set("X-MMG-Theme-Menu-Hotfix", KAIROS_THEME_MENU_HOTFIX_BUILD);
   headers.set("X-Kairos-MCP", KAIROS_MCP_BUILD);
+  headers.set("X-Kairos-Commerce-Orchestrator", KAIROS_COMMERCE_ORCHESTRATOR_BUILD);
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
@@ -169,7 +175,8 @@ function json(value, status = 200) {
       "X-MMG-All-Theme-Navigation": KAIROS_ALL_THEME_NAVIGATION_BUILD,
       "X-MMG-Live-Header-Navigation": KAIROS_LIVE_HEADER_BUILD,
       "X-MMG-Theme-Menu-Hotfix": KAIROS_THEME_MENU_HOTFIX_BUILD,
-      "X-Kairos-MCP": KAIROS_MCP_BUILD
+      "X-Kairos-MCP": KAIROS_MCP_BUILD,
+      "X-Kairos-Commerce-Orchestrator": KAIROS_COMMERCE_ORCHESTRATOR_BUILD
     }
   });
 }
