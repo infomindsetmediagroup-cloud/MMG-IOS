@@ -1,15 +1,16 @@
 {
   "contract_id": "mmg-commerce-staging-integration-contract-v1",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "status": "approved_for_staging_execution",
   "approved_date": "2026-07-21",
   "authority": "MMG executive approval",
-  "purpose": "Apply and verify the canonical commerce migrations in staging, mount the protected commerce routes, connect distinct secret-managed runtime boundaries, maintain a safe paused staging state, execute isolated SEV1 and SEV2 drills, and persist exact-release rehearsal evidence without publishing Shopify resources or using live customer data.",
+  "purpose": "Apply and verify the canonical commerce migrations in staging, mount the protected commerce routes, connect distinct secret-managed runtime boundaries, maintain a safe paused staging state, refresh exact-release provider evidence, execute isolated SEV1 and SEV2 drills, and persist exact-release rehearsal evidence without publishing Shopify resources or using live customer data.",
   "dependencies": {
     "deployment_contract": "registry/deployment/mmg-live-commerce-deployment-contract-v1.json",
     "operations_contract": "registry/operations/mmg-commerce-operations-control-contract-v1.json",
     "adapter_rehearsal_contract": "registry/operations/mmg-production-adapters-staging-rehearsal-contract-v1.json",
     "readiness_contract": "registry/deployment/mmg-commerce-staging-readiness-contract-v1.json",
+    "staging_host_contract": "registry/deployment/mmg-commerce-staging-host-runtime-contract-v1.json",
     "database_schema": "database/migrations/20260721_011_mmg_staging_integration_execution.sql"
   },
   "implementation": {
@@ -26,8 +27,10 @@
     "fixture_evidence": "server/operations/commerce-staging-fixture-evidence.ts",
     "logical_endpoint": "/api/internal/commerce/staging-integration",
     "readiness_endpoint": "/api/internal/commerce/staging-readiness",
+    "provider_heartbeat_endpoint": "/api/internal/commerce/provider-heartbeats/refresh",
     "workflow": ".github/workflows/mmg-commerce-staging-integration.yml",
     "readiness_workflow": ".github/workflows/mmg-commerce-staging-readiness.yml",
+    "staging_host_workflow": ".github/workflows/mmg-commerce-staging-runtime-deploy.yml",
     "environment_contract": "deployment/mmg-commerce-staging.env.example"
   },
   "actions": [
@@ -42,18 +45,27 @@
     "rehearse"
   ],
   "readiness_gate": {
-    "required_before_actions": [
-      "execute",
-      "rehearse"
-    ],
-    "local_report_ready_required": true,
-    "runtime_report_ready_required": true,
+    "local_preflight_required_before_database_mutation": true,
+    "runtime_report_required_after_bootstrap": true,
     "maximum_blockers": 0,
     "publication_allowed": false,
     "live_customer_data_allowed": false,
     "does_not_apply_migrations": true,
-    "does_not_trigger_rehearsal": true
+    "does_not_trigger_rehearsal": true,
+    "circular_dependency_allowed": false
   },
+  "execution_order": [
+    "validate exact source",
+    "local protected-environment preflight",
+    "reconcile migrations 001 through 011",
+    "register exact staging release",
+    "bootstrap canonical safe state",
+    "refresh eight exact-release provider heartbeats",
+    "enforce protected runtime readiness",
+    "execute rehearsal when requested",
+    "inspect or verify exact-release integration",
+    "archive sanitized evidence"
+  ],
   "migration_contract": {
     "environment": "staging_only",
     "ordered_migrations": [
@@ -79,15 +91,16 @@
   },
   "credential_contract": {
     "minimum_length": 32,
-    "all_credentials_must_be_distinct": true,
-    "credentials": [
+    "integration_credentials": [
       "operations",
       "staging_integration",
       "rehearsal_operator",
       "rehearsal_adapter",
       "runtime_control"
     ],
+    "integration_credentials_must_be_distinct": true,
     "admin_portal_authentication_is_separate": true,
+    "provider_health_credential_is_separate": true,
     "credentials_in_source_control_allowed": false,
     "credentials_in_responses_allowed": false
   },
@@ -151,6 +164,10 @@
   "verification_contract": {
     "required_migration_count": 11,
     "all_route_probes_must_pass": true,
+    "required_routes_include": [
+      "/api/internal/commerce/staging-readiness",
+      "/api/internal/commerce/provider-heartbeats/refresh"
+    ],
     "required_exact_release_healthy_heartbeats": [
       "database",
       "runtime_routes",
@@ -172,7 +189,8 @@
     "github_environment": "mmg-commerce-staging",
     "exact_commit_checkout_required": true,
     "validation_before_execution_required": true,
-    "readiness_before_execution_required": true,
+    "local_preflight_before_migrations_required": true,
+    "runtime_readiness_after_bootstrap_required": true,
     "migration_execution_actions": [
       "execute",
       "rehearse"
@@ -183,15 +201,15 @@
     "shopify_publication_action_available": false
   },
   "release_gates": [
-    "The local and protected runtime readiness reports return ready with zero blockers before execute or rehearse.",
-    "Migrations 001 through 011 are reconciled through the SHA-256 migration ledger in the staging PostgreSQL database.",
-    "The staging runtime mounts readiness, integration, operations, Admin operations, rehearsal, rehearsal-adapter, runtime-control, Knowledge Library, Customer Portal, Thank-you, webhook, and deployment routes.",
-    "Five distinct staging server credentials and separate Admin Portal authentication are configured outside source control.",
-    "Nonproduction SEV1 and SEV2 alert destinations are configured and verified.",
+    "The isolated Cloudflare staging upstream and host Workers are deployed for the exact release.",
+    "The local protected-environment preflight returns ready with zero blockers before database mutation.",
+    "Migrations 001 through 011 are reconciled through the SHA-256 migration ledger in staging PostgreSQL.",
+    "The exact release is registered before safe-state bootstrap.",
+    "Bootstrap establishes canonical safe controls and Paused 0% rollout before full readiness is enforced.",
+    "The staging runtime mounts readiness, integration, provider-heartbeat, operations, Admin operations, rehearsal, rehearsal-adapter, runtime-control, Knowledge Library, Customer Portal, Thank-you, webhook, and deployment routes.",
     "Database, route, control, alert, scheduler, dispatcher, storage-signer, and Admin-auth adapters write healthy heartbeats for the exact release.",
-    "Bootstrap establishes the canonical safe controls and Paused 0% rollout state.",
+    "Protected runtime readiness returns zero blockers after heartbeat refresh.",
     "The exact-release staging SEV1, SEV2, consistency, staged-rollout, and rights-preservation rehearsal passes.",
-    "Verification returns no blockers while publication and live-customer flags remain false.",
     "Production remains paused and Shopify publication remains a separate executive-approved action."
   ],
   "publication_boundary": {
@@ -202,8 +220,8 @@
     "production_database_changed": false
   },
   "integration_sequence": {
-    "previous_component": "Staging integration execution runtime and evidence control",
-    "current_component": "Staging integration execution guarded by the readiness inspector",
-    "next_component": "Configure the protected staging environment, deploy the runtime, pass readiness, then execute and review the first exact-release staging rehearsal"
+    "previous_component": "Cloudflare staging host runtime and readiness inspector",
+    "current_component": "Exact-release staging integration with corrected bootstrap and readiness order",
+    "next_component": "Configure protected infrastructure, deploy the staging upstream and host, then run execute and rehearse"
   }
 }
