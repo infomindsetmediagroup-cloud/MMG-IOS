@@ -24,12 +24,20 @@ import {
   type MMGCommerceProductionAdapterConfig,
 } from "./production-adapter-config.js";
 
+const ALLOWED_INTERNAL_ROLES = new Set([
+  "mmg-commerce-operator",
+  "mmg-commerce-monitor",
+  "mmg-incident-commander",
+  "mmg-production-release-manager",
+]);
+
 export interface MMGProductionOperationsRuntimeDependencies {
   config: MMGCommerceProductionAdapterConfig;
   database: MMGTransactionalDatabase;
   dashboardAuthenticator: MMGCommerceOperationsDashboardAuthenticator;
   alertHasher: MMGCommerceAlertHasher;
   hashPayloadSync(value: unknown): string;
+  internalRoles?: string[];
   allowedOrigins?: ReadonlySet<string>;
   fetcher?: typeof fetch;
   now?: () => Date;
@@ -47,13 +55,30 @@ const tokenEquals = (left: string, right: string): boolean => {
   return mismatch === 0;
 };
 
+const resolveRoles = (roles: string[] | undefined): string[] => {
+  const resolved = [...new Set(roles ?? ["mmg-commerce-operator", "mmg-commerce-monitor"] )];
+  if (!resolved.includes("mmg-commerce-operator")) {
+    throw new Error("MMG_PRODUCTION_INTERNAL_OPERATOR_ROLE_REQUIRED");
+  }
+  if (resolved.some((role) => !ALLOWED_INTERNAL_ROLES.has(role))) {
+    throw new Error("MMG_PRODUCTION_INTERNAL_ROLE_INVALID");
+  }
+  return resolved;
+};
+
 class MMGInternalOperationsAuthenticator implements MMGCommerceOperationsAuthenticator {
   readonly #token: string;
   readonly #environment: "staging" | "production";
+  readonly #roles: string[];
 
-  constructor(token: string, environment: "staging" | "production") {
+  constructor(
+    token: string,
+    environment: "staging" | "production",
+    roles: string[],
+  ) {
     this.#token = token;
     this.#environment = environment;
+    this.#roles = roles;
   }
 
   async authenticate(request: Request) {
@@ -65,12 +90,7 @@ class MMGInternalOperationsAuthenticator implements MMGCommerceOperationsAuthent
     return {
       actorId: `commerce-runtime:${this.#environment}`,
       sessionId: `internal:${this.#environment}`,
-      roles: [
-        "mmg-commerce-operator",
-        "mmg-commerce-monitor",
-        "mmg-incident-commander",
-        "mmg-production-release-manager",
-      ],
+      roles: [...this.#roles],
     };
   }
 }
@@ -118,6 +138,7 @@ export const buildMMGProductionOperationsRuntime = (
   const authenticator = new MMGInternalOperationsAuthenticator(
     dependencies.config.internalToken,
     dependencies.config.environment,
+    resolveRoles(dependencies.internalRoles),
   );
   const allowedOrigins = new Set([
     dependencies.config.runtimeOrigin,
