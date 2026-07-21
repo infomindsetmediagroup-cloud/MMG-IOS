@@ -1,6 +1,6 @@
-client_id = "13551d4b9b290845899b0e34ccd29b15"
-name = "MMG Customer Account"
-handle = "mmg-customer-account"
+client_id = "c59b40991414fb575c15acd4dae8cd74"
+name = "Customer Account Integration"
+handle = "customer-account-integration"
 application_url = "https://shopify.dev/apps/default-app-home"
 embedded = false
 
