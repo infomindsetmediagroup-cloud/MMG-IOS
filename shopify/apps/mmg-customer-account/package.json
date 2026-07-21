@@ -1,0 +1,22 @@
+{
+  "name": "@mmg/customer-account",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Mindset Media Group customer-account extensions for secure digital access.",
+  "workspaces": [
+    "extensions/*"
+  ],
+  "scripts": {
+    "dev": "shopify app dev",
+    "deploy": "shopify app deploy",
+    "validate": "node scripts/validate-my-downloads.mjs",
+    "test": "node --test extensions/mmg-my-downloads/tests/*.test.mjs",
+    "check": "npm run validate && npm test"
+  },
+  "devDependencies": {
+    "@shopify/cli": "4.5.2"
+  },
+  "engines": {
+    "node": ">=20.10"
+  }
+}
