@@ -1,0 +1,61 @@
+{
+  "schemaVersion": "1.0.0",
+  "changeSetId": "shopify-customer-account-my-downloads-library-20260721",
+  "state": "source-complete-shopify-app-link-and-deploy-required",
+  "surface": "customer-account.page.render",
+  "extension": {
+    "name": "My Downloads",
+    "handle": "mmg-my-downloads",
+    "apiVersion": "2026-07",
+    "requiredScopes": [
+      "customer_read_customers",
+      "customer_read_orders"
+    ],
+    "apiAccess": true,
+    "networkAccess": false
+  },
+  "eligibility": {
+    "orderFinancialStatuses": [
+      "PAID",
+      "PARTIALLY_REFUNDED"
+    ],
+    "orderMustNotBeCancelled": true,
+    "lineItemRequiresShipping": false,
+    "lineItemGiftCard": false,
+    "productType": "Digital Download",
+    "skuPrefixFallback": "MMG-DIG-",
+    "fullyRefundedLineItemsExcluded": true
+  },
+  "security": {
+    "fileUrlsStored": false,
+    "fileBytesDuplicated": false,
+    "entitlementSource": "shopify-paid-order-history",
+    "accessDestination": "order.statusPageUrl",
+    "deliveryAuthority": "Shopify Digital Products",
+    "customerAuthentication": "Shopify Customer Accounts"
+  },
+  "integration": {
+    "currentMenuGid": "gid://shopify/Menu/248455561370",
+    "currentTemporaryMenuEntry": "Orders & Downloads",
+    "currentTemporaryPageGid": "gid://shopify/CustomerAccountPage/126387191962",
+    "postDeployMenuEntry": "My Downloads",
+    "postDeployMenuType": "CUSTOMER_ACCOUNT_PAGE",
+    "postDeployResourceId": "resolve-from-customerAccountPages-after-deployment"
+  },
+  "canonicalDigitalProduct": {
+    "productGid": "gid://shopify/Product/9022950998170",
+    "variantGid": "gid://shopify/ProductVariant/48655433498778",
+    "sku": "MMG-DIG-AIM-STD",
+    "assetAttachment": "confirmed-by-merchant-screenshot-one-active-file",
+    "paidOrderEvidence": "confirmed-admin-readback-order-1001"
+  },
+  "releaseGates": [
+    "link-source-to-mmg-shopify-dev-dashboard-app",
+    "approve-protected-customer-data-access",
+    "deploy-extension-with-shopify-cli",
+    "resolve-deployed-customer-account-page-gid",
+    "replace-temporary-orders-downloads-menu-entry",
+    "verify-ai-image-mastery-appears-for-order-1001",
+    "verify-access-button-opens-digital-products-download-block"
+  ]
+}
