@@ -6,7 +6,8 @@ const root = resolve(process.cwd(), 'shopify/products/professional-cover-design-
 const required = [
   'README.md', 'contract.json', 'live-baseline.md', 'qa.md', 'deployment.md',
   'deployment-manifest.json', 'staging-record-2026-07-20.json',
-  'staging-record-2026-07-20.md', 'source/section.html', 'source/styles.css',
+  'staging-record-2026-07-20.md', 'local-browser-qa-2026-07-20.json',
+  'local-browser-qa-2026-07-20.md', 'source/section.html', 'source/styles.css',
   'source/behavior.js', 'graphql/preflight.graphql'
 ];
 const errors = [];
@@ -17,6 +18,7 @@ if (errors.length) fail();
 const contract = JSON.parse(readFileSync(resolve(root, 'contract.json'), 'utf8'));
 const manifest = JSON.parse(readFileSync(resolve(root, 'deployment-manifest.json'), 'utf8'));
 const staging = JSON.parse(readFileSync(resolve(root, 'staging-record-2026-07-20.json'), 'utf8'));
+const localQa = JSON.parse(readFileSync(resolve(root, 'local-browser-qa-2026-07-20.json'), 'utf8'));
 const html = readFileSync(resolve(root, 'source/section.html'), 'utf8');
 const css = readFileSync(resolve(root, 'source/styles.css'), 'utf8');
 const js = readFileSync(resolve(root, 'source/behavior.js'), 'utf8');
@@ -109,7 +111,7 @@ assert(staging.themes?.staging?.processingFailed === false, 'Staging theme proce
 
 assert(staging.preview?.path === '/t/16/products/professional-cover-design-service?view=mmg-professional-cover-design', 'Preview path mismatch');
 assert(staging.preview?.templateSuffix === 'mmg-professional-cover-design', 'Preview template suffix mismatch');
-assert(staging.preview?.browserRenderedQa === 'pending', 'Rendered QA must remain pending until evidence exists');
+assert(staging.preview?.browserRenderedQa === 'pending', 'Rendered QA must remain pending until live preview evidence exists');
 assert(staging.preview?.routeFailureObserved === false, 'Tooling rejection must not be recorded as a Shopify route failure');
 assert(typeof staging.preview?.pendingReason === 'string' && staging.preview.pendingReason.length > 30, 'Pending rendered-QA reason is required');
 
@@ -172,14 +174,59 @@ assert(staging.qa?.productionUnchanged === 'passed-server', 'Production unchange
 for (const field of [
   'renderedResponsiveOverflow', 'renderedHeaderFooter',
   'renderedKeyboardAndFocus', 'renderedCartNetworkRequest'
-]) assert(staging.qa?.[field] === 'pending-browser-retrieval', `${field} must remain pending until browser evidence exists`);
+]) assert(staging.qa?.[field] === 'pending-browser-retrieval', `${field} must remain pending until live preview evidence exists`);
+
+assert(localQa.schemaVersion === '1.0.0', 'Unexpected local-browser QA schema');
+assert(localQa.recordId === 'shopify-canonical-service-local-browser-qa-20260720', 'Local-browser QA record ID mismatch');
+assert(localQa.sourceChangeSetId === manifest.changeSetId, 'Local-browser QA must reference the deployment change set');
+assert(localQa.stagingThemeId === staging.themes?.staging?.id, 'Local-browser QA staging theme mismatch');
+assert(localQa.stagingThemeRole === 'UNPUBLISHED', 'Local-browser QA must remain tied to an unpublished theme');
+assert(localQa.evidenceClassification === 'supplemental-local-browser-evidence-not-live-preview-acceptance', 'Local-browser evidence classification mismatch');
+assert(localQa.livePreviewAcceptance === 'pending', 'Local browser QA must not close the live preview gate');
+assert(localQa.productionMutationOccurred === false, 'Local browser QA must not mutate production');
+assert(localQa.productionAuthorizationGranted === false, 'Local browser QA must not grant production authorization');
+assert(localQa.overallPass === true, 'Local browser QA must pass');
+
+const expectedWidths = ['320', '375', '768', '1024', '1440'];
+assert(Object.keys(localQa.viewports || {}).length === expectedWidths.length, 'Local browser QA must contain exactly five viewports');
+for (const width of expectedWidths) {
+  const viewport = localQa.viewports?.[width];
+  assert(Boolean(viewport), `Missing local browser viewport ${width}`);
+  if (!viewport) continue;
+  assert(viewport.innerWidth === Number(width), `Viewport ${width} inner width mismatch`);
+  assert(viewport.documentScrollWidth === Number(width), `Viewport ${width} document overflow detected`);
+  assert(viewport.bodyScrollWidth === Number(width), `Viewport ${width} body overflow detected`);
+  assert(viewport.rootScrollWidth === Number(width), `Viewport ${width} root overflow detected`);
+  assert(viewport.overflow === false, `Viewport ${width} must not overflow`);
+  assert(viewport.h1Count === 1, `Viewport ${width} must have one H1`);
+  assert(viewport.objectFit === 'contain', `Viewport ${width} portrait image must remain contained`);
+  assert(viewport.growthSelected === true, `Viewport ${width} must keep Growth selected`);
+  assert(viewport.enabledButtons === 3, `Viewport ${width} must enable exactly three tiers after hydration`);
+  assert(viewport.availability === 'Available now', `Viewport ${width} availability mismatch`);
+  assert(viewport.hiddenRevealCount === 0, `Viewport ${width} reveal fail-safe left hidden content`);
+}
+
+for (const field of [
+  'noOverflowAllViewports', 'oneH1AllViewports', 'containedImageAllViewports',
+  'hydrationAllViewports', 'revealFailSafeAllViewports', 'focusVisibleInsideRoot',
+  'cartRequestExactGrowth', 'cartSuccessMessage', 'reducedMotionSafe'
+]) assert(localQa.checks?.[field] === true, `Local browser check ${field} must pass`);
+assert(localQa.functional?.focusVisible?.insideRoot === true, 'Keyboard focus must reach an MMG control');
+assert(localQa.functional?.focusVisible?.outlineWidth === '3px', 'MMG focus outline width mismatch');
+assert(localQa.functional?.growthKeyboardSelection === true, 'Growth keyboard selection must pass');
+assert(localQa.functional?.cartRequest?.id === 48658205409434, 'Local cart request must use Growth numeric variant ID');
+assert(localQa.functional?.cartRequest?.quantity === 1, 'Local cart request quantity must remain one project');
+assert(localQa.functional?.cartSuccessMessage === 'Growth was added to your cart.', 'Local cart success message mismatch');
+assert(localQa.functional?.reducedMotion?.matches === true, 'Reduced motion must be emulated');
+assert(localQa.functional?.reducedMotion?.opacity === '1', 'Reduced motion must leave content visible');
+assert(localQa.functional?.reducedMotion?.transform === 'none', 'Reduced motion must remove transform dependency');
 
 assert(staging.rollback?.stagingOnly === true, 'Current rollback boundary must remain staging-only');
 assert(staging.rollback?.productionRollbackRequiredAtThisStage === false, 'Production rollback must not be required before production changes');
 assert(staging.rollback?.deleteOnlyTheseFiles?.length === 4, 'Staging rollback must identify exactly four files');
 
 if (errors.length) fail();
-console.log('Canonical service product valid: source contract preserved, unpublished staging verified, rendered browser QA pending, production unchanged.');
+console.log('Canonical service product valid: source preserved, unpublished staging verified, local browser QA passed, live preview QA pending, production unchanged.');
 
 function fail() {
   console.error('Canonical service product validation failed:');
