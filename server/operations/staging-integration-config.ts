@@ -5,6 +5,7 @@ export interface MMGStagingIntegrationEnvironment {
   MMG_COMMERCE_STAGING_REHEARSAL_TOKEN?: string;
   MMG_COMMERCE_STAGING_REHEARSAL_ADAPTER_TOKEN?: string;
   MMG_COMMERCE_STAGING_RUNTIME_CONTROL_TOKEN?: string;
+  MMG_COMMERCE_STAGING_INTEGRATION_TOKEN?: string;
 }
 
 const secret = (value: string | undefined, code: string): string => {
@@ -33,8 +34,12 @@ export const parseMMGStagingIntegrationTokens = (
       environment.MMG_COMMERCE_STAGING_RUNTIME_CONTROL_TOKEN,
       "MMG_STAGING_RUNTIME_CONTROL_TOKEN_INVALID",
     ),
+    integration: secret(
+      environment.MMG_COMMERCE_STAGING_INTEGRATION_TOKEN,
+      "MMG_STAGING_INTEGRATION_TOKEN_INVALID",
+    ),
   };
-  if (new Set(Object.values(tokens)).size !== 4) {
+  if (new Set(Object.values(tokens)).size !== 5) {
     throw new Error("MMG_STAGING_INTEGRATION_TOKENS_MUST_BE_DISTINCT");
   }
   return tokens;
@@ -47,5 +52,6 @@ export const redactMMGStagingIntegrationTokens = (
   rehearsalConfigured: tokens.rehearsal.length >= 32,
   rehearsalAdapterConfigured: tokens.rehearsalAdapter.length >= 32,
   runtimeControlConfigured: tokens.runtimeControl.length >= 32,
-  distinctCredentials: new Set(Object.values(tokens)).size === 4,
+  integrationConfigured: tokens.integration.length >= 32,
+  distinctCredentials: new Set(Object.values(tokens)).size === 5,
 });
