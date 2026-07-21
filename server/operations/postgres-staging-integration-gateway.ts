@@ -37,8 +37,30 @@ export interface MMGStagingBootstrapRuntime {
   bootstrapSafeState(): Promise<void>;
 }
 
-const iso = (value: Date | string): string =>
-  value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+const MAX_HEARTBEAT_AGE_MS = 15 * 60 * 1000;
+
+const date = (value: Date | string): Date => {
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (!Number.isFinite(parsed.getTime())) {
+    throw new Error("MMG_STAGING_ADAPTER_HEARTBEAT_TIME_INVALID");
+  }
+  return parsed;
+};
+
+const heartbeat = (
+  row: HeartbeatRow,
+  inspectedAt: Date,
+): MMGStagingAdapterHeartbeat => {
+  const observedAt = date(row.observed_at);
+  const age = inspectedAt.getTime() - observedAt.getTime();
+  const fresh = age >= 0 && age <= MAX_HEARTBEAT_AGE_MS;
+  return {
+    adapterCode: row.adapter_code,
+    status: fresh ? row.status : "unavailable",
+    releaseId: row.release_id,
+    observedAt: observedAt.toISOString(),
+  };
+};
 
 export class MMGPostgresStagingIntegrationGateway
   implements MMGStagingIntegrationGateway
@@ -109,12 +131,7 @@ export class MMGPostgresStagingIntegrationGateway
       releaseCommitSha: input.releaseCommitSha,
       migrationIds: migrations.rows.map((row) => row.migration_id),
       routeProbe,
-      heartbeats: heartbeats.rows.map((row) => ({
-        adapterCode: row.adapter_code,
-        status: row.status,
-        releaseId: row.release_id,
-        observedAt: iso(row.observed_at),
-      })),
+      heartbeats: heartbeats.rows.map((row) => heartbeat(row, input.occurredAt)),
       controls: Object.fromEntries(
         controls.rows.map((row) => [row.control_code, row.mode]),
       ) as Partial<Record<MMGCommerceControlCode, MMGCommerceControlMode>>,
