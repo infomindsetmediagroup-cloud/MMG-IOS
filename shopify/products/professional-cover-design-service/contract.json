@@ -1,0 +1,138 @@
+{
+  "schemaVersion": "1.0.0",
+  "contractId": "mmg-canonical-service-product-professional-cover-design",
+  "state": "candidate-not-deployed",
+  "observedAt": "2026-07-21T00:26:43Z",
+  "product": {
+    "id": "gid://shopify/Product/9024288620698",
+    "title": "Professional Cover Design Service™",
+    "handle": "professional-cover-design-service",
+    "url": "https://themindsetmediagroup.com/products/professional-cover-design-service",
+    "status": "ACTIVE",
+    "vendor": "Mindset Media Group",
+    "productType": "Publishing Service",
+    "templateSuffix": null,
+    "publishedAt": "2026-07-06T02:53:01Z",
+    "updatedAt": "2026-07-21T00:26:42Z",
+    "tracksInventory": false,
+    "requiresSellingPlan": false,
+    "requiresShipping": false,
+    "purchaseModel": "one-purchase-one-project",
+    "sourceLocation": "shopify-description-html"
+  },
+  "seo": {
+    "title": "Professional Book Cover Design Service | Mindset Media Group™",
+    "description": "Professional custom book cover design for authors, creators, entrepreneurs, and publishers. Premium KDP-ready cover artwork for paperback, hardcover, eBook, and digital products."
+  },
+  "option": {
+    "name": "Package",
+    "id": "gid://shopify/ProductOption/11564818432154"
+  },
+  "variants": [
+    {
+      "name": "Starter",
+      "id": "gid://shopify/ProductVariant/48658205376666",
+      "inventoryItemId": "gid://shopify/InventoryItem/50674230755482",
+      "optionValueId": "gid://shopify/ProductOptionValue/5911271800986",
+      "price": "97.95",
+      "sku": "MMG-SVC-PCD-STA",
+      "taxable": true,
+      "tracked": false,
+      "requiresShipping": false,
+      "customerLabel": "eBook / front cover"
+    },
+    {
+      "name": "Growth",
+      "id": "gid://shopify/ProductVariant/48658205409434",
+      "inventoryItemId": "gid://shopify/InventoryItem/50674230788250",
+      "optionValueId": "gid://shopify/ProductOptionValue/5911271833754",
+      "price": "197.95",
+      "sku": "MMG-SVC-PCD-GRO",
+      "taxable": true,
+      "tracked": false,
+      "requiresShipping": false,
+      "customerLabel": "Book cover package",
+      "defaultSelection": true
+    },
+    {
+      "name": "Professional",
+      "id": "gid://shopify/ProductVariant/48658205442202",
+      "inventoryItemId": "gid://shopify/InventoryItem/50674230821018",
+      "optionValueId": "gid://shopify/ProductOptionValue/5911271866522",
+      "price": "397.95",
+      "sku": "MMG-SVC-PCD-PRO",
+      "taxable": true,
+      "tracked": false,
+      "requiresShipping": false,
+      "customerLabel": "Expanded cover system"
+    }
+  ],
+  "media": [
+    {
+      "id": "gid://shopify/MediaImage/37448831008922",
+      "role": "featured-portrait",
+      "width": 1023,
+      "height": 1537,
+      "altRequired": true
+    },
+    {
+      "id": "gid://shopify/MediaImage/37559744790682",
+      "role": "supporting-square-1",
+      "width": 1254,
+      "height": 1254,
+      "altRequired": true
+    },
+    {
+      "id": "gid://shopify/MediaImage/37559748755610",
+      "role": "supporting-square-2",
+      "width": 1254,
+      "height": 1254,
+      "altRequired": true
+    },
+    {
+      "id": "gid://shopify/MediaImage/37559753310362",
+      "role": "supporting-square-3",
+      "width": 1254,
+      "height": 1254,
+      "altRequired": true
+    }
+  ],
+  "customerWorkflow": [
+    "purchase",
+    "project-guide-delivery",
+    "customer-portal-intake",
+    "scope-validation",
+    "production",
+    "quality-assurance",
+    "organized-delivery",
+    "connected-next-step"
+  ],
+  "delivery": {
+    "immediate": "MMG Project Guide™ Customer Handbook",
+    "portalRequired": true,
+    "finalDeliverable": "organized-cover-package",
+    "physicalShipment": false
+  },
+  "sourceArchitecture": {
+    "candidateRoot": "shopify/products/professional-cover-design-service/source",
+    "html": "source/section.html",
+    "css": "source/styles.css",
+    "javascript": "source/behavior.js",
+    "liveSourceUnchanged": true,
+    "deploymentRequiresApproval": true
+  },
+  "reservedRoutes": [
+    "/products/publish-ready-book-build-service",
+    "/products/listing-optimization-service",
+    "/products/visual-asset-production-service",
+    "/products/research-content-enhancement-service"
+  ],
+  "controls": {
+    "shopifyToolkitValidationRequired": true,
+    "cartMutationRequiresCustomerClick": true,
+    "productionWriteRequiresExplicitApproval": true,
+    "rollbackRequired": true,
+    "postDeploymentVerificationRequired": true,
+    "secretsProhibited": true
+  }
+}

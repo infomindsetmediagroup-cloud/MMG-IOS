@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "validate:shopify": "node scripts/validate-shopify-governance.mjs",
-    "check": "npm run typecheck && npm test && npm run validate:shopify",
+    "validate:service-product": "node shopify/products/professional-cover-design-service/validate.mjs",
+    "check": "npm run typecheck && npm test && npm run validate:shopify && npm run validate:service-product",
     "cf:dev": "wrangler dev",
     "cf:deploy": "wrangler deploy"
   },

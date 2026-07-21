@@ -1,0 +1,32 @@
+query MMGCanonicalServiceProductPreflight {
+  product(id: "gid://shopify/Product/9024288620698") {
+    id
+    title
+    handle
+    status
+    vendor
+    productType
+    templateSuffix
+    publishedAt
+    updatedAt
+    tracksInventory
+    requiresSellingPlan
+    seo { title description }
+    options { id name position optionValues { id name hasVariants } }
+    variants(first: 20) {
+      nodes {
+        id
+        title
+        sku
+        price
+        taxable
+        inventoryItem { id tracked requiresShipping sku }
+      }
+      pageInfo { hasNextPage endCursor }
+    }
+    media(first: 20) {
+      nodes { id mediaContentType alt status }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+}
