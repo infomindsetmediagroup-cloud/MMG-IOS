@@ -119,8 +119,25 @@ export const buildMMGProductionOperationsRuntime = (
     routeProbe,
     now,
   });
+  const infrastructure = {
+    async databaseConnectivity(input: { environment: "staging" | "production" }) {
+      const samples = await Promise.all(
+        Array.from({ length: 5 }, () => telemetry.databaseConnectivity(input)),
+      );
+      return samples.reduce(
+        (aggregate, sample) => ({
+          successes: aggregate.successes + sample.successes,
+          total: aggregate.total + sample.total,
+        }),
+        { successes: 0, total: 0 },
+      );
+    },
+    runtimeRouteAvailability(input: { environment: "staging" | "production" }) {
+      return telemetry.runtimeRouteAvailability(input);
+    },
+  };
   const metrics = new MMGCompositeCommerceMetricsAdapter({
-    infrastructure: telemetry,
+    infrastructure,
     webhooks: telemetry,
     delivery: telemetry,
     access: telemetry,
