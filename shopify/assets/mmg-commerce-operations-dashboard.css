@@ -1,0 +1,413 @@
+.mmg-operations-dashboard,
+.mmg-operations-dashboard * {
+  box-sizing: border-box;
+}
+
+.mmg-operations-dashboard {
+  --mmg-ops-ink: #05070d;
+  --mmg-ops-panel: #0b101a;
+  --mmg-ops-panel-soft: #111827;
+  --mmg-ops-text: #f7fbff;
+  --mmg-ops-copy: #aebbd0;
+  --mmg-ops-border: rgba(164, 185, 219, 0.16);
+  --mmg-ops-blue: #168cff;
+  --mmg-ops-cyan: #5ce1ff;
+  --mmg-ops-purple: #9b6cff;
+  --mmg-ops-gold: #ffc74a;
+  --mmg-ops-red: #ff5c72;
+  display: block;
+  color: var(--mmg-ops-text);
+}
+
+.mmg-operations-dashboard__shell {
+  width: 100%;
+  padding: clamp(20px, 4vw, 48px);
+  border: 1px solid var(--mmg-ops-border);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(22, 140, 255, 0.14), transparent 34%),
+    radial-gradient(circle at 90% 10%, rgba(155, 108, 255, 0.1), transparent 30%),
+    var(--mmg-ops-ink);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.35);
+}
+
+.mmg-operations-dashboard__header,
+.mmg-operations-dashboard__panel-header,
+.mmg-operations-dashboard__incident-header,
+.mmg-operations-dashboard__signal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.mmg-operations-dashboard__header h2,
+.mmg-operations-dashboard__panel h3,
+.mmg-operations-dashboard__panel h4,
+.mmg-operations-dashboard__blocked h3 {
+  margin: 0;
+  color: var(--mmg-ops-text);
+  line-height: 1.12;
+}
+
+.mmg-operations-dashboard__header h2 {
+  max-width: 760px;
+  font-size: clamp(1.8rem, 4vw, 3.4rem);
+}
+
+.mmg-operations-dashboard__header p,
+.mmg-operations-dashboard__panel p,
+.mmg-operations-dashboard__blocked p,
+.mmg-operations-dashboard__noscript {
+  color: var(--mmg-ops-copy);
+}
+
+.mmg-operations-dashboard__header > div:first-child > p:last-child {
+  max-width: 780px;
+  margin: 14px 0 0;
+  line-height: 1.7;
+}
+
+.mmg-operations-dashboard__eyebrow,
+.mmg-operations-dashboard__blocked-kicker,
+.mmg-operations-dashboard__panel-header p {
+  margin: 0 0 8px;
+  color: var(--mmg-ops-cyan) !important;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.mmg-operations-dashboard__toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.mmg-operations-dashboard__toolbar label {
+  display: grid;
+  gap: 7px;
+  color: var(--mmg-ops-copy);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mmg-operations-dashboard__toolbar select,
+.mmg-operations-dashboard__toolbar button {
+  min-height: 44px;
+  border: 1px solid var(--mmg-ops-border);
+  border-radius: 14px;
+  background: var(--mmg-ops-panel);
+  color: var(--mmg-ops-text);
+  font: inherit;
+}
+
+.mmg-operations-dashboard__toolbar select {
+  min-width: 144px;
+  padding: 0 38px 0 14px;
+}
+
+.mmg-operations-dashboard__toolbar button {
+  padding: 0 18px;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.mmg-operations-dashboard__toolbar button:hover,
+.mmg-operations-dashboard__toolbar button:focus-visible {
+  border-color: rgba(92, 225, 255, 0.7);
+}
+
+.mmg-operations-dashboard__toolbar button:disabled {
+  cursor: progress;
+  opacity: 0.58;
+}
+
+.mmg-operations-dashboard__status,
+.mmg-operations-dashboard__blocked,
+.mmg-operations-dashboard__noscript {
+  margin-top: 24px;
+  padding: 22px;
+  border: 1px solid var(--mmg-ops-border);
+  border-radius: 18px;
+  background: rgba(11, 16, 26, 0.88);
+}
+
+.mmg-operations-dashboard__status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--mmg-ops-copy);
+}
+
+.mmg-operations-dashboard__spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(92, 225, 255, 0.2);
+  border-top-color: var(--mmg-ops-cyan);
+  border-radius: 50%;
+  animation: mmg-operations-spin 0.8s linear infinite;
+}
+
+.mmg-operations-dashboard__content {
+  display: grid;
+  gap: 24px;
+  margin-top: 28px;
+}
+
+.mmg-operations-dashboard__summary,
+.mmg-operations-dashboard__signal-grid,
+.mmg-operations-dashboard__control-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.mmg-operations-dashboard__summary-card,
+.mmg-operations-dashboard__signal,
+.mmg-operations-dashboard__control,
+.mmg-operations-dashboard__incident {
+  min-width: 0;
+  border: 1px solid var(--mmg-ops-border);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(17, 24, 39, 0.96), rgba(7, 11, 19, 0.96));
+}
+
+.mmg-operations-dashboard__summary-card {
+  display: grid;
+  gap: 7px;
+  min-height: 148px;
+  padding: 20px;
+  border-top: 3px solid var(--mmg-ops-blue);
+}
+
+.mmg-operations-dashboard__summary-card[data-state="critical"],
+.mmg-operations-dashboard__summary-card[data-state="failed"] {
+  border-top-color: var(--mmg-ops-red);
+}
+
+.mmg-operations-dashboard__summary-card[data-state="degraded"],
+.mmg-operations-dashboard__summary-card[data-state="paused"] {
+  border-top-color: var(--mmg-ops-gold);
+}
+
+.mmg-operations-dashboard__summary-card[data-state="healthy"],
+.mmg-operations-dashboard__summary-card[data-state="passed"],
+.mmg-operations-dashboard__summary-card[data-state="full"] {
+  border-top-color: var(--mmg-ops-cyan);
+}
+
+.mmg-operations-dashboard__summary-label,
+.mmg-operations-dashboard__summary-detail,
+.mmg-operations-dashboard__incident-meta,
+.mmg-operations-dashboard__signal-meta,
+.mmg-operations-dashboard__control small {
+  color: var(--mmg-ops-copy);
+}
+
+.mmg-operations-dashboard__summary-label {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mmg-operations-dashboard__summary-value {
+  overflow-wrap: anywhere;
+  font-size: clamp(1.35rem, 3vw, 2rem);
+}
+
+.mmg-operations-dashboard__panel {
+  padding: clamp(18px, 3vw, 28px);
+  border: 1px solid var(--mmg-ops-border);
+  border-radius: 22px;
+  background: rgba(5, 9, 16, 0.72);
+}
+
+.mmg-operations-dashboard__panel-header {
+  margin-bottom: 18px;
+}
+
+.mmg-operations-dashboard__panel-header > span {
+  color: var(--mmg-ops-copy);
+  font-size: 0.84rem;
+}
+
+.mmg-operations-dashboard__list {
+  display: grid;
+  gap: 12px;
+}
+
+.mmg-operations-dashboard__incident,
+.mmg-operations-dashboard__signal,
+.mmg-operations-dashboard__control {
+  padding: 18px;
+}
+
+.mmg-operations-dashboard__incident[data-severity="SEV1"] {
+  border-left: 4px solid var(--mmg-ops-red);
+}
+
+.mmg-operations-dashboard__incident[data-severity="SEV2"] {
+  border-left: 4px solid var(--mmg-ops-gold);
+}
+
+.mmg-operations-dashboard__incident[data-severity="SEV3"] {
+  border-left: 4px solid var(--mmg-ops-purple);
+}
+
+.mmg-operations-dashboard__incident h4,
+.mmg-operations-dashboard__signal h4,
+.mmg-operations-dashboard__control h4 {
+  font-size: 1rem;
+}
+
+.mmg-operations-dashboard__incident p,
+.mmg-operations-dashboard__signal p,
+.mmg-operations-dashboard__control p {
+  margin: 8px 0 0;
+  line-height: 1.55;
+}
+
+.mmg-operations-dashboard__incident-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 14px;
+  font-size: 0.78rem;
+}
+
+.mmg-operations-dashboard__pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 5px 10px;
+  border: 1px solid var(--mmg-ops-border);
+  border-radius: 999px;
+  color: var(--mmg-ops-copy);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.mmg-operations-dashboard__pill[data-state="critical"],
+.mmg-operations-dashboard__pill[data-state="sev1"],
+.mmg-operations-dashboard__pill[data-state="failed"],
+.mmg-operations-dashboard__pill[data-state="disabled"] {
+  border-color: rgba(255, 92, 114, 0.45);
+  color: #ff9aaa;
+}
+
+.mmg-operations-dashboard__pill[data-state="degraded"],
+.mmg-operations-dashboard__pill[data-state="sev2"],
+.mmg-operations-dashboard__pill[data-state="paused"],
+.mmg-operations-dashboard__pill[data-state="drain_only"] {
+  border-color: rgba(255, 199, 74, 0.48);
+  color: #ffd77a;
+}
+
+.mmg-operations-dashboard__pill[data-state="healthy"],
+.mmg-operations-dashboard__pill[data-state="passed"],
+.mmg-operations-dashboard__pill[data-state="enabled"] {
+  border-color: rgba(92, 225, 255, 0.46);
+  color: #91edff;
+}
+
+.mmg-operations-dashboard__pill[data-state="observe_only"],
+.mmg-operations-dashboard__pill[data-state="sev3"] {
+  border-color: rgba(155, 108, 255, 0.5);
+  color: #c4a6ff;
+}
+
+.mmg-operations-dashboard__signal-grid,
+.mmg-operations-dashboard__control-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.mmg-operations-dashboard__signal-value {
+  display: block;
+  margin-top: 14px;
+  font-size: 1.15rem;
+}
+
+.mmg-operations-dashboard__empty {
+  margin: 0;
+  padding: 20px;
+  border: 1px dashed var(--mmg-ops-border);
+  border-radius: 16px;
+  text-align: center;
+}
+
+.mmg-operations-dashboard [hidden] {
+  display: none !important;
+}
+
+.mmg-operations-dashboard :focus-visible {
+  outline: 3px solid rgba(92, 225, 255, 0.7);
+  outline-offset: 3px;
+}
+
+@keyframes mmg-operations-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 980px) {
+  .mmg-operations-dashboard__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .mmg-operations-dashboard__toolbar {
+    align-items: stretch;
+  }
+
+  .mmg-operations-dashboard__toolbar label,
+  .mmg-operations-dashboard__toolbar select,
+  .mmg-operations-dashboard__toolbar button {
+    width: 100%;
+  }
+
+  .mmg-operations-dashboard__summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mmg-operations-dashboard__signal-grid,
+  .mmg-operations-dashboard__control-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .mmg-operations-dashboard__shell {
+    padding: 18px;
+    border-radius: 20px;
+  }
+
+  .mmg-operations-dashboard__toolbar,
+  .mmg-operations-dashboard__panel-header,
+  .mmg-operations-dashboard__incident-header,
+  .mmg-operations-dashboard__signal-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .mmg-operations-dashboard__summary,
+  .mmg-operations-dashboard__signal-grid,
+  .mmg-operations-dashboard__control-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mmg-operations-dashboard__spinner {
+    animation: none;
+  }
+}
