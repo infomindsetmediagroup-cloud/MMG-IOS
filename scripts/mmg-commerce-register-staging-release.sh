@@ -36,28 +36,26 @@ PSQL_HISTORY=/dev/null psql "${DATABASE_URL}" \
   --set=registered_by="${registered_by}" <<'SQL'
 \set ON_ERROR_STOP on
 BEGIN;
-SELECT pg_advisory_xact_lock(hashtextextended('mmg-commerce-staging-release:' || :'release_id', 0));
+SELECT pg_advisory_xact_lock(
+  hashtextextended('mmg-commerce-staging-release:' || :'release_id', 0)
+);
 
-DO $$
-DECLARE
-  existing_environment text;
-  existing_sha text;
-BEGIN
-  SELECT environment, release_commit_sha
-    INTO existing_environment, existing_sha
-    FROM mmg_commerce_releases
-   WHERE release_id = :'release_id';
+SELECT NOT EXISTS (
+  SELECT 1
+  FROM mmg_commerce_releases
+  WHERE release_id = :'release_id'
+    AND (
+      environment <> 'staging'
+      OR release_commit_sha <> :'release_sha'
+    )
+) AS mmg_release_identity_valid \gset
 
-  IF existing_sha IS NOT NULL THEN
-    IF existing_environment <> 'staging' THEN
-      RAISE EXCEPTION 'MMG_STAGING_RELEASE_ENVIRONMENT_COLLISION:%', :'release_id';
-    END IF;
-    IF existing_sha <> :'release_sha' THEN
-      RAISE EXCEPTION 'MMG_STAGING_RELEASE_SHA_COLLISION:%', :'release_id';
-    END IF;
-  END IF;
-END;
-$$;
+\if :mmg_release_identity_valid
+\else
+  \echo 'MMG staging release identity collision.'
+  ROLLBACK;
+  \quit 67
+\endif
 
 INSERT INTO mmg_commerce_releases (
   release_id,
