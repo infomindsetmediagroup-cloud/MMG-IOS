@@ -1,0 +1,34 @@
+# Prepared rollback only. Variables must be the six GIDs captured from the approved forward run.
+mutation MMGDeleteTemporaryCatalogRedirects(
+  $publishReadyBookBuildId: ID!
+  $listingOptimizationId: ID!
+  $visualAssetProductionId: ID!
+  $researchContentEnhancementId: ID!
+  $creatorsBibleId: ID!
+  $aiPromptingForBeginnersId: ID!
+) {
+  publishReadyBookBuild: urlRedirectDelete(id: $publishReadyBookBuildId) {
+    deletedUrlRedirectId
+    userErrors { field message }
+  }
+  listingOptimization: urlRedirectDelete(id: $listingOptimizationId) {
+    deletedUrlRedirectId
+    userErrors { field message }
+  }
+  visualAssetProduction: urlRedirectDelete(id: $visualAssetProductionId) {
+    deletedUrlRedirectId
+    userErrors { field message }
+  }
+  researchContentEnhancement: urlRedirectDelete(id: $researchContentEnhancementId) {
+    deletedUrlRedirectId
+    userErrors { field message }
+  }
+  creatorsBible: urlRedirectDelete(id: $creatorsBibleId) {
+    deletedUrlRedirectId
+    userErrors { field message }
+  }
+  aiPromptingForBeginners: urlRedirectDelete(id: $aiPromptingForBeginnersId) {
+    deletedUrlRedirectId
+    userErrors { field message }
+  }
+}
