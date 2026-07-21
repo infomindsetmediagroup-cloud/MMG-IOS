@@ -1,0 +1,220 @@
+import { createHash } from "node:crypto";
+import { parseMMGCommerceProductionAdapterConfig } from "../operations/production-adapter-config.js";
+import { parseMMGStagingIntegrationTokens } from "../operations/staging-integration-config.js";
+import { buildMMGStagingIntegrationRuntime } from "../operations/staging-integration-runtime.js";
+import { MMGCloudflareHyperdriveDatabase } from "./cloudflare-hyperdrive-postgres.js";
+import { MMGCloudflareStagingAdminAuthenticator } from "./cloudflare-staging-admin-auth.js";
+import {
+  MMGCloudflareStagingProviderHeartbeatCoordinator,
+  parseMMGStagingProviderTargets,
+} from "./cloudflare-staging-provider-heartbeats.js";
+
+export interface MMGCloudflareHyperdriveEnvBinding {
+  connectionString: string;
+}
+
+export interface MMGCloudflareCommerceStagingEnvironment {
+  HYPERDRIVE: MMGCloudflareHyperdriveEnvBinding;
+  MMG_COMMERCE_ENVIRONMENT: string;
+  MMG_COMMERCE_RELEASE_ID: string;
+  MMG_COMMERCE_RELEASE_COMMIT_SHA: string;
+  MMG_COMMERCE_RUNTIME_ORIGIN: string;
+  MMG_COMMERCE_REQUEST_TIMEOUT_MS?: string;
+  MMG_COMMERCE_ROUTE_PROBE_PATHS?: string;
+  MMG_COMMERCE_ALERT_DESTINATIONS: string;
+  MMG_COMMERCE_MONITOR_ENABLED?: string;
+  MMG_COMMERCE_STAGING_OPERATIONS_TOKEN: string;
+  MMG_COMMERCE_STAGING_REHEARSAL_TOKEN: string;
+  MMG_COMMERCE_STAGING_REHEARSAL_ADAPTER_TOKEN: string;
+  MMG_COMMERCE_STAGING_RUNTIME_CONTROL_TOKEN: string;
+  MMG_COMMERCE_STAGING_INTEGRATION_TOKEN: string;
+  MMG_COMMERCE_STAGING_ADMIN_DASHBOARD_TOKEN: string;
+  MMG_COMMERCE_STAGING_PROVIDER_HEALTH_TOKEN?: string;
+  MMG_COMMERCE_ALERT_HEALTH_ENDPOINT?: string;
+  MMG_COMMERCE_SCHEDULER_HEALTH_ENDPOINT?: string;
+  MMG_COMMERCE_DISPATCHER_HEALTH_ENDPOINT?: string;
+  MMG_COMMERCE_STORAGE_SIGNER_HEALTH_ENDPOINT?: string;
+}
+
+export interface MMGCloudflareCommerceStagingHost {
+  releaseId: string;
+  releaseCommitSha: string;
+  fetch(request: Request): Promise<Response>;
+  scheduled(cron: string): Promise<void>;
+}
+
+const sha256 = (value: string): string =>
+  createHash("sha256").update(value).digest("hex");
+
+const releaseCommit = (value: string): string => {
+  const normalized = value.trim();
+  if (!/^[a-f0-9]{40}$/.test(normalized)) {
+    throw new Error("MMG_STAGING_HOST_COMMIT_SHA_INVALID");
+  }
+  return normalized;
+};
+
+const safeHealth = (input: {
+  releaseId: string;
+  releaseCommitSha: string;
+  runtimeOrigin: string;
+}): Response =>
+  Response.json(
+    {
+      ok: true,
+      service: "mmg-commerce-staging",
+      environment: "staging",
+      releaseId: input.releaseId,
+      releaseCommitSha: input.releaseCommitSha,
+      runtimeOrigin: input.runtimeOrigin,
+      publicationAllowed: false,
+      liveCustomerDataAllowed: false,
+    },
+    {
+      headers: {
+        "Cache-Control": "no-store, private, max-age=0",
+        "X-Content-Type-Options": "nosniff",
+        "X-MMG-Release-Id": input.releaseId,
+        "X-MMG-Release-Commit": input.releaseCommitSha,
+      },
+    },
+  );
+
+export const buildMMGCloudflareCommerceStagingHost = (
+  environment: MMGCloudflareCommerceStagingEnvironment,
+  options: { fetcher?: typeof fetch; now?: () => Date } = {},
+): MMGCloudflareCommerceStagingHost => {
+  if (environment.MMG_COMMERCE_ENVIRONMENT !== "staging") {
+    throw new Error("MMG_STAGING_HOST_STAGING_ONLY");
+  }
+  const releaseCommitSha = releaseCommit(
+    environment.MMG_COMMERCE_RELEASE_COMMIT_SHA,
+  );
+  const tokens = parseMMGStagingIntegrationTokens(environment);
+  const config = parseMMGCommerceProductionAdapterConfig({
+    MMG_COMMERCE_ENVIRONMENT: "staging",
+    MMG_COMMERCE_RELEASE_ID: environment.MMG_COMMERCE_RELEASE_ID,
+    MMG_COMMERCE_RUNTIME_ORIGIN: environment.MMG_COMMERCE_RUNTIME_ORIGIN,
+    MMG_COMMERCE_INTERNAL_TOKEN: tokens.operations,
+    MMG_COMMERCE_REQUEST_TIMEOUT_MS:
+      environment.MMG_COMMERCE_REQUEST_TIMEOUT_MS,
+    MMG_COMMERCE_ROUTE_PROBE_PATHS:
+      environment.MMG_COMMERCE_ROUTE_PROBE_PATHS,
+    MMG_COMMERCE_ALERT_DESTINATIONS:
+      environment.MMG_COMMERCE_ALERT_DESTINATIONS,
+  });
+  const database = new MMGCloudflareHyperdriveDatabase(environment.HYPERDRIVE, {
+    applicationName: `mmg-commerce-staging-${config.releaseId}`.slice(0, 63),
+    statementTimeoutMs: 15_000,
+    connectionTimeoutMs: config.requestTimeoutMs,
+  });
+  const adminAuthenticator = new MMGCloudflareStagingAdminAuthenticator(
+    environment.MMG_COMMERCE_STAGING_ADMIN_DASHBOARD_TOKEN,
+  );
+  const runtime = buildMMGStagingIntegrationRuntime({
+    config,
+    tokens,
+    database,
+    dashboardAuthenticator: adminAuthenticator,
+    alertHasher: {
+      async sha256(value: string) {
+        return sha256(value);
+      },
+    },
+    hashPayloadSync(value: unknown) {
+      return sha256(JSON.stringify(value));
+    },
+    fetcher: options.fetcher,
+    now: options.now,
+  });
+  const providerTargets = parseMMGStagingProviderTargets({
+    alertEndpoint: environment.MMG_COMMERCE_ALERT_HEALTH_ENDPOINT,
+    schedulerEndpoint: environment.MMG_COMMERCE_SCHEDULER_HEALTH_ENDPOINT,
+    dispatcherEndpoint: environment.MMG_COMMERCE_DISPATCHER_HEALTH_ENDPOINT,
+    storageSignerEndpoint:
+      environment.MMG_COMMERCE_STORAGE_SIGNER_HEALTH_ENDPOINT,
+    providerToken: environment.MMG_COMMERCE_STAGING_PROVIDER_HEALTH_TOKEN,
+  });
+  const heartbeatCoordinator =
+    new MMGCloudflareStagingProviderHeartbeatCoordinator({
+      database,
+      runtime,
+      releaseId: config.releaseId,
+      runtimeOrigin: config.runtimeOrigin,
+      runtimeProbeToken: tokens.integration,
+      adminTokenConfigured:
+        environment.MMG_COMMERCE_STAGING_ADMIN_DASHBOARD_TOKEN.trim().length >=
+        32,
+      targets: providerTargets,
+      fetcher: options.fetcher,
+      timeoutMs: config.requestTimeoutMs,
+      now: options.now,
+    });
+
+  return {
+    releaseId: config.releaseId,
+    releaseCommitSha,
+    async fetch(request: Request): Promise<Response> {
+      const pathname = new URL(request.url).pathname;
+      if (pathname === "/healthz" || pathname === "/api/internal/healthz") {
+        if (request.method !== "GET" && request.method !== "HEAD") {
+          return new Response(null, {
+            status: 405,
+            headers: { Allow: "GET, HEAD", "Cache-Control": "no-store" },
+          });
+        }
+        const response = safeHealth({
+          releaseId: config.releaseId,
+          releaseCommitSha,
+          runtimeOrigin: config.runtimeOrigin,
+        });
+        return request.method === "HEAD"
+          ? new Response(null, {
+              status: response.status,
+              headers: response.headers,
+            })
+          : response;
+      }
+      const routed = await runtime.route(request);
+      if (routed) {
+        const headers = new Headers(routed.headers);
+        headers.set("X-MMG-Release-Id", config.releaseId);
+        headers.set("X-MMG-Release-Commit", releaseCommitSha);
+        headers.set("X-MMG-Publication-Allowed", "false");
+        return new Response(routed.body, {
+          status: routed.status,
+          statusText: routed.statusText,
+          headers,
+        });
+      }
+      return Response.json(
+        {
+          ok: false,
+          error: { code: "MMG_STAGING_ROUTE_NOT_FOUND" },
+          publicationAllowed: false,
+          liveCustomerDataAllowed: false,
+        },
+        {
+          status: 404,
+          headers: {
+            "Cache-Control": "no-store, private, max-age=0",
+            "X-Content-Type-Options": "nosniff",
+            "X-MMG-Release-Id": config.releaseId,
+          },
+        },
+      );
+    },
+    async scheduled(cron: string): Promise<void> {
+      if (environment.MMG_COMMERCE_MONITOR_ENABLED !== "true") return;
+      await heartbeatCoordinator.refresh();
+      const requestId = `cloudflare-scheduled:${cron}:${Date.now()}`.slice(
+        0,
+        128,
+      );
+      const response = await runtime.runScheduledEvaluation(requestId);
+      if (!response.ok) {
+        throw new Error(`MMG_STAGING_SCHEDULED_EVALUATION_FAILED:${response.status}`);
+      }
+    },
+  };
+};
