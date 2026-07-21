@@ -1,0 +1,32 @@
+{
+  "changeSet": "mmg-product-navigation-fix-20260721",
+  "createdAt": "2026-07-21",
+  "store": "themindsetmediagroup.com",
+  "sourceTheme": {
+    "id": "gid://shopify/OnlineStoreTheme/155339915418",
+    "name": "MMG Pricing Fix 2026-07-21",
+    "role": "MAIN"
+  },
+  "candidateTheme": {
+    "id": "gid://shopify/OnlineStoreTheme/155361247386",
+    "name": "MMG Product + Navigation Fix 2026-07-21",
+    "role": "UNPUBLISHED"
+  },
+  "completed": [
+    "Restored Professional Cover Design Service templateSuffix to mmg-professional-cover-design",
+    "Installed sections/mmg-knowledge-subscription.liquid on candidate theme",
+    "Installed templates/product.mmg-knowledge-subscription.json on candidate theme",
+    "Replaced candidate header with confirmed-live page navigation",
+    "Disabled obsolete candidate navigation injector asset"
+  ],
+  "pendingOwnerBoundary": [
+    "Publish candidate theme from Shopify Admin because themePublish is blocked for automated execution",
+    "After publication assign MMG Knowledge Subscription templateSuffix to mmg-knowledge-subscription",
+    "Verify live product and navigation URLs"
+  ],
+  "productIds": {
+    "professionalCoverDesign": "gid://shopify/Product/9024288620698",
+    "knowledgeSubscription": "gid://shopify/Product/9050613678234",
+    "aiImageMastery": "gid://shopify/Product/9022950998170"
+  }
+}
