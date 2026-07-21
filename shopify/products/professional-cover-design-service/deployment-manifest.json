@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "1.0.0",
+  "changeSetId": "shopify-canonical-service-product-source-20260721",
+  "state": "prepared-not-approved-not-executed",
+  "productGid": "gid://shopify/Product/9024288620698",
+  "preferredDeployment": "unpublished-theme-product-template",
+  "fallbackDeployment": "approved-description-html-replacement",
+  "requiredArtifacts": [
+    "contract.json",
+    "source/section.html",
+    "source/styles.css",
+    "source/behavior.js",
+    "qa.md",
+    "deployment.md",
+    "graphql/preflight.graphql"
+  ],
+  "preflight": {
+    "abortOnMismatch": true,
+    "captureDescriptionHtmlForRollback": true,
+    "validateReservedRedirects": true,
+    "shopifyToolkitValidationRequired": true
+  },
+  "prohibitedChanges": [
+    "product-title",
+    "handle",
+    "status",
+    "product-type",
+    "variant-identity",
+    "sku",
+    "price",
+    "inventory",
+    "shipping",
+    "media-removal",
+    "publication",
+    "redirects"
+  ],
+  "approval": {
+    "required": true,
+    "mustNameChangeSetId": true
+  },
+  "rollback": {
+    "descriptionDeployment": "restore-exact-preflight-description-html",
+    "templateDeployment": "restore-prior-template-and-unpublish-candidate",
+    "postRollbackVerificationRequired": true
+  }
+}
