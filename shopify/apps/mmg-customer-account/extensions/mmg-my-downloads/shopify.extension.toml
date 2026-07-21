@@ -9,6 +9,3 @@ uid = "c2a4f88e-ecb7-4d3e-94c8-21fa813d9e11"
 [[extensions.targeting]]
 target = "customer-account.page.render"
 module = "./src/MyDownloads.tsx"
-
-[extensions.capabilities]
-api_access = true
