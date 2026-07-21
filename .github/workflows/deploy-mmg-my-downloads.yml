@@ -21,6 +21,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: deploy-mmg-my-downloads-production
@@ -87,6 +88,7 @@ jobs:
           npx shopify app config validate --config production 2>&1 | tee /tmp/shopify-config-validation.log
 
       - name: Deploy and release My Downloads
+        id: shopify_deploy
         shell: bash
         working-directory: repository/shopify/apps/mmg-customer-account
         env:
@@ -99,10 +101,45 @@ jobs:
             --source-control-url "${COMMIT_URL}" \
             > /tmp/shopify-deploy.log 2>&1
           status=$?
-          tail -n 25 /tmp/shopify-deploy.log
-          exit $status
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          path = Path('/tmp/shopify-deploy.log')
+          text = path.read_text(errors='replace') if path.exists() else 'No Shopify CLI output was captured.'
+          clean = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', text)
+          Path('/tmp/shopify-deploy-tail.txt').write_text('\n'.join(clean.splitlines()[-40:]))
+          PY
+          echo "status=${status}" >> "$GITHUB_OUTPUT"
+          cat /tmp/shopify-deploy-tail.txt
+          exit 0
+
+      - name: Report deployment rejection
+        if: github.event_name == 'pull_request' && steps.shopify_deploy.outputs.status != '0'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Shopify My Downloads deployment diagnostic"
+            echo
+            echo '```text'
+            cat /tmp/shopify-deploy-tail.txt
+            echo '```'
+          } > /tmp/shopify-deploy-comment.md
+          gh api \
+            --method POST \
+            "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+            -F body=@/tmp/shopify-deploy-comment.md
+
+      - name: Enforce successful Shopify release
+        if: steps.shopify_deploy.outputs.status != '0'
+        shell: bash
+        run: exit 1
 
       - name: Run governed validation and entitlement tests
+        if: steps.shopify_deploy.outputs.status == '0'
         shell: bash
         working-directory: repository/shopify/apps/mmg-customer-account
         run: |
