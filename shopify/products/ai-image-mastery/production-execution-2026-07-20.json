@@ -1,0 +1,73 @@
+{
+  "schemaVersion": "1.0.0",
+  "recordId": "shopify-ai-image-mastery-production-execution-20260720",
+  "changeSetId": "shopify-canonical-digital-download-ai-image-mastery-20260721",
+  "state": "deployed-admin-verified-storefront-edge-propagation-observed",
+  "approval": {
+    "received": true,
+    "instruction": "Approve production deployment: shopify-canonical-digital-download-ai-image-mastery-20260721"
+  },
+  "execution": {
+    "attemptedAt": "2026-07-21T04:29:15Z",
+    "executedAt": "2026-07-21T04:29:15Z",
+    "mutation": "productUpdate",
+    "productGid": "gid://shopify/Product/9022950998170",
+    "changedField": "templateSuffix",
+    "before": null,
+    "after": "mmg-ai-image-mastery",
+    "userErrors": []
+  },
+  "postMutationReadback": {
+    "verifiedAt": "2026-07-21T04:29:16Z",
+    "productUpdatedAt": "2026-07-21T04:29:15Z",
+    "templateSuffix": "mmg-ai-image-mastery",
+    "title": "AI Image Mastery™",
+    "handle": "ai-image-mastery",
+    "status": "ACTIVE",
+    "productType": "Digital Download",
+    "variantId": "gid://shopify/ProductVariant/48655433498778",
+    "inventoryItemId": "gid://shopify/InventoryItem/50671454027930",
+    "price": "9.95",
+    "compareAtPrice": null,
+    "sku": "MMG-DIG-AIM-STD",
+    "inventoryPolicy": "DENY",
+    "inventoryQuantity": 0,
+    "tracked": false,
+    "requiresShipping": false,
+    "availableForSale": true,
+    "descriptionHtmlPreserved": true,
+    "seoPreserved": true,
+    "tagsPreserved": true,
+    "mediaPreserved": true
+  },
+  "theme": {
+    "id": "gid://shopify/OnlineStoreTheme/155338309786",
+    "name": "MMG Digital Download Candidate 2026-07-20",
+    "role": "MAIN",
+    "prefix": "/t/18",
+    "processing": false,
+    "processingFailed": false,
+    "files": [
+      {"filename":"assets/mmg-ai-image-mastery.css","checksumMd5":"5a749b91c5078360f9a64d642ef268be","size":10471},
+      {"filename":"assets/mmg-ai-image-mastery.js","checksumMd5":"2653b8a8d87c8f5852f653b7580c405d","size":5665},
+      {"filename":"sections/mmg-ai-image-mastery.liquid","checksumMd5":"52893c2bc11789b613424ec296d838d0","size":14700},
+      {"filename":"templates/product.mmg-ai-image-mastery.json","checksumMd5":"f767d9a33d9c4afb1ebee3c899e58768","size":132}
+    ]
+  },
+  "rollback": {
+    "productTemplate": "set-templateSuffix-null",
+    "formerMainThemeGid": "gid://shopify/OnlineStoreTheme/155336671386",
+    "formerMainThemeRole": "UNPUBLISHED",
+    "formerMainThemePrefix": "/t/17",
+    "secondaryRollbackThemeGid": "gid://shopify/OnlineStoreTheme/155242856602",
+    "legacyDescriptionHtmlPreserved": true
+  },
+  "storefrontObservation": {
+    "url": "https://themindsetmediagroup.com/products/ai-image-mastery",
+    "observedImmediatelyAfterAssignment": true,
+    "edgeResponseStillContainedPreAssignmentShell": true,
+    "classification": "edge-cache-or-template-propagation-observation",
+    "configurationRollbackTriggered": false,
+    "reason": "Shopify Admin independently confirmed the assigned suffix, verified MAIN theme files, and preserved all protected commercial fields."
+  }
+}
