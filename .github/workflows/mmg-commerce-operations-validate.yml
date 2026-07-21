@@ -1,0 +1,35 @@
+name: Validate MMG Commerce Operations
+
+on:
+  pull_request:
+    paths:
+      - "server/operations/**"
+      - "database/migrations/20260720_008_mmg_commerce_operations_control.sql"
+      - "database/migrations/20260720_009_mmg_commerce_operations_integrity.sql"
+      - "registry/operations/**"
+      - "backend-tests/mmg-commerce-operations-*.test.ts"
+      - "backend-tests/mmg-commerce-rollout-*.test.ts"
+      - "backend-tests/mmg-commerce-consistency-audit.test.ts"
+      - "backend-tests/mmg-commerce-metrics-collector.test.ts"
+      - "backend-tests/mmg-commerce-alert-routing.test.ts"
+      - "shopify/snippets/mmg-commerce-operations-dashboard.liquid"
+      - "shopify/assets/mmg-commerce-operations-dashboard.*"
+      - ".github/workflows/mmg-commerce-operations*.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test -- --runInBand
