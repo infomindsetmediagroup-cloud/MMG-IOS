@@ -126,11 +126,20 @@ export class MMGHTTPCommerceStagingRehearsalGateway
     if (!digest || !/^[a-f0-9]{64}$/.test(String(digest.digestSha256 ?? ""))) {
       throw new Error("MMG_REHEARSAL_RIGHTS_DIGEST_INVALID");
     }
+    const counts = [
+      digest.activeOwnershipCount,
+      digest.activeDeliveryGrantCount,
+      digest.deliveredWindowCount,
+      digest.activeEntitlementCount,
+    ].map(Number);
+    if (counts.some((value) => !Number.isInteger(value) || value < 0)) {
+      throw new Error("MMG_REHEARSAL_RIGHTS_COUNT_INVALID");
+    }
     return {
-      activeOwnershipCount: Number(digest.activeOwnershipCount ?? 0),
-      activeDeliveryGrantCount: Number(digest.activeDeliveryGrantCount ?? 0),
-      deliveredWindowCount: Number(digest.deliveredWindowCount ?? 0),
-      activeEntitlementCount: Number(digest.activeEntitlementCount ?? 0),
+      activeOwnershipCount: counts[0]!,
+      activeDeliveryGrantCount: counts[1]!,
+      deliveredWindowCount: counts[2]!,
+      activeEntitlementCount: counts[3]!,
       digestSha256: String(digest.digestSha256),
     };
   }
@@ -151,9 +160,9 @@ export class MMGHTTPCommerceStagingRehearsalGateway
     return state as MMGCommerceOperationsState;
   }
 
-  async #call(
+  async #call<T extends object>(
     action: string,
-    input: Record<string, unknown> & { occurredAt?: Date },
+    input: T & { occurredAt?: Date },
   ): Promise<Record<string, unknown>> {
     const fetcher = this.#config.fetcher ?? fetch;
     const controller = new AbortController();
