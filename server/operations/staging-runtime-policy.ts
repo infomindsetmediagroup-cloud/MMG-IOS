@@ -34,14 +34,14 @@ export interface MMGStagingRuntimePolicyHasher {
 }
 
 const DEFAULT_CONTROLS: Record<MMGCommerceControlCode, MMGCommerceControlMode> = {
-  product_publication: "observe_only",
+  product_publication: "disabled",
   subscription_checkout: "disabled",
   webhook_ingestion: "enabled",
   delivery_scheduler: "disabled",
   delivery_dispatcher: "disabled",
   recommendation_automation: "observe_only",
   signed_library_access: "disabled",
-  thank_you_handoff: "disabled",
+  thank_you_handoff: "observe_only",
 };
 
 const number = (value: unknown): number => {
