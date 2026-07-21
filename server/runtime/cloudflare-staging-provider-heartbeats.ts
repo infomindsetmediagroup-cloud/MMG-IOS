@@ -86,7 +86,7 @@ export class MMGCloudflareStagingProviderHeartbeatCoordinator {
   readonly #releaseId: string;
   readonly #runtimeOrigin: string;
   readonly #runtimeProbeToken: string;
-  readonly #adminTokenConfigured: boolean;
+  readonly #adminToken: string;
   readonly #targets: MMGStagingProviderProbeTarget[];
   readonly #fetcher: typeof fetch;
   readonly #timeoutMs: number;
@@ -98,7 +98,7 @@ export class MMGCloudflareStagingProviderHeartbeatCoordinator {
     releaseId: string;
     runtimeOrigin: string;
     runtimeProbeToken: string;
-    adminTokenConfigured: boolean;
+    adminToken: string;
     targets: MMGStagingProviderProbeTarget[];
     fetcher?: typeof fetch;
     timeoutMs?: number;
@@ -118,7 +118,10 @@ export class MMGCloudflareStagingProviderHeartbeatCoordinator {
       input.runtimeProbeToken,
       "MMG_STAGING_PROVIDER_RUNTIME_TOKEN_INVALID",
     );
-    this.#adminTokenConfigured = input.adminTokenConfigured;
+    this.#adminToken = token(
+      input.adminToken,
+      "MMG_STAGING_PROVIDER_ADMIN_TOKEN_INVALID",
+    );
     this.#targets = input.targets.map((target) => ({
       adapterCode: target.adapterCode,
       endpoint: httpsEndpoint(
@@ -207,7 +210,8 @@ export class MMGCloudflareStagingProviderHeartbeatCoordinator {
       this.#runtimeProbeToken,
       "HEAD",
     );
-    const reachable = response !== null && [200, 204, 401, 403, 405].includes(response.status);
+    const reachable =
+      response !== null && [200, 204, 401, 403, 405].includes(response.status);
     return this.#record({
       adapterCode: "runtime_routes",
       status: reachable ? "healthy" : "unavailable",
@@ -221,7 +225,9 @@ export class MMGCloudflareStagingProviderHeartbeatCoordinator {
 
   async #probeRuntimeControls(observedAt: Date) {
     try {
-      const result = await this.#database.query<{ control_count: string | number }>(
+      const result = await this.#database.query<{
+        control_count: string | number;
+      }>(
         `SELECT COUNT(*) AS control_count
          FROM mmg_staging_runtime_controls
          WHERE environment = 'staging'`,
@@ -248,13 +254,30 @@ export class MMGCloudflareStagingProviderHeartbeatCoordinator {
   }
 
   async #probeAdminAuth(observedAt: Date) {
+    const response = await this.#request(
+      `${this.#runtimeOrigin}/api/admin/commerce/operations`,
+      this.#adminToken,
+      "GET",
+    );
+    const releaseId = response ? await responseRelease(response.clone()) : null;
+    const healthy = response?.status === 200 && releaseId === this.#releaseId;
     return this.#record({
       adapterCode: "admin_auth",
-      status: this.#adminTokenConfigured ? "healthy" : "unavailable",
-      reasonCode: this.#adminTokenConfigured
-        ? "MMG_STAGING_ADMIN_AUTH_CONFIGURED"
-        : "MMG_STAGING_ADMIN_AUTH_UNAVAILABLE",
+      status: healthy
+        ? "healthy"
+        : response?.status === 200
+          ? "degraded"
+          : "unavailable",
+      reasonCode: healthy
+        ? "MMG_STAGING_ADMIN_AUTH_VERIFIED"
+        : response?.status === 200
+          ? "MMG_STAGING_ADMIN_AUTH_RELEASE_MISMATCH"
+          : "MMG_STAGING_ADMIN_AUTH_UNAVAILABLE",
       observedAt,
+      details: {
+        statusCode: response?.status ?? null,
+        exactRelease: releaseId === this.#releaseId,
+      },
     });
   }
 
