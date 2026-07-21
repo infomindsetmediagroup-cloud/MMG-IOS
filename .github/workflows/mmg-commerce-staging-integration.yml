@@ -86,6 +86,20 @@ jobs:
           chmod 700 scripts/mmg-commerce-apply-migrations.sh
           scripts/mmg-commerce-apply-migrations.sh
 
+      - name: Register exact staging release
+        if: inputs.action == 'execute' || inputs.action == 'rehearse'
+        env:
+          DATABASE_URL: ${{ secrets.MMG_COMMERCE_STAGING_DATABASE_URL }}
+          MMG_COMMERCE_ENVIRONMENT: staging
+          MMG_COMMERCE_RELEASE_ID: ${{ inputs.release_id }}
+          MMG_COMMERCE_RELEASE_COMMIT_SHA: ${{ inputs.release_commit_sha }}
+          MMG_RELEASE_REGISTERED_BY: github-actions:${{ github.actor }}
+        run: |
+          set -euo pipefail
+          test -n "$DATABASE_URL"
+          chmod 700 scripts/mmg-commerce-register-staging-release.sh
+          scripts/mmg-commerce-register-staging-release.sh
+
       - name: Inspect or bootstrap staging runtime
         id: integration
         env:
