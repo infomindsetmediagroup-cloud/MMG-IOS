@@ -49,6 +49,10 @@ describe("MMG live commerce deployment contract", () => {
       true,
     );
     expect(contract.e2e_contract.publication_evidence_maximum_age_hours).toBe(24);
+    expect(contract.e2e_contract.staging_rehearsal_required).toBe(true);
+    expect(contract.e2e_contract.staging_rehearsal_release_id_must_match).toBe(
+      true,
+    );
   });
 
   it("preserves locked product economics", () => {
@@ -74,10 +78,20 @@ describe("MMG live commerce deployment contract", () => {
     );
   });
 
-  it("requires migrations, routes, scopes, webhooks, and complete E2E evidence", () => {
-    expect(contract.required_migrations).toHaveLength(7);
+  it("requires migrations, operations routes, scopes, webhooks, and complete evidence", () => {
+    expect(contract.required_migrations).toHaveLength(10);
+    expect(contract.required_migrations.at(-1)).toContain("20260721_010");
     expect(contract.required_runtime_routes).toContain(
       "/api/shopify/webhooks/subscriptions",
+    );
+    expect(contract.required_runtime_routes).toContain(
+      "/api/internal/commerce/operations",
+    );
+    expect(contract.required_runtime_routes).toContain(
+      "/api/internal/commerce/rehearsal",
+    );
+    expect(contract.required_runtime_routes).toContain(
+      "/api/internal/runtime-controls/rollout",
     );
     expect(contract.shopify_contract.required_scopes).toContain(
       "write_own_subscription_contracts",
