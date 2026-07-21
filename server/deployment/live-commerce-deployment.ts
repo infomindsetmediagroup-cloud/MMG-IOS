@@ -1,6 +1,6 @@
 import type { MMGSubscriptionPlanCode } from "../knowledge-library/entitlements.js";
 
-export const MMG_COMMERCE_DEPLOYMENT_VERSION = "1.0.0" as const;
+export const MMG_COMMERCE_DEPLOYMENT_VERSION = "1.1.0" as const;
 export const MMG_SHOPIFY_API_VERSION = "2026-07" as const;
 
 export type MMGCommerceDeploymentEnvironment = "staging" | "production";
@@ -57,6 +57,15 @@ export interface MMGShopifyRuntimeMapping {
   verifiedAt: string | null;
 }
 
+export interface MMGCommerceE2EEvidence {
+  runId: string;
+  completedAt: string;
+  environment: MMGCommerceDeploymentEnvironment;
+  checks: Record<string, "passed" | "failed" | "not_run">;
+  testOrderIdHash: string | null;
+  testCustomerReferenceHash: string | null;
+}
+
 export interface MMGCommerceDeploymentProbe {
   canonicalShopDomain: string;
   apiVersion: string;
@@ -70,16 +79,8 @@ export interface MMGCommerceDeploymentProbe {
   schedulerActive: boolean;
   dispatcherActive: boolean;
   storageSignerActive: boolean;
+  stagingRehearsalPassed: boolean;
   e2eEvidence: MMGCommerceE2EEvidence | null;
-}
-
-export interface MMGCommerceE2EEvidence {
-  runId: string;
-  completedAt: string;
-  environment: MMGCommerceDeploymentEnvironment;
-  checks: Record<string, "passed" | "failed" | "not_run">;
-  testOrderIdHash: string | null;
-  testCustomerReferenceHash: string | null;
 }
 
 export interface MMGCommerceDeploymentStep {
@@ -123,6 +124,9 @@ export const MMG_REQUIRED_MIGRATIONS = Object.freeze([
   "20260720_005_mmg_shopify_subscription_reconciliation",
   "20260720_006_mmg_recommendation_curation_ranking",
   "20260720_007_mmg_live_commerce_deployment_control",
+  "20260720_008_mmg_commerce_operations_control",
+  "20260720_009_mmg_commerce_operations_integrity",
+  "20260721_010_mmg_production_adapters_staging_rehearsal",
 ]);
 
 export const MMG_REQUIRED_RUNTIME_ENDPOINTS = Object.freeze([
@@ -136,6 +140,12 @@ export const MMG_REQUIRED_RUNTIME_ENDPOINTS = Object.freeze([
   "/api/checkout/thank-you/subscription-handoff",
   "/api/shopify/webhooks/subscriptions",
   "/api/internal/commerce/deployment",
+  "/api/internal/commerce/operations",
+  "/api/admin/commerce/operations",
+  "/api/internal/commerce/rehearsal",
+  "/api/internal/commerce/rehearsal/adapter",
+  "/api/internal/runtime-controls/control",
+  "/api/internal/runtime-controls/rollout",
 ]);
 
 export const MMG_REQUIRED_WEBHOOK_TOPICS = Object.freeze([
@@ -231,10 +241,20 @@ export const buildMMGCommerceDeploymentPlan = (input: {
   const operationalReady = input.probe.schedulerActive && input.probe.dispatcherActive;
   const assetsReady = input.probe.verifiedSelectableAssetCount >= 2;
   const evidenceReady = e2ePassed(input.probe.e2eEvidence);
+  const rehearsalReady = input.probe.stagingRehearsalPassed;
   const publishIncluded = input.includePublication === true;
+  const publicationReady =
+    input.probe.runtimeMapping?.productStatus === "ACTIVE" &&
+    evidenceReady &&
+    rehearsalReady;
 
   const steps: MMGCommerceDeploymentStep[] = [
-    step("preflight", true, "Release identity, canonical shop, API version, and contract inputs are valid.", []),
+    step(
+      "preflight",
+      true,
+      "Release identity, canonical shop, API version, and contract inputs are valid.",
+      [],
+    ),
     step(
       "application_scopes",
       scopeBlockers.length === 0,
@@ -245,14 +265,14 @@ export const buildMMGCommerceDeploymentPlan = (input: {
     step(
       "database_migrations",
       migrationBlockers.length === 0,
-      "Commerce migrations 001 through 007 are applied in order.",
+      "Commerce migrations 001 through 010 are applied in order.",
       migrationBlockers.map((migration) => `MISSING_MIGRATION:${migration}`),
       { destructive: true, requiresApproval: input.environment === "production" },
     ),
     step(
       "runtime_routes",
       routeBlockers.length === 0,
-      "All private, webhook, Customer Portal, picker, and deployment routes are available through the deployed Kairos runtime.",
+      "All private, webhook, Customer Portal, deployment, operations, rehearsal, and runtime-control routes are available through the deployed Kairos runtime.",
       routeBlockers.map((route) => `MISSING_ROUTE:${route}`),
     ),
     step(
@@ -292,7 +312,7 @@ export const buildMMGCommerceDeploymentPlan = (input: {
     step(
       "scheduler_and_dispatcher",
       operationalReady && input.probe.storageSignerActive,
-      "The delivery-window scheduler, idempotent dispatcher, acknowledgement path, and secure storage signer are active.",
+      "The delivery-window scheduler, idempotent dispatcher, acknowledgement path, operations monitoring, and secure storage signer are active.",
       [
         ...(input.probe.schedulerActive ? [] : ["DELIVERY_SCHEDULER_INACTIVE"]),
         ...(input.probe.dispatcherActive ? [] : ["DELIVERY_DISPATCHER_INACTIVE"]),
@@ -309,11 +329,15 @@ export const buildMMGCommerceDeploymentPlan = (input: {
     publishIncluded
       ? step(
           "publication",
-          input.probe.runtimeMapping?.productStatus === "ACTIVE" && evidenceReady,
-          "The product is ACTIVE and published only to the verified Online Store publication after the complete release gate passed.",
-          input.probe.runtimeMapping?.productStatus === "ACTIVE" && evidenceReady
-            ? []
-            : ["PUBLICATION_NOT_COMPLETED"],
+          publicationReady,
+          "The product is ACTIVE and published only after fresh end-to-end evidence and a release-bound controlled staging rehearsal pass.",
+          [
+            ...(input.probe.runtimeMapping?.productStatus === "ACTIVE"
+              ? []
+              : ["PUBLICATION_NOT_COMPLETED"]),
+            ...(evidenceReady ? [] : ["END_TO_END_EVIDENCE_NOT_PASSED"]),
+            ...(rehearsalReady ? [] : ["STAGING_REHEARSAL_NOT_PASSED"]),
+          ],
           { destructive: true, requiresApproval: true },
         )
       : {
@@ -322,7 +346,8 @@ export const buildMMGCommerceDeploymentPlan = (input: {
           destructive: true,
           requiresApproval: true,
           reasonCodes: [],
-          summary: "Publication is intentionally excluded from this deployment plan and remains a separate executive-approved action.",
+          summary:
+            "Publication is intentionally excluded from this deployment plan and remains a separate executive-approved action.",
         },
   ];
 
@@ -340,7 +365,9 @@ export const buildMMGCommerceDeploymentPlan = (input: {
     publishIncluded,
     steps,
     blockers,
-    executable: blockers.length === 0 && (!publishIncluded || evidenceReady),
+    executable:
+      blockers.length === 0 &&
+      (!publishIncluded || (evidenceReady && rehearsalReady)),
   };
 };
 
