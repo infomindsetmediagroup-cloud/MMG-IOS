@@ -1,12 +1,13 @@
 {
   "contract_id": "mmg-commerce-staging-readiness-contract-v1",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "status": "approved_for_staging",
   "approved_date": "2026-07-21",
   "authority": "MMG executive approval",
-  "purpose": "Provide a fail-closed, read-only readiness inspection before any staging execute or rehearse action by verifying immutable release identity, protected environment configuration, database prerequisites, route mounts, provider health, canonical safe controls, migration tooling, and the absence of publication or live-customer capability.",
+  "purpose": "Provide a fail-closed, read-only readiness inspection before any staging execute or rehearse action by verifying immutable release identity, protected environment configuration, Cloudflare staging-host prerequisites, database prerequisites, route mounts, provider health, canonical safe controls, migration tooling, and the absence of publication or live-customer capability.",
   "dependencies": {
     "staging_integration_contract": "registry/deployment/mmg-commerce-staging-integration-contract-v1.json",
+    "staging_host_contract": "registry/deployment/mmg-commerce-staging-host-runtime-contract-v1.json",
     "deployment_contract": "registry/deployment/mmg-live-commerce-deployment-contract-v1.json",
     "operations_contract": "registry/operations/mmg-commerce-operations-control-contract-v1.json"
   },
@@ -20,6 +21,7 @@
     "logical_endpoint": "/api/internal/commerce/staging-readiness",
     "local_inspector": "scripts/mmg-commerce-staging-readiness.mjs",
     "workflow": ".github/workflows/mmg-commerce-staging-readiness.yml",
+    "staging_host_workflow": ".github/workflows/mmg-commerce-staging-runtime-deploy.yml",
     "environment_contract": "deployment/mmg-commerce-staging.env.example"
   },
   "authority_boundary": {
@@ -46,14 +48,34 @@
   "protected_environment_checks": [
     "GitHub Environment name is mmg-commerce-staging",
     "all required protected values are present",
-    "five server credentials are at least 32 characters",
-    "five server credentials are mutually distinct",
-    "Admin Portal authentication is separately configured",
+    "operations, integration, rehearsal, rehearsal-adapter, runtime-control, Admin, and provider credentials are at least 32 characters",
+    "all authority credentials are separated",
     "runtime origin and protected endpoints use HTTPS",
     "protected endpoints belong to the staging runtime origin",
+    "Cloudflare account ID and least-privilege API token are configured",
+    "staging Hyperdrive ID is configured",
+    "staging upstream service name ends in -staging",
+    "four provider health endpoints use HTTPS",
     "alert environment is explicitly staging",
     "required alert channels are configured through HTTPS"
   ],
+  "cloudflare_host_checks": {
+    "required_repository_files": [
+      "cloudflare/mmg-commerce-staging-worker.ts",
+      "server/runtime/cloudflare-commerce-staging-host.ts",
+      "server/runtime/cloudflare-hyperdrive-postgres.ts",
+      "scripts/mmg-build-commerce-staging-wrangler.mjs",
+      ".github/workflows/mmg-commerce-staging-runtime-deploy.yml",
+      "registry/deployment/mmg-commerce-staging-host-runtime-contract-v1.json"
+    ],
+    "required_bindings": [
+      "HYPERDRIVE",
+      "MMG_COMMERCE_UPSTREAM"
+    ],
+    "upstream_service_suffix": "-staging",
+    "production_upstream_allowed": false,
+    "production_database_allowed": false
+  },
   "database_checks": {
     "required": [
       "staging PostgreSQL is reachable",
@@ -79,7 +101,10 @@
       "timeout",
       "network failure"
     ],
-    "required_route": "/api/internal/commerce/staging-readiness",
+    "required_routes": [
+      "/api/internal/commerce/staging-readiness",
+      "/api/internal/commerce/provider-heartbeats/refresh"
+    ],
     "credential_aware": true,
     "raw_credentials_exposed": false
   },
@@ -97,7 +122,8 @@
     "required_status": "healthy",
     "required_release_binding": true,
     "maximum_heartbeat_age_minutes": 15,
-    "missing_heartbeat_status": "unknown_and_blocking"
+    "missing_heartbeat_status": "unknown_and_blocking",
+    "remote_provider_release_mismatch_status": "degraded"
   },
   "canonical_safe_state": {
     "product_publication": "disabled",
@@ -117,7 +143,9 @@
     "sha256sum is available",
     "migration runner is present",
     "release-registration script is present",
-    "staging integration workflow is present"
+    "Wrangler staging config generator is present",
+    "staging integration workflow is present",
+    "staging host deployment workflow is present"
   ],
   "report_contract": {
     "statuses": [
@@ -150,20 +178,29 @@
     "readiness_blockers_fail_workflow": true,
     "execute_or_rehearse_triggered": false
   },
+  "ordering_contract": {
+    "pre_migration_gate": "Local protected-environment readiness must pass before migrations.",
+    "post_bootstrap_gate": "Full runtime readiness, migration, control, and heartbeat evidence is enforced after migrations, release registration, safe-state bootstrap, and provider-heartbeat refresh.",
+    "circular_dependency_allowed": false
+  },
   "release_gates": [
     "The local protected-environment inspection returns ready with zero blockers.",
-    "The protected runtime inspection returns ready with zero blockers.",
+    "The Cloudflare account, Hyperdrive binding, staging upstream service, Worker secrets, and provider health endpoints are configured.",
+    "The protected runtime inspection returns ready with zero blockers after bootstrap.",
     "The requested release and configured runtime are bound to the same exact commit.",
     "PostgreSQL and pgcrypto are reachable before execute.",
     "All required routes, credentials, alert channels, provider heartbeats, and safe controls pass.",
     "The customer rollout is paused at zero percent.",
     "The report confirms publicationAllowed=false and liveCustomerDataAllowed=false.",
-    "Only after readiness passes may the existing staging integration workflow execute migrations or run the rehearsal."
+    "Only after post-bootstrap readiness passes may the staging rehearsal execute."
   ],
   "non_actions": [
+    "does not create Cloudflare resources",
+    "does not deploy the Worker",
     "does not apply migrations",
     "does not register a release",
     "does not bootstrap controls",
+    "does not refresh provider heartbeats",
     "does not run incident drills",
     "does not mutate Shopify",
     "does not enable checkout",
@@ -172,7 +209,7 @@
   ],
   "integration_sequence": {
     "previous_component": "Staging integration execution runtime and evidence control",
-    "current_component": "Staging readiness inspector",
-    "next_component": "Configure the protected mmg-commerce-staging environment, deploy the staging runtime, run readiness, then execute the first exact-release staging integration and rehearsal"
+    "current_component": "Staging readiness inspector with Cloudflare host prerequisites",
+    "next_component": "Deploy the isolated staging upstream and host, then execute the first exact-release integration and rehearsal"
   }
 }
