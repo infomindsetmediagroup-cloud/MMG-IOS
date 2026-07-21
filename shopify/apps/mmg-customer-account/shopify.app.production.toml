@@ -6,7 +6,6 @@ embedded = true
 
 [build]
 automatically_update_urls_on_dev = false
-include_config_on_deploy = true
 
 [access_scopes]
 scopes = "customer_read_customers,customer_read_orders"
