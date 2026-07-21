@@ -39,6 +39,7 @@ const completeProbe = (): MMGCommerceDeploymentProbe => ({
   schedulerActive: true,
   dispatcherActive: true,
   storageSignerActive: true,
+  stagingRehearsalPassed: true,
   e2eEvidence: {
     runId: "e2e-release-12345678",
     completedAt: "2026-07-20T23:00:00.000Z",
@@ -78,6 +79,22 @@ describe("MMG live commerce deployment", () => {
     expect(plan.executable).toBe(false);
   });
 
+  it("blocks publication without fresh staging rehearsal evidence", () => {
+    const probe = completeProbe();
+    probe.runtimeMapping = { ...mapping, productStatus: "ACTIVE" };
+    probe.stagingRehearsalPassed = false;
+    const plan = buildMMGCommerceDeploymentPlan({
+      releaseId: "release-20260720-002b",
+      environment: "production",
+      releaseCommitSha: "e".repeat(40),
+      generatedAt: new Date("2026-07-20T23:00:00.000Z"),
+      probe,
+      includePublication: true,
+    });
+    expect(plan.blockers).toContain("STAGING_REHEARSAL_NOT_PASSED");
+    expect(plan.executable).toBe(false);
+  });
+
   it("identifies missing scopes, migrations, routes, assets, and operations", () => {
     const probe = completeProbe();
     probe.grantedScopes = [];
@@ -96,7 +113,7 @@ describe("MMG live commerce deployment", () => {
     });
     expect(plan.blockers).toContain("MISSING_SCOPE:write_products");
     expect(plan.blockers).toContain(
-      "MISSING_MIGRATION:20260720_007_mmg_live_commerce_deployment_control",
+      "MISSING_MIGRATION:20260721_010_mmg_production_adapters_staging_rehearsal",
     );
     expect(plan.blockers).toContain(
       "MISSING_ROUTE:/api/internal/commerce/deployment",
