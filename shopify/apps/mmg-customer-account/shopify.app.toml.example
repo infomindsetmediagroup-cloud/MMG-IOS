@@ -1,0 +1,22 @@
+# Run `shopify app config link` and select the MMG Shopify Dev Dashboard app.
+# Shopify CLI will create the active shopify.app.toml with the real client_id.
+
+name = "MMG Customer Account"
+client_id = "REPLACE_WITH_LINKED_SHOPIFY_APP_CLIENT_ID"
+application_url = "REPLACE_WITH_LINKED_APP_URL"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+include_config_on_deploy = true
+
+[webhooks]
+api_version = "2026-07"
+
+[access_scopes]
+scopes = "customer_read_customers,customer_read_orders"
+
+[auth]
+redirect_urls = [
+  "REPLACE_WITH_LINKED_APP_URL/auth/callback"
+]
