@@ -65,12 +65,83 @@ jobs:
         with:
           ref: ${{ inputs.release_commit_sha }}
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Install PostgreSQL client
         if: inputs.action == 'execute' || inputs.action == 'rehearse'
         run: |
           set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Enforce local staging readiness
+        if: inputs.action == 'execute' || inputs.action == 'rehearse'
+        env:
+          MMG_COMMERCE_ENVIRONMENT: staging
+          MMG_COMMERCE_RELEASE_ID: ${{ inputs.release_id }}
+          MMG_COMMERCE_RELEASE_COMMIT_SHA: ${{ inputs.release_commit_sha }}
+          MMG_GITHUB_ENVIRONMENT_NAME: mmg-commerce-staging
+          MMG_COMMERCE_STAGING_DATABASE_URL: ${{ secrets.MMG_COMMERCE_STAGING_DATABASE_URL }}
+          MMG_COMMERCE_STAGING_RUNTIME_ORIGIN: ${{ secrets.MMG_COMMERCE_STAGING_RUNTIME_ORIGIN }}
+          MMG_COMMERCE_STAGING_READINESS_ENDPOINT: ${{ secrets.MMG_COMMERCE_STAGING_READINESS_ENDPOINT }}
+          MMG_COMMERCE_STAGING_INTEGRATION_ENDPOINT: ${{ secrets.MMG_COMMERCE_STAGING_INTEGRATION_ENDPOINT }}
+          MMG_COMMERCE_REHEARSAL_ENDPOINT: ${{ secrets.MMG_COMMERCE_REHEARSAL_ENDPOINT }}
+          MMG_COMMERCE_STAGING_OPERATIONS_TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_OPERATIONS_TOKEN }}
+          MMG_COMMERCE_STAGING_INTEGRATION_TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_INTEGRATION_TOKEN }}
+          MMG_COMMERCE_STAGING_REHEARSAL_TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_REHEARSAL_TOKEN }}
+          MMG_COMMERCE_STAGING_REHEARSAL_ADAPTER_TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_REHEARSAL_ADAPTER_TOKEN }}
+          MMG_COMMERCE_STAGING_RUNTIME_CONTROL_TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_RUNTIME_CONTROL_TOKEN }}
+          MMG_COMMERCE_ALERT_DESTINATIONS: ${{ secrets.MMG_COMMERCE_ALERT_DESTINATIONS }}
+          MMG_COMMERCE_ALERT_ENVIRONMENT: staging
+          MMG_COMMERCE_ADMIN_AUTH_CONFIGURED: ${{ vars.MMG_COMMERCE_ADMIN_AUTH_CONFIGURED }}
+          MMG_COMMERCE_SCHEDULER_CONFIGURED: ${{ vars.MMG_COMMERCE_SCHEDULER_CONFIGURED }}
+          MMG_COMMERCE_DISPATCHER_CONFIGURED: ${{ vars.MMG_COMMERCE_DISPATCHER_CONFIGURED }}
+          MMG_COMMERCE_STORAGE_SIGNER_CONFIGURED: ${{ vars.MMG_COMMERCE_STORAGE_SIGNER_CONFIGURED }}
+          MMG_STAGING_READINESS_OUTPUT: mmg-commerce-staging-readiness-preflight.json
+        run: node scripts/mmg-commerce-staging-readiness.mjs
+
+      - name: Enforce protected runtime readiness
+        if: inputs.action == 'execute' || inputs.action == 'rehearse'
+        env:
+          ENDPOINT: ${{ secrets.MMG_COMMERCE_STAGING_READINESS_ENDPOINT }}
+          TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_INTEGRATION_TOKEN }}
+          RELEASE_ID: ${{ inputs.release_id }}
+          RELEASE_SHA: ${{ inputs.release_commit_sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tooling=$(jq '.evidence | {
+            nodeMajor,
+            psqlAvailable,
+            sha256ToolAvailable,
+            migrationRunnerPresent,
+            releaseRegistrationPresent,
+            workflowPresent
+          }' mmg-commerce-staging-readiness-preflight.json)
+          github_environment=$(jq '.evidence | {
+            configured: .githubEnvironmentConfigured,
+            requiredSecretNamesPresent
+          }' mmg-commerce-staging-readiness-preflight.json)
+          payload=$(jq -n \
+            --arg requestId "staging-readiness-preflight-${RUN_ID}-${RUN_ATTEMPT}" \
+            --arg releaseId "$RELEASE_ID" \
+            --arg releaseCommitSha "$RELEASE_SHA" \
+            --argjson tooling "$tooling" \
+            --argjson githubEnvironment "$github_environment" \
+            '{requestId:$requestId,environment:"staging",releaseId:$releaseId,releaseCommitSha:$releaseCommitSha,tooling:$tooling,githubEnvironment:$githubEnvironment,publicationAllowed:false,liveCustomerDataAllowed:false}')
+          response=$(curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $TOKEN" \
+            --header "Content-Type: application/json" \
+            --header "X-MMG-Internal-Request: github-actions-staging-integration-readiness" \
+            --data "$payload" \
+            "$ENDPOINT")
+          echo "$response" | jq . > mmg-commerce-staging-readiness-runtime.json
+          echo "$response" | jq -e '.ok == true and .report.ready == true and .report.blockerCount == 0 and .report.publicationAllowed == false and .report.liveCustomerDataAllowed == false'
 
       - name: Reconcile staging migrations 001-011
         if: inputs.action == 'execute' || inputs.action == 'rehearse'
@@ -199,10 +270,13 @@ jobs:
           echo "$response" | jq -e '.ok == true and .status == "verified" and (.blockers | length) == 0'
 
       - name: Upload sanitized staging evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: mmg-commerce-staging-integration-${{ github.run_id }}
           path: |
+            mmg-commerce-staging-readiness-preflight.json
+            mmg-commerce-staging-readiness-runtime.json
             mmg-commerce-staging-integration-evidence.json
             mmg-commerce-staging-rehearsal-evidence.json
             mmg-commerce-staging-integration-verification.json
