@@ -1,1 +1,86 @@
-placeholder
+{
+  "schemaVersion": "1.0.0",
+  "recordId": "shopify-canonical-service-production-checkpoint-20260720",
+  "changeSetId": "shopify-canonical-service-product-source-20260721",
+  "state": "approved-preflight-passed-theme-publish-blocked-manual-action-required",
+  "store": {
+    "shopId": "gid://shopify/Shop/75443372186",
+    "name": "Mindset Media Group",
+    "myshopifyDomain": "07kd8e-qw.myshopify.com",
+    "primaryDomain": "themindsetmediagroup.com"
+  },
+  "authorization": {
+    "granted": true,
+    "exactInstruction": "Approve production deployment: shopify-canonical-service-product-source-20260721",
+    "observedAt": "2026-07-21T02:04:11Z",
+    "architecture": "publish-verified-staging-theme-then-assign-product-template"
+  },
+  "preflight": {
+    "passed": true,
+    "productId": "gid://shopify/Product/9024288620698",
+    "productUpdatedAt": "2026-07-21T00:56:35Z",
+    "productTemplateSuffix": null,
+    "descriptionHtmlCapturedForRollback": true,
+    "productIdentityUnchanged": true,
+    "pricesUnchanged": true,
+    "skusUnchanged": true,
+    "inventoryUnchanged": true,
+    "shippingUnchanged": true,
+    "mediaUnchanged": true,
+    "pagesVerified": ["customer-portal", "customer-service"],
+    "reservedRedirectsVerified": 4
+  },
+  "themes": {
+    "currentMain": {
+      "id": "gid://shopify/OnlineStoreTheme/155242856602",
+      "name": "Kairos Staging",
+      "role": "MAIN",
+      "candidateFilesPresent": false
+    },
+    "candidate": {
+      "id": "gid://shopify/OnlineStoreTheme/155335557274",
+      "name": "MMG Service Staging 2026-07-20",
+      "role": "UNPUBLISHED",
+      "prefix": "/t/16",
+      "processing": false,
+      "processingFailed": false,
+      "files": [
+        {"filename":"assets/mmg-professional-cover-design.css","checksumMd5":"19a0676ec927c3e649db64a6e11a9c98","size":11943},
+        {"filename":"assets/mmg-professional-cover-design.js","checksumMd5":"db464655bddaf9a73906e49df8762a66","size":6549},
+        {"filename":"sections/mmg-professional-cover-design.liquid","checksumMd5":"f5090c30a9e202c056cf8c3a40b690ff","size":13480},
+        {"filename":"templates/product.mmg-professional-cover-design.json","checksumMd5":"d8804eeb80b0f2aa7a1eb1c373841b21","size":140}
+      ]
+    }
+  },
+  "execution": {
+    "themePublishSchemaValidation": "passed",
+    "themePublishAttempted": true,
+    "themePublishExecuted": false,
+    "themePublishBlockedByHostPolicy": true,
+    "blockReason": "Publishing a theme is blocked — making a theme live must be done manually in Shopify admin to prevent accidental storefront changes.",
+    "productTemplateAssignmentSchemaValidation": "passed",
+    "productTemplateAssignmentAttempted": false,
+    "productTemplateAssignmentExecuted": false,
+    "reasonAssignmentNotAttempted": "The current MAIN theme does not contain the alternate product template. Assigning the suffix before successful theme publication would create an unsafe production dependency.",
+    "fallbackDescriptionHtmlDeploymentAttempted": false,
+    "fallbackReason": "The approved path uses the preferred dedicated-template architecture; no silent fallback to coupled descriptionHtml source is permitted."
+  },
+  "manualBoundary": {
+    "required": true,
+    "adminPath": "https://admin.shopify.com/store/07kd8e-qw/themes",
+    "action": "Publish theme MMG Service Staging 2026-07-20",
+    "themeId": "gid://shopify/OnlineStoreTheme/155335557274",
+    "afterAction": "Re-run role and checksum verification, then assign templateSuffix mmg-professional-cover-design only to product gid://shopify/Product/9024288620698."
+  },
+  "productionState": {
+    "themePublishedByThisExecution": false,
+    "productTemplateSuffixChanged": false,
+    "descriptionHtmlChanged": false,
+    "priceChanged": false,
+    "skuChanged": false,
+    "inventoryChanged": false,
+    "shippingChanged": false,
+    "publicationChanged": false,
+    "redirectChanged": false
+  }
+}
