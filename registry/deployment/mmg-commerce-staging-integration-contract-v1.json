@@ -1,0 +1,191 @@
+{
+  "contract_id": "mmg-commerce-staging-integration-contract-v1",
+  "version": "1.0.0",
+  "status": "approved_for_staging_execution",
+  "approved_date": "2026-07-21",
+  "authority": "MMG executive approval",
+  "purpose": "Apply and verify the canonical commerce migrations in staging, mount the protected commerce routes, connect distinct secret-managed runtime boundaries, maintain a safe paused staging state, execute isolated SEV1 and SEV2 drills, and persist exact-release rehearsal evidence without publishing Shopify resources or using live customer data.",
+  "dependencies": {
+    "deployment_contract": "registry/deployment/mmg-live-commerce-deployment-contract-v1.json",
+    "operations_contract": "registry/operations/mmg-commerce-operations-control-contract-v1.json",
+    "adapter_rehearsal_contract": "registry/operations/mmg-production-adapters-staging-rehearsal-contract-v1.json",
+    "database_schema": "database/migrations/20260721_011_mmg_staging_integration_execution.sql"
+  },
+  "implementation": {
+    "migration_runner": "scripts/mmg-commerce-apply-migrations.sh",
+    "integration_service": "server/operations/staging-integration-service.ts",
+    "integration_http": "server/operations/staging-integration-http.ts",
+    "integration_gateway": "server/operations/postgres-staging-integration-gateway.ts",
+    "integration_repository": "server/operations/postgres-staging-integration-repository.ts",
+    "runtime_composition": "server/operations/staging-integration-runtime.ts",
+    "runtime_policy": "server/operations/staging-runtime-policy.ts",
+    "runtime_control_boundary": "server/operations/postgres-staging-runtime-control-boundary.ts",
+    "fixture_executor": "server/operations/postgres-commerce-staging-fixture-executor.ts",
+    "fixture_metrics": "server/operations/commerce-staging-fixture-metrics.ts",
+    "fixture_evidence": "server/operations/commerce-staging-fixture-evidence.ts",
+    "logical_endpoint": "/api/internal/commerce/staging-integration",
+    "workflow": ".github/workflows/mmg-commerce-staging-integration.yml",
+    "environment_contract": "deployment/mmg-commerce-staging.env.example"
+  },
+  "actions": [
+    "inspect",
+    "bootstrap",
+    "verify"
+  ],
+  "workflow_actions": [
+    "plan",
+    "execute",
+    "verify",
+    "rehearse"
+  ],
+  "migration_contract": {
+    "environment": "staging_only",
+    "ordered_migrations": [
+      "20260720_001_mmg_knowledge_entitlements",
+      "20260720_002_mmg_delivery_window_controller",
+      "20260720_003_mmg_thank_you_first_title_handoff",
+      "20260720_004_mmg_my_library_delivery",
+      "20260720_005_mmg_shopify_subscription_reconciliation",
+      "20260720_006_mmg_recommendation_curation_ranking",
+      "20260720_007_mmg_live_commerce_deployment_control",
+      "20260720_008_mmg_commerce_operations_control",
+      "20260720_009_mmg_commerce_operations_integrity",
+      "20260721_010_mmg_production_adapters_staging_rehearsal",
+      "20260721_011_mmg_staging_integration_execution"
+    ],
+    "session_advisory_lock_required": true,
+    "content_sha256_ledger_required": true,
+    "hash_mismatch_fails_closed": true,
+    "database_url_may_be_logged": false,
+    "migration_actor_recorded": true,
+    "automatic_down_migration_allowed": false,
+    "repair_policy": "forward-only reviewed repair"
+  },
+  "credential_contract": {
+    "minimum_length": 32,
+    "all_credentials_must_be_distinct": true,
+    "credentials": [
+      "operations",
+      "staging_integration",
+      "rehearsal_operator",
+      "rehearsal_adapter",
+      "runtime_control"
+    ],
+    "admin_portal_authentication_is_separate": true,
+    "credentials_in_source_control_allowed": false,
+    "credentials_in_responses_allowed": false
+  },
+  "runtime_control_contract": {
+    "environment": "staging_only",
+    "safe_initial_controls": {
+      "product_publication": "observe_only",
+      "subscription_checkout": "disabled",
+      "webhook_ingestion": "enabled",
+      "delivery_scheduler": "disabled",
+      "delivery_dispatcher": "disabled",
+      "recommendation_automation": "observe_only",
+      "signed_library_access": "disabled",
+      "thank_you_handoff": "disabled"
+    },
+    "rollout_stages": {
+      "paused": 0,
+      "internal": 0,
+      "pilot": 5,
+      "limited": 25,
+      "expanded": 50,
+      "full": 100
+    },
+    "webhook_ingestion_disable_allowed": false,
+    "publication_enable_allowed": false,
+    "durable_control_receipts_required": true,
+    "raw_customer_reference_allowed": false,
+    "cohort_input": "SHA-256 customer reference hash",
+    "cohort_assignment": "deterministic SHA-256 release-bound bucket"
+  },
+  "fixture_contract": {
+    "environment": "staging_only",
+    "parallel_active_fixtures_allowed": false,
+    "publication_allowed": false,
+    "live_customer_data_allowed": false,
+    "delivered_ownership_revocation_allowed": false,
+    "scenarios": [
+      "database_connectivity_sev1",
+      "webhook_failure_sev2"
+    ],
+    "actual_evidence_preserved_during_fixture": [
+      "runtime route availability",
+      "entitlement consistency",
+      "ownership uniqueness"
+    ],
+    "synthetic_evidence_allowed_only_for": [
+      "approved incident scenarios",
+      "isolated healthy recovery baselines",
+      "fixture virtual clock",
+      "fixture rollout approvals"
+    ],
+    "rights_digest_covers": [
+      "active ownership grants",
+      "active delivery grants",
+      "delivered windows",
+      "active entitlements"
+    ],
+    "rights_digest_algorithm": "SHA-256 through PostgreSQL pgcrypto",
+    "teardown_policy": "Release only the isolated fixture lease and restore the staging safe paused state; never delete customer records or revoke ownership."
+  },
+  "verification_contract": {
+    "required_migration_count": 11,
+    "all_route_probes_must_pass": true,
+    "required_exact_release_healthy_heartbeats": [
+      "database",
+      "runtime_routes",
+      "runtime_controls",
+      "alerts",
+      "scheduler",
+      "dispatcher",
+      "storage_signer",
+      "admin_auth"
+    ],
+    "safe_controls_must_match": true,
+    "rollout_must_remain_paused": true,
+    "rehearsal_required_before_publication": true,
+    "rehearsal_evidence_maximum_age_hours": 24,
+    "publication_allowed": false,
+    "live_customer_data_allowed": false
+  },
+  "workflow_contract": {
+    "github_environment": "mmg-commerce-staging",
+    "exact_commit_checkout_required": true,
+    "validation_before_execution_required": true,
+    "migration_execution_actions": [
+      "execute",
+      "rehearse"
+    ],
+    "sanitized_evidence_artifact_required": true,
+    "artifact_retention_days": 30,
+    "production_environment_selectable": false,
+    "shopify_publication_action_available": false
+  },
+  "release_gates": [
+    "Migrations 001 through 011 are reconciled through the SHA-256 migration ledger in the staging PostgreSQL database.",
+    "The staging runtime mounts the integration, operations, Admin operations, rehearsal, rehearsal-adapter, runtime-control, Knowledge Library, Customer Portal, Thank-you, webhook, and deployment routes.",
+    "Five distinct staging server credentials and separate Admin Portal authentication are configured outside source control.",
+    "Nonproduction SEV1 and SEV2 alert destinations are configured and verified.",
+    "Database, route, control, alert, scheduler, dispatcher, storage-signer, and Admin-auth adapters write healthy heartbeats for the exact release.",
+    "Bootstrap establishes the canonical safe controls and Paused 0% rollout state.",
+    "The exact-release staging SEV1, SEV2, consistency, staged-rollout, and rights-preservation rehearsal passes.",
+    "Verification returns no blockers while publication and live-customer flags remain false.",
+    "Production remains paused and Shopify publication remains a separate executive-approved action."
+  ],
+  "publication_boundary": {
+    "shopify_mutation_performed": false,
+    "subscription_checkout_enabled": false,
+    "customer_cohort_exposed": false,
+    "production_runtime_changed": false,
+    "production_database_changed": false
+  },
+  "integration_sequence": {
+    "previous_component": "Production adapter wiring and controlled staging rehearsal framework",
+    "current_component": "Staging integration execution runtime and evidence control",
+    "next_component": "Deploy this runtime to the isolated staging environment, configure providers and secrets, then execute and review the first exact-release staging rehearsal"
+  }
+}
