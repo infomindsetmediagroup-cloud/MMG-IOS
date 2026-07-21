@@ -4,6 +4,7 @@ import {
   type MMGCommerceOperationsDependencies,
   type MMGCommerceOperationsPrincipal,
 } from "./commerce-operations-service.js";
+import { executeMMGCommerceRolloutCommand } from "./commerce-rollout-service.js";
 
 export interface MMGCommerceOperationsAuthenticator {
   authenticate(request: Request): Promise<MMGCommerceOperationsPrincipal | null>;
@@ -185,11 +186,18 @@ export const handleMMGCommerceOperationsRequest = async (
     const principal = await dependencies.authenticator.authenticate(request);
     if (!principal) throw new Error("MMG_OPERATIONS_AUTH_REQUIRED");
     const payload = await readJSON(request);
-    const result = await executeMMGCommerceOperationsCommand({
-      command: commandFrom(payload),
-      principal,
-      dependencies,
-    });
+    const command = commandFrom(payload);
+    const result = ["advance_rollout", "pause_rollout"].includes(command.action)
+      ? await executeMMGCommerceRolloutCommand({
+          command,
+          principal,
+          dependencies,
+        })
+      : await executeMMGCommerceOperationsCommand({
+          command,
+          principal,
+          dependencies,
+        });
     return json(result.body, result.status);
   } catch (error) {
     const code = error instanceof Error ? error.message : "MMG_OPERATIONS_FAILED";
