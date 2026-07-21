@@ -1,10 +1,17 @@
 {
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "changeSetId": "shopify-product-normalization-20260720",
-  "state": "prepared-not-approved-not-executed",
+  "state": "executed-verified",
   "observedAt": "2026-07-20",
+  "executedAt": "2026-07-21T00:26:42Z",
+  "verifiedAt": "2026-07-21T00:26:43Z",
   "storeDomain": "themindsetmediagroup.com",
   "approvalLevel": 3,
+  "authorization": {
+    "approvedBy": "user",
+    "instruction": "Push thru",
+    "scope": "both-prepared-change-sets"
+  },
   "requiredScopes": [
     "read_products",
     "read_inventory",
@@ -13,6 +20,7 @@
   "preflight": {
     "artifact": "shopify/operations/graphql/product-normalization-preflight.graphql",
     "abortOnAnyMismatch": true,
+    "matched": true,
     "products": [
       {
         "productGid": "gid://shopify/Product/9024288620698",
@@ -101,6 +109,21 @@
       "sellingPlans"
     ]
   },
+  "execution": {
+    "shopifyUserErrors": 0,
+    "products": {
+      "professional-cover-design-service": {
+        "productGid": "gid://shopify/Product/9024288620698",
+        "productType": "Publishing Service",
+        "updatedAt": "2026-07-21T00:26:42Z"
+      },
+      "ai-image-mastery": {
+        "productGid": "gid://shopify/Product/9022950998170",
+        "productType": "Digital Download",
+        "updatedAt": "2026-07-21T00:26:43Z"
+      }
+    }
+  },
   "rollback": {
     "strategy": "restore-exact-preflight-values",
     "productTypes": {
@@ -124,6 +147,7 @@
     ]
   },
   "postconditions": {
+    "verified": true,
     "productTypes": {
       "professional-cover-design-service": "Publishing Service",
       "ai-image-mastery": "Digital Download"
@@ -138,5 +162,6 @@
     ],
     "inventoryTrackingMustRemain": false,
     "requiresShippingMustRemain": false
-  }
+  },
+  "executionRecord": "shopify/operations/executions/2026-07-20-production-change-sets.md"
 }
