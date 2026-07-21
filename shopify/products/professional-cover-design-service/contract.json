@@ -1,8 +1,8 @@
 {
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "contractId": "mmg-canonical-service-product-professional-cover-design",
-  "state": "candidate-not-deployed",
-  "observedAt": "2026-07-21T00:26:43Z",
+  "state": "deployed-verified",
+  "observedAt": "2026-07-21T03:16:38Z",
   "product": {
     "id": "gid://shopify/Product/9024288620698",
     "title": "Professional Cover Design Service™",
@@ -11,14 +11,24 @@
     "status": "ACTIVE",
     "vendor": "Mindset Media Group",
     "productType": "Publishing Service",
-    "templateSuffix": null,
+    "templateSuffix": "mmg-professional-cover-design",
     "publishedAt": "2026-07-06T02:53:01Z",
-    "updatedAt": "2026-07-21T00:26:42Z",
+    "updatedAt": "2026-07-21T03:16:38Z",
     "tracksInventory": false,
     "requiresSellingPlan": false,
     "requiresShipping": false,
     "purchaseModel": "one-purchase-one-project",
-    "sourceLocation": "shopify-description-html"
+    "sourceLocation": "online-store-theme-product-template"
+  },
+  "theme": {
+    "mainThemeId": "gid://shopify/OnlineStoreTheme/155336671386",
+    "mainThemeName": "MMG Service Production Candidate 2026-07-20",
+    "mainThemePrefix": "/t/17",
+    "mainThemeUpdatedAt": "2026-07-21T03:16:16Z",
+    "rollbackThemeId": "gid://shopify/OnlineStoreTheme/155242856602",
+    "rollbackThemeName": "Kairos Staging",
+    "rollbackThemeRole": "UNPUBLISHED",
+    "rollbackThemePrefix": "/t/10"
   },
   "seo": {
     "title": "Professional Book Cover Design Service | Mindset Media Group™",
@@ -39,6 +49,7 @@
       "taxable": true,
       "tracked": false,
       "requiresShipping": false,
+      "availableForSale": true,
       "customerLabel": "eBook / front cover"
     },
     {
@@ -51,6 +62,7 @@
       "taxable": true,
       "tracked": false,
       "requiresShipping": false,
+      "availableForSale": true,
       "customerLabel": "Book cover package",
       "defaultSelection": true
     },
@@ -64,6 +76,7 @@
       "taxable": true,
       "tracked": false,
       "requiresShipping": false,
+      "availableForSale": true,
       "customerLabel": "Expanded cover system"
     }
   ],
@@ -118,8 +131,11 @@
     "html": "source/section.html",
     "css": "source/styles.css",
     "javascript": "source/behavior.js",
-    "liveSourceUnchanged": true,
-    "deploymentRequiresApproval": true
+    "themeSection": "sections/mmg-professional-cover-design.liquid",
+    "themeTemplate": "templates/product.mmg-professional-cover-design.json",
+    "legacyDescriptionHtmlPreservedForRollback": true,
+    "deploymentApprovalReceived": true,
+    "postDeploymentVerificationPassed": true
   },
   "reservedRoutes": [
     "/products/publish-ready-book-build-service",
