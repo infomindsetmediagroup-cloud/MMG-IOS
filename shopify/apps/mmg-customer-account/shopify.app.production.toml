@@ -1,6 +1,6 @@
-client_id = "c59b40991414fb575c15acd4dae8cd74"
-name = "Customer Account Integration"
-handle = "customer-account-integration"
+client_id = "0e2218fa78074829c6d9df9ab2fdfe95"
+name = "Mindset Media Group"
+handle = "mmg-customer-account-1"
 application_url = "https://shopify.dev/apps/default-app-home"
 embedded = false
 
