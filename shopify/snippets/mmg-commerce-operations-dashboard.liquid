@@ -1,0 +1,89 @@
+{%- liquid
+  assign mmg_operations_endpoint = mmg_operations_endpoint | default: '/api/admin/commerce/operations'
+  assign mmg_operations_environment = mmg_operations_environment | default: 'production'
+  assign mmg_operations_instance_seed = mmg_operations_instance_id | default: section.id | default: 'admin-portal'
+  assign mmg_operations_instance = mmg_operations_instance_seed | append: '-commerce-operations' | handleize
+-%}
+
+{{ 'mmg-commerce-operations-dashboard.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'mmg-commerce-operations-dashboard.js' | asset_url }}" defer></script>
+
+<mmg-commerce-operations-dashboard
+  id="mmg-commerce-operations-{{ mmg_operations_instance }}"
+  class="mmg-operations-dashboard"
+  data-endpoint="{{ mmg_operations_endpoint | escape }}"
+  data-environment="{{ mmg_operations_environment | escape }}"
+  aria-labelledby="mmg-operations-title-{{ mmg_operations_instance }}"
+>
+  <section id="commerce-operations" class="mmg-operations-dashboard__shell">
+    <header class="mmg-operations-dashboard__header">
+      <div>
+        <p class="mmg-operations-dashboard__eyebrow">Kairos Commerce Operations</p>
+        <h2 id="mmg-operations-title-{{ mmg_operations_instance }}">Release health and incident control</h2>
+        <p>Private read-only visibility into health signals, rollout state, incidents, kill switches, consistency, and verification evidence.</p>
+      </div>
+      <div class="mmg-operations-dashboard__toolbar">
+        <label>
+          <span>Environment</span>
+          <select data-mmg-operations-environment>
+            <option value="production"{% if mmg_operations_environment == 'production' %} selected{% endif %}>Production</option>
+            <option value="staging"{% if mmg_operations_environment == 'staging' %} selected{% endif %}>Staging</option>
+          </select>
+        </label>
+        <button type="button" data-mmg-operations-refresh>Refresh</button>
+      </div>
+    </header>
+
+    <div class="mmg-operations-dashboard__status" data-mmg-operations-status role="status" aria-live="polite">
+      <span class="mmg-operations-dashboard__spinner" aria-hidden="true"></span>
+      <span data-mmg-operations-status-text>Loading protected operations state…</span>
+    </div>
+
+    <div class="mmg-operations-dashboard__blocked" data-mmg-operations-blocked hidden>
+      <p class="mmg-operations-dashboard__blocked-kicker">Protected operations data</p>
+      <h3 data-mmg-operations-blocked-title>Operator access required</h3>
+      <p data-mmg-operations-blocked-copy>This dashboard requires an authenticated MMG commerce operator session.</p>
+    </div>
+
+    <div class="mmg-operations-dashboard__content" data-mmg-operations-content hidden>
+      <div class="mmg-operations-dashboard__summary" data-mmg-operations-summary></div>
+
+      <section class="mmg-operations-dashboard__panel" aria-labelledby="mmg-operations-incidents-{{ mmg_operations_instance }}">
+        <div class="mmg-operations-dashboard__panel-header">
+          <div>
+            <p>Incident queue</p>
+            <h3 id="mmg-operations-incidents-{{ mmg_operations_instance }}">Open incidents</h3>
+          </div>
+          <span data-mmg-operations-incident-count>0 open</span>
+        </div>
+        <div class="mmg-operations-dashboard__list" data-mmg-operations-incidents></div>
+      </section>
+
+      <section class="mmg-operations-dashboard__panel" aria-labelledby="mmg-operations-signals-{{ mmg_operations_instance }}">
+        <div class="mmg-operations-dashboard__panel-header">
+          <div>
+            <p>Telemetry</p>
+            <h3 id="mmg-operations-signals-{{ mmg_operations_instance }}">Health signals</h3>
+          </div>
+          <span data-mmg-operations-evaluated>Not evaluated</span>
+        </div>
+        <div class="mmg-operations-dashboard__signal-grid" data-mmg-operations-signals></div>
+      </section>
+
+      <section class="mmg-operations-dashboard__panel" aria-labelledby="mmg-operations-controls-{{ mmg_operations_instance }}">
+        <div class="mmg-operations-dashboard__panel-header">
+          <div>
+            <p>Runtime safeguards</p>
+            <h3 id="mmg-operations-controls-{{ mmg_operations_instance }}">Control state</h3>
+          </div>
+          <span>Changes require governed operations commands</span>
+        </div>
+        <div class="mmg-operations-dashboard__control-grid" data-mmg-operations-controls></div>
+      </section>
+    </div>
+
+    <noscript>
+      <p class="mmg-operations-dashboard__noscript">JavaScript is required to load private commerce operations state.</p>
+    </noscript>
+  </section>
+</mmg-commerce-operations-dashboard>
