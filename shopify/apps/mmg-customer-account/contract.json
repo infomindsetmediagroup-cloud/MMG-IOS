@@ -12,7 +12,8 @@
       "customer_read_customers",
       "customer_read_orders"
     ],
-    "apiAccess": true,
+    "customerAccountApiDirectAccess": true,
+    "storefrontApiCapability": false,
     "networkAccess": false
   },
   "eligibility": {
