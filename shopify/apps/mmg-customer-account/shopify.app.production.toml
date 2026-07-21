@@ -10,3 +10,9 @@ include_config_on_deploy = true
 
 [access_scopes]
 scopes = "customer_read_customers,customer_read_orders"
+
+[webhooks]
+api_version = "2026-07"
+
+[auth]
+redirect_urls = ["https://shopify.dev/apps/default-app-home"]
