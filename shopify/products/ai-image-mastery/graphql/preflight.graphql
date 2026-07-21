@@ -1,0 +1,103 @@
+query MMGAIImageMasteryProductionPreflight($productId: ID!) {
+  product(id: $productId) {
+    id
+    title
+    handle
+    status
+    vendor
+    productType
+    templateSuffix
+    createdAt
+    updatedAt
+    publishedAt
+    onlineStoreUrl
+    tracksInventory
+    totalInventory
+    requiresSellingPlan
+    hasOnlyDefaultVariant
+    descriptionHtml
+    seo { title description }
+    tags
+    variants(first: 10) {
+      nodes {
+        id
+        legacyResourceId
+        title
+        price
+        compareAtPrice
+        availableForSale
+        inventoryPolicy
+        inventoryQuantity
+        requiresComponents
+        taxable
+        updatedAt
+        inventoryItem {
+          id
+          sku
+          tracked
+          requiresShipping
+          updatedAt
+        }
+      }
+      pageInfo { hasNextPage endCursor }
+    }
+    media(first: 20) {
+      nodes {
+        id
+        mediaContentType
+        alt
+        ... on MediaImage {
+          image { url width height }
+        }
+      }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+  mainThemes: themes(first: 10, roles: [MAIN]) {
+    nodes {
+      id
+      name
+      role
+      prefix
+      processing
+      processingFailed
+      createdAt
+      updatedAt
+      files(
+        first: 20
+        filenames: [
+          "assets/mmg-professional-cover-design.css"
+          "assets/mmg-professional-cover-design.js"
+          "sections/mmg-professional-cover-design.liquid"
+          "templates/product.mmg-professional-cover-design.json"
+          "assets/mmg-ai-image-mastery.css"
+          "assets/mmg-ai-image-mastery.js"
+          "sections/mmg-ai-image-mastery.liquid"
+          "templates/product.mmg-ai-image-mastery.json"
+        ]
+      ) {
+        nodes { filename contentType checksumMd5 size updatedAt }
+        pageInfo { hasNextPage endCursor }
+        userErrors { code filename }
+      }
+    }
+    pageInfo { hasNextPage endCursor }
+  }
+  rollbackThemes: themes(first: 10, roles: [UNPUBLISHED], names: ["Kairos Staging"]) {
+    nodes {
+      id
+      name
+      role
+      prefix
+      processing
+      processingFailed
+      createdAt
+      updatedAt
+    }
+    pageInfo { hasNextPage endCursor }
+  }
+  pages(first: 20, query: "handle:customer-portal OR handle:customer-service") {
+    nodes { id title handle publishedAt updatedAt }
+    pageInfo { hasNextPage endCursor }
+  }
+}

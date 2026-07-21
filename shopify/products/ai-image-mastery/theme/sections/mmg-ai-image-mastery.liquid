@@ -1,0 +1,246 @@
+<script>
+  document.documentElement.classList.add('mmg-ai-image-mastery-page');
+  if (document.body) document.body.classList.add('mmg-ai-image-mastery-page');
+</script>
+
+{{ 'mmg-ai-image-mastery.css' | asset_url | stylesheet_tag }}
+
+<article
+  id="mmg-ai-image-mastery"
+  class="mmg-digital-product"
+  data-mmg-product-handle="{{ product.handle | escape }}"
+  aria-labelledby="mmg-aim-title"
+>
+  <header class="mmg-digital-product__hero" id="overview">
+    <div class="mmg-digital-product__hero-copy">
+      <p class="mmg-digital-product__eyebrow">MMG AI Mastery Systems™ · Digital Download</p>
+      <h1 id="mmg-aim-title">AI Image <span>Mastery™</span></h1>
+      <p class="mmg-digital-product__lede">
+        Build more intentional AI-generated visuals with practical prompt frameworks,
+        repeatable creative workflows, style systems, and enhancement techniques for
+        creators, entrepreneurs, educators, and visual brands.
+      </p>
+
+      <div class="mmg-digital-product__chips" aria-label="Digital guide highlights">
+        <span>Immediate digital access</span>
+        <span>Prompt-building frameworks</span>
+        <span>Style and composition systems</span>
+        <span>Personal-use digital license</span>
+      </div>
+
+      <div class="mmg-digital-product__actions">
+        <a class="mmg-button mmg-button--primary" href="#purchase">
+          Get AI Image Mastery™ · {{ product.price | money }}
+        </a>
+        <a class="mmg-button mmg-button--secondary" href="#included">
+          See What’s Inside
+        </a>
+      </div>
+    </div>
+
+    <figure class="mmg-digital-product__media">
+      {% if product.featured_image %}
+        <img
+          src="{{ product.featured_image | image_url: width: 1600 }}"
+          srcset="
+            {{ product.featured_image | image_url: width: 480 }} 480w,
+            {{ product.featured_image | image_url: width: 720 }} 720w,
+            {{ product.featured_image | image_url: width: 960 }} 960w,
+            {{ product.featured_image | image_url: width: 1200 }} 1200w,
+            {{ product.featured_image | image_url: width: 1600 }} 1600w
+          "
+          sizes="(max-width: 1080px) 90vw, 42vw"
+          data-mmg-featured-image
+          alt="AI Image Mastery digital guide from Mindset Media Group"
+          loading="eager"
+          fetchpriority="high"
+          decoding="async"
+        >
+      {% else %}
+        <img
+          data-mmg-featured-image
+          alt="AI Image Mastery digital guide from Mindset Media Group"
+          loading="eager"
+          decoding="async"
+        >
+      {% endif %}
+      <figcaption>
+        Live Shopify product image · Immediate digital delivery · No physical shipment
+      </figcaption>
+    </figure>
+  </header>
+
+  <nav class="mmg-digital-product__nav" aria-label="AI Image Mastery page sections">
+    <a href="#objectives">Objectives</a>
+    <a href="#included">What’s Included</a>
+    <a href="#system">The System</a>
+    <a href="#purchase">Purchase</a>
+    <a href="#delivery">Delivery</a>
+    <a href="#support">Support</a>
+  </nav>
+
+  <section class="mmg-section mmg-section--soft" id="objectives" aria-labelledby="objectives-title">
+    <div class="mmg-section__head">
+      <p class="mmg-digital-product__eyebrow">Start With Your Objective</p>
+      <h2 id="objectives-title">Choose what your AI imagery needs to accomplish.</h2>
+      <p>
+        Strong outputs begin with a clear visual objective. Use the guide to connect
+        audience, message, composition, lighting, style, and platform requirements
+        before generating.
+      </p>
+    </div>
+
+    <div class="mmg-grid mmg-grid--four">
+      <article class="mmg-card"><strong>Brand</strong><h3>Create a recognizable visual direction.</h3><p>Develop more consistent imagery for offers, campaigns, products, and brand storytelling.</p></article>
+      <article class="mmg-card"><strong>Content</strong><h3>Produce stronger social visuals.</h3><p>Plan images around attention, clarity, format, platform context, and content goals.</p></article>
+      <article class="mmg-card"><strong>Publishing</strong><h3>Support books and digital products.</h3><p>Build visual concepts for covers, educational resources, promotional assets, and launches.</p></article>
+      <article class="mmg-card"><strong>Creative Control</strong><h3>Move beyond random prompting.</h3><p>Use repeatable prompt components to guide subject, scene, camera, lighting, mood, and finish.</p></article>
+    </div>
+  </section>
+
+  <section class="mmg-section" id="included" aria-labelledby="included-title">
+    <div class="mmg-section__head">
+      <p class="mmg-digital-product__eyebrow">Inside the Digital Guide</p>
+      <h2 id="included-title">A practical system for directing better AI images.</h2>
+      <p>AI Image Mastery™ organizes the creative process into usable frameworks rather than isolated prompt tricks.</p>
+    </div>
+
+    <div class="mmg-grid mmg-grid--four">
+      <article class="mmg-card"><strong>01 · Foundations</strong><h3>Prompt architecture</h3><p>Structure subject, environment, composition, style, lighting, perspective, detail, and output intent.</p></article>
+      <article class="mmg-card"><strong>02 · Direction</strong><h3>Visual style systems</h3><p>Translate an idea into a clearer aesthetic using mood, era, medium, texture, palette, and finish.</p></article>
+      <article class="mmg-card"><strong>03 · Workflow</strong><h3>Iteration and refinement</h3><p>Diagnose weak outputs, adjust one variable at a time, compare results, and preserve effective patterns.</p></article>
+      <article class="mmg-card"><strong>04 · Application</strong><h3>Creator-ready use cases</h3><p>Apply the system to branded content, product visuals, publishing assets, campaigns, and concept development.</p></article>
+    </div>
+  </section>
+
+  <section class="mmg-section mmg-section--dark" id="system" aria-labelledby="system-title">
+    <div class="mmg-section__head">
+      <p class="mmg-digital-product__eyebrow">The MMG Image-Direction Workflow</p>
+      <h2 id="system-title">Move from idea to repeatable visual system.</h2>
+      <p>The guide follows a six-stage workflow that makes prompt development easier to diagnose, refine, reuse, and adapt.</p>
+    </div>
+
+    <ol class="mmg-process">
+      <li><strong>Define the objective.</strong><span>Clarify the audience, message, platform, format, and intended response.</span></li>
+      <li><strong>Build the visual brief.</strong><span>Specify subject, environment, composition, perspective, mood, and constraints.</span></li>
+      <li><strong>Translate the brief into prompt components.</strong><span>Use deliberate language for camera, lighting, style, texture, and finish.</span></li>
+      <li><strong>Generate controlled variations.</strong><span>Change targeted variables instead of rewriting the entire prompt at random.</span></li>
+      <li><strong>Evaluate and refine.</strong><span>Compare clarity, hierarchy, anatomy, consistency, relevance, and production readiness.</span></li>
+      <li><strong>Save the working system.</strong><span>Document useful structures so the visual direction can be reproduced and expanded.</span></li>
+    </ol>
+  </section>
+
+  <section class="mmg-section" id="outcomes" aria-labelledby="outcomes-title">
+    <div class="mmg-section__head">
+      <p class="mmg-digital-product__eyebrow">What Changes</p>
+      <h2 id="outcomes-title">Replace guesswork with a more controlled creative process.</h2>
+    </div>
+
+    <div class="mmg-grid mmg-grid--three">
+      <article class="mmg-card"><strong>Before</strong><h3>Vague prompts and inconsistent outputs</h3><p>Ideas exist, but the generator receives incomplete direction and returns unpredictable results.</p></article>
+      <article class="mmg-card"><strong>During</strong><h3>Structured prompt decisions</h3><p>Each creative variable becomes visible, intentional, and easier to improve.</p></article>
+      <article class="mmg-card"><strong>After</strong><h3>Reusable visual frameworks</h3><p>Effective prompt structures can support future content, products, campaigns, and brand assets.</p></article>
+    </div>
+  </section>
+
+  <section class="mmg-section mmg-section--soft" id="purchase" aria-labelledby="purchase-title">
+    <div class="mmg-purchase">
+      <div>
+        <p class="mmg-digital-product__eyebrow">Digital Download</p>
+        <h2 id="purchase-title">Get the complete AI Image Mastery™ guide.</h2>
+        <p>One purchase provides one personal-use digital license and access to the current product files delivered through Shopify’s digital-order workflow.</p>
+        <p class="mmg-status" data-mmg-availability aria-live="polite">Loading live availability…</p>
+      </div>
+
+      <aside class="mmg-purchase__card" aria-label="AI Image Mastery purchase">
+        <strong>AI Image Mastery™</strong>
+        <p class="mmg-purchase__price" data-mmg-price>{{ product.price | money }}</p>
+        <ul>
+          <li>Immediate digital-product access after successful checkout</li>
+          <li>Practical prompt and workflow frameworks</li>
+          <li>Personal-use license for the purchaser</li>
+          <li>No physical product or shipping charge</li>
+        </ul>
+        <button class="mmg-button mmg-button--primary" type="button" data-mmg-add disabled>Add Digital Guide to Cart</button>
+        <a class="mmg-button mmg-button--secondary" href="/cart">View Cart</a>
+        <p class="mmg-status" data-mmg-cart-status aria-live="polite"></p>
+      </aside>
+    </div>
+  </section>
+
+  <section class="mmg-section" id="delivery" aria-labelledby="delivery-title">
+    <div class="mmg-section__head">
+      <p class="mmg-digital-product__eyebrow">Digital-Product Delivery Standard</p>
+      <h2 id="delivery-title">The purchased files are the finished product.</h2>
+      <p>Unlike an MMG service product, this guide does not enter onboarding or a production queue. Access begins after successful payment and digital fulfillment.</p>
+    </div>
+
+    <div class="mmg-grid mmg-grid--four">
+      <article class="mmg-card"><strong>Immediate</strong><h3>Digital access</h3><p>Shopify confirms the order and the connected digital-delivery system provides the purchased files.</p></article>
+      <article class="mmg-card"><strong>License</strong><h3>Personal use</h3><p>The purchaser may use the guide for their own learning and creative work; resale or redistribution is prohibited.</p></article>
+      <article class="mmg-card"><strong>Recovery</strong><h3>Download support</h3><p>If the delivery message is missing or access fails, customer service can verify the order and help restore access.</p></article>
+      <article class="mmg-card"><strong>Updates</strong><h3>Current edition</h3><p>The purchase covers the edition delivered with the order. Future editions or expanded products are separate unless explicitly included.</p></article>
+    </div>
+  </section>
+
+  <section class="mmg-section mmg-section--soft" id="terms" aria-labelledby="terms-title">
+    <div class="mmg-section__head">
+      <p class="mmg-digital-product__eyebrow">Clear Purchase Boundaries</p>
+      <h2 id="terms-title">Know exactly what the purchase includes.</h2>
+    </div>
+
+    <div class="mmg-grid mmg-grid--four">
+      <article class="mmg-card"><strong>Included</strong><h3>The current digital guide</h3><p>Receive the files associated with AI Image Mastery™ at the time of purchase.</p></article>
+      <article class="mmg-card"><strong>Not Included</strong><h3>Custom creative services</h3><p>Prompt consulting, image generation, brand strategy, design production, and account setup are separate services.</p></article>
+      <article class="mmg-card"><strong>Final Sale</strong><h3>Instant-access digital goods</h3><p>Digital products are generally final sale after access or delivery, subject to the published customer-service policies and applicable law.</p></article>
+      <article class="mmg-card"><strong>Platform Change</strong><h3>Tools evolve</h3><p>AI platforms, interfaces, pricing, features, and model behavior can change after publication.</p></article>
+    </div>
+  </section>
+
+  <section class="mmg-section mmg-section--dark" id="support" aria-labelledby="support-title">
+    <div class="mmg-section__head">
+      <p class="mmg-digital-product__eyebrow">Customer Support</p>
+      <h2 id="support-title">Purchase once. Keep the access path clear.</h2>
+      <p>Use Customer Service for order verification, missing delivery messages, file-access problems, or policy questions. The Customer Portal remains available for MMG project and account workflows.</p>
+    </div>
+
+    <div class="mmg-digital-product__actions">
+      <a class="mmg-button mmg-button--primary" href="#purchase">Get AI Image Mastery™</a>
+      <a class="mmg-button mmg-button--secondary mmg-button--on-dark" href="/pages/customer-service">Customer Service</a>
+      <a class="mmg-button mmg-button--secondary mmg-button--on-dark" href="/pages/customer-portal">Customer Portal</a>
+      <a class="mmg-button mmg-button--secondary mmg-button--on-dark" href="/collections/all">Explore the Knowledge Library</a>
+    </div>
+  </section>
+
+  <section class="mmg-section" id="next" aria-labelledby="next-title">
+    <div class="mmg-section__head">
+      <p class="mmg-digital-product__eyebrow">Continue Learning</p>
+      <h2 id="next-title">Connect the guide to the wider MMG knowledge ecosystem.</h2>
+      <p>Use AI Image Mastery™ as one component in a larger creator, publishing, business, and digital-production system.</p>
+    </div>
+
+    <div class="mmg-grid mmg-grid--three">
+      <a class="mmg-card mmg-card--link" href="/collections/all"><strong>Knowledge Library</strong><h3>Explore MMG products</h3><p>Browse digital guides, publishing services, books, and creator resources.</p></a>
+      <a class="mmg-card mmg-card--link" href="/pages/customer-service"><strong>Support</strong><h3>Resolve access questions</h3><p>Get help with order verification, delivery, file access, and published policies.</p></a>
+      <a class="mmg-card mmg-card--link" href="/pages/customer-portal"><strong>Portal</strong><h3>Continue an MMG project</h3><p>Use the Customer Portal for connected project and account workflows.</p></a>
+    </div>
+  </section>
+
+  <button class="mmg-back-top" type="button" data-mmg-back-top>Back to top</button>
+</article>
+
+<script src="{{ 'mmg-ai-image-mastery.js' | asset_url }}" defer="defer"></script>
+
+{% schema %}
+{
+  "name": "MMG AI Image Mastery",
+  "tag": "section",
+  "class": "mmg-ai-image-mastery-section",
+  "settings": [],
+  "presets": [
+    {
+      "name": "MMG AI Image Mastery"
+    }
+  ]
+}
+{% endschema %}

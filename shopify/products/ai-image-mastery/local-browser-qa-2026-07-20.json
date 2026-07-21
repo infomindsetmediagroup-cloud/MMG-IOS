@@ -1,0 +1,96 @@
+{
+  "schemaVersion": "1.1.0",
+  "recordId": "shopify-ai-image-mastery-local-browser-qa-20260720",
+  "sourceChangeSetId": "shopify-canonical-digital-download-ai-image-mastery-20260721",
+  "productionThemeId": "gid://shopify/OnlineStoreTheme/155338309786",
+  "evidenceClassification": "supplemental-local-browser-evidence-not-live-storefront-acceptance",
+  "liveStorefrontAcceptance": "pending-product-template-assignment",
+  "observedAt": "2026-07-21T04:03:16Z",
+  "viewports": {
+    "320": {
+      "innerWidth": 320,
+      "documentScrollWidth": 320,
+      "bodyScrollWidth": 320,
+      "rootScrollWidth": 320,
+      "h1Count": 1,
+      "objectFit": "contain",
+      "enabledButtons": 1,
+      "hiddenRevealCount": 0,
+      "price": "$9.95",
+      "availability": "Available now · immediate digital access",
+      "overflow": false
+    },
+    "375": {
+      "innerWidth": 375,
+      "documentScrollWidth": 375,
+      "bodyScrollWidth": 375,
+      "rootScrollWidth": 375,
+      "h1Count": 1,
+      "objectFit": "contain",
+      "enabledButtons": 1,
+      "hiddenRevealCount": 0,
+      "price": "$9.95",
+      "availability": "Available now · immediate digital access",
+      "overflow": false
+    },
+    "768": {
+      "innerWidth": 768,
+      "documentScrollWidth": 768,
+      "bodyScrollWidth": 768,
+      "rootScrollWidth": 768,
+      "h1Count": 1,
+      "objectFit": "contain",
+      "enabledButtons": 1,
+      "hiddenRevealCount": 0,
+      "price": "$9.95",
+      "availability": "Available now · immediate digital access",
+      "overflow": false
+    },
+    "1024": {
+      "innerWidth": 1024,
+      "documentScrollWidth": 1024,
+      "bodyScrollWidth": 1024,
+      "rootScrollWidth": 1024,
+      "h1Count": 1,
+      "objectFit": "contain",
+      "enabledButtons": 1,
+      "hiddenRevealCount": 0,
+      "price": "$9.95",
+      "availability": "Available now · immediate digital access",
+      "overflow": false
+    },
+    "1440": {
+      "innerWidth": 1440,
+      "documentScrollWidth": 1440,
+      "bodyScrollWidth": 1440,
+      "rootScrollWidth": 1440,
+      "h1Count": 1,
+      "objectFit": "contain",
+      "enabledButtons": 1,
+      "hiddenRevealCount": 0,
+      "price": "$9.95",
+      "availability": "Available now · immediate digital access",
+      "overflow": false
+    }
+  },
+  "functional": {
+    "focusVisible": {
+      "tag": "A",
+      "outlineWidth": "3px",
+      "outlineStyle": "solid"
+    },
+    "cartStatus": "AI Image Mastery™ was added to your cart.",
+    "cartRequests": [
+      {
+        "id": 48655433498778,
+        "quantity": 1
+      }
+    ],
+    "reducedMotion": {
+      "opacity": "1",
+      "transform": "none"
+    }
+  },
+  "overallPass": true,
+  "productionMutationOccurred": false
+}
