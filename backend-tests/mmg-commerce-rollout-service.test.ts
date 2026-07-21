@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { MMGCommerceRolloutStage } from "../server/operations/commerce-operations-control.js";
 import {
   executeMMGCommerceRolloutCommand,
   type MMGCommerceRolloutDependencies,
@@ -8,13 +9,7 @@ import type { MMGCommerceOperationsState } from "../server/operations/commerce-o
 const now = new Date("2026-07-20T23:00:00.000Z");
 const releaseId = "release-staging-12345678";
 
-const state = (
-  stage: MMGCommerceOperationsState["rollout"] extends infer R
-    ? R extends { stage: infer S }
-      ? S
-      : never
-    : never,
-): MMGCommerceOperationsState => ({
+const state = (stage: MMGCommerceRolloutStage): MMGCommerceOperationsState => ({
   environment: "staging",
   latestHealth: {
     schemaVersion: "1.0.0",
@@ -68,20 +63,22 @@ const dependencies = (
     loadIncident: vi.fn(),
     transitionIncident: vi.fn(),
     setControl: vi.fn(),
-    setRollout: vi.fn().mockImplementation(async ({ stage, cohortPercentage, status }) => ({
-      ...operationsState.rollout,
-      stage,
-      cohortPercentage,
-      status,
-      enteredAt: now.toISOString(),
-      version: 2,
-    })),
+    setRollout: vi
+      .fn()
+      .mockImplementation(async ({ stage, cohortPercentage, status }) => ({
+        ...operationsState.rollout,
+        stage,
+        cohortPercentage,
+        status,
+        enteredAt: now.toISOString(),
+        version: 2,
+      })),
     loadRolloutApproval: vi.fn().mockResolvedValue(
       approval
         ? {
             approvalId: "approval-rollout-12345678",
             releaseId,
-            environment: "staging",
+            environment: operationsState.environment,
             fromStage: operationsState.rollout?.stage ?? "paused",
             toStage: "pilot",
             approvedBy: "executive-1",
@@ -158,7 +155,9 @@ describe("MMG commerce rollout service", () => {
 
   it("rejects evidence from another or stale release", async () => {
     const mismatched = state("limited");
-    if (mismatched.latestHealth) mismatched.latestHealth.releaseId = "release-other-12345678";
+    if (mismatched.latestHealth) {
+      mismatched.latestHealth.releaseId = "release-other-12345678";
+    }
     const deps = dependencies(mismatched, true, false);
     await expect(
       executeMMGCommerceRolloutCommand({
