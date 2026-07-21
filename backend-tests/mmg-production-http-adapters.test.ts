@@ -47,17 +47,25 @@ describe("MMG production HTTP adapters", () => {
     });
   });
 
-  it("applies reversible controls and forbids publication enablement", async () => {
+  it("applies reversible controls, persists receipts, and forbids publication enablement", async () => {
+    const receiptRecord = vi.fn().mockResolvedValue(undefined);
     const fetcher = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ ok: true }), {
         status: 200,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Request-Id": "runtime-provider-123",
+        },
       }),
     );
     const adapter = new MMGHTTPCommerceControlAdapter({
       runtimeOrigin: "https://runtime.example.com",
       internalToken: "x".repeat(48),
       requestTimeoutMs: 1000,
+      receiptStore: { record: receiptRecord },
+      sha256: vi.fn().mockResolvedValue("a".repeat(64)),
+      createReceiptId: () => "control-receipt-12345678",
+      now: () => new Date("2026-07-21T00:00:01.000Z"),
       fetcher,
     });
     await adapter.applyControl({
@@ -73,6 +81,15 @@ describe("MMG production HTTP adapters", () => {
     expect(fetcher).toHaveBeenCalledWith(
       expect.objectContaining({ pathname: "/api/internal/runtime-controls/control" }),
       expect.objectContaining({ method: "POST" }),
+    );
+    expect(receiptRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        receiptId: "control-receipt-12345678",
+        controlCode: "delivery_scheduler",
+        requestedMode: "disabled",
+        outcome: "applied",
+        providerReferenceHash: "a".repeat(64),
+      }),
     );
     await expect(
       adapter.applyControl({
