@@ -31,14 +31,16 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.release_commit_sha }}
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+
       - name: Validate immutable release identity
         env:
           RELEASE_ID: ${{ inputs.release_id }}
@@ -48,8 +50,10 @@ jobs:
           [[ "$RELEASE_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$ ]]
           [[ "$RELEASE_COMMIT_SHA" =~ ^[a-f0-9]{40}$ ]]
           test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT_SHA"
+
       - name: Install validation dependencies
         run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+
       - run: npm run typecheck
       - run: npm test
       - run: npm run validate:shopify
@@ -58,7 +62,7 @@ jobs:
   integrate:
     needs: validate
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     environment: mmg-commerce-staging
     steps:
       - uses: actions/checkout@v4
@@ -70,14 +74,14 @@ jobs:
           node-version: 22
 
       - name: Install PostgreSQL client
-        if: inputs.action == 'execute' || inputs.action == 'rehearse'
+        if: inputs.action != 'plan'
         run: |
           set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends postgresql-client
 
-      - name: Enforce local staging readiness
-        if: inputs.action == 'execute' || inputs.action == 'rehearse'
+      - name: Run local protected-environment preflight
+        if: inputs.action != 'plan'
         env:
           MMG_COMMERCE_ENVIRONMENT: staging
           MMG_COMMERCE_RELEASE_ID: ${{ inputs.release_id }}
@@ -93,6 +97,8 @@ jobs:
           MMG_COMMERCE_STAGING_REHEARSAL_TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_REHEARSAL_TOKEN }}
           MMG_COMMERCE_STAGING_REHEARSAL_ADAPTER_TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_REHEARSAL_ADAPTER_TOKEN }}
           MMG_COMMERCE_STAGING_RUNTIME_CONTROL_TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_RUNTIME_CONTROL_TOKEN }}
+          MMG_COMMERCE_STAGING_ADMIN_DASHBOARD_TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_ADMIN_DASHBOARD_TOKEN }}
+          MMG_COMMERCE_STAGING_PROVIDER_HEALTH_TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_PROVIDER_HEALTH_TOKEN }}
           MMG_COMMERCE_ALERT_DESTINATIONS: ${{ secrets.MMG_COMMERCE_ALERT_DESTINATIONS }}
           MMG_COMMERCE_ALERT_ENVIRONMENT: staging
           MMG_COMMERCE_ADMIN_AUTH_CONFIGURED: ${{ vars.MMG_COMMERCE_ADMIN_AUTH_CONFIGURED }}
@@ -100,48 +106,15 @@ jobs:
           MMG_COMMERCE_DISPATCHER_CONFIGURED: ${{ vars.MMG_COMMERCE_DISPATCHER_CONFIGURED }}
           MMG_COMMERCE_STORAGE_SIGNER_CONFIGURED: ${{ vars.MMG_COMMERCE_STORAGE_SIGNER_CONFIGURED }}
           MMG_STAGING_READINESS_OUTPUT: mmg-commerce-staging-readiness-preflight.json
-        run: node scripts/mmg-commerce-staging-readiness.mjs
-
-      - name: Enforce protected runtime readiness
-        if: inputs.action == 'execute' || inputs.action == 'rehearse'
-        env:
-          ENDPOINT: ${{ secrets.MMG_COMMERCE_STAGING_READINESS_ENDPOINT }}
-          TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_INTEGRATION_TOKEN }}
-          RELEASE_ID: ${{ inputs.release_id }}
-          RELEASE_SHA: ${{ inputs.release_commit_sha }}
-          RUN_ID: ${{ github.run_id }}
-          RUN_ATTEMPT: ${{ github.run_attempt }}
-        shell: bash
         run: |
           set -euo pipefail
-          tooling=$(jq '.evidence | {
-            nodeMajor,
-            psqlAvailable,
-            sha256ToolAvailable,
-            migrationRunnerPresent,
-            releaseRegistrationPresent,
-            workflowPresent
-          }' mmg-commerce-staging-readiness-preflight.json)
-          github_environment=$(jq '.evidence | {
-            configured: .githubEnvironmentConfigured,
-            requiredSecretNamesPresent
-          }' mmg-commerce-staging-readiness-preflight.json)
-          payload=$(jq -n \
-            --arg requestId "staging-readiness-preflight-${RUN_ID}-${RUN_ATTEMPT}" \
-            --arg releaseId "$RELEASE_ID" \
-            --arg releaseCommitSha "$RELEASE_SHA" \
-            --argjson tooling "$tooling" \
-            --argjson githubEnvironment "$github_environment" \
-            '{requestId:$requestId,environment:"staging",releaseId:$releaseId,releaseCommitSha:$releaseCommitSha,tooling:$tooling,githubEnvironment:$githubEnvironment,publicationAllowed:false,liveCustomerDataAllowed:false}')
-          response=$(curl --fail-with-body --silent --show-error \
-            --request POST \
-            --header "Authorization: Bearer $TOKEN" \
-            --header "Content-Type: application/json" \
-            --header "X-MMG-Internal-Request: github-actions-staging-integration-readiness" \
-            --data "$payload" \
-            "$ENDPOINT")
-          echo "$response" | jq . > mmg-commerce-staging-readiness-runtime.json
-          echo "$response" | jq -e '.ok == true and .report.ready == true and .report.blockerCount == 0 and .report.publicationAllowed == false and .report.liveCustomerDataAllowed == false'
+          node scripts/mmg-commerce-staging-readiness.mjs
+          jq -e '
+            .ready == true and
+            .blockerCount == 0 and
+            .publicationAllowed == false and
+            .liveCustomerDataAllowed == false
+          ' mmg-commerce-staging-readiness-preflight.json
 
       - name: Reconcile staging migrations 001-011
         if: inputs.action == 'execute' || inputs.action == 'rehearse'
@@ -171,45 +144,100 @@ jobs:
           chmod 700 scripts/mmg-commerce-register-staging-release.sh
           scripts/mmg-commerce-register-staging-release.sh
 
-      - name: Inspect or bootstrap staging runtime
-        id: integration
+      - name: Bootstrap canonical safe state
+        if: inputs.action == 'execute' || inputs.action == 'rehearse'
         env:
           ENDPOINT: ${{ secrets.MMG_COMMERCE_STAGING_INTEGRATION_ENDPOINT }}
           TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_INTEGRATION_TOKEN }}
           RELEASE_ID: ${{ inputs.release_id }}
           RELEASE_SHA: ${{ inputs.release_commit_sha }}
-          ACTION: ${{ inputs.action }}
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$ENDPOINT"
-          test -n "$TOKEN"
-          case "$ACTION" in
-            plan) command_action="inspect" ;;
-            execute|rehearse) command_action="bootstrap" ;;
-            verify) command_action="verify" ;;
-            *) exit 64 ;;
-          esac
-          request_id="staging-integration-${RUN_ID}-${RUN_ATTEMPT}-${command_action}"
-          integration_run_id="integration-${RUN_ID}-${RUN_ATTEMPT}"
           payload=$(jq -n \
-            --arg requestId "$request_id" \
-            --arg integrationRunId "$integration_run_id" \
+            --arg requestId "staging-bootstrap-${RUN_ID}-${RUN_ATTEMPT}" \
+            --arg integrationRunId "integration-${RUN_ID}-${RUN_ATTEMPT}" \
             --arg releaseId "$RELEASE_ID" \
             --arg releaseCommitSha "$RELEASE_SHA" \
-            --arg action "$command_action" \
-            '{requestId:$requestId,integrationRunId:$integrationRunId,releaseId:$releaseId,releaseCommitSha:$releaseCommitSha,action:$action,environment:"staging",publicationAllowed:false,liveCustomerDataAllowed:false}')
+            '{requestId:$requestId,integrationRunId:$integrationRunId,releaseId:$releaseId,releaseCommitSha:$releaseCommitSha,action:"bootstrap",environment:"staging",publicationAllowed:false,liveCustomerDataAllowed:false}')
           response=$(curl --fail-with-body --silent --show-error \
             --request POST \
             --header "Authorization: Bearer $TOKEN" \
             --header "Content-Type: application/json" \
-            --header "X-MMG-Internal-Request: github-actions-staging-integration" \
+            --header "X-MMG-Internal-Request: github-actions-staging-bootstrap" \
             --data "$payload" \
             "$ENDPOINT")
-          echo "$response" | jq . > mmg-commerce-staging-integration-evidence.json
+          echo "$response" | jq . > mmg-commerce-staging-bootstrap-evidence.json
           echo "$response" | jq -e '.ok == true and .snapshot.publicationAllowed == false and .snapshot.liveCustomerDataAllowed == false'
+
+      - name: Refresh exact-release provider heartbeats
+        if: inputs.action != 'plan'
+        env:
+          RUNTIME_ORIGIN: ${{ secrets.MMG_COMMERCE_STAGING_RUNTIME_ORIGIN }}
+          TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_INTEGRATION_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          response=$(curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $TOKEN" \
+            --header "X-MMG-Internal-Request: github-actions-provider-heartbeats" \
+            "$RUNTIME_ORIGIN/api/internal/commerce/provider-heartbeats/refresh")
+          echo "$response" | jq . > mmg-commerce-staging-provider-heartbeats.json
+          echo "$response" | jq -e '
+            .publicationAllowed == false and
+            .liveCustomerDataAllowed == false and
+            (.summary.results | length) == 8
+          '
+
+      - name: Enforce protected runtime readiness after bootstrap
+        if: inputs.action != 'plan'
+        env:
+          ENDPOINT: ${{ secrets.MMG_COMMERCE_STAGING_READINESS_ENDPOINT }}
+          TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_INTEGRATION_TOKEN }}
+          RELEASE_ID: ${{ inputs.release_id }}
+          RELEASE_SHA: ${{ inputs.release_commit_sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tooling=$(jq '.evidence | {
+            nodeMajor,
+            psqlAvailable,
+            sha256ToolAvailable,
+            migrationRunnerPresent,
+            releaseRegistrationPresent,
+            workflowPresent
+          }' mmg-commerce-staging-readiness-preflight.json)
+          github_environment=$(jq '.evidence | {
+            configured: .githubEnvironmentConfigured,
+            requiredSecretNamesPresent
+          }' mmg-commerce-staging-readiness-preflight.json)
+          payload=$(jq -n \
+            --arg requestId "staging-readiness-${RUN_ID}-${RUN_ATTEMPT}" \
+            --arg releaseId "$RELEASE_ID" \
+            --arg releaseCommitSha "$RELEASE_SHA" \
+            --argjson tooling "$tooling" \
+            --argjson githubEnvironment "$github_environment" \
+            '{requestId:$requestId,environment:"staging",releaseId:$releaseId,releaseCommitSha:$releaseCommitSha,tooling:$tooling,githubEnvironment:$githubEnvironment,publicationAllowed:false,liveCustomerDataAllowed:false}')
+          response=$(curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $TOKEN" \
+            --header "Content-Type: application/json" \
+            --header "X-MMG-Internal-Request: github-actions-staging-readiness" \
+            --data "$payload" \
+            "$ENDPOINT")
+          echo "$response" | jq . > mmg-commerce-staging-readiness-runtime.json
+          echo "$response" | jq -e '
+            .ok == true and
+            .report.ready == true and
+            .report.blockerCount == 0 and
+            .report.publicationAllowed == false and
+            .report.liveCustomerDataAllowed == false
+          '
 
       - name: Execute exact-release staging rehearsal
         if: inputs.action == 'rehearse'
@@ -222,8 +250,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$ENDPOINT"
-          test -n "$TOKEN"
           rehearsal_run_id="rehearsal-${RUN_ID}-${RUN_ATTEMPT}"
           payload=$(jq -n \
             --arg runId "$rehearsal_run_id" \
@@ -239,35 +265,43 @@ jobs:
           echo "$response" | jq . > mmg-commerce-staging-rehearsal-evidence.json
           echo "$response" | jq -e '.ok == true and .status == "passed" and .evidence.publicationAttempted == false and .evidence.liveCustomerDataUsed == false and .evidence.deliveredOwnershipRevocationAllowed == false'
 
-      - name: Verify staging integration after rehearsal
-        if: inputs.action == 'rehearse'
+      - name: Inspect or verify staging integration
         env:
           ENDPOINT: ${{ secrets.MMG_COMMERCE_STAGING_INTEGRATION_ENDPOINT }}
           TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_INTEGRATION_TOKEN }}
           RELEASE_ID: ${{ inputs.release_id }}
           RELEASE_SHA: ${{ inputs.release_commit_sha }}
+          ACTION: ${{ inputs.action }}
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
         shell: bash
         run: |
           set -euo pipefail
-          request_id="staging-integration-${RUN_ID}-${RUN_ATTEMPT}-verify"
-          integration_run_id="integration-${RUN_ID}-${RUN_ATTEMPT}"
+          case "$ACTION" in
+            plan|execute) command_action="inspect" ;;
+            verify|rehearse) command_action="verify" ;;
+            *) exit 64 ;;
+          esac
           payload=$(jq -n \
-            --arg requestId "$request_id" \
-            --arg integrationRunId "$integration_run_id" \
+            --arg requestId "staging-integration-${RUN_ID}-${RUN_ATTEMPT}-${command_action}" \
+            --arg integrationRunId "integration-${RUN_ID}-${RUN_ATTEMPT}" \
             --arg releaseId "$RELEASE_ID" \
             --arg releaseCommitSha "$RELEASE_SHA" \
-            '{requestId:$requestId,integrationRunId:$integrationRunId,releaseId:$releaseId,releaseCommitSha:$releaseCommitSha,action:"verify",environment:"staging",publicationAllowed:false,liveCustomerDataAllowed:false}')
+            --arg action "$command_action" \
+            '{requestId:$requestId,integrationRunId:$integrationRunId,releaseId:$releaseId,releaseCommitSha:$releaseCommitSha,action:$action,environment:"staging",publicationAllowed:false,liveCustomerDataAllowed:false}')
           response=$(curl --fail-with-body --silent --show-error \
             --request POST \
             --header "Authorization: Bearer $TOKEN" \
             --header "Content-Type: application/json" \
-            --header "X-MMG-Internal-Request: github-actions-staging-integration-verify" \
+            --header "X-MMG-Internal-Request: github-actions-staging-integration" \
             --data "$payload" \
             "$ENDPOINT")
-          echo "$response" | jq . > mmg-commerce-staging-integration-verification.json
-          echo "$response" | jq -e '.ok == true and .status == "verified" and (.blockers | length) == 0'
+          echo "$response" | jq . > mmg-commerce-staging-integration-evidence.json
+          if test "$command_action" = "verify"; then
+            echo "$response" | jq -e '.ok == true and .status == "verified" and (.blockers | length) == 0'
+          else
+            echo "$response" | jq -e '.ok == true and .snapshot.publicationAllowed == false and .snapshot.liveCustomerDataAllowed == false'
+          fi
 
       - name: Upload sanitized staging evidence
         if: always()
@@ -276,9 +310,10 @@ jobs:
           name: mmg-commerce-staging-integration-${{ github.run_id }}
           path: |
             mmg-commerce-staging-readiness-preflight.json
+            mmg-commerce-staging-bootstrap-evidence.json
+            mmg-commerce-staging-provider-heartbeats.json
             mmg-commerce-staging-readiness-runtime.json
-            mmg-commerce-staging-integration-evidence.json
             mmg-commerce-staging-rehearsal-evidence.json
-            mmg-commerce-staging-integration-verification.json
-          if-no-files-found: error
+            mmg-commerce-staging-integration-evidence.json
+          if-no-files-found: warn
           retention-days: 30
