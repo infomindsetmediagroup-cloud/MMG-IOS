@@ -8,6 +8,16 @@ on:
     paths:
       - "shopify/apps/mmg-customer-account/**"
       - ".github/workflows/deploy-mmg-my-downloads.yml"
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+    branches:
+      - main
+    paths:
+      - "shopify/apps/mmg-customer-account/**"
+      - ".github/workflows/deploy-mmg-my-downloads.yml"
 
 permissions:
   contents: read
@@ -19,12 +29,13 @@ concurrency:
 jobs:
   deploy:
     name: Validate and deploy customer-account extension
+    if: github.event_name != 'pull_request' || github.head_ref == 'codex/diagnose-mmg-my-downloads-deploy'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
       SHOPIFY_APP_AUTOMATION_TOKEN: ${{ secrets.MMG_SHOPIFY_APP_AUTOMATION_TOKEN || secrets.SHOPIFY_APP_AUTOMATION_TOKEN }}
       SHOPIFY_CLI_PARTNERS_TOKEN: ${{ secrets.SHOPIFY_CLI_PARTNERS_TOKEN }}
-      SOURCE_SHA: ${{ github.sha }}
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
     steps:
       - name: Verify deployment credential
@@ -86,7 +97,7 @@ jobs:
         shell: bash
         working-directory: repository/shopify/apps/mmg-customer-account
         env:
-          COMMIT_URL: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
+          COMMIT_URL: ${{ github.server_url }}/${{ github.repository }}/commit/${{ env.SOURCE_SHA }}
         run: |
           set -euo pipefail
           npx shopify app deploy \
