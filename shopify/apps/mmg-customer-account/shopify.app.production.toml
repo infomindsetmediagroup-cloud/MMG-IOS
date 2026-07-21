@@ -1,12 +1,17 @@
 client_id = "0e2218fa78074829c6d9df9ab2fdfe95"
-name = "Mindset Media Group"
-handle = "mmg-customer-account-1"
+name = "MMG Customer Account"
+handle = "mmg-customer-account"
 application_url = "https://shopify.dev/apps/default-app-home"
-embedded = false
+embedded = true
 
 [build]
 automatically_update_urls_on_dev = false
-include_config_on_deploy = true
 
 [access_scopes]
 scopes = "customer_read_customers,customer_read_orders"
+
+[webhooks]
+api_version = "2026-07"
+
+[auth]
+redirect_urls = ["https://shopify.dev/apps/default-app-home"]
