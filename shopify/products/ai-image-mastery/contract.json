@@ -1,8 +1,13 @@
 {
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "contractId": "mmg-canonical-digital-download-ai-image-mastery",
-  "state": "theme-published-product-assignment-pending-explicit-approval",
-  "observedAt": "2026-07-21T04:03:16Z",
+  "state": "deployed-admin-verified-storefront-edge-propagation-observed",
+  "observedAt": "2026-07-21T04:29:16Z",
+  "changeSetId": "shopify-canonical-digital-download-ai-image-mastery-20260721",
+  "approval": {
+    "received": true,
+    "instruction": "Approve production deployment: shopify-canonical-digital-download-ai-image-mastery-20260721"
+  },
   "product": {
     "id": "gid://shopify/Product/9022950998170",
     "title": "AI Image Mastery™",
@@ -11,44 +16,22 @@
     "status": "ACTIVE",
     "vendor": "Mindset Media Group",
     "productType": "Digital Download",
-    "templateSuffix": null,
-    "createdAt": "2026-07-05T04:34:19Z",
-    "updatedAt": "2026-07-21T00:26:43Z",
-    "publishedAt": "2026-07-05T04:34:31Z",
+    "templateSuffix": "mmg-ai-image-mastery",
+    "updatedAt": "2026-07-21T04:29:15Z",
     "tracksInventory": false,
     "totalInventory": 0,
     "requiresSellingPlan": false,
     "hasOnlyDefaultVariant": true,
     "requiresShipping": false,
     "purchaseModel": "one-purchase-one-personal-use-license",
-    "sourceLocation": "shopify-description-html-until-product-template-assignment"
+    "legacyDescriptionHtmlPreservedForRollback": true
   },
   "seo": {
     "title": "AI Image Mastery™ | Mindset Media Group",
-    "description": "Learn cinematic AI prompting, professional visual design, prompt engineering, lighting, composition, and AI-generated content creation with AI Image Mastery™ from Mindset Media Group."
+    "description": "Learn cinematic AI prompting, professional visual design, prompt engineering, lighting, composition, and AI-generated content creation with AI Image Mastery™ from Mindset Media Group.",
+    "preserved": true
   },
-  "tags": [
-    "AI art",
-    "AI creator",
-    "AI design",
-    "AI image generation",
-    "AI Image Mastery",
-    "AI Mastery Series",
-    "AI prompting",
-    "AI visuals",
-    "ChatGPT",
-    "Cinematic AI",
-    "Content Creator",
-    "Creator Education",
-    "Digital Download",
-    "Image prompting",
-    "Midjourney",
-    "Mindset Media Group",
-    "Prompt Engineering",
-    "Visual storytelling"
-  ],
   "variant": {
-    "name": "Default Title",
     "id": "gid://shopify/ProductVariant/48655433498778",
     "legacyResourceId": "48655433498778",
     "inventoryItemId": "gid://shopify/InventoryItem/50671454027930",
@@ -61,9 +44,7 @@
     "tracked": false,
     "requiresShipping": false,
     "availableForSale": true,
-    "requiresComponents": false,
-    "updatedAt": "2026-07-21T00:26:43Z",
-    "inventoryItemUpdatedAt": "2026-07-21T00:26:43Z"
+    "requiresComponents": false
   },
   "media": [
     {
@@ -72,18 +53,8 @@
       "width": 1800,
       "height": 2700,
       "alt": "",
-      "altRequired": true,
-      "url": "https://cdn.shopify.com/s/files/1/0754/4337/2186/files/05_AI_Image_Mastery_Kindle_Ebook_Cover.jpg?v=1783226242"
+      "preserved": true
     }
-  ],
-  "customerWorkflow": [
-    "purchase",
-    "shopify-order-confirmation",
-    "digital-fulfillment",
-    "download-or-access",
-    "personal-use",
-    "download-recovery-support",
-    "connected-next-step"
   ],
   "delivery": {
     "immediate": "current AI Image Mastery™ digital product files",
@@ -100,113 +71,45 @@
     "name": "MMG Digital Download Candidate 2026-07-20",
     "role": "MAIN",
     "prefix": "/t/18",
-    "createdAt": "2026-07-21T03:37:06Z",
-    "updatedAt": "2026-07-21T04:03:16Z",
     "processing": false,
     "processingFailed": false,
     "files": [
-      {
-        "filename": "assets/mmg-ai-image-mastery.css",
-        "contentType": "text/css",
-        "checksumMd5": "5a749b91c5078360f9a64d642ef268be",
-        "size": 10471,
-        "updatedAt": "2026-07-21T03:43:15Z"
-      },
-      {
-        "filename": "assets/mmg-ai-image-mastery.js",
-        "contentType": "application/javascript",
-        "checksumMd5": "2653b8a8d87c8f5852f653b7580c405d",
-        "size": 5665,
-        "updatedAt": "2026-07-21T03:44:06Z"
-      },
-      {
-        "filename": "sections/mmg-ai-image-mastery.liquid",
-        "contentType": "application/x-liquid",
-        "checksumMd5": "52893c2bc11789b613424ec296d838d0",
-        "size": 14700,
-        "updatedAt": "2026-07-21T03:45:47Z"
-      },
-      {
-        "filename": "templates/product.mmg-ai-image-mastery.json",
-        "contentType": "application/json",
-        "checksumMd5": "f767d9a33d9c4afb1ebee3c899e58768",
-        "size": 132,
-        "updatedAt": "2026-07-21T03:46:00Z",
-        "semanticVerification": "single main section type mmg-ai-image-mastery; order contains main only"
-      }
-    ],
-    "preservedCanonicalServiceFiles": [
-      {
-        "filename": "assets/mmg-professional-cover-design.css",
-        "checksumMd5": "19a0676ec927c3e649db64a6e11a9c98",
-        "size": 11943,
-        "updatedAt": "2026-07-21T03:37:29Z"
-      },
-      {
-        "filename": "assets/mmg-professional-cover-design.js",
-        "checksumMd5": "db464655bddaf9a73906e49df8762a66",
-        "size": 6549,
-        "updatedAt": "2026-07-21T03:37:29Z"
-      },
-      {
-        "filename": "sections/mmg-professional-cover-design.liquid",
-        "checksumMd5": "f5090c30a9e202c056cf8c3a40b690ff",
-        "size": 13480,
-        "updatedAt": "2026-07-21T03:37:29Z"
-      },
-      {
-        "filename": "templates/product.mmg-professional-cover-design.json",
-        "checksumMd5": "6935d2e46128a36c8d5578ac1e62d50b",
-        "size": 503,
-        "updatedAt": "2026-07-21T03:37:29Z"
-      }
+      {"filename":"assets/mmg-ai-image-mastery.css","checksumMd5":"5a749b91c5078360f9a64d642ef268be","size":10471},
+      {"filename":"assets/mmg-ai-image-mastery.js","checksumMd5":"2653b8a8d87c8f5852f653b7580c405d","size":5665},
+      {"filename":"sections/mmg-ai-image-mastery.liquid","checksumMd5":"52893c2bc11789b613424ec296d838d0","size":14700},
+      {"filename":"templates/product.mmg-ai-image-mastery.json","checksumMd5":"f767d9a33d9c4afb1ebee3c899e58768","size":132}
     ]
   },
   "rollbackThemes": {
     "formerMain": {
       "id": "gid://shopify/OnlineStoreTheme/155336671386",
-      "name": "MMG Service Production Candidate 2026-07-20",
       "role": "UNPUBLISHED",
       "prefix": "/t/17",
-      "createdAt": "2026-07-21T02:15:40Z",
-      "updatedAt": "2026-07-21T03:53:35Z",
       "processing": false,
       "processingFailed": false
     },
     "secondary": {
       "id": "gid://shopify/OnlineStoreTheme/155242856602",
-      "name": "Kairos Staging",
       "role": "UNPUBLISHED",
-      "prefix": "/t/10",
-      "updatedAt": "2026-07-21T02:54:29Z"
+      "prefix": "/t/10"
     }
   },
-  "sourceArchitecture": {
-    "candidateRoot": "shopify/products/ai-image-mastery/source",
-    "html": "source/section.html",
-    "css": "source/styles.css",
-    "javascript": "source/behavior.js",
-    "themeSection": "theme/sections/mmg-ai-image-mastery.liquid",
-    "themeTemplate": "theme/templates/product.mmg-ai-image-mastery.json",
-    "legacyDescriptionHtmlPreservedForRollback": true,
-    "themePublicationObserved": true,
-    "themePublishedByThisAssistant": false,
-    "deploymentApprovalReceivedForProductAssignment": false,
-    "postDeploymentVerificationPassed": false
-  },
-  "routes": {
-    "customerService": "/pages/customer-service",
-    "customerPortal": "/pages/customer-portal",
-    "knowledgeLibrary": "/collections/all",
-    "cart": "/cart"
+  "execution": {
+    "mutation": "productUpdate",
+    "changedField": "templateSuffix",
+    "before": null,
+    "after": "mmg-ai-image-mastery",
+    "userErrors": [],
+    "protectedCommercialFieldsPreserved": true,
+    "postMutationAdminReadbackPassed": true,
+    "storefrontEdgePropagationObserved": true,
+    "storefrontRenderAcceptanceComplete": false
   },
   "controls": {
-    "shopifyToolkitValidationRequired": true,
     "cartMutationRequiresCustomerClick": true,
-    "productionWriteRequiresExplicitApproval": true,
-    "exactApprovalInstruction": "Approve production deployment: shopify-canonical-digital-download-ai-image-mastery-20260721",
     "rollbackRequired": true,
     "postDeploymentVerificationRequired": true,
-    "secretsProhibited": true
+    "secretsProhibited": true,
+    "rollbackProductTemplate": "set-templateSuffix-null"
   }
 }
