@@ -1,0 +1,99 @@
+mutation MMGNormalizeLiveProductMetadata {
+  serviceType: productUpdate(
+    product: {
+      id: "gid://shopify/Product/9024288620698"
+      productType: "Publishing Service"
+    }
+  ) {
+    product {
+      id
+      handle
+      productType
+      updatedAt
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+
+  serviceSkus: productVariantsBulkUpdate(
+    productId: "gid://shopify/Product/9024288620698"
+    allowPartialUpdates: false
+    variants: [
+      {
+        id: "gid://shopify/ProductVariant/48658205376666"
+        inventoryItem: { sku: "MMG-SVC-PCD-STA" }
+      }
+      {
+        id: "gid://shopify/ProductVariant/48658205409434"
+        inventoryItem: { sku: "MMG-SVC-PCD-GRO" }
+      }
+      {
+        id: "gid://shopify/ProductVariant/48658205442202"
+        inventoryItem: { sku: "MMG-SVC-PCD-PRO" }
+      }
+    ]
+  ) {
+    productVariants {
+      id
+      title
+      sku
+      inventoryItem {
+        id
+        sku
+        tracked
+        requiresShipping
+      }
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+
+  digitalType: productUpdate(
+    product: {
+      id: "gid://shopify/Product/9022950998170"
+      productType: "Digital Download"
+    }
+  ) {
+    product {
+      id
+      handle
+      productType
+      updatedAt
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+
+  digitalSku: productVariantsBulkUpdate(
+    productId: "gid://shopify/Product/9022950998170"
+    allowPartialUpdates: false
+    variants: [
+      {
+        id: "gid://shopify/ProductVariant/48655433498778"
+        inventoryItem: { sku: "MMG-DIG-AIM-STD" }
+      }
+    ]
+  ) {
+    productVariants {
+      id
+      title
+      sku
+      inventoryItem {
+        id
+        sku
+        tracked
+        requiresShipping
+      }
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}
