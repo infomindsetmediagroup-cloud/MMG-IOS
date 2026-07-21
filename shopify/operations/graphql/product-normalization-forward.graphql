@@ -1,3 +1,4 @@
+# Prepared change-set only. Do not execute without explicit approval for shopify-product-normalization-20260720.
 mutation MMGNormalizeLiveProductMetadata {
   serviceType: productUpdate(
     product: {
