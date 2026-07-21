@@ -23,6 +23,7 @@ jobs:
     timeout-minutes: 15
     env:
       SHOPIFY_APP_AUTOMATION_TOKEN: ${{ secrets.MMG_SHOPIFY_APP_AUTOMATION_TOKEN || secrets.SHOPIFY_APP_AUTOMATION_TOKEN }}
+      SHOPIFY_CLI_PARTNERS_TOKEN: ${{ secrets.SHOPIFY_CLI_PARTNERS_TOKEN }}
       SOURCE_SHA: ${{ github.sha }}
 
     steps:
@@ -30,10 +31,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ -z "${SHOPIFY_APP_AUTOMATION_TOKEN:-}" ]; then
-            echo "Missing app-scoped Shopify automation token."
-            echo "Expected repository secret: MMG_SHOPIFY_APP_AUTOMATION_TOKEN or SHOPIFY_APP_AUTOMATION_TOKEN."
+          if [ -z "${SHOPIFY_APP_AUTOMATION_TOKEN:-}" ] && [ -z "${SHOPIFY_CLI_PARTNERS_TOKEN:-}" ]; then
+            echo "Missing Shopify deployment credential."
+            echo "Expected one repository secret: MMG_SHOPIFY_APP_AUTOMATION_TOKEN, SHOPIFY_APP_AUTOMATION_TOKEN, or SHOPIFY_CLI_PARTNERS_TOKEN."
             exit 78
+          fi
+          if [ -n "${SHOPIFY_APP_AUTOMATION_TOKEN:-}" ]; then
+            echo "Using app-scoped Shopify automation token."
+          else
+            echo "Using existing legacy Shopify CLI Partner token."
           fi
 
       - name: Download exact repository revision
