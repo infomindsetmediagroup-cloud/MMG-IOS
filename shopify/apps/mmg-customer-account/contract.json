@@ -6,6 +6,7 @@
   "extension": {
     "name": "My Downloads",
     "handle": "mmg-my-downloads",
+    "uid": "c2a4f88e-ecb7-4d3e-94c8-21fa813d9e11",
     "apiVersion": "2026-07",
     "requiredScopes": [
       "customer_read_customers",
