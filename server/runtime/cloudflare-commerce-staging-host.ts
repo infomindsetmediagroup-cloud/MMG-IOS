@@ -13,8 +13,13 @@ export interface MMGCloudflareHyperdriveEnvBinding {
   connectionString: string;
 }
 
+export interface MMGCloudflareWorkerServiceBinding {
+  fetch(request: Request): Promise<Response>;
+}
+
 export interface MMGCloudflareCommerceStagingEnvironment {
   HYPERDRIVE: MMGCloudflareHyperdriveEnvBinding;
+  MMG_COMMERCE_UPSTREAM?: MMGCloudflareWorkerServiceBinding;
   MMG_COMMERCE_ENVIRONMENT: string;
   MMG_COMMERCE_RELEASE_ID: string;
   MMG_COMMERCE_RELEASE_COMMIT_SHA: string;
@@ -58,6 +63,7 @@ const safeHealth = (input: {
   releaseId: string;
   releaseCommitSha: string;
   runtimeOrigin: string;
+  upstreamConfigured: boolean;
 }): Response =>
   Response.json(
     {
@@ -67,6 +73,7 @@ const safeHealth = (input: {
       releaseId: input.releaseId,
       releaseCommitSha: input.releaseCommitSha,
       runtimeOrigin: input.runtimeOrigin,
+      upstreamConfigured: input.upstreamConfigured,
       publicationAllowed: false,
       liveCustomerDataAllowed: false,
     },
@@ -79,6 +86,26 @@ const safeHealth = (input: {
       },
     },
   );
+
+const stampResponse = (
+  response: Response,
+  input: {
+    releaseId: string;
+    releaseCommitSha: string;
+    upstream: boolean;
+  },
+): Response => {
+  const headers = new Headers(response.headers);
+  headers.set("X-MMG-Release-Id", input.releaseId);
+  headers.set("X-MMG-Release-Commit", input.releaseCommitSha);
+  headers.set("X-MMG-Publication-Allowed", "false");
+  headers.set("X-MMG-Upstream-Routed", input.upstream ? "true" : "false");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+};
 
 export const buildMMGCloudflareCommerceStagingHost = (
   environment: MMGCloudflareCommerceStagingEnvironment,
@@ -167,6 +194,7 @@ export const buildMMGCloudflareCommerceStagingHost = (
           releaseId: config.releaseId,
           releaseCommitSha,
           runtimeOrigin: config.runtimeOrigin,
+          upstreamConfigured: Boolean(environment.MMG_COMMERCE_UPSTREAM),
         });
         return request.method === "HEAD"
           ? new Response(null, {
@@ -177,14 +205,20 @@ export const buildMMGCloudflareCommerceStagingHost = (
       }
       const routed = await runtime.route(request);
       if (routed) {
-        const headers = new Headers(routed.headers);
-        headers.set("X-MMG-Release-Id", config.releaseId);
-        headers.set("X-MMG-Release-Commit", releaseCommitSha);
-        headers.set("X-MMG-Publication-Allowed", "false");
-        return new Response(routed.body, {
-          status: routed.status,
-          statusText: routed.statusText,
-          headers,
+        return stampResponse(routed, {
+          releaseId: config.releaseId,
+          releaseCommitSha,
+          upstream: false,
+        });
+      }
+      if (environment.MMG_COMMERCE_UPSTREAM) {
+        const upstreamResponse = await environment.MMG_COMMERCE_UPSTREAM.fetch(
+          request.clone(),
+        );
+        return stampResponse(upstreamResponse, {
+          releaseId: config.releaseId,
+          releaseCommitSha,
+          upstream: true,
         });
       }
       return Response.json(
@@ -213,7 +247,9 @@ export const buildMMGCloudflareCommerceStagingHost = (
       );
       const response = await runtime.runScheduledEvaluation(requestId);
       if (!response.ok) {
-        throw new Error(`MMG_STAGING_SCHEDULED_EVALUATION_FAILED:${response.status}`);
+        throw new Error(
+          `MMG_STAGING_SCHEDULED_EVALUATION_FAILED:${response.status}`,
+        );
       }
     },
   };
