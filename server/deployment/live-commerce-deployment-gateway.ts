@@ -28,7 +28,7 @@ export interface MMGApplicationReleaseAdapter {
 export interface MMGDatabaseMigrationAdapter {
   inspectAppliedMigrations(): Promise<string[]>;
   applyCommerceMigrations(input: {
-    through: "20260720_007_mmg_live_commerce_deployment_control";
+    through: "20260721_010_mmg_production_adapters_staging_rehearsal";
   }): Promise<{ applied: string[] }>;
 }
 
@@ -89,11 +89,13 @@ export interface MMGCommerceOperationsAdapter {
     schedulerActive: boolean;
     dispatcherActive: boolean;
     storageSignerActive: boolean;
+    stagingRehearsalPassed: boolean;
   }>;
   activate(): Promise<{
     schedulerActive: boolean;
     dispatcherActive: boolean;
     storageSignerActive: boolean;
+    stagingRehearsalPassed: boolean;
   }>;
   deactivate(): Promise<void>;
 }
@@ -203,7 +205,7 @@ export class MMGCompositeCommerceDeploymentGateway
       case "database_migrations":
         return result(
           await this.#dependencies.database.applyCommerceMigrations({
-            through: "20260720_007_mmg_live_commerce_deployment_control",
+            through: "20260721_010_mmg_production_adapters_staging_rehearsal",
           }),
         );
       case "runtime_routes":
@@ -218,7 +220,10 @@ export class MMGCompositeCommerceDeploymentGateway
           environment: input.environment,
           releaseCommitSha: input.releaseCommitSha,
         });
-        return result({ productGid: mapping.productGid, productStatus: mapping.productStatus }, { runtimeMapping: mapping });
+        return result(
+          { productGid: mapping.productGid, productStatus: mapping.productStatus },
+          { runtimeMapping: mapping },
+        );
       }
       case "selling_plan": {
         const mapping = await this.#dependencies.shopify.inspectRuntimeMapping();
@@ -228,7 +233,10 @@ export class MMGCompositeCommerceDeploymentGateway
           releaseCommitSha: input.releaseCommitSha,
           mapping,
         });
-        return result({ sellingPlanGroupGid: updated.sellingPlanGroupGid }, { runtimeMapping: updated });
+        return result(
+          { sellingPlanGroupGid: updated.sellingPlanGroupGid },
+          { runtimeMapping: updated },
+        );
       }
       case "asset_registry":
         return result(await this.#dependencies.assets.synchronizeAndVerifyAssets());
@@ -256,10 +264,19 @@ export class MMGCompositeCommerceDeploymentGateway
           environment: input.environment,
           occurredAt: input.occurredAt,
         });
-        return result({ runId: evidence.runId, checks: evidence.checks }, { e2eEvidence: evidence });
+        return result(
+          { runId: evidence.runId, checks: evidence.checks },
+          { e2eEvidence: evidence },
+        );
       }
       case "publication": {
-        if (!input.approval) throw new Error("MMG_DEPLOYMENT_PUBLICATION_APPROVAL_REQUIRED");
+        if (!input.approval) {
+          throw new Error("MMG_DEPLOYMENT_PUBLICATION_APPROVAL_REQUIRED");
+        }
+        const operations = await this.#dependencies.operations.inspect();
+        if (!operations.stagingRehearsalPassed) {
+          throw new Error("MMG_DEPLOYMENT_STAGING_REHEARSAL_REQUIRED");
+        }
         const mapping = await this.#dependencies.shopify.inspectRuntimeMapping();
         if (!mapping) throw new Error("MMG_DEPLOYMENT_SHOPIFY_MAPPING_REQUIRED");
         const published = await this.#dependencies.shopify.activateAndPublish({
@@ -267,7 +284,10 @@ export class MMGCompositeCommerceDeploymentGateway
           releaseCommitSha: input.releaseCommitSha,
           mapping,
         });
-        return result({ productGid: published.productGid, productStatus: published.productStatus }, { runtimeMapping: published });
+        return result(
+          { productGid: published.productGid, productStatus: published.productStatus },
+          { runtimeMapping: published },
+        );
       }
     }
   }
@@ -291,11 +311,17 @@ export class MMGCompositeCommerceDeploymentGateway
           releaseCommitSha: input.releaseCommitSha,
           mapping,
         });
-        return { status: "rolled_back" as const, result: { productStatus: reverted.productStatus } };
+        return {
+          status: "rolled_back" as const,
+          result: { productStatus: reverted.productStatus },
+        };
       }
       case "scheduler_and_dispatcher":
         await this.#dependencies.operations.deactivate();
-        return { status: "rolled_back" as const, result: { operationsActive: false } };
+        return {
+          status: "rolled_back" as const,
+          result: { operationsActive: false },
+        };
       case "webhook_release":
       case "application_scopes":
         return {
