@@ -55,14 +55,15 @@ export const routeMMGProductionOperationsRequest = async (
       return new Response(
         JSON.stringify({
           ok: false,
-          status: "unavailable",
-          error: { code: "MMG_STAGING_INTEGRATION_NOT_CONFIGURED" },
+          status: "disabled",
+          error: { code: "MMG_STAGING_INTEGRATION_STAGING_ONLY" },
         }),
         {
-          status: 503,
+          status: 405,
           headers: {
             "Content-Type": "application/json; charset=utf-8",
             "Cache-Control": "no-store, private, max-age=0",
+            Allow: "HEAD",
           },
         },
       );
