@@ -85,6 +85,7 @@ jobs:
           MMG_COMMERCE_RELEASE_ID: ${{ inputs.release_id }}
           MMG_COMMERCE_RELEASE_COMMIT_SHA: ${{ inputs.release_commit_sha }}
           MMG_CLOUDFLARE_STAGING_HYPERDRIVE_ID: ${{ secrets.MMG_CLOUDFLARE_STAGING_HYPERDRIVE_ID }}
+          MMG_CLOUDFLARE_STAGING_UPSTREAM_SERVICE: ${{ vars.MMG_CLOUDFLARE_STAGING_UPSTREAM_SERVICE }}
           MMG_COMMERCE_STAGING_RUNTIME_ORIGIN: ${{ secrets.MMG_COMMERCE_STAGING_RUNTIME_ORIGIN }}
           MMG_COMMERCE_REQUEST_TIMEOUT_MS: ${{ vars.MMG_COMMERCE_REQUEST_TIMEOUT_MS }}
           MMG_COMMERCE_ROUTE_PROBE_PATHS: ${{ vars.MMG_COMMERCE_ROUTE_PROBE_PATHS }}
@@ -93,15 +94,17 @@ jobs:
           MMG_COMMERCE_SCHEDULER_HEALTH_ENDPOINT: ${{ vars.MMG_COMMERCE_SCHEDULER_HEALTH_ENDPOINT }}
           MMG_COMMERCE_DISPATCHER_HEALTH_ENDPOINT: ${{ vars.MMG_COMMERCE_DISPATCHER_HEALTH_ENDPOINT }}
           MMG_COMMERCE_STORAGE_SIGNER_HEALTH_ENDPOINT: ${{ vars.MMG_COMMERCE_STORAGE_SIGNER_HEALTH_ENDPOINT }}
+          ACTION: ${{ inputs.action }}
         run: |
           set -euo pipefail
           node scripts/mmg-build-commerce-staging-wrangler.mjs
-          jq -e '
+          jq -e --arg action "$ACTION" '
             .environment == "staging" and
             .publicationAllowed == false and
             .liveCustomerDataAllowed == false and
             .hyperdriveConfigured == true and
-            .secretNames | length == 8
+            ((.secretNames | length) == 8) and
+            (if $action == "validate" then true else .upstreamServiceConfigured == true end)
           ' dist/mmg-commerce-staging/deployment-summary.json
 
       - name: Create protected deployment secret file
@@ -208,6 +211,7 @@ jobs:
              .environment == "staging" and
              .releaseId == $releaseId and
              .releaseCommitSha == $releaseCommitSha and
+             .upstreamConfigured == true and
              .publicationAllowed == false and
              .liveCustomerDataAllowed == false'
 
