@@ -1,0 +1,11 @@
+{
+  "pageHeading": "My Downloads",
+  "pageSubheading": "Your digital purchases, organized across every eligible order.",
+  "refresh": "Refresh",
+  "allOrders": "All orders",
+  "accessDownload": "Access download",
+  "emptyHeading": "No digital downloads yet",
+  "emptyBody": "Eligible digital purchases will appear here after payment is confirmed.",
+  "errorHeading": "Downloads could not be loaded",
+  "retry": "Try again"
+}
