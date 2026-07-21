@@ -1,8 +1,19 @@
 # Deployment
 
-## Current architecture
+## Production architecture
 
-The verified theme containing `product.mmg-ai-image-mastery.json` is now MAIN. The product remains deliberately unassigned so the legacy `descriptionHtml` continues to render until the governed product-specific mutation is approved.
+The verified MAIN theme contains `product.mmg-ai-image-mastery.json`, and AI Image Mastery™ is assigned to that dedicated template.
+
+## Execution
+
+- Approval: `Approve production deployment: shopify-canonical-digital-download-ai-image-mastery-20260721`
+- Product: `gid://shopify/Product/9022950998170`
+- Mutation: `productUpdate`
+- Field changed: `templateSuffix`
+- Before: `null`
+- After: `mmg-ai-image-mastery`
+- Executed: `2026-07-21T04:29:15Z`
+- Shopify user errors: none
 
 ## Production theme
 
@@ -11,22 +22,16 @@ The verified theme containing `product.mmg-ai-image-mastery.json` is now MAIN. T
 - Prefix: `/t/18`
 - Role: MAIN
 - Processing failed: false
-- All four digital-download files match their expected checksums.
-- All four canonical service-product files remain present.
+- All four digital-download files match their governed checksums.
+- Canonical service-product files remain preserved.
 
-## Remaining approval boundary
+## Protected state
 
-Send exactly:
+The deployment did not change title, handle, status, vendor, product type, variant identity, SKU, price, compare-at price, inventory policy, inventory quantity, tracking, shipping, media, publication, SEO, tags, or `descriptionHtml`.
 
-`Approve production deployment: shopify-canonical-digital-download-ai-image-mastery-20260721`
+## Storefront observation
 
-After that approval:
-
-1. Re-read product identity, variant identity, MAIN role, and all checksums.
-2. Assign `templateSuffix: mmg-ai-image-mastery` only to `gid://shopify/Product/9022950998170`.
-3. Verify the product timestamp and unchanged commercial fields.
-4. Verify the public product page, responsive layout, cart hydration, and customer routes.
-5. Record and merge the immutable production-execution evidence.
+The public edge response observed immediately after assignment still contained the pre-assignment shell. Shopify Admin independently confirmed the assigned template and all production checksums. The observation is classified as cache or template propagation; it did not trigger rollback.
 
 ## Rollback
 
