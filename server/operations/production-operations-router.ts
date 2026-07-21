@@ -6,6 +6,8 @@ import type { MMGRuntimeControlHTTPDependencies } from "./runtime-control-http.j
 import { handleMMGRuntimeControlRequest } from "./runtime-control-http.js";
 import type { MMGStagingIntegrationHTTPDependencies } from "./staging-integration-http.js";
 import { handleMMGStagingIntegrationRequest } from "./staging-integration-http.js";
+import type { MMGStagingReadinessHTTPDependencies } from "./staging-readiness-http.js";
+import { handleMMGStagingReadinessRequest } from "./staging-readiness-http.js";
 
 export interface MMGProductionOperationsRuntimeHandlers {
   handleOperations(request: Request): Promise<Response>;
@@ -18,6 +20,7 @@ export interface MMGProductionOperationsRouterDependencies {
   rehearsalAdapter: MMGCommerceStagingRehearsalAdapterHTTPDependencies;
   runtimeControl: MMGRuntimeControlHTTPDependencies;
   stagingIntegration?: MMGStagingIntegrationHTTPDependencies;
+  stagingReadiness?: MMGStagingReadinessHTTPDependencies;
 }
 
 export const MMG_PRODUCTION_OPERATIONS_ROUTE_MANIFEST = Object.freeze({
@@ -26,9 +29,27 @@ export const MMG_PRODUCTION_OPERATIONS_ROUTE_MANIFEST = Object.freeze({
   rehearsal: "/api/internal/commerce/rehearsal",
   rehearsalAdapter: "/api/internal/commerce/rehearsal/adapter",
   stagingIntegration: "/api/internal/commerce/staging-integration",
+  stagingReadiness: "/api/internal/commerce/staging-readiness",
   control: "/api/internal/runtime-controls/control",
   rollout: "/api/internal/runtime-controls/rollout",
 });
+
+const stagingOnlyUnavailable = (code: string): Response =>
+  new Response(
+    JSON.stringify({
+      ok: false,
+      status: "disabled",
+      error: { code },
+    }),
+    {
+      status: 405,
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-store, private, max-age=0",
+        Allow: "HEAD",
+      },
+    },
+  );
 
 export const routeMMGProductionOperationsRequest = async (
   request: Request,
@@ -52,26 +73,18 @@ export const routeMMGProductionOperationsRequest = async (
   }
   if (pathname === MMG_PRODUCTION_OPERATIONS_ROUTE_MANIFEST.stagingIntegration) {
     if (!dependencies.stagingIntegration) {
-      return new Response(
-        JSON.stringify({
-          ok: false,
-          status: "disabled",
-          error: { code: "MMG_STAGING_INTEGRATION_STAGING_ONLY" },
-        }),
-        {
-          status: 405,
-          headers: {
-            "Content-Type": "application/json; charset=utf-8",
-            "Cache-Control": "no-store, private, max-age=0",
-            Allow: "HEAD",
-          },
-        },
-      );
+      return stagingOnlyUnavailable("MMG_STAGING_INTEGRATION_STAGING_ONLY");
     }
     return handleMMGStagingIntegrationRequest(
       request,
       dependencies.stagingIntegration,
     );
+  }
+  if (pathname === MMG_PRODUCTION_OPERATIONS_ROUTE_MANIFEST.stagingReadiness) {
+    if (!dependencies.stagingReadiness) {
+      return stagingOnlyUnavailable("MMG_STAGING_READINESS_STAGING_ONLY");
+    }
+    return handleMMGStagingReadinessRequest(request, dependencies.stagingReadiness);
   }
   if (
     pathname === MMG_PRODUCTION_OPERATIONS_ROUTE_MANIFEST.control ||
