@@ -1,6 +1,6 @@
 {
   "contract_id": "mmg-commerce-staging-integration-contract-v1",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "status": "approved_for_staging_execution",
   "approved_date": "2026-07-21",
   "authority": "MMG executive approval",
@@ -9,6 +9,7 @@
     "deployment_contract": "registry/deployment/mmg-live-commerce-deployment-contract-v1.json",
     "operations_contract": "registry/operations/mmg-commerce-operations-control-contract-v1.json",
     "adapter_rehearsal_contract": "registry/operations/mmg-production-adapters-staging-rehearsal-contract-v1.json",
+    "readiness_contract": "registry/deployment/mmg-commerce-staging-readiness-contract-v1.json",
     "database_schema": "database/migrations/20260721_011_mmg_staging_integration_execution.sql"
   },
   "implementation": {
@@ -24,7 +25,9 @@
     "fixture_metrics": "server/operations/commerce-staging-fixture-metrics.ts",
     "fixture_evidence": "server/operations/commerce-staging-fixture-evidence.ts",
     "logical_endpoint": "/api/internal/commerce/staging-integration",
+    "readiness_endpoint": "/api/internal/commerce/staging-readiness",
     "workflow": ".github/workflows/mmg-commerce-staging-integration.yml",
+    "readiness_workflow": ".github/workflows/mmg-commerce-staging-readiness.yml",
     "environment_contract": "deployment/mmg-commerce-staging.env.example"
   },
   "actions": [
@@ -38,6 +41,19 @@
     "verify",
     "rehearse"
   ],
+  "readiness_gate": {
+    "required_before_actions": [
+      "execute",
+      "rehearse"
+    ],
+    "local_report_ready_required": true,
+    "runtime_report_ready_required": true,
+    "maximum_blockers": 0,
+    "publication_allowed": false,
+    "live_customer_data_allowed": false,
+    "does_not_apply_migrations": true,
+    "does_not_trigger_rehearsal": true
+  },
   "migration_contract": {
     "environment": "staging_only",
     "ordered_migrations": [
@@ -156,6 +172,7 @@
     "github_environment": "mmg-commerce-staging",
     "exact_commit_checkout_required": true,
     "validation_before_execution_required": true,
+    "readiness_before_execution_required": true,
     "migration_execution_actions": [
       "execute",
       "rehearse"
@@ -166,8 +183,9 @@
     "shopify_publication_action_available": false
   },
   "release_gates": [
+    "The local and protected runtime readiness reports return ready with zero blockers before execute or rehearse.",
     "Migrations 001 through 011 are reconciled through the SHA-256 migration ledger in the staging PostgreSQL database.",
-    "The staging runtime mounts the integration, operations, Admin operations, rehearsal, rehearsal-adapter, runtime-control, Knowledge Library, Customer Portal, Thank-you, webhook, and deployment routes.",
+    "The staging runtime mounts readiness, integration, operations, Admin operations, rehearsal, rehearsal-adapter, runtime-control, Knowledge Library, Customer Portal, Thank-you, webhook, and deployment routes.",
     "Five distinct staging server credentials and separate Admin Portal authentication are configured outside source control.",
     "Nonproduction SEV1 and SEV2 alert destinations are configured and verified.",
     "Database, route, control, alert, scheduler, dispatcher, storage-signer, and Admin-auth adapters write healthy heartbeats for the exact release.",
@@ -184,8 +202,8 @@
     "production_database_changed": false
   },
   "integration_sequence": {
-    "previous_component": "Production adapter wiring and controlled staging rehearsal framework",
-    "current_component": "Staging integration execution runtime and evidence control",
-    "next_component": "Deploy this runtime to the isolated staging environment, configure providers and secrets, then execute and review the first exact-release staging rehearsal"
+    "previous_component": "Staging integration execution runtime and evidence control",
+    "current_component": "Staging integration execution guarded by the readiness inspector",
+    "next_component": "Configure the protected staging environment, deploy the runtime, pass readiness, then execute and review the first exact-release staging rehearsal"
   }
 }
