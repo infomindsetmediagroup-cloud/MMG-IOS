@@ -1,0 +1,33 @@
+# Prepared rollback only. Restores the verified preflight values; do not execute without rollback authorization.
+mutation MMGRollbackLiveProductMetadata {
+  serviceType: productUpdate(product: { id: "gid://shopify/Product/9024288620698", productType: "" }) {
+    product { id handle productType updatedAt }
+    userErrors { field message }
+  }
+  serviceSkus: productVariantsBulkUpdate(
+    productId: "gid://shopify/Product/9024288620698"
+    allowPartialUpdates: false
+    variants: [
+      { id: "gid://shopify/ProductVariant/48658205376666", inventoryItem: { sku: null } }
+      { id: "gid://shopify/ProductVariant/48658205409434", inventoryItem: { sku: null } }
+      { id: "gid://shopify/ProductVariant/48658205442202", inventoryItem: { sku: null } }
+    ]
+  ) {
+    productVariants { id title sku inventoryItem { id sku tracked requiresShipping } }
+    userErrors { field message }
+  }
+  digitalType: productUpdate(product: { id: "gid://shopify/Product/9022950998170", productType: "" }) {
+    product { id handle productType updatedAt }
+    userErrors { field message }
+  }
+  digitalSku: productVariantsBulkUpdate(
+    productId: "gid://shopify/Product/9022950998170"
+    allowPartialUpdates: false
+    variants: [
+      { id: "gid://shopify/ProductVariant/48655433498778", inventoryItem: { sku: null } }
+    ]
+  ) {
+    productVariants { id title sku inventoryItem { id sku tracked requiresShipping } }
+    userErrors { field message }
+  }
+}
