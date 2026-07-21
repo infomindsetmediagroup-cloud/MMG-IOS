@@ -7,7 +7,14 @@ import type {
   MMGCommerceOperationsCommand,
   MMGCommerceOperationsDependencies,
   MMGCommerceOperationsPrincipal,
+  MMGCommerceOperationsState,
 } from "./commerce-operations-service.js";
+import type { MMGCommerceRolloutEvidenceAdapter } from "./commerce-rollout-evidence.js";
+
+export interface MMGCommerceRolloutDependencies
+  extends MMGCommerceOperationsDependencies {
+  rolloutEvidence: MMGCommerceRolloutEvidenceAdapter;
+}
 
 const requireRole = (
   principal: MMGCommerceOperationsPrincipal,
@@ -15,6 +22,24 @@ const requireRole = (
   code: string,
 ): void => {
   if (!principal.roles.includes(role)) throw new Error(code);
+};
+
+const validateCommand = (
+  command: MMGCommerceOperationsCommand,
+): MMGCommerceOperationsCommand => {
+  if (!/^[a-z0-9][a-z0-9._:-]{7,127}$/i.test(command.requestId.trim())) {
+    throw new Error("MMG_OPERATIONS_REQUEST_ID_INVALID");
+  }
+  if (
+    command.expectedVersion !== undefined &&
+    (!Number.isInteger(command.expectedVersion) || command.expectedVersion < 1)
+  ) {
+    throw new Error("MMG_OPERATIONS_EXPECTED_VERSION_INVALID");
+  }
+  if (command.reason !== undefined && command.reason.trim().length > 500) {
+    throw new Error("MMG_OPERATIONS_REASON_TOO_LONG");
+  }
+  return command;
 };
 
 const assertAuthorized = (
@@ -40,17 +65,14 @@ const assertAuthorized = (
 
 const activeIncidentCount = (
   severity: "SEV1" | "SEV2",
-  incidents: Awaited<
-    ReturnType<MMGCommerceOperationsDependencies["repository"]["loadState"]>
-  >["openIncidents"],
+  incidents: MMGCommerceOperationsState["openIncidents"],
 ): number => incidents.filter((entry) => entry.severity === severity).length;
 
 const pausedResumeDecision = (input: {
   target: Exclude<MMGCommerceRolloutStage, "paused">;
   approvalPresent: boolean;
-  state: Awaited<
-    ReturnType<MMGCommerceOperationsDependencies["repository"]["loadState"]>
-  >;
+  state: MMGCommerceOperationsState;
+  releaseEvidencePassed: boolean;
 }) => {
   const blockers: string[] = [];
   if (activeIncidentCount("SEV1", input.state.openIncidents) > 0) {
@@ -62,10 +84,16 @@ const pausedResumeDecision = (input: {
   if (["critical", "unknown"].includes(input.state.latestHealth?.overallStatus ?? "unknown")) {
     blockers.push("HEALTH_STATUS_NOT_ELIGIBLE");
   }
+  if (input.state.latestHealth?.releaseId !== input.state.rollout?.releaseId) {
+    blockers.push("HEALTH_RELEASE_MISMATCH");
+  }
   if (input.state.latestConsistencyAudit?.status !== "passed") {
     blockers.push("CONSISTENCY_AUDIT_REQUIRED");
   }
-  if (!input.state.freshE2EPassed) blockers.push("FRESH_E2E_REQUIRED");
+  if (input.state.latestConsistencyAudit?.releaseId !== input.state.rollout?.releaseId) {
+    blockers.push("CONSISTENCY_AUDIT_RELEASE_MISMATCH");
+  }
+  if (!input.releaseEvidencePassed) blockers.push("FRESH_RELEASE_E2E_REQUIRED");
   if (input.target !== "internal" && !input.approvalPresent) {
     blockers.push("PAUSED_RESUME_APPROVAL_REQUIRED");
   }
@@ -84,9 +112,10 @@ const pausedResumeDecision = (input: {
 export const executeMMGCommerceRolloutCommand = async (input: {
   command: MMGCommerceOperationsCommand;
   principal: MMGCommerceOperationsPrincipal;
-  dependencies: MMGCommerceOperationsDependencies;
+  dependencies: MMGCommerceRolloutDependencies;
 }): Promise<{ status: number; body: Record<string, unknown> }> => {
-  const { command, principal, dependencies } = input;
+  const command = validateCommand(input.command);
+  const { principal, dependencies } = input;
   if (!["advance_rollout", "pause_rollout"].includes(command.action)) {
     throw new Error("MMG_ROLLOUT_ACTION_INVALID");
   }
@@ -112,6 +141,9 @@ export const executeMMGCommerceRolloutCommand = async (input: {
     const state = await dependencies.repository.loadState(command.environment);
     const current = state.rollout;
     if (!current) throw new Error("MMG_ROLLOUT_STATE_NOT_FOUND");
+    if (command.releaseId && command.releaseId !== current.releaseId) {
+      throw new Error("MMG_ROLLOUT_RELEASE_ID_MISMATCH");
+    }
     const target: MMGCommerceRolloutStage =
       command.action === "pause_rollout"
         ? "paused"
@@ -140,6 +172,15 @@ export const executeMMGCommerceRolloutCommand = async (input: {
             toStage: target,
             asOf: occurredAt,
           });
+    const releaseEvidencePassed =
+      target === "paused"
+        ? false
+        : await dependencies.rolloutEvidence.hasFreshReleaseEvidence({
+            environment: command.environment,
+            releaseId: current.releaseId,
+            maximumAgeSeconds: 86_400,
+            asOf: occurredAt,
+          });
 
     const observedHours = Math.max(
       0,
@@ -153,21 +194,31 @@ export const executeMMGCommerceRolloutCommand = async (input: {
               target,
               approvalPresent: Boolean(approval),
               state,
+              releaseEvidencePassed,
             })
-          : evaluateMMGCommerceRolloutTransition({
-              currentStage: current.stage,
-              targetStage: target,
-              observedHours,
-              openSev1Count: activeIncidentCount("SEV1", state.openIncidents),
-              openSev2Count: activeIncidentCount("SEV2", state.openIncidents),
-              latestHealthStatus: state.latestHealth?.overallStatus ?? "unknown",
-              consistencyAuditPassed: state.latestConsistencyAudit?.status === "passed",
-              freshE2EPassed: state.freshE2EPassed,
-              executiveApprovalPresent: Boolean(approval),
-            });
+          : (() => {
+              const decision = evaluateMMGCommerceRolloutTransition({
+                currentStage: current.stage,
+                targetStage: target,
+                observedHours,
+                openSev1Count: activeIncidentCount("SEV1", state.openIncidents),
+                openSev2Count: activeIncidentCount("SEV2", state.openIncidents),
+                latestHealthStatus: state.latestHealth?.overallStatus ?? "unknown",
+                consistencyAuditPassed:
+                  state.latestConsistencyAudit?.status === "passed" &&
+                  state.latestConsistencyAudit.releaseId === current.releaseId,
+                freshE2EPassed: releaseEvidencePassed,
+                executiveApprovalPresent: Boolean(approval),
+              });
+              if (state.latestHealth?.releaseId !== current.releaseId) {
+                decision.blockers.push("HEALTH_RELEASE_MISMATCH");
+                decision.allowed = false;
+              }
+              return decision;
+            })();
 
     if (!decision.allowed) {
-      throw new Error(`MMG_ROLLOUT_TRANSITION_BLOCKED:${decision.blockers.join(",")}`);
+      throw new Error(`MMG_ROLLOUT_TRANSITION_BLOCKED:${[...new Set(decision.blockers)].join(",")}`);
     }
     await dependencies.controls.applyRollout({
       environment: command.environment,
