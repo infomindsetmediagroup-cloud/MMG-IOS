@@ -1,0 +1,165 @@
+name: MMG Commerce Staging Readiness
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: Exact immutable staging commerce release ID
+        required: true
+        type: string
+      release_commit_sha:
+        description: Exact 40-character commit SHA to inspect
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mmg-commerce-staging-readiness-${{ inputs.release_id }}
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: mmg-commerce-staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_commit_sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install PostgreSQL client
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Run local fail-closed readiness inspection
+        id: local
+        continue-on-error: true
+        env:
+          MMG_COMMERCE_ENVIRONMENT: staging
+          MMG_COMMERCE_RELEASE_ID: ${{ inputs.release_id }}
+          MMG_COMMERCE_RELEASE_COMMIT_SHA: ${{ inputs.release_commit_sha }}
+          MMG_GITHUB_ENVIRONMENT_NAME: mmg-commerce-staging
+          MMG_COMMERCE_STAGING_DATABASE_URL: ${{ secrets.MMG_COMMERCE_STAGING_DATABASE_URL }}
+          MMG_COMMERCE_STAGING_RUNTIME_ORIGIN: ${{ secrets.MMG_COMMERCE_STAGING_RUNTIME_ORIGIN }}
+          MMG_COMMERCE_STAGING_READINESS_ENDPOINT: ${{ secrets.MMG_COMMERCE_STAGING_READINESS_ENDPOINT }}
+          MMG_COMMERCE_STAGING_INTEGRATION_ENDPOINT: ${{ secrets.MMG_COMMERCE_STAGING_INTEGRATION_ENDPOINT }}
+          MMG_COMMERCE_REHEARSAL_ENDPOINT: ${{ secrets.MMG_COMMERCE_REHEARSAL_ENDPOINT }}
+          MMG_COMMERCE_STAGING_OPERATIONS_TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_OPERATIONS_TOKEN }}
+          MMG_COMMERCE_STAGING_INTEGRATION_TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_INTEGRATION_TOKEN }}
+          MMG_COMMERCE_STAGING_REHEARSAL_TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_REHEARSAL_TOKEN }}
+          MMG_COMMERCE_STAGING_REHEARSAL_ADAPTER_TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_REHEARSAL_ADAPTER_TOKEN }}
+          MMG_COMMERCE_STAGING_RUNTIME_CONTROL_TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_RUNTIME_CONTROL_TOKEN }}
+          MMG_COMMERCE_ALERT_DESTINATIONS: ${{ secrets.MMG_COMMERCE_ALERT_DESTINATIONS }}
+          MMG_COMMERCE_ALERT_ENVIRONMENT: staging
+          MMG_COMMERCE_ADMIN_AUTH_CONFIGURED: ${{ vars.MMG_COMMERCE_ADMIN_AUTH_CONFIGURED }}
+          MMG_COMMERCE_SCHEDULER_CONFIGURED: ${{ vars.MMG_COMMERCE_SCHEDULER_CONFIGURED }}
+          MMG_COMMERCE_DISPATCHER_CONFIGURED: ${{ vars.MMG_COMMERCE_DISPATCHER_CONFIGURED }}
+          MMG_COMMERCE_STORAGE_SIGNER_CONFIGURED: ${{ vars.MMG_COMMERCE_STORAGE_SIGNER_CONFIGURED }}
+          MMG_STAGING_READINESS_OUTPUT: mmg-commerce-staging-readiness-local.json
+        run: node scripts/mmg-commerce-staging-readiness.mjs
+
+      - name: Run protected runtime readiness inspection
+        id: runtime
+        if: steps.local.outcome == 'success'
+        continue-on-error: true
+        env:
+          ENDPOINT: ${{ secrets.MMG_COMMERCE_STAGING_READINESS_ENDPOINT }}
+          TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_INTEGRATION_TOKEN }}
+          RELEASE_ID: ${{ inputs.release_id }}
+          RELEASE_SHA: ${{ inputs.release_commit_sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ENDPOINT"
+          test -n "$TOKEN"
+          tooling=$(jq '.evidence | {
+            nodeMajor,
+            psqlAvailable,
+            sha256ToolAvailable,
+            migrationRunnerPresent,
+            releaseRegistrationPresent,
+            workflowPresent
+          }' mmg-commerce-staging-readiness-local.json)
+          github_environment=$(jq '.evidence | {
+            configured: .githubEnvironmentConfigured,
+            requiredSecretNamesPresent
+          }' mmg-commerce-staging-readiness-local.json)
+          payload=$(jq -n \
+            --arg requestId "staging-readiness-${RUN_ID}-${RUN_ATTEMPT}" \
+            --arg releaseId "$RELEASE_ID" \
+            --arg releaseCommitSha "$RELEASE_SHA" \
+            --argjson tooling "$tooling" \
+            --argjson githubEnvironment "$github_environment" \
+            '{
+              requestId:$requestId,
+              environment:"staging",
+              releaseId:$releaseId,
+              releaseCommitSha:$releaseCommitSha,
+              tooling:$tooling,
+              githubEnvironment:$githubEnvironment,
+              publicationAllowed:false,
+              liveCustomerDataAllowed:false
+            }')
+          response=$(curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $TOKEN" \
+            --header "Content-Type: application/json" \
+            --header "X-MMG-Internal-Request: github-actions-staging-readiness" \
+            --data "$payload" \
+            "$ENDPOINT")
+          echo "$response" | jq . > mmg-commerce-staging-readiness-runtime.json
+          echo "$response" | jq -e '
+            .ok == true and
+            .report.publicationAllowed == false and
+            .report.liveCustomerDataAllowed == false and
+            .report.ready == true and
+            .report.blockerCount == 0
+          '
+
+      - name: Write unavailable runtime evidence
+        if: steps.local.outcome != 'success'
+        run: |
+          cat > mmg-commerce-staging-readiness-runtime.json <<'JSON'
+          {
+            "ok": false,
+            "status": "not_run",
+            "reason": "Local protected-environment readiness blockers must be resolved first.",
+            "publicationAllowed": false,
+            "liveCustomerDataAllowed": false
+          }
+          JSON
+
+      - name: Upload sanitized readiness evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmg-commerce-staging-readiness-${{ github.run_id }}
+          path: |
+            mmg-commerce-staging-readiness-local.json
+            mmg-commerce-staging-readiness-runtime.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce readiness gate
+        if: always()
+        env:
+          LOCAL_OUTCOME: ${{ steps.local.outcome }}
+          RUNTIME_OUTCOME: ${{ steps.runtime.outcome }}
+        run: |
+          set -euo pipefail
+          test "$LOCAL_OUTCOME" = "success"
+          test "$RUNTIME_OUTCOME" = "success"
+          jq -e '.ready == true and .blockerCount == 0 and .publicationAllowed == false and .liveCustomerDataAllowed == false' \
+            mmg-commerce-staging-readiness-local.json
+          jq -e '.report.ready == true and .report.blockerCount == 0 and .report.publicationAllowed == false and .report.liveCustomerDataAllowed == false' \
+            mmg-commerce-staging-readiness-runtime.json
