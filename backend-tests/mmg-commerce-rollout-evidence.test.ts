@@ -14,7 +14,7 @@ describe("MMG rollout evidence adapter", () => {
         rowCount: 1,
       }),
     };
-    const adapter = new MMGPostgresRolloutEvidenceAdapter(database);
+    const adapter = new MMGPostgresRolloutEvidenceAdapter(database as any);
     await expect(
       adapter.hasFreshReleaseEvidence({
         environment: "production",
@@ -44,7 +44,7 @@ describe("MMG rollout evidence adapter", () => {
         rowCount: 1,
       }),
     };
-    const adapter = new MMGPostgresRolloutEvidenceAdapter(database);
+    const adapter = new MMGPostgresRolloutEvidenceAdapter(database as any);
     await expect(
       adapter.hasFreshReleaseEvidence({
         environment: "staging",
