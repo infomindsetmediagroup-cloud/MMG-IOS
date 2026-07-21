@@ -143,7 +143,13 @@ const validateCommand = (
   if (!/^[a-f0-9]{40}$/.test(command.releaseCommitSha)) {
     throw new Error("MMG_STAGING_INTEGRATION_COMMIT_SHA_INVALID");
   }
-  if (!new Set<MMGStagingIntegrationAction>(["inspect", "bootstrap", "verify"]).has(command.action)) {
+  if (
+    !new Set<MMGStagingIntegrationAction>([
+      "inspect",
+      "bootstrap",
+      "verify",
+    ]).has(command.action)
+  ) {
     throw new Error("MMG_STAGING_INTEGRATION_ACTION_INVALID");
   }
   return command;
@@ -193,6 +199,9 @@ export const stagingIntegrationBlockers = (
     snapshot.rollout.releaseId !== snapshot.releaseId
   ) {
     blockers.push("STAGING_ROLLOUT_NOT_SAFELY_PAUSED");
+  }
+  if (!snapshot.rehearsalEvidencePassed) {
+    blockers.push("STAGING_REHEARSAL_EVIDENCE_REQUIRED");
   }
   if (snapshot.publicationAllowed || snapshot.liveCustomerDataAllowed) {
     blockers.push("STAGING_SAFETY_BOUNDARY_VIOLATED");
@@ -261,7 +270,8 @@ export const executeMMGStagingIntegrationCommand = async (input: {
       },
     };
   } catch (error) {
-    const code = error instanceof Error ? error.message : "MMG_STAGING_INTEGRATION_FAILED";
+    const code =
+      error instanceof Error ? error.message : "MMG_STAGING_INTEGRATION_FAILED";
     await input.dependencies.repository.fail({
       command,
       errorCode: code.split(":", 1)[0],
