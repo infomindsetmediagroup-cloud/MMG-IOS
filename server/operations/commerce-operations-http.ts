@@ -16,6 +16,38 @@ export interface MMGCommerceOperationsHTTPDependencies
 }
 
 const MAX_BODY_BYTES = 32 * 1024;
+const ACTIONS = new Set([
+  "inspect",
+  "evaluate",
+  "run_consistency_audit",
+  "acknowledge_incident",
+  "apply_mitigation",
+  "resolve_incident",
+  "close_incident",
+  "set_control",
+  "advance_rollout",
+  "pause_rollout",
+]);
+const ENVIRONMENTS = new Set(["staging", "production"]);
+const CONTROLS = new Set([
+  "product_publication",
+  "subscription_checkout",
+  "webhook_ingestion",
+  "delivery_scheduler",
+  "delivery_dispatcher",
+  "recommendation_automation",
+  "signed_library_access",
+  "thank_you_handoff",
+]);
+const MODES = new Set(["enabled", "disabled", "observe_only", "drain_only"]);
+const STAGES = new Set([
+  "internal",
+  "pilot",
+  "limited",
+  "expanded",
+  "full",
+  "paused",
+]);
 
 const headers = (): Headers =>
   new Headers({
@@ -29,16 +61,18 @@ const json = (body: Record<string, unknown>, status = 200): Response =>
   new Response(JSON.stringify(body), { status, headers: headers() });
 
 const errorStatus = (code: string): number => {
-  if (code.includes("AUTH") || code.includes("ROLE_REQUIRED")) return 403;
+  if (code.includes("BODY_TOO_LARGE")) return 413;
+  if (
+    code.includes("AUTH") ||
+    code.includes("ROLE_REQUIRED") ||
+    code.includes("FORBIDDEN") ||
+    code.includes("INTERNAL_MARKER_REQUIRED")
+  ) {
+    return 403;
+  }
   if (code.includes("NOT_FOUND")) return 404;
   if (code.includes("COLLISION") || code.includes("CONFLICT")) return 409;
-  if (
-    code.includes("BLOCKED") ||
-    code.includes("FORBIDDEN") ||
-    code.includes("REQUIRED")
-  ) {
-    return 409;
-  }
+  if (code.includes("BLOCKED") || code.includes("REQUIRED")) return 409;
   if (code.includes("INVALID") || code.includes("INCOMPLETE")) return 400;
   return 500;
 };
@@ -79,32 +113,58 @@ const assertOrigin = (
   }
 };
 
-const commandFrom = (payload: Record<string, unknown>): MMGCommerceOperationsCommand => ({
+const requiredEnum = <T extends string>(
+  value: unknown,
+  allowed: ReadonlySet<string>,
+  code: string,
+): T => {
+  const normalized = String(value ?? "").trim();
+  if (!allowed.has(normalized)) throw new Error(code);
+  return normalized as T;
+};
+
+const optionalEnum = <T extends string>(
+  value: unknown,
+  allowed: ReadonlySet<string>,
+  code: string,
+): T | undefined => {
+  if (value === undefined) return undefined;
+  return requiredEnum<T>(value, allowed, code);
+};
+
+const commandFrom = (
+  payload: Record<string, unknown>,
+): MMGCommerceOperationsCommand => ({
   requestId: String(payload.requestId ?? ""),
-  action: String(payload.action ?? "") as MMGCommerceOperationsCommand["action"],
-  environment: String(
-    payload.environment ?? "",
-  ) as MMGCommerceOperationsCommand["environment"],
+  action: requiredEnum<MMGCommerceOperationsCommand["action"]>(
+    payload.action,
+    ACTIONS,
+    "MMG_OPERATIONS_ACTION_INVALID",
+  ),
+  environment: requiredEnum<MMGCommerceOperationsCommand["environment"]>(
+    payload.environment,
+    ENVIRONMENTS,
+    "MMG_OPERATIONS_ENVIRONMENT_INVALID",
+  ),
   releaseId:
     payload.releaseId === null || payload.releaseId === undefined
       ? null
       : String(payload.releaseId),
   incidentId:
     payload.incidentId === undefined ? undefined : String(payload.incidentId),
-  control:
-    payload.control === undefined
-      ? undefined
-      : (String(payload.control) as MMGCommerceOperationsCommand["control"]),
-  mode:
-    payload.mode === undefined
-      ? undefined
-      : (String(payload.mode) as MMGCommerceOperationsCommand["mode"]),
-  targetStage:
-    payload.targetStage === undefined
-      ? undefined
-      : (String(
-          payload.targetStage,
-        ) as MMGCommerceOperationsCommand["targetStage"]),
+  control: optionalEnum<NonNullable<MMGCommerceOperationsCommand["control"]>>(
+    payload.control,
+    CONTROLS,
+    "MMG_OPERATIONS_CONTROL_INVALID",
+  ),
+  mode: optionalEnum<NonNullable<MMGCommerceOperationsCommand["mode"]>>(
+    payload.mode,
+    MODES,
+    "MMG_OPERATIONS_CONTROL_MODE_INVALID",
+  ),
+  targetStage: optionalEnum<
+    NonNullable<MMGCommerceOperationsCommand["targetStage"]>
+  >(payload.targetStage, STAGES, "MMG_OPERATIONS_ROLLOUT_STAGE_INVALID"),
   expectedVersion:
     payload.expectedVersion === undefined
       ? undefined
