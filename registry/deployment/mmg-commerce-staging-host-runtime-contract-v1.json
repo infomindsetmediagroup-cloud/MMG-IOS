@@ -1,0 +1,231 @@
+{
+  "contract_id": "mmg-commerce-staging-host-runtime-contract-v1",
+  "version": "1.0.0",
+  "status": "approved_for_staging_deployment",
+  "approved_date": "2026-07-21",
+  "authority": "MMG executive approval",
+  "purpose": "Deploy the governed MMG commerce control plane to an isolated Cloudflare staging Worker with exact-release identity, Hyperdrive PostgreSQL access, separate authority credentials, a staging-only upstream service binding, protected provider-heartbeat refresh, and no Shopify publication or live-customer authority.",
+  "dependencies": {
+    "staging_readiness_contract": "registry/deployment/mmg-commerce-staging-readiness-contract-v1.json",
+    "staging_integration_contract": "registry/deployment/mmg-commerce-staging-integration-contract-v1.json",
+    "deployment_contract": "registry/deployment/mmg-live-commerce-deployment-contract-v1.json",
+    "database_schema": "database/migrations/20260721_011_mmg_staging_integration_execution.sql"
+  },
+  "implementation": {
+    "worker_entry": "cloudflare/mmg-commerce-staging-worker.ts",
+    "host_composition": "server/runtime/cloudflare-commerce-staging-host.ts",
+    "postgres_adapter": "server/runtime/cloudflare-hyperdrive-postgres.ts",
+    "admin_authenticator": "server/runtime/cloudflare-staging-admin-auth.ts",
+    "provider_heartbeat_coordinator": "server/runtime/cloudflare-staging-provider-heartbeats.ts",
+    "wrangler_generator": "scripts/mmg-build-commerce-staging-wrangler.mjs",
+    "deployment_workflow": ".github/workflows/mmg-commerce-staging-runtime-deploy.yml",
+    "integration_workflow": ".github/workflows/mmg-commerce-staging-integration.yml",
+    "environment_contract": "deployment/mmg-commerce-staging.env.example",
+    "health_endpoint": "/healthz",
+    "provider_heartbeat_endpoint": "/api/internal/commerce/provider-heartbeats/refresh"
+  },
+  "platform_contract": {
+    "provider": "Cloudflare Workers",
+    "worker_name": "mmg-commerce-staging",
+    "environment": "staging_only",
+    "compatibility_date": "2026-07-21",
+    "compatibility_flags": [
+      "nodejs_compat"
+    ],
+    "observability_enabled": true,
+    "workers_dev_enabled": true,
+    "preview_urls_enabled": true,
+    "scheduled_monitor_cron": "*/15 * * * *",
+    "monitor_default_enabled": false,
+    "production_worker_replacement_allowed": false
+  },
+  "database_contract": {
+    "binding": "HYPERDRIVE",
+    "database_type": "PostgreSQL",
+    "driver": "node-postgres",
+    "connection_string_source": "Cloudflare Hyperdrive binding",
+    "database_url_in_worker_vars_allowed": false,
+    "statement_timeout_ms": 15000,
+    "connection_timeout_range_ms": [
+      1000,
+      30000
+    ],
+    "transaction_behavior": "BEGIN, COMMIT, and ROLLBACK through one Hyperdrive-backed client",
+    "production_database_allowed": false,
+    "live_customer_data_allowed": false
+  },
+  "upstream_contract": {
+    "binding": "MMG_COMMERCE_UPSTREAM",
+    "binding_type": "Cloudflare Worker service binding",
+    "service_name_must_end_with": "-staging",
+    "public_internet_hop_required": false,
+    "upload_or_deploy_requires_binding": true,
+    "required_upstream_capability": "The bound Worker must mount the governed Knowledge Library, Customer Portal, Thank-you, Shopify webhook, delivery-window, and deployment handlers; placeholder route responses are prohibited.",
+    "response_headers_added_by_host": [
+      "X-MMG-Release-Id",
+      "X-MMG-Release-Commit",
+      "X-MMG-Publication-Allowed",
+      "X-MMG-Upstream-Routed"
+    ]
+  },
+  "required_secrets": [
+    "MMG_COMMERCE_STAGING_OPERATIONS_TOKEN",
+    "MMG_COMMERCE_STAGING_REHEARSAL_TOKEN",
+    "MMG_COMMERCE_STAGING_REHEARSAL_ADAPTER_TOKEN",
+    "MMG_COMMERCE_STAGING_RUNTIME_CONTROL_TOKEN",
+    "MMG_COMMERCE_STAGING_INTEGRATION_TOKEN",
+    "MMG_COMMERCE_STAGING_ADMIN_DASHBOARD_TOKEN",
+    "MMG_COMMERCE_STAGING_PROVIDER_HEALTH_TOKEN",
+    "MMG_COMMERCE_ALERT_DESTINATIONS"
+  ],
+  "credential_contract": {
+    "minimum_length": 32,
+    "operations_integration_rehearsal_adapter_runtime_control_mutually_distinct": true,
+    "admin_authentication_separate": true,
+    "provider_health_credential_separate": true,
+    "secret_values_in_source_control_allowed": false,
+    "secret_values_in_artifacts_allowed": false,
+    "wrangler_required_secret_validation": true,
+    "secrets_uploaded_with_exact_worker_version": true
+  },
+  "provider_heartbeat_contract": {
+    "required_adapters": [
+      "database",
+      "runtime_routes",
+      "runtime_controls",
+      "alerts",
+      "scheduler",
+      "dispatcher",
+      "storage_signer",
+      "admin_auth"
+    ],
+    "remote_health_endpoints_require_https": true,
+    "remote_health_success_status": "2xx",
+    "release_identity_sources": [
+      "JSON releaseId",
+      "X-MMG-Release-Id"
+    ],
+    "release_mismatch_status": "degraded",
+    "missing_or_unreachable_status": "unavailable",
+    "durable_heartbeat_write_required": true,
+    "refresh_endpoint_authentication": "staging integration bearer credential",
+    "refresh_endpoint_internal_marker_required": true,
+    "refresh_endpoint_same_origin_required_when_origin_present": true,
+    "raw_provider_responses_persisted": false,
+    "raw_provider_tokens_persisted": false
+  },
+  "health_contract": {
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "response_fields": [
+      "environment",
+      "releaseId",
+      "releaseCommitSha",
+      "runtimeOrigin",
+      "upstreamConfigured",
+      "publicationAllowed",
+      "liveCustomerDataAllowed"
+    ],
+    "cache_control": "no-store, private, max-age=0",
+    "publication_allowed": false,
+    "live_customer_data_allowed": false
+  },
+  "runtime_routing_contract": {
+    "host_owned_routes": [
+      "/healthz",
+      "/api/internal/healthz",
+      "/api/internal/commerce/operations",
+      "/api/admin/commerce/operations",
+      "/api/internal/commerce/staging-readiness",
+      "/api/internal/commerce/staging-integration",
+      "/api/internal/commerce/provider-heartbeats/refresh",
+      "/api/internal/commerce/rehearsal",
+      "/api/internal/commerce/rehearsal/adapter",
+      "/api/internal/runtime-controls/control",
+      "/api/internal/runtime-controls/rollout"
+    ],
+    "upstream_owned_route_groups": [
+      "Knowledge Library",
+      "Customer Portal",
+      "Thank-you handoff",
+      "subscription webhooks",
+      "delivery-window execution",
+      "deployment control"
+    ],
+    "unknown_route_without_upstream": "404 fail closed",
+    "production_fallback_allowed": false
+  },
+  "workflow_contract": {
+    "github_environment": "mmg-commerce-staging",
+    "actions": [
+      "validate",
+      "upload",
+      "deploy"
+    ],
+    "exact_commit_checkout_required": true,
+    "typecheck_required": true,
+    "focused_tests_required": true,
+    "shopify_governance_required": true,
+    "service_product_validation_required": true,
+    "validate_action_uses_dry_run": true,
+    "upload_action_creates_immutable_version": true,
+    "deploy_action_verifies_exact_release_health": true,
+    "upload_or_deploy_requires_upstream_binding": true,
+    "secret_file_permissions": "0600",
+    "secret_file_removed_after_action": true,
+    "sanitized_artifact_retention_days": 30
+  },
+  "staging_integration_sequence": [
+    "deploy exact-release staging upstream Worker",
+    "deploy exact-release staging commerce host Worker",
+    "run local protected-environment preflight",
+    "apply migrations 001 through 011",
+    "register exact staging release",
+    "bootstrap canonical safe controls",
+    "refresh all eight exact-release provider heartbeats",
+    "enforce protected runtime readiness",
+    "execute isolated staging rehearsal",
+    "verify integration evidence",
+    "return to Paused 0 percent"
+  ],
+  "safety_contract": {
+    "shopify_mutation_performed_by_host": false,
+    "product_publication_enabled": false,
+    "subscription_checkout_enabled": false,
+    "live_customer_cohort_exposed": false,
+    "production_database_allowed": false,
+    "production_upstream_allowed": false,
+    "customer_rights_revocation_allowed": false,
+    "monitor_enablement_requires_explicit_workflow_input": true
+  },
+  "release_gates": [
+    "The isolated staging PostgreSQL database and Hyperdrive configuration exist and contain no production customer data.",
+    "A staging-only upstream Worker ending in -staging mounts the governed commerce application handlers.",
+    "The Cloudflare account ID, least-privilege API token, Hyperdrive ID, upstream service name, runtime origin, and protected endpoints are configured in the mmg-commerce-staging GitHub Environment.",
+    "All seven authority credentials are at least 32 characters and mutually distinct where required.",
+    "All four provider health endpoints are HTTPS and identify the exact release.",
+    "The Worker dry-run, TypeScript check, focused tests, Shopify governance, and service-product validation pass for the exact commit.",
+    "The deployed health endpoint reports the exact release and upstream binding with publicationAllowed=false and liveCustomerDataAllowed=false.",
+    "The integration workflow applies migrations and bootstraps safe state before requiring full runtime readiness.",
+    "All eight provider heartbeats become healthy, fresh, and exact-release bound before rehearsal.",
+    "No production Worker, production database, Shopify product, checkout state, or live customer cohort changes during staging deployment."
+  ],
+  "non_actions": [
+    "does not provision the Cloudflare account",
+    "does not create the Hyperdrive configuration",
+    "does not create or reveal protected secrets",
+    "does not deploy the staging upstream automatically",
+    "does not apply database migrations during Worker deployment",
+    "does not mutate Shopify",
+    "does not enable subscription checkout",
+    "does not publish the subscription product",
+    "does not expose live customers"
+  ],
+  "integration_sequence": {
+    "previous_component": "Staging readiness inspector",
+    "current_component": "Cloudflare staging host runtime and deployment workflow",
+    "next_component": "Deploy the isolated staging upstream and host, configure Hyperdrive and protected providers, then run execute and rehearse for the exact release"
+  }
+}

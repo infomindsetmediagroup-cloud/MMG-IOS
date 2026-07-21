@@ -1,0 +1,236 @@
+name: MMG Commerce Staging Runtime Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: Exact immutable staging commerce release ID
+        required: true
+        type: string
+      release_commit_sha:
+        description: Exact 40-character commit SHA to deploy
+        required: true
+        type: string
+      action:
+        description: Controlled Cloudflare staging action
+        required: true
+        type: choice
+        options:
+          - validate
+          - upload
+          - deploy
+      monitor_enabled:
+        description: Enable the 15-minute operations monitor after deployment
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mmg-commerce-staging-runtime-${{ inputs.release_id }}
+  cancel-in-progress: false
+
+jobs:
+  validate-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_commit_sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate immutable staging release
+        env:
+          RELEASE_ID: ${{ inputs.release_id }}
+          RELEASE_COMMIT_SHA: ${{ inputs.release_commit_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$ ]]
+          [[ "$RELEASE_COMMIT_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT_SHA"
+
+      - name: Install validation dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+
+      - run: npm run typecheck
+      - run: npm run validate:commerce-staging-host
+      - run: npm run validate:shopify
+      - run: npm run validate:service-product
+
+  stage-runtime:
+    needs: validate-source
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: mmg-commerce-staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_commit_sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install deployment dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+
+      - name: Generate exact-release Wrangler configuration
+        env:
+          MMG_COMMERCE_RELEASE_ID: ${{ inputs.release_id }}
+          MMG_COMMERCE_RELEASE_COMMIT_SHA: ${{ inputs.release_commit_sha }}
+          MMG_CLOUDFLARE_STAGING_HYPERDRIVE_ID: ${{ secrets.MMG_CLOUDFLARE_STAGING_HYPERDRIVE_ID }}
+          MMG_CLOUDFLARE_STAGING_UPSTREAM_SERVICE: ${{ vars.MMG_CLOUDFLARE_STAGING_UPSTREAM_SERVICE }}
+          MMG_COMMERCE_STAGING_RUNTIME_ORIGIN: ${{ secrets.MMG_COMMERCE_STAGING_RUNTIME_ORIGIN }}
+          MMG_COMMERCE_REQUEST_TIMEOUT_MS: ${{ vars.MMG_COMMERCE_REQUEST_TIMEOUT_MS }}
+          MMG_COMMERCE_ROUTE_PROBE_PATHS: ${{ vars.MMG_COMMERCE_ROUTE_PROBE_PATHS }}
+          MMG_COMMERCE_MONITOR_ENABLED: ${{ inputs.monitor_enabled }}
+          MMG_COMMERCE_ALERT_HEALTH_ENDPOINT: ${{ vars.MMG_COMMERCE_ALERT_HEALTH_ENDPOINT }}
+          MMG_COMMERCE_SCHEDULER_HEALTH_ENDPOINT: ${{ vars.MMG_COMMERCE_SCHEDULER_HEALTH_ENDPOINT }}
+          MMG_COMMERCE_DISPATCHER_HEALTH_ENDPOINT: ${{ vars.MMG_COMMERCE_DISPATCHER_HEALTH_ENDPOINT }}
+          MMG_COMMERCE_STORAGE_SIGNER_HEALTH_ENDPOINT: ${{ vars.MMG_COMMERCE_STORAGE_SIGNER_HEALTH_ENDPOINT }}
+          ACTION: ${{ inputs.action }}
+        run: |
+          set -euo pipefail
+          node scripts/mmg-build-commerce-staging-wrangler.mjs
+          jq -e --arg action "$ACTION" '
+            .environment == "staging" and
+            .publicationAllowed == false and
+            .liveCustomerDataAllowed == false and
+            .hyperdriveConfigured == true and
+            ((.secretNames | length) == 8) and
+            (if $action == "validate" then true else .upstreamServiceConfigured == true end)
+          ' dist/mmg-commerce-staging/deployment-summary.json
+
+      - name: Create protected deployment secret file
+        env:
+          OPERATIONS_TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_OPERATIONS_TOKEN }}
+          REHEARSAL_TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_REHEARSAL_TOKEN }}
+          REHEARSAL_ADAPTER_TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_REHEARSAL_ADAPTER_TOKEN }}
+          RUNTIME_CONTROL_TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_RUNTIME_CONTROL_TOKEN }}
+          INTEGRATION_TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_INTEGRATION_TOKEN }}
+          ADMIN_DASHBOARD_TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_ADMIN_DASHBOARD_TOKEN }}
+          PROVIDER_HEALTH_TOKEN: ${{ secrets.MMG_COMMERCE_STAGING_PROVIDER_HEALTH_TOKEN }}
+          ALERT_DESTINATIONS: ${{ secrets.MMG_COMMERCE_ALERT_DESTINATIONS }}
+        run: |
+          set -euo pipefail
+          umask 077
+          for value in \
+            "$OPERATIONS_TOKEN" \
+            "$REHEARSAL_TOKEN" \
+            "$REHEARSAL_ADAPTER_TOKEN" \
+            "$RUNTIME_CONTROL_TOKEN" \
+            "$INTEGRATION_TOKEN" \
+            "$ADMIN_DASHBOARD_TOKEN" \
+            "$PROVIDER_HEALTH_TOKEN" \
+            "$ALERT_DESTINATIONS"; do
+            test -n "$value"
+          done
+          jq -n \
+            --arg operations "$OPERATIONS_TOKEN" \
+            --arg rehearsal "$REHEARSAL_TOKEN" \
+            --arg rehearsalAdapter "$REHEARSAL_ADAPTER_TOKEN" \
+            --arg runtimeControl "$RUNTIME_CONTROL_TOKEN" \
+            --arg integration "$INTEGRATION_TOKEN" \
+            --arg admin "$ADMIN_DASHBOARD_TOKEN" \
+            --arg provider "$PROVIDER_HEALTH_TOKEN" \
+            --arg alerts "$ALERT_DESTINATIONS" \
+            '{
+              MMG_COMMERCE_STAGING_OPERATIONS_TOKEN:$operations,
+              MMG_COMMERCE_STAGING_REHEARSAL_TOKEN:$rehearsal,
+              MMG_COMMERCE_STAGING_REHEARSAL_ADAPTER_TOKEN:$rehearsalAdapter,
+              MMG_COMMERCE_STAGING_RUNTIME_CONTROL_TOKEN:$runtimeControl,
+              MMG_COMMERCE_STAGING_INTEGRATION_TOKEN:$integration,
+              MMG_COMMERCE_STAGING_ADMIN_DASHBOARD_TOKEN:$admin,
+              MMG_COMMERCE_STAGING_PROVIDER_HEALTH_TOKEN:$provider,
+              MMG_COMMERCE_ALERT_DESTINATIONS:$alerts
+            }' > dist/mmg-commerce-staging/secrets.json
+          chmod 600 dist/mmg-commerce-staging/secrets.json
+
+      - name: Validate Cloudflare bundle without deployment
+        if: inputs.action == 'validate'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler deploy \
+            --dry-run \
+            --config dist/mmg-commerce-staging/wrangler.jsonc \
+            --secrets-file dist/mmg-commerce-staging/secrets.json \
+            --outdir dist/mmg-commerce-staging/bundle
+
+      - name: Upload immutable staging Worker version
+        if: inputs.action == 'upload'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler versions upload \
+            --config dist/mmg-commerce-staging/wrangler.jsonc \
+            --secrets-file dist/mmg-commerce-staging/secrets.json \
+            --message "MMG commerce staging ${{ inputs.release_id }}" \
+            --tag "${{ inputs.release_commit_sha }}" \
+            | tee dist/mmg-commerce-staging/cloudflare-upload.txt
+
+      - name: Deploy isolated staging Worker
+        if: inputs.action == 'deploy'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler deploy \
+            --config dist/mmg-commerce-staging/wrangler.jsonc \
+            --secrets-file dist/mmg-commerce-staging/secrets.json \
+            --message "MMG commerce staging ${{ inputs.release_id }}" \
+            | tee dist/mmg-commerce-staging/cloudflare-deploy.txt
+
+      - name: Verify deployed staging release identity
+        if: inputs.action == 'deploy'
+        env:
+          RUNTIME_ORIGIN: ${{ secrets.MMG_COMMERCE_STAGING_RUNTIME_ORIGIN }}
+          RELEASE_ID: ${{ inputs.release_id }}
+          RELEASE_SHA: ${{ inputs.release_commit_sha }}
+        run: |
+          set -euo pipefail
+          response=$(curl --fail-with-body --silent --show-error \
+            --header 'Cache-Control: no-store' \
+            "$RUNTIME_ORIGIN/healthz")
+          echo "$response" | jq . > dist/mmg-commerce-staging/health-verification.json
+          echo "$response" | jq -e \
+            --arg releaseId "$RELEASE_ID" \
+            --arg releaseCommitSha "$RELEASE_SHA" \
+            '.ok == true and
+             .environment == "staging" and
+             .releaseId == $releaseId and
+             .releaseCommitSha == $releaseCommitSha and
+             .upstreamConfigured == true and
+             .publicationAllowed == false and
+             .liveCustomerDataAllowed == false'
+
+      - name: Remove protected deployment secret file
+        if: always()
+        run: |
+          if test -f dist/mmg-commerce-staging/secrets.json; then
+            shred -u dist/mmg-commerce-staging/secrets.json || rm -f dist/mmg-commerce-staging/secrets.json
+          fi
+
+      - name: Upload sanitized deployment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmg-commerce-staging-runtime-${{ github.run_id }}
+          path: |
+            dist/mmg-commerce-staging/deployment-summary.json
+            dist/mmg-commerce-staging/health-verification.json
+            dist/mmg-commerce-staging/cloudflare-upload.txt
+            dist/mmg-commerce-staging/cloudflare-deploy.txt
+          if-no-files-found: warn
+          retention-days: 30

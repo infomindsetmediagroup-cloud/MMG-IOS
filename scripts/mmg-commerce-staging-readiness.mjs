@@ -7,12 +7,18 @@ import process from "node:process";
 const requiredFiles = [
   "scripts/mmg-commerce-apply-migrations.sh",
   "scripts/mmg-commerce-register-staging-release.sh",
+  "scripts/mmg-build-commerce-staging-wrangler.mjs",
   ".github/workflows/mmg-commerce-staging-integration.yml",
+  ".github/workflows/mmg-commerce-staging-runtime-deploy.yml",
+  "cloudflare/mmg-commerce-staging-worker.ts",
+  "server/runtime/cloudflare-commerce-staging-host.ts",
+  "server/runtime/cloudflare-hyperdrive-postgres.ts",
   "registry/deployment/mmg-commerce-staging-integration-contract-v1.json",
   "registry/deployment/mmg-commerce-staging-readiness-contract-v1.json",
+  "registry/deployment/mmg-commerce-staging-host-runtime-contract-v1.json",
 ];
 
-const requiredSecrets = [
+const requiredProtectedValues = [
   "MMG_COMMERCE_STAGING_DATABASE_URL",
   "MMG_COMMERCE_STAGING_RUNTIME_ORIGIN",
   "MMG_COMMERCE_STAGING_READINESS_ENDPOINT",
@@ -23,11 +29,28 @@ const requiredSecrets = [
   "MMG_COMMERCE_STAGING_REHEARSAL_TOKEN",
   "MMG_COMMERCE_STAGING_REHEARSAL_ADAPTER_TOKEN",
   "MMG_COMMERCE_STAGING_RUNTIME_CONTROL_TOKEN",
+  "MMG_COMMERCE_STAGING_ADMIN_DASHBOARD_TOKEN",
+  "MMG_COMMERCE_STAGING_PROVIDER_HEALTH_TOKEN",
   "MMG_COMMERCE_ALERT_DESTINATIONS",
+  "CLOUDFLARE_ACCOUNT_ID",
+  "CLOUDFLARE_API_TOKEN",
+  "MMG_CLOUDFLARE_STAGING_HYPERDRIVE_ID",
+  "MMG_CLOUDFLARE_STAGING_UPSTREAM_SERVICE",
+  "MMG_COMMERCE_ALERT_HEALTH_ENDPOINT",
+  "MMG_COMMERCE_SCHEDULER_HEALTH_ENDPOINT",
+  "MMG_COMMERCE_DISPATCHER_HEALTH_ENDPOINT",
+  "MMG_COMMERCE_STORAGE_SIGNER_HEALTH_ENDPOINT",
 ];
 
 const checks = [];
-const add = (code, critical, passed, summary, remediation = null, evidence = {}) => {
+const add = (
+  code,
+  critical,
+  passed,
+  summary,
+  remediation = null,
+  evidence = {},
+) => {
   checks.push({
     code,
     critical,
@@ -38,14 +61,11 @@ const add = (code, critical, passed, summary, remediation = null, evidence = {})
   });
 };
 
-const environment = String(process.env.MMG_COMMERCE_ENVIRONMENT ?? "").trim();
-const releaseId = String(process.env.MMG_COMMERCE_RELEASE_ID ?? "").trim();
-const releaseCommitSha = String(
-  process.env.MMG_COMMERCE_RELEASE_COMMIT_SHA ?? "",
-).trim();
-const expectedEnvironmentName = String(
-  process.env.MMG_GITHUB_ENVIRONMENT_NAME ?? "",
-).trim();
+const value = (name) => String(process.env[name] ?? "").trim();
+const environment = value("MMG_COMMERCE_ENVIRONMENT");
+const releaseId = value("MMG_COMMERCE_RELEASE_ID");
+const releaseCommitSha = value("MMG_COMMERCE_RELEASE_COMMIT_SHA");
+const expectedEnvironmentName = value("MMG_GITHUB_ENVIRONMENT_NAME");
 
 add(
   "ENVIRONMENT_STAGING_ONLY",
@@ -103,12 +123,13 @@ add(
 );
 
 for (const file of requiredFiles) {
+  const present = existsSync(file);
   add(
     `REPOSITORY_FILE:${file}`,
     true,
-    existsSync(file),
-    existsSync(file) ? `${file} is present.` : `${file} is missing.`,
-    "Deploy the exact repository release containing every governed execution file.",
+    present,
+    present ? `${file} is present.` : `${file} is missing.`,
+    "Deploy the exact repository release containing every governed staging host file.",
   );
 }
 
@@ -148,55 +169,60 @@ add(
   "Install a compatible SHA-256 command on the protected staging runner.",
 );
 
-const missingSecrets = requiredSecrets.filter(
-  (name) => String(process.env[name] ?? "").trim().length === 0,
+const missingProtectedValues = requiredProtectedValues.filter(
+  (name) => value(name).length === 0,
 );
 add(
-  "REQUIRED_SECRET_VALUES_PRESENT",
+  "REQUIRED_PROTECTED_VALUES_PRESENT",
   true,
-  missingSecrets.length === 0,
-  missingSecrets.length === 0
+  missingProtectedValues.length === 0,
+  missingProtectedValues.length === 0
     ? "All required protected staging values are present."
-    : `${missingSecrets.length} required protected staging value(s) are missing.`,
+    : `${missingProtectedValues.length} required protected staging value(s) are missing.`,
   "Configure every required value in the mmg-commerce-staging GitHub Environment.",
-  { missingSecretNames: missingSecrets.join(",") },
+  { missingProtectedValueNames: missingProtectedValues.join(",") },
 );
 
-const tokens = [
-  process.env.MMG_COMMERCE_STAGING_OPERATIONS_TOKEN,
-  process.env.MMG_COMMERCE_STAGING_INTEGRATION_TOKEN,
-  process.env.MMG_COMMERCE_STAGING_REHEARSAL_TOKEN,
-  process.env.MMG_COMMERCE_STAGING_REHEARSAL_ADAPTER_TOKEN,
-  process.env.MMG_COMMERCE_STAGING_RUNTIME_CONTROL_TOKEN,
-].map((value) => String(value ?? "").trim());
+const authorityCredentialNames = [
+  "MMG_COMMERCE_STAGING_OPERATIONS_TOKEN",
+  "MMG_COMMERCE_STAGING_INTEGRATION_TOKEN",
+  "MMG_COMMERCE_STAGING_REHEARSAL_TOKEN",
+  "MMG_COMMERCE_STAGING_REHEARSAL_ADAPTER_TOKEN",
+  "MMG_COMMERCE_STAGING_RUNTIME_CONTROL_TOKEN",
+  "MMG_COMMERCE_STAGING_ADMIN_DASHBOARD_TOKEN",
+  "MMG_COMMERCE_STAGING_PROVIDER_HEALTH_TOKEN",
+];
+const authorityCredentials = authorityCredentialNames.map(value);
 add(
-  "SERVER_CREDENTIAL_LENGTH",
+  "AUTHORITY_CREDENTIAL_LENGTH",
   true,
-  tokens.every((value) => value.length >= 32),
-  "Every staging server credential is at least 32 characters.",
+  authorityCredentials.every((credential) => credential.length >= 32),
+  "Every staging authority credential is at least 32 characters.",
   "Generate strong credentials of at least 32 characters for every authority.",
 );
 add(
-  "SERVER_CREDENTIAL_SEPARATION",
+  "AUTHORITY_CREDENTIAL_SEPARATION",
   true,
-  tokens.every(Boolean) && new Set(tokens).size === tokens.length,
-  "The five staging server credentials are mutually distinct.",
-  "Use a separate credential for operations, integration, rehearsal, rehearsal adapter, and runtime control.",
+  authorityCredentials.every(Boolean) &&
+    new Set(authorityCredentials).size === authorityCredentials.length,
+  "Operations, integration, rehearsal, adapter, runtime-control, Admin, and provider credentials are mutually distinct.",
+  "Use a separate credential for every staging authority boundary.",
+  { credentialCount: authorityCredentials.length },
 );
 
-const parseUrl = (value, allowedProtocols) => {
+const parseUrl = (raw, allowedProtocols) => {
   try {
-    const parsed = new URL(String(value ?? "").trim());
+    const parsed = new URL(String(raw ?? "").trim());
     return allowedProtocols.includes(parsed.protocol) ? parsed : null;
   } catch {
     return null;
   }
 };
-const databaseUrl = parseUrl(process.env.MMG_COMMERCE_STAGING_DATABASE_URL, [
+const databaseUrl = parseUrl(value("MMG_COMMERCE_STAGING_DATABASE_URL"), [
   "postgres:",
   "postgresql:",
 ]);
-const runtimeOrigin = parseUrl(process.env.MMG_COMMERCE_STAGING_RUNTIME_ORIGIN, [
+const runtimeOrigin = parseUrl(value("MMG_COMMERCE_STAGING_RUNTIME_ORIGIN"), [
   "https:",
 ]);
 add(
@@ -211,7 +237,7 @@ add(
   true,
   Boolean(runtimeOrigin),
   "The staging runtime origin uses HTTPS.",
-  "Configure an HTTPS staging runtime origin.",
+  "Configure the isolated Cloudflare staging Worker HTTPS origin.",
 );
 
 for (const name of [
@@ -219,7 +245,7 @@ for (const name of [
   "MMG_COMMERCE_STAGING_INTEGRATION_ENDPOINT",
   "MMG_COMMERCE_REHEARSAL_ENDPOINT",
 ]) {
-  const parsed = parseUrl(process.env[name], ["https:"]);
+  const parsed = parseUrl(value(name), ["https:"]);
   const sameOrigin = Boolean(
     parsed && runtimeOrigin && parsed.origin === runtimeOrigin.origin,
   );
@@ -234,9 +260,33 @@ for (const name of [
   );
 }
 
-const alertEnvironment = String(
-  process.env.MMG_COMMERCE_ALERT_ENVIRONMENT ?? "",
-).trim();
+const cloudflareAccountId = value("CLOUDFLARE_ACCOUNT_ID");
+const hyperdriveId = value("MMG_CLOUDFLARE_STAGING_HYPERDRIVE_ID");
+const upstreamService = value("MMG_CLOUDFLARE_STAGING_UPSTREAM_SERVICE");
+add(
+  "CLOUDFLARE_ACCOUNT_CONFIGURED",
+  true,
+  cloudflareAccountId.length >= 16 && value("CLOUDFLARE_API_TOKEN").length >= 20,
+  "The protected Cloudflare account and API credential are configured.",
+  "Configure a least-privilege Cloudflare API token and account ID.",
+);
+add(
+  "HYPERDRIVE_BINDING_CONFIGURED",
+  true,
+  /^[a-f0-9-]{32,64}$/i.test(hyperdriveId),
+  "The staging Hyperdrive binding ID is configured.",
+  "Create a Hyperdrive configuration for the isolated PostgreSQL database and store its ID.",
+);
+add(
+  "STAGING_UPSTREAM_SERVICE_CONFIGURED",
+  true,
+  /^[a-z0-9][a-z0-9-]{1,62}-staging$/i.test(upstreamService),
+  "The commerce host is bound to an isolated staging upstream service.",
+  "Deploy the commerce API upstream as a staging-only Worker and configure its service name ending in -staging.",
+  { configured: Boolean(upstreamService) },
+);
+
+const alertEnvironment = value("MMG_COMMERCE_ALERT_ENVIRONMENT");
 add(
   "ALERT_ENVIRONMENT_STAGING",
   true,
@@ -244,7 +294,7 @@ add(
   "Alert delivery is explicitly labeled staging.",
   "Set MMG_COMMERCE_ALERT_ENVIRONMENT=staging and use nonproduction destinations.",
 );
-const alertEntries = String(process.env.MMG_COMMERCE_ALERT_DESTINATIONS ?? "")
+const alertEntries = value("MMG_COMMERCE_ALERT_DESTINATIONS")
   .split(",")
   .map((entry) => entry.trim())
   .filter(Boolean);
@@ -257,8 +307,9 @@ for (const entry of alertEntries) {
     continue;
   }
   alertChannels.add(entry.slice(0, separator).trim());
-  const parsed = parseUrl(entry.slice(separator + 1).trim(), ["https:"]);
-  if (!parsed) alertsHttps = false;
+  if (!parseUrl(entry.slice(separator + 1).trim(), ["https:"])) {
+    alertsHttps = false;
+  }
 }
 const requiredAlertChannels = [
   "on_call_pager",
@@ -280,18 +331,37 @@ add(
   "Replace non-HTTPS alert destinations.",
 );
 
+const providerEndpointNames = [
+  "MMG_COMMERCE_ALERT_HEALTH_ENDPOINT",
+  "MMG_COMMERCE_SCHEDULER_HEALTH_ENDPOINT",
+  "MMG_COMMERCE_DISPATCHER_HEALTH_ENDPOINT",
+  "MMG_COMMERCE_STORAGE_SIGNER_HEALTH_ENDPOINT",
+];
+for (const name of providerEndpointNames) {
+  const parsed = parseUrl(value(name), ["https:"]);
+  add(
+    `PROVIDER_HEALTH_ENDPOINT:${name}`,
+    true,
+    Boolean(parsed),
+    parsed
+      ? `${name} is configured through HTTPS.`
+      : `${name} is missing or not HTTPS.`,
+    "Deploy the staging provider health endpoint and configure its HTTPS URL.",
+  );
+}
+
 for (const [code, name] of [
   ["ADMIN_AUTH_DECLARED", "MMG_COMMERCE_ADMIN_AUTH_CONFIGURED"],
   ["SCHEDULER_DECLARED", "MMG_COMMERCE_SCHEDULER_CONFIGURED"],
   ["DISPATCHER_DECLARED", "MMG_COMMERCE_DISPATCHER_CONFIGURED"],
   ["STORAGE_SIGNER_DECLARED", "MMG_COMMERCE_STORAGE_SIGNER_CONFIGURED"],
 ]) {
-  const value = String(process.env[name] ?? "").trim().toLowerCase();
+  const declared = value(name).toLowerCase() === "true";
   add(
     code,
     true,
-    value === "true",
-    `${name} is explicitly confirmed.`,
+    declared,
+    declared ? `${name} is explicitly confirmed.` : `${name} is not confirmed.`,
     `Set ${name}=true only after the staging adapter is actually connected.`,
   );
 }
@@ -301,7 +371,7 @@ const blockers = checks.filter(
 );
 const warnings = checks.filter((entry) => entry.status === "warning");
 const report = {
-  schemaVersion: "1.0.0",
+  schemaVersion: "1.1.0",
   environment: "staging",
   releaseId,
   releaseCommitSha,
@@ -321,19 +391,32 @@ const report = {
     workflowPresent: existsSync(
       ".github/workflows/mmg-commerce-staging-integration.yml",
     ),
+    stagingHostWorkflowPresent: existsSync(
+      ".github/workflows/mmg-commerce-staging-runtime-deploy.yml",
+    ),
+    stagingHostSourcePresent: existsSync(
+      "server/runtime/cloudflare-commerce-staging-host.ts",
+    ),
     githubEnvironmentConfigured:
       expectedEnvironmentName === "mmg-commerce-staging",
-    requiredSecretNamesPresent: missingSecrets.length === 0,
+    requiredSecretNamesPresent: missingProtectedValues.length === 0,
+    cloudflareConfigured:
+      cloudflareAccountId.length >= 16 &&
+      value("CLOUDFLARE_API_TOKEN").length >= 20,
+    hyperdriveConfigured: /^[a-f0-9-]{32,64}$/i.test(hyperdriveId),
+    upstreamServiceConfigured:
+      /^[a-z0-9][a-z0-9-]{1,62}-staging$/i.test(upstreamService),
+    providerHealthEndpointsConfigured: providerEndpointNames.every((name) =>
+      Boolean(parseUrl(value(name), ["https:"])),
+    ),
   },
   publicationAllowed: false,
   liveCustomerDataAllowed: false,
   inspectedAt: new Date().toISOString(),
 };
 
-const outputPath = String(
-  process.env.MMG_STAGING_READINESS_OUTPUT ??
-    "mmg-commerce-staging-readiness-local.json",
-).trim();
+const outputPath = value("MMG_STAGING_READINESS_OUTPUT") ||
+  "mmg-commerce-staging-readiness-local.json";
 writeFileSync(outputPath, `${JSON.stringify(report, null, 2)}\n`, {
   encoding: "utf8",
   mode: 0o600,

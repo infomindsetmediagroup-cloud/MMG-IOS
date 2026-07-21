@@ -1,10 +1,10 @@
 {
   "contract_id": "mmg-live-commerce-deployment-contract-v1",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "status": "approved_for_controlled_release",
   "approved_date": "2026-07-21",
   "authority": "MMG executive approval",
-  "purpose": "Provision and release the canonical MMG subscription-commerce stack through an approval-gated, idempotent, observable, rollback-aware deployment control plane without exposing Shopify, database, customer, or storage credentials.",
+  "purpose": "Provision and release the canonical MMG subscription-commerce stack through an approval-gated, idempotent, observable, rollback-aware deployment control plane without exposing Shopify, database, customer, storage, or staging-host credentials.",
   "dependencies": {
     "commerce_contract": "registry/products/mmg-commerce-contract-v1.json",
     "subscription_product_contract": "shopify/products/mmg-knowledge-subscription/product-contract.json",
@@ -12,6 +12,8 @@
     "operations_contract": "registry/operations/mmg-commerce-operations-control-contract-v1.json",
     "production_adapter_contract": "registry/operations/mmg-production-adapters-staging-rehearsal-contract-v1.json",
     "staging_integration_contract": "registry/deployment/mmg-commerce-staging-integration-contract-v1.json",
+    "staging_readiness_contract": "registry/deployment/mmg-commerce-staging-readiness-contract-v1.json",
+    "staging_host_contract": "registry/deployment/mmg-commerce-staging-host-runtime-contract-v1.json",
     "database_schemas": [
       "database/migrations/20260720_007_mmg_live_commerce_deployment_control.sql",
       "database/migrations/20260720_008_mmg_commerce_operations_control.sql",
@@ -29,11 +31,16 @@
     "e2e_verifier": "server/deployment/e2e-commerce-verifier.ts",
     "operations_composition": "server/operations/production-operations-runtime.ts",
     "staging_integration_composition": "server/operations/staging-integration-runtime.ts",
+    "staging_host_composition": "server/runtime/cloudflare-commerce-staging-host.ts",
+    "staging_host_worker": "cloudflare/mmg-commerce-staging-worker.ts",
     "logical_endpoint": "/api/internal/commerce/deployment",
     "staging_integration_endpoint": "/api/internal/commerce/staging-integration",
+    "staging_readiness_endpoint": "/api/internal/commerce/staging-readiness",
+    "provider_heartbeat_endpoint": "/api/internal/commerce/provider-heartbeats/refresh",
     "github_workflow": ".github/workflows/mmg-commerce-release.yml",
     "staging_rehearsal_workflow": ".github/workflows/mmg-commerce-staging-rehearsal.yml",
     "staging_integration_workflow": ".github/workflows/mmg-commerce-staging-integration.yml",
+    "staging_host_workflow": ".github/workflows/mmg-commerce-staging-runtime-deploy.yml",
     "shopify_app_template": "shopify/deployment/shopify.app.production.template.toml",
     "environment_contract": "deployment/mmg-commerce-production.env.example",
     "adapter_environment_contract": "deployment/mmg-commerce-adapters.env.example",
@@ -144,6 +151,8 @@
     "/api/internal/commerce/operations",
     "/api/admin/commerce/operations",
     "/api/internal/commerce/staging-integration",
+    "/api/internal/commerce/staging-readiness",
+    "/api/internal/commerce/provider-heartbeats/refresh",
     "/api/internal/commerce/rehearsal",
     "/api/internal/commerce/rehearsal/adapter",
     "/api/internal/runtime-controls/control",
@@ -156,6 +165,18 @@
     "subscription_billing_attempts/failure",
     "subscription_billing_attempts/challenged"
   ],
+  "staging_host_contract": {
+    "worker_name": "mmg-commerce-staging",
+    "database_binding": "HYPERDRIVE",
+    "upstream_binding": "MMG_COMMERCE_UPSTREAM",
+    "upstream_service_must_end_with": "-staging",
+    "production_database_allowed": false,
+    "production_upstream_allowed": false,
+    "publication_allowed": false,
+    "live_customer_data_allowed": false,
+    "monitor_default_enabled": false,
+    "provider_heartbeat_count": 8
+  },
   "approval_contract": {
     "production_mutations_require_approval": true,
     "production_actions_requiring_approval": [
@@ -218,8 +239,8 @@
     "customer_rights": "Never revoke delivered ownership solely because a deployment is rolled back."
   },
   "privacy_and_security_contract": [
-    "Never commit Shopify app secrets, Admin API tokens, database credentials, CSRF secrets, storage signing keys, operations credentials, staging-integration credentials, rehearsal credentials, or dispatcher secrets.",
-    "Authenticate deployment, operations, staging-integration, rehearsal, rehearsal-adapter, and runtime-control endpoints with distinct server-to-server credentials and dedicated roles.",
+    "Never commit Shopify app secrets, Admin API tokens, database credentials, CSRF secrets, storage signing keys, operations credentials, staging-integration credentials, rehearsal credentials, provider-health credentials, Cloudflare credentials, or dispatcher secrets.",
+    "Authenticate deployment, operations, staging-readiness, staging-integration, provider-heartbeat, rehearsal, rehearsal-adapter, and runtime-control endpoints with their governed credentials and roles.",
     "Require an additional production release-manager role for production actions.",
     "Require production verification approval because controlled end-to-end verification may create a live test order and mutate entitlement state.",
     "Do not accept live publication as part of general provisioning; publication is a separate approved action.",
@@ -231,7 +252,8 @@
   "release_gates": [
     "The Shopify app has protected subscription API access and every required scope.",
     "Migrations 001 through 011 are applied in order to the target PostgreSQL environment.",
-    "All required runtime routes, including the staging-integration route, are deployed and private routes enforce authentication, same-origin, CSRF, HMAC, or server-to-server controls as specified by their contracts.",
+    "All required runtime routes, including readiness and provider-heartbeat refresh, are deployed and private routes enforce their specified controls.",
+    "The isolated Cloudflare staging host uses Hyperdrive and a staging-only service binding and reports the exact release with publication and live-customer authority disabled.",
     "The staging integration composition root is connected to PostgreSQL, route probes, runtime controls, alerts, release evidence, rehearsal fixtures, and separate Admin Portal authentication.",
     "The production operations composition root is connected to PostgreSQL telemetry, route probes, runtime controls, alerts, release evidence, and Admin Portal authentication.",
     "The canonical product is provisioned as DRAFT with exact variants, prices, SKUs, nonshipping flags, metafields, and one shared monthly selling plan.",
@@ -244,8 +266,8 @@
     "Publication receives a distinct executive approval bound to the exact release commit."
   ],
   "integration_sequence": {
-    "previous_component": "Production adapter wiring and controlled staging rehearsal framework",
-    "current_component": "Staging integration execution runtime, migration reconciliation, and exact-release rehearsal control",
-    "next_component": "Deploy the staging runtime, configure the protected providers and secrets, then execute and review the first exact-release staging rehearsal without publishing Shopify resources"
+    "previous_component": "Staging readiness inspector and integration execution control",
+    "current_component": "Cloudflare staging host runtime with Hyperdrive, service binding, provider heartbeat refresh, and controlled deployment",
+    "next_component": "Deploy the staging upstream and host, configure protected infrastructure, then execute and review the first exact-release rehearsal without publishing Shopify resources"
   }
 }
