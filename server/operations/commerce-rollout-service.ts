@@ -182,10 +182,11 @@ export const executeMMGCommerceRolloutCommand = async (input: {
             asOf: occurredAt,
           });
 
-    const observedHours = Math.max(
-      0,
-      (occurredAt.getTime() - Date.parse(current.enteredAt)) / 3_600_000,
-    );
+    const enteredAt = Date.parse(current.enteredAt);
+    const observedHours = Number.isFinite(enteredAt)
+      ? Math.max(0, (occurredAt.getTime() - enteredAt) / 3_600_000)
+      : 0;
+    const observationTimestampValid = Number.isFinite(enteredAt);
     const decision =
       target === "paused"
         ? { allowed: true, blockers: [], targetPercentage: 0, targetObservationHours: 0 }
@@ -210,6 +211,10 @@ export const executeMMGCommerceRolloutCommand = async (input: {
                 freshE2EPassed: releaseEvidencePassed,
                 executiveApprovalPresent: Boolean(approval),
               });
+              if (!observationTimestampValid) {
+                decision.blockers.push("ROLLOUT_OBSERVATION_TIMESTAMP_INVALID");
+                decision.allowed = false;
+              }
               if (state.latestHealth?.releaseId !== current.releaseId) {
                 decision.blockers.push("HEALTH_RELEASE_MISMATCH");
                 decision.allowed = false;
