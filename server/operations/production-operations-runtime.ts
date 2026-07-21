@@ -12,7 +12,10 @@ import {
 import { MMGPostgresCommerceOperationsRepository } from "./postgres-commerce-operations-repository.js";
 import { MMGPostgresRolloutEvidenceAdapter } from "./commerce-rollout-evidence.js";
 import { MMGHTTPCommerceRouteProbe } from "./http-commerce-route-probe.js";
-import { MMGHTTPCommerceControlAdapter } from "./http-commerce-control-adapter.js";
+import {
+  MMGHTTPCommerceControlAdapter,
+  MMGPostgresCommerceRuntimeControlReceiptStore,
+} from "./http-commerce-control-adapter.js";
 import { MMGPostgresCommerceProductionTelemetry } from "./postgres-commerce-production-telemetry.js";
 import {
   MMGPostgresCommerceAlertDeliveryStore,
@@ -37,6 +40,7 @@ export interface MMGProductionOperationsRuntimeDependencies {
   dashboardAuthenticator: MMGCommerceOperationsDashboardAuthenticator;
   alertHasher: MMGCommerceAlertHasher;
   hashPayloadSync(value: unknown): string;
+  createControlReceiptId?(): string;
   internalRoles?: string[];
   allowedOrigins?: ReadonlySet<string>;
   fetcher?: typeof fetch;
@@ -56,7 +60,9 @@ const tokenEquals = (left: string, right: string): boolean => {
 };
 
 const resolveRoles = (roles: string[] | undefined): string[] => {
-  const resolved = [...new Set(roles ?? ["mmg-commerce-operator", "mmg-commerce-monitor"] )];
+  const resolved = [
+    ...new Set(roles ?? ["mmg-commerce-operator", "mmg-commerce-monitor"]),
+  ];
   if (!resolved.includes("mmg-commerce-operator")) {
     throw new Error("MMG_PRODUCTION_INTERNAL_OPERATOR_ROLE_REQUIRED");
   }
@@ -125,7 +131,15 @@ export const buildMMGProductionOperationsRuntime = (
     runtimeOrigin: dependencies.config.runtimeOrigin,
     internalToken: dependencies.config.internalToken,
     requestTimeoutMs: dependencies.config.requestTimeoutMs,
+    receiptStore: new MMGPostgresCommerceRuntimeControlReceiptStore(
+      dependencies.database,
+    ),
+    sha256: (value) => dependencies.alertHasher.sha256(value),
+    createReceiptId:
+      dependencies.createControlReceiptId ??
+      (() => `control:${globalThis.crypto.randomUUID()}`),
     fetcher,
+    now,
   });
   const alerts = new MMGWebhookCommerceAlertAdapter({
     destinations: dependencies.config.alertDestinations,
@@ -179,9 +193,14 @@ export const buildMMGProductionOperationsRuntime = (
     },
     async bootstrapSafeState(): Promise<void> {
       const principal = await authenticator.authenticate(
-        new Request(`${dependencies.config.runtimeOrigin}/api/internal/commerce/operations`, {
-          headers: { Authorization: `Bearer ${dependencies.config.internalToken}` },
-        }),
+        new Request(
+          `${dependencies.config.runtimeOrigin}/api/internal/commerce/operations`,
+          {
+            headers: {
+              Authorization: `Bearer ${dependencies.config.internalToken}`,
+            },
+          },
+        ),
       );
       if (!principal) throw new Error("MMG_PRODUCTION_BOOTSTRAP_AUTH_FAILED");
       await bootstrapMMGCommerceOperations({
@@ -195,22 +214,25 @@ export const buildMMGProductionOperationsRuntime = (
     },
     async runScheduledEvaluation(requestId: string): Promise<Response> {
       return handleMMGCommerceOperationsRequest(
-        new Request(`${dependencies.config.runtimeOrigin}/api/internal/commerce/operations`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${dependencies.config.internalToken}`,
-            Origin: dependencies.config.runtimeOrigin,
-            "Content-Type": "application/json",
-            "X-MMG-Internal-Request": "production-scheduled-monitor",
+        new Request(
+          `${dependencies.config.runtimeOrigin}/api/internal/commerce/operations`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${dependencies.config.internalToken}`,
+              Origin: dependencies.config.runtimeOrigin,
+              "Content-Type": "application/json",
+              "X-MMG-Internal-Request": "production-scheduled-monitor",
+            },
+            body: JSON.stringify({
+              requestId,
+              action: "evaluate",
+              environment: dependencies.config.environment,
+              releaseId: dependencies.config.releaseId,
+              allowAutomaticContainment: true,
+            }),
           },
-          body: JSON.stringify({
-            requestId,
-            action: "evaluate",
-            environment: dependencies.config.environment,
-            releaseId: dependencies.config.releaseId,
-            allowAutomaticContainment: true,
-          }),
-        }),
+        ),
         {
           ...common,
           authenticator,
