@@ -1,23 +1,63 @@
 name: Validate Canonical Digital Download Product
 
 on:
+  workflow_dispatch: {}
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
     paths:
-      - 'shopify/products/ai-image-mastery/**'
-      - 'scripts/validate-canonical-digital-download-product.mjs'
-      - '.github/workflows/validate-canonical-digital-download-product.yml'
-  workflow_dispatch:
+      - "shopify/products/ai-image-mastery/**"
+      - "scripts/validate-canonical-digital-download-product.mjs"
+      - ".github/workflows/validate-canonical-digital-download-product.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "shopify/products/ai-image-mastery/**"
+      - "scripts/validate-canonical-digital-download-product.mjs"
+      - ".github/workflows/validate-canonical-digital-download-product.yml"
 
 permissions:
   contents: read
+
+concurrency:
+  group: canonical-digital-download-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:
     name: Validate digital-download contract and source
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
     steps:
       - name: Download repository source
-        uses: actions/checkout@v4
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p repository
+          curl --fail --show-error --silent --location \
+            --connect-timeout 15 \
+            --max-time 90 \
+            --retry 2 \
+            --retry-delay 2 \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/tarball/${SOURCE_SHA}" \
+            --output repository.tar.gz
+          tar -xzf repository.tar.gz --strip-components=1 -C repository
 
       - name: Validate canonical digital-download product
-        run: node scripts/validate-canonical-digital-download-product.mjs
+        shell: bash
+        working-directory: repository
+        run: |
+          set -euo pipefail
+          node --version
+          node scripts/validate-canonical-digital-download-product.mjs
