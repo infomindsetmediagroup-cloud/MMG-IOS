@@ -1,6 +1,9 @@
 import type { MMGSQLExecutor } from "../knowledge-library/persistence.js";
-import type { MMGCommerceControlCode } from "./commerce-operations-control.js";
-import type { MMGCommerceRehearsalEvidenceAdapter } from "./commerce-deployment-operations-adapter.js";
+import type {
+  MMGCommerceControlCode,
+  MMGCommerceControlMode,
+} from "./commerce-operations-control.js";
+import type { MMGCommerceRehearsalEvidenceAdapter } from "./postgres-commerce-rehearsal-evidence.js";
 import type { MMGHTTPCommerceRouteProbe } from "./http-commerce-route-probe.js";
 import type {
   MMGStagingAdapterHeartbeat,
@@ -62,36 +65,42 @@ export class MMGPostgresStagingIntegrationGateway
     releaseCommitSha: string;
     occurredAt: Date;
   }): Promise<MMGStagingIntegrationSnapshot> {
-    const [migrations, heartbeats, controls, rollout, routeProbe, rehearsalEvidencePassed] =
-      await Promise.all([
-        this.#database.query<MigrationRow>(
-          `SELECT migration_id FROM mmg_schema_migrations ORDER BY migration_id`,
-        ),
-        this.#database.query<HeartbeatRow>(
-          `SELECT adapter_code, status, release_id, observed_at
-           FROM mmg_commerce_adapter_heartbeats
-           WHERE environment = 'staging'
-           ORDER BY adapter_code`,
-        ),
-        this.#database.query<ControlRow>(
-          `SELECT control_code, mode
-           FROM mmg_commerce_controls
-           WHERE environment = 'staging'
-           ORDER BY control_code`,
-        ),
-        this.#database.query<RolloutRow>(
-          `SELECT release_id, stage, cohort_percentage
-           FROM mmg_commerce_rollout_state
-           WHERE environment = 'staging'
-           LIMIT 1`,
-        ),
-        this.#routeProbe.availability({ environment: "staging" }),
-        this.#rehearsal.hasFreshPassedEvidence({
-          releaseId: input.releaseId,
-          maximumAgeSeconds: 86_400,
-          asOf: input.occurredAt,
-        }),
-      ]);
+    const [
+      migrations,
+      heartbeats,
+      controls,
+      rollout,
+      routeProbe,
+      rehearsalEvidencePassed,
+    ] = await Promise.all([
+      this.#database.query<MigrationRow>(
+        `SELECT migration_id FROM mmg_schema_migrations ORDER BY migration_id`,
+      ),
+      this.#database.query<HeartbeatRow>(
+        `SELECT adapter_code, status, release_id, observed_at
+         FROM mmg_commerce_adapter_heartbeats
+         WHERE environment = 'staging'
+         ORDER BY adapter_code`,
+      ),
+      this.#database.query<ControlRow>(
+        `SELECT control_code, mode
+         FROM mmg_commerce_controls
+         WHERE environment = 'staging'
+         ORDER BY control_code`,
+      ),
+      this.#database.query<RolloutRow>(
+        `SELECT release_id, stage, cohort_percentage
+         FROM mmg_commerce_rollout_state
+         WHERE environment = 'staging'
+         LIMIT 1`,
+      ),
+      this.#routeProbe.availability({ environment: "staging" }),
+      this.#rehearsal.hasFreshPassedEvidence({
+        releaseId: input.releaseId,
+        maximumAgeSeconds: 86_400,
+        asOf: input.occurredAt,
+      }),
+    ]);
     const rolloutRow = rollout.rows[0];
     return {
       schemaVersion: "1.0.0",
@@ -108,7 +117,7 @@ export class MMGPostgresStagingIntegrationGateway
       })),
       controls: Object.fromEntries(
         controls.rows.map((row) => [row.control_code, row.mode]),
-      ) as Partial<Record<MMGCommerceControlCode, never>>,
+      ) as Partial<Record<MMGCommerceControlCode, MMGCommerceControlMode>>,
       rollout: rolloutRow
         ? {
             releaseId: rolloutRow.release_id,
