@@ -1,5 +1,5 @@
 name = "mmg-ios"
-main = "src/kairos-production-entry-theme-menu-hotfix-v1.js"
+main = "src/kairos-production-entry-cover-images-v1.js"
 compatibility_date = "2026-07-11"
 workers_dev = true
 keep_vars = true
@@ -12,6 +12,9 @@ not_found_handling = "single-page-application"
 
 [ai]
 binding = "AI"
+
+[images]
+binding = "IMAGES"
 
 [triggers]
 crons = ["* * * * *", "0 15 * * *", "0 2 * * *"]
@@ -26,7 +29,9 @@ new_sqlite_classes = ["KairosProject"]
 
 # Required before production activation:
 # `wrangler secret put KAIROS_API_TOKEN`
-# This bearer secret protects every /api/kairos/projects route and must never be committed.
+# `wrangler secret put KAIROS_MEDIA_SIGNING_SECRET`
+# `wrangler secret put SHOPIFY_ADMIN_ACCESS_TOKEN`
+# These secrets protect project routes, signed staging media, and Shopify DRAFT staging.
 
 [vars]
 SHOPIFY_STORE_DOMAIN = "07kd8e-qw.myshopify.com"
