@@ -1,0 +1,80 @@
+{
+  "policyId": "kairos-shopify-operation-scope-v1",
+  "version": "2026-07-22.1",
+  "defaultDecision": "deny",
+  "runtime": {
+    "requiredProvider": "cloudflare",
+    "vercelAllowed": false,
+    "openAiRequired": false,
+    "deterministic": true
+  },
+  "authority": {
+    "taskIntentGrantsStoreWideAuthority": false,
+    "arbitraryGraphql": false,
+    "wildcardResources": false,
+    "crossResourceSideEffects": false,
+    "exactWorkflow": true,
+    "exactOperation": true,
+    "exactTarget": true,
+    "exactFields": true,
+    "exactThemeFilePaths": true
+  },
+  "workflows": {
+    "manuscript.write.v1": {
+      "shopifyAccess": "none",
+      "allowedOperations": ["artifact.manuscript.write"]
+    },
+    "shopify.verify.connection.v1": {
+      "shopifyAccess": "read",
+      "allowedOperations": ["shopify.verifyInstallation"]
+    },
+    "shopify.product.update.v1": {
+      "shopifyAccess": "write",
+      "resourceType": "product",
+      "targetCount": 1,
+      "allowedOperations": ["shopify.product.update"]
+    },
+    "shopify.page.update.v1": {
+      "shopifyAccess": "write",
+      "resourceType": "page",
+      "targetCount": 1,
+      "allowedOperations": ["shopify.page.update"]
+    },
+    "shopify.menu.update.v1": {
+      "shopifyAccess": "write",
+      "resourceType": "menu",
+      "targetCount": 1,
+      "allowedOperations": ["shopify.menu.update"]
+    },
+    "shopify.theme.unpublished-files.upsert.v1": {
+      "shopifyAccess": "write",
+      "resourceType": "theme",
+      "targetCount": 1,
+      "allowedThemeRole": "UNPUBLISHED",
+      "allowedOperations": ["shopify.theme.unpublishedFiles.upsert"]
+    }
+  },
+  "writeRequirements": [
+    "global-write-gate-enabled",
+    "explicit-approval-reference",
+    "explicit-approval-header-confirmation",
+    "signed-unexpired-manifest",
+    "unique-idempotency-key",
+    "persistent-receipt-store",
+    "required-shopify-scopes",
+    "read-before-write",
+    "shopify-user-errors-empty",
+    "readback-verification",
+    "receipt-digest"
+  ],
+  "permanentlyDeniedOperations": [
+    "shopify.arbitraryGraphql.execute",
+    "shopify.theme.publish",
+    "shopify.theme.mainFiles.upsert",
+    "shopify.theme.delete",
+    "shopify.order.cancel",
+    "shopify.order.refund",
+    "shopify.giftCard.write",
+    "shopify.staff.write"
+  ]
+}
