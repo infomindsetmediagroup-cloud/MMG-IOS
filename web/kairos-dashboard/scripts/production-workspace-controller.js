@@ -1,10 +1,12 @@
-const BUILD = "kairos-production-workspace-20260713-3";
+const BUILD = "kairos-production-workspace-20260722-4";
 const ACTIVE_KEY = "kairos.production.active-workspace";
 const REGISTRY_CACHE_KEY = "kairos.production.registry-cache";
 const PRODUCT_KEYS = ["kairos.complete-product.job", "kairos.product.publication", "kairos.product.media", "kairos.product.launch"];
 const originalFetch = window.fetch.bind(window);
 let durableProjects = [];
 let registryReady = false;
+let overlaySignalScheduled = false;
+let lastOverlaySignature = "";
 
 window.fetch = async (...args) => {
   const response = await originalFetch(...args);
@@ -139,12 +141,25 @@ window.KairosProductionWorkspace = Object.freeze({
   summary: productionSummary,
 });
 
-const observer = new MutationObserver(() => {
-  const active = readJSON(ACTIVE_KEY);
-  if (!active?.workspace) return;
-  const isOpen = active.workspace === "complete-product" ? Boolean(document.querySelector("#complete-product-overlay")) : Boolean(document.querySelector("#manuscript-studio-overlay"));
-  if (isOpen) window.dispatchEvent(new CustomEvent("kairos:production:state-changed", { detail: productionSummary() }));
-});
+function scheduleOverlayStateSignal() {
+  if (overlaySignalScheduled) return;
+  overlaySignalScheduled = true;
+  queueMicrotask(() => {
+    overlaySignalScheduled = false;
+    const active = readJSON(ACTIVE_KEY);
+    const isOpen = active?.workspace === "complete-product"
+      ? Boolean(document.querySelector("#complete-product-overlay"))
+      : active?.workspace === "manuscript-studio"
+        ? Boolean(document.querySelector("#manuscript-studio-overlay"))
+        : false;
+    const signature = `${active?.workspace || "none"}:${active?.projectId || "none"}:${isOpen ? "open" : "closed"}`;
+    if (signature === lastOverlaySignature) return;
+    lastOverlaySignature = signature;
+    window.dispatchEvent(new CustomEvent("kairos:production:state-changed", { detail: productionSummary() }));
+  });
+}
+
+const observer = new MutationObserver(scheduleOverlayStateSignal);
 observer.observe(document.documentElement, { childList: true, subtree: true });
 
 function nextActionForJob(job) { if (job.status === "completed") return "Review the completed package and continue to Shopify handoff."; if (job.status === "awaiting-cover-approval") return "Review and approve the cover proof."; if (job.status === "needs-attention") return "Resolve the reported production issue."; return job.stageLabel || "Resume production."; }
