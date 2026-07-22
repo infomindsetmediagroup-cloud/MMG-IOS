@@ -92,8 +92,9 @@ test("controller mounts and an iPhone tap completes cover upload plus assignment
     }
 
     if (request.method() === "PUT" && url.pathname === COVER_PATH) {
-      const bytes = request.postDataBuffer();
-      expect(bytes?.length).toBeGreaterThan(8);
+      expect(request.headers()["content-type"]).toBe("image/png");
+      expect(request.headers()["x-filename"]).toBe("cover.png");
+      expect(request.headers()["x-kairos-operation-id"]).toBeTruthy();
       await route.fulfill({
         status: 201,
         contentType: "application/json",
