@@ -73,7 +73,7 @@
   <script type="module" src="./scripts/manuscript-project-setup.js?v=manuscript-controller-20260722-3"></script>
   <script>
     const modules=["shopify-analytics.js","manuscript-editorial-workbench.js","manuscript-manufacturing.js","manuscript-delivery.js","manuscript-platform-submission.js","publication-catalog.js","publication-operations.js","publication-performance.js","publication-settlement.js","publication-tax-compliance.js","launch-boundary.js","complete-product-engine.js","production-workspace-controller.js","publishing-production-center.js","product-media-installer.js","product-launch-control.js","website-visual-verification.js","shopify-release-control.js","website-registry.js","shopify-page-compiler.js"];
-    function loadNext(index=0){if(index>=modules.length)return;const script=document.createElement("script");script.type="module";script.src=`./scripts/${modules[index]}?v=manuscript-workspace-20260722-2`;script.onload=()=>setTimeout(()=>loadNext(index+1),50);script.onerror=()=>setTimeout(()=>loadNext(index+1),50);document.body.appendChild(script)}
+    function loadNext(index=0){if(index>=modules.length)return;const script=document.createElement("script");script.type="module";script.src=`./scripts/${modules[index]}?v=manuscript-workspace-20260722-2-manuscript-large-intake-20260717-1`;script.onload=()=>setTimeout(()=>loadNext(index+1),50);script.onerror=()=>setTimeout(()=>loadNext(index+1),50);document.body.appendChild(script)}
     window.addEventListener("load",()=>setTimeout(()=>loadNext(),600),{once:true});
   </script>
 </body>
