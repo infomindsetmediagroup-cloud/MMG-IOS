@@ -26,7 +26,52 @@ permissions:
   contents: read
 
 jobs:
+  discover-publishing-tests:
+    runs-on: ubuntu-latest
+    outputs:
+      tests: ${{ steps.discover.outputs.tests }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Discover publishing orchestration tests
+        id: discover
+        shell: bash
+        run: |
+          set -euo pipefail
+          tests="$(node -e 'const fs=require("fs");const p="cloudflare/mmg-ios/test";const files=fs.readdirSync(p).filter((name)=>name.endsWith(".test.js")&&name.includes("publishing")).sort().map((name)=>`test/${name}`);process.stdout.write(JSON.stringify(files));')"
+          test "${tests}" != "[]"
+          echo "tests=${tests}" >> "${GITHUB_OUTPUT}"
+
+  publishing-orchestration:
+    needs: discover-publishing-tests
+    name: Publishing orchestration · ${{ matrix.test }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        test: ${{ fromJSON(needs.discover-publishing-tests.outputs.tests) }}
+    defaults:
+      run:
+        working-directory: cloudflare/mmg-ios
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Worker dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Run ${{ matrix.test }}
+        run: node --test "${{ matrix.test }}"
+
   publishing-pipeline:
+    needs: publishing-orchestration
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -47,21 +92,6 @@ jobs:
 
       - name: Validate manuscript pipeline
         run: node --test test/kairos-*manuscript*.test.js
-
-      - name: Validate publishing orchestration
-        shell: bash
-        run: |
-          set -euo pipefail
-          mapfile -t tests < <(printf '%s\n' test/kairos-*publishing*.test.js test/kairos-publishing-operational-fixture-v1.test.js | sort -u)
-          for test_file in "${tests[@]}"; do
-            echo "Testing ${test_file}"
-            if ! node --test "${test_file}" > "${RUNNER_TEMP}/one-publishing-test.log" 2>&1; then
-              echo "FAILED: ${test_file}"
-              cat "${RUNNER_TEMP}/one-publishing-test.log"
-              exit 1
-            fi
-            echo "PASSED: ${test_file}"
-          done
 
       - name: Validate deliverable pipeline
         run: node --test test/kairos-*deliverable*.test.js
