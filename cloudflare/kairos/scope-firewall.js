@@ -77,6 +77,13 @@ export function authorizeOperation({ manifest, operationName, args, env, idempot
     if (!isNonEmptyString(idempotencyKey)) {
       deny("IDEMPOTENCY_KEY_REQUIRED", "Every Shopify write requires an idempotency key.");
     }
+    if (!env?.KAIROS_RECEIPTS?.get || !env?.KAIROS_RECEIPTS?.put) {
+      deny(
+        "RECEIPT_STORE_REQUIRED",
+        "Persistent KAIROS_RECEIPTS storage is required before any Shopify write.",
+        503,
+      );
+    }
   }
 
   return Object.freeze({
