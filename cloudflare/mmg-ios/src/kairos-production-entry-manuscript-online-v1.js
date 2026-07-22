@@ -3,8 +3,9 @@ import {
   inspectManuscriptOperation,
   KAIROS_MANUSCRIPT_OPERATION_BOUNDARY_BUILD,
 } from "./kairos-manuscript-operation-boundary-v1.js";
+import { KAIROS_MANUSCRIPT_AUTO_PIPELINE_BUILD } from "./kairos-manuscript-auto-pipeline-v1.js";
 
-const BUILD = "kairos-manuscript-online-20260722-1";
+const BUILD = "kairos-manuscript-online-20260722-2";
 const STATUS_PATH = "/api/kairos/manuscripts/status";
 
 export { KairosProject };
@@ -23,6 +24,7 @@ export default {
         status: "denied",
         build: BUILD,
         boundary: KAIROS_MANUSCRIPT_OPERATION_BOUNDARY_BUILD,
+        autoPipeline: KAIROS_MANUSCRIPT_AUTO_PIPELINE_BUILD,
         manuscriptMode: true,
         shopifyWritesEnabled: false,
         error: {
@@ -52,6 +54,9 @@ export default {
 };
 
 function status(env) {
+  const shopifyDraftWritesEnabled = shopifyWritesEnabled(env);
+  const shopifyLivePublishEnabled = shopifyDraftWritesEnabled
+    && String(env.KAIROS_SHOPIFY_LIVE_PUBLISH_ENABLED || "false").toLowerCase() === "true";
   const checks = {
     manuscriptRuntimeEnabled: String(env.KAIROS_MANUSCRIPT_RUNTIME_ENABLED || "").toLowerCase() === "true",
     durableObjectBinding: Boolean(env.KAIROS_PROJECTS),
@@ -60,16 +65,19 @@ function status(env) {
     aiBinding: Boolean(env.AI),
     apiTokenConfigured: nonEmpty(env.KAIROS_API_TOKEN),
     mediaSigningSecretConfigured: nonEmpty(env.KAIROS_MEDIA_SIGNING_SECRET),
-    shopifyWritesDisabled: String(env.KAIROS_SHOPIFY_WRITES_ENABLED || "false").toLowerCase() !== "true",
+    shopifyWritesDisabled: !shopifyDraftWritesEnabled,
+    automaticProductionPackage: true,
+    adminAssetVault: true,
+    manualCatalogEntryRequired: false,
   };
-
   const required = [
     "manuscriptRuntimeEnabled",
     "durableObjectBinding",
     "assetsBinding",
     "apiTokenConfigured",
     "mediaSigningSecretConfigured",
-    "shopifyWritesDisabled",
+    "automaticProductionPackage",
+    "adminAssetVault",
   ];
   const missing = required.filter((name) => checks[name] !== true);
   const ready = missing.length === 0;
@@ -79,26 +87,45 @@ function status(env) {
     ready,
     build: BUILD,
     boundary: KAIROS_MANUSCRIPT_OPERATION_BOUNDARY_BUILD,
+    autoPipeline: KAIROS_MANUSCRIPT_AUTO_PIPELINE_BUILD,
     mode: "manuscript-only",
     checks,
     missing,
+    capabilities: {
+      automaticMetadataExtraction: true,
+      productionReadyAssetManufacturing: true,
+      finalZipAssembly: true,
+      adminAssetVaultStorage: true,
+      customTemplateShopifyDraftPreparation: true,
+      manualCatalogEntryRequired: false,
+    },
     safeguards: {
       manuscriptOperationsOnly: true,
-      shopifyAccess: "none",
+      shopifyAccess: shopifyDraftWritesEnabled ? "draft-only" : "none",
+      shopifyDraftWritesEnabled,
+      shopifyLivePublishEnabled,
+      shopifyDraftApprovalRequired: true,
+      liveProductPublicationApprovalRequired: true,
       websiteMutationAuthorized: false,
       navigationMutationAuthorized: false,
       homepageMutationAuthorized: false,
       themeMutationAuthorized: false,
-      productMutationAuthorized: false,
+      productMutationAuthorized: shopifyDraftWritesEnabled,
+      liveProductMutationAuthorized: shopifyLivePublishEnabled,
       minuteWebsiteCronEnabled: false,
     },
   }, ready ? 200 : 503);
+}
+
+function shopifyWritesEnabled(env) {
+  return String(env.KAIROS_SHOPIFY_WRITES_ENABLED || env.KAIROS_SHOPIFY_DRAFTS_ENABLED || "false").toLowerCase() === "true";
 }
 
 function stamp(response) {
   const headers = new Headers(response.headers);
   headers.set("X-Kairos-Manuscript-Online", BUILD);
   headers.set("X-Kairos-Manuscript-Boundary", KAIROS_MANUSCRIPT_OPERATION_BOUNDARY_BUILD);
+  headers.set("X-Kairos-Manuscript-Auto-Pipeline", KAIROS_MANUSCRIPT_AUTO_PIPELINE_BUILD);
   headers.set("X-Kairos-Operation-Mode", "manuscript-only");
   return new Response(response.body, {
     status: response.status,
@@ -115,6 +142,7 @@ function json(value, status = 200) {
       "Cache-Control": "no-store",
       "X-Kairos-Manuscript-Online": BUILD,
       "X-Kairos-Manuscript-Boundary": KAIROS_MANUSCRIPT_OPERATION_BOUNDARY_BUILD,
+      "X-Kairos-Manuscript-Auto-Pipeline": KAIROS_MANUSCRIPT_AUTO_PIPELINE_BUILD,
       "X-Kairos-Operation-Mode": "manuscript-only",
     },
   });
