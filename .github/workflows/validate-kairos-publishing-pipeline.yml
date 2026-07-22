@@ -1,0 +1,57 @@
+name: Validate Kairos Publishing Pipeline
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'cloudflare/mmg-ios/src/kairos-*publishing*'
+      - 'cloudflare/mmg-ios/src/kairos-*manuscript*'
+      - 'cloudflare/mmg-ios/src/kairos-*deliverable*'
+      - 'cloudflare/mmg-ios/src/kairos-*package*'
+      - 'cloudflare/mmg-ios/src/kairos-*cover*'
+      - 'cloudflare/mmg-ios/src/kairos-*shopify-staging*'
+      - 'cloudflare/mmg-ios/test/kairos-*'
+      - 'server/kairos/publishing/**'
+      - 'backend-tests/kairos-publishing-*'
+      - 'web/kairos-dashboard/scripts/publishing-operations-center.js'
+      - 'web/kairos-dashboard/styles/publishing-operations-center.css'
+      - '.github/workflows/validate-kairos-publishing-pipeline.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: kairos-publishing-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  publishing-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: cloudflare/mmg-ios
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: cloudflare/mmg-ios/package-lock.json
+
+      - name: Install Worker dependencies
+        run: npm ci
+
+      - name: Run publishing pipeline tests
+        run: node --test test/kairos-*publishing*.test.js test/kairos-*manuscript*.test.js test/kairos-*deliverable*.test.js test/kairos-*package*.test.js test/kairos-*cover*.test.js test/kairos-*shopify*.test.js test/kairos-publishing-operational-fixture-v1.test.js
+
+      - name: Validate Worker configuration
+        run: npm run validate:production
+
+      - name: Build deployment bundle
+        run: npx wrangler deploy --dry-run
