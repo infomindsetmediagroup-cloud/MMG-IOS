@@ -1,4 +1,4 @@
-import previousRuntime, { KairosProject } from "./kairos-production-entry-image-packages-v1.js";
+import previousRuntime, { KairosProject } from "./kairos-production-entry-package-images-v1.js";
 
 const BUILD = "kairos-publishing-readiness-20260722-1";
 
