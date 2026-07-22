@@ -24,11 +24,17 @@ import {
   handlePublishingPackage,
   handlePublishingPackageObjectRequest,
 } from "./kairos-publishing-package-v1.js";
+import {
+  handlePublishingPackageControl,
+  handlePublishingPackageControlObjectRequest,
+} from "./kairos-package-assembly-v1.js";
 import { handleDeliverableRunObjectRequest } from "./kairos-deliverable-runner-v1.js";
 import { handleManuscriptRunObjectRequest } from "./kairos-manuscript-runner-v1.js";
 
 export class KairosProject extends NativeKairosProject {
   async fetch(request) {
+    const packageControl = await handlePublishingPackageControlObjectRequest(this.state, request, this.env);
+    if (packageControl) return packageControl;
     const deliverableRun = await handleDeliverableRunObjectRequest(this.state, request, this.env);
     if (deliverableRun) return deliverableRun;
     const manuscriptRun = await handleManuscriptRunObjectRequest(this.state, request, this.env);
@@ -91,6 +97,8 @@ export default {
       });
     }
 
+    const packageControl = await handlePublishingPackageControl(request, env);
+    if (packageControl) return packageControl;
     const publishingPackage = await handlePublishingPackage(request, env);
     if (publishingPackage) return publishingPackage;
     const productManufacturing = await handleProductManufacturingBridge(request, env);
