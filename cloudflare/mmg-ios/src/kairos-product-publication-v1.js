@@ -1,4 +1,4 @@
-const BUILD = "kairos-product-publication-20260722-2";
+const BUILD = "kairos-product-publication-20260722-3";
 const TTL = 60 * 60 * 24;
 const tokenCache = new Map();
 const APPROVED_TEMPLATE_SUFFIXES = new Set(["mmg-book-product", "mmg-ai-image-mastery", "mmg-digital-download"]);
@@ -17,9 +17,9 @@ async function prepare(request, env) {
   try {
     const body = await request.json();
     const projectId = String(body?.projectId || "").trim();
-    const price = normalizePrice(body?.price);
+    const requestedPrice = normalizePrice(body?.price);
     if (!/^[a-f0-9-]{20,}$/i.test(projectId)) throw err(400, "project_id_required", "A completed Kairos product project is required.");
-    if (!price) throw err(400, "price_required", "Set the approved Shopify price before preparing the product.");
+    if (!requestedPrice) throw err(400, "price_required", "Set the approved Shopify price before preparing the product.");
 
     const status = await fetchProjectJSON(request, projectId, "");
     if (status?.status !== "completed") throw err(409, "project_not_complete", "The complete-product project must finish before Shopify handoff.");
@@ -27,9 +27,18 @@ async function prepare(request, env) {
     if (!product?.title || !product?.handle || !product?.shopifyHTML) throw err(422, "product_package_invalid", "The project did not produce a valid Shopify product package.");
 
     const existing = await findProduct(env, product.handle);
+    if (existing && existing.status !== "DRAFT") {
+      throw err(
+        409,
+        "existing_live_product_protected",
+        "A live Shopify product already uses this handle. Kairos will not demote or overwrite an active product while preparing a draft. Use the controlled live-product replacement workflow for this existing listing.",
+      );
+    }
+
     const releaseId = crypto.randomUUID();
     const templateSuffix = normalizeTemplateSuffix(body?.templateSuffix, product.title);
     const digitalTemplate = templateSuffix === "mmg-ai-image-mastery" || templateSuffix === "mmg-digital-download";
+    const price = normalizePrice(existing?.variants?.nodes?.[0]?.price || requestedPrice);
     const desired = {
       title: String(product.title).slice(0, 255),
       handle: String(product.handle).slice(0, 255),
@@ -47,12 +56,12 @@ async function prepare(request, env) {
       build: BUILD,
       status: "awaiting-executive-approval",
       createdAt: new Date().toISOString(),
-      action: existing ? "update-draft-product" : "create-draft-product",
+      action: existing ? "update-existing-draft-product" : "create-draft-product",
       existing: existing ? snapshot(existing) : null,
       desired,
       source: { title: status.title, author: status.author || null, wordCount: status.wordCount, pageCount: status.pageCount, coverProvided: Boolean(status.coverProvided), artifacts: status.artifacts || [] },
       confirmationRequired: existing ? "UPDATE PRODUCT DRAFT" : "CREATE PRODUCT DRAFT",
-      safeguards: { draftOnly: true, storefrontPublicationAuthorized: false, priceApprovalRequired: false, canonicalPriceApplied: true, templateAllowlisted: true, liveProductUntouchedUntilSeparateApproval: true, rollbackRequired: true },
+      safeguards: { draftOnly: true, activeProductProtected: true, storefrontPublicationAuthorized: false, priceApprovalRequired: false, canonicalPriceApplied: !existing, existingDraftPricePreserved: Boolean(existing), templateAllowlisted: true, liveProductUntouchedUntilSeparateApproval: true, rollbackRequired: true },
     };
     await save(request, record);
     return json(record, 201);
@@ -68,7 +77,7 @@ async function execute(request, env) {
     if (String(body?.confirmation || "") !== record.confirmationRequired) throw err(403, "product_confirmation_required", `Type ${record.confirmationRequired} to authorize the draft product operation.`);
 
     const current = await findProduct(env, record.desired.handle);
-    if (record.existing && (!current || current.id !== record.existing.id || current.updatedAt !== record.existing.updatedAt)) throw err(409, "product_changed", "The Shopify product changed after preparation. Prepare a new release.");
+    if (record.existing && (!current || current.id !== record.existing.id || current.updatedAt !== record.existing.updatedAt || current.status !== "DRAFT")) throw err(409, "product_changed", "The Shopify DRAFT changed after preparation. Prepare a new release.");
     if (!record.existing && current) throw err(409, "product_now_exists", "A Shopify product with this handle now exists. Prepare a new release.");
 
     const product = current ? await updateProduct(env, current.id, record.desired) : await createProduct(env, record.desired);
