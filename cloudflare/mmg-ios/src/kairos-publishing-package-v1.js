@@ -1,4 +1,4 @@
-const BUILD = "kairos-publishing-package-20260722-1";
+const BUILD = "kairos-publishing-package-20260722-2";
 const PROJECT_PREFIX = "/api/kairos/projects";
 const MAX_COVER_BYTES = 25 * 1024 * 1024;
 const MAX_MANUSCRIPT_BYTES = 100 * 1024 * 1024;
@@ -221,11 +221,18 @@ function internalRequest(source, path, overrides = {}) {
   const headers = new Headers(source.headers);
   headers.delete("Authorization");
   for (const [name, value] of Object.entries(overrides.headers || {})) headers.set(name, value);
-  return new Request(new URL(path, source.url), {
-    method: overrides.method || source.method,
-    headers,
-    body: overrides.body !== undefined ? overrides.body : source.body,
-  });
+
+  const method = overrides.method || source.method;
+  const body = overrides.body !== undefined ? overrides.body : source.body;
+  const init = { method, headers };
+  if (body !== null && body !== undefined && method !== "GET" && method !== "HEAD") {
+    init.body = body;
+    if (typeof ReadableStream !== "undefined" && body instanceof ReadableStream) {
+      init.duplex = "half";
+    }
+  }
+
+  return new Request(new URL(path, source.url), init);
 }
 
 function validateAsset(role, mimeType, byteSize) {
