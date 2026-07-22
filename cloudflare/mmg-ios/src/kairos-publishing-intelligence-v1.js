@@ -1,4 +1,4 @@
-const BUILD = "kairos-publishing-intelligence-20260722-1";
+const BUILD = "kairos-publishing-intelligence-20260722-2";
 const DEFAULT_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8";
 
 export async function runPublishingIntelligence(state, project, env = {}) {
@@ -284,7 +284,7 @@ function mergeProviderResult(base, output) {
     productType: normalizeProductType(output.productType || base.productType),
     keywords: normalizeKeywords(output.keywords, base.keywords),
     summary: cleanOptional(output.summary)?.slice(0, 1200) || base.summary,
-    confidence: Number(Math.max(base.confidence, confidence).toFixed(2)),
+    confidence: Number(confidence.toFixed(2)),
     enrichment: "governed-provider",
   };
 }
