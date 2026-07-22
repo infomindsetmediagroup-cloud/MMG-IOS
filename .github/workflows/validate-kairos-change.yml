@@ -9,6 +9,8 @@ on:
       - 'cloudflare/mmg-ios-worker.js'
       - 'server/kairos/**'
       - 'backend-tests/**'
+      - 'browser-tests/**'
+      - 'playwright.config.mjs'
       - 'governance/kairos-shopify-operation-scope-v1.json'
       - 'governance/kairos-builder-plugin-registry-v1.json'
       - 'scripts/validate-kairos-shopify-policy.mjs'
@@ -32,7 +34,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Check out repository
@@ -57,11 +59,18 @@ jobs:
           node --check cloudflare/kairos/runtime.js
           node --check cloudflare/mmg-ios/src/kairos-manuscript-operation-boundary-v1.js
           node --check cloudflare/mmg-ios/src/kairos-production-entry-manuscript-online-v1.js
+          node --check web/kairos-dashboard/scripts/manuscript-project-setup.js
           node --check scripts/validate-kairos-shopify-policy.mjs
           node --check scripts/validate-kairos-manuscript-activation.mjs
 
       - name: Test Kairos operation boundaries
         run: npx vitest run backend-tests/kairos-scope-firewall.test.js backend-tests/kairos-manuscript-operation-boundary.test.js
+
+      - name: Install WebKit browser
+        run: npx playwright install --with-deps webkit
+
+      - name: Test manuscript buttons in mobile WebKit
+        run: npm run test:manuscript-ui
 
       - name: Validate Kairos Shopify policy
         run: npm run validate:kairos-shopify
