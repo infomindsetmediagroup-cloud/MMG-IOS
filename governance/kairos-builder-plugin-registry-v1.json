@@ -1,7 +1,7 @@
 {
-  "version": "kairos-builder-plugin-registry-v1",
+  "version": "kairos-builder-plugin-registry-v2",
   "status": "active",
-  "purpose": "Use installed app-building plugins as governed development advisors without granting production authority.",
+  "purpose": "Use installed app-building plugins as governed development advisors without granting production authority, while allowing Kairos itself to execute one exact approval-gated manuscript product-release pipeline.",
   "defaultDecision": "deny-production-authority",
   "runtime": {
     "productionProvider": "cloudflare",
@@ -24,7 +24,7 @@
       ],
       "productionDependency": false,
       "mutationAuthority": false,
-      "activationRule": "Use only when a ChatGPT app, MCP surface, or widget architecture is explicitly in scope."
+      "activationRule": "Use only when a ChatGPT app, MCP surface, or widget architecture is explicitly in scope. Guidance cannot grant runtime authority."
     },
     {
       "id": "openai-developers/agents-sdk",
@@ -65,15 +65,33 @@
       ],
       "productionDependency": false,
       "mutationAuthority": false,
-      "activationRule": "Shopify guidance is available only inside a separately approved Shopify workflow manifest. Manuscript workflows receive zero Shopify capability."
+      "activationRule": "Shopify guidance remains advisory. The only manuscript-origin Shopify capability belongs to the deterministic Kairos release controller and requires exact project scope plus explicit draft and live approvals."
     }
   ],
+  "productionReleasePolicy": {
+    "scope": "single-manuscript-product",
+    "allowedRoutes": [
+      "/api/production-registry/manuscripts/:projectId/auto-pipeline/run",
+      "/api/production-registry/manuscripts/:projectId/auto-pipeline/shopify-draft",
+      "/api/production-registry/manuscripts/:projectId/auto-pipeline/shopify-publish"
+    ],
+    "directShopifyRoutesAllowed": false,
+    "draftRequiresExplicitUserAction": true,
+    "livePublishRequiresExplicitUserAction": true,
+    "customTemplateAllowlistRequired": true,
+    "adminAssetVaultRequired": true,
+    "finalZipRequired": true,
+    "rollbackRequired": true,
+    "themeMutationAuthorized": false,
+    "navigationMutationAuthorized": false,
+    "pageMutationAuthorized": false
+  },
   "enforcement": {
     "builderGuidanceCannotExpandTaskScope": true,
     "builderGuidanceCannotGrantStoreWideAuthority": true,
     "builderGuidanceCannotReadSecrets": true,
     "builderGuidanceCannotDeploy": true,
     "builderGuidanceCannotMutateShopify": true,
-    "manuscriptWorkflowShopifyAccess": "none"
+    "manuscriptWorkflowShopifyAccess": "approval-gated-exact-product-release"
   }
 }

@@ -34,9 +34,15 @@ import {
 } from "./kairos-shopify-staging-router-v1.js";
 import { handleDeliverableRunObjectRequest } from "./kairos-deliverable-runner-v1.js";
 import { handleManuscriptRunObjectRequest } from "./kairos-manuscript-runner-v1.js";
+import {
+  handleManuscriptAutoPipeline,
+  handleManuscriptAutoPipelineObjectRequest,
+} from "./kairos-manuscript-auto-pipeline-v1.js";
 
 export class KairosProject extends NativeKairosProject {
   async fetch(request) {
+    const autoPipeline = await handleManuscriptAutoPipelineObjectRequest(this.state, request, this.env);
+    if (autoPipeline) return autoPipeline;
     const shopifyStaging = await handleShopifyStagingObjectRequest(this.state, request, this.env);
     if (shopifyStaging) return shopifyStaging;
     const packageControl = await handlePublishingPackageControlObjectRequest(this.state, request, this.env);
@@ -103,6 +109,8 @@ export default {
       });
     }
 
+    const autoPipeline = await handleManuscriptAutoPipeline(request, env);
+    if (autoPipeline) return autoPipeline;
     const shopifyStaging = await handleShopifyStaging(request, env);
     if (shopifyStaging) return shopifyStaging;
     const packageControl = await handlePublishingPackageControl(request, env);
