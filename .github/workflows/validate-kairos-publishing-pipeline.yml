@@ -49,7 +49,19 @@ jobs:
         run: node --test test/kairos-*manuscript*.test.js
 
       - name: Validate publishing orchestration
-        run: node --test test/kairos-*publishing*.test.js test/kairos-publishing-operational-fixture-v1.test.js
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t tests < <(printf '%s\n' test/kairos-*publishing*.test.js test/kairos-publishing-operational-fixture-v1.test.js | sort -u)
+          for test_file in "${tests[@]}"; do
+            echo "Testing ${test_file}"
+            if ! node --test "${test_file}" > "${RUNNER_TEMP}/one-publishing-test.log" 2>&1; then
+              echo "FAILED: ${test_file}"
+              cat "${RUNNER_TEMP}/one-publishing-test.log"
+              exit 1
+            fi
+            echo "PASSED: ${test_file}"
+          done
 
       - name: Validate deliverable pipeline
         run: node --test test/kairos-*deliverable*.test.js
