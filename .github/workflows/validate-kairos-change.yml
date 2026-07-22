@@ -2,8 +2,18 @@ name: Validate Kairos Change
 
 on:
   pull_request:
-    branches:
-      - main
+    branches: [main]
+    paths:
+      - 'cloudflare/mmg-ios/**'
+      - 'server/kairos/**'
+      - 'backend-tests/**'
+      - 'web/kairos-dashboard/**'
+      - '.github/workflows/validate-kairos-change.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: validate-kairos-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -11,7 +21,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Check out repository
@@ -20,16 +30,17 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
-          cache-dependency-path: cloudflare/mmg-ios/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            cloudflare/mmg-ios/package-lock.json
 
-      - name: Validate repository automation
-        run: |
-          node --check scripts/prep-changes.mjs
-          test -f cloudflare/mmg-ios/wrangler.toml
-          test -f cloudflare/mmg-ios/src/kairos-theme-menu-hotfix-publisher-20260718.js
-          grep -q 'kairos-theme-menu-hotfix-20260718-3' cloudflare/mmg-ios/src/kairos-theme-menu-hotfix-publisher-20260718.js
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Validate root contracts and tests
+        run: npm run check
 
       - name: Install Kairos Worker dependencies
         working-directory: cloudflare/mmg-ios
@@ -40,5 +51,9 @@ jobs:
         run: npm test
 
       - name: Validate production configuration
+        working-directory: cloudflare/mmg-ios
+        run: npm run validate:production
+
+      - name: Validate deployment bundle
         working-directory: cloudflare/mmg-ios
         run: npx wrangler deploy --dry-run

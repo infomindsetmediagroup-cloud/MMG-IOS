@@ -20,9 +20,33 @@ import {
   handleProductManufacturingBridge,
   handleProductManufacturingBridgeObjectRequest,
 } from "./kairos-product-manufacturing-bridge-v1.js";
+import {
+  handlePublishingPackage,
+  handlePublishingPackageObjectRequest,
+} from "./kairos-publishing-package-v1.js";
+import {
+  handlePublishingPackageControl,
+  handlePublishingPackageControlObjectRequest,
+} from "./kairos-package-assembly-v1.js";
+import {
+  handleShopifyStaging,
+  handleShopifyStagingObjectRequest,
+} from "./kairos-shopify-staging-router-v1.js";
+import { handleDeliverableRunObjectRequest } from "./kairos-deliverable-runner-v1.js";
+import { handleManuscriptRunObjectRequest } from "./kairos-manuscript-runner-v1.js";
 
 export class KairosProject extends NativeKairosProject {
   async fetch(request) {
+    const shopifyStaging = await handleShopifyStagingObjectRequest(this.state, request, this.env);
+    if (shopifyStaging) return shopifyStaging;
+    const packageControl = await handlePublishingPackageControlObjectRequest(this.state, request, this.env);
+    if (packageControl) return packageControl;
+    const deliverableRun = await handleDeliverableRunObjectRequest(this.state, request, this.env);
+    if (deliverableRun) return deliverableRun;
+    const manuscriptRun = await handleManuscriptRunObjectRequest(this.state, request, this.env);
+    if (manuscriptRun) return manuscriptRun;
+    const publishingPackage = await handlePublishingPackageObjectRequest(this.state, request, this.env);
+    if (publishingPackage) return publishingPackage;
     const productManufacturing = await handleProductManufacturingBridgeObjectRequest(this.state, request, this.env);
     if (productManufacturing) return productManufacturing;
     const websiteBuilderAsset = await handleWebsiteBuilderAssetObjectRequest(this.state, request);
@@ -59,8 +83,6 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
-    // Static dashboard pages and assets must never traverse production API handlers.
-    // Cloudflare's asset binding is the authoritative responder for browser routes.
     if ((request.method === "GET" || request.method === "HEAD") && !url.pathname.startsWith("/api/")) {
       if (!env.ASSETS || typeof env.ASSETS.fetch !== "function") {
         return new Response("Kairos dashboard assets are unavailable.", {
@@ -81,6 +103,12 @@ export default {
       });
     }
 
+    const shopifyStaging = await handleShopifyStaging(request, env);
+    if (shopifyStaging) return shopifyStaging;
+    const packageControl = await handlePublishingPackageControl(request, env);
+    if (packageControl) return packageControl;
+    const publishingPackage = await handlePublishingPackage(request, env);
+    if (publishingPackage) return publishingPackage;
     const productManufacturing = await handleProductManufacturingBridge(request, env);
     if (productManufacturing) return productManufacturing;
     const registry = await handleProductionRegistry(request, env);
