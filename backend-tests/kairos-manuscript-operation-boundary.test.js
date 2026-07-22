@@ -22,6 +22,32 @@ describe("Kairos manuscript-only operation boundary", () => {
     expect((await inspectManuscriptOperation(request("/api/production-registry/projects/manuscript-studio-12345678", "PATCH", {}))).allowed).toBe(true);
   });
 
+  it("allows only an exact manuscript workspace registration", async () => {
+    const manuscript = await inspectManuscriptOperation(request(
+      "/api/production-registry/projects",
+      "POST",
+      {
+        projectId: "manuscript-studio-12345678",
+        projectType: "manuscript-studio",
+        activeWorkspace: "manuscript-studio",
+        title: "New Manuscript Project",
+      },
+    ));
+    expect(manuscript.allowed).toBe(true);
+    expect(manuscript.scope).toBe("manuscript-workspace-registration");
+
+    for (const body of [
+      { projectId: "product-12345678", projectType: "complete-product", activeWorkspace: "complete-product" },
+      { projectId: "manuscript-studio-12345678", projectType: "complete-product", activeWorkspace: "manuscript-studio" },
+      { projectId: "manuscript-studio-12345678", projectType: "manuscript-studio", activeWorkspace: "website" },
+      { projectId: "arbitrary-12345678", projectType: "manuscript-studio", activeWorkspace: "manuscript-studio" },
+    ]) {
+      const denied = await inspectManuscriptOperation(request("/api/production-registry/projects", "POST", body));
+      expect(denied.allowed).toBe(false);
+      expect(denied.code).toBe("NON_MANUSCRIPT_REGISTRY_WRITE_DENIED");
+    }
+  });
+
   it("allows only book-package content generation", async () => {
     const book = await inspectManuscriptOperation(request("/api/content/generate", "POST", { type: "book_package" }));
     const product = await inspectManuscriptOperation(request("/api/content/generate", "POST", { type: "product_asset_copy" }));

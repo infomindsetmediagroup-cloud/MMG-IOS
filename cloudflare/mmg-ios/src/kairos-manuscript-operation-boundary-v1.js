@@ -1,6 +1,7 @@
-const BUILD = "kairos-manuscript-operation-boundary-20260722-1";
+const BUILD = "kairos-manuscript-operation-boundary-20260722-2";
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const MANUSCRIPT_PROJECT = /^\/api\/production-registry\/projects\/manuscript-studio-[a-z0-9-]+$/i;
+const MANUSCRIPT_REGISTRY = "/api/production-registry/projects";
 const MANUSCRIPT_PREFIXES = [
   "/api/manuscript/",
   "/api/production-registry/manuscripts/",
@@ -25,6 +26,25 @@ export async function inspectManuscriptOperation(request) {
 
   if (WEBSITE_MUTATION.test(path)) {
     return deny("WEBSITE_MUTATION_DENIED", "Website and Shopify mutations are outside the manuscript runtime.", path, method);
+  }
+
+  if (method === "POST" && path === MANUSCRIPT_REGISTRY) {
+    const body = await safeJSON(request.clone());
+    const projectId = String(body?.projectId || "");
+    const projectType = String(body?.projectType || "");
+    const activeWorkspace = String(body?.activeWorkspace || "");
+    const manuscriptRecord = projectType === "manuscript-studio"
+      && activeWorkspace === "manuscript-studio"
+      && /^manuscript-studio-[a-z0-9-]+$/i.test(projectId);
+
+    return manuscriptRecord
+      ? allow("manuscript-workspace-registration", path, method)
+      : deny(
+        "NON_MANUSCRIPT_REGISTRY_WRITE_DENIED",
+        "Only an exact manuscript-studio workspace record may be created in manuscript mode.",
+        path,
+        method,
+      );
   }
 
   if (MANUSCRIPT_PROJECT.test(path) || MANUSCRIPT_PREFIXES.some((prefix) => path.startsWith(prefix))) {
