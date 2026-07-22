@@ -186,15 +186,19 @@ test("Command Center manuscript event routes through the production workspace co
   await expect.poll(() => page.evaluate(() => window.__openedWorkspace)).toBe("manuscript-studio");
 });
 
-test("dashboard force-loads all critical manuscript controllers with unique versions", async () => {
-  expect(indexSource).toContain("kairos-command-hub-editorial-stable-20260722-5");
+test("dashboard force-loads the no-form production controllers with unique versions", async () => {
+  expect(indexSource).toContain("kairos-command-hub-auto-production-vault-20260722-1");
   expect(indexSource).toContain("./scripts/command-center-governance.js?v=manuscript-workspace-20260722-2");
   expect(indexSource).toContain("./scripts/manuscript-studio.js?v=manuscript-controller-20260722-3");
   expect(indexSource).toContain("./scripts/manuscript-project-setup.js?v=manuscript-controller-20260722-3");
   expect(indexSource).toContain("./scripts/manuscript-editorial-workbench.js?v=editorial-stable-20260722-2");
+  expect(indexSource).toContain("./scripts/manuscript-auto-pipeline.js?v=auto-production-vault-20260722-1");
 
   const delayedModuleList = indexSource.match(/const modules=\[(.*?)\];/s)?.[1] || "";
   expect(delayedModuleList).not.toContain("manuscript-studio.js");
   expect(delayedModuleList).not.toContain("manuscript-project-setup.js");
   expect(delayedModuleList).not.toContain("manuscript-editorial-workbench.js");
+  expect(delayedModuleList).not.toContain("manuscript-auto-pipeline.js");
+  expect(delayedModuleList).not.toContain("publication-catalog.js");
+  expect(delayedModuleList).not.toContain("manuscript-manufacturing.js");
 });
