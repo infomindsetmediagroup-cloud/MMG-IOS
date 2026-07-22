@@ -1,7 +1,8 @@
-const BUILD = "kairos-manuscript-operation-boundary-20260722-2";
+const BUILD = "kairos-manuscript-operation-boundary-20260722-3";
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const MANUSCRIPT_PROJECT = /^\/api\/production-registry\/projects\/manuscript-studio-[a-z0-9-]+$/i;
 const MANUSCRIPT_REGISTRY = "/api/production-registry/projects";
+const MANUSCRIPT_AUTO_PIPELINE = /^\/api\/production-registry\/manuscripts\/[a-z0-9-]{8,}\/auto-pipeline\/(run|shopify-draft|shopify-publish)$/i;
 const MANUSCRIPT_PREFIXES = [
   "/api/manuscript/",
   "/api/production-registry/manuscripts/",
@@ -24,8 +25,14 @@ export async function inspectManuscriptOperation(request) {
     return allow("read-only", path, method);
   }
 
+  const automaticPipeline = method === "POST" ? path.match(MANUSCRIPT_AUTO_PIPELINE) : null;
+  if (automaticPipeline) {
+    const action = automaticPipeline[1].toLowerCase();
+    return allow(action === "run" ? "manuscript-production-package" : action === "shopify-draft" ? "approval-gated-shopify-draft" : "approval-gated-shopify-publication", path, method);
+  }
+
   if (WEBSITE_MUTATION.test(path)) {
-    return deny("WEBSITE_MUTATION_DENIED", "Website and Shopify mutations are outside the manuscript runtime.", path, method);
+    return deny("WEBSITE_MUTATION_DENIED", "Website and direct Shopify mutations are outside the manuscript runtime. Use the exact governed manuscript release pipeline instead.", path, method);
   }
 
   if (method === "POST" && path === MANUSCRIPT_REGISTRY) {
