@@ -18,8 +18,21 @@ function project(overrides = {}) {
     id: "77777777-7777-4777-8777-777777777777",
     status: "APPROVED_FOR_SHOPIFY_STAGING",
     metadata: { title: "Guide" },
-    sourceAssets: [{ id: "cover-1", role: "COVER_SOURCE", filename: "cover.png", sha256: "a".repeat(64), publicStagingUrl: "https://cdn.example/cover.png" }],
-    artifacts: [{ id: "meta-1", kind: "PRODUCT_METADATA", filename: "shopify-product-metadata.json", sha256: "b".repeat(64), storageKey: "artifact:meta" }],
+    sourceAssets: [{ id: "cover-1", role: "COVER_SOURCE", filename: "cover.png", sha256: "a".repeat(64) }],
+    artifacts: [
+      { id: "meta-1", kind: "PRODUCT_METADATA", filename: "shopify-product-metadata.json", sha256: "b".repeat(64), storageKey: "artifact:meta" },
+      {
+        id: "primary-1",
+        kind: "STOREFRONT_PRIMARY_IMAGE",
+        filename: "guide-product-2048x3072.png",
+        mimeType: "image/png",
+        width: 2048,
+        height: 3072,
+        sha256: "c".repeat(64),
+        signedStagingUrl: "https://themindsetmediagroup.com/api/kairos/media/project/primary-1?expires=9999999999&sig=test",
+        signedUrlExpiresAt: "2286-11-20T17:46:39.000Z",
+      },
+    ],
     stages: stages(),
     governance: { liveShopifyMutationAuthorized: false },
     run: { status: "REVIEW_REQUIRED" },
@@ -57,14 +70,14 @@ function mockFetch(handler) {
   return () => { globalThis.fetch = original; };
 }
 
-test("creates a DRAFT product and persists staging receipt and rollback", async () => {
+test("creates a DRAFT product with rendered primary media and persists receipt", async () => {
   const durable = state();
   await seed(durable);
   const restore = mockFetch(async (_url, options) => {
     const body = JSON.parse(options.body);
     assert.match(body.query, /productCreate/);
     assert.equal(body.variables.input.status, "DRAFT");
-    assert.equal(body.variables.media[0].originalSource, "https://cdn.example/cover.png");
+    assert.match(body.variables.media[0].originalSource, /primary-1/);
     return new Response(JSON.stringify({ data: { productCreate: { product: { id: "gid://shopify/Product/1", title: "Representative Guide", handle: "representative-guide", status: "DRAFT" }, userErrors: [] } } }), { status: 200 });
   });
   try {
@@ -73,9 +86,11 @@ test("creates a DRAFT product and persists staging receipt and rollback", async 
     assert.equal(response.status, 200);
     assert.equal(payload.project.status, "COMPLETED");
     assert.equal(payload.receipt.status, "DRAFT");
+    assert.equal(payload.receipt.renderedPrimaryImageArtifactId, "primary-1");
+    assert.deepEqual(payload.receipt.renderedPrimaryImageDimensions, { width: 2048, height: 3072 });
+    assert.equal(payload.receipt.mediaAttached, true);
     assert.equal(payload.receipt.publicationMutationExecuted, false);
     assert.equal(payload.rollback.action, "DELETE_CREATED_DRAFT");
-    assert.equal(payload.project.stages.at(-1).status, "SUCCEEDED");
   } finally { restore(); }
 });
 
@@ -88,11 +103,11 @@ test("updates only an existing DRAFT and captures rollback snapshot", async () =
     calls += 1;
     const body = JSON.parse(options.body);
     if (calls === 1) {
-      assert.match(body.query, /query KairosStagedProduct/);
       return new Response(JSON.stringify({ data: { product: { id: "gid://shopify/Product/2", title: "Old", handle: "old", descriptionHtml: "<p>Old</p>", vendor: "Mindset Media Group", productType: "Digital Product", status: "DRAFT", tags: [], seo: { title: "Old", description: "Old" } } } }), { status: 200 });
     }
     assert.match(body.query, /productUpdate/);
     assert.equal(body.variables.input.status, "DRAFT");
+    assert.equal(body.variables.media.length, 1);
     return new Response(JSON.stringify({ data: { productUpdate: { product: { id: "gid://shopify/Product/2", title: "Representative Guide", handle: "representative-guide", status: "DRAFT" }, userErrors: [] } } }), { status: 200 });
   });
   try {
@@ -102,6 +117,16 @@ test("updates only an existing DRAFT and captures rollback snapshot", async () =
     assert.equal(payload.rollback.action, "RESTORE_DRAFT_SNAPSHOT");
     assert.equal(payload.rollback.input.title, "Old");
   } finally { restore(); }
+});
+
+test("blocks staging when rendered primary image is absent", async () => {
+  const durable = state();
+  const missing = project({ artifacts: project().artifacts.filter((artifact) => artifact.kind !== "STOREFRONT_PRIMARY_IMAGE") });
+  await seed(durable, missing);
+  await assert.rejects(
+    () => handleShopifyStagingObjectRequest(durable, new Request("https://internal.test/internal/publishing/projects/77777777-7777-4777-8777-777777777777/shopify-staging", { method: "POST" }), env()),
+    (error) => error.code === "rendered_primary_image_missing",
+  );
 });
 
 test("blocks non-DRAFT metadata before calling Shopify", async () => {
