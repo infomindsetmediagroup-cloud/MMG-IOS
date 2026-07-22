@@ -1,4 +1,4 @@
-const BUILD = "kairos-shopify-staging-adapter-20260722-1";
+const BUILD = "kairos-shopify-staging-adapter-20260722-2";
 const PROJECT_KEY = "publishing:project";
 const API_VERSION = "2026-07";
 
@@ -20,6 +20,8 @@ export async function stageDraftProduct(state, project, env = {}) {
   const metadata = JSON.parse(decode(await state.storage.get(productMetadataArtifact.storageKey)));
   assertDraftMetadata(metadata);
 
+  const primaryImage = selectRenderedPrimaryImage(project);
+  const media = buildCoverMedia(primaryImage, metadata);
   const client = createShopifyClient(env);
   const existingReceipt = project.shopifyStaging?.receipt || null;
   const operationId = crypto.randomUUID();
@@ -35,14 +37,14 @@ export async function stageDraftProduct(state, project, env = {}) {
     rollback = snapshotRollback(product);
     result = await client.mutate(PRODUCT_UPDATE_MUTATION, {
       input: toProductInput(metadata, existingReceipt.productId),
-      media: buildCoverMedia(project, metadata),
+      media,
     });
     assertNoUserErrors(result?.productUpdate?.userErrors, "product_update_failed");
     result = result.productUpdate.product;
   } else {
     result = await client.mutate(PRODUCT_CREATE_MUTATION, {
       input: toProductInput(metadata),
-      media: buildCoverMedia(project, metadata),
+      media,
     });
     assertNoUserErrors(result?.productCreate?.userErrors, "product_create_failed");
     result = result.productCreate.product;
@@ -68,6 +70,11 @@ export async function stageDraftProduct(state, project, env = {}) {
     metadataArtifactId: productMetadataArtifact.id,
     metadataSha256: productMetadataArtifact.sha256,
     coverSourceAssetId: project.sourceAssets.find((asset) => asset.role === "COVER_SOURCE")?.id || null,
+    renderedPrimaryImageArtifactId: primaryImage.id,
+    renderedPrimaryImageSha256: primaryImage.sha256,
+    renderedPrimaryImageDimensions: { width: primaryImage.width, height: primaryImage.height },
+    renderedPrimaryImageUrlExpiresAt: primaryImage.signedUrlExpiresAt,
+    mediaAttached: media.length === 1,
     productPublished: false,
     publicationMutationExecuted: false,
     liveMutationAuthorized: false,
@@ -184,11 +191,17 @@ function toProductInput(metadata, id) {
   };
 }
 
-function buildCoverMedia(project, metadata) {
-  const cover = project.sourceAssets.find((asset) => asset.role === "COVER_SOURCE");
-  const sourceUrl = cover?.publicStagingUrl || cover?.signedStagingUrl || null;
-  if (!sourceUrl) return [];
-  return [{ originalSource: sourceUrl, mediaContentType: "IMAGE", alt: `${metadata.title} cover` }];
+function selectRenderedPrimaryImage(project) {
+  const artifact = project.artifacts.find((item) => item.kind === "STOREFRONT_PRIMARY_IMAGE");
+  if (!artifact) throw stagingError("rendered_primary_image_missing", "Rendered 2048×3072 primary product image is required before Shopify staging.", 409);
+  if (artifact.width !== 2048 || artifact.height !== 3072) throw stagingError("rendered_primary_image_dimensions_invalid", "Primary product image must be 2048×3072.", 409);
+  if (!artifact.signedStagingUrl) throw stagingError("rendered_primary_image_url_missing", "Rendered primary image requires a signed staging URL.", 409);
+  if (!/^[a-f0-9]{64}$/i.test(artifact.sha256 || "")) throw stagingError("rendered_primary_image_checksum_invalid", "Rendered primary image checksum is invalid.", 409);
+  return artifact;
+}
+
+function buildCoverMedia(primaryImage, metadata) {
+  return [{ originalSource: primaryImage.signedStagingUrl, mediaContentType: "IMAGE", alt: `${metadata.title} cover` }];
 }
 
 function snapshotRollback(product) {
@@ -219,6 +232,9 @@ function safeguards() {
     publicationMutationExecuted: false,
     salesChannelPublicationBlocked: true,
     liveShopifyMutationAuthorized: false,
+    renderedPrimaryImageRequired: true,
+    croppingAllowed: false,
+    redrawingAllowed: false,
     rollbackPersisted: true,
   };
 }
