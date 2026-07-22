@@ -10,9 +10,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "validate:shopify": "node scripts/validate-shopify-governance.mjs",
+    "validate:kairos-shopify": "node scripts/validate-kairos-shopify-policy.mjs",
     "validate:service-product": "node shopify/products/professional-cover-design-service/validate.mjs",
     "validate:commerce-staging-host": "vitest run backend-tests/mmg-cloudflare-staging-host.test.ts",
-    "check": "npm run typecheck && npm test && npm run validate:shopify && npm run validate:service-product",
+    "check": "npm run typecheck && npm test && npm run validate:shopify && npm run validate:kairos-shopify && npm run validate:service-product",
     "cf:dev": "wrangler dev",
     "cf:deploy": "wrangler deploy"
   },
