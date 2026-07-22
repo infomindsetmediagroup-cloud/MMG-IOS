@@ -20,9 +20,15 @@ import {
   handleProductManufacturingBridge,
   handleProductManufacturingBridgeObjectRequest,
 } from "./kairos-product-manufacturing-bridge-v1.js";
+import {
+  handlePublishingPackage,
+  handlePublishingPackageObjectRequest,
+} from "./kairos-publishing-package-v1.js";
 
 export class KairosProject extends NativeKairosProject {
   async fetch(request) {
+    const publishingPackage = await handlePublishingPackageObjectRequest(this.state, request, this.env);
+    if (publishingPackage) return publishingPackage;
     const productManufacturing = await handleProductManufacturingBridgeObjectRequest(this.state, request, this.env);
     if (productManufacturing) return productManufacturing;
     const websiteBuilderAsset = await handleWebsiteBuilderAssetObjectRequest(this.state, request);
@@ -81,6 +87,8 @@ export default {
       });
     }
 
+    const publishingPackage = await handlePublishingPackage(request, env);
+    if (publishingPackage) return publishingPackage;
     const productManufacturing = await handleProductManufacturingBridge(request, env);
     if (productManufacturing) return productManufacturing;
     const registry = await handleProductionRegistry(request, env);
