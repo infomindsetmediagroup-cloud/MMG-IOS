@@ -100,7 +100,7 @@ test("normalizes UTF-8 text and reports manuscript statistics", async () => {
   assert.equal(normalized.text, "# Title\n\nFirst   line.\n\nSecond paragraph.");
   assert.equal(normalized.headingCount, 1);
   assert.equal(normalized.paragraphCount, 3);
-  assert.equal(normalized.wordCount, 6);
+  assert.equal(normalized.wordCount, 5);
 });
 
 test("extracts paragraphs, tabs, breaks, and XML entities from DOCX", async () => {
