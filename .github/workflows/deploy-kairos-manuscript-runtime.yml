@@ -13,6 +13,9 @@ on:
       - 'web/kairos-dashboard/index.html'
       - 'web/kairos-dashboard/scripts/manuscript-*.js'
       - 'web/kairos-dashboard/styles/manuscript-*.css'
+      - 'browser-tests/manuscript-*.spec.mjs'
+      - 'playwright.config.mjs'
+      - 'package.json'
       - 'governance/kairos-builder-plugin-registry-v1.json'
       - 'scripts/validate-kairos-manuscript-activation.mjs'
       - '.github/workflows/deploy-kairos-manuscript-runtime.yml'
@@ -29,7 +32,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -45,7 +48,7 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"pending\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Validating manuscript-only deployment\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"pending\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Testing manuscript buttons before deployment\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
       - name: Check out repository
         uses: actions/checkout@v4
@@ -67,6 +70,12 @@ jobs:
           node --check web/kairos-dashboard/scripts/manuscript-project-setup.js
           node scripts/validate-kairos-manuscript-activation.mjs
           npx vitest run backend-tests/kairos-manuscript-operation-boundary.test.js backend-tests/kairos-scope-firewall.test.js
+
+      - name: Install WebKit browser
+        run: npx playwright install --with-deps webkit
+
+      - name: Tap manuscript setup buttons in mobile WebKit
+        run: npm run test:manuscript-ui
 
       - name: Install Worker dependencies
         working-directory: cloudflare/mmg-ios
@@ -106,24 +115,28 @@ jobs:
             sleep 5
           done
 
-      - name: Verify resumable manuscript setup deployed
+      - name: Verify complete controller source deployed
         run: |
           set -euo pipefail
+          root="${RUNNER_TEMP}/root.html"
           client="${RUNNER_TEMP}/manuscript-project-setup.js"
           curl --fail --silent --show-error --max-time 20 \
-            "${WORKER_URL}/scripts/manuscript-project-setup.js?verify=${GITHUB_SHA}" \
-            -o "${client}"
-          grep -q 'kairos-manuscript-project-setup-ui-20260722-2' "${client}"
-          grep -q 'two-phase-resumable' "${client}"
-          headers="${RUNNER_TEMP}/setup-probe-headers.txt"
-          body="${RUNNER_TEMP}/setup-probe.json"
-          status="$(curl --silent --show-error --max-time 20 \
-            -D "${headers}" \
-            "${WORKER_URL}/api/production-registry/manuscripts/deployment-probe-12345678/setup" \
-            -o "${body}" -w '%{http_code}' || true)"
-          test "${status}" = "404"
-          grep -qi 'X-Kairos-Manuscript-Setup: kairos-manuscript-project-setup-20260722-3' "${headers}"
-          grep -q '"code":"manuscript_setup_not_found"' "${body}"
+            "${WORKER_URL}/?verify=${GITHUB_SHA}" -o "${root}"
+          curl --fail --silent --show-error --max-time 20 \
+            "${WORKER_URL}/scripts/manuscript-project-setup.js?verify=${GITHUB_SHA}" -o "${client}"
+          grep -q 'manuscript-controller-20260722-3' "${root}"
+          grep -q 'kairos-manuscript-project-setup-ui-20260722-3' "${client}"
+          grep -q 'KairosManuscriptSetupController' "${client}"
+          grep -q 'function activeProjectId' "${client}"
+          grep -q 'function currentTitle' "${client}"
+          grep -q 'function esc' "${client}"
+          grep -q 'document.addEventListener("click", handleClick, true)' "${client}"
+          grep -q 'init();' "${client}"
+
+      - name: Tap deployed Manuscript Studio in mobile WebKit
+        env:
+          KAIROS_LIVE_URL: ${{ env.WORKER_URL }}
+        run: npx playwright test browser-tests/manuscript-live-smoke.spec.mjs --project=webkit
 
       - name: Verify website mutation firewall
         run: |
@@ -148,7 +161,7 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"success\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Manuscript setup resumable; Shopify denied\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"success\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Mobile WebKit buttons passed; Shopify denied\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
       - name: Report deployment failure
         if: ${{ failure() || cancelled() }}
@@ -160,4 +173,4 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"failure\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Manuscript deployment or verification failed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"failure\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Manuscript button validation or deployment failed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"

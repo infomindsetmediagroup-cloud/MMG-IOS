@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#05070a">
-  <meta name="mmg-build" content="kairos-command-hub-manuscript-setup-recovery-20260722-2">
+  <meta name="mmg-build" content="kairos-command-hub-manuscript-controller-20260722-3">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -30,7 +30,7 @@
   <link rel="stylesheet" href="./styles/social-production.css?v=recovery-20260714-1">
   <link rel="stylesheet" href="./styles/header-override.css?v=recovery-20260714-1">
   <link rel="stylesheet" href="./styles/shopify-analytics.css?v=recovery-20260714-1">
-  <link rel="stylesheet" href="./styles/manuscript-studio.css?v=recovery-20260714-1">
+  <link rel="stylesheet" href="./styles/manuscript-studio.css?v=manuscript-controller-20260722-3">
   <link rel="stylesheet" href="./styles/publication-operations.css?v=recovery-20260714-1">
   <link rel="stylesheet" href="./styles/publication-performance.css?v=recovery-20260714-1">
   <link rel="stylesheet" href="./styles/publication-settlement.css?v=recovery-20260714-1">
@@ -69,11 +69,12 @@
   <script type="module" src="./scripts/social-production.js?v=recovery-20260714-1"></script>
   <script type="module" src="./scripts/website-production-mobile-route.js?v=recovery-20260714-1"></script>
   <script type="module" src="./scripts/publishing-operations-center.js?v=publishing-20260722-1"></script>
+  <script type="module" src="./scripts/manuscript-studio.js?v=manuscript-controller-20260722-3"></script>
+  <script type="module" src="./scripts/manuscript-project-setup.js?v=manuscript-controller-20260722-3"></script>
   <script>
-    const modules=["shopify-analytics.js","manuscript-studio.js","manuscript-project-setup.js","manuscript-editorial-workbench.js","manuscript-manufacturing.js","manuscript-delivery.js","manuscript-platform-submission.js","publication-catalog.js","publication-operations.js","publication-performance.js","publication-settlement.js","publication-tax-compliance.js","launch-boundary.js","complete-product-engine.js","production-workspace-controller.js","publishing-production-center.js","product-media-installer.js","product-launch-control.js","website-visual-verification.js","shopify-release-control.js","website-registry.js","shopify-page-compiler.js"];
-    function versionFor(name){return name==="manuscript-project-setup.js"?"manuscript-setup-mobile-20260722-2":"product-bridge-20260717-1-manuscript-large-intake-20260717-1"}
-    function loadNext(index=0){if(index>=modules.length)return;const script=document.createElement("script");script.type="module";script.src=`./scripts/${modules[index]}?v=${versionFor(modules[index])}`;script.onload=()=>setTimeout(()=>loadNext(index+1),50);script.onerror=()=>setTimeout(()=>loadNext(index+1),50);document.body.appendChild(script)}
-    window.addEventListener("load",()=>setTimeout(()=>loadNext(),1400),{once:true});
+    const modules=["shopify-analytics.js","manuscript-editorial-workbench.js","manuscript-manufacturing.js","manuscript-delivery.js","manuscript-platform-submission.js","publication-catalog.js","publication-operations.js","publication-performance.js","publication-settlement.js","publication-tax-compliance.js","launch-boundary.js","complete-product-engine.js","production-workspace-controller.js","publishing-production-center.js","product-media-installer.js","product-launch-control.js","website-visual-verification.js","shopify-release-control.js","website-registry.js","shopify-page-compiler.js"];
+    function loadNext(index=0){if(index>=modules.length)return;const script=document.createElement("script");script.type="module";script.src=`./scripts/${modules[index]}?v=product-bridge-20260717-1-manuscript-large-intake-20260717-1`;script.onload=()=>setTimeout(()=>loadNext(index+1),50);script.onerror=()=>setTimeout(()=>loadNext(index+1),50);document.body.appendChild(script)}
+    window.addEventListener("load",()=>setTimeout(()=>loadNext(),600),{once:true});
   </script>
 </body>
 </html>

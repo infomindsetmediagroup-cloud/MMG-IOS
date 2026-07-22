@@ -1,64 +1,136 @@
-const BUILD = "kairos-manuscript-project-setup-ui-20260722-2";
+const BUILD = "kairos-manuscript-project-setup-ui-20260722-3";
 const ACTIVE_KEY = "kairos.production.active-workspace";
 const COVER_LIMIT = 8 * 1024 * 1024;
 const COVER_TIMEOUT_MS = 90_000;
 const SETUP_TIMEOUT_MS = 30_000;
 const STATUS_TIMEOUT_MS = 12_000;
 
-let busy = false;
-let phase = "";
-let error = "";
-let record = null;
-let draft = null;
-let operationId = "";
-const checkedProjects = new Set();
+const state = {
+  initialized: false,
+  mountScheduled: false,
+  busy: false,
+  phase: "",
+  error: "",
+  record: null,
+  draft: null,
+  operationId: "",
+  checkedProjects: new Set(),
+};
+
+function init() {
+  if (state.initialized) return;
+  state.initialized = true;
+
+  document.addEventListener("click", handleClick, true);
+  window.addEventListener("kairos:manuscript:restore", scheduleEnhance);
+  window.addEventListener("kairos:production:state-changed", scheduleEnhance);
+
+  const observer = new MutationObserver(scheduleEnhance);
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+
+  window.KairosManuscriptSetupController = Object.freeze({
+    build: BUILD,
+    ready: true,
+    enhance: scheduleEnhance,
+    getState: () => ({
+      busy: state.busy,
+      phase: state.phase,
+      error: state.error,
+      operationId: state.operationId,
+      hasRecord: Boolean(state.record),
+      hasDraft: Boolean(state.draft),
+    }),
+  });
+
+  scheduleEnhance();
+}
+
+function scheduleEnhance() {
+  if (state.mountScheduled) return;
+  state.mountScheduled = true;
+  queueMicrotask(() => {
+    state.mountScheduled = false;
+    enhance();
+  });
+}
 
 function enhance() {
   const result = document.querySelector("#manuscript-studio-overlay .manuscript-result");
-  if (!result || result.querySelector("#manuscript-project-setup")) return;
   const projectId = activeProjectId();
-  if (!projectId) return;
+  if (!result || !projectId) return;
 
-  const section = document.createElement("section");
-  section.id = "manuscript-project-setup";
-  section.className = "manuscript-project-setup";
-  section.innerHTML = view(projectId);
-  result.appendChild(section);
-  bind(section, projectId);
+  let section = result.querySelector("#manuscript-project-setup");
+  const isNew = !section;
+  const projectChanged = section?.dataset.projectId && section.dataset.projectId !== projectId;
 
-  if (!busy && !record && !checkedProjects.has(projectId)) {
-    checkedProjects.add(projectId);
-    resumeExisting(projectId);
+  if (projectChanged) {
+    section.remove();
+    section = null;
+    resetProjectState();
+  }
+
+  if (!section) {
+    section = document.createElement("section");
+    section.id = "manuscript-project-setup";
+    section.className = "manuscript-project-setup";
+    section.dataset.projectId = projectId;
+    section.dataset.controllerBuild = BUILD;
+    result.appendChild(section);
+    render(section);
+  }
+
+  if ((isNew || projectChanged) && !state.busy && !state.record && !state.checkedProjects.has(projectId)) {
+    state.checkedProjects.add(projectId);
+    void resumeExisting(projectId);
   }
 }
 
+function resetProjectState() {
+  state.busy = false;
+  state.phase = "";
+  state.error = "";
+  state.record = null;
+  state.draft = null;
+  state.operationId = "";
+}
+
+function render(section = currentSection()) {
+  if (!section) {
+    scheduleEnhance();
+    return;
+  }
+
+  section.setAttribute("aria-busy", state.busy ? "true" : "false");
+  section.innerHTML = view();
+}
+
 function view() {
-  if (busy) {
+  if (state.busy) {
     return `
       <p class="eyebrow">Project setup</p>
-      <h3>${esc(phase || "Saving production assignment…")}</h3>
-      <p class="manuscript-progress">Kairos is completing one bounded step at a time. This screen will not wait indefinitely.</p>
-      <p class="manuscript-note">Operation: ${esc(operationId || "starting")}</p>
-      <button class="secondary" data-setup-status>Check saved status</button>
+      <h3>${esc(state.phase || "Saving production assignment…")}</h3>
+      <p class="manuscript-progress">Kairos is completing one bounded step at a time.</p>
+      <p class="manuscript-note">Operation: ${esc(state.operationId || "starting")}</p>
+      <button type="button" class="secondary" data-setup-status>Check saved status</button>
     `;
   }
 
-  if (record) {
+  if (state.record) {
     return `
       <p class="eyebrow">Production assignment</p>
-      <h3>${esc(record.setup?.status || record.status)}</h3>
-      <p>${esc(record.nextAction || "Project setup completed.")}</p>
-      <div class="issue-list">${(record.setup?.assignments || []).map((assignment) => `
+      <h3>${esc(state.record.setup?.status || state.record.status || "assigned-to-production")}</h3>
+      <p>${esc(state.record.nextAction || "Project setup completed.")}</p>
+      <div class="issue-list">${(state.record.setup?.assignments || []).map((assignment) => `
         <article><b>${esc(assignment.department)}</b><p>${esc(assignment.role)}</p><small>${esc(assignment.status)}</small></article>
       `).join("")}</div>
-      <div class="issue-list">${(record.setup?.milestones || []).map((milestone) => `
+      <div class="issue-list">${(state.record.setup?.milestones || []).map((milestone) => `
         <article><b>${esc(milestone.label)}</b><p>${esc(milestone.status)}</p></article>
       `).join("")}</div>
       <p class="manuscript-note">The project is stored in the durable production registry and can be resumed across sessions and devices.</p>
     `;
   }
 
-  const value = draft || {};
+  const value = state.draft || {};
   return `
     <p class="eyebrow">Next stage</p>
     <h3>Complete Project Setup</h3>
@@ -70,10 +142,10 @@ function view() {
     <div class="manuscript-grid">
       <label>Publishing service<select data-setup-service>
         <option value="">Select service</option>
-        ${serviceOption("manuscript-correction", "Manuscript Correction", value.service)}
-        ${serviceOption("editorial-production", "Editorial Production", value.service)}
-        ${serviceOption("complete-publishing-package", "Complete Publishing Package", value.service)}
-        ${serviceOption("digital-edition-production", "Digital Edition Production", value.service)}
+        ${option("manuscript-correction", "Manuscript Correction", value.service)}
+        ${option("editorial-production", "Editorial Production", value.service)}
+        ${option("complete-publishing-package", "Complete Publishing Package", value.service)}
+        ${option("digital-edition-production", "Digital Edition Production", value.service)}
       </select></label>
       <label>Edition<select data-setup-edition>
         ${option("multi-format", "Multi-format", value.edition || "multi-format")}
@@ -92,39 +164,67 @@ function view() {
         ${option("not-required", "Not required", value.isbnStatus)}
       </select></label>
     </div>
-    <label>Customer-supplied cover<input data-setup-cover type="file" accept="image/png,image/jpeg"><small>PNG or JPEG, up to 8 MB. The cover uploads as its own resumable step.</small></label>
+    <label>Customer-supplied cover<input data-setup-cover type="file" accept="image/png,image/jpeg"><small>PNG or JPEG, up to 8 MB.</small></label>
     <label>Production notes<textarea data-setup-notes maxlength="4000" placeholder="Special instructions, deadlines, edition notes, or customer requirements.">${esc(value.notes || "")}</textarea></label>
-    ${error ? `<p class="manuscript-error">${esc(error)}</p>` : ""}
-    <button class="primary" data-setup-submit>${value.coverStored ? "Retry Assignment Save" : "Save Setup & Assign Production"}</button>
-    <button class="secondary" data-setup-status>Check saved status</button>
+    ${state.error ? `<p class="manuscript-error" role="alert">${esc(state.error)}</p>` : ""}
+    <div class="manuscript-actions">
+      <button type="button" class="primary" data-setup-submit>${value.coverStored ? "Retry Assignment Save" : "Save Setup & Assign Production"}</button>
+      <button type="button" class="secondary" data-setup-status>Check saved status</button>
+    </div>
   `;
 }
 
-function bind(section, projectId) {
-  section.querySelector("[data-setup-submit]")?.addEventListener("click", () => submit(section, projectId));
-  section.querySelector("[data-setup-status]")?.addEventListener("click", () => recover(projectId, true));
+function handleClick(event) {
+  const button = event.target instanceof Element
+    ? event.target.closest("[data-setup-submit], [data-setup-status]")
+    : null;
+  if (!button || !button.closest("#manuscript-project-setup")) return;
+
+  event.preventDefault();
+
+  const section = button.closest("#manuscript-project-setup");
+  const projectId = section?.dataset.projectId || activeProjectId();
+  if (!section || !projectId) {
+    state.error = "Kairos could not identify the active manuscript project. Reopen Manuscript Studio and try again.";
+    render(section);
+    return;
+  }
+
+  if (button.matches("[data-setup-submit]")) {
+    void submit(section, projectId);
+    return;
+  }
+
+  void recover(projectId, true);
 }
 
 async function submit(section, projectId) {
-  if (busy) return;
+  if (state.busy) return;
 
   const nextDraft = snapshot(section);
   const validation = validate(nextDraft);
-  if (validation) return fail(validation);
+  if (validation) {
+    state.error = validation;
+    state.draft = nextDraft;
+    render(section);
+    return;
+  }
 
-  draft = nextDraft;
-  operationId = newOperationId();
-  busy = true;
-  error = "";
-  phase = draft.cover && !draft.coverStored ? "Uploading customer cover…" : "Saving production assignment…";
-  refresh();
+  state.draft = nextDraft;
+  state.operationId = newOperationId();
+  state.busy = true;
+  state.error = "";
+  state.phase = state.draft.cover && !state.draft.coverStored
+    ? "Uploading customer cover…"
+    : "Saving production assignment…";
+  render(section);
 
   try {
-    if (draft.cover && !draft.coverStored) {
-      await uploadCover(projectId, draft.cover, operationId);
-      draft.coverStored = true;
-      phase = "Saving production assignment…";
-      refresh();
+    if (state.draft.cover && !state.draft.coverStored) {
+      await uploadCover(projectId, state.draft.cover, state.operationId);
+      state.draft.coverStored = true;
+      state.phase = "Saving production assignment…";
+      render();
     }
 
     const body = await requestJSON(
@@ -135,41 +235,41 @@ async function submit(section, projectId) {
         headers: {
           "Content-Type": "application/json",
           "X-MMG-Client-Build": BUILD,
-          "X-Kairos-Operation-Id": operationId,
-          "X-Kairos-Idempotency-Key": operationId,
+          "X-Kairos-Operation-Id": state.operationId,
+          "X-Kairos-Idempotency-Key": state.operationId,
         },
         body: JSON.stringify({
-          authorName: draft.authorName,
-          publicationTitle: draft.publicationTitle,
-          service: draft.service,
-          edition: draft.edition,
-          trimSize: draft.trimSize,
-          isbnStatus: draft.isbnStatus,
-          notes: draft.notes,
-          operationId,
+          authorName: state.draft.authorName,
+          publicationTitle: state.draft.publicationTitle,
+          service: state.draft.service,
+          edition: state.draft.edition,
+          trimSize: state.draft.trimSize,
+          isbnStatus: state.draft.isbnStatus,
+          notes: state.draft.notes,
+          operationId: state.operationId,
         }),
       },
       SETUP_TIMEOUT_MS,
     );
 
-    record = body;
-    draft = null;
+    state.record = body;
+    state.draft = null;
+    state.error = "";
     window.KairosProductionWorkspace?.refresh?.();
+    window.dispatchEvent(new CustomEvent("kairos:production:state-changed"));
   } catch (caught) {
-    phase = "Checking whether the assignment was saved…";
-    refresh();
+    state.phase = "Checking whether the assignment was saved…";
+    render();
     const recovered = await recover(projectId, false);
-    if (!recovered) {
-      error = userMessage(caught);
-    }
+    if (!recovered) state.error = userMessage(caught);
   } finally {
-    busy = false;
-    phase = "";
-    refresh();
+    state.busy = false;
+    state.phase = "";
+    render();
   }
 }
 
-async function uploadCover(projectId, file, currentOperationId) {
+async function uploadCover(projectId, file, operationId) {
   await requestJSON(
     `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/setup/cover`,
     {
@@ -179,7 +279,7 @@ async function uploadCover(projectId, file, currentOperationId) {
         "Content-Type": file.type,
         "X-Filename": file.name || "customer-cover.png",
         "X-MMG-Client-Build": BUILD,
-        "X-Kairos-Operation-Id": currentOperationId,
+        "X-Kairos-Operation-Id": operationId,
       },
       body: file,
     },
@@ -194,15 +294,19 @@ async function resumeExisting(projectId) {
       { method: "GET", credentials: "include", headers: { "X-MMG-Client-Build": BUILD } },
       STATUS_TIMEOUT_MS,
     );
-    if (response.status === 404) return;
+    if (response.status === 404) return false;
     const body = await parseJSON(response);
     if (response.ok && body?.setup) {
-      record = body;
-      refresh();
+      state.record = body;
+      state.draft = null;
+      state.error = "";
+      render();
+      return true;
     }
   } catch {
     // Initial recovery is best-effort and must never block the form.
   }
+  return false;
 }
 
 async function recover(projectId, showFailure) {
@@ -214,23 +318,24 @@ async function recover(projectId, showFailure) {
     );
     const body = await parseJSON(response);
     if (response.ok && body?.setup) {
-      record = body;
-      draft = null;
-      error = "";
+      state.record = body;
+      state.draft = null;
+      state.error = "";
       window.KairosProductionWorkspace?.refresh?.();
-      if (showFailure) refresh();
+      render();
       return true;
     }
+
     if (showFailure) {
-      error = body?.operation?.status === "working"
+      state.error = body?.operation?.status === "working"
         ? "Kairos is still completing the saved operation. Wait a moment and check again."
         : body?.error?.message || "No saved production assignment was found yet.";
-      refresh();
+      render();
     }
   } catch (caught) {
     if (showFailure) {
-      error = userMessage(caught);
-      refresh();
+      state.error = userMessage(caught);
+      render();
     }
   }
   return false;
@@ -245,12 +350,12 @@ async function requestJSON(url, init, timeoutMs) {
 
 async function fetchWithTimeout(url, init, timeoutMs) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort("timeout"), timeoutMs);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, { ...init, signal: controller.signal });
   } catch (caught) {
     if (controller.signal.aborted) {
-      throw new Error("Kairos did not respond in time. The app checked durable storage so you can safely retry without duplicating the assignment.");
+      throw new Error("Kairos did not respond in time. Check saved status, then retry safely.");
     }
     throw caught;
   } finally {
@@ -277,8 +382,8 @@ function snapshot(section) {
     trimSize: section.querySelector("[data-setup-trim]")?.value || "6x9",
     isbnStatus: section.querySelector("[data-setup-isbn]")?.value || "not-decided",
     notes: section.querySelector("[data-setup-notes]")?.value || "",
-    cover: section.querySelector("[data-setup-cover]")?.files?.[0] || draft?.cover || null,
-    coverStored: Boolean(draft?.coverStored),
+    cover: section.querySelector("[data-setup-cover]")?.files?.[0] || state.draft?.cover || null,
+    coverStored: Boolean(state.draft?.coverStored),
   };
 }
 
@@ -293,8 +398,25 @@ function validate(value) {
   return "";
 }
 
-function serviceOption(value, label, selected) {
-  return option(value, label, selected);
+function currentSection() {
+  return document.querySelector("#manuscript-project-setup");
+}
+
+function activeProjectId() {
+  const active = readJSON(sessionStorage.getItem(ACTIVE_KEY));
+  return active?.workspace === "manuscript-studio" ? active.projectId || null : null;
+}
+
+function currentTitle() {
+  return document.querySelector("#manuscript-studio-overlay .manuscript-result > h3")?.textContent?.trim() || "";
+}
+
+function readJSON(value) {
+  try {
+    return JSON.parse(value || "null");
+  } catch {
+    return null;
+  }
 }
 
 function option(value, label, selected) {
@@ -309,29 +431,6 @@ function userMessage(caught) {
   return caught?.message || "Project setup failed. Check saved status, then retry.";
 }
 
-function refresh() {
-  document.querySelector("#manuscript-project-setup")?.remove();
-  enhance();
-}
-
-function fail(message) {
-  error = message;
-  refresh();
-}
-
-function activeProjectId() {
-  try {
-    const active = JSON.parse(sessionStorage.getItem(ACTIVE_KEY) || "null");
-    return active?.workspace === "manuscript-studio" ? active.projectId || null : null;
-  } catch {
-    return null;
-  }
-}
-
-function currentTitle() {
-  return document.querySelector("#manuscript-studio-overlay .manuscript-result h3")?.textContent?.trim() || "";
-}
-
 function esc(value) {
   return String(value ?? "").replace(/[&<>'"]/g, (character) => ({
     "&": "&amp;",
@@ -342,14 +441,8 @@ function esc(value) {
   })[character]);
 }
 
-window.KairosManuscriptProjectSetup = Object.freeze({
-  build: BUILD,
-  mode: "two-phase-resumable",
-  checkStatus: () => {
-    const projectId = activeProjectId();
-    return projectId ? recover(projectId, true) : Promise.resolve(false);
-  },
-});
-
-new MutationObserver(enhance).observe(document.documentElement, { childList: true, subtree: true });
-enhance();
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", init, { once: true });
+} else {
+  init();
+}
