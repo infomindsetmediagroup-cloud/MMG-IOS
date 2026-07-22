@@ -45,26 +45,23 @@ jobs:
       - name: Install Worker dependencies
         run: npm install --ignore-scripts --no-audit --no-fund
 
-      - name: Run publishing pipeline tests
-        shell: bash
-        run: |
-          set +e
-          node --test \
-            test/kairos-*publishing*.test.js \
-            test/kairos-*manuscript*.test.js \
-            test/kairos-*deliverable*.test.js \
-            test/kairos-*package*.test.js \
-            test/kairos-*cover*.test.js \
-            test/kairos-*shopify*.test.js \
-            test/kairos-publishing-operational-fixture-v1.test.js \
-            > "${RUNNER_TEMP}/publishing-tests.log" 2>&1
-          status=$?
-          if [ "$status" -ne 0 ]; then
-            echo "Publishing pipeline test failure (last 180 lines):"
-            tail -n 180 "${RUNNER_TEMP}/publishing-tests.log"
-            exit "$status"
-          fi
-          tail -n 40 "${RUNNER_TEMP}/publishing-tests.log"
+      - name: Validate manuscript pipeline
+        run: node --test test/kairos-*manuscript*.test.js
+
+      - name: Validate publishing orchestration
+        run: node --test test/kairos-*publishing*.test.js test/kairos-publishing-operational-fixture-v1.test.js
+
+      - name: Validate deliverable pipeline
+        run: node --test test/kairos-*deliverable*.test.js
+
+      - name: Validate publishing packages
+        run: node --test test/kairos-*package*.test.js
+
+      - name: Validate cover production
+        run: node --test test/kairos-*cover*.test.js
+
+      - name: Validate Shopify staging boundary
+        run: node --test test/kairos-*shopify*.test.js
 
       - name: Validate Worker configuration
         run: npm run validate:production
