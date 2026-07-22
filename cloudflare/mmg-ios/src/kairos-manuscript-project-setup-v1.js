@@ -1,4 +1,4 @@
-const BUILD = "kairos-manuscript-project-setup-20260713-1";
+const BUILD = "kairos-manuscript-project-setup-20260722-2";
 const COVER_CHUNK_BYTES = 96 * 1024;
 const MAX_COVER_BYTES = 8 * 1024 * 1024;
 const SERVICES = new Set(["manuscript-correction","editorial-production","complete-publishing-package","digital-edition-production"]);
@@ -78,7 +78,9 @@ async function storeCover(state, projectId, file) {
   await removeCover(state,projectId);
   const bytes = new Uint8Array(await file.arrayBuffer());
   const chunks = Math.ceil(bytes.length/COVER_CHUNK_BYTES);
-  for (let i=0;i<chunks;i++) await state.storage.put(`${coverPrefix(projectId)}${i}`,bytes.slice(i*COVER_CHUNK_BYTES,Math.min(bytes.length,(i+1)*COVER_CHUNK_BYTES)));
+  const entries = {};
+  for (let i=0;i<chunks;i++) entries[`${coverPrefix(projectId)}${i}`] = bytes.slice(i*COVER_CHUNK_BYTES,Math.min(bytes.length,(i+1)*COVER_CHUNK_BYTES));
+  if (Object.keys(entries).length) await state.storage.put(entries);
   const metadata={projectId,filename:safeFilename(file.name||"customer-cover.png"),contentType:file.type,size:bytes.length,chunks,storedAt:new Date().toISOString(),downloadURL:`/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/setup/cover`};
   await state.storage.put(coverMetadataKey(projectId),metadata);
   return metadata;
@@ -87,16 +89,17 @@ async function storeCover(state, projectId, file) {
 async function readCover(state, projectId) {
   const metadata=await state.storage.get(coverMetadataKey(projectId));
   if(!metadata) return json({status:"not-found",error:{code:"customer_cover_not_found",message:"Customer cover was not found."}},404);
+  const keys=Array.from({length:Number(metadata.chunks||0)},(_,i)=>`${coverPrefix(projectId)}${i}`);
+  const values=keys.length?await state.storage.get(keys):new Map();
   const out=new Uint8Array(metadata.size);let offset=0;
-  for(let i=0;i<metadata.chunks;i++){const value=await state.storage.get(`${coverPrefix(projectId)}${i}`);if(!value)throw fail(502,"cover_chunk_missing","A stored cover chunk is missing.");const chunk=value instanceof Uint8Array?value:new Uint8Array(value);out.set(chunk,offset);offset+=chunk.length;}
+  for(const key of keys){const value=values.get(key);if(!value)throw fail(502,"cover_chunk_missing","A stored cover chunk is missing.");const chunk=value instanceof Uint8Array?value:new Uint8Array(value);out.set(chunk,offset);offset+=chunk.length;}
   return new Response(out,{status:200,headers:{"Content-Type":metadata.contentType,"Content-Disposition":`inline; filename="${metadata.filename.replace(/[\"\r\n]/g,"")}"`,"Cache-Control":"private, no-store","X-Kairos-Manuscript-Setup":BUILD}});
 }
 
 async function deleteCover(state, projectId){await removeCover(state,projectId);return json({status:"deleted",build:BUILD,projectId});}
-async function removeCover(state,projectId){const metadata=await state.storage.get(coverMetadataKey(projectId));if(!metadata)return;for(let i=0;i<Number(metadata.chunks||0);i++)await state.storage.delete(`${coverPrefix(projectId)}${i}`);await state.storage.delete(coverMetadataKey(projectId));}
+async function removeCover(state,projectId){const metadata=await state.storage.get(coverMetadataKey(projectId));if(!metadata)return;const keys=Array.from({length:Number(metadata.chunks||0)},(_,i)=>`${coverPrefix(projectId)}${i}`);if(keys.length)await state.storage.delete(keys);await state.storage.delete(coverMetadataKey(projectId));}
 
 async function updateRegistry(state,setup){const records=(await state.storage.get("production-registry"))||{};const current=records[setup.projectId]||{};records[setup.projectId]={...current,projectId:setup.projectId,projectType:"manuscript-studio",title:setup.publicationTitle,status:setup.status,stage:setup.currentStage,progress:setup.progress,activeWorkspace:"manuscript-studio",summary:`${setup.authorName} · ${setup.service} · ${setup.coverStatus}`,nextAction:setup.cover?"Begin editorial and production work.":"Upload the customer-supplied cover.",projectSetup:true,coverStored:Boolean(setup.cover),assignments:setup.assignments,milestones:setup.milestones,checkpoints:merge(current.checkpoints,{id:"project-setup",label:"Project setup and production assignment completed",status:"completed",recordedAt:setup.updatedAt}),updatedAt:setup.updatedAt,revision:Number(current.revision||0)+1,ownerScope:"mmg-executive",externalInferenceAPI:false};await state.storage.put("production-registry",records);}
-
 function milestone(id,label,status,completedAt){return{id,label,status,completedAt};}
 function publicCover(value){const{chunks,...rest}=value;return rest;}
 function merge(values,item){const list=Array.isArray(values)?values.filter(v=>v?.id!==item.id):[];return[...list.slice(-29),item];}
