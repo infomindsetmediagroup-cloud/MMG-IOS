@@ -22,6 +22,34 @@ describe("Kairos manuscript-only operation boundary", () => {
     expect((await inspectManuscriptOperation(request("/api/production-registry/projects/manuscript-studio-12345678", "PATCH", {}))).allowed).toBe(true);
   });
 
+  it("allows only the exact automatic manuscript build, Shopify draft, and live-approval routes", async () => {
+    const cases = [
+      ["run", "manuscript-production-package"],
+      ["shopify-draft", "approval-gated-shopify-draft"],
+      ["shopify-publish", "approval-gated-shopify-publication"],
+    ];
+
+    for (const [action, scope] of cases) {
+      const result = await inspectManuscriptOperation(request(
+        `/api/production-registry/manuscripts/manuscript-studio-12345678/auto-pipeline/${action}`,
+        "POST",
+        {},
+      ));
+      expect(result.allowed).toBe(true);
+      expect(result.scope).toBe(scope);
+    }
+
+    for (const path of [
+      "/api/production-registry/manuscripts/manuscript-studio-12345678/auto-pipeline/shopify-draft/force",
+      "/api/production-registry/manuscripts/manuscript-studio-12345678/auto-pipeline/product-media",
+      "/api/production-registry/manuscripts/manuscript-studio-12345678/auto-pipeline/shopify-publish-now",
+    ]) {
+      const result = await inspectManuscriptOperation(request(path, "POST", {}));
+      expect(result.allowed).toBe(false);
+      expect(result.code).toBe("WEBSITE_MUTATION_DENIED");
+    }
+  });
+
   it("allows only an exact manuscript workspace registration", async () => {
     const manuscript = await inspectManuscriptOperation(request(
       "/api/production-registry/projects",
@@ -64,13 +92,16 @@ describe("Kairos manuscript-only operation boundary", () => {
     expect(website.code).toBe("NON_MANUSCRIPT_HUB_ACTION_DENIED");
   });
 
-  it("denies Shopify, navigation, homepage, theme, and product publication mutations", async () => {
+  it("denies direct Shopify, navigation, homepage, theme, and product publication mutations", async () => {
     for (const path of [
       "/api/shopify/page-shell/publish",
       "/api/navigation/native-main-menu/publish",
       "/api/theme/menu-hotfix/publish",
       "/api/website-builder/publish",
       "/api/product-publication/publish",
+      "/api/shopify/product-publication/execute",
+      "/api/shopify/product-media/execute",
+      "/api/shopify/product-launch/publish",
     ]) {
       const result = await inspectManuscriptOperation(request(path, "POST", {}));
       expect(result.allowed).toBe(false);
