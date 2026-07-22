@@ -1,4 +1,6 @@
-const BUILD = "kairos-shopify-staging-adapter-20260722-2";
+import { getShopifyAdminAccessToken } from "./kairos-shopify-auth-v1.js";
+
+const BUILD = "kairos-shopify-staging-adapter-20260722-3";
 const PROJECT_KEY = "publishing:project";
 const API_VERSION = "2026-07";
 
@@ -55,6 +57,7 @@ export async function stageDraftProduct(state, project, env = {}) {
   if (result.status !== "DRAFT") throw stagingError("shopify_draft_guard_failed", "Shopify returned a non-DRAFT product.", 502);
 
   const completedAt = new Date().toISOString();
+  const auth = client.lastAuthentication();
   const receipt = {
     schemaVersion: "1.0.0",
     build: BUILD,
@@ -66,7 +69,9 @@ export async function stageDraftProduct(state, project, env = {}) {
     handle: result.handle,
     status: result.status,
     title: result.title,
-    adminGraphqlApiVersion: String(env.SHOPIFY_ADMIN_API_VERSION || API_VERSION),
+    adminGraphqlApiVersion: String(env.SHOPIFY_ADMIN_API_VERSION || env.SHOPIFY_API_VERSION || API_VERSION),
+    authenticationMode: auth?.source || "UNKNOWN",
+    authenticationExpiresAt: auth?.expiresAt || null,
     metadataArtifactId: productMetadataArtifact.id,
     metadataSha256: productMetadataArtifact.sha256,
     coverSourceAssetId: project.sourceAssets.find((asset) => asset.role === "COVER_SOURCE")?.id || null,
@@ -142,17 +147,19 @@ async function rollbackStaging(state, project, env) {
 
 export function createShopifyClient(env) {
   const shop = String(env.SHOPIFY_STORE_DOMAIN || "").replace(/^https?:\/\//, "").replace(/\/$/, "");
-  const token = String(env.SHOPIFY_ADMIN_ACCESS_TOKEN || "");
-  const version = String(env.SHOPIFY_ADMIN_API_VERSION || API_VERSION);
-  if (!shop || !token) throw stagingError("shopify_credentials_unavailable", "Shopify staging credentials are unavailable.", 503);
+  const version = String(env.SHOPIFY_ADMIN_API_VERSION || env.SHOPIFY_API_VERSION || API_VERSION);
+  if (!shop) throw stagingError("shopify_credentials_unavailable", "SHOPIFY_STORE_DOMAIN is unavailable.", 503);
   const endpoint = `https://${shop}/admin/api/${version}/graphql.json`;
+  let lastAuth = null;
 
   async function execute(query, variables) {
+    const authentication = await getShopifyAdminAccessToken(env);
+    lastAuth = authentication;
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Shopify-Access-Token": token,
+        "X-Shopify-Access-Token": authentication.accessToken,
       },
       body: JSON.stringify({ query, variables }),
     });
@@ -161,7 +168,7 @@ export function createShopifyClient(env) {
     if (payload?.errors?.length) throw stagingError("shopify_graphql_failed", payload.errors.map((item) => item.message).join("; "), 502);
     return payload?.data || {};
   }
-  return { query: execute, mutate: execute };
+  return { query: execute, mutate: execute, lastAuthentication: () => lastAuth };
 }
 
 function assertStagingEligible(project) {
@@ -236,6 +243,7 @@ function safeguards() {
     croppingAllowed: false,
     redrawingAllowed: false,
     rollbackPersisted: true,
+    clientCredentialsSupported: true,
   };
 }
 
