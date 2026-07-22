@@ -80,10 +80,11 @@ test("deployed Content route opens and registers a durable Manuscript Studio wor
   expect(errors).toEqual([]);
 });
 
-test("deployed iPhone flow completes intake, cover upload, and production assignment", async ({ page }) => {
+test("deployed iPhone flow completes intake and assignment without an editorial request storm", async ({ page }) => {
   const errors = [];
   const calls = [];
   let savedSetup = false;
+  let editorialReads = 0;
 
   page.on("pageerror", (error) => errors.push(error.message));
 
@@ -190,6 +191,48 @@ test("deployed iPhone flow completes intake, cover upload, and production assign
       return;
     }
 
+    if (method === "GET" && /^\/api\/production-registry\/manuscripts\/[^/]+\/editorial$/.test(path)) {
+      editorialReads += 1;
+      calls.push({ method, path, role: "editorial" });
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          status: "ready",
+          editorial: {
+            status: "not-started",
+            stage: "editorial-intake",
+            currentVersionId: null,
+            versions: [],
+            review: null,
+          },
+        }),
+      });
+      return;
+    }
+
+    if (method === "GET" && /^\/api\/production-registry\/manuscripts\/[^/]+\/source\/text$/.test(path)) {
+      calls.push({ method, path, role: "editorial-source" });
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ manuscript: "The preserved manuscript source for the deployed WebKit validation." }),
+      });
+      return;
+    }
+
+    if (method === "GET" && /^\/api\/production-registry\/manuscripts\/[^/]+\/(manufacturing|delivery|platform-submission)$/.test(path)) {
+      const domain = path.split("/").at(-1);
+      calls.push({ method, path, role: domain });
+      const key = domain === "platform-submission" ? "submission" : domain;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ [key]: null }),
+      });
+      return;
+    }
+
     await route.continue();
   });
 
@@ -220,7 +263,11 @@ test("deployed iPhone flow completes intake, cover upload, and production assign
   await expect(overlay.locator("#manuscript-project-setup")).toContainText(
     "Begin the assigned editorial and production queue.",
   );
+  await expect(overlay.locator("#manuscript-editorial-workbench")).toBeVisible({ timeout: 15_000 });
+  await expect.poll(() => editorialReads).toBe(1);
+  await page.waitForTimeout(1_000);
 
+  expect(editorialReads).toBe(1);
   expect(calls.some((call) => call.role === "source")).toBe(true);
   expect(calls.some((call) => call.role === "intake")).toBe(true);
   expect(calls.some((call) => call.role === "registry")).toBe(true);
