@@ -30,7 +30,9 @@ new_sqlite_classes = ["KairosProject"]
 # Required before production activation:
 # `wrangler secret put KAIROS_API_TOKEN`
 # `wrangler secret put KAIROS_MEDIA_SIGNING_SECRET`
-# `wrangler secret put SHOPIFY_ADMIN_ACCESS_TOKEN`
+# `wrangler secret put SHOPIFY_CLIENT_ID`
+# `wrangler secret put SHOPIFY_CLIENT_SECRET`
+# Optional legacy fallback: `wrangler secret put SHOPIFY_ADMIN_ACCESS_TOKEN`
 # These secrets protect project routes, signed staging media, and Shopify DRAFT staging.
 
 [vars]
