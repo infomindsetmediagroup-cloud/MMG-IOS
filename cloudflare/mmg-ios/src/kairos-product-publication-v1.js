@@ -29,11 +29,12 @@ async function prepare(request, env) {
     const existing = await findProduct(env, product.handle);
     const releaseId = crypto.randomUUID();
     const templateSuffix = normalizeTemplateSuffix(body?.templateSuffix, product.title);
+    const digitalTemplate = templateSuffix === "mmg-ai-image-mastery" || templateSuffix === "mmg-digital-download";
     const desired = {
       title: String(product.title).slice(0, 255),
       handle: String(product.handle).slice(0, 255),
       descriptionHtml: String(product.shopifyHTML),
-      productType: String(body?.productType || product.productType || "Digital Download").slice(0, 255),
+      productType: String(body?.productType || (digitalTemplate ? "Digital Download" : product.productType || "Book")).slice(0, 255),
       tags: Array.isArray(product.tags) ? product.tags.map(String).slice(0, 40) : [],
       seo: { title: String(product?.seo?.title || product.title).slice(0, 70), description: String(product?.seo?.metaDescription || product.shortDescription || "").slice(0, 320) },
       status: "DRAFT",
