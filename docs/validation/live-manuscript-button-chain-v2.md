@@ -1,0 +1,1 @@
+The deployed mobile WebKit validation must prove the full Manuscript Studio interaction chain from Content center through intake, project setup, cover upload, production assignment, and the assigned success state. The synthetic browser test intercepts API requests and therefore does not modify production records or Shopify.
