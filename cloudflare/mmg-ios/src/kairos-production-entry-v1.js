@@ -24,9 +24,12 @@ import {
   handlePublishingPackage,
   handlePublishingPackageObjectRequest,
 } from "./kairos-publishing-package-v1.js";
+import { handleManuscriptRunObjectRequest } from "./kairos-manuscript-runner-v1.js";
 
 export class KairosProject extends NativeKairosProject {
   async fetch(request) {
+    const manuscriptRun = await handleManuscriptRunObjectRequest(this.state, request, this.env);
+    if (manuscriptRun) return manuscriptRun;
     const publishingPackage = await handlePublishingPackageObjectRequest(this.state, request, this.env);
     if (publishingPackage) return publishingPackage;
     const productManufacturing = await handleProductManufacturingBridgeObjectRequest(this.state, request, this.env);
