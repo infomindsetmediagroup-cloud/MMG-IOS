@@ -28,100 +28,46 @@ permissions:
   contents: read
 
 jobs:
-  discover-tests:
+  publishing-pipeline:
     runs-on: ubuntu-latest
-    outputs:
-      publishing: ${{ steps.discover.outputs.publishing }}
-      cover: ${{ steps.discover.outputs.cover }}
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: cloudflare/mmg-ios
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Discover publishing and cover tests
-        id: discover
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Worker dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Validate publishing orchestration
         shell: bash
         run: |
           set -euo pipefail
-          publishing="$(node -e 'const fs=require("fs");const p="cloudflare/mmg-ios/test";const files=fs.readdirSync(p).filter((name)=>name.endsWith(".test.js")&&name.includes("publishing")).sort().map((name)=>`test/${name}`);process.stdout.write(JSON.stringify(files));')"
-          cover="$(node -e 'const fs=require("fs");const p="cloudflare/mmg-ios/test";const files=fs.readdirSync(p).filter((name)=>name.endsWith(".test.js")&&name.includes("cover")).sort().map((name)=>`test/${name}`);process.stdout.write(JSON.stringify(files));')"
-          test "${publishing}" != "[]"
-          test "${cover}" != "[]"
-          echo "publishing=${publishing}" >> "${GITHUB_OUTPUT}"
-          echo "cover=${cover}" >> "${GITHUB_OUTPUT}"
+          mapfile -t tests < <(find test -maxdepth 1 -type f -name 'kairos-*publishing*.test.js' -print | sort)
+          test "${#tests[@]}" -gt 0
+          for test_file in "${tests[@]}"; do
+            echo "Running ${test_file}"
+            node --test "${test_file}"
+          done
 
-  publishing-orchestration:
-    needs: discover-tests
-    name: Publishing orchestration · ${{ matrix.test }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        test: ${{ fromJSON(needs.discover-tests.outputs.publishing) }}
-    defaults:
-      run:
-        working-directory: cloudflare/mmg-ios
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install Worker dependencies
-        run: npm install --ignore-scripts --no-audit --no-fund
-
-      - name: Run ${{ matrix.test }}
-        run: node --test "${{ matrix.test }}"
-
-  cover-production:
-    needs: discover-tests
-    name: Cover production · ${{ matrix.test }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        test: ${{ fromJSON(needs.discover-tests.outputs.cover) }}
-    defaults:
-      run:
-        working-directory: cloudflare/mmg-ios
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install Worker dependencies
-        run: npm install --ignore-scripts --no-audit --no-fund
-
-      - name: Run ${{ matrix.test }}
-        run: node --test "${{ matrix.test }}"
-
-  publishing-pipeline:
-    needs: [publishing-orchestration, cover-production]
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    defaults:
-      run:
-        working-directory: cloudflare/mmg-ios
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install Worker dependencies
-        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Validate cover production
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t tests < <(find test -maxdepth 1 -type f -name 'kairos-*cover*.test.js' -print | sort)
+          test "${#tests[@]}" -gt 0
+          for test_file in "${tests[@]}"; do
+            echo "Running ${test_file}"
+            node --test "${test_file}"
+          done
 
       - name: Validate manuscript pipeline
         run: node --test test/kairos-*manuscript*.test.js
