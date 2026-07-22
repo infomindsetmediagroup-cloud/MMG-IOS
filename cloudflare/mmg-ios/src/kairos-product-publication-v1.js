@@ -1,6 +1,7 @@
-const BUILD = "kairos-product-publication-20260713-1";
+const BUILD = "kairos-product-publication-20260722-2";
 const TTL = 60 * 60 * 24;
 const tokenCache = new Map();
+const APPROVED_TEMPLATE_SUFFIXES = new Set(["mmg-book-product", "mmg-ai-image-mastery", "mmg-digital-download"]);
 
 export async function handleProductPublication(request, env) {
   const url = new URL(request.url);
@@ -27,15 +28,16 @@ async function prepare(request, env) {
 
     const existing = await findProduct(env, product.handle);
     const releaseId = crypto.randomUUID();
+    const templateSuffix = normalizeTemplateSuffix(body?.templateSuffix, product.title);
     const desired = {
       title: String(product.title).slice(0, 255),
       handle: String(product.handle).slice(0, 255),
       descriptionHtml: String(product.shopifyHTML),
-      productType: String(product.productType || "Book").slice(0, 255),
+      productType: String(body?.productType || product.productType || "Digital Download").slice(0, 255),
       tags: Array.isArray(product.tags) ? product.tags.map(String).slice(0, 40) : [],
       seo: { title: String(product?.seo?.title || product.title).slice(0, 70), description: String(product?.seo?.metaDescription || product.shortDescription || "").slice(0, 320) },
       status: "DRAFT",
-      templateSuffix: "mmg-book-product",
+      templateSuffix,
       price,
     };
     const record = {
@@ -47,9 +49,9 @@ async function prepare(request, env) {
       action: existing ? "update-draft-product" : "create-draft-product",
       existing: existing ? snapshot(existing) : null,
       desired,
-      source: { title: status.title, wordCount: status.wordCount, pageCount: status.pageCount, coverProvided: Boolean(status.coverProvided), artifacts: status.artifacts || [] },
+      source: { title: status.title, author: status.author || null, wordCount: status.wordCount, pageCount: status.pageCount, coverProvided: Boolean(status.coverProvided), artifacts: status.artifacts || [] },
       confirmationRequired: existing ? "UPDATE PRODUCT DRAFT" : "CREATE PRODUCT DRAFT",
-      safeguards: { draftOnly: true, storefrontPublicationAuthorized: false, priceApprovalRequired: true, liveProductUntouchedUntilSeparateApproval: true, rollbackRequired: true },
+      safeguards: { draftOnly: true, storefrontPublicationAuthorized: false, priceApprovalRequired: false, canonicalPriceApplied: true, templateAllowlisted: true, liveProductUntouchedUntilSeparateApproval: true, rollbackRequired: true },
     };
     await save(request, record);
     return json(record, 201);
@@ -72,6 +74,7 @@ async function execute(request, env) {
     await updateVariantPrice(env, product.id, record.desired.price);
     const verified = await findProduct(env, record.desired.handle);
     if (!verified || verified.id !== product.id || verified.status !== "DRAFT") throw err(502, "product_draft_verification_failed", "Shopify did not verify the approved draft product.");
+    if ((verified.templateSuffix || "") !== record.desired.templateSuffix) throw err(502, "product_template_verification_failed", "Shopify did not verify the approved custom product template.");
 
     const updated = {
       ...record,
@@ -81,7 +84,7 @@ async function execute(request, env) {
       result: snapshot(verified),
       previewURL: `https://${storeDomain(env)}/products/${encodeURIComponent(verified.handle)}`,
       rollback: { created: !record.existing, productId: verified.id, prior: record.existing },
-      nextAction: "Review the draft product in Shopify and route its approved product template through site-wide visual verification and Resource Release Control.",
+      nextAction: "Install the generated product media, review the exact custom-template preview, then use Product Launch Control for live publication.",
     };
     await save(request, updated);
     return json(updated);
@@ -116,27 +119,33 @@ async function findProduct(env, handle) {
   const data = await gql(env, `query($q:String!){products(first:2,query:$q){nodes{id title handle descriptionHtml productType tags status templateSuffix updatedAt seo{title description} variants(first:1){nodes{id price}}}}}`, { q: `handle:${handle}` });
   return data?.products?.nodes?.[0] || null;
 }
+
 async function findProductById(env, id) {
   const data = await gql(env, `query($id:ID!){product(id:$id){id title handle descriptionHtml productType tags status templateSuffix updatedAt seo{title description} variants(first:1){nodes{id price}}}}`, { id });
   return data?.product || null;
 }
+
 async function createProduct(env, desired) {
   const data = await gql(env, `mutation($product:ProductCreateInput!){productCreate(product:$product){product{id} userErrors{field message}}}`, { product: input(desired) });
   reject(data?.productCreate); return data.productCreate.product;
 }
+
 async function updateProduct(env, id, desired) {
   const data = await gql(env, `mutation($product:ProductUpdateInput!){productUpdate(product:$product){product{id} userErrors{field message}}}`, { product: { id, ...input(desired) } });
   reject(data?.productUpdate); return data.productUpdate.product;
 }
+
 async function updateVariantPrice(env, productId, price) {
   const current = await findProductById(env, productId); const variantId = current?.variants?.nodes?.[0]?.id;
   if (!variantId) throw err(502, "product_variant_missing", "Shopify did not provide the product's default variant.");
   const data = await gql(env, `mutation($productId:ID!,$variants:[ProductVariantsBulkInput!]!){productVariantsBulkUpdate(productId:$productId,variants:$variants){productVariants{id price} userErrors{field message}}}`, { productId, variants: [{ id: variantId, price }] });
   reject(data?.productVariantsBulkUpdate);
 }
+
 async function deleteProduct(env, id) {
   const data = await gql(env, `mutation($input:ProductDeleteInput!){productDelete(input:$input){deletedProductId userErrors{field message}}}`, { input: { id } }); reject(data?.productDelete);
 }
+
 function input(value) { return { title:value.title, handle:value.handle, descriptionHtml:value.descriptionHtml, productType:value.productType, tags:value.tags, status:value.status, templateSuffix:value.templateSuffix, seo:value.seo }; }
 function snapshot(p) { return { id:p.id, title:p.title, handle:p.handle, descriptionHtml:p.descriptionHtml, productType:p.productType, tags:p.tags || [], status:p.status, templateSuffix:p.templateSuffix || "", updatedAt:p.updatedAt, seo:p.seo || {}, price:p.variants?.nodes?.[0]?.price || null }; }
 function reject(payload) { const list = payload?.userErrors || []; if (list.length) throw err(422, "shopify_mutation_rejected", list.map(x => x.message).join("; ")); }
@@ -149,11 +158,21 @@ async function gql(env, query, variables) {
   if (body.errors?.length) throw err(422, "shopify_graphql_error", body.errors.map(x => x.message).join("; "));
   return body.data || {};
 }
+
 async function accessToken(env, store) {
   const id=String(env.SHOPIFY_CLIENT_ID||"").trim(), secret=String(env.SHOPIFY_CLIENT_SECRET||"").trim(), key=`${store}:${id}`;
   if (id&&secret) { const cached=tokenCache.get(key); if(cached?.expires>Date.now()) return cached.token; const r=await fetch(`https://${store}/admin/oauth/access_token`,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({grant_type:"client_credentials",client_id:id,client_secret:secret})}); const b=await r.json().catch(()=>({})); if(!r.ok||!b.access_token)throw err(401,"shopify_auth_failed","Shopify client credentials failed."); tokenCache.set(key,{token:b.access_token,expires:Date.now()+3300000}); return b.access_token; }
   const token=String(env.SHOPIFY_ADMIN_ACCESS_TOKEN||"").trim(); if(!token)throw err(503,"shopify_not_configured","Shopify credentials are not configured."); return token;
 }
+
+function normalizeTemplateSuffix(value, title) {
+  const requested = String(value || "").trim();
+  const fallback = /\bai image mastery\b/i.test(String(title || "")) ? "mmg-ai-image-mastery" : "mmg-book-product";
+  const candidate = requested || fallback;
+  if (!APPROVED_TEMPLATE_SUFFIXES.has(candidate)) throw err(400, "product_template_not_approved", "The requested Shopify product template is not approved by the MMG digital-product contract.");
+  return candidate;
+}
+
 function storeDomain(env) { const value=String(env.SHOPIFY_STORE_DOMAIN||"").trim().toLowerCase(); if(!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(value))throw err(503,"shopify_invalid_domain","Shopify store domain is invalid."); return value; }
 function normalizePrice(value) { const number=Number(value); return Number.isFinite(number)&&number>=0.5&&number<=10000 ? number.toFixed(2) : null; }
 function recordRequest(request,id){return new Request(`${new URL(request.url).origin}/__kairos/product-publication/${id}`);}
@@ -162,4 +181,4 @@ async function load(request,id){const r=await caches.default.match(recordRequest
 async function readRecord(request,id){const r=await load(request,id);return r?json(r):json({status:"not-found",error:{message:"Product publication record not found."}},404);}
 function err(status,code,message){return Object.assign(new Error(message),{status,code});}
 function failure(error,code){return json({status:"failed",build:BUILD,error:{code:error?.code||code,message:error instanceof Error?error.message:"Product publication failed."}},Number(error?.status||500));}
-function json(value,status=200){return new Response(JSON.stringify(value),{status,headers:{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store","X-Content-Type-Options":"nosniff"}});}
+function json(value,status=200){return new Response(JSON.stringify(value),{status,headers:{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store","X-Content-Type-Options":"nosniff","X-Kairos-Product-Publication":BUILD}});}
