@@ -46,7 +46,7 @@ jobs:
           node-version: '22'
 
       - name: Install root dependencies
-        run: npm install --ignore-scripts --no-audit --no-fund
+        run: npm install --ignore-scripts --no-audit --no-fund > /dev/null
 
       - name: Validate Cloudflare runtime syntax
         run: |
@@ -67,20 +67,33 @@ jobs:
         run: npx vitest run backend-tests/kairos-scope-firewall.test.js backend-tests/kairos-manuscript-operation-boundary.test.js
 
       - name: Install WebKit browser
-        run: npx playwright install --with-deps webkit
+        run: npx playwright install --with-deps webkit > /dev/null
 
       - name: Test manuscript buttons in mobile WebKit
+        id: webkit
         shell: bash
         run: |
           set +e
           npm run test:manuscript-ui > "${RUNNER_TEMP}/manuscript-webkit.log" 2>&1
           status=$?
+          cp "${RUNNER_TEMP}/manuscript-webkit.log" manuscript-webkit.log
           if [ "${status}" -ne 0 ]; then
             echo "Mobile WebKit interaction failure:"
-            tail -n 220 "${RUNNER_TEMP}/manuscript-webkit.log"
+            tail -n 220 manuscript-webkit.log
             exit "${status}"
           fi
-          tail -n 60 "${RUNNER_TEMP}/manuscript-webkit.log"
+          tail -n 60 manuscript-webkit.log
+
+      - name: Upload WebKit failure evidence
+        if: ${{ failure() && steps.webkit.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: manuscript-webkit-failure
+          path: |
+            manuscript-webkit.log
+            test-results
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Validate Kairos Shopify policy
         run: npm run validate:kairos-shopify
@@ -96,7 +109,7 @@ jobs:
 
       - name: Install active Worker dependencies
         working-directory: cloudflare/mmg-ios
-        run: npm install --ignore-scripts --no-audit --no-fund
+        run: npm install --ignore-scripts --no-audit --no-fund > /dev/null
 
       - name: Validate active Cloudflare manuscript bundle
         working-directory: cloudflare/mmg-ios
