@@ -1,9 +1,10 @@
 import { ManuscriptProcessingError, processManuscriptSource } from "./kairos-manuscript-processor-v1.js";
+import { PublishingIntelligenceError, runPublishingIntelligence } from "./kairos-publishing-intelligence-v1.js";
 
-const BUILD = "kairos-manuscript-runner-20260722-1";
+const BUILD = "kairos-manuscript-runner-20260722-2";
 const PROJECT_KEY = "publishing:project";
 
-export async function handleManuscriptRunObjectRequest(state, request) {
+export async function handleManuscriptRunObjectRequest(state, request, env = {}) {
   const url = new URL(request.url);
   const match = url.pathname.match(/^\/internal\/publishing\/projects\/([^/]+)\/run$/);
   if (!match || request.method !== "POST") return null;
@@ -11,7 +12,7 @@ export async function handleManuscriptRunObjectRequest(state, request) {
   const project = await state.storage.get(PROJECT_KEY);
   if (!project) return error("project_not_found", "Project not found.", 404);
   if (project.status === "RUNNING") return error("run_in_progress", "A pipeline run is already active.", 409);
-  if (!["READY", "FAILED"].includes(project.status)) {
+  if (!["READY", "FAILED", "REVIEW_REQUIRED"].includes(project.status)) {
     return error("project_not_runnable", `Project status ${project.status} cannot start a pipeline run.`, 409);
   }
 
@@ -39,55 +40,122 @@ export async function handleManuscriptRunObjectRequest(state, request) {
   await state.storage.put(PROJECT_KEY, runningProject);
 
   try {
-    const result = await processManuscriptSource(state, runningProject);
-    const completedAt = new Date().toISOString();
-    const artifacts = [
-      ...runningProject.artifacts.filter((artifact) => artifact.kind !== "NORMALIZED_MANUSCRIPT"),
-      result.artifact,
-    ];
-    const updated = {
+    const extraction = await processManuscriptSource(state, runningProject);
+    const extractionCompletedAt = new Date().toISOString();
+    const afterExtraction = {
       ...runningProject,
-      status: "RUNNING",
-      artifacts,
+      artifacts: [
+        ...runningProject.artifacts.filter((artifact) => artifact.kind !== "NORMALIZED_MANUSCRIPT"),
+        extraction.artifact,
+      ],
       stages: runningProject.stages.map((stage) => {
         if (stage.name === "MANUSCRIPT_EXTRACTION") {
-          return { ...stage, status: "SUCCEEDED", completedAt, requiresHumanReview: false };
+          return { ...stage, status: "SUCCEEDED", completedAt: extractionCompletedAt, requiresHumanReview: false };
         }
         if (stage.name === "METADATA_INFERENCE") {
-          return { ...stage, status: "RUNNING", startedAt: completedAt };
+          return { ...stage, status: "RUNNING", startedAt: extractionCompletedAt };
         }
         return stage;
       }),
       run: {
         ...runningProject.run,
         currentStage: "METADATA_INFERENCE",
-        lastHeartbeatAt: completedAt,
-        extractionArtifactId: result.artifact.id,
-        extractionReport: result.report,
+        lastHeartbeatAt: extractionCompletedAt,
+        extractionArtifactId: extraction.artifact.id,
+        extractionReport: extraction.report,
       },
-      updatedAt: completedAt,
+      updatedAt: extractionCompletedAt,
+    };
+    await state.storage.put(PROJECT_KEY, afterExtraction);
+
+    const intelligence = await runPublishingIntelligence(state, afterExtraction, env);
+    const intelligenceCompletedAt = new Date().toISOString();
+    const reviewRequired = intelligence.requiresHumanReview;
+    const artifacts = [
+      ...afterExtraction.artifacts.filter((artifact) => !["METADATA_INFERENCE", "QA_REPORT"].includes(artifact.kind)),
+      ...intelligence.artifacts,
+    ];
+    const updated = {
+      ...afterExtraction,
+      status: reviewRequired ? "REVIEW_REQUIRED" : "RUNNING",
+      metadata: {
+        ...afterExtraction.metadata,
+        ...intelligence.metadata.metadata,
+      },
+      artifacts,
+      stages: afterExtraction.stages.map((stage) => {
+        if (stage.name === "METADATA_INFERENCE") {
+          return {
+            ...stage,
+            status: "SUCCEEDED",
+            completedAt: intelligenceCompletedAt,
+            requiresHumanReview: intelligence.metadata.requiresHumanReview,
+          };
+        }
+        if (stage.name === "EDITORIAL_ANALYSIS") {
+          return {
+            ...stage,
+            status: reviewRequired ? "BLOCKED" : "SUCCEEDED",
+            startedAt: intelligenceCompletedAt,
+            completedAt: intelligenceCompletedAt,
+            requiresHumanReview: reviewRequired,
+            errorCode: reviewRequired ? "editorial_review_required" : undefined,
+            errorMessage: reviewRequired ? "Editorial QA requires human review before deliverable generation." : undefined,
+          };
+        }
+        if (stage.name === "DELIVERABLE_GENERATION" && !reviewRequired) {
+          return { ...stage, status: "RUNNING", startedAt: intelligenceCompletedAt };
+        }
+        return stage;
+      }),
+      run: {
+        ...afterExtraction.run,
+        status: reviewRequired ? "REVIEW_REQUIRED" : "RUNNING",
+        currentStage: reviewRequired ? "EDITORIAL_ANALYSIS" : "DELIVERABLE_GENERATION",
+        lastHeartbeatAt: intelligenceCompletedAt,
+        metadataArtifactId: intelligence.artifacts.find((artifact) => artifact.kind === "METADATA_INFERENCE")?.id,
+        qaArtifactId: intelligence.artifacts.find((artifact) => artifact.kind === "QA_REPORT")?.id,
+        editorialScore: intelligence.editorial.score,
+        editorialGrade: intelligence.editorial.grade,
+        requiresHumanReview: reviewRequired,
+      },
+      review: reviewRequired
+        ? {
+            required: true,
+            stage: "EDITORIAL_ANALYSIS",
+            blockers: intelligence.editorial.blockers,
+            warnings: intelligence.editorial.warnings,
+            recommendations: intelligence.editorial.recommendations,
+            requestedAt: intelligenceCompletedAt,
+          }
+        : null,
+      updatedAt: intelligenceCompletedAt,
     };
     await state.storage.put(PROJECT_KEY, updated);
 
     return json({
-      status: "accepted",
+      status: reviewRequired ? "review-required" : "accepted",
       build: BUILD,
       run: updated.run,
       project: updated,
-      extraction: result.report,
-      artifact: publicArtifact(result.artifact),
+      extraction: extraction.report,
+      metadata: intelligence.metadata,
+      editorial: intelligence.editorial,
+      artifacts: intelligence.artifacts.map(publicArtifact),
       safeguards: safeguards(),
-    }, 202);
+    }, reviewRequired ? 202 : 202);
   } catch (caught) {
     const failure = normalizeFailure(caught);
     const failedAt = new Date().toISOString();
+    const current = await state.storage.get(PROJECT_KEY) || runningProject;
+    const failedStage = current.run?.currentStage || "MANUSCRIPT_EXTRACTION";
     const failed = {
-      ...runningProject,
-      status: "FAILED",
-      stages: runningProject.stages.map((stage) => stage.name === "MANUSCRIPT_EXTRACTION"
+      ...current,
+      status: failure.requiresHumanReview ? "REVIEW_REQUIRED" : "FAILED",
+      stages: current.stages.map((stage) => stage.name === failedStage
         ? {
             ...stage,
-            status: "FAILED",
+            status: failure.requiresHumanReview ? "BLOCKED" : "FAILED",
             completedAt: failedAt,
             errorCode: failure.code,
             errorMessage: failure.message,
@@ -95,19 +163,29 @@ export async function handleManuscriptRunObjectRequest(state, request) {
           }
         : stage),
       run: {
-        ...runningProject.run,
-        status: "FAILED",
-        currentStage: "MANUSCRIPT_EXTRACTION",
+        ...current.run,
+        status: failure.requiresHumanReview ? "REVIEW_REQUIRED" : "FAILED",
+        currentStage: failedStage,
         failedAt,
         lastHeartbeatAt: failedAt,
         error: failure,
       },
+      review: failure.requiresHumanReview
+        ? {
+            required: true,
+            stage: failedStage,
+            blockers: [failure.message],
+            warnings: [],
+            recommendations: ["Review the source and project metadata, then retry the governed pipeline."],
+            requestedAt: failedAt,
+          }
+        : current.review,
       updatedAt: failedAt,
     };
     await state.storage.put(PROJECT_KEY, failed);
 
     return json({
-      status: "failed",
+      status: failure.requiresHumanReview ? "review-required" : "failed",
       build: BUILD,
       error: failure,
       project: failed,
@@ -134,7 +212,7 @@ function resetStagesForExtraction(stages, now) {
 }
 
 function normalizeFailure(caught) {
-  if (caught instanceof ManuscriptProcessingError) {
+  if (caught instanceof ManuscriptProcessingError || caught instanceof PublishingIntelligenceError) {
     return {
       code: caught.code,
       message: caught.message,
@@ -143,8 +221,8 @@ function normalizeFailure(caught) {
     };
   }
   return {
-    code: "manuscript_processing_failed",
-    message: caught instanceof Error ? caught.message : "Manuscript processing failed.",
+    code: "publishing_pipeline_failed",
+    message: caught instanceof Error ? caught.message : "Publishing pipeline failed.",
     requiresHumanReview: false,
     retryable: true,
   };
@@ -161,6 +239,7 @@ function safeguards() {
     shopifyOutputStatus: "DRAFT",
     humanReviewRequired: true,
     sourceAssetsImmutable: true,
+    providerMayEnrichButNotAuthorize: true,
   };
 }
 
