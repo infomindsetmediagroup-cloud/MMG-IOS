@@ -41,11 +41,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
-          cache-dependency-path: cloudflare/mmg-ios/package-lock.json
 
       - name: Install Worker dependencies
-        run: npm ci
+        run: npm install --ignore-scripts --no-audit --no-fund
 
       - name: Run publishing pipeline tests
         run: node --test test/kairos-*publishing*.test.js test/kairos-*manuscript*.test.js test/kairos-*deliverable*.test.js test/kairos-*package*.test.js test/kairos-*cover*.test.js test/kairos-*shopify*.test.js test/kairos-publishing-operational-fixture-v1.test.js
