@@ -5,6 +5,10 @@ const controllerSource = readFileSync(
   new URL("../web/kairos-dashboard/scripts/manuscript-project-setup.js", import.meta.url),
   "utf8",
 );
+const governanceSource = readFileSync(
+  new URL("../web/kairos-dashboard/scripts/command-center-governance.js", import.meta.url),
+  "utf8",
+);
 const indexSource = readFileSync(
   new URL("../web/kairos-dashboard/index.html", import.meta.url),
   "utf8",
@@ -167,9 +171,27 @@ test("Check saved status is bound and restores a durable assignment", async ({ p
   expect(statusReads).toBeGreaterThanOrEqual(2);
 });
 
-test("dashboard loads the manuscript controller directly instead of the delayed module chain", async () => {
+test("Command Center manuscript event routes through the production workspace controller", async ({ page }) => {
+  await page.setContent("<!doctype html><html><body><button class='manuscript-launch'>Open Manuscript Studio</button></body></html>");
+  await page.evaluate(() => {
+    window.__openedWorkspace = "";
+    window.KairosProductionWorkspace = {
+      open(workspace) {
+        window.__openedWorkspace = workspace;
+      },
+    };
+  });
+  await page.addScriptTag({ type: "module", content: governanceSource });
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent("kairos:manuscript-studio:open")));
+  await expect.poll(() => page.evaluate(() => window.__openedWorkspace)).toBe("manuscript-studio");
+});
+
+test("dashboard force-loads the manuscript workspace activation modules", async () => {
+  expect(indexSource).toContain("kairos-command-hub-manuscript-workspace-20260722-4");
+  expect(indexSource).toContain("./scripts/command-center-governance.js?v=manuscript-workspace-20260722-2");
   expect(indexSource).toContain("./scripts/manuscript-studio.js?v=manuscript-controller-20260722-3");
   expect(indexSource).toContain("./scripts/manuscript-project-setup.js?v=manuscript-controller-20260722-3");
+  expect(indexSource).toContain("?v=manuscript-workspace-20260722-2");
 
   const delayedModuleList = indexSource.match(/const modules=\[(.*?)\];/s)?.[1] || "";
   expect(delayedModuleList).not.toContain("manuscript-studio.js");
