@@ -154,3 +154,36 @@ test("enforces bearer authentication at the public route boundary", async () => 
   assert.equal(response.status, 401);
   assert.equal((await body(response)).error.code, "unauthorized");
 });
+
+test("preserves the asset role query when forwarding to the durable object", async () => {
+  let forwardedURL = "";
+  const stub = {
+    async fetch(request) {
+      forwardedURL = request.url;
+      return new Response("{}", { status: 200 });
+    },
+  };
+  const env = {
+    KAIROS_PROJECTS: {
+      idFromName() {
+        return "id";
+      },
+      get() {
+        return stub;
+      },
+    },
+  };
+
+  const projectId = "44444444-4444-4444-8444-444444444444";
+  const response = await handlePublishingPackage(
+    new Request(`https://kairos.test/api/kairos/projects/${projectId}/assets?role=COVER_SOURCE`, {
+      method: "POST",
+      body: new Uint8Array([1]),
+      headers: { "Content-Type": "image/png" },
+    }),
+    env,
+  );
+
+  assert.equal(response.status, 200);
+  assert.match(forwardedURL, /\/internal\/publishing\/projects\/44444444-4444-4444-8444-444444444444\/assets\?role=COVER_SOURCE$/);
+});
