@@ -54,8 +54,9 @@ export async function handlePublishingPackage(request, env) {
   if (!isProjectId(projectId)) return error("invalid_project_id", "Project ID is invalid.", 400);
 
   const target = env.KAIROS_PROJECTS.get(env.KAIROS_PROJECTS.idFromName(`publishing:${projectId}`));
-  const internalPath = `/internal/publishing/projects/${encodeURIComponent(projectId)}/${action}`;
-  return target.fetch(internalRequest(request, internalPath));
+  const internalURL = new URL(`/internal/publishing/projects/${encodeURIComponent(projectId)}/${action}`, request.url);
+  internalURL.search = url.search;
+  return target.fetch(internalRequest(request, internalURL.pathname + internalURL.search));
 }
 
 export async function handlePublishingPackageObjectRequest(state, request) {
