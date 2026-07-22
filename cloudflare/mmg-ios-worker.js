@@ -1,11 +1,11 @@
-const VERCEL_RUNTIME_ORIGIN = "https://mmg-ios.vercel.app";
+import { handleKairosApiRequest } from "./kairos/runtime.js";
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
     if (url.pathname.startsWith("/api/")) {
-      return proxyRuntimeRequest(request, url);
+      return handleKairosApiRequest(request, env, ctx);
     }
 
     if (url.pathname === "/web/kairos-dashboard" || url.pathname === "/web/kairos-dashboard/") {
@@ -17,37 +17,6 @@ export default {
   },
 };
 
-async function proxyRuntimeRequest(request, incomingURL) {
-  const targetURL = new URL(`${incomingURL.pathname}${incomingURL.search}`, VERCEL_RUNTIME_ORIGIN);
-  const headers = new Headers(request.headers);
-  headers.set("X-MMG-Proxy-Origin", incomingURL.origin);
-  headers.set("X-Forwarded-Host", incomingURL.host);
-  headers.delete("host");
-
-  const init = {
-    method: request.method,
-    headers,
-    redirect: "manual",
-  };
-
-  if (!["GET", "HEAD"].includes(request.method)) {
-    init.body = request.body;
-  }
-
-  const upstream = await fetch(targetURL, init);
-  const responseHeaders = new Headers(upstream.headers);
-  responseHeaders.set("Cache-Control", "no-store");
-  responseHeaders.set("X-MMG-Runtime-Proxy", "cloudflare-to-vercel");
-  responseHeaders.delete("access-control-allow-origin");
-  responseHeaders.delete("access-control-allow-credentials");
-
-  return new Response(upstream.body, {
-    status: upstream.status,
-    statusText: upstream.statusText,
-    headers: responseHeaders,
-  });
-}
-
 function withAssetHeaders(response) {
   const headers = new Headers(response.headers);
   if ((headers.get("content-type") || "").includes("text/html")) {
@@ -56,6 +25,8 @@ function withAssetHeaders(response) {
     headers.set("Cache-Control", "public, max-age=300");
   }
   headers.set("X-MMG-Host", "cloudflare");
+  headers.set("X-MMG-Kairos-Runtime", "cloudflare-native");
+  headers.set("X-Content-Type-Options", "nosniff");
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,

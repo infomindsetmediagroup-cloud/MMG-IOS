@@ -1,0 +1,98 @@
+name: Deploy Kairos Manuscript Runtime
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'cloudflare/mmg-ios/src/kairos-production-entry-manuscript-online-v1.js'
+      - 'cloudflare/mmg-ios/src/kairos-manuscript-operation-boundary-v1.js'
+      - 'cloudflare/mmg-ios/src/kairos-manuscript-*.js'
+      - 'cloudflare/mmg-ios/wrangler.toml'
+      - 'web/kairos-dashboard/scripts/manuscript-*.js'
+      - 'web/kairos-dashboard/styles/manuscript-*.css'
+      - 'governance/kairos-builder-plugin-registry-v1.json'
+      - 'scripts/validate-kairos-manuscript-activation.mjs'
+      - '.github/workflows/deploy-kairos-manuscript-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-kairos-manuscript-runtime
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install validation dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Validate manuscript activation boundary
+        run: |
+          node --check cloudflare/mmg-ios/src/kairos-manuscript-operation-boundary-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-production-entry-manuscript-online-v1.js
+          node scripts/validate-kairos-manuscript-activation.mjs
+          npx vitest run backend-tests/kairos-manuscript-operation-boundary.test.js backend-tests/kairos-scope-firewall.test.js
+
+      - name: Install Worker dependencies
+        working-directory: cloudflare/mmg-ios
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Validate Worker bundle
+        working-directory: cloudflare/mmg-ios
+        run: npx wrangler deploy --dry-run
+
+      - name: Deploy manuscript Worker
+        working-directory: cloudflare/mmg-ios
+        run: npx wrangler deploy
+
+      - name: Verify manuscript runtime online
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            body="${RUNNER_TEMP}/manuscript-status.json"
+            status="$(curl --silent --show-error --max-time 20 \
+              "${WORKER_URL}/api/kairos/manuscripts/status?attempt=${attempt}" \
+              -o "${body}" -w '%{http_code}' || true)"
+            if [ "${status}" = "200" ] \
+              && grep -q '"ready":true' "${body}" \
+              && grep -q '"mode":"manuscript-only"' "${body}" \
+              && grep -q '"shopifyAccess":"none"' "${body}"; then
+              cat "${body}"
+              break
+            fi
+            if [ "${attempt}" = "30" ]; then
+              cat "${body}" || true
+              exit 1
+            fi
+            sleep 5
+          done
+
+      - name: Verify website mutation firewall
+        run: |
+          set -euo pipefail
+          body="${RUNNER_TEMP}/shopify-denial.json"
+          status="$(curl --silent --show-error --max-time 20 \
+            -X POST "${WORKER_URL}/api/shopify/page-shell/publish" \
+            -H 'Content-Type: application/json' \
+            --data '{}' \
+            -o "${body}" -w '%{http_code}' || true)"
+          cat "${body}"
+          test "${status}" = "403"
+          grep -q '"code":"WEBSITE_MUTATION_DENIED"' "${body}"

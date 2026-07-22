@@ -1,4 +1,4 @@
-const BUILD = "kairos-cover-image-production-20260722-1";
+const BUILD = "kairos-cover-image-production-20260722-2";
 const PROJECT_KEY = "publishing:project";
 const MAX_IMAGES_BINDING_BYTES = 20 * 1024 * 1024;
 const RENDER_CONFIRMATION = "APPROVE_NO_CROP_NO_REDRAW_RENDER";
@@ -37,14 +37,22 @@ export async function handleCoverImageProduction(request, env) {
 
   const projectId = decodeURIComponent(renderMatch[1]);
   const target = env.KAIROS_PROJECTS.get(env.KAIROS_PROJECTS.idFromName(`publishing:${projectId}`));
-  const internal = new Request(new URL(`/internal/publishing/projects/${encodeURIComponent(projectId)}/cover/render`, request.url), {
+  const body = request.body;
+  const init = {
     method: "POST",
     headers: {
       "Content-Type": request.headers.get("Content-Type") || "application/json",
       "X-Kairos-Public-Origin": url.origin,
     },
-    body: request.body,
-  });
+  };
+  if (body !== null) {
+    init.body = body;
+    if (typeof ReadableStream !== "undefined" && body instanceof ReadableStream) init.duplex = "half";
+  }
+  const internal = new Request(
+    new URL(`/internal/publishing/projects/${encodeURIComponent(projectId)}/cover/render`, request.url),
+    init,
+  );
   return target.fetch(internal);
 }
 
@@ -105,11 +113,10 @@ export async function renderCoverDerivatives(state, request, env = {}) {
   const handle = slugify(project.metadata?.title || project.metadata?.workingTitle || "digital-product");
   const artifacts = [];
   for (const output of OUTPUTS) {
-    const response = (
-      await env.IMAGES.input(streamFromBytes(source))
-        .transform({ width: output.width, height: output.height, fit: "pad", background })
-        .output({ format: "image/png", anim: false })
-    ).response();
+    const response = await env.IMAGES.input(streamFromBytes(source))
+      .transform({ width: output.width, height: output.height, fit: "pad", background })
+      .output({ format: "image/png", anim: false })
+      .response();
     if (!response.ok) return error("cover_render_failed", `Images binding returned HTTP ${response.status}.`, 502);
     const bytes = new Uint8Array(await response.arrayBuffer());
     if (!bytes.byteLength) return error("cover_render_empty", `${output.role} render was empty.`, 502);
@@ -181,7 +188,7 @@ async function readStoredMedia(state, artifactId) {
     headers: {
       "Content-Type": artifact.mimeType,
       "Content-Length": String(bytes.byteLength),
-      "ETag": `\"${artifact.sha256}\"`,
+      "ETag": `"${artifact.sha256}"`,
       "Cache-Control": "private, max-age=300, no-transform",
       "X-Content-Type-Options": "nosniff",
       "X-Kairos-Media-Sha256": artifact.sha256,

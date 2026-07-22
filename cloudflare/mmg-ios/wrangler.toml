@@ -1,5 +1,5 @@
 name = "mmg-ios"
-main = "src/kairos-production-entry-publishing-readiness-v1.js"
+main = "src/kairos-production-entry-manuscript-online-v1.js"
 compatibility_date = "2026-07-11"
 workers_dev = true
 keep_vars = true
@@ -17,7 +17,7 @@ binding = "AI"
 binding = "IMAGES"
 
 [triggers]
-crons = ["* * * * *", "0 15 * * *", "0 2 * * *"]
+crons = ["0 15 * * *", "0 2 * * *"]
 
 [[durable_objects.bindings]]
 name = "KAIROS_PROJECTS"
@@ -27,16 +27,14 @@ class_name = "KairosProject"
 tag = "native-publishing-v1"
 new_sqlite_classes = ["KairosProject"]
 
-# Required before production activation:
-# `wrangler secret put KAIROS_API_TOKEN`
-# `wrangler secret put KAIROS_MEDIA_SIGNING_SECRET`
-# `wrangler secret put SHOPIFY_CLIENT_ID`
-# `wrangler secret put SHOPIFY_CLIENT_SECRET`
-# Optional legacy fallback: `wrangler secret put SHOPIFY_ADMIN_ACCESS_TOKEN`
-# These secrets protect project routes, signed staging media, and Shopify DRAFT staging.
+# Existing production secrets are retained by keep_vars=true.
+# Manuscript-only activation requires KAIROS_API_TOKEN and KAIROS_MEDIA_SIGNING_SECRET.
+# Shopify credentials may remain configured, but Shopify writes are disabled at the runtime boundary.
 
 [vars]
 SHOPIFY_STORE_DOMAIN = "07kd8e-qw.myshopify.com"
 SHOPIFY_API_VERSION = "2026-07"
 MMG_STOREFRONT_ORIGIN = "https://themindsetmediagroup.com"
 KAIROS_WORKERS_AI_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8"
+KAIROS_MANUSCRIPT_RUNTIME_ENABLED = "true"
+KAIROS_SHOPIFY_WRITES_ENABLED = "false"

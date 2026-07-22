@@ -1,0 +1,79 @@
+{
+  "version": "kairos-builder-plugin-registry-v1",
+  "status": "active",
+  "purpose": "Use installed app-building plugins as governed development advisors without granting production authority.",
+  "defaultDecision": "deny-production-authority",
+  "runtime": {
+    "productionProvider": "cloudflare",
+    "openAiRuntimeRequired": false,
+    "shopifyRuntimeAccessFromBuilderPlugins": "none",
+    "secretAccess": "none",
+    "deploymentAuthority": "none"
+  },
+  "advisors": [
+    {
+      "id": "openai-developers/build-chatgpt-app",
+      "role": "app-architecture-and-tooling-advisor",
+      "allowedGuidance": [
+        "app-archetype classification",
+        "tool schema planning",
+        "MCP and widget architecture",
+        "security metadata and CSP review",
+        "minimum working repository contract",
+        "validation ladder"
+      ],
+      "productionDependency": false,
+      "mutationAuthority": false,
+      "activationRule": "Use only when a ChatGPT app, MCP surface, or widget architecture is explicitly in scope."
+    },
+    {
+      "id": "openai-developers/agents-sdk",
+      "role": "agent-prototype-and-evaluation-advisor",
+      "allowedGuidance": [
+        "single-agent-first design",
+        "narrow deterministic tools",
+        "approval gates",
+        "local smoke tests",
+        "focused eval harnesses",
+        "health endpoint conventions"
+      ],
+      "productionDependency": false,
+      "mutationAuthority": false,
+      "activationRule": "Prototype or evaluate only after explicit approval; do not add an OpenAI API dependency to the manuscript runtime by implication."
+    },
+    {
+      "id": "github/github",
+      "role": "repository-change-and-ci-advisor",
+      "allowedGuidance": [
+        "branch and pull-request discipline",
+        "CI inspection",
+        "review evidence",
+        "scoped commits",
+        "deployment traceability"
+      ],
+      "productionDependency": false,
+      "mutationAuthority": "repository-only-with-explicit-user-request"
+    },
+    {
+      "id": "shopify/shopify-dev",
+      "role": "shopify-engineering-advisor",
+      "allowedGuidance": [
+        "official Shopify documentation",
+        "GraphQL schema discovery",
+        "Liquid and extension guidance",
+        "Shopify CLI validation"
+      ],
+      "productionDependency": false,
+      "mutationAuthority": false,
+      "activationRule": "Shopify guidance is available only inside a separately approved Shopify workflow manifest. Manuscript workflows receive zero Shopify capability."
+    }
+  ],
+  "enforcement": {
+    "builderGuidanceCannotExpandTaskScope": true,
+    "builderGuidanceCannotGrantStoreWideAuthority": true,
+    "builderGuidanceCannotReadSecrets": true,
+    "builderGuidanceCannotDeploy": true,
+    "builderGuidanceCannotMutateShopify": true,
+    "manuscriptWorkflowShopifyAccess": "none"
+  }
+}

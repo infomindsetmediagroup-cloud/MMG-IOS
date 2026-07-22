@@ -26,7 +26,83 @@ permissions:
   contents: read
 
 jobs:
+  discover-tests:
+    runs-on: ubuntu-latest
+    outputs:
+      publishing: ${{ steps.discover.outputs.publishing }}
+      cover: ${{ steps.discover.outputs.cover }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Discover publishing and cover tests
+        id: discover
+        shell: bash
+        run: |
+          set -euo pipefail
+          publishing="$(node -e 'const fs=require("fs");const p="cloudflare/mmg-ios/test";const files=fs.readdirSync(p).filter((name)=>name.endsWith(".test.js")&&name.includes("publishing")).sort().map((name)=>`test/${name}`);process.stdout.write(JSON.stringify(files));')"
+          cover="$(node -e 'const fs=require("fs");const p="cloudflare/mmg-ios/test";const files=fs.readdirSync(p).filter((name)=>name.endsWith(".test.js")&&name.includes("cover")).sort().map((name)=>`test/${name}`);process.stdout.write(JSON.stringify(files));')"
+          test "${publishing}" != "[]"
+          test "${cover}" != "[]"
+          echo "publishing=${publishing}" >> "${GITHUB_OUTPUT}"
+          echo "cover=${cover}" >> "${GITHUB_OUTPUT}"
+
+  publishing-orchestration:
+    needs: discover-tests
+    name: Publishing orchestration · ${{ matrix.test }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        test: ${{ fromJSON(needs.discover-tests.outputs.publishing) }}
+    defaults:
+      run:
+        working-directory: cloudflare/mmg-ios
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Worker dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Run ${{ matrix.test }}
+        run: node --test "${{ matrix.test }}"
+
+  cover-production:
+    needs: discover-tests
+    name: Cover production · ${{ matrix.test }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        test: ${{ fromJSON(needs.discover-tests.outputs.cover) }}
+    defaults:
+      run:
+        working-directory: cloudflare/mmg-ios
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Worker dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Run ${{ matrix.test }}
+        run: node --test "${{ matrix.test }}"
+
   publishing-pipeline:
+    needs: [publishing-orchestration, cover-production]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -41,14 +117,21 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
-          cache-dependency-path: cloudflare/mmg-ios/package-lock.json
 
       - name: Install Worker dependencies
-        run: npm ci
+        run: npm install --ignore-scripts --no-audit --no-fund
 
-      - name: Run publishing pipeline tests
-        run: node --test test/kairos-*publishing*.test.js test/kairos-*manuscript*.test.js test/kairos-*deliverable*.test.js test/kairos-*package*.test.js test/kairos-*cover*.test.js test/kairos-*shopify*.test.js test/kairos-publishing-operational-fixture-v1.test.js
+      - name: Validate manuscript pipeline
+        run: node --test test/kairos-*manuscript*.test.js
+
+      - name: Validate deliverable pipeline
+        run: node --test test/kairos-*deliverable*.test.js
+
+      - name: Validate publishing packages
+        run: node --test test/kairos-*package*.test.js
+
+      - name: Validate Shopify staging boundary
+        run: node --test test/kairos-*shopify*.test.js
 
       - name: Validate Worker configuration
         run: npm run validate:production
