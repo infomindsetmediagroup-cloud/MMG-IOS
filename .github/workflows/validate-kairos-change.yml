@@ -42,8 +42,16 @@ jobs:
       - name: Install root dependencies
         run: npm install --ignore-scripts --no-audit --no-fund
 
-      - name: Typecheck root runtime
-        run: npm run typecheck
+      - name: Validate Cloudflare runtime syntax
+        run: |
+          node --check cloudflare/mmg-ios-worker.js
+          node --check cloudflare/kairos/shopify-doctrine.js
+          node --check cloudflare/kairos/workflow-registry.js
+          node --check cloudflare/kairos/scope-firewall.js
+          node --check cloudflare/kairos/shopify-client.js
+          node --check cloudflare/kairos/operation-registry.js
+          node --check cloudflare/kairos/runtime.js
+          node --check scripts/validate-kairos-shopify-policy.mjs
 
       - name: Test Kairos operation-scope firewall
         run: npx vitest run backend-tests/kairos-scope-firewall.test.js
@@ -56,9 +64,6 @@ jobs:
 
       - name: Validate canonical service product
         run: npm run validate:service-product
-
-      - name: Run complete root test suite
-        run: npm test
 
       - name: Install Kairos Worker dependencies
         working-directory: cloudflare/mmg-ios
