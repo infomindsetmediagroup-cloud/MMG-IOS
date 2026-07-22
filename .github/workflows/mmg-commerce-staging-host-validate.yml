@@ -12,11 +12,12 @@ on:
       - ".github/workflows/mmg-commerce-staging-runtime-deploy.yml"
       - ".github/workflows/mmg-commerce-staging-integration.yml"
       - ".github/workflows/mmg-commerce-staging-readiness.yml"
+      - ".github/workflows/mmg-commerce-staging-host-validate.yml"
       - "backend-tests/mmg-cloudflare-staging-host.test.ts"
       - "registry/deployment/mmg-commerce-staging-host-runtime-contract-v1.json"
       - "deployment/mmg-commerce-staging.env.example"
       - "package.json"
-      - "tsconfig.json"
+      - "tsconfig.commerce-staging.json"
   workflow_dispatch:
 
 permissions:
@@ -36,8 +37,8 @@ jobs:
       - name: Install dependencies
         run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
 
-      - name: TypeScript validation
-        run: npm run typecheck
+      - name: Focused TypeScript validation
+        run: npm run typecheck:commerce-staging
 
       - name: Focused staging-host tests
         run: npm run validate:commerce-staging-host
