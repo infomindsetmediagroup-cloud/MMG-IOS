@@ -12,5 +12,7 @@
     "server/runtime/cloudflare-staging-admin-auth.ts",
     "server/runtime/cloudflare-staging-provider-heartbeats.ts",
     "backend-tests/mmg-cloudflare-staging-host.test.ts"
-  ]
+  ],
+  "include": [],
+  "exclude": []
 }
