@@ -17,6 +17,7 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 concurrency:
   group: deploy-kairos-manuscript-runtime
@@ -32,6 +33,17 @@ jobs:
       WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
 
     steps:
+      - name: Mark deployment pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --silent --show-error \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "{\"state\":\"pending\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Validating manuscript-only deployment\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+
       - name: Check out repository
         uses: actions/checkout@v4
 
@@ -96,3 +108,27 @@ jobs:
           cat "${body}"
           test "${status}" = "403"
           grep -q '"code":"WEBSITE_MUTATION_DENIED"' "${body}"
+
+      - name: Report deployment success
+        if: ${{ success() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --silent --show-error \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "{\"state\":\"success\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Manuscript runtime online; Shopify denied\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+
+      - name: Report deployment failure
+        if: ${{ failure() || cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --silent --show-error \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "{\"state\":\"failure\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Manuscript deployment or verification failed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
