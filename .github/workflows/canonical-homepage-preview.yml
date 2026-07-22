@@ -1,0 +1,152 @@
+name: Canonical MMG Homepage Preview
+
+on:
+  push:
+    branches:
+      - "kairos/canonical-homepage-preview"
+    paths:
+      - ".github/workflows/canonical-homepage-preview.yml"
+      - "scripts/canonical-homepage-preview.mjs"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  statuses: write
+  pull-requests: write
+
+concurrency:
+  group: canonical-homepage-preview
+  cancel-in-progress: true
+
+jobs:
+  build-test-repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      GH_TOKEN: ${{ github.token }}
+      KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+      SHOPIFY_STORE_DOMAIN: 07kd8e-qw.myshopify.com
+      REVIEW_BRANCH: kairos/canonical-homepage-preview
+      PR_NUMBER: "261"
+
+    steps:
+      - name: Build, test, repair, and persist verified preview
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          pending_payload="$(node -e 'process.stdout.write(JSON.stringify({state:"pending",context:"canonical-homepage-preview",description:"Canonical Shopify preview is running",target_url:process.argv[1]}))' "${target_url}")"
+          curl --fail --show-error --silent \
+            -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "${pending_payload}" >/dev/null
+
+          git init repository
+          git -C repository remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git -C repository fetch --depth=1 origin "refs/heads/${REVIEW_BRANCH}"
+          git -C repository checkout -B "${REVIEW_BRANCH}" FETCH_HEAD
+
+          cd repository
+          node --version
+          npm --version
+          npm install --no-save --no-audit --no-fund playwright@1.61.1
+          npx playwright install --with-deps chromium
+          node --check scripts/canonical-homepage-preview.mjs
+
+          set +e
+          node scripts/canonical-homepage-preview.mjs
+          harness_status=$?
+          set -e
+
+          if [ -d shopify/canonical-homepage-preview/baseline ] && [ -d shopify/canonical-homepage-preview/candidate ]; then
+            mkdir -p artifacts/canonical-homepage
+            set +e
+            git diff --no-index --no-ext-diff --src-prefix=a/ --dst-prefix=b/ \
+              shopify/canonical-homepage-preview/baseline \
+              shopify/canonical-homepage-preview/candidate \
+              > artifacts/canonical-homepage/homepage-theme.patch
+            diff_status=$?
+            set -e
+            if [ "${diff_status}" -gt 1 ]; then
+              harness_status="${diff_status}"
+            fi
+          fi
+
+          if [ -f artifacts/canonical-homepage/report.md ]; then
+            cat artifacts/canonical-homepage/report.md >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+          if [ -f artifacts/canonical-homepage/receipt.json ]; then
+            git config user.name "kairos-production-bot"
+            git config user.email "actions@users.noreply.github.com"
+            git add artifacts/canonical-homepage/receipt.json \
+                    artifacts/canonical-homepage/report.md \
+                    shopify/canonical-homepage-preview
+            if [ -f artifacts/canonical-homepage/homepage-theme.patch ]; then
+              git add artifacts/canonical-homepage/homepage-theme.patch
+            fi
+            if ! git diff --cached --quiet; then
+              git commit -m "Add canonical homepage preview evidence [skip ci]"
+              git push origin "HEAD:${REVIEW_BRANCH}"
+            fi
+          fi
+
+          if [ "${harness_status}" -eq 0 ]; then
+            status_state="success"
+            status_description="Canonical Shopify preview verified"
+          else
+            status_state="failure"
+            status_description="Canonical Shopify preview failed verification"
+          fi
+
+          status_payload="$(node -e 'process.stdout.write(JSON.stringify({state:process.argv[1],context:"canonical-homepage-preview",description:process.argv[2],target_url:process.argv[3]}))' "${status_state}" "${status_description}" "${target_url}")"
+          curl --fail --show-error --silent \
+            -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "${status_payload}" >/dev/null
+
+          comment_payload="$(node - <<'NODE'
+          const fs = require('fs');
+          let receipt = {};
+          try { receipt = JSON.parse(fs.readFileSync('artifacts/canonical-homepage/receipt.json', 'utf8')); } catch {}
+          const passed = receipt?.playwright?.passed === true;
+          const changed = Array.isArray(receipt?.changedFiles) ? receipt.changedFiles.length : 0;
+          const batches = Array.isArray(receipt?.batches) ? receipt.batches.length : 0;
+          const failures = Array.isArray(receipt?.playwright?.failures) ? receipt.playwright.failures : [];
+          const body = [
+            '## Canonical homepage preview receipt',
+            '',
+            `- **Result:** ${passed ? 'Verified' : 'Failed verification'}`,
+            `- **Preview:** ${receipt.previewURL || 'Unavailable'}`,
+            `- **Fresh Shopify theme clone verified:** ${receipt.clonedThemeVerified ? 'Yes' : 'No'}`,
+            `- **Changed theme files:** ${changed}`,
+            `- **Execution batches:** ${batches}`,
+            `- **Playwright:** ${passed ? 'Passed desktop and mobile validation' : 'Failed'}`,
+            '',
+            failures.length ? `Failures:\n${failures.map(item => `- ${item}`).join('\n')}` : 'Failures: none.',
+            '',
+            'The exact baseline-to-candidate Shopify patch and execution receipt are committed on this PR branch.',
+          ].join('\n');
+          process.stdout.write(JSON.stringify({ body }));
+          NODE
+          )"
+          curl --fail --show-error --silent \
+            -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+            --data "${comment_payload}" >/dev/null
+
+          exit "${harness_status}"
