@@ -7,7 +7,10 @@ on:
       - 'cloudflare/mmg-ios/src/kairos-production-entry-manuscript-online-v1.js'
       - 'cloudflare/mmg-ios/src/kairos-manuscript-operation-boundary-v1.js'
       - 'cloudflare/mmg-ios/src/kairos-manuscript-*.js'
+      - 'cloudflare/mmg-ios/src/kairos-production-registry-v1.js'
+      - 'cloudflare/mmg-ios/test/kairos-manuscript-*.test.js'
       - 'cloudflare/mmg-ios/wrangler.toml'
+      - 'web/kairos-dashboard/index.html'
       - 'web/kairos-dashboard/scripts/manuscript-*.js'
       - 'web/kairos-dashboard/styles/manuscript-*.css'
       - 'governance/kairos-builder-plugin-registry-v1.json'
@@ -59,12 +62,19 @@ jobs:
         run: |
           node --check cloudflare/mmg-ios/src/kairos-manuscript-operation-boundary-v1.js
           node --check cloudflare/mmg-ios/src/kairos-production-entry-manuscript-online-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-manuscript-project-setup-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-production-registry-v1.js
+          node --check web/kairos-dashboard/scripts/manuscript-project-setup.js
           node scripts/validate-kairos-manuscript-activation.mjs
           npx vitest run backend-tests/kairos-manuscript-operation-boundary.test.js backend-tests/kairos-scope-firewall.test.js
 
       - name: Install Worker dependencies
         working-directory: cloudflare/mmg-ios
         run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Validate manuscript setup transaction
+        working-directory: cloudflare/mmg-ios
+        run: node --test test/kairos-manuscript-project-setup-v3.test.js test/kairos-manuscript-project-setup-ui-v2.test.js
 
       - name: Validate Worker bundle
         working-directory: cloudflare/mmg-ios
@@ -96,6 +106,25 @@ jobs:
             sleep 5
           done
 
+      - name: Verify resumable manuscript setup deployed
+        run: |
+          set -euo pipefail
+          client="${RUNNER_TEMP}/manuscript-project-setup.js"
+          curl --fail --silent --show-error --max-time 20 \
+            "${WORKER_URL}/scripts/manuscript-project-setup.js?verify=${GITHUB_SHA}" \
+            -o "${client}"
+          grep -q 'kairos-manuscript-project-setup-ui-20260722-2' "${client}"
+          grep -q 'two-phase-resumable' "${client}"
+          headers="${RUNNER_TEMP}/setup-probe-headers.txt"
+          body="${RUNNER_TEMP}/setup-probe.json"
+          status="$(curl --silent --show-error --max-time 20 \
+            -D "${headers}" \
+            "${WORKER_URL}/api/production-registry/manuscripts/deployment-probe-12345678/setup" \
+            -o "${body}" -w '%{http_code}' || true)"
+          test "${status}" = "404"
+          grep -qi 'X-Kairos-Manuscript-Setup: kairos-manuscript-project-setup-20260722-3' "${headers}"
+          grep -q '"code":"manuscript_setup_not_found"' "${body}"
+
       - name: Verify website mutation firewall
         run: |
           set -euo pipefail
@@ -119,7 +148,7 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"success\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Manuscript runtime online; Shopify denied\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"success\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Manuscript setup resumable; Shopify denied\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
       - name: Report deployment failure
         if: ${{ failure() || cancelled() }}
