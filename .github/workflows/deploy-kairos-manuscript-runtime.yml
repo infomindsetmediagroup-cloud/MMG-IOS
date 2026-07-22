@@ -59,7 +59,7 @@ jobs:
           node-version: '22'
 
       - name: Install validation dependencies
-        run: npm install --ignore-scripts --no-audit --no-fund
+        run: npm install --ignore-scripts --no-audit --no-fund > /dev/null
 
       - name: Validate manuscript activation boundary
         run: |
@@ -72,14 +72,14 @@ jobs:
           npx vitest run backend-tests/kairos-manuscript-operation-boundary.test.js backend-tests/kairos-scope-firewall.test.js
 
       - name: Install WebKit browser
-        run: npx playwright install --with-deps webkit
+        run: npx playwright install --with-deps webkit > /dev/null
 
       - name: Tap manuscript setup buttons in mobile WebKit
         run: npm run test:manuscript-ui
 
       - name: Install Worker dependencies
         working-directory: cloudflare/mmg-ios
-        run: npm install --ignore-scripts --no-audit --no-fund
+        run: npm install --ignore-scripts --no-audit --no-fund > /dev/null
 
       - name: Validate manuscript setup transaction
         working-directory: cloudflare/mmg-ios
@@ -134,9 +134,28 @@ jobs:
           grep -q 'init();' "${client}"
 
       - name: Tap deployed Manuscript Studio in mobile WebKit
+        id: live_webkit
+        continue-on-error: true
+        shell: bash
         env:
           KAIROS_LIVE_URL: ${{ env.WORKER_URL }}
-        run: npx playwright test browser-tests/manuscript-live-smoke.spec.mjs --project=webkit
+        run: |
+          set +e
+          npx playwright test browser-tests/manuscript-live-smoke.spec.mjs --project=webkit > live-manuscript-webkit.log 2>&1
+          status=$?
+          tail -n 220 live-manuscript-webkit.log
+          exit "${status}"
+
+      - name: Upload live WebKit failure evidence
+        if: ${{ steps.live_webkit.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-manuscript-webkit-failure
+          path: |
+            live-manuscript-webkit.log
+            test-results
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Verify website mutation firewall
         run: |
@@ -150,6 +169,10 @@ jobs:
           cat "${body}"
           test "${status}" = "403"
           grep -q '"code":"WEBSITE_MUTATION_DENIED"' "${body}"
+
+      - name: Enforce live WebKit result
+        if: ${{ always() }}
+        run: test "${{ steps.live_webkit.outcome }}" = "success"
 
       - name: Report deployment success
         if: ${{ success() }}
