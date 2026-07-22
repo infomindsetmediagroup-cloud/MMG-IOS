@@ -2,26 +2,19 @@ name: Verify Kairos Experience Live
 
 on:
   pull_request:
-    branches:
-      - main
+    branches: [main]
     paths: &experience_paths
       - ".github/workflows/verify-kairos-experience-live.yml"
-      - "cloudflare/mmg-ios/src/kairos-production-entry-immutable-v1.js"
-      - "cloudflare/mmg-ios/src/kairos-production-entry-v1.js"
-      - "cloudflare/mmg-ios/src/kairos-product-manufacturing-bridge-v1.js"
-      - "cloudflare/mmg-ios/src/kairos-website-builder-v2.js"
-      - "cloudflare/mmg-ios/src/kairos-website-builder-asset-library-v1.js"
-      - "cloudflare/mmg-ios/scripts/validate-kairos-experience-controller.mjs"
-      - "cloudflare/mmg-ios/scripts/validate-website-builder-v2.mjs"
-      - "cloudflare/mmg-ios/scripts/validate-product-manufacturing-bridge.mjs"
-      - "cloudflare/mmg-ios/scripts/validate-production-quiet.mjs"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-manuscript-online-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-manuscript-project-setup-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-production-registry-v1.js"
+      - "cloudflare/mmg-ios/scripts/validate-manuscript-production-mode.mjs"
+      - "cloudflare/mmg-ios/test/kairos-manuscript-project-setup-*.test.js"
+      - "cloudflare/mmg-ios/wrangler.toml"
       - "web/kairos-dashboard/index.html"
-      - "web/kairos-dashboard/scripts/complete-product-engine.js"
-      - "web/kairos-dashboard/scripts/website-builder-studio.js"
-      - "web/kairos-dashboard/styles/website-builder-studio.css"
+      - "web/kairos-dashboard/scripts/manuscript-project-setup.js"
   push:
-    branches:
-      - main
+    branches: [main]
     paths: *experience_paths
   workflow_dispatch: {}
 
@@ -49,87 +42,77 @@ jobs:
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" --output repository.tar.gz
           tar -xzf repository.tar.gz --strip-components=1 -C repository
           test -f repository/cloudflare/mmg-ios/wrangler.toml
+
       - name: Install Worker dependencies
         working-directory: repository/cloudflare/mmg-ios
         run: npm install --no-package-lock --no-audit --no-fund
-      - name: Validate complete production contract
+
+      - name: Validate active manuscript experience contract
         working-directory: repository/cloudflare/mmg-ios
-        run: npm run validate:production
+        run: |
+          node scripts/validate-manuscript-production-mode.mjs
+          node --test test/kairos-manuscript-project-setup-v3.test.js test/kairos-manuscript-project-setup-ui-v2.test.js
+
       - name: Validate Worker bundle
         working-directory: repository/cloudflare/mmg-ios
         run: npx wrangler deploy --dry-run
 
   verify-production-live:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    needs: verify-contract
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       KAIROS_PRODUCTION_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
     steps:
-      - name: Verify deployed product manufacturing and website experience
+      - name: Verify deployed manuscript experience and operation boundary
         shell: bash
         run: |
           set -euo pipefail
           success=0
           for attempt in $(seq 1 24); do
-            headers_file="$(mktemp)"
-            if builder_status_json="$(curl --fail --show-error --silent --location --max-time 30 -D "${headers_file}" "${KAIROS_PRODUCTION_URL}/api/website-builder/v2/status?proof=${GITHUB_SHA}")" \
-              && product_status_json="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/api/product-manufacturing/status?proof=${GITHUB_SHA}")" \
-              && assets_json="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/api/website-builder/assets?proof=${GITHUB_SHA}")" \
-              && root_html="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/?proof=${GITHUB_SHA}")" \
-              && objective_js="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/scripts/objective-controller-v2.js?proof=${GITHUB_SHA}")" \
-              && builder_js="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/scripts/website-builder-studio.js?proof=${GITHUB_SHA}")" \
-              && product_js="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/scripts/complete-product-engine.js?proof=${GITHUB_SHA}")" \
-              && builder_css="$(curl --fail --show-error --silent --location --max-time 30 "${KAIROS_PRODUCTION_URL}/styles/website-builder-studio.css?proof=${GITHUB_SHA}")"; then
-              production_entry="$(awk 'BEGIN{IGNORECASE=1} /^x-mmg-production-entry:/ {gsub(/\r/, ""); sub(/^[^:]+:[[:space:]]*/, ""); print; exit}' "${headers_file}")"
-              website_builder_v2="$(awk 'BEGIN{IGNORECASE=1} /^x-mmg-website-builder-v2:/ {gsub(/\r/, ""); sub(/^[^:]+:[[:space:]]*/, ""); print; exit}' "${headers_file}")"
-              product_bridge="$(awk 'BEGIN{IGNORECASE=1} /^x-kairos-product-manufacturing:/ {gsub(/\r/, ""); sub(/^[^:]+:[[:space:]]*/, ""); print; exit}' "${headers_file}")"
-              if BUILDER_STATUS_JSON="${builder_status_json}" PRODUCT_STATUS_JSON="${product_status_json}" ASSETS_JSON="${assets_json}" ROOT_HTML="${root_html}" OBJECTIVE_JS="${objective_js}" BUILDER_JS="${builder_js}" PRODUCT_JS="${product_js}" BUILDER_CSS="${builder_css}" PRODUCTION_ENTRY="${production_entry}" WEBSITE_BUILDER_V2="${website_builder_v2}" PRODUCT_BRIDGE="${product_bridge}" node <<'NODE'
-          const builderStatus = JSON.parse(process.env.BUILDER_STATUS_JSON || "{}");
-          const productStatus = JSON.parse(process.env.PRODUCT_STATUS_JSON || "{}");
-          const assets = JSON.parse(process.env.ASSETS_JSON || "{}");
-          const root = process.env.ROOT_HTML || "";
-          const objective = process.env.OBJECTIVE_JS || "";
-          const builder = process.env.BUILDER_JS || "";
-          const product = process.env.PRODUCT_JS || "";
-          const css = process.env.BUILDER_CSS || "";
-          const checks = {
-            productionEntry: process.env.PRODUCTION_ENTRY === "kairos-production-entry-immutable-20260717-11",
-            websiteBuilderHeader: process.env.WEBSITE_BUILDER_V2 === "kairos-website-builder-v2-20260717-1",
-            productBridgeHeader: process.env.PRODUCT_BRIDGE === "kairos-product-manufacturing-bridge-20260717-1",
-            builderOperational: builderStatus.status === "operational",
-            productManufacturingOperational: productStatus.status === "operational",
-            authoritativeManuscript: productStatus.authoritativeManuscriptIntake === true,
-            approvedCoverRequired: productStatus.approvedCoverRequired === true,
-            durableSource: productStatus.sourcePreservation === "durable-object-chunked-source-and-extracted-text",
-            shopifyHandoff: productStatus.shopifyHandoff === "existing-draft-media-review-publication-controls",
-            websitePopulation: productStatus.websitePopulation === "approved-cover-auto-registered-to-builder-asset-library",
-            intelligentComposer: builderStatus.composer === "objective-to-premium-composition-v2",
-            assetLibrary: builderStatus.assetLibrary === "durable-object-central-library-v1",
-            assetsReadable: assets.status === "completed" && Array.isArray(assets.assets),
-            rootLoadsProductBridge: root.includes("product-bridge-20260717-1") && root.includes("complete-product-engine.js"),
-            objectiveExecutes: objective.includes("/api/objectives/execute") && objective.includes("Execute Objective"),
-            composerUI: builder.includes("Compose complete website") && builder.includes("/api/website-builder/compose"),
-            productSourceUpload: product.includes("sourceDataBase64") && product.includes("Authoritative manuscript"),
-            productDraftHandoff: product.includes("Prepare Shopify Draft") && product.includes("/api/shopify/product-publication/prepare"),
-            replacementBlocked: product.includes("does not replace the uploaded book"),
-            premiumCanvas: css.includes(".kws-composer") && css.includes(".kws-asset-library") && css.includes(".kws-preview__section--full-bleed"),
-          };
-          console.log(JSON.stringify({ productionEntry: process.env.PRODUCTION_ENTRY, websiteBuilderV2: process.env.WEBSITE_BUILDER_V2, productBridge: process.env.PRODUCT_BRIDGE, builderStatus, productStatus, assetCount: assets.assets?.length, checks }, null, 2));
-          if (Object.values(checks).some(value => value !== true)) process.exit(1);
-          NODE
-              then
-                success=1
-                rm -f "${headers_file}"
-                echo "Live Product Manufacturing Bridge and Website Builder verified on attempt ${attempt}."
-                break
-              fi
+            status_file="$(mktemp)"
+            client_file="$(mktemp)"
+            probe_headers="$(mktemp)"
+            probe_body="$(mktemp)"
+            denial_body="$(mktemp)"
+
+            status_code="$(curl --silent --show-error --max-time 30 \
+              "${KAIROS_PRODUCTION_URL}/api/kairos/manuscripts/status?proof=${GITHUB_SHA}" \
+              -o "${status_file}" -w '%{http_code}' || true)"
+            client_code="$(curl --silent --show-error --max-time 30 \
+              "${KAIROS_PRODUCTION_URL}/scripts/manuscript-project-setup.js?proof=${GITHUB_SHA}" \
+              -o "${client_file}" -w '%{http_code}' || true)"
+            probe_code="$(curl --silent --show-error --max-time 30 -D "${probe_headers}" \
+              "${KAIROS_PRODUCTION_URL}/api/production-registry/manuscripts/experience-probe-12345678/setup" \
+              -o "${probe_body}" -w '%{http_code}' || true)"
+            denial_code="$(curl --silent --show-error --max-time 30 \
+              -X POST "${KAIROS_PRODUCTION_URL}/api/shopify/page-shell/publish" \
+              -H 'Content-Type: application/json' --data '{}' \
+              -o "${denial_body}" -w '%{http_code}' || true)"
+
+            if [ "${status_code}" = "200" ] \
+              && grep -q '"ready":true' "${status_file}" \
+              && grep -q '"mode":"manuscript-only"' "${status_file}" \
+              && [ "${client_code}" = "200" ] \
+              && grep -q 'kairos-manuscript-project-setup-ui-20260722-2' "${client_file}" \
+              && grep -q 'two-phase-resumable' "${client_file}" \
+              && [ "${probe_code}" = "404" ] \
+              && grep -qi 'X-Kairos-Manuscript-Setup: kairos-manuscript-project-setup-20260722-3' "${probe_headers}" \
+              && [ "${denial_code}" = "403" ] \
+              && grep -q '"code":"WEBSITE_MUTATION_DENIED"' "${denial_body}"; then
+              success=1
+              echo "Live manuscript experience verified on attempt ${attempt}."
+              rm -f "${status_file}" "${client_file}" "${probe_headers}" "${probe_body}" "${denial_body}"
+              break
             fi
-            rm -f "${headers_file}"
-            echo "Production deployment not ready for Product Manufacturing Bridge (attempt ${attempt}/24)."
+
+            rm -f "${status_file}" "${client_file}" "${probe_headers}" "${probe_body}" "${denial_body}"
+            echo "Manuscript experience deployment not ready (attempt ${attempt}/24)."
             sleep 5
           done
+
           if [ "${success}" -ne 1 ]; then
-            echo "::error::Live Product Manufacturing Bridge proof failed after the production deployment window."
+            echo "::error::Live manuscript experience proof failed after the deployment window."
             exit 1
           fi
