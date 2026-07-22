@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const BUILD = "kairos-manuscript-production-validator-20260722-1";
+const BUILD = "kairos-manuscript-production-validator-20260722-2";
 const here = dirname(fileURLToPath(import.meta.url));
 const workerRoot = join(here, "..");
 const sourceRoot = join(workerRoot, "src");
@@ -14,6 +14,8 @@ const boundaryPath = join(sourceRoot, "kairos-manuscript-operation-boundary-v1.j
 const publishingEntryPath = join(sourceRoot, "kairos-production-entry-publishing-readiness-v1.js");
 const setupPath = join(sourceRoot, "kairos-manuscript-project-setup-v1.js");
 const packagePath = join(sourceRoot, "kairos-publishing-package-v1.js");
+const autoPipelinePath = join(sourceRoot, "kairos-manuscript-auto-pipeline-v1.js");
+const productPublicationPath = join(sourceRoot, "kairos-product-publication-v1.js");
 
 for (const file of [
   wranglerPath,
@@ -22,6 +24,8 @@ for (const file of [
   publishingEntryPath,
   setupPath,
   packagePath,
+  autoPipelinePath,
+  productPublicationPath,
 ]) {
   assert.ok(existsSync(file), `Required manuscript production file is missing: ${file}`);
 }
@@ -39,8 +43,13 @@ assert.match(
 );
 assert.match(
   wrangler,
-  /KAIROS_SHOPIFY_WRITES_ENABLED\s*=\s*"false"/,
-  "Shopify writes must remain disabled in manuscript mode.",
+  /KAIROS_SHOPIFY_WRITES_ENABLED\s*=\s*"true"/,
+  "The approval-gated Shopify draft capability must be enabled.",
+);
+assert.match(
+  wrangler,
+  /KAIROS_SHOPIFY_LIVE_PUBLISH_ENABLED\s*=\s*"true"/,
+  "The explicit live-publication capability must be enabled.",
 );
 assert.match(
   wrangler,
@@ -61,15 +70,21 @@ const entry = readFileSync(entryPath, "utf8");
 for (const marker of [
   './kairos-production-entry-publishing-readiness-v1.js',
   './kairos-manuscript-operation-boundary-v1.js',
+  './kairos-manuscript-auto-pipeline-v1.js',
   'inspectManuscriptOperation',
   '/api/kairos/manuscripts/status',
   'mode: "manuscript-only"',
-  'shopifyAccess: "none"',
+  'shopifyAccess: shopifyDraftWritesEnabled ? "draft-only" : "none"',
+  'automaticMetadataExtraction: true',
+  'productionReadyAssetManufacturing: true',
+  'adminAssetVaultStorage: true',
+  'manualCatalogEntryRequired: false',
+  'shopifyDraftApprovalRequired: true',
+  'liveProductPublicationApprovalRequired: true',
   'websiteMutationAuthorized: false',
   'navigationMutationAuthorized: false',
   'homepageMutationAuthorized: false',
   'themeMutationAuthorized: false',
-  'productMutationAuthorized: false',
   'minuteWebsiteCronEnabled: false',
 ]) {
   assert.ok(entry.includes(marker), `Manuscript production entry is missing: ${marker}`);
@@ -77,6 +92,10 @@ for (const marker of [
 
 const boundary = readFileSync(boundaryPath, "utf8");
 for (const marker of [
+  'MANUSCRIPT_AUTO_PIPELINE',
+  'manuscript-production-package',
+  'approval-gated-shopify-draft',
+  'approval-gated-shopify-publication',
   'WEBSITE_MUTATION_DENIED',
   'OPERATION_OUT_OF_SCOPE',
   'NON_MANUSCRIPT_CONTENT_DENIED',
@@ -100,7 +119,32 @@ for (const prohibitedCapability of [
   'product-publication',
   'product-media',
 ]) {
-  assert.ok(boundary.includes(prohibitedCapability), `Website mutation denial is missing: ${prohibitedCapability}`);
+  assert.ok(boundary.includes(prohibitedCapability), `Direct website mutation denial is missing: ${prohibitedCapability}`);
+}
+
+const autoPipeline = readFileSync(autoPipelinePath, "utf8");
+for (const marker of [
+  'derivePublicationMetadata',
+  '/admin-vault/manifest',
+  'complete-production-package.zip',
+  'CREATE SHOPIFY PRODUCT DRAFT',
+  'PUBLISH PRODUCT LIVE',
+  'manualCatalogEntryRequired: false',
+  'websiteThemeMutationAuthorized: false',
+  'navigationMutationAuthorized: false',
+]) {
+  assert.ok(autoPipeline.includes(marker), `Automatic manuscript production pipeline is missing: ${marker}`);
+}
+
+const productPublication = readFileSync(productPublicationPath, "utf8");
+for (const marker of [
+  'APPROVED_TEMPLATE_SUFFIXES',
+  'mmg-ai-image-mastery',
+  'mmg-book-product',
+  'status: "DRAFT"',
+  'product_template_verification_failed',
+]) {
+  assert.ok(productPublication.includes(marker), `Governed Shopify product publication is missing: ${marker}`);
 }
 
 const runtimeModule = await import(`${pathToFileURL(entryPath).href}?validation=${Date.now()}`);
@@ -112,8 +156,11 @@ console.log(JSON.stringify({
   status: "ready",
   build: BUILD,
   mode: "manuscript-only",
-  shopifyAccess: "none",
-  websiteMutationAuthorized: false,
+  shopifyAccess: "approval-gated-exact-product-release",
+  adminAssetVault: true,
+  finalZipRequired: true,
+  manualCatalogEntryRequired: false,
+  directWebsiteMutationAuthorized: false,
   minuteWebsiteCronEnabled: false,
   productionEntry: "kairos-production-entry-manuscript-online-v1.js",
 }, null, 2));
