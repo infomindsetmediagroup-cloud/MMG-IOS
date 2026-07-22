@@ -1,0 +1,2 @@
+Trigger a fresh Cloudflare production build from the corrected main branch.
+Expected readiness build: kairos-publishing-readiness-20260722-2
