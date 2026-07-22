@@ -5,16 +5,21 @@ on:
     branches: [main]
     paths:
       - 'cloudflare/kairos/**'
+      - 'cloudflare/mmg-ios/**'
       - 'cloudflare/mmg-ios-worker.js'
       - 'server/kairos/**'
       - 'backend-tests/**'
       - 'governance/kairos-shopify-operation-scope-v1.json'
+      - 'governance/kairos-builder-plugin-registry-v1.json'
       - 'scripts/validate-kairos-shopify-policy.mjs'
+      - 'scripts/validate-kairos-manuscript-activation.mjs'
       - 'docs/runbooks/kairos-cloudflare-native-shopify-runtime.md'
+      - 'docs/runbooks/kairos-builder-plugin-operating-model.md'
       - 'package.json'
       - 'wrangler.toml'
       - 'web/kairos-dashboard/**'
       - '.github/workflows/validate-kairos-change.yml'
+      - '.github/workflows/deploy-kairos-manuscript-runtime.yml'
   workflow_dispatch:
 
 concurrency:
@@ -50,13 +55,19 @@ jobs:
           node --check cloudflare/kairos/shopify-client.js
           node --check cloudflare/kairos/operation-registry.js
           node --check cloudflare/kairos/runtime.js
+          node --check cloudflare/mmg-ios/src/kairos-manuscript-operation-boundary-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-production-entry-manuscript-online-v1.js
           node --check scripts/validate-kairos-shopify-policy.mjs
+          node --check scripts/validate-kairos-manuscript-activation.mjs
 
-      - name: Test Kairos operation-scope firewall
-        run: npx vitest run backend-tests/kairos-scope-firewall.test.js
+      - name: Test Kairos operation boundaries
+        run: npx vitest run backend-tests/kairos-scope-firewall.test.js backend-tests/kairos-manuscript-operation-boundary.test.js
 
       - name: Validate Kairos Shopify policy
         run: npm run validate:kairos-shopify
+
+      - name: Validate manuscript activation and builder plugins
+        run: npm run validate:manuscript-activation
 
       - name: Validate Shopify governance
         run: npm run validate:shopify
@@ -64,5 +75,10 @@ jobs:
       - name: Validate canonical service product
         run: npm run validate:service-product
 
-      - name: Validate active Cloudflare deployment bundle
+      - name: Install active Worker dependencies
+        working-directory: cloudflare/mmg-ios
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Validate active Cloudflare manuscript bundle
+        working-directory: cloudflare/mmg-ios
         run: npx wrangler deploy --dry-run
