@@ -24,6 +24,9 @@ class_name = "KairosProject"
 tag = "native-publishing-v1"
 new_sqlite_classes = ["KairosProject"]
 
+# Required production secret (set with `wrangler secret put KAIROS_API_TOKEN`):
+# KAIROS_API_TOKEN authenticates all /api/kairos/projects routes.
+
 [vars]
 SHOPIFY_STORE_DOMAIN = "07kd8e-qw.myshopify.com"
 SHOPIFY_API_VERSION = "2026-07"
