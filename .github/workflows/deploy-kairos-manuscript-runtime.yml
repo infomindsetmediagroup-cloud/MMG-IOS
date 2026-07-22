@@ -80,8 +80,14 @@ jobs:
       - name: Validate manuscript activation contract
         run: node scripts/validate-kairos-manuscript-activation.mjs
 
-      - name: Test automatic metadata and vault pipeline
-        run: npx vitest run backend-tests/kairos-manuscript-auto-pipeline.test.js
+      - name: Test AI Image Mastery metadata extraction
+        run: npx vitest run backend-tests/kairos-manuscript-auto-pipeline.test.js -t "extracts the AI Image Mastery publication record without a catalog form"
+
+      - name: Test durable project metadata precedence
+        run: npx vitest run backend-tests/kairos-manuscript-auto-pipeline.test.js -t "uses the durable project setup as the authoritative title and author"
+
+      - name: Test generic publication template routing
+        run: npx vitest run backend-tests/kairos-manuscript-auto-pipeline.test.js -t "routes non-AI publications to the canonical MMG book-product template"
 
       - name: Test exact manuscript operation boundary
         run: npx vitest run backend-tests/kairos-manuscript-operation-boundary.test.js
