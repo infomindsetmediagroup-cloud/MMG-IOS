@@ -38,8 +38,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
-          cache-dependency-path: cloudflare/mmg-ios/package-lock.json
 
       - name: Install root dependencies
         run: npm install --ignore-scripts --no-audit --no-fund
@@ -49,7 +47,7 @@ jobs:
 
       - name: Install Kairos Worker dependencies
         working-directory: cloudflare/mmg-ios
-        run: npm ci
+        run: npm install --ignore-scripts --no-audit --no-fund
 
       - name: Run Kairos Worker tests
         working-directory: cloudflare/mmg-ios
