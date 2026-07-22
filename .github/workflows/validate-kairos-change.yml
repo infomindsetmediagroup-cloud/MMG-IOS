@@ -70,7 +70,17 @@ jobs:
         run: npx playwright install --with-deps webkit
 
       - name: Test manuscript buttons in mobile WebKit
-        run: npm run test:manuscript-ui
+        shell: bash
+        run: |
+          set +e
+          npm run test:manuscript-ui > "${RUNNER_TEMP}/manuscript-webkit.log" 2>&1
+          status=$?
+          if [ "${status}" -ne 0 ]; then
+            echo "Mobile WebKit interaction failure:"
+            tail -n 220 "${RUNNER_TEMP}/manuscript-webkit.log"
+            exit "${status}"
+          fi
+          tail -n 60 "${RUNNER_TEMP}/manuscript-webkit.log"
 
       - name: Validate Kairos Shopify policy
         run: npm run validate:kairos-shopify
