@@ -1,6 +1,7 @@
 import previousRuntime, { KairosProject } from "./kairos-production-entry-package-images-v1.js";
+import { inspectShopifyAuthConfiguration } from "./kairos-shopify-auth-v1.js";
 
-const BUILD = "kairos-publishing-readiness-20260722-1";
+const BUILD = "kairos-publishing-readiness-20260722-2";
 
 export { KairosProject };
 
@@ -20,6 +21,7 @@ export default {
 };
 
 function readiness(env) {
+  const shopifyAuth = inspectShopifyAuthConfiguration(env);
   const checks = {
     durableObjectBinding: Boolean(env.KAIROS_PROJECTS),
     imagesBinding: Boolean(env.IMAGES && typeof env.IMAGES.input === "function"),
@@ -28,7 +30,10 @@ function readiness(env) {
     apiTokenConfigured: nonEmpty(env.KAIROS_API_TOKEN),
     mediaSigningSecretConfigured: nonEmpty(env.KAIROS_MEDIA_SIGNING_SECRET),
     shopifyDomainConfigured: nonEmpty(env.SHOPIFY_STORE_DOMAIN),
-    shopifyAdminTokenConfigured: nonEmpty(env.SHOPIFY_ADMIN_ACCESS_TOKEN),
+    shopifyAuthenticationConfigured: shopifyAuth.authenticationConfigured,
+    shopifyClientIdConfigured: shopifyAuth.clientIdConfigured,
+    shopifyClientSecretConfigured: shopifyAuth.clientSecretConfigured,
+    shopifyStaticAdminTokenConfigured: shopifyAuth.staticTokenConfigured,
     storefrontOriginSecure: /^https:\/\//.test(String(env.MMG_STOREFRONT_ORIGIN || "")),
   };
 
@@ -39,7 +44,7 @@ function readiness(env) {
     "apiTokenConfigured",
     "mediaSigningSecretConfigured",
     "shopifyDomainConfigured",
-    "shopifyAdminTokenConfigured",
+    "shopifyAuthenticationConfigured",
     "storefrontOriginSecure",
   ];
   const missing = required.filter((name) => checks[name] !== true);
@@ -51,6 +56,7 @@ function readiness(env) {
     ready,
     checks,
     missing,
+    shopifyAuthenticationMode: shopifyAuth.preferredMode,
     safeguards: {
       shopifyTargetStatus: "DRAFT",
       livePublicationAuthorized: false,
