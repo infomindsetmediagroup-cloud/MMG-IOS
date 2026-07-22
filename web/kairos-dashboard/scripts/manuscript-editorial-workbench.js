@@ -1,35 +1,81 @@
-const BUILD = "kairos-manuscript-editorial-workbench-ui-20260713-1";
+const BUILD = "kairos-manuscript-editorial-workbench-ui-20260722-2";
 const ACTIVE_KEY = "kairos.production.active-workspace";
-let state = { record: null, manuscript: "", busy: false, error: "" };
+
+let state = {
+  projectId: "",
+  record: null,
+  manuscript: "",
+  busy: false,
+  error: "",
+};
+let loadPromise = null;
 
 async function enhance() {
   const setup = document.querySelector("#manuscript-project-setup");
-  if (!setup || setup.querySelector("#manuscript-editorial-workbench")) return;
+  if (!setup) return;
+
   const projectId = activeProjectId();
   if (!projectId) return;
-  const setupComplete = setup.textContent.includes("Production assignment") || setup.textContent.includes("assigned-to-production") || setup.textContent.includes("awaiting-customer-cover");
+
+  const setupComplete = setup.textContent.includes("Production assignment")
+    || setup.textContent.includes("assigned-to-production")
+    || setup.textContent.includes("awaiting-customer-cover");
   if (!setupComplete) return;
+
+  const existing = document.querySelector("#manuscript-editorial-workbench");
+  if (existing?.dataset.projectId === projectId) return;
+  existing?.remove();
+
+  if (state.projectId !== projectId) {
+    state = {
+      projectId,
+      record: null,
+      manuscript: "",
+      busy: false,
+      error: "",
+    };
+    loadPromise = null;
+  }
 
   const section = document.createElement("section");
   section.id = "manuscript-editorial-workbench";
+  section.dataset.projectId = projectId;
   section.className = "manuscript-editorial-workbench";
-  section.innerHTML = `<p class="eyebrow">Editorial production</p><h3>Loading Editorial Workbench…</h3>`;
+  section.innerHTML = '<p class="eyebrow">Editorial production</p><h3>Loading Editorial Workbench…</h3>';
   setup.insertAdjacentElement("afterend", section);
-  await load(projectId);
+
+  await ensureLoaded(projectId);
+}
+
+function ensureLoaded(projectId) {
+  if (loadPromise && state.projectId === projectId) return loadPromise;
+  loadPromise = load(projectId).finally(() => {
+    if (state.projectId === projectId) loadPromise = null;
+  });
+  return loadPromise;
 }
 
 async function load(projectId) {
-  state.busy = true; state.error = ""; render(projectId);
+  state.busy = true;
+  state.error = "";
+  render(projectId);
+
   try {
-    const response = await fetch(`/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/editorial`, { credentials: "include", cache: "no-store" });
+    const response = await fetch(
+      `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/editorial`,
+      { credentials: "include", cache: "no-store" },
+    );
     const body = await response.json();
-    if (!response.ok) throw new Error(body?.error?.message || "Editorial workbench could not be loaded.");
+    if (!response.ok) {
+      throw new Error(body?.error?.message || "Editorial workbench could not be loaded.");
+    }
     state.record = body;
     if (!state.manuscript) await loadCurrentText(projectId, body.editorial);
   } catch (error) {
     state.error = error?.message || "Editorial workbench could not be loaded.";
   } finally {
-    state.busy = false; render(projectId);
+    state.busy = false;
+    render(projectId);
   }
 }
 
@@ -45,14 +91,21 @@ async function loadCurrentText(projectId, editorial) {
 
 function render(projectId) {
   const section = document.querySelector("#manuscript-editorial-workbench");
-  if (!section) return;
+  if (!section || section.dataset.projectId !== projectId) return;
+
   if (state.busy) {
-    section.innerHTML = `<p class="eyebrow">Editorial production</p><h3>Saving production work…</h3><p class="manuscript-progress">Kairos is preserving the version, milestone, and approval record.</p>`;
+    section.innerHTML = '<p class="eyebrow">Editorial production</p><h3>Loading Editorial Workbench…</h3><p class="manuscript-progress">Kairos is loading the saved editorial state once.</p>';
     return;
   }
+
   if (state.error) {
-    section.innerHTML = `<p class="eyebrow">Editorial production</p><h3>Editorial Workbench needs attention</h3><p class="manuscript-error">${esc(state.error)}</p><button class="secondary" data-editorial-retry>Retry</button>`;
-    section.querySelector("[data-editorial-retry]")?.addEventListener("click", () => load(projectId));
+    section.innerHTML = `
+      <p class="eyebrow">Editorial production</p>
+      <h3>Editorial Workbench needs attention</h3>
+      <p class="manuscript-error">${esc(state.error)}</p>
+      <button type="button" class="secondary" data-editorial-retry>Retry</button>
+    `;
+    section.querySelector("[data-editorial-retry]")?.addEventListener("click", () => ensureLoaded(projectId));
     return;
   }
 
@@ -81,12 +134,12 @@ function render(projectId) {
     <label>Editorial manuscript<textarea data-editorial-text maxlength="2000000">${esc(state.manuscript)}</textarea></label>
     <label>Production notes<textarea data-editorial-notes maxlength="4000" placeholder="Record corrections, unresolved questions, style decisions, and production notes."></textarea></label>
     <div class="manuscript-actions">
-      <button class="primary" data-editorial-save>Save Version</button>
-      ${versions.length ? `<button class="secondary" data-editorial-review>Prepare Customer Review</button>` : ""}
-      ${review?.status === "awaiting-customer-review" ? `<button class="secondary" data-editorial-approve>Record Approval</button><button class="secondary" data-editorial-revise>Request Revision</button>` : ""}
-      ${review?.decision === "approved" ? `<button class="primary" data-editorial-finalize>Send to Manufacturing</button>` : ""}
+      <button type="button" class="primary" data-editorial-save>Save Version</button>
+      ${versions.length ? '<button type="button" class="secondary" data-editorial-review>Prepare Customer Review</button>' : ""}
+      ${review?.status === "awaiting-customer-review" ? '<button type="button" class="secondary" data-editorial-approve>Record Approval</button><button type="button" class="secondary" data-editorial-revise>Request Revision</button>' : ""}
+      ${review?.decision === "approved" ? '<button type="button" class="primary" data-editorial-finalize>Send to Manufacturing</button>' : ""}
     </div>
-    ${versions.length ? `<div class="issue-list manuscript-version-list">${versions.slice().reverse().map(v => `<article><b>${esc(v.label)}</b><p>${esc(v.passType)} · ${Number(v.wordCount || 0).toLocaleString()} words</p><small>${esc(v.actor)} · ${esc(formatDate(v.createdAt))}</small></article>`).join("")}</div>` : ""}
+    ${versions.length ? `<div class="issue-list manuscript-version-list">${versions.slice().reverse().map((version) => `<article><b>${esc(version.label)}</b><p>${esc(version.passType)} · ${Number(version.wordCount || 0).toLocaleString()} words</p><small>${esc(version.actor)} · ${esc(formatDate(version.createdAt))}</small></article>`).join("")}</div>` : ""}
   `;
 
   section.querySelector("[data-editorial-save]")?.addEventListener("click", () => saveVersion(section, projectId));
@@ -98,7 +151,10 @@ function render(projectId) {
 
 async function saveVersion(section, projectId) {
   const manuscript = section.querySelector("[data-editorial-text]")?.value || "";
-  if (manuscript.trim().length < 50) return fail(projectId, "Provide at least 50 characters for the editorial version.");
+  if (manuscript.trim().length < 50) {
+    fail(projectId, "Provide at least 50 characters for the editorial version.");
+    return;
+  }
   await run(projectId, `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/editorial/versions`, {
     manuscript,
     passType: section.querySelector("[data-editorial-pass]")?.value || "copyedit",
@@ -111,41 +167,114 @@ async function saveVersion(section, projectId) {
 
 async function prepareReview(projectId) {
   const currentVersionId = state.record?.editorial?.currentVersionId;
-  if (!currentVersionId) return fail(projectId, "Save an editorial version before preparing customer review.");
-  await run(projectId, `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/editorial/review`, { versionId: currentVersionId, actor: "MMG Editorial Production" });
+  if (!currentVersionId) {
+    fail(projectId, "Save an editorial version before preparing customer review.");
+    return;
+  }
+  await run(projectId, `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/editorial/review`, {
+    versionId: currentVersionId,
+    actor: "MMG Editorial Production",
+  });
 }
 
 async function decision(projectId, value) {
   const note = window.prompt(value === "approved" ? "Approval note (optional)" : "Describe the requested revision") || "";
-  await run(projectId, `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/editorial/decision`, { decision: value, note, actor: "Executive" });
+  await run(projectId, `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/editorial/decision`, {
+    decision: value,
+    note,
+    actor: "Executive",
+  });
 }
 
 async function finalize(projectId) {
   const currentVersionId = state.record?.editorial?.currentVersionId;
-  await run(projectId, `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/editorial/finalize`, { versionId: currentVersionId, actor: "MMG Editorial Production" });
+  await run(projectId, `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/editorial/finalize`, {
+    versionId: currentVersionId,
+    actor: "MMG Editorial Production",
+  });
 }
 
 async function run(projectId, url, payload) {
-  state.busy = true; state.error = ""; render(projectId);
+  state.busy = true;
+  state.error = "";
+  render(projectId);
   try {
-    const response = await fetch(url, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json", "X-MMG-Client-Build": BUILD }, body: JSON.stringify(payload) });
+    const response = await fetch(url, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", "X-MMG-Client-Build": BUILD },
+      body: JSON.stringify(payload),
+    });
     const body = await response.json();
     if (!response.ok) throw new Error(body?.error?.message || "Editorial production action failed.");
     await window.KairosProductionWorkspace?.refresh?.();
-    const refresh = await fetch(`/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/editorial`, { credentials: "include", cache: "no-store" });
+    const refresh = await fetch(
+      `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/editorial`,
+      { credentials: "include", cache: "no-store" },
+    );
     state.record = await refresh.json();
   } catch (error) {
     state.error = error?.message || "Editorial production action failed.";
   } finally {
-    state.busy = false; render(projectId);
+    state.busy = false;
+    render(projectId);
   }
 }
 
-function fail(projectId, message) { state.error = message; render(projectId); }
-function activeProjectId() { try { const active = JSON.parse(sessionStorage.getItem(ACTIVE_KEY) || "null"); return active?.workspace === "manuscript-studio" ? active.projectId || null : null; } catch { return null; } }
-function statusLabel(value) { return ({ "not-started": "Editorial Workbench", "editorial-in-progress": "Editorial production in progress", "awaiting-customer-review": "Awaiting customer review", "customer-approved": "Customer approved", "revision-requested": "Revision requested", "ready-for-manufacturing": "Ready for manufacturing" })[value] || "Editorial Workbench"; }
-function formatDate(value) { try { return new Date(value).toLocaleString(); } catch { return String(value || ""); } }
-function esc(value) { return String(value ?? "").replace(/[&<>'"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "'":"&#39;", '"':"&quot;" })[c]); }
-new MutationObserver(enhance).observe(document.documentElement, { childList: true, subtree: true });
-window.addEventListener("kairos:production:state-changed", enhance);
-enhance();
+function fail(projectId, message) {
+  state.error = message;
+  render(projectId);
+}
+
+function activeProjectId() {
+  try {
+    const active = JSON.parse(sessionStorage.getItem(ACTIVE_KEY) || "null");
+    return active?.workspace === "manuscript-studio" ? active.projectId || null : null;
+  } catch {
+    return null;
+  }
+}
+
+function statusLabel(value) {
+  return ({
+    "not-started": "Editorial Workbench",
+    "editorial-in-progress": "Editorial production in progress",
+    "awaiting-customer-review": "Awaiting customer review",
+    "customer-approved": "Customer approved",
+    "revision-requested": "Revision requested",
+    "ready-for-manufacturing": "Ready for manufacturing",
+  })[value] || "Editorial Workbench";
+}
+
+function formatDate(value) {
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return String(value || "");
+  }
+}
+
+function esc(value) {
+  return String(value ?? "").replace(/[&<>'"]/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "'": "&#39;",
+    '"': "&quot;",
+  })[character]);
+}
+
+window.KairosEditorialWorkbenchController = Object.freeze({
+  build: BUILD,
+  ready: true,
+  enhance,
+});
+
+const observer = new MutationObserver(() => {
+  void enhance();
+});
+observer.observe(document.documentElement, { childList: true, subtree: true });
+window.addEventListener("kairos:production:state-changed", () => {
+  void enhance();
+});
+void enhance();
