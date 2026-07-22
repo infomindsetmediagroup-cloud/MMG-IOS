@@ -7,9 +7,24 @@ const doctrinePath = path.join(root, "cloudflare/kairos/shopify-doctrine.js");
 const workflowPath = path.join(root, "cloudflare/kairos/workflow-registry.js");
 const firewallPath = path.join(root, "cloudflare/kairos/scope-firewall.js");
 const workerPath = path.join(root, "cloudflare/mmg-ios-worker.js");
-const wranglerPath = path.join(root, "wrangler.toml");
+const rootWranglerPath = path.join(root, "wrangler.toml");
+const productionWranglerPath = path.join(root, "cloudflare/mmg-ios/wrangler.toml");
+const manuscriptEntryPath = path.join(root, "cloudflare/mmg-ios/src/kairos-production-entry-manuscript-online-v1.js");
+const manuscriptBoundaryPath = path.join(root, "cloudflare/mmg-ios/src/kairos-manuscript-operation-boundary-v1.js");
+const builderRegistryPath = path.join(root, "governance/kairos-builder-plugin-registry-v1.json");
 
-const requiredFiles = [policyPath, doctrinePath, workflowPath, firewallPath, workerPath, wranglerPath];
+const requiredFiles = [
+  policyPath,
+  doctrinePath,
+  workflowPath,
+  firewallPath,
+  workerPath,
+  rootWranglerPath,
+  productionWranglerPath,
+  manuscriptEntryPath,
+  manuscriptBoundaryPath,
+  builderRegistryPath,
+];
 for (const file of requiredFiles) {
   if (!fs.existsSync(file)) fail(`Missing required Kairos policy file: ${path.relative(root, file)}`);
 }
@@ -28,11 +43,15 @@ for (const workflow of prohibitedAutomaticWorkflowPaths) {
 }
 
 const policy = JSON.parse(fs.readFileSync(policyPath, "utf8"));
+const builderRegistry = JSON.parse(fs.readFileSync(builderRegistryPath, "utf8"));
 const doctrine = fs.readFileSync(doctrinePath, "utf8");
 const workflows = fs.readFileSync(workflowPath, "utf8");
 const firewall = fs.readFileSync(firewallPath, "utf8");
 const worker = fs.readFileSync(workerPath, "utf8");
-const wrangler = fs.readFileSync(wranglerPath, "utf8");
+const rootWrangler = fs.readFileSync(rootWranglerPath, "utf8");
+const productionWrangler = fs.readFileSync(productionWranglerPath, "utf8");
+const manuscriptEntry = fs.readFileSync(manuscriptEntryPath, "utf8");
+const manuscriptBoundary = fs.readFileSync(manuscriptBoundaryPath, "utf8");
 
 assert(policy.defaultDecision === "deny", "Policy must default deny.");
 assert(policy.runtime.requiredProvider === "cloudflare", "Cloudflare must be the required runtime.");
@@ -57,7 +76,16 @@ for (const denied of [
 assert(!worker.includes("vercel"), "Cloudflare Worker must not contain a Vercel proxy or origin.");
 assert(!worker.includes("VERCEL_RUNTIME_ORIGIN"), "Legacy Vercel runtime constant is prohibited.");
 assert(worker.includes("handleKairosApiRequest"), "Cloudflare Worker must route API requests to Kairos runtime.");
-assert(wrangler.includes('KAIROS_SHOPIFY_WRITES_ENABLED = "false"'), "Shopify writes must default to disabled.");
+assert(rootWrangler.includes('KAIROS_SHOPIFY_WRITES_ENABLED = "false"'), "Root Shopify writes must default to disabled.");
+assert(productionWrangler.includes('main = "src/kairos-production-entry-manuscript-online-v1.js"'), "Production Worker must use the manuscript-only entry.");
+assert(productionWrangler.includes('KAIROS_SHOPIFY_WRITES_ENABLED = "false"'), "Production Shopify writes must remain disabled.");
+assert(!productionWrangler.includes('"* * * * *"'), "Minute-level website mutation cron must remain removed.");
+assert(manuscriptEntry.includes("inspectManuscriptOperation"), "Production manuscript entry must enforce the operation boundary.");
+assert(manuscriptEntry.includes('shopifyAccess: "none"'), "Production manuscript status must declare zero Shopify access.");
+assert(manuscriptBoundary.includes("WEBSITE_MUTATION_DENIED"), "Production boundary must deny website mutations.");
+assert(manuscriptBoundary.includes("OPERATION_OUT_OF_SCOPE"), "Production boundary must fail closed for unrelated mutations.");
+assert(builderRegistry.runtime.shopifyRuntimeAccessFromBuilderPlugins === "none", "Builder plugins must not gain Shopify runtime access.");
+assert(builderRegistry.enforcement.builderGuidanceCannotExpandTaskScope === true, "Builder guidance must not expand task scope.");
 assert(workflows.includes('"manuscript.write.v1"'), "Manuscript workflow definition is missing.");
 assert(workflows.includes('shopifyAccess: "none"'), "Manuscript workflow Shopify denial is missing.");
 assert(firewall.includes("CROSS_DOMAIN_OPERATION_DENIED"), "Cross-domain firewall rule is missing.");
