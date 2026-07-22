@@ -98,6 +98,20 @@ test("stores immutable cover and manuscript bytes and starts the orchestrator", 
   assert.equal(runPayload.project.stages[1].status, "SUCCEEDED");
   assert.equal(runPayload.project.stages[2].status, "RUNNING");
   assert.equal(runPayload.safeguards.liveShopifyMutation, "blocked");
+
+  const statusResponse = await handlePublishingPackageObjectRequest(
+    durableState,
+    new Request(`https://internal.test/internal/publishing/projects/${projectId}/status`),
+  );
+  assert.equal(statusResponse.status, 200);
+  assert.equal((await body(statusResponse)).project.run.id, runPayload.run.id);
+
+  const packageResponse = await handlePublishingPackageObjectRequest(
+    durableState,
+    new Request(`https://internal.test/internal/publishing/projects/${projectId}/package`),
+  );
+  assert.equal(packageResponse.status, 404);
+  assert.equal((await body(packageResponse)).error.code, "package_not_ready");
 });
 
 test("rejects unsupported assets and incomplete runs", async () => {
