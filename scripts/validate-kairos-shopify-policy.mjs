@@ -14,6 +14,19 @@ for (const file of requiredFiles) {
   if (!fs.existsSync(file)) fail(`Missing required Kairos policy file: ${path.relative(root, file)}`);
 }
 
+const prohibitedAutomaticWorkflowPaths = [
+  ".github/workflows/deploy-clean-page-shell-on-pr.yml",
+  ".github/workflows/diagnose-native-page-repair-on-pr.yml",
+  ".github/workflows/execute-native-page-repair-on-pr.yml",
+  ".github/workflows/verify-audited-page-shell-on-pr.yml",
+];
+for (const workflow of prohibitedAutomaticWorkflowPaths) {
+  assert(
+    !fs.existsSync(path.join(root, workflow)),
+    `Deprecated broad-scope storefront workflow must remain removed: ${workflow}`,
+  );
+}
+
 const policy = JSON.parse(fs.readFileSync(policyPath, "utf8"));
 const doctrine = fs.readFileSync(doctrinePath, "utf8");
 const workflows = fs.readFileSync(workflowPath, "utf8");
