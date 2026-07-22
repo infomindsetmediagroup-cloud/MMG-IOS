@@ -4,9 +4,16 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'cloudflare/kairos/**'
       - 'cloudflare/mmg-ios/**'
+      - 'cloudflare/mmg-ios-worker.js'
       - 'server/kairos/**'
       - 'backend-tests/**'
+      - 'governance/kairos-shopify-operation-scope-v1.json'
+      - 'scripts/validate-kairos-shopify-policy.mjs'
+      - 'docs/runbooks/kairos-cloudflare-native-shopify-runtime.md'
+      - 'package.json'
+      - 'wrangler.toml'
       - 'web/kairos-dashboard/**'
       - '.github/workflows/validate-kairos-change.yml'
   workflow_dispatch:
@@ -32,12 +39,10 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            cloudflare/mmg-ios/package-lock.json
+          cache-dependency-path: cloudflare/mmg-ios/package-lock.json
 
       - name: Install root dependencies
-        run: npm ci
+        run: npm install --ignore-scripts --no-audit --no-fund
 
       - name: Validate root contracts and tests
         run: npm run check
