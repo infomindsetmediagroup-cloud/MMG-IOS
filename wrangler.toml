@@ -1,4 +1,4 @@
-name = "mmg-ios"
+name = "mmg-ios-staging-host"
 main = "cloudflare/mmg-ios-worker.js"
 compatibility_date = "2026-07-11"
 workers_dev = true
