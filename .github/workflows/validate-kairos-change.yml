@@ -42,8 +42,23 @@ jobs:
       - name: Install root dependencies
         run: npm install --ignore-scripts --no-audit --no-fund
 
-      - name: Validate root contracts and tests
-        run: npm run check
+      - name: Typecheck root runtime
+        run: npm run typecheck
+
+      - name: Test Kairos operation-scope firewall
+        run: npx vitest run backend-tests/kairos-scope-firewall.test.js
+
+      - name: Validate Kairos Shopify policy
+        run: npm run validate:kairos-shopify
+
+      - name: Validate Shopify governance
+        run: npm run validate:shopify
+
+      - name: Validate canonical service product
+        run: npm run validate:service-product
+
+      - name: Run complete root test suite
+        run: npm test
 
       - name: Install Kairos Worker dependencies
         working-directory: cloudflare/mmg-ios
