@@ -65,7 +65,7 @@ jobs:
       - name: Install validation dependencies
         run: npm install --ignore-scripts --no-audit --no-fund > /dev/null
 
-      - name: Validate manuscript activation and automatic production boundary
+      - name: Validate automatic manuscript runtime syntax
         run: |
           node --check cloudflare/mmg-ios/src/kairos-manuscript-operation-boundary-v1.js
           node --check cloudflare/mmg-ios/src/kairos-production-entry-manuscript-online-v1.js
@@ -76,11 +76,18 @@ jobs:
           node --check web/kairos-dashboard/scripts/manuscript-project-setup.js
           node --check web/kairos-dashboard/scripts/manuscript-editorial-workbench.js
           node --check web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
-          node scripts/validate-kairos-manuscript-activation.mjs
-          npx vitest run \
-            backend-tests/kairos-manuscript-operation-boundary.test.js \
-            backend-tests/kairos-manuscript-auto-pipeline.test.js \
-            backend-tests/kairos-scope-firewall.test.js
+
+      - name: Validate manuscript activation contract
+        run: node scripts/validate-kairos-manuscript-activation.mjs
+
+      - name: Test automatic metadata and vault pipeline
+        run: npx vitest run backend-tests/kairos-manuscript-auto-pipeline.test.js
+
+      - name: Test exact manuscript operation boundary
+        run: npx vitest run backend-tests/kairos-manuscript-operation-boundary.test.js
+
+      - name: Test cross-domain scope firewall
+        run: npx vitest run backend-tests/kairos-scope-firewall.test.js
 
       - name: Install WebKit browser
         run: npx playwright install --with-deps webkit > /dev/null
@@ -202,7 +209,7 @@ jobs:
           grep -q '"code":"WEBSITE_MUTATION_DENIED"' "${body}"
 
       - name: Enforce live WebKit result
-        if: ${{ always() }}
+        if: ${{ always() && steps.live_webkit.outcome != 'skipped' }}
         run: test "${{ steps.live_webkit.outcome }}" = "success"
 
       - name: Report deployment success
