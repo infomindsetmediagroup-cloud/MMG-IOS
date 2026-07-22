@@ -28,11 +28,17 @@ import {
   handlePublishingPackageControl,
   handlePublishingPackageControlObjectRequest,
 } from "./kairos-package-assembly-v1.js";
+import {
+  handleShopifyStaging,
+  handleShopifyStagingObjectRequest,
+} from "./kairos-shopify-staging-router-v1.js";
 import { handleDeliverableRunObjectRequest } from "./kairos-deliverable-runner-v1.js";
 import { handleManuscriptRunObjectRequest } from "./kairos-manuscript-runner-v1.js";
 
 export class KairosProject extends NativeKairosProject {
   async fetch(request) {
+    const shopifyStaging = await handleShopifyStagingObjectRequest(this.state, request, this.env);
+    if (shopifyStaging) return shopifyStaging;
     const packageControl = await handlePublishingPackageControlObjectRequest(this.state, request, this.env);
     if (packageControl) return packageControl;
     const deliverableRun = await handleDeliverableRunObjectRequest(this.state, request, this.env);
@@ -97,6 +103,8 @@ export default {
       });
     }
 
+    const shopifyStaging = await handleShopifyStaging(request, env);
+    if (shopifyStaging) return shopifyStaging;
     const packageControl = await handlePublishingPackageControl(request, env);
     if (packageControl) return packageControl;
     const publishingPackage = await handlePublishingPackage(request, env);
