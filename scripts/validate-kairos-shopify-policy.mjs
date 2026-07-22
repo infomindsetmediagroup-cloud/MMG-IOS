@@ -76,7 +76,10 @@ for (const denied of [
 assert(!worker.includes("vercel"), "Cloudflare Worker must not contain a Vercel proxy or origin.");
 assert(!worker.includes("VERCEL_RUNTIME_ORIGIN"), "Legacy Vercel runtime constant is prohibited.");
 assert(worker.includes("handleKairosApiRequest"), "Cloudflare Worker must route API requests to Kairos runtime.");
+assert(rootWrangler.includes('name = "mmg-ios-staging-host"'), "Root Wrangler config must use a non-production staging Worker name.");
+assert(!rootWrangler.includes('name = "mmg-ios"'), "Root Wrangler config must not collide with the production Worker name.");
 assert(rootWrangler.includes('KAIROS_SHOPIFY_WRITES_ENABLED = "false"'), "Root Shopify writes must default to disabled.");
+assert(productionWrangler.includes('name = "mmg-ios"'), "Production Wrangler config must retain the canonical Worker name.");
 assert(productionWrangler.includes('main = "src/kairos-production-entry-manuscript-online-v1.js"'), "Production Worker must use the manuscript-only entry.");
 assert(productionWrangler.includes('KAIROS_SHOPIFY_WRITES_ENABLED = "false"'), "Production Shopify writes must remain disabled.");
 assert(!productionWrangler.includes('"* * * * *"'), "Minute-level website mutation cron must remain removed.");
