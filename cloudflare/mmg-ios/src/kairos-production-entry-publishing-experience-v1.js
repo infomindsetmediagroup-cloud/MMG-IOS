@@ -1,10 +1,10 @@
-import previousRuntime, { KairosProject } from "./kairos-production-entry-digital-asset-v2-v1.js";
+import previousRuntime, { KairosProject } from "./kairos-production-entry-customer-delivery-v2.js";
 import {
   handlePublishingExperience,
   KAIROS_PUBLISHING_EXPERIENCE_BUILD,
 } from "./kairos-publishing-experience-v1.js";
 
-const BUILD = "kairos-production-entry-publishing-experience-20260723-1";
+const BUILD = "kairos-production-entry-publishing-experience-20260723-2";
 
 export { KairosProject };
 
