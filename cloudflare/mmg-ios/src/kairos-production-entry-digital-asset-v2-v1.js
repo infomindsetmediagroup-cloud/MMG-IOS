@@ -10,7 +10,7 @@ import {
   writeDigitalAssetEditionV2,
 } from "./kairos-digital-asset-v2-manuscript-writer-v1.js";
 
-const BUILD = "kairos-production-entry-digital-asset-v2-20260722-3";
+const BUILD = "kairos-production-entry-digital-asset-v2-20260722-4";
 const PUBLISHER = "Mindset Media Group™";
 const REGISTRY_OBJECT = "mmg-production-project-registry";
 
@@ -156,11 +156,23 @@ async function sanitizeResponse(response) {
 }
 
 function normalizeHeadingsForManufacturing(value) {
-  return String(value || "")
+  return normalizeWinAnsi(String(value || ""))
     .replace(/^#{1,3}\s+(?=(?:Chapter\s+\d+|Part\s+\d+)\b)/gim, "")
     .replace(/^#{1,3}\s+(.+)$/gm, "$1")
     .replace(/\n{4,}/g, "\n\n\n")
     .trim();
+}
+
+function normalizeWinAnsi(value) {
+  return String(value || "")
+    .replace(/[☐□◻▢]/g, "[ ]")
+    .replace(/[☑☒✓✔]/g, "[x]")
+    .replace(/[→⇒]/g, "->")
+    .replace(/[←⇐]/g, "<-")
+    .replace(/[↔⇔]/g, "<->")
+    .replace(/[★☆]/g, "*")
+    .replace(/[◆◇]/g, "-")
+    .replace(/[^\u0009\u000A\u000D\u0020-\u00FF\u2010-\u2027\u2030\u2032\u2033\u20AC\u2122]/g, "");
 }
 
 function countWords(value) {
