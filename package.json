@@ -28,6 +28,8 @@
     "@playwright/test": "^1.55.0",
     "@types/node": "^24.0.0",
     "@types/pg": "^8.20.0",
+    "fflate": "^0.8.2",
+    "pdf-lib": "^1.17.1",
     "typescript": "^5.8.0",
     "vitest": "^3.2.0",
     "wrangler": "^4.112.0"
