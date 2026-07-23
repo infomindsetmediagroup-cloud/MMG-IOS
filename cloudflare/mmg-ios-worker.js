@@ -1,8 +1,16 @@
 import { handleKairosApiRequest } from "./kairos/runtime.js";
+import {
+  handleKairosIntelligenceRequest,
+  isKairosIntelligenceRoute,
+} from "./kairos/intelligence-api.js";
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    if (isKairosIntelligenceRoute(url.pathname)) {
+      return handleKairosIntelligenceRequest(request, env, ctx);
+    }
 
     if (url.pathname.startsWith("/api/")) {
       return handleKairosApiRequest(request, env, ctx);
@@ -25,7 +33,7 @@ function withAssetHeaders(response) {
     headers.set("Cache-Control", "public, max-age=300");
   }
   headers.set("X-MMG-Host", "cloudflare");
-  headers.set("X-MMG-Kairos-Runtime", "cloudflare-native");
+  headers.set("X-MMG-Kairos-Runtime", "provider-independent");
   headers.set("X-Content-Type-Options", "nosniff");
   return new Response(response.body, {
     status: response.status,
