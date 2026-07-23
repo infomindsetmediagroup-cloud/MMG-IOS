@@ -13,13 +13,20 @@ import {
   KAIROS_MANUFACTURING_ORCHESTRATOR_BUILD,
   handleManufacturingOrchestrator,
 } from "./kairos-manufacturing-orchestrator-v1.js";
+import {
+  handleCustomerDelivery,
+  handleCustomerDeliveryObjectRequest,
+} from "./kairos-customer-delivery-v1.js";
 
-const BUILD = "kairos-production-entry-digital-asset-v2-20260723-6";
+const BUILD = "kairos-production-entry-digital-asset-v2-20260723-7";
+const CUSTOMER_DELIVERY_BUILD = "kairos-customer-delivery-20260723-1";
 const PUBLISHER = "Mindset Media Group™";
 const REGISTRY_OBJECT = "mmg-production-project-registry";
 
 export class KairosProject extends PreviousKairosProject {
   async fetch(request) {
+    const customerDelivery = await handleCustomerDeliveryObjectRequest(this.state, request, this.env);
+    if (customerDelivery) return stamp(await sanitizeResponse(customerDelivery));
     const prepared = await prepareObjectRequest(request, this.env);
     const response = await super.fetch(prepared);
     return stamp(await sanitizeResponse(response));
@@ -28,6 +35,9 @@ export class KairosProject extends PreviousKairosProject {
 
 export default {
   async fetch(request, env, ctx) {
+    const customerDelivery = await handleCustomerDelivery(request.clone(), env);
+    if (customerDelivery) return stamp(await sanitizeResponse(customerDelivery));
+
     const manufacturing = await handleManufacturingOrchestrator(request.clone(), env);
     if (manufacturing) return stamp(await sanitizeResponse(manufacturing));
 
@@ -232,6 +242,7 @@ function stamp(response) {
   headers.set("X-Kairos-Digital-Asset-Contract", KAIROS_DIGITAL_ASSET_V2_BUILD);
   headers.set("X-Kairos-Digital-Asset-Writer", KAIROS_DIGITAL_ASSET_V2_WRITER_BUILD);
   headers.set("X-Kairos-Manufacturing-Orchestrator", KAIROS_MANUFACTURING_ORCHESTRATOR_BUILD);
+  headers.set("X-Kairos-Customer-Delivery", CUSTOMER_DELIVERY_BUILD);
   headers.set("X-Kairos-Digital-Asset-Entry", BUILD);
   return new Response(response.body, {
     status: response.status,
