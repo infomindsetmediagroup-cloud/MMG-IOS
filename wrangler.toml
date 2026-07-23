@@ -12,3 +12,7 @@ not_found_handling = "single-page-application"
 [vars]
 KAIROS_SHOPIFY_WRITES_ENABLED = "false"
 SHOPIFY_ADMIN_API_VERSION = "2026-07"
+KAIROS_MODEL_PROVIDER = "deterministic"
+KAIROS_MODEL_REQUIRED = "false"
+KAIROS_MODEL_TIMEOUT_MS = "15000"
+KAIROS_MODEL_NAME = "qwen2.5:7b-instruct"
