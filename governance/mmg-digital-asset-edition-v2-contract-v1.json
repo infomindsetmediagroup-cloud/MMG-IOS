@@ -1,0 +1,102 @@
+{
+  "schemaVersion": "1.0.0",
+  "contractId": "mmg-digital-asset-edition-v2",
+  "status": "required",
+  "effectiveDate": "2026-07-22",
+  "publisherIdentity": "Mindset Media Group™",
+  "individualAttributionAllowed": false,
+  "forbiddenIdentityStrings": [
+    "Michael King"
+  ],
+  "manuscript": {
+    "canonicalTemplate": "AI Video Prompt Mastery — MMG Digital Asset Edition V2 Production Master",
+    "sourceOfTruth": "Master Production DOCX",
+    "minimumFinishedPages": 100,
+    "minimumDevelopedSections": 8,
+    "customerFacingOnly": true,
+    "thinEbookAllowed": false,
+    "paddingAllowed": false,
+    "duplicationAllowed": false,
+    "requiredPracticalArchitecture": [
+      "frameworks",
+      "workflows",
+      "prompt blocks",
+      "templates",
+      "worksheets",
+      "checklists",
+      "decision rules",
+      "implementation tools",
+      "labs",
+      "action steps"
+    ]
+  },
+  "customerRelease": {
+    "exactDeliverableCount": 6,
+    "deliverables": [
+      {
+        "id": "customer-spec-sheet",
+        "format": "PDF",
+        "customerFacing": true
+      },
+      {
+        "id": "kdp-interior",
+        "format": "PDF",
+        "trim": "6x9",
+        "coverIncluded": false,
+        "customerFacing": true
+      },
+      {
+        "id": "digital-edition-v2",
+        "format": "PDF",
+        "coverAsPageOne": true,
+        "customerFacing": true
+      },
+      {
+        "id": "portrait-cover",
+        "format": "PNG",
+        "width": 2048,
+        "height": 3072,
+        "fit": "pad",
+        "croppingAllowed": false,
+        "redrawingAllowed": false,
+        "customerFacing": true
+      },
+      {
+        "id": "thumbnail-cover",
+        "format": "PNG",
+        "width": 2048,
+        "height": 2048,
+        "fit": "pad",
+        "croppingAllowed": false,
+        "redrawingAllowed": false,
+        "customerFacing": true
+      },
+      {
+        "id": "readme",
+        "format": "TXT",
+        "customerFacing": true
+      }
+    ],
+    "excludedFromCustomerZip": [
+      "Master Production DOCX",
+      "production manifests",
+      "QA reports",
+      "research records",
+      "Shopify files",
+      "storefront metadata",
+      "private URLs",
+      "internal workflow notes",
+      "KDP full-wrap cover",
+      "EPUB"
+    ]
+  },
+  "releaseGate": {
+    "failBelowMinimumPages": true,
+    "failOnForbiddenIdentity": true,
+    "failOnInternalContent": true,
+    "failOnShopifyContent": true,
+    "failOnIncorrectDeliverableCount": true,
+    "failOnCoverCropping": true,
+    "failOnCoverRedrawing": true
+  }
+}
