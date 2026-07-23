@@ -10,7 +10,7 @@ import {
   writeDigitalAssetEditionV2,
 } from "./kairos-digital-asset-v2-manuscript-writer-v1.js";
 
-const BUILD = "kairos-production-entry-digital-asset-v2-20260722-2";
+const BUILD = "kairos-production-entry-digital-asset-v2-20260722-3";
 const PUBLISHER = "Mindset Media Group™";
 const REGISTRY_OBJECT = "mmg-production-project-registry";
 
@@ -80,6 +80,7 @@ async function rewriteManufacturingRequest(request, env) {
     manuscript: sourceText,
     env,
   });
+  const manufacturingText = normalizeHeadingsForManufacturing(written.text);
   const cover = await normalizeApprovedCoverToPNG(body?.cover || {}, env);
   const directive = `${DIGITAL_ASSET_V2_LABEL}. The manuscript has completed the V2 source-grounded writing pass and now contains ${written.wordCount} words across ${written.chapterCount} expanded source chapters, estimated at ${written.estimatedPages} substantive pages. Manufacture the exact customer-facing release package without filler, duplicated passages, individual attribution, storefront content, or internal workflow commentary.`;
 
@@ -90,7 +91,7 @@ async function rewriteManufacturingRequest(request, env) {
     objective: `${objective} ${directive}`.trim(),
     manuscript: {
       ...manuscript,
-      text: written.text,
+      text: manufacturingText,
       digitalAssetEdition: "2.0",
       minimumFinishedPages: MINIMUM_FINISHED_PAGES,
       customerFacingOnly: true,
@@ -102,6 +103,7 @@ async function rewriteManufacturingRequest(request, env) {
         estimatedPages: written.estimatedPages,
         chapterCount: written.chapterCount,
         sectionCount: written.sectionCount,
+        manufacturingWordCount: countWords(manufacturingText),
       },
     },
     cover,
@@ -151,6 +153,18 @@ async function sanitizeResponse(response) {
     statusText: response.statusText,
     headers,
   });
+}
+
+function normalizeHeadingsForManufacturing(value) {
+  return String(value || "")
+    .replace(/^#{1,3}\s+(?=(?:Chapter\s+\d+|Part\s+\d+)\b)/gim, "")
+    .replace(/^#{1,3}\s+(.+)$/gm, "$1")
+    .replace(/\n{4,}/g, "\n\n\n")
+    .trim();
+}
+
+function countWords(value) {
+  return (String(value || "").match(/\b[\p{L}\p{N}’'-]+\b/gu) || []).length;
 }
 
 function sanitizeText(value) {
