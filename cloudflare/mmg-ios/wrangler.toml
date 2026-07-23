@@ -1,5 +1,5 @@
 name = "mmg-ios"
-main = "src/kairos-production-entry-customer-delivery-v2.js"
+main = "src/kairos-production-entry-local-inference-v1.js"
 compatibility_date = "2026-07-11"
 workers_dev = true
 keep_vars = true
@@ -31,9 +31,9 @@ new_sqlite_classes = ["KairosProject"]
 # Digital Asset Edition V2 is mandatory for manuscript manufacturing and customer release packaging.
 # Customer delivery attachment is mandatory before a Shopify digital-product draft is considered complete.
 # Canonical approvals: Start Production Job, Approve Package, Approve & Publish Product.
-# Cloudflare Workers AI is intentionally not bound and consumes zero neurons.
-# Paid OpenAI API usage is disabled by default. It may be enabled only when verified free credits are explicitly authorized.
-# Default manuscript processing is source-preserving, deterministic, and no-cost.
+# Kairos local inference runs in the user's browser through WebGPU and consumes zero Cloudflare neurons.
+# Paid OpenAI API usage is disabled by default and is not required by the local inference workflow.
+# The authoritative source is backed up before the locally inferred manuscript becomes the manufacturing text.
 # Project setup reconciles a uniquely matching stored manuscript when intake refresh changes the active project ID.
 
 [vars]
@@ -43,6 +43,7 @@ MMG_STOREFRONT_ORIGIN = "https://themindsetmediagroup.com"
 KAIROS_OPENAI_MODEL = "gpt-5"
 KAIROS_OPENAI_FREE_CREDITS_ENABLED = "false"
 KAIROS_NO_COST_MODE = "true"
+KAIROS_LOCAL_INFERENCE_ENABLED = "true"
 KAIROS_CLOUDFLARE_NEURONS_ENABLED = "false"
 KAIROS_MANUSCRIPT_RUNTIME_ENABLED = "true"
 KAIROS_DIGITAL_ASSET_V2_REQUIRED = "true"
