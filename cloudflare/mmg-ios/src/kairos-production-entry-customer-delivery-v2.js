@@ -5,8 +5,12 @@ import {
   handleCustomerDelivery,
   handleCustomerDeliveryObjectRequest,
 } from "./kairos-customer-delivery-v2.js";
+import {
+  handlePublishingExperience,
+  KAIROS_PUBLISHING_EXPERIENCE_BUILD,
+} from "./kairos-publishing-experience-v1.js";
 
-const BUILD = "kairos-production-entry-customer-delivery-20260723-2";
+const BUILD = "kairos-production-entry-customer-delivery-20260723-3";
 const EXECUTE_PATH = "/api/shopify/product-publication/execute";
 
 export class KairosProject extends CurrentKairosProject {
@@ -19,6 +23,9 @@ export class KairosProject extends CurrentKairosProject {
 
 export default {
   async fetch(request, env, ctx) {
+    const experience = await handlePublishingExperience(request.clone(), env);
+    if (experience) return stamp(experience);
+
     const delivery = await handleCustomerDelivery(request.clone(), env);
     if (delivery) return stamp(delivery);
 
@@ -117,6 +124,7 @@ function stamp(response) {
   const headers = new Headers(response.headers);
   headers.set("X-Kairos-Customer-Delivery", KAIROS_CUSTOMER_DELIVERY_BUILD);
   headers.set("X-Kairos-Customer-Delivery-Entry", BUILD);
+  headers.set("X-Kairos-Publishing-Experience", KAIROS_PUBLISHING_EXPERIENCE_BUILD);
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
@@ -129,6 +137,7 @@ function json(value, status = 200) {
       "X-Content-Type-Options": "nosniff",
       "X-Kairos-Customer-Delivery": KAIROS_CUSTOMER_DELIVERY_BUILD,
       "X-Kairos-Customer-Delivery-Entry": BUILD,
+      "X-Kairos-Publishing-Experience": KAIROS_PUBLISHING_EXPERIENCE_BUILD,
     },
   });
 }
