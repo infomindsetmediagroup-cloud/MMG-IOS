@@ -43,7 +43,7 @@ jobs:
             --data "${payload}"
 
       - name: Checkout exact main
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
 

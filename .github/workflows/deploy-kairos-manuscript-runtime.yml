@@ -45,7 +45,7 @@ jobs:
             --data "{\"state\":\"pending\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Validating governed production release ${KAIROS_RELEASE_ID}\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
       - name: Check out main
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: main
 
