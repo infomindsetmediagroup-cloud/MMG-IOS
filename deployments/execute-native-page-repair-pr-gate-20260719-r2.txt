@@ -1,0 +1,1 @@
+Retry native Shopify page repair using a workflow that does not depend on external GitHub Actions.
