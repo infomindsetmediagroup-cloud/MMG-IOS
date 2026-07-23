@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#05070a">
-  <meta name="mmg-build" content="kairos-command-hub-local-inference-20260723-1">
+  <meta name="mmg-build" content="kairos-command-hub-abos-v2-20260723-1">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>Kairos Command Center</title>
+  <title>Kairos Executive Operating System</title>
   <link rel="stylesheet" href="./styles/command-hub.css?v=recovery-20260714-1">
   <link rel="stylesheet" href="./styles/parent-icon-alignment.css?v=recovery-20260714-1">
   <link rel="stylesheet" href="./styles/command-center-layout.css?v=recovery-20260714-1">
@@ -44,6 +44,7 @@
   <link rel="stylesheet" href="./styles/objective-controller-v2.css?v=experience-20260717-1">
   <link rel="stylesheet" href="./styles/website-builder-studio.css?v=experience-20260717-2">
   <link rel="stylesheet" href="./styles/publishing-operations-center.css?v=publishing-20260722-1">
+  <link rel="stylesheet" href="./styles/executive-os.css?v=abos-v2-20260723-1">
 </head>
 <body>
   <div id="kairos-hub" class="hub-shell" aria-live="polite"></div>
@@ -79,5 +80,6 @@
     function loadNext(index=0){if(index>=modules.length)return;const script=document.createElement("script");script.type="module";script.src=`./scripts/${modules[index]}?v=manuscript-local-inference-20260723-1`;script.onload=()=>setTimeout(()=>loadNext(index+1),50);script.onerror=()=>setTimeout(()=>loadNext(index+1),50);document.body.appendChild(script)}
     window.addEventListener("load",()=>setTimeout(()=>loadNext(),600),{once:true});
   </script>
+  <script type="module" src="./scripts/executive-os.js?v=abos-v2-20260723-1"></script>
 </body>
 </html>
