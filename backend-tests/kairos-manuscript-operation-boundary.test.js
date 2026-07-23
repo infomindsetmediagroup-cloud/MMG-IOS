@@ -50,6 +50,34 @@ describe("Kairos manuscript-only operation boundary", () => {
     }
   });
 
+  it("allows only the exact controlled existing-live-product replacement routes", async () => {
+    const cases = [
+      ["prepare", "controlled-live-product-replacement-review"],
+      ["execute", "approval-gated-live-product-replacement"],
+      ["rollback", "approval-gated-live-product-replacement-rollback"],
+    ];
+
+    for (const [action, scope] of cases) {
+      const result = await inspectManuscriptOperation(request(
+        `/api/production-registry/manuscripts/manuscript-studio-12345678/live-product-replacement/${action}`,
+        "POST",
+        {},
+      ));
+      expect(result.allowed).toBe(true);
+      expect(result.scope).toBe(scope);
+    }
+
+    for (const path of [
+      "/api/production-registry/manuscripts/manuscript-studio-12345678/live-product-replacement/execute/force",
+      "/api/production-registry/manuscripts/manuscript-studio-12345678/live-product-replacement/delete",
+      "/api/production-registry/manuscripts/manuscript-studio-12345678/live-product-replacement/publish-now",
+    ]) {
+      const result = await inspectManuscriptOperation(request(path, "POST", {}));
+      expect(result.allowed).toBe(false);
+      expect(result.code).toBe("WEBSITE_MUTATION_DENIED");
+    }
+  });
+
   it("allows only an exact manuscript workspace registration", async () => {
     const manuscript = await inspectManuscriptOperation(request(
       "/api/production-registry/projects",
