@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test";
 
 const liveURL = process.env.KAIROS_LIVE_URL;
 const ACTIVE_KEY = "kairos.production.active-workspace";
+const SMOKE_INFERENCE_BUILD = "kairos-local-inference-live-webkit-smoke";
+const SMOKE_INFERENCE_MODEL = "playwright-webkit-smoke-model";
 
 test.skip(!liveURL, "KAIROS_LIVE_URL is required for the deployed-app smoke test.");
 
@@ -24,6 +26,28 @@ async function openManuscriptStudio(page) {
   await expect(overlay).toBeVisible();
   await expect(overlay.getByRole("heading", { name: "Manuscript Studio" })).toBeVisible();
   return overlay;
+}
+
+async function installLocalInferenceSmokeDouble(page) {
+  await page.evaluate(({ build, model }) => {
+    window.KairosLocalInference = Object.freeze({
+      ready: true,
+      build,
+      async run({ onProgress } = {}) {
+        onProgress?.("Deterministic live-smoke inference complete");
+        return {
+          status: "local-inference-ready",
+          build,
+          model,
+          wordCount: 25_500,
+          generatedSections: 4,
+        };
+      },
+      getModel: () => model,
+    });
+  }, { build: SMOKE_INFERENCE_BUILD, model: SMOKE_INFERENCE_MODEL });
+
+  await expect.poll(() => page.evaluate(() => window.KairosLocalInference?.build || "")).toBe(SMOKE_INFERENCE_BUILD);
 }
 
 function savedSetupRecord() {
@@ -164,6 +188,9 @@ test("deployed iPhone flow requires Start, Package Approval, and Shopify Preview
       return route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ error: { code: "auto_pipeline_not_started" } }) });
     }
     if (autoMatch && method === "POST" && autoMatch[2] === "run") {
+      const payload = JSON.parse(request.postData() || "{}");
+      expect(payload.localInferenceBuild).toBe(SMOKE_INFERENCE_BUILD);
+      expect(payload.localInferenceModel).toBe(SMOKE_INFERENCE_MODEL);
       autoPipelineRuns += 1;
       calls.push("start-production");
       return route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify(productionReadyRecord(autoMatch[1])) });
@@ -178,6 +205,7 @@ test("deployed iPhone flow requires Start, Package Approval, and Shopify Preview
   });
 
   const overlay = await openManuscriptStudio(page);
+  await installLocalInferenceSmokeDouble(page);
   await overlay.locator("#ms-title").fill("Live WebKit Publication");
   await overlay.locator("#ms-body").fill("This is a complete browser-level manuscript test with enough text to pass intake validation and exercise every required button in the deployed Manuscript Studio flow.");
   await overlay.locator("[data-advance]").tap();
