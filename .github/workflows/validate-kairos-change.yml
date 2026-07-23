@@ -34,7 +34,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
 
     steps:
       - name: Check out repository
@@ -57,16 +57,21 @@ jobs:
           node --check cloudflare/kairos/shopify-client.js
           node --check cloudflare/kairos/operation-registry.js
           node --check cloudflare/kairos/runtime.js
+          node --check cloudflare/kairos/deterministic-planner.js
+          node --check cloudflare/kairos/intelligence-runtime.js
+          node --check cloudflare/kairos/intelligence-api.js
           node --check cloudflare/mmg-ios/src/kairos-manuscript-operation-boundary-v1.js
           node --check cloudflare/mmg-ios/src/kairos-production-entry-manuscript-online-v1.js
           node --check web/kairos-dashboard/scripts/manuscript-project-setup.js
           node --check web/kairos-dashboard/scripts/manuscript-editorial-workbench.js
+          node --check web/kairos-dashboard/scripts/kairos-local-inference.js
+          node --check web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
           node --check web/kairos-dashboard/scripts/publication-performance.js
           node --check scripts/validate-kairos-shopify-policy.mjs
           node --check scripts/validate-kairos-manuscript-activation.mjs
 
-      - name: Test Kairos operation boundaries
-        run: npx vitest run backend-tests/kairos-scope-firewall.test.js backend-tests/kairos-manuscript-operation-boundary.test.js
+      - name: Test Kairos operation and intelligence boundaries
+        run: npx vitest run backend-tests/kairos-scope-firewall.test.js backend-tests/kairos-manuscript-operation-boundary.test.js backend-tests/kairos-self-hosted-runtime.test.ts
 
       - name: Install WebKit browser
         run: npx playwright install --with-deps webkit > /dev/null
@@ -98,21 +103,27 @@ jobs:
           retention-days: 7
 
       - name: Validate Kairos Shopify policy
+        if: ${{ always() }}
         run: npm run validate:kairos-shopify
 
       - name: Validate manuscript activation and builder plugins
+        if: ${{ always() }}
         run: npm run validate:manuscript-activation
 
       - name: Validate Shopify governance
+        if: ${{ always() }}
         run: npm run validate:shopify
 
       - name: Validate canonical service product
+        if: ${{ always() }}
         run: npm run validate:service-product
 
       - name: Install active Worker dependencies
+        if: ${{ always() }}
         working-directory: cloudflare/mmg-ios
         run: npm install --ignore-scripts --no-audit --no-fund > /dev/null
 
       - name: Validate active Cloudflare manuscript bundle
+        if: ${{ always() }}
         working-directory: cloudflare/mmg-ios
         run: npx wrangler deploy --dry-run

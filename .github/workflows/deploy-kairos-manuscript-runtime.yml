@@ -1,46 +1,36 @@
 name: Deploy Kairos Manuscript Runtime
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'cloudflare/mmg-ios/src/kairos-production-entry-manuscript-online-v1.js'
-      - 'cloudflare/mmg-ios/src/kairos-manuscript-operation-boundary-v1.js'
-      - 'cloudflare/mmg-ios/src/kairos-manuscript-*.js'
-      - 'cloudflare/mmg-ios/src/kairos-product-publication-v1.js'
-      - 'cloudflare/mmg-ios/src/kairos-product-media-v1.js'
-      - 'cloudflare/mmg-ios/src/kairos-product-launch-control-v1.js'
-      - 'cloudflare/mmg-ios/src/kairos-production-registry-v1.js'
-      - 'cloudflare/mmg-ios/test/kairos-manuscript-*.test.js'
-      - 'backend-tests/kairos-manuscript-*.test.js'
-      - 'cloudflare/mmg-ios/wrangler.toml'
-      - 'web/kairos-dashboard/index.html'
-      - 'web/kairos-dashboard/scripts/manuscript-*.js'
-      - 'web/kairos-dashboard/styles/manuscript-*.css'
-      - 'browser-tests/manuscript-*.spec.mjs'
-      - 'playwright.config.mjs'
-      - 'package.json'
-      - 'governance/kairos-builder-plugin-registry-v1.json'
-      - 'scripts/validate-kairos-manuscript-activation.mjs'
-      - '.github/workflows/deploy-kairos-manuscript-runtime.yml'
   workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type DEPLOY KAIROS MANUSCRIPT RUNTIME to authorize production deployment.'
+        required: true
+        type: string
+      release_id:
+        description: 'Human-readable production release identifier.'
+        required: true
+        type: string
 
 permissions:
   contents: read
   statuses: write
 
 concurrency:
-  group: deploy-kairos-manuscript-runtime
+  group: deploy-kairos-manuscript-runtime-production
   cancel-in-progress: false
 
 jobs:
   deploy:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirmation == 'DEPLOY KAIROS MANUSCRIPT RUNTIME' }}
+    environment: production
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+      KAIROS_RELEASE_ID: ${{ inputs.release_id }}
 
     steps:
       - name: Mark deployment pending
@@ -52,10 +42,12 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"pending\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Testing automatic vault and mobile release flow\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"pending\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Validating governed production release ${KAIROS_RELEASE_ID}\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
-      - name: Check out repository
+      - name: Check out main
         uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -65,8 +57,10 @@ jobs:
       - name: Install validation dependencies
         run: npm install --ignore-scripts --no-audit --no-fund > /dev/null
 
-      - name: Validate automatic manuscript runtime syntax
+      - name: Validate production runtime syntax
         run: |
+          node --check cloudflare/mmg-ios/src/kairos-production-entry-local-inference-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-local-inference-v1.js
           node --check cloudflare/mmg-ios/src/kairos-manuscript-operation-boundary-v1.js
           node --check cloudflare/mmg-ios/src/kairos-production-entry-manuscript-online-v1.js
           node --check cloudflare/mmg-ios/src/kairos-manuscript-project-setup-v1.js
@@ -75,45 +69,23 @@ jobs:
           node --check cloudflare/mmg-ios/src/kairos-production-registry-v1.js
           node --check web/kairos-dashboard/scripts/manuscript-project-setup.js
           node --check web/kairos-dashboard/scripts/manuscript-editorial-workbench.js
+          node --check web/kairos-dashboard/scripts/kairos-local-inference.js
           node --check web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
 
-      - name: Validate manuscript activation contract
-        run: node scripts/validate-kairos-manuscript-activation.mjs
-
-      - name: Test AI Image Mastery metadata extraction
-        id: ai_metadata
-        continue-on-error: true
-        shell: bash
+      - name: Validate governance contracts
         run: |
-          set +e
-          npx vitest run backend-tests/kairos-manuscript-auto-pipeline.test.js -t "extracts the AI Image Mastery publication record without a catalog form" > ai-metadata-test.log 2>&1
-          status=$?
-          tail -n 220 ai-metadata-test.log
-          exit "${status}"
+          npm run validate:kairos-shopify
+          npm run validate:manuscript-activation
+          npm run validate:shopify
+          npm run validate:service-product
 
-      - name: Upload AI metadata failure evidence
-        if: ${{ steps.ai_metadata.outcome == 'failure' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: ai-metadata-test-failure
-          path: ai-metadata-test.log
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Enforce AI metadata result
-        run: test "${{ steps.ai_metadata.outcome }}" = "success"
-
-      - name: Test durable project metadata precedence
-        run: npx vitest run backend-tests/kairos-manuscript-auto-pipeline.test.js -t "uses the durable project setup as the authoritative title and author"
-
-      - name: Test generic publication template routing
-        run: npx vitest run backend-tests/kairos-manuscript-auto-pipeline.test.js -t "routes non-AI publications to the canonical MMG book-product template"
-
-      - name: Test exact manuscript operation boundary
-        run: npx vitest run backend-tests/kairos-manuscript-operation-boundary.test.js
-
-      - name: Test cross-domain scope firewall
-        run: npx vitest run backend-tests/kairos-scope-firewall.test.js
+      - name: Test publication metadata and operation boundaries
+        run: |
+          npx vitest run backend-tests/kairos-manuscript-auto-pipeline.test.js -t "extracts the AI Image Mastery publication record without a catalog form"
+          npx vitest run backend-tests/kairos-manuscript-auto-pipeline.test.js -t "uses the durable project setup as the authoritative title and author"
+          npx vitest run backend-tests/kairos-manuscript-auto-pipeline.test.js -t "routes non-AI publications to the canonical MMG book-product template"
+          npx vitest run backend-tests/kairos-manuscript-operation-boundary.test.js
+          npx vitest run backend-tests/kairos-scope-firewall.test.js
 
       - name: Install WebKit browser
         run: npx playwright install --with-deps webkit > /dev/null
@@ -143,11 +115,10 @@ jobs:
           for attempt in $(seq 1 30); do
             body="${RUNNER_TEMP}/manuscript-status.json"
             status="$(curl --silent --show-error --max-time 20 \
-              "${WORKER_URL}/api/kairos/manuscripts/status?attempt=${attempt}" \
+              "${WORKER_URL}/api/kairos/manuscripts/status?release=${KAIROS_RELEASE_ID}&attempt=${attempt}" \
               -o "${body}" -w '%{http_code}' || true)"
             if [ "${status}" = "200" ] \
               && grep -q '"ready":true' "${body}" \
-              && grep -q '"mode":"manuscript-only"' "${body}" \
               && grep -q '"automaticProductionPackage":true' "${body}" \
               && grep -q '"adminAssetVault":true' "${body}" \
               && grep -q '"manualCatalogEntryRequired":false' "${body}" \
@@ -164,34 +135,42 @@ jobs:
             sleep 5
           done
 
-      - name: Verify automatic production controller deployed
+      - name: Verify current production controllers deployed
         run: |
           set -euo pipefail
           root="${RUNNER_TEMP}/root.html"
           setup="${RUNNER_TEMP}/manuscript-project-setup.js"
           editorial="${RUNNER_TEMP}/manuscript-editorial-workbench.js"
+          inference="${RUNNER_TEMP}/kairos-local-inference.js"
           automatic="${RUNNER_TEMP}/manuscript-auto-pipeline.js"
           for attempt in $(seq 1 30); do
             curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${root}" || true
             curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-project-setup.js?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${setup}" || true
             curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-editorial-workbench.js?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${editorial}" || true
+            curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/scripts/kairos-local-inference.js?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${inference}" || true
             curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-auto-pipeline.js?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${automatic}" || true
-            if grep -q 'kairos-command-hub-auto-production-vault-20260722-1' "${root}" \
-              && grep -q 'manuscript-auto-pipeline.js?v=auto-production-vault-20260722-1' "${root}" \
+            if grep -Eq '<meta name="mmg-build" content="kairos-command-hub-[^"]+">' "${root}" \
+              && grep -Eq 'manuscript-project-setup\.js\?v=[^"]+' "${root}" \
+              && grep -Eq 'kairos-local-inference\.js\?v=[^"]+' "${root}" \
+              && grep -Eq 'manuscript-auto-pipeline\.js\?v=[^"]+' "${root}" \
               && ! grep -q 'publication-catalog.js' "${root}" \
-              && grep -q 'kairos-manuscript-project-setup-ui-20260722-3' "${setup}" \
               && grep -q 'KairosManuscriptSetupController' "${setup}" \
-              && grep -q 'kairos-manuscript-editorial-workbench-ui-20260722-2' "${editorial}" \
               && grep -q 'KairosEditorialWorkbenchController' "${editorial}" \
-              && grep -q 'kairos-manuscript-auto-pipeline-ui-20260722-1' "${automatic}" \
+              && grep -q 'KairosLocalInference' "${inference}" \
               && grep -q 'KairosManuscriptAutoPipelineController' "${automatic}" \
-              && grep -q 'Download Production-Ready ZIP' "${automatic}" \
               && grep -q 'CREATE SHOPIFY PRODUCT DRAFT' "${automatic}" \
               && grep -q 'PUBLISH PRODUCT LIVE' "${automatic}"; then
+              node - "${root}" <<'NODE'
+          const fs = require('node:fs');
+          const html = fs.readFileSync(process.argv[2], 'utf8');
+          const inference = html.indexOf('./scripts/kairos-local-inference.js?v=');
+          const pipeline = html.indexOf('./scripts/manuscript-auto-pipeline.js?v=');
+          if (inference < 0 || pipeline <= inference) process.exit(1);
+          NODE
               break
             fi
             if [ "${attempt}" = "30" ]; then
-              echo "Automatic production controller did not propagate completely."
+              echo "Current production controllers did not propagate completely."
               exit 1
             fi
             sleep 5
@@ -200,24 +179,16 @@ jobs:
       - name: Tap deployed Manuscript Studio in mobile WebKit
         id: live_webkit
         continue-on-error: true
-        shell: bash
         env:
           KAIROS_LIVE_URL: ${{ env.WORKER_URL }}
-        run: |
-          set +e
-          npx playwright test browser-tests/manuscript-live-smoke.spec.mjs --project=webkit > live-manuscript-webkit.log 2>&1
-          status=$?
-          tail -n 260 live-manuscript-webkit.log
-          exit "${status}"
+        run: npx playwright test browser-tests/manuscript-live-smoke.spec.mjs --project=webkit
 
       - name: Upload live WebKit failure evidence
         if: ${{ steps.live_webkit.outcome == 'failure' }}
         uses: actions/upload-artifact@v4
         with:
           name: live-manuscript-webkit-failure
-          path: |
-            live-manuscript-webkit.log
-            test-results
+          path: test-results
           if-no-files-found: warn
           retention-days: 7
 
@@ -235,7 +206,6 @@ jobs:
           grep -q '"code":"WEBSITE_MUTATION_DENIED"' "${body}"
 
       - name: Enforce live WebKit result
-        if: ${{ always() && steps.live_webkit.outcome != 'skipped' }}
         run: test "${{ steps.live_webkit.outcome }}" = "success"
 
       - name: Report deployment success
@@ -248,7 +218,7 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"success\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Mobile vault ZIP and governed product flow passed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"success\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Production release ${KAIROS_RELEASE_ID} passed all gates\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
       - name: Report deployment failure
         if: ${{ failure() || cancelled() }}
@@ -260,4 +230,4 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"failure\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Automatic manuscript vault or release validation failed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"failure\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Production release ${KAIROS_RELEASE_ID} failed validation\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"

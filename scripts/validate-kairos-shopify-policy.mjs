@@ -9,6 +9,7 @@ const firewallPath = path.join(root, "cloudflare/kairos/scope-firewall.js");
 const workerPath = path.join(root, "cloudflare/mmg-ios-worker.js");
 const rootWranglerPath = path.join(root, "wrangler.toml");
 const productionWranglerPath = path.join(root, "cloudflare/mmg-ios/wrangler.toml");
+const localInferenceEntryPath = path.join(root, "cloudflare/mmg-ios/src/kairos-production-entry-local-inference-v1.js");
 const manuscriptEntryPath = path.join(root, "cloudflare/mmg-ios/src/kairos-production-entry-manuscript-online-v1.js");
 const manuscriptBoundaryPath = path.join(root, "cloudflare/mmg-ios/src/kairos-manuscript-operation-boundary-v1.js");
 const manuscriptReleasePath = path.join(root, "cloudflare/mmg-ios/src/kairos-manuscript-auto-pipeline-v1.js");
@@ -23,6 +24,7 @@ const requiredFiles = [
   workerPath,
   rootWranglerPath,
   productionWranglerPath,
+  localInferenceEntryPath,
   manuscriptEntryPath,
   manuscriptBoundaryPath,
   manuscriptReleasePath,
@@ -54,6 +56,7 @@ const firewall = fs.readFileSync(firewallPath, "utf8");
 const worker = fs.readFileSync(workerPath, "utf8");
 const rootWrangler = fs.readFileSync(rootWranglerPath, "utf8");
 const productionWrangler = fs.readFileSync(productionWranglerPath, "utf8");
+const localInferenceEntry = fs.readFileSync(localInferenceEntryPath, "utf8");
 const manuscriptEntry = fs.readFileSync(manuscriptEntryPath, "utf8");
 const manuscriptBoundary = fs.readFileSync(manuscriptBoundaryPath, "utf8");
 const manuscriptRelease = fs.readFileSync(manuscriptReleasePath, "utf8");
@@ -86,10 +89,17 @@ assert(rootWrangler.includes('name = "mmg-ios-staging-host"'), "Root Wrangler co
 assert(!rootWrangler.includes('name = "mmg-ios"'), "Root Wrangler config must not collide with the production Worker name.");
 assert(rootWrangler.includes('KAIROS_SHOPIFY_WRITES_ENABLED = "false"'), "Root staging Shopify writes must default to disabled.");
 assert(productionWrangler.includes('name = "mmg-ios"'), "Production Wrangler config must retain the canonical Worker name.");
-assert(productionWrangler.includes('main = "src/kairos-production-entry-manuscript-online-v1.js"'), "Production Worker must use the manuscript-only entry.");
+assert(productionWrangler.includes('main = "src/kairos-production-entry-local-inference-v1.js"'), "Production Worker must use the governed local-inference entry.");
+assert(productionWrangler.includes('KAIROS_NO_COST_MODE = "true"'), "Production Worker must default to no-cost mode.");
+assert(productionWrangler.includes('KAIROS_LOCAL_INFERENCE_ENABLED = "true"'), "Production Worker must explicitly enable local inference.");
+assert(productionWrangler.includes('KAIROS_CLOUDFLARE_NEURONS_ENABLED = "false"'), "Production Worker must keep paid Cloudflare inference disabled.");
 assert(productionWrangler.includes('KAIROS_SHOPIFY_WRITES_ENABLED = "true"'), "The exact approval-gated product DRAFT capability must be enabled.");
 assert(productionWrangler.includes('KAIROS_SHOPIFY_LIVE_PUBLISH_ENABLED = "true"'), "The exact live-publication approval capability must be enabled.");
 assert(!productionWrangler.includes('"* * * * *"'), "Minute-level website mutation cron must remain removed.");
+assert(localInferenceEntry.includes("handleLocalInferenceObjectRequest"), "Local-inference production entry must route durable-object inference requests.");
+assert(localInferenceEntry.includes("currentRuntime.fetch"), "Local-inference production entry must delegate to the governed runtime chain.");
+assert(localInferenceEntry.includes('X-Kairos-Inference-Cost-Mode'), "Local-inference production entry must stamp the no-paid-API cost mode.");
+assert(localInferenceEntry.includes('X-Kairos-Cloudflare-Neurons", "0"'), "Local-inference production entry must stamp zero Cloudflare neurons.");
 assert(manuscriptEntry.includes("inspectManuscriptOperation"), "Production manuscript entry must enforce the operation boundary.");
 assert(manuscriptEntry.includes('shopifyAccess: shopifyDraftWritesEnabled ? "draft-only" : "none"'), "Production status must describe only the gated draft capability.");
 assert(manuscriptEntry.includes("liveProductPublicationApprovalRequired: true"), "Live product publication must require explicit approval.");

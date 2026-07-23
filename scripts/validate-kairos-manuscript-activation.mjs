@@ -98,12 +98,24 @@ assert(autoPipeline.includes("CREATE SHOPIFY PRODUCT DRAFT"), "Explicit Shopify 
 assert(autoPipeline.includes("PUBLISH PRODUCT LIVE"), "Explicit live-publication action is missing.");
 assert(productPublication.includes("APPROVED_TEMPLATE_SUFFIXES"), "The custom product-template allowlist is missing.");
 assert(productPublication.includes('status: "DRAFT"'), "Shopify product creation must begin as DRAFT.");
+
+assert(deploy.includes("workflow_dispatch:"), "Production deployment must be manually dispatched.");
+assert(!/^\s{2}push:/m.test(deploy), "Production deployment must not trigger automatically on repository pushes.");
+assert(deploy.includes("DEPLOY KAIROS MANUSCRIPT RUNTIME"), "Production deployment must require the exact executive confirmation phrase.");
+assert(deploy.includes("github.ref == 'refs/heads/main'"), "Production deployment must be restricted to main.");
+assert(deploy.includes("environment: production"), "Production deployment must use the protected GitHub production environment.");
+assert(deploy.includes("inputs.release_id"), "Production deployment must require a release identifier.");
 assert(deploy.includes("working-directory: cloudflare/mmg-ios"), "Deployment must use the configured manuscript Worker directory.");
+assert(deploy.includes("npx wrangler deploy --dry-run"), "Deployment must validate the Worker bundle before release.");
+assert(deploy.includes("run: npx wrangler deploy"), "Deployment must use the governed Wrangler production release command.");
 assert(deploy.includes("/api/kairos/manuscripts/status"), "Deployment must verify manuscript readiness.");
-assert(deploy.includes("Download Production-Ready ZIP"), "Deployment must verify the vault ZIP controller.");
+assert(deploy.includes("kairos-local-inference.js"), "Deployment must verify the local-inference controller.");
+assert(deploy.includes("KairosLocalInference"), "Deployment must verify the local-inference runtime is active.");
+assert(deploy.includes("KairosManuscriptAutoPipelineController"), "Deployment must verify the publishing controller.");
 assert(deploy.includes("/api/shopify/page-shell/publish"), "Deployment must probe the direct Shopify denial boundary.");
 assert(!deploy.includes("REPAIR_MMG_AUDITED_PAGES_NOW"), "Legacy Shopify page repair must not be deployable.");
 assert(!deploy.includes("PUBLISH_MMG_PAGE_SHELL_RECONCILIATION"), "Legacy page-shell publication must not be deployable.");
+
 assert(registry.defaultDecision === "deny-production-authority", "Builder plugins must default to no production authority.");
 assert(registry.runtime.openAiRuntimeRequired === false, "Builder guidance must not impose an OpenAI production runtime.");
 assert(registry.runtime.shopifyRuntimeAccessFromBuilderPlugins === "none", "Builder plugins must not gain Shopify runtime access.");

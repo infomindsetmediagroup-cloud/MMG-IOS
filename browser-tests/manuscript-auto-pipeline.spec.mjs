@@ -70,6 +70,9 @@ test("mobile Manuscript Studio uses the canonical three approvals", async ({ pag
     if (request.resourceType() === "document") return route.fulfill({ status:200, contentType:"text/html", body:fixtureHTML() });
     if (request.method() === "GET" && url.pathname === PIPELINE_PATH) return route.fulfill({ status:404, contentType:"application/json", body:JSON.stringify({ error:{ code:"auto_pipeline_not_started" } }) });
     if (request.method() === "POST" && url.pathname === `${PIPELINE_PATH}/run`) {
+      const payload = JSON.parse(request.postData() || "{}");
+      expect(payload.localInferenceBuild).toBe("kairos-local-inference-test");
+      expect(payload.localInferenceModel).toBe("test-model");
       buildRuns += 1;
       calls.push("start");
       return route.fulfill({ status:201, contentType:"application/json", body:JSON.stringify(productionReadyRecord()) });
@@ -96,7 +99,23 @@ test("mobile Manuscript Studio uses the canonical three approvals", async ({ pag
   });
 
   await page.goto("https://kairos.test/");
-  await page.evaluate(projectId => sessionStorage.setItem("kairos.production.active-workspace", JSON.stringify({ workspace:"manuscript-studio", projectId })), PROJECT_ID);
+  await page.evaluate(projectId => {
+    sessionStorage.setItem("kairos.production.active-workspace", JSON.stringify({ workspace:"manuscript-studio", projectId }));
+    window.KairosLocalInference = Object.freeze({
+      ready: true,
+      build: "kairos-local-inference-test",
+      async run({ onProgress } = {}) {
+        onProgress?.("Local test inference complete");
+        return {
+          status: "local-inference-ready",
+          build: "kairos-local-inference-test",
+          model: "test-model",
+          wordCount: 25_500,
+          generatedSections: 4,
+        };
+      },
+    });
+  }, PROJECT_ID);
   await page.addScriptTag({ type:"module", content:controllerSource });
 
   await expect.poll(() => page.evaluate(() => window.KairosPublishingExperience?.ready === true)).toBe(true);
