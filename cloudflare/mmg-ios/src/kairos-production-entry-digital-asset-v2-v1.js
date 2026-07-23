@@ -9,8 +9,12 @@ import {
   normalizeApprovedCoverToPNG,
   writeDigitalAssetEditionV2,
 } from "./kairos-digital-asset-v2-manuscript-writer-v1.js";
+import {
+  KAIROS_MANUFACTURING_ORCHESTRATOR_BUILD,
+  handleManufacturingOrchestrator,
+} from "./kairos-manufacturing-orchestrator-v1.js";
 
-const BUILD = "kairos-production-entry-digital-asset-v2-20260723-5";
+const BUILD = "kairos-production-entry-digital-asset-v2-20260723-6";
 const PUBLISHER = "Mindset Media Group™";
 const REGISTRY_OBJECT = "mmg-production-project-registry";
 
@@ -24,6 +28,9 @@ export class KairosProject extends PreviousKairosProject {
 
 export default {
   async fetch(request, env, ctx) {
+    const manufacturing = await handleManufacturingOrchestrator(request.clone(), env);
+    if (manufacturing) return stamp(await sanitizeResponse(manufacturing));
+
     await enforceExistingSetupForRun(request, env).catch(() => null);
     const response = await previousRuntime.fetch(request, env, ctx);
     return stamp(await sanitizeResponse(response));
@@ -224,6 +231,7 @@ function stamp(response) {
   headers.set("X-Kairos-Digital-Asset-Edition", "V2");
   headers.set("X-Kairos-Digital-Asset-Contract", KAIROS_DIGITAL_ASSET_V2_BUILD);
   headers.set("X-Kairos-Digital-Asset-Writer", KAIROS_DIGITAL_ASSET_V2_WRITER_BUILD);
+  headers.set("X-Kairos-Manufacturing-Orchestrator", KAIROS_MANUFACTURING_ORCHESTRATOR_BUILD);
   headers.set("X-Kairos-Digital-Asset-Entry", BUILD);
   return new Response(response.body, {
     status: response.status,
