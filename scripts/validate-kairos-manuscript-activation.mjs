@@ -5,6 +5,8 @@ const root = process.cwd();
 const paths = {
   wrangler: "cloudflare/mmg-ios/wrangler.toml",
   entry: "cloudflare/mmg-ios/src/kairos-production-entry-digital-asset-v2-v1.js",
+  deliveryEntry: "cloudflare/mmg-ios/src/kairos-production-entry-customer-delivery-v2.js",
+  delivery: "cloudflare/mmg-ios/src/kairos-customer-delivery-v2.js",
   boundary: "cloudflare/mmg-ios/src/kairos-manuscript-operation-boundary-v1.js",
   autoPipeline: "cloudflare/mmg-ios/src/kairos-manuscript-auto-pipeline-v1.js",
   productPublication: "cloudflare/mmg-ios/src/kairos-product-publication-v1.js",
@@ -22,6 +24,8 @@ for (const [name, relative] of Object.entries(paths)) {
 
 const wrangler = read(paths.wrangler);
 const entry = read(paths.entry);
+const deliveryEntry = read(paths.deliveryEntry);
+const delivery = read(paths.delivery);
 const boundary = read(paths.boundary);
 const autoPipeline = read(paths.autoPipeline);
 const productPublication = read(paths.productPublication);
@@ -32,7 +36,7 @@ const governanceContract = JSON.parse(read(paths.governanceContract));
 const deploy = read(paths.deploy);
 const registry = JSON.parse(read(paths.registry));
 
-assert(wrangler.includes('main = "src/kairos-production-entry-digital-asset-v2-v1.js"'), "The active Worker must use the Digital Asset Edition V2 entry.");
+assert(wrangler.includes('main = "src/kairos-production-entry-customer-delivery-v2.js"'), "The active Worker must use the corrected customer-delivery entry.");
 assert(wrangler.includes('KAIROS_MANUSCRIPT_RUNTIME_ENABLED = "true"'), "Manuscript runtime activation flag is missing.");
 assert(wrangler.includes('KAIROS_DIGITAL_ASSET_V2_REQUIRED = "true"'), "Digital Asset Edition V2 activation flag is missing.");
 assert(!wrangler.includes('"* * * * *"'), "Minute-level website reconciliation must be removed.");
@@ -42,6 +46,11 @@ assert(entry.includes("rewriteManufacturingRequest"), "The V2 runtime must rewri
 assert(entry.includes("enforceExistingSetupForRun"), "Existing manuscript setup records must be normalized before reruns.");
 assert(entry.includes("Mindset Media Group™"), "The V2 runtime must enforce the publisher identity.");
 assert(entry.includes("MINIMUM_FINISHED_PAGES"), "The V2 runtime must carry the minimum-page requirement into manufacturing.");
+assert(deliveryEntry.includes("executeDraftWithDelivery"), "Shopify draft execution must enforce customer delivery attachment.");
+assert(deliveryEntry.includes("rollbackAndFail"), "Delivery attachment failure must roll the Shopify draft back.");
+assert(delivery.includes("webhookSubscriptionCreate"), "The customer delivery runtime must register the paid-order webhook.");
+assert(delivery.includes("webhookSubscription: { uri, format: \"JSON\" }"), "The customer delivery runtime must use Shopify's current webhook uri contract.");
+assert(delivery.includes("unwrapOrderPayload"), "The delivery runtime must support current wrapped order webhook payloads.");
 assert(digitalAssetContract.includes("MINIMUM_FINISHED_PAGES = 100"), "The V2 contract must require at least 100 finished pages.");
 assert(digitalAssetContract.includes("buildCustomerSpecSheetPDF"), "The customer-facing PDF specification builder is missing.");
 assert(digitalAssetContract.includes("buildThumbnailCoverPNG"), "The square thumbnail cover builder is missing.");
@@ -98,7 +107,7 @@ for (const advisor of registry.advisors || []) {
   assert(advisor.mutationAuthority !== true, `${advisor.id} cannot have unrestricted mutation authority.`);
 }
 
-console.log("Kairos manuscript activation, Digital Asset Edition V2 customer release, Admin Asset Vault, and governed product-release validation passed.");
+console.log("Kairos manuscript activation, Digital Asset Edition V2 customer release, customer delivery, Admin Asset Vault, and governed product-release validation passed.");
 
 function read(relative) {
   return fs.readFileSync(path.join(root, relative), "utf8");
