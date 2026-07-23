@@ -4,10 +4,14 @@ import path from "node:path";
 const root = process.cwd();
 const paths = {
   wrangler: "cloudflare/mmg-ios/wrangler.toml",
-  entry: "cloudflare/mmg-ios/src/kairos-production-entry-manuscript-online-v1.js",
+  entry: "cloudflare/mmg-ios/src/kairos-production-entry-digital-asset-v2-v1.js",
   boundary: "cloudflare/mmg-ios/src/kairos-manuscript-operation-boundary-v1.js",
   autoPipeline: "cloudflare/mmg-ios/src/kairos-manuscript-auto-pipeline-v1.js",
   productPublication: "cloudflare/mmg-ios/src/kairos-product-publication-v1.js",
+  digitalAssetContract: "cloudflare/mmg-ios/src/kairos-digital-asset-edition-v2-contract-v1.js",
+  creationArtifacts: "cloudflare/mmg-ios/src/kairos-creation-artifacts-v1.js",
+  governanceContract: "governance/mmg-digital-asset-edition-v2-contract-v1.json",
+  doctrine: "docs/doctrine/mmg-digital-asset-edition-v2-customer-release-doctrine.md",
   registry: "governance/kairos-builder-plugin-registry-v1.json",
   deploy: ".github/workflows/deploy-kairos-manuscript-runtime.yml",
 };
@@ -21,18 +25,41 @@ const entry = read(paths.entry);
 const boundary = read(paths.boundary);
 const autoPipeline = read(paths.autoPipeline);
 const productPublication = read(paths.productPublication);
+const digitalAssetContract = read(paths.digitalAssetContract);
+const creationArtifacts = read(paths.creationArtifacts);
+const doctrine = read(paths.doctrine);
+const governanceContract = JSON.parse(read(paths.governanceContract));
 const deploy = read(paths.deploy);
 const registry = JSON.parse(read(paths.registry));
 
-assert(wrangler.includes('main = "src/kairos-production-entry-manuscript-online-v1.js"'), "The active Worker must use the manuscript-only entry.");
-assert(!wrangler.includes('"* * * * *"'), "Minute-level website reconciliation must be removed.");
+assert(wrangler.includes('main = "src/kairos-production-entry-digital-asset-v2-v1.js"'), "The active Worker must use the Digital Asset Edition V2 entry.");
 assert(wrangler.includes('KAIROS_MANUSCRIPT_RUNTIME_ENABLED = "true"'), "Manuscript runtime activation flag is missing.");
+assert(wrangler.includes('KAIROS_DIGITAL_ASSET_V2_REQUIRED = "true"'), "Digital Asset Edition V2 activation flag is missing.");
+assert(!wrangler.includes('"* * * * *"'), "Minute-level website reconciliation must be removed.");
 assert(wrangler.includes('KAIROS_SHOPIFY_WRITES_ENABLED = "true"'), "The approval-gated Shopify draft capability must be enabled.");
 assert(wrangler.includes('KAIROS_SHOPIFY_LIVE_PUBLISH_ENABLED = "true"'), "The explicit live-publication control must be enabled.");
-assert(entry.includes("inspectManuscriptOperation"), "The manuscript entry must enforce the operation boundary.");
-assert(entry.includes('shopifyAccess: shopifyDraftWritesEnabled ? "draft-only" : "none"'), "The status contract must distinguish approval-gated draft access from zero access.");
-assert(entry.includes("liveProductPublicationApprovalRequired: true"), "The status contract must require explicit live approval.");
-assert(entry.includes("adminAssetVaultStorage: true"), "The status contract must expose Admin Asset Vault storage.");
+assert(entry.includes("rewriteManufacturingRequest"), "The V2 runtime must rewrite manufacturing requests through the customer-facing contract.");
+assert(entry.includes("enforceExistingSetupForRun"), "Existing manuscript setup records must be normalized before reruns.");
+assert(entry.includes("Mindset Media Group™"), "The V2 runtime must enforce the publisher identity.");
+assert(entry.includes("MINIMUM_FINISHED_PAGES"), "The V2 runtime must carry the minimum-page requirement into manufacturing.");
+assert(digitalAssetContract.includes("MINIMUM_FINISHED_PAGES = 100"), "The V2 contract must require at least 100 finished pages.");
+assert(digitalAssetContract.includes("buildCustomerSpecSheetPDF"), "The customer-facing PDF specification builder is missing.");
+assert(digitalAssetContract.includes("buildThumbnailCoverPNG"), "The square thumbnail cover builder is missing.");
+assert(digitalAssetContract.includes("digital_asset_v2_padding_detected"), "The no-padding and no-duplication release gate is missing.");
+assert(creationArtifacts.includes("CUSTOMER_DELIVERABLE_NAMES"), "The exact customer deliverable set is missing.");
+assert(creationArtifacts.includes("customer-spec-sheet.pdf"), "The customer-facing PDF specification sheet is missing.");
+assert(creationArtifacts.includes("kdp-interior-6x9.pdf"), "The 6x9 KDP interior deliverable is missing.");
+assert(creationArtifacts.includes("digital-asset-edition-v2.pdf"), "The Digital Asset Edition V2 PDF is missing.");
+assert(creationArtifacts.includes("cover-portrait-2048x3072.png"), "The portrait cover deliverable is missing.");
+assert(creationArtifacts.includes("cover-thumbnail-2048x2048.png"), "The square thumbnail deliverable is missing.");
+assert(creationArtifacts.includes("Object.keys(files).length !== 6"), "The six-item package count gate is missing.");
+assert(governanceContract.contractId === "mmg-digital-asset-edition-v2", "The machine-readable V2 contract ID is incorrect.");
+assert(governanceContract.manuscript.minimumFinishedPages === 100, "The machine-readable contract must require 100 finished pages.");
+assert(governanceContract.customerRelease.exactDeliverableCount === 6, "The machine-readable contract must require exactly six customer deliverables.");
+assert(governanceContract.publisherIdentity === "Mindset Media Group™", "The machine-readable contract must use Mindset Media Group™ as the publisher identity.");
+assert(governanceContract.individualAttributionAllowed === false, "Individual attribution must remain prohibited.");
+assert(doctrine.includes("Everything in the customer release package must be written for the customer") || doctrine.includes("Every item in the customer release package must be written for the customer"), "The customer-facing doctrine is missing.");
+assert(entry.includes("sanitizeText"), "The V2 runtime attribution sanitizer is missing.");
 assert(boundary.includes("MANUSCRIPT_AUTO_PIPELINE"), "The exact automatic manuscript release routes are missing.");
 assert(boundary.includes("approval-gated-shopify-draft"), "The governed Shopify draft scope is missing.");
 assert(boundary.includes("approval-gated-shopify-publication"), "The governed live-publication scope is missing.");
@@ -71,7 +98,7 @@ for (const advisor of registry.advisors || []) {
   assert(advisor.mutationAuthority !== true, `${advisor.id} cannot have unrestricted mutation authority.`);
 }
 
-console.log("Kairos manuscript activation, Admin Asset Vault, and governed product-release validation passed.");
+console.log("Kairos manuscript activation, Digital Asset Edition V2 customer release, Admin Asset Vault, and governed product-release validation passed.");
 
 function read(relative) {
   return fs.readFileSync(path.join(root, relative), "utf8");
