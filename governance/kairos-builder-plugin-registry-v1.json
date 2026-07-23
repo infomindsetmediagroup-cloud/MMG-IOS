@@ -1,7 +1,7 @@
 {
-  "version": "kairos-builder-plugin-registry-v2",
+  "version": "kairos-builder-plugin-registry-v3",
   "status": "active",
-  "purpose": "Use installed app-building plugins as governed development advisors without granting production authority, while allowing Kairos itself to execute one exact approval-gated manuscript product-release pipeline.",
+  "purpose": "Use installed app-building plugins as governed development advisors without granting production authority, while allowing Kairos itself to execute exact approval-gated manuscript product-release and existing-live-product replacement pipelines.",
   "defaultDecision": "deny-production-authority",
   "runtime": {
     "productionProvider": "cloudflare",
@@ -65,7 +65,7 @@
       ],
       "productionDependency": false,
       "mutationAuthority": false,
-      "activationRule": "Shopify guidance remains advisory. The only manuscript-origin Shopify capability belongs to the deterministic Kairos release controller and requires exact project scope plus explicit draft and live approvals."
+      "activationRule": "Shopify guidance remains advisory. The only manuscript-origin Shopify capabilities belong to deterministic Kairos release controllers and require exact project scope plus explicit draft, live, replacement, or rollback approvals."
     }
   ],
   "productionReleasePolicy": {
@@ -73,14 +73,24 @@
     "allowedRoutes": [
       "/api/production-registry/manuscripts/:projectId/auto-pipeline/run",
       "/api/production-registry/manuscripts/:projectId/auto-pipeline/shopify-draft",
-      "/api/production-registry/manuscripts/:projectId/auto-pipeline/shopify-publish"
+      "/api/production-registry/manuscripts/:projectId/auto-pipeline/shopify-publish",
+      "/api/production-registry/manuscripts/:projectId/live-product-replacement/prepare",
+      "/api/production-registry/manuscripts/:projectId/live-product-replacement/execute",
+      "/api/production-registry/manuscripts/:projectId/live-product-replacement/rollback"
     ],
     "directShopifyRoutesAllowed": false,
     "draftRequiresExplicitUserAction": true,
     "livePublishRequiresExplicitUserAction": true,
+    "liveReplacementRequiresExplicitUserAction": true,
+    "liveReplacementRollbackRequiresExplicitUserAction": true,
+    "existingProductIdentityMustBePreserved": true,
+    "existingProductHandleMustBePreserved": true,
+    "existingProductPriceMustBePreserved": true,
+    "existingDigitalDeliveryAssociationsMustBePreserved": true,
     "customTemplateAllowlistRequired": true,
     "adminAssetVaultRequired": true,
     "finalZipRequired": true,
+    "storefrontVerificationRequired": true,
     "rollbackRequired": true,
     "themeMutationAuthorized": false,
     "navigationMutationAuthorized": false,
@@ -92,6 +102,6 @@
     "builderGuidanceCannotReadSecrets": true,
     "builderGuidanceCannotDeploy": true,
     "builderGuidanceCannotMutateShopify": true,
-    "manuscriptWorkflowShopifyAccess": "approval-gated-exact-product-release"
+    "manuscriptWorkflowShopifyAccess": "approval-gated-exact-product-release-and-live-replacement"
   }
 }
