@@ -2,6 +2,7 @@ import { strToU8, zipSync } from "fflate";
 import { ARTIFACT_NAMES, artifactContentType, buildArtifact } from "./kairos-native-publishing-artifacts-v1.js";
 import { PRODUCT_ASSET_NAMES, buildProductAssetSVG, buildShopifyProductHTML } from "./kairos-product-page-package-v1.js";
 import {
+  DIGITAL_ASSET_V2_LABEL,
   KAIROS_DIGITAL_ASSET_V2_BUILD,
   assertCustomerFacingText,
   buildCustomerREADME,
