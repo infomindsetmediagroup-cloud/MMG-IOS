@@ -81,7 +81,27 @@ jobs:
         run: node scripts/validate-kairos-manuscript-activation.mjs
 
       - name: Test AI Image Mastery metadata extraction
-        run: npx vitest run backend-tests/kairos-manuscript-auto-pipeline.test.js -t "extracts the AI Image Mastery publication record without a catalog form"
+        id: ai_metadata
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          npx vitest run backend-tests/kairos-manuscript-auto-pipeline.test.js -t "extracts the AI Image Mastery publication record without a catalog form" > ai-metadata-test.log 2>&1
+          status=$?
+          tail -n 220 ai-metadata-test.log
+          exit "${status}"
+
+      - name: Upload AI metadata failure evidence
+        if: ${{ steps.ai_metadata.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-metadata-test-failure
+          path: ai-metadata-test.log
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce AI metadata result
+        run: test "${{ steps.ai_metadata.outcome }}" = "success"
 
       - name: Test durable project metadata precedence
         run: npx vitest run backend-tests/kairos-manuscript-auto-pipeline.test.js -t "uses the durable project setup as the authoritative title and author"
