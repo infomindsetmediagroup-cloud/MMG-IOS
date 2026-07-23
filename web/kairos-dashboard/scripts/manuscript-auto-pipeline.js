@@ -1,7 +1,9 @@
-const BUILD = "kairos-manuscript-auto-pipeline-ui-20260722-1";
+const BUILD = "kairos-manuscript-auto-pipeline-ui-20260722-2";
 const ACTIVE_KEY = "kairos.production.active-workspace";
 const DRAFT_CONFIRMATION = "CREATE SHOPIFY PRODUCT DRAFT";
 const LIVE_CONFIRMATION = "PUBLISH PRODUCT LIVE";
+const REPLACEMENT_CONFIRMATION = "REPLACE LIVE PRODUCT FROM VAULT";
+const REPLACEMENT_ROLLBACK_CONFIRMATION = "ROLL BACK LIVE PRODUCT REPLACEMENT";
 
 const state = {
   initialized: false,
@@ -25,7 +27,7 @@ function init() {
     ready: true,
     build: BUILD,
     enhance: scheduleEnhance,
-    getState: () => ({ projectId: state.projectId, busy: state.busy, phase: state.phase, error: state.error, status: state.record?.status || null }),
+    getState: () => ({ projectId: state.projectId, busy: state.busy, phase: state.phase, error: state.error, status: state.record?.status || null, shopifyStatus: state.record?.shopify?.status || null }),
   });
   scheduleEnhance();
 }
@@ -125,7 +127,13 @@ async function createShopifyDraft(projectId) {
   try {
     state.record = await post(`${endpoint(projectId)}/shopify-draft`, { confirmation: DRAFT_CONFIRMATION });
   } catch (error) {
-    state.error = error?.message || "Kairos could not prepare the Shopify product draft.";
+    if (error?.code === "existing_live_product_protected") {
+      state.phase = "Preparing a protected replacement for the existing live product…";
+      render();
+      state.record = await post(`${replacementEndpoint(projectId)}/prepare`, {});
+    } else {
+      state.error = error?.message || "Kairos could not prepare the Shopify product draft.";
+    }
   } finally {
     state.busy = false;
     state.phase = "";
@@ -143,6 +151,46 @@ async function publishLive(projectId) {
     state.record = await post(`${endpoint(projectId)}/shopify-publish`, { confirmation: LIVE_CONFIRMATION });
   } catch (error) {
     state.error = error?.message || "Kairos could not publish the Shopify product.";
+  } finally {
+    state.busy = false;
+    state.phase = "";
+    render();
+  }
+}
+
+async function executeLiveReplacement(projectId) {
+  if (state.busy) return;
+  state.busy = true;
+  state.phase = "Applying vaulted content and assets to the protected live product…";
+  state.error = "";
+  render();
+  try {
+    state.record = await post(`${replacementEndpoint(projectId)}/execute`, {
+      confirmation: REPLACEMENT_CONFIRMATION,
+      actor: "MMG Executive",
+    });
+  } catch (error) {
+    state.error = error?.message || "Kairos could not replace and verify the existing live product.";
+  } finally {
+    state.busy = false;
+    state.phase = "";
+    render();
+  }
+}
+
+async function rollbackLiveReplacement(projectId) {
+  if (state.busy) return;
+  state.busy = true;
+  state.phase = "Restoring and verifying the prior live product…";
+  state.error = "";
+  render();
+  try {
+    state.record = await post(`${replacementEndpoint(projectId)}/rollback`, {
+      confirmation: REPLACEMENT_ROLLBACK_CONFIRMATION,
+      actor: "MMG Executive",
+    });
+  } catch (error) {
+    state.error = error?.message || "Kairos could not roll back the live-product replacement.";
   } finally {
     state.busy = false;
     state.phase = "";
@@ -179,7 +227,7 @@ function render(section = document.querySelector("#manuscript-auto-pipeline")) {
   const vault = state.record.vault || {};
   const assets = Array.isArray(vault.assets) ? vault.assets : [];
   const shopify = state.record.shopify || {};
-  const liveURL = metadata.liveURL || shopify.livePublication?.publication?.liveProbe?.finalURL || "";
+  const liveURL = metadata.liveURL || shopify.livePublication?.publication?.liveProbe?.finalURL || shopify.replacement?.result?.liveProbe?.finalURL || "";
 
   section.innerHTML = `
     <p class="eyebrow">Admin Asset Vault</p>
@@ -198,7 +246,7 @@ function render(section = document.querySelector("#manuscript-auto-pipeline")) {
     </div>
     <div class="manuscript-actions">
       <a class="manuscript-package" href="${esc(vault.packageDownloadURL || "#")}" download>Download Production-Ready ZIP</a>
-      <button type="button" class="primary" data-auto-shopify-draft>${shopify.status === "not-prepared" ? "Prepare Shopify Product Draft" : "Rebuild Shopify Product Draft"}</button>
+      ${releaseAction(shopify)}
     </div>
     <div class="manuscript-manufacturing-grid">
       ${assets.map((asset) => `<a href="${esc(asset.downloadURL)}" download><strong>${esc(asset.filename)}</strong><small>${esc(asset.role)} · ${formatBytes(asset.byteSize)}</small></a>`).join("")}
@@ -208,9 +256,58 @@ function render(section = document.querySelector("#manuscript-auto-pipeline")) {
   `;
 }
 
+function releaseAction(shopify) {
+  const status = String(shopify?.status || "not-prepared");
+  if (["awaiting-live-replacement-approval", "live-product-replaced-and-verified", "live-product-replacement-rolled-back-and-verified"].includes(status)) return "";
+  if (/draft-created|awaiting-live-approval|product-live/.test(status)) return "";
+  return `<button type="button" class="primary" data-auto-shopify-draft>${status === "not-prepared" ? "Prepare Shopify Product Draft" : "Rebuild Shopify Product Draft"}</button>`;
+}
+
 function shopifyMarkup(shopify, liveURL) {
   if (!shopify || shopify.status === "not-prepared") {
     return `<p class="manuscript-note">Shopify remains untouched until you choose to prepare the governed product draft.</p>`;
+  }
+
+  const replacement = shopify.replacement || {};
+  if (shopify.status === "awaiting-live-replacement-approval") {
+    return `
+      <section class="manuscript-result">
+        <p class="eyebrow">Protected existing live product</p>
+        <h3>${esc(replacement.productBefore?.title || replacement.desired?.title || "Existing live product")}</h3>
+        <p>Kairos found the active product at <strong>${esc(replacement.productBefore?.handle || "the existing handle")}</strong>. It will update that product in place so its price, handle, active status, and digital-delivery associations remain intact.</p>
+        <div class="publication-catalog-proof">
+          <span><strong>${esc(replacement.productBefore?.price || "—")}</strong><small>preserved price</small></span>
+          <span><strong>${esc(replacement.desired?.templateSuffix || "—")}</strong><small>approved template</small></span>
+          <span><strong>${Number(replacement.assets?.files?.length || 0) + 1}</strong><small>new product assets</small></span>
+        </div>
+        <p class="manuscript-note">The current live product remains unchanged until you approve this replacement.</p>
+        <button type="button" class="primary" data-auto-live-replace>Approve Existing Live Product Replacement</button>
+      </section>
+    `;
+  }
+
+  if (shopify.status === "live-product-replaced-and-verified") {
+    return `
+      <section class="manuscript-result">
+        <p class="eyebrow">Controlled live replacement</p>
+        <h3>Existing product updated and verified</h3>
+        <p>The same Shopify product now uses the vaulted copy, approved custom template, new cover, and supporting product assets. Its handle, price, active status, and digital-delivery associations were preserved.</p>
+        <div class="manuscript-actions">
+          ${liveURL ? `<a class="manuscript-package" href="${esc(liveURL)}" target="_blank" rel="noopener">Open Updated Live Product</a>` : ""}
+          <button type="button" class="secondary" data-auto-live-replacement-rollback>Roll Back Live Product Replacement</button>
+        </div>
+      </section>
+    `;
+  }
+
+  if (shopify.status === "live-product-replacement-rolled-back-and-verified") {
+    return `
+      <section class="manuscript-result">
+        <p class="eyebrow">Replacement rollback</p>
+        <h3>Prior live product restored and verified</h3>
+        ${liveURL ? `<a class="manuscript-package" href="${esc(liveURL)}" target="_blank" rel="noopener">Open Restored Live Product</a>` : ""}
+      </section>
+    `;
   }
 
   const prepared = shopify.prepared || {};
@@ -260,7 +357,7 @@ function errorMarkup() {
 
 function handleClick(event) {
   const button = event.target instanceof Element
-    ? event.target.closest("[data-auto-build], [data-auto-shopify-draft], [data-auto-shopify-publish]")
+    ? event.target.closest("[data-auto-build], [data-auto-shopify-draft], [data-auto-shopify-publish], [data-auto-live-replace], [data-auto-live-replacement-rollback]")
     : null;
   if (!button || !button.closest("#manuscript-auto-pipeline")) return;
   event.preventDefault();
@@ -269,6 +366,8 @@ function handleClick(event) {
   if (button.matches("[data-auto-build]")) void runPipeline(projectId);
   if (button.matches("[data-auto-shopify-draft]")) void createShopifyDraft(projectId);
   if (button.matches("[data-auto-shopify-publish]")) void publishLive(projectId);
+  if (button.matches("[data-auto-live-replace]")) void executeLiveReplacement(projectId);
+  if (button.matches("[data-auto-live-replacement-rollback]")) void rollbackLiveReplacement(projectId);
 }
 
 async function post(url, payload) {
@@ -279,7 +378,13 @@ async function post(url, payload) {
     body: JSON.stringify(payload),
   });
   const body = await readJSON(response);
-  if (!response.ok) throw new Error(body?.error?.message || `Kairos returned HTTP ${response.status}.`);
+  if (!response.ok) {
+    throw Object.assign(new Error(body?.error?.message || `Kairos returned HTTP ${response.status}.`), {
+      code: body?.error?.code || "kairos_request_failed",
+      status: response.status,
+      body,
+    });
+  }
   return body;
 }
 
@@ -292,6 +397,10 @@ async function readJSON(response) {
 
 function endpoint(projectId) {
   return `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/auto-pipeline`;
+}
+
+function replacementEndpoint(projectId) {
+  return `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/live-product-replacement`;
 }
 
 function activeProjectId() {
