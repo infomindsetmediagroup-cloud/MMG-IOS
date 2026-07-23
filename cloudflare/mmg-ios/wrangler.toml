@@ -10,9 +10,6 @@ binding = "ASSETS"
 run_worker_first = true
 not_found_handling = "single-page-application"
 
-[ai]
-binding = "AI"
-
 [images]
 binding = "IMAGES"
 
@@ -34,12 +31,14 @@ new_sqlite_classes = ["KairosProject"]
 # Digital Asset Edition V2 is mandatory for manuscript manufacturing and customer release packaging.
 # Customer delivery attachment is mandatory before a Shopify digital-product draft is considered complete.
 # Canonical approvals: Start Production Job, Approve Package, Approve & Publish Product.
+# Cloudflare Workers AI is intentionally not bound. Production intelligence uses the OpenAI Responses API.
 
 [vars]
 SHOPIFY_STORE_DOMAIN = "07kd8e-qw.myshopify.com"
 SHOPIFY_API_VERSION = "2026-07"
 MMG_STOREFRONT_ORIGIN = "https://themindsetmediagroup.com"
-KAIROS_WORKERS_AI_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8"
+KAIROS_OPENAI_MODEL = "gpt-5"
+KAIROS_CLOUDFLARE_NEURONS_ENABLED = "false"
 KAIROS_MANUSCRIPT_RUNTIME_ENABLED = "true"
 KAIROS_DIGITAL_ASSET_V2_REQUIRED = "true"
 KAIROS_SHOPIFY_WRITES_ENABLED = "true"
