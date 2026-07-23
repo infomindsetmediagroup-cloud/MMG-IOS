@@ -313,7 +313,7 @@ jobs:
 
       - name: Upload sanitized staging evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mmg-commerce-staging-integration-${{ github.run_id }}
           path: |

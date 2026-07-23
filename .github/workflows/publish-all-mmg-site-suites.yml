@@ -151,7 +151,7 @@ jobs:
 
       - name: Upload complete release evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mmg-complete-site-suite-release-evidence
           if-no-files-found: warn
