@@ -1,0 +1,54 @@
+{
+  "schemaVersion": "1.0.0",
+  "contractId": "kairos-full-manufacturing-pipeline-v1",
+  "status": "required",
+  "effectiveDate": "2026-07-23",
+  "publisherIdentity": "Mindset Media Group™",
+  "productTypes": [
+    "digital-asset",
+    "workbook",
+    "prompt-library",
+    "course-guide",
+    "service-package",
+    "subscription-resource"
+  ],
+  "stages": [
+    "source-analysis",
+    "product-classification",
+    "research-gap-assessment",
+    "manuscript-writing-and-expansion",
+    "master-production-docx",
+    "cover-generation-or-normalization",
+    "customer-deliverables",
+    "storefront-copy",
+    "seo-metadata",
+    "social-assets",
+    "quality-gates",
+    "shopify-draft",
+    "approval-gated-live-publication"
+  ],
+  "digitalAsset": {
+    "edition": "2.0",
+    "minimumFinishedPages": 100,
+    "exactCustomerDeliverableCount": 6,
+    "customerFacingOnly": true
+  },
+  "publication": {
+    "automaticDraftAllowed": false,
+    "automaticLivePublicationAllowed": false,
+    "draftConfirmation": "CREATE SHOPIFY PRODUCT DRAFT",
+    "liveConfirmation": "PUBLISH PRODUCT LIVE",
+    "pricingApprovalRequired": true,
+    "coverApprovalRequired": true,
+    "metadataApprovalRequired": true
+  },
+  "prohibited": [
+    "individual author attribution",
+    "internal workflow notes in customer files",
+    "unapproved Shopify mutations",
+    "theme mutations",
+    "navigation mutations",
+    "filler or duplicated manuscript content",
+    "unsupported factual claims"
+  ]
+}
