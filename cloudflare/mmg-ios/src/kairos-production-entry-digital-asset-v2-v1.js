@@ -4,14 +4,19 @@ import {
   KAIROS_DIGITAL_ASSET_V2_BUILD,
   MINIMUM_FINISHED_PAGES,
 } from "./kairos-digital-asset-edition-v2-contract-v1.js";
+import {
+  KAIROS_DIGITAL_ASSET_V2_WRITER_BUILD,
+  normalizeApprovedCoverToPNG,
+  writeDigitalAssetEditionV2,
+} from "./kairos-digital-asset-v2-manuscript-writer-v1.js";
 
-const BUILD = "kairos-production-entry-digital-asset-v2-20260722-1";
+const BUILD = "kairos-production-entry-digital-asset-v2-20260722-2";
 const PUBLISHER = "Mindset Media Group™";
 const REGISTRY_OBJECT = "mmg-production-project-registry";
 
 export class KairosProject extends PreviousKairosProject {
   async fetch(request) {
-    const prepared = await prepareObjectRequest(request);
+    const prepared = await prepareObjectRequest(request, this.env);
     const response = await super.fetch(prepared);
     return stamp(await sanitizeResponse(response));
   }
@@ -31,13 +36,13 @@ export default {
   },
 };
 
-async function prepareObjectRequest(request) {
+async function prepareObjectRequest(request, env) {
   const url = new URL(request.url);
   if (request.method === "POST" && /^\/registry\/manuscripts\/[a-z0-9-]{8,}\/setup$/i.test(url.pathname)) {
     return rewriteSetupRequest(request);
   }
   if (request.method === "POST" && url.pathname === "/product-manufacturing/create") {
-    return rewriteManufacturingRequest(request);
+    return rewriteManufacturingRequest(request, env);
   }
   return request;
 }
@@ -64,11 +69,20 @@ async function rewriteSetupRequest(request) {
   return request;
 }
 
-async function rewriteManufacturingRequest(request) {
+async function rewriteManufacturingRequest(request, env) {
   const body = await request.clone().json().catch(() => ({}));
   const manuscript = body?.manuscript || {};
   const objective = sanitizeText(body?.objective || "");
-  const directive = `${DIGITAL_ASSET_V2_LABEL}. Write and manufacture the manuscript as a substantial customer-facing operating manual of at least ${MINIMUM_FINISHED_PAGES} substantive finished pages. Use practical frameworks, workflows, prompt blocks, templates, worksheets, checklists, decision rules, implementation tools, labs, and action steps where appropriate. Do not use filler, duplicated passages, artificial pagination, individual attribution, storefront content, or internal workflow commentary.`;
+  const sourceText = sanitizeText(manuscript?.text || "");
+  const written = await writeDigitalAssetEditionV2({
+    title: sanitizeText(body?.title || "Untitled Digital Guide"),
+    subtitle: sanitizeText(body?.subtitle || ""),
+    manuscript: sourceText,
+    env,
+  });
+  const cover = await normalizeApprovedCoverToPNG(body?.cover || {}, env);
+  const directive = `${DIGITAL_ASSET_V2_LABEL}. The manuscript has completed the V2 source-grounded writing pass and now contains ${written.wordCount} words across ${written.chapterCount} expanded source chapters, estimated at ${written.estimatedPages} substantive pages. Manufacture the exact customer-facing release package without filler, duplicated passages, individual attribution, storefront content, or internal workflow commentary.`;
+
   return jsonRequest(request, {
     ...body,
     author: PUBLISHER,
@@ -76,11 +90,21 @@ async function rewriteManufacturingRequest(request) {
     objective: `${objective} ${directive}`.trim(),
     manuscript: {
       ...manuscript,
-      text: sanitizeText(manuscript?.text || ""),
+      text: written.text,
       digitalAssetEdition: "2.0",
       minimumFinishedPages: MINIMUM_FINISHED_PAGES,
       customerFacingOnly: true,
+      originalSourcePreserved: true,
+      v2Writer: {
+        build: written.build,
+        model: written.model,
+        wordCount: written.wordCount,
+        estimatedPages: written.estimatedPages,
+        chapterCount: written.chapterCount,
+        sectionCount: written.sectionCount,
+      },
     },
+    cover,
   });
 }
 
@@ -150,6 +174,7 @@ function stamp(response) {
   const headers = new Headers(response.headers);
   headers.set("X-Kairos-Digital-Asset-Edition", "V2");
   headers.set("X-Kairos-Digital-Asset-Contract", KAIROS_DIGITAL_ASSET_V2_BUILD);
+  headers.set("X-Kairos-Digital-Asset-Writer", KAIROS_DIGITAL_ASSET_V2_WRITER_BUILD);
   headers.set("X-Kairos-Digital-Asset-Entry", BUILD);
   return new Response(response.body, {
     status: response.status,
