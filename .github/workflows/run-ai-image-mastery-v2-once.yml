@@ -1,0 +1,166 @@
+name: Run AI Image Mastery V2 Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/run-ai-image-mastery-v2-once.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: run-ai-image-mastery-v2-once
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+      KAIROS_API_TOKEN: ${{ secrets.KAIROS_API_TOKEN }}
+
+    steps:
+      - name: Mark run pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --silent --show-error \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "{\"state\":\"pending\",\"context\":\"ai-image-mastery-v2-rerun\",\"description\":\"Locating and running AI Image Mastery V2\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+
+      - name: Locate AI Image Mastery project
+        id: locate
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=()
+          if [ -n "${KAIROS_API_TOKEN:-}" ]; then
+            auth=(-H "Authorization: Bearer ${KAIROS_API_TOKEN}" -H "X-Kairos-API-Token: ${KAIROS_API_TOKEN}")
+          fi
+          curl --fail --silent --show-error --max-time 30 \
+            "${auth[@]}" \
+            "${WORKER_URL}/api/production-registry/projects?type=manuscript-studio" \
+            -o projects.json
+          cat projects.json
+          project_id="$(jq -r '[.projects[] | select((.title // "") | test("AI Image Mastery"; "i"))] | sort_by(.updatedAt) | reverse | .[0].projectId // empty' projects.json)"
+          if [ -z "${project_id}" ]; then
+            echo "AI Image Mastery manuscript project was not found." >&2
+            exit 1
+          fi
+          echo "project_id=${project_id}" >> "${GITHUB_OUTPUT}"
+          echo "Located ${project_id}"
+
+      - name: Verify source and cover readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=()
+          if [ -n "${KAIROS_API_TOKEN:-}" ]; then
+            auth=(-H "Authorization: Bearer ${KAIROS_API_TOKEN}" -H "X-Kairos-API-Token: ${KAIROS_API_TOKEN}")
+          fi
+          project_id='${{ steps.locate.outputs.project_id }}'
+          curl --fail --silent --show-error --max-time 30 "${auth[@]}" \
+            "${WORKER_URL}/api/production-registry/manuscripts/${project_id}/source/text" \
+            -o source-status.json
+          curl --fail --silent --show-error --max-time 30 "${auth[@]}" \
+            "${WORKER_URL}/api/production-registry/manuscripts/${project_id}/setup" \
+            -o setup-status.json
+          curl --fail --silent --show-error --max-time 30 "${auth[@]}" \
+            "${WORKER_URL}/api/production-registry/manuscripts/${project_id}/setup/cover" \
+            -o approved-cover.bin
+          jq '{status, source: (.source | {filename, format, pages, checksum}), manuscriptCharacters: (.manuscript | length)}' source-status.json
+          jq '{status, setup: (.setup | {publicationTitle, authorName, service, trimSize, edition, coverStatus})}' setup-status.json
+          test -s approved-cover.bin
+
+      - name: Run Digital Asset Edition V2 production
+        id: production
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          auth=()
+          if [ -n "${KAIROS_API_TOKEN:-}" ]; then
+            auth=(-H "Authorization: Bearer ${KAIROS_API_TOKEN}" -H "X-Kairos-API-Token: ${KAIROS_API_TOKEN}")
+          fi
+          project_id='${{ steps.locate.outputs.project_id }}'
+          status="$(curl --silent --show-error --max-time 300 \
+            "${auth[@]}" \
+            -X POST \
+            -H 'Content-Type: application/json' \
+            --data '{"requestedBy":"MMG Executive","edition":"MMG Digital Asset Edition V2","customerFacingOnly":true}' \
+            "${WORKER_URL}/api/production-registry/manuscripts/${project_id}/auto-pipeline/run" \
+            -o production-result.json \
+            -w '%{http_code}')"
+          cat production-result.json
+          echo "http_status=${status}" >> "${GITHUB_OUTPUT}"
+          if [ "${status}" -lt 200 ] || [ "${status}" -ge 300 ]; then
+            exit 1
+          fi
+          jq -e '.status == "production-ready"' production-result.json > /dev/null
+
+      - name: Download completed customer package
+        if: ${{ steps.production.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=()
+          if [ -n "${KAIROS_API_TOKEN:-}" ]; then
+            auth=(-H "Authorization: Bearer ${KAIROS_API_TOKEN}" -H "X-Kairos-API-Token: ${KAIROS_API_TOKEN}")
+          fi
+          project_id='${{ steps.locate.outputs.project_id }}'
+          curl --fail --silent --show-error --max-time 300 "${auth[@]}" \
+            "${WORKER_URL}/api/admin-asset-vault/projects/${project_id}/package" \
+            -o AI-Image-Mastery_Digital-Asset-Edition-V2_Customer-Package.zip
+          test -s AI-Image-Mastery_Digital-Asset-Edition-V2_Customer-Package.zip
+          unzip -l AI-Image-Mastery_Digital-Asset-Edition-V2_Customer-Package.zip | tee package-contents.txt
+          file_count="$(unzip -Z1 AI-Image-Mastery_Digital-Asset-Edition-V2_Customer-Package.zip | wc -l | tr -d ' ')"
+          test "${file_count}" = "6"
+
+      - name: Upload run evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-image-mastery-v2-rerun-evidence
+          path: |
+            projects.json
+            source-status.json
+            setup-status.json
+            production-result.json
+            package-contents.txt
+            AI-Image-Mastery_Digital-Asset-Edition-V2_Customer-Package.zip
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Enforce production result
+        run: test '${{ steps.production.outcome }}' = 'success'
+
+      - name: Report run success
+        if: ${{ success() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --silent --show-error \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "{\"state\":\"success\",\"context\":\"ai-image-mastery-v2-rerun\",\"description\":\"AI Image Mastery V2 customer package completed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+
+      - name: Report run failure
+        if: ${{ failure() || cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --silent --show-error \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "{\"state\":\"failure\",\"context\":\"ai-image-mastery-v2-rerun\",\"description\":\"AI Image Mastery V2 run requires correction\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
