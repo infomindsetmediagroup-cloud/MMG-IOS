@@ -10,13 +10,16 @@ import {
   KAIROS_PUBLISHING_EXPERIENCE_BUILD,
 } from "./kairos-publishing-experience-v1.js";
 
-const BUILD = "kairos-production-entry-customer-delivery-20260723-4-zero-neuron";
+const BUILD = "kairos-production-entry-customer-delivery-20260723-5-zero-neuron-object";
 const EXECUTE_PATH = "/api/shopify/product-publication/execute";
 const OPENAI_URL = "https://api.openai.com/v1/responses";
 const DEFAULT_OPENAI_MODEL = "gpt-5";
 
 export class KairosProject extends CurrentKairosProject {
   async fetch(request) {
+    // The manuscript writer executes inside this Durable Object. Apply the
+    // OpenAI-compatible AI.run adapter here, not only at the outer Worker.
+    this.env = withOpenAICompatibility(this.env);
     const delivery = await handleCustomerDeliveryObjectRequest(this.state, request, this.env);
     if (delivery) return stamp(delivery);
     return stamp(await super.fetch(request));
@@ -46,7 +49,7 @@ export default {
 };
 
 function withOpenAICompatibility(env) {
-  if (!env) return env;
+  if (!env || env.__KAIROS_ZERO_NEURON_ENV__ === true) return env;
   const adapter = Object.freeze({
     async run(_cloudflareModel, input = {}) {
       if (!env.OPENAI_API_KEY) {
@@ -88,6 +91,7 @@ function withOpenAICompatibility(env) {
   });
   return new Proxy(env, {
     get(target, property, receiver) {
+      if (property === "__KAIROS_ZERO_NEURON_ENV__") return true;
       if (property === "AI") return adapter;
       if (property === "KAIROS_WORKERS_AI_MODEL") return String(target.KAIROS_OPENAI_MODEL || DEFAULT_OPENAI_MODEL);
       return Reflect.get(target, property, receiver);
