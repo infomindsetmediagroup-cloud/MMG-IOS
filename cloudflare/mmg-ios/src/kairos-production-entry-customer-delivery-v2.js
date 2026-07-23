@@ -10,16 +10,19 @@ import {
   KAIROS_PUBLISHING_EXPERIENCE_BUILD,
 } from "./kairos-publishing-experience-v1.js";
 
-const BUILD = "kairos-production-entry-customer-delivery-20260723-5-zero-neuron-object";
+const BUILD = "kairos-production-entry-customer-delivery-20260723-6-source-reconciliation";
 const EXECUTE_PATH = "/api/shopify/product-publication/execute";
 const OPENAI_URL = "https://api.openai.com/v1/responses";
 const DEFAULT_OPENAI_MODEL = "gpt-5";
+const REGISTRY_OBJECT = "mmg-production-project-registry";
 
 export class KairosProject extends CurrentKairosProject {
+  constructor(state, env) {
+    super(state, withOpenAICompatibility(env));
+    this.env = withOpenAICompatibility(env);
+  }
+
   async fetch(request) {
-    // The manuscript writer executes inside this Durable Object. Apply the
-    // OpenAI-compatible AI.run adapter here, not only at the outer Worker.
-    this.env = withOpenAICompatibility(this.env);
     const delivery = await handleCustomerDeliveryObjectRequest(this.state, request, this.env);
     if (delivery) return stamp(delivery);
     return stamp(await super.fetch(request));
@@ -36,6 +39,11 @@ export default {
     if (experience) return stamp(experience);
 
     const url = new URL(request.url);
+    if (request.method === "POST" && /^\/api\/production-registry\/manuscripts\/[a-z0-9-]{8,}\/setup$/i.test(url.pathname)) {
+      const repaired = await ensureActiveProjectSource(request.clone(), zeroNeuronEnv);
+      if (repaired) return stamp(repaired);
+    }
+
     if (request.method === "POST" && url.pathname === EXECUTE_PATH) {
       return executeDraftWithDelivery(request, zeroNeuronEnv, ctx);
     }
@@ -48,8 +56,74 @@ export default {
   },
 };
 
+async function ensureActiveProjectSource(request, env) {
+  if (!env?.KAIROS_PROJECTS) return null;
+  const url = new URL(request.url);
+  const match = url.pathname.match(/^\/api\/production-registry\/manuscripts\/([a-z0-9-]{8,})\/setup$/i);
+  if (!match) return null;
+  const projectId = match[1];
+  const input = await request.clone().json().catch(() => ({}));
+  const title = normalizeTitle(input?.publicationTitle || "");
+  const stub = env.KAIROS_PROJECTS.get(env.KAIROS_PROJECTS.idFromName(REGISTRY_OBJECT));
+
+  const direct = await stub.fetch(`https://kairos.internal/registry/manuscripts/${encodeURIComponent(projectId)}/source`);
+  if (direct.ok) return null;
+
+  const projectsResponse = await stub.fetch("https://kairos.internal/registry/projects");
+  const projects = await projectsResponse.json().catch(() => ({ projects: [] }));
+  const candidates = (Array.isArray(projects?.projects) ? projects.projects : [])
+    .filter((item) => item?.projectId && item.projectId !== projectId && item?.sourceStored === true)
+    .filter((item) => !title || normalizeTitle(item?.title || item?.source?.title || "") === title)
+    .sort((a, b) => String(b?.updatedAt || "").localeCompare(String(a?.updatedAt || "")));
+
+  if (candidates.length !== 1) {
+    return null;
+  }
+
+  const sourceProjectId = candidates[0].projectId;
+  const metadataResponse = await stub.fetch(`https://kairos.internal/registry/manuscripts/${encodeURIComponent(sourceProjectId)}/source`);
+  const textResponse = await stub.fetch(`https://kairos.internal/registry/manuscripts/${encodeURIComponent(sourceProjectId)}/source/text`);
+  const fileResponse = await stub.fetch(`https://kairos.internal/registry/manuscripts/${encodeURIComponent(sourceProjectId)}/source/download`);
+  if (!metadataResponse.ok || !textResponse.ok || !fileResponse.ok) return null;
+
+  const metadataPayload = await metadataResponse.json().catch(() => null);
+  const textPayload = await textResponse.json().catch(() => null);
+  const metadata = metadataPayload?.source || textPayload?.source;
+  const manuscript = String(textPayload?.manuscript || "");
+  if (!metadata || manuscript.trim().length < 50) return null;
+
+  const bytes = await fileResponse.arrayBuffer();
+  const filename = String(metadata.filename || "manuscript.txt");
+  const contentType = String(metadata.contentType || "text/plain");
+  const form = new FormData();
+  form.append("file", new File([bytes], filename, { type: contentType }), filename);
+  form.append("extractedText", manuscript);
+  form.append("title", String(input?.publicationTitle || metadata.title || filename));
+  form.append("format", String(metadata.format || "txt"));
+  form.append("pages", metadata.pages == null ? "" : String(metadata.pages));
+  form.append("checksum", String(metadata.checksum || ""));
+
+  const copyResponse = await stub.fetch(`https://kairos.internal/registry/manuscripts/${encodeURIComponent(projectId)}/source`, {
+    method: "POST",
+    body: form,
+  });
+  if (!copyResponse.ok) return null;
+
+  const verification = await stub.fetch(`https://kairos.internal/registry/manuscripts/${encodeURIComponent(projectId)}/source`);
+  if (!verification.ok) return null;
+
+  const response = await currentRuntime.fetch(request, env, {});
+  const headers = new Headers(response.headers);
+  headers.set("X-Kairos-Source-Reconciled", sourceProjectId);
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
+function normalizeTitle(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
 function withOpenAICompatibility(env) {
-  if (!env || env.__KAIROS_ZERO_NEURON_ENV__ === true) return env;
+  if (!env) return env;
   const adapter = Object.freeze({
     async run(_cloudflareModel, input = {}) {
       if (!env.OPENAI_API_KEY) {
@@ -91,7 +165,6 @@ function withOpenAICompatibility(env) {
   });
   return new Proxy(env, {
     get(target, property, receiver) {
-      if (property === "__KAIROS_ZERO_NEURON_ENV__") return true;
       if (property === "AI") return adapter;
       if (property === "KAIROS_WORKERS_AI_MODEL") return String(target.KAIROS_OPENAI_MODEL || DEFAULT_OPENAI_MODEL);
       return Reflect.get(target, property, receiver);
