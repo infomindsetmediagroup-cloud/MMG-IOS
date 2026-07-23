@@ -1,8 +1,9 @@
-const BUILD = "kairos-manuscript-operation-boundary-20260722-3";
+const BUILD = "kairos-manuscript-operation-boundary-20260722-4";
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const MANUSCRIPT_PROJECT = /^\/api\/production-registry\/projects\/manuscript-studio-[a-z0-9-]+$/i;
 const MANUSCRIPT_REGISTRY = "/api/production-registry/projects";
 const MANUSCRIPT_AUTO_PIPELINE = /^\/api\/production-registry\/manuscripts\/[a-z0-9-]{8,}\/auto-pipeline\/(run|shopify-draft|shopify-publish)$/i;
+const MANUSCRIPT_LIVE_REPLACEMENT = /^\/api\/production-registry\/manuscripts\/[a-z0-9-]{8,}\/live-product-replacement\/(prepare|execute|rollback)$/i;
 const MANUSCRIPT_PREFIXES = [
   "/api/manuscript/",
   "/api/production-registry/manuscripts/",
@@ -29,6 +30,20 @@ export async function inspectManuscriptOperation(request) {
   if (automaticPipeline) {
     const action = automaticPipeline[1].toLowerCase();
     return allow(action === "run" ? "manuscript-production-package" : action === "shopify-draft" ? "approval-gated-shopify-draft" : "approval-gated-shopify-publication", path, method);
+  }
+
+  const liveReplacement = method === "POST" ? path.match(MANUSCRIPT_LIVE_REPLACEMENT) : null;
+  if (liveReplacement) {
+    const action = liveReplacement[1].toLowerCase();
+    return allow(
+      action === "prepare"
+        ? "controlled-live-product-replacement-review"
+        : action === "execute"
+          ? "approval-gated-live-product-replacement"
+          : "approval-gated-live-product-replacement-rollback",
+      path,
+      method,
+    );
   }
 
   if (WEBSITE_MUTATION.test(path)) {
