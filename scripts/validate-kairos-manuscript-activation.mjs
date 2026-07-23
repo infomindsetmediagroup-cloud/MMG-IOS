@@ -4,6 +4,8 @@ import path from "node:path";
 const root = process.cwd();
 const paths = {
   wrangler: "cloudflare/mmg-ios/wrangler.toml",
+  localEntry: "cloudflare/mmg-ios/src/kairos-production-entry-local-inference-v1.js",
+  localInference: "cloudflare/mmg-ios/src/kairos-local-inference-v1.js",
   entry: "cloudflare/mmg-ios/src/kairos-production-entry-digital-asset-v2-v1.js",
   deliveryEntry: "cloudflare/mmg-ios/src/kairos-production-entry-customer-delivery-v2.js",
   delivery: "cloudflare/mmg-ios/src/kairos-customer-delivery-v2.js",
@@ -12,6 +14,7 @@ const paths = {
   productPublication: "cloudflare/mmg-ios/src/kairos-product-publication-v1.js",
   digitalAssetContract: "cloudflare/mmg-ios/src/kairos-digital-asset-edition-v2-contract-v1.js",
   creationArtifacts: "cloudflare/mmg-ios/src/kairos-creation-artifacts-v1.js",
+  localUI: "web/kairos-dashboard/scripts/kairos-local-inference.js",
   governanceContract: "governance/mmg-digital-asset-edition-v2-contract-v1.json",
   doctrine: "docs/doctrine/mmg-digital-asset-edition-v2-customer-release-doctrine.md",
   registry: "governance/kairos-builder-plugin-registry-v1.json",
@@ -23,6 +26,9 @@ for (const [name, relative] of Object.entries(paths)) {
 }
 
 const wrangler = read(paths.wrangler);
+const localEntry = read(paths.localEntry);
+const localInference = read(paths.localInference);
+const localUI = read(paths.localUI);
 const entry = read(paths.entry);
 const deliveryEntry = read(paths.deliveryEntry);
 const delivery = read(paths.delivery);
@@ -36,7 +42,18 @@ const governanceContract = JSON.parse(read(paths.governanceContract));
 const deploy = read(paths.deploy);
 const registry = JSON.parse(read(paths.registry));
 
-assert(wrangler.includes('main = "src/kairos-production-entry-customer-delivery-v2.js"'), "The active Worker must use the corrected customer-delivery entry.");
+assert(wrangler.includes('main = "src/kairos-production-entry-local-inference-v1.js"'), "The active Worker must use the local-inference entry.");
+assert(wrangler.includes('KAIROS_LOCAL_INFERENCE_ENABLED = "true"'), "Kairos local inference must be enabled.");
+assert(wrangler.includes('KAIROS_OPENAI_FREE_CREDITS_ENABLED = "false"'), "Paid OpenAI use must remain disabled by default.");
+assert(wrangler.includes('KAIROS_CLOUDFLARE_NEURONS_ENABLED = "false"'), "Cloudflare neuron use must remain disabled.");
+assert(localEntry.includes("handleLocalInference"), "The active entry must route local inference requests.");
+assert(localEntry.includes("X-Kairos-Inference-Cost-Mode"), "The runtime must report device-compute no-paid-API mode.");
+assert(localInference.includes("externalPaidAPIUsed: false"), "Stored local inference records must prove that no paid API was used.");
+assert(localInference.includes("cloudflareNeuronsUsed: 0"), "Stored local inference records must prove zero Cloudflare neuron use.");
+assert(localInference.includes("backupOriginalText"), "The authoritative manuscript must be backed up before local inference replaces manufacturing text.");
+assert(localUI.includes("@mlc-ai/web-llm"), "The browser-native WebLLM inference runtime is missing.");
+assert(localUI.includes("navigator?.gpu"), "The local model must enforce WebGPU capability detection.");
+assert(localUI.includes("STORE LOCAL INFERENCE"), "The local inference storage approval contract is missing.");
 assert(wrangler.includes('KAIROS_MANUSCRIPT_RUNTIME_ENABLED = "true"'), "Manuscript runtime activation flag is missing.");
 assert(wrangler.includes('KAIROS_DIGITAL_ASSET_V2_REQUIRED = "true"'), "Digital Asset Edition V2 activation flag is missing.");
 assert(!wrangler.includes('"* * * * *"'), "Minute-level website reconciliation must be removed.");
@@ -49,7 +66,7 @@ assert(entry.includes("MINIMUM_FINISHED_PAGES"), "The V2 runtime must carry the 
 assert(deliveryEntry.includes("executeDraftWithDelivery"), "Shopify draft execution must enforce customer delivery attachment.");
 assert(deliveryEntry.includes("rollbackAndFail"), "Delivery attachment failure must roll the Shopify draft back.");
 assert(delivery.includes("webhookSubscriptionCreate"), "The customer delivery runtime must register the paid-order webhook.");
-assert(delivery.includes("webhookSubscription: { uri, format: \"JSON\" }"), "The customer delivery runtime must use Shopify's current webhook uri contract.");
+assert(delivery.includes('webhookSubscription: { uri, format: "JSON" }'), "The customer delivery runtime must use Shopify's current webhook uri contract.");
 assert(delivery.includes("unwrapOrderPayload"), "The delivery runtime must support current wrapped order webhook payloads.");
 assert(digitalAssetContract.includes("MINIMUM_FINISHED_PAGES = 100"), "The V2 contract must require at least 100 finished pages.");
 assert(digitalAssetContract.includes("buildCustomerSpecSheetPDF"), "The customer-facing PDF specification builder is missing.");
@@ -107,17 +124,8 @@ for (const advisor of registry.advisors || []) {
   assert(advisor.mutationAuthority !== true, `${advisor.id} cannot have unrestricted mutation authority.`);
 }
 
-console.log("Kairos manuscript activation, Digital Asset Edition V2 customer release, customer delivery, Admin Asset Vault, and governed product-release validation passed.");
+console.log("Kairos local inference, Digital Asset Edition V2 customer release, customer delivery, Admin Asset Vault, and governed product-release validation passed.");
 
-function read(relative) {
-  return fs.readFileSync(path.join(root, relative), "utf8");
-}
-
-function assert(condition, message) {
-  if (!condition) fail(message);
-}
-
-function fail(message) {
-  console.error(`Kairos manuscript activation validation failed: ${message}`);
-  process.exit(1);
-}
+function read(relative) { return fs.readFileSync(path.join(root, relative), "utf8"); }
+function assert(condition, message) { if (!condition) fail(message); }
+function fail(message) { console.error(`Kairos manuscript activation validation failed: ${message}`); process.exit(1); }
