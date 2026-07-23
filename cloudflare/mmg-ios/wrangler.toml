@@ -1,5 +1,5 @@
 name = "mmg-ios"
-main = "src/kairos-production-entry-digital-asset-v2-v1.js"
+main = "src/kairos-production-entry-customer-delivery-v2.js"
 compatibility_date = "2026-07-11"
 workers_dev = true
 keep_vars = true
@@ -32,6 +32,7 @@ new_sqlite_classes = ["KairosProject"]
 # Product DRAFT creation and live publication are available only through the exact auto-pipeline routes,
 # after vault integrity verification and explicit user actions in Manuscript Studio.
 # Digital Asset Edition V2 is mandatory for manuscript manufacturing and customer release packaging.
+# Customer delivery attachment is mandatory before a Shopify digital-product draft is considered complete.
 
 [vars]
 SHOPIFY_STORE_DOMAIN = "07kd8e-qw.myshopify.com"
