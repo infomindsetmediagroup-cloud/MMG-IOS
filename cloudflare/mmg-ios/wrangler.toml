@@ -33,6 +33,7 @@ new_sqlite_classes = ["KairosProject"]
 # Canonical approvals: Start Production Job, Approve Package, Approve & Publish Product.
 # Cloudflare Workers AI is intentionally not bound. Production intelligence uses the OpenAI Responses API.
 # Zero-neuron adapter is installed at both the outer Worker and Durable Object execution boundaries.
+# Project setup reconciles a uniquely matching stored manuscript when intake refresh changes the active project ID.
 
 [vars]
 SHOPIFY_STORE_DOMAIN = "07kd8e-qw.myshopify.com"
