@@ -166,7 +166,7 @@ jobs:
 
       - name: Upload release evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mmg-product-commerce-suite-${{ env.TARGET_SHA }}
           path: artifacts/product-commerce-suite
