@@ -71,6 +71,7 @@ jobs:
           node --check web/kairos-dashboard/scripts/manuscript-editorial-workbench.js
           node --check web/kairos-dashboard/scripts/kairos-local-inference.js
           node --check web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
+          node --check browser-tests/abos-live-smoke.spec.mjs
 
       - name: Validate governance contracts
         run: |
@@ -176,12 +177,12 @@ jobs:
             sleep 5
           done
 
-      - name: Tap deployed Manuscript Studio in mobile WebKit
+      - name: Tap deployed ABOS Manuscript Studio in mobile WebKit
         id: live_webkit
         continue-on-error: true
         env:
           KAIROS_LIVE_URL: ${{ env.WORKER_URL }}
-        run: npx playwright test browser-tests/manuscript-live-smoke.spec.mjs --project=webkit
+        run: npx playwright test browser-tests/abos-live-smoke.spec.mjs --project=webkit
 
       - name: Upload live WebKit failure evidence
         if: ${{ steps.live_webkit.outcome == 'failure' }}
