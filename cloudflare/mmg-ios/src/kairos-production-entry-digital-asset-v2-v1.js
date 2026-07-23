@@ -18,10 +18,11 @@ import {
   handleCustomerDeliveryObjectRequest,
 } from "./kairos-customer-delivery-v1.js";
 
-const BUILD = "kairos-production-entry-digital-asset-v2-20260723-7";
+const BUILD = "kairos-production-entry-digital-asset-v2-20260723-8";
 const CUSTOMER_DELIVERY_BUILD = "kairos-customer-delivery-20260723-1";
 const PUBLISHER = "Mindset Media Group™";
 const REGISTRY_OBJECT = "mmg-production-project-registry";
+const PRODUCT_PUBLICATION_EXECUTE_PATH = "/api/shopify/product-publication/execute";
 
 export class KairosProject extends PreviousKairosProject {
   async fetch(request) {
@@ -41,8 +42,13 @@ export default {
     const manufacturing = await handleManufacturingOrchestrator(request.clone(), env);
     if (manufacturing) return stamp(await sanitizeResponse(manufacturing));
 
+    const url = new URL(request.url);
+    const shouldAttachAfterDraft = request.method === "POST" && url.pathname === PRODUCT_PUBLICATION_EXECUTE_PATH;
     await enforceExistingSetupForRun(request, env).catch(() => null);
     const response = await previousRuntime.fetch(request, env, ctx);
+    if (shouldAttachAfterDraft && response.ok) {
+      return stamp(await sanitizeResponse(await attachDeliveryToDraft(request, response, env)));
+    }
     return stamp(await sanitizeResponse(response));
   },
 
@@ -52,6 +58,42 @@ export default {
     }
   },
 };
+
+async function attachDeliveryToDraft(request, publicationResponse, env) {
+  const publication = await publicationResponse.clone().json().catch(() => null);
+  if (publication?.status !== "draft-created-and-verified" || !publication?.projectId || !publication?.result?.id) return publicationResponse;
+  const attachRequest = new Request(`${new URL(request.url).origin}/api/customer-delivery/attach`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      projectId: publication.projectId,
+      productId: publication.result.id,
+      confirmation: "ATTACH CUSTOMER DELIVERY",
+    }),
+  });
+  const deliveryResponse = await handleCustomerDelivery(attachRequest, env);
+  const delivery = await deliveryResponse?.json().catch(() => null);
+  if (!deliveryResponse?.ok || delivery?.status !== "attached-and-verified") {
+    return new Response(JSON.stringify({
+      ...publication,
+      status: "draft-created-delivery-attachment-failed",
+      customerDelivery: delivery || { status: "failed", error: { message: "Customer delivery could not be attached." } },
+      nextAction: "Keep the product in draft. Correct customer delivery, then retry the draft operation before live publication.",
+    }), {
+      status: 502,
+      headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
+    });
+  }
+  return new Response(JSON.stringify({
+    ...publication,
+    status: "draft-created-delivery-attached-and-verified",
+    customerDelivery: delivery,
+    nextAction: "Review the draft product and delivery configuration, then use the governed live-publication control.",
+  }), {
+    status: 200,
+    headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
+  });
+}
 
 async function prepareObjectRequest(request, env) {
   const url = new URL(request.url);
