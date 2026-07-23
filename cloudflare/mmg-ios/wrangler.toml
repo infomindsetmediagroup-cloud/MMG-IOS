@@ -31,8 +31,9 @@ new_sqlite_classes = ["KairosProject"]
 # Digital Asset Edition V2 is mandatory for manuscript manufacturing and customer release packaging.
 # Customer delivery attachment is mandatory before a Shopify digital-product draft is considered complete.
 # Canonical approvals: Start Production Job, Approve Package, Approve & Publish Product.
-# Cloudflare Workers AI is intentionally not bound. Production intelligence uses the OpenAI Responses API.
-# Zero-neuron adapter is installed at both the outer Worker and Durable Object execution boundaries.
+# Cloudflare Workers AI is intentionally not bound and consumes zero neurons.
+# Paid OpenAI API usage is disabled by default. It may be enabled only when verified free credits are explicitly authorized.
+# Default manuscript processing is source-preserving, deterministic, and no-cost.
 # Project setup reconciles a uniquely matching stored manuscript when intake refresh changes the active project ID.
 
 [vars]
@@ -40,6 +41,8 @@ SHOPIFY_STORE_DOMAIN = "07kd8e-qw.myshopify.com"
 SHOPIFY_API_VERSION = "2026-07"
 MMG_STOREFRONT_ORIGIN = "https://themindsetmediagroup.com"
 KAIROS_OPENAI_MODEL = "gpt-5"
+KAIROS_OPENAI_FREE_CREDITS_ENABLED = "false"
+KAIROS_NO_COST_MODE = "true"
 KAIROS_CLOUDFLARE_NEURONS_ENABLED = "false"
 KAIROS_MANUSCRIPT_RUNTIME_ENABLED = "true"
 KAIROS_DIGITAL_ASSET_V2_REQUIRED = "true"
