@@ -15,9 +15,18 @@
     root.querySelectorAll(selector).forEach((node) => { node.textContent = text; });
   };
 
-  const formatMoney = (value) => {
-    const amount = Number.parseFloat(String(value));
-    return Number.isFinite(amount) ? `$${amount.toFixed(2)}` : '';
+  const formatCents = (value) => {
+    const normalized = String(value ?? '').trim();
+    if (!/^\d+$/.test(normalized)) return '';
+    const cents = Number(normalized);
+    return Number.isSafeInteger(cents) && cents >= 0
+      ? new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        }).format(cents / 100)
+      : '';
   };
 
   const selectTier = (tier) => {
@@ -61,7 +70,7 @@
         const variant = variants.get(tier);
         const price = root.querySelector(`[data-mmg-price="${tier}"]`);
         const button = root.querySelector(`[data-mmg-add="${tier}"]`);
-        if (variant && price) price.textContent = formatMoney(variant.price);
+        if (variant && price) price.textContent = formatCents(variant.price);
         if (button) {
           button.disabled = !variant || variant.available === false;
           button.textContent = variant?.available === false ? `${tier} Unavailable` : `Add ${tier} to Cart`;
