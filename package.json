@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "typecheck:commerce-staging": "tsc -p tsconfig.commerce-staging.json --noEmit",
     "test": "vitest run",
-    "test:manuscript-ui": "playwright test browser-tests/manuscript-project-setup.spec.mjs browser-tests/manuscript-editorial-workbench.spec.mjs browser-tests/manuscript-auto-pipeline.spec.mjs --project=webkit",
+    "test:manuscript-ui": "playwright test browser-tests/manuscript-project-setup.spec.mjs browser-tests/manuscript-editorial-workbench.spec.mjs browser-tests/manuscript-auto-pipeline.spec.mjs browser-tests/manuscript-live-product-replacement.spec.mjs --project=webkit",
     "validate:shopify": "node scripts/validate-shopify-governance.mjs",
     "validate:kairos-shopify": "node scripts/validate-kairos-shopify-policy.mjs",
     "validate:manuscript-activation": "node scripts/validate-kairos-manuscript-activation.mjs",
