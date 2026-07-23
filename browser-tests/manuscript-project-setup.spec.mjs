@@ -186,18 +186,34 @@ test("Command Center manuscript event routes through the production workspace co
   await expect.poll(() => page.evaluate(() => window.__openedWorkspace)).toBe("manuscript-studio");
 });
 
-test("dashboard force-loads the no-form production controllers with unique versions", async () => {
-  expect(indexSource).toContain("kairos-command-hub-auto-production-vault-20260722-1");
-  expect(indexSource).toContain("./scripts/command-center-governance.js?v=manuscript-workspace-20260722-2");
-  expect(indexSource).toContain("./scripts/manuscript-studio.js?v=manuscript-controller-20260722-3");
-  expect(indexSource).toContain("./scripts/manuscript-project-setup.js?v=manuscript-controller-20260722-3");
-  expect(indexSource).toContain("./scripts/manuscript-editorial-workbench.js?v=editorial-stable-20260722-2");
-  expect(indexSource).toContain("./scripts/manuscript-auto-pipeline.js?v=auto-production-vault-20260722-1");
+test("dashboard force-loads the no-form production controllers with cache-busted versions", async () => {
+  expect(indexSource).toMatch(/<meta name="mmg-build" content="kairos-command-hub-[^"]+">/);
+
+  const requiredScripts = [
+    "command-center-governance.js",
+    "manuscript-studio.js",
+    "manuscript-project-setup.js",
+    "manuscript-editorial-workbench.js",
+    "kairos-local-inference.js",
+    "manuscript-auto-pipeline.js",
+  ];
+
+  for (const filename of requiredScripts) {
+    const matches = [...indexSource.matchAll(new RegExp(`src="\\./scripts/${filename.replace(".", "\\.")}\\?v=([^"]+)"`, "g"))];
+    expect(matches, `${filename} must be loaded exactly once with a cache-busting version`).toHaveLength(1);
+    expect(matches[0][1].trim().length).toBeGreaterThan(0);
+  }
+
+  const inferenceIndex = indexSource.indexOf("./scripts/kairos-local-inference.js?v=");
+  const pipelineIndex = indexSource.indexOf("./scripts/manuscript-auto-pipeline.js?v=");
+  expect(inferenceIndex).toBeGreaterThan(-1);
+  expect(pipelineIndex).toBeGreaterThan(inferenceIndex);
 
   const delayedModuleList = indexSource.match(/const modules=\[(.*?)\];/s)?.[1] || "";
   expect(delayedModuleList).not.toContain("manuscript-studio.js");
   expect(delayedModuleList).not.toContain("manuscript-project-setup.js");
   expect(delayedModuleList).not.toContain("manuscript-editorial-workbench.js");
+  expect(delayedModuleList).not.toContain("kairos-local-inference.js");
   expect(delayedModuleList).not.toContain("manuscript-auto-pipeline.js");
   expect(delayedModuleList).not.toContain("publication-catalog.js");
   expect(delayedModuleList).not.toContain("manuscript-manufacturing.js");
