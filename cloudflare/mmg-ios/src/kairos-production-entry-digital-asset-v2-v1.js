@@ -10,7 +10,7 @@ import {
   writeDigitalAssetEditionV2,
 } from "./kairos-digital-asset-v2-manuscript-writer-v1.js";
 
-const BUILD = "kairos-production-entry-digital-asset-v2-20260722-4";
+const BUILD = "kairos-production-entry-digital-asset-v2-20260723-5";
 const PUBLISHER = "Mindset Media Group™";
 const REGISTRY_OBJECT = "mmg-production-project-registry";
 
@@ -118,27 +118,47 @@ async function enforceExistingSetupForRun(request, env) {
   const projectId = match[1];
   const stub = env.KAIROS_PROJECTS.get(env.KAIROS_PROJECTS.idFromName(REGISTRY_OBJECT));
   const currentResponse = await stub.fetch(`https://kairos.internal/registry/manuscripts/${projectId}/setup`);
-  if (!currentResponse.ok) return;
-  const current = await currentResponse.json().catch(() => null);
-  const setup = current?.setup;
-  if (!setup) return;
-  await stub.fetch(`https://kairos.internal/registry/manuscripts/${projectId}/setup`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Operation-Id": crypto.randomUUID(),
-      "Idempotency-Key": `digital-asset-v2-${projectId}-${Date.now()}`,
-    },
-    body: JSON.stringify({
-      authorName: PUBLISHER,
-      publicationTitle: sanitizeText(setup.publicationTitle || ""),
-      service: setup.service,
-      trimSize: "6x9",
-      edition: setup.edition || "multi-format",
-      isbnStatus: setup.isbnStatus || "not-decided",
-      notes: sanitizeText(setup.notes || ""),
-    }),
-  });
+  if (currentResponse.ok) {
+    const current = await currentResponse.json().catch(() => null);
+    const setup = current?.setup;
+    if (setup) {
+      await stub.fetch(`https://kairos.internal/registry/manuscripts/${projectId}/setup`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Operation-Id": crypto.randomUUID(),
+          "Idempotency-Key": `digital-asset-v2-${projectId}-${Date.now()}`,
+        },
+        body: JSON.stringify({
+          authorName: PUBLISHER,
+          publicationTitle: sanitizeText(setup.publicationTitle || ""),
+          service: setup.service,
+          trimSize: "6x9",
+          edition: setup.edition || "multi-format",
+          isbnStatus: setup.isbnStatus || "not-decided",
+          notes: sanitizeText(setup.notes || ""),
+        }),
+      });
+    }
+  }
+
+  const pipelineResponse = await stub.fetch(`https://kairos.internal/registry/manuscripts/${projectId}/auto-pipeline`);
+  if (pipelineResponse.ok) {
+    const record = await pipelineResponse.json().catch(() => null);
+    if (record) {
+      await stub.fetch(`https://kairos.internal/registry/manuscripts/${projectId}/auto-pipeline`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...record,
+          status: "v2-rebuild-required",
+          signature: null,
+          updatedAt: new Date().toISOString(),
+          nextAction: "Regenerate the customer package with the current Digital Asset Edition V2 build.",
+        }),
+      });
+    }
+  }
 }
 
 async function sanitizeResponse(response) {
@@ -157,6 +177,9 @@ async function sanitizeResponse(response) {
 
 function normalizeHeadingsForManufacturing(value) {
   return normalizeWinAnsi(String(value || ""))
+    .replace(/^#{1,3}\s+(Introduction\b.*)$/gim, "Chapter 0: $1")
+    .replace(/^#{1,3}\s+Chapter\s+(\d+)\s*[\-–—:]\s*(.+)$/gim, "Chapter $1: $2")
+    .replace(/^#{1,3}\s+Part\s+(\d+)\s*[\-–—:]\s*(.+)$/gim, "Part $1: $2")
     .replace(/^#{1,3}\s+(?=(?:Chapter\s+\d+|Part\s+\d+)\b)/gim, "")
     .replace(/^#{1,3}\s+(.+)$/gm, "$1")
     .replace(/\n{4,}/g, "\n\n\n")
