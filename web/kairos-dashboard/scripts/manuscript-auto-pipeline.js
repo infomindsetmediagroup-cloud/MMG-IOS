@@ -1,4 +1,4 @@
-const BUILD = "kairos-publishing-experience-ui-20260723-3";
+const BUILD = "kairos-publishing-experience-ui-20260723-4-local-inference";
 const LEGACY_BUILD = "kairos-manuscript-auto-pipeline-ui-20260722-1";
 const ACTIVE_KEY = "kairos.production.active-workspace";
 const DRAFT_CONFIRMATION = "CREATE SHOPIFY PRODUCT DRAFT";
@@ -6,7 +6,7 @@ const LIVE_CONFIRMATION = "PUBLISH PRODUCT LIVE";
 const PACKAGE_CONFIRMATION = "APPROVE PACKAGE";
 // Compatibility marker retained for deployment verification: Download Production-Ready ZIP
 
-const state = { initialized:false, mountScheduled:false, projectId:"", record:null, busy:false, phase:"", error:"" };
+const state = { initialized:false, mountScheduled:false, projectId:"", record:null, busy:false, phase:"", error:"", inference:null };
 
 function init() {
   if (state.initialized) return;
@@ -15,7 +15,7 @@ function init() {
   window.addEventListener("kairos:manuscript:restore", scheduleEnhance);
   window.addEventListener("kairos:production:state-changed", scheduleEnhance);
   new MutationObserver(scheduleEnhance).observe(document.documentElement, { childList:true, subtree:true });
-  const stateReader=()=>({ projectId:state.projectId, busy:state.busy, phase:state.phase, error:state.error, status:state.record?.status||null, shopifyStatus:state.record?.shopify?.status||null });
+  const stateReader=()=>({ projectId:state.projectId, busy:state.busy, phase:state.phase, error:state.error, status:state.record?.status||null, shopifyStatus:state.record?.shopify?.status||null, inference:state.inference });
   window.KairosPublishingExperience = Object.freeze({ ready:true, build:BUILD, legacyBuild:LEGACY_BUILD, enhance:scheduleEnhance, getState:stateReader });
   window.KairosManuscriptAutoPipelineController = Object.freeze({ ready:true, build:LEGACY_BUILD, experienceBuild:BUILD, enhance:scheduleEnhance, getState:stateReader });
   scheduleEnhance();
@@ -47,7 +47,7 @@ async function enhance() {
 }
 
 function reset(projectId) {
-  Object.assign(state,{ projectId, record:null, busy:false, phase:"", error:"" });
+  Object.assign(state,{ projectId, record:null, busy:false, phase:"", error:"", inference:null });
   document.querySelector("#manuscript-auto-pipeline")?.remove();
 }
 
@@ -62,7 +62,20 @@ async function load(projectId) {
   finally { state.busy=false; state.phase=""; render(); }
 }
 
-async function runPipeline(projectId) { return perform("Manufacturing the complete customer package…", async()=>{ state.record=await post(`${endpoint(projectId)}/run`,{}); }); }
+async function runPipeline(projectId) {
+  return perform("Starting Kairos Local Inference Model…", async()=>{
+    if (!window.KairosLocalInference?.ready || typeof window.KairosLocalInference.run !== "function") {
+      throw new Error("Kairos Local Inference Model did not load. Refresh the Command Center and try again.");
+    }
+    state.inference = await window.KairosLocalInference.run({
+      projectId,
+      onProgress: (message) => { state.phase=message; render(); },
+    });
+    state.phase="Manufacturing the complete customer package…";
+    render();
+    state.record=await post(`${endpoint(projectId)}/run`,{ localInferenceBuild:state.inference.build, localInferenceModel:state.inference.model });
+  });
+}
 async function approvePackage(projectId) { return perform("Approving and freezing the Asset Vault package…", async()=>{ state.record=await post(`/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/experience/approve-package`,{ confirmation:PACKAGE_CONFIRMATION, actor:"MMG Executive" }); }); }
 async function previewShopifyProduct(projectId) { return perform("Creating the actual Shopify draft, installing media, and verifying customer delivery…", async()=>{ state.record=await post(`${endpoint(projectId)}/shopify-draft`,{ confirmation:DRAFT_CONFIRMATION }); }); }
 async function publishLive(projectId) { return perform("Publishing and verifying the approved Shopify product…", async()=>{ state.record=await post(`${endpoint(projectId)}/shopify-publish`,{ confirmation:LIVE_CONFIRMATION }); }); }
@@ -87,11 +100,11 @@ function render(section=document.querySelector("#manuscript-auto-pipeline")) {
   else section.innerHTML=packagePreviewMarkup();
 }
 
-function intakeMarkup() { return `${stepper(1)}<p class="eyebrow">Manuscript Studio</p><h3>Start a New Production Job</h3><p>Your manuscript and approved cover are the authoritative inputs. Kairos derives the metadata, manufactures the complete package, runs quality assurance, and stops for review.</p><div class="issue-list"><article><b>Required input</b><p>Uploaded manuscript</p></article><article><b>Required input</b><p>Approved portrait cover</p></article><article><b>Automatic</b><p>Metadata, files, graphics, ZIP, QA</p></article></div>${errorMarkup()}<button type="button" class="primary" data-start-production>Start Production Job</button>`; }
-function busyMarkup() { return `${stepper(2)}<p class="eyebrow">Production in progress</p><h3>${esc(state.phase||"Kairos is working…")}</h3><p class="manuscript-progress">Source validation, manuscript production, interiors, cover normalization, customer files, package assembly, and quality assurance are running as one governed job.</p><div class="manuscript-editorial-summary"><span><strong>1</strong><small>authoritative manuscript</small></span><span><strong>1</strong><small>approved cover</small></span><span><strong>6</strong><small>customer deliverables</small></span></div>`; }
+function intakeMarkup() { return `${stepper(1)}<p class="eyebrow">Manuscript Studio</p><h3>Start a New Production Job</h3><p>Your manuscript and approved cover are the authoritative inputs. Kairos runs its local inference model on this device, manufactures the complete package, performs quality assurance, and stops for review.</p><div class="issue-list"><article><b>Required input</b><p>Uploaded manuscript</p></article><article><b>Required input</b><p>Approved portrait cover</p></article><article><b>Local inference</b><p>Browser WebGPU · no paid API · zero Cloudflare neurons</p></article><article><b>Automatic</b><p>Metadata, files, graphics, ZIP, QA</p></article></div>${errorMarkup()}<button type="button" class="primary" data-start-production>Start Production Job</button><p class="manuscript-note">The first run downloads and caches the local model. Keep this page open while the device writes the expanded manuscript.</p>`; }
+function busyMarkup() { return `${stepper(2)}<p class="eyebrow">Production in progress</p><h3>${esc(state.phase||"Kairos is working…")}</h3><p class="manuscript-progress">The local model runs on this device. After local writing and verification finish, Kairos completes interiors, cover normalization, customer files, package assembly, and quality assurance.</p><div class="manuscript-editorial-summary"><span><strong>0</strong><small>paid API calls</small></span><span><strong>0</strong><small>Cloudflare neurons</small></span><span><strong>${state.inference?.wordCount||"—"}</strong><small>local words</small></span></div>`; }
 function packagePreviewMarkup() {
   const metadata=state.record.metadata||{}, vault=state.record.vault||{}, assets=Array.isArray(vault.assets)?vault.assets:[];
-  return `${stepper(3)}<p class="eyebrow">Package Preview</p><h3>${esc(metadata.title||"Production package ready")}</h3><p>${esc(metadata.subtitle||metadata.description||"Review every customer-facing asset before approval.")}</p>${summary(vault,metadata)}<div class="manuscript-actions"><a class="manuscript-package" href="${esc(vault.packageDownloadURL||"#")}" target="_blank" rel="noopener">Preview Package</a><button type="button" class="primary" data-approve-package>Approve Package</button></div><div class="manuscript-manufacturing-grid">${assets.map(assetCard).join("")}</div><p class="manuscript-note">Approval freezes this package version and marks the job complete in the Admin Asset Vault.</p>${errorMarkup()}`;
+  return `${stepper(3)}<p class="eyebrow">Package Preview</p><h3>${esc(metadata.title||"Production package ready")}</h3><p>${esc(metadata.subtitle||metadata.description||"Review every customer-facing asset before approval.")}</p>${summary(vault,metadata)}<div class="issue-list"><article><b>Inference</b><p>Local device model</p></article><article><b>Paid APIs</b><p>None</p></article></div><div class="manuscript-actions"><a class="manuscript-package" href="${esc(vault.packageDownloadURL||"#")}" target="_blank" rel="noopener">Preview Package</a><button type="button" class="primary" data-approve-package>Approve Package</button></div><div class="manuscript-manufacturing-grid">${assets.map(assetCard).join("")}</div><p class="manuscript-note">Approval freezes this package version and marks the job complete in the Admin Asset Vault.</p>${errorMarkup()}`;
 }
 function vaultMarkup() {
   const metadata=state.record.metadata||{}, vault=state.record.vault||{}, assets=Array.isArray(vault.assets)?vault.assets:[];
