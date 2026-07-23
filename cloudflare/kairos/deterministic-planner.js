@@ -37,18 +37,23 @@ const WORKFLOW_CATALOG = Object.freeze([
   },
 ]);
 
-const PROTECTED_TERMS = Object.freeze([
-  "publish",
-  "live",
-  "price",
-  "pricing",
-  "charge",
-  "delete",
-  "production",
-  "customer message",
-  "send email",
-  "deploy",
+const PROTECTED_PATTERNS = Object.freeze([
+  /\bpublish(?:ed|ing)?\b/i,
+  /\bgo live\b|\blive publication\b/i,
+  /\bprice|pricing|discount|charge|refund|payment|invoice|financial\b/i,
+  /\bdelete|destroy|purge|remove permanently|overwrite\b/i,
+  /\bproduction deploy|deploy to production|production mutation\b/i,
+  /\bcustomer message|message (?:a |the )?customer|send (?:an )?email|notify customers?\b/i,
+  /\bpermission|access role|credential|secret|api key|token rotation\b/i,
+  /\binventory|subscription billing|entitlement revocation\b/i,
+  /\btheme publish|domain change|dns change\b/i,
 ]);
+
+const SENSITIVE_KEY_PATTERN = /token|secret|password|passphrase|credential|api[_-]?key|private[_-]?key|authorization|cookie|session/i;
+const MAX_CONTEXT_DEPTH = 4;
+const MAX_CONTEXT_KEYS = 50;
+const MAX_ARRAY_ITEMS = 20;
+const MAX_CONTEXT_STRING = 2_000;
 
 export function createDeterministicPlan(input = {}) {
   const objective = requireObjective(input.objective);
@@ -68,7 +73,7 @@ export function createDeterministicPlan(input = {}) {
     domain: "executive",
     stages: ["clarify measurable outcome", "identify authoritative sources", "select workflow", "prepare governed execution plan"],
   };
-  const requiresApproval = PROTECTED_TERMS.some((term) => normalized.includes(term));
+  const requiresApproval = PROTECTED_PATTERNS.some((pattern) => pattern.test(normalized));
 
   return Object.freeze({
     planVersion: "1.0",
@@ -103,11 +108,31 @@ function requireObjective(value) {
 }
 
 function sanitizeContext(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const seen = new WeakSet();
+  const sanitized = sanitizeValue(value, 0, seen);
+  return sanitized && typeof sanitized === "object" && !Array.isArray(sanitized) ? sanitized : {};
+}
+
+function sanitizeValue(value, depth, seen) {
+  if (value == null || typeof value === "boolean" || typeof value === "number") return value;
+  if (typeof value === "string") return value.slice(0, MAX_CONTEXT_STRING);
+  if (depth >= MAX_CONTEXT_DEPTH || typeof value !== "object") return undefined;
+  if (seen.has(value)) return "[circular]";
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    return value
+      .slice(0, MAX_ARRAY_ITEMS)
+      .map((item) => sanitizeValue(item, depth + 1, seen))
+      .filter((item) => item !== undefined);
+  }
+
   return Object.fromEntries(
     Object.entries(value)
-      .filter(([key]) => !/token|secret|password|key/i.test(key))
-      .slice(0, 50),
+      .filter(([key]) => !SENSITIVE_KEY_PATTERN.test(key))
+      .slice(0, MAX_CONTEXT_KEYS)
+      .map(([key, item]) => [key.slice(0, 120), sanitizeValue(item, depth + 1, seen)])
+      .filter(([, item]) => item !== undefined),
   );
 }
 
