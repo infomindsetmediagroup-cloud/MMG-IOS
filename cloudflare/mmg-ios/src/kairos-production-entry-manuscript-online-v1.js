@@ -4,8 +4,12 @@ import {
   KAIROS_MANUSCRIPT_OPERATION_BOUNDARY_BUILD,
 } from "./kairos-manuscript-operation-boundary-v1.js";
 import { KAIROS_MANUSCRIPT_AUTO_PIPELINE_BUILD } from "./kairos-manuscript-auto-pipeline-v1.js";
+import {
+  handleManuscriptLiveProductReplacement,
+  KAIROS_MANUSCRIPT_LIVE_PRODUCT_REPLACEMENT_BUILD,
+} from "./kairos-manuscript-live-product-replacement-v1.js";
 
-const BUILD = "kairos-manuscript-online-20260722-2";
+const BUILD = "kairos-manuscript-online-20260722-3";
 const STATUS_PATH = "/api/kairos/manuscripts/status";
 
 export { KairosProject };
@@ -25,6 +29,7 @@ export default {
         build: BUILD,
         boundary: KAIROS_MANUSCRIPT_OPERATION_BOUNDARY_BUILD,
         autoPipeline: KAIROS_MANUSCRIPT_AUTO_PIPELINE_BUILD,
+        liveProductReplacement: KAIROS_MANUSCRIPT_LIVE_PRODUCT_REPLACEMENT_BUILD,
         manuscriptMode: true,
         shopifyWritesEnabled: false,
         error: {
@@ -37,6 +42,9 @@ export default {
         },
       }, 403);
     }
+
+    const replacement = await handleManuscriptLiveProductReplacement(request, env);
+    if (replacement) return stamp(replacement);
 
     return stamp(await previousRuntime.fetch(request, env, ctx));
   },
@@ -69,6 +77,7 @@ function status(env) {
     automaticProductionPackage: true,
     adminAssetVault: true,
     manualCatalogEntryRequired: false,
+    controlledLiveProductReplacement: true,
   };
   const required = [
     "manuscriptRuntimeEnabled",
@@ -78,6 +87,7 @@ function status(env) {
     "mediaSigningSecretConfigured",
     "automaticProductionPackage",
     "adminAssetVault",
+    "controlledLiveProductReplacement",
   ];
   const missing = required.filter((name) => checks[name] !== true);
   const ready = missing.length === 0;
@@ -88,6 +98,7 @@ function status(env) {
     build: BUILD,
     boundary: KAIROS_MANUSCRIPT_OPERATION_BOUNDARY_BUILD,
     autoPipeline: KAIROS_MANUSCRIPT_AUTO_PIPELINE_BUILD,
+    liveProductReplacement: KAIROS_MANUSCRIPT_LIVE_PRODUCT_REPLACEMENT_BUILD,
     mode: "manuscript-only",
     checks,
     missing,
@@ -97,15 +108,21 @@ function status(env) {
       finalZipAssembly: true,
       adminAssetVaultStorage: true,
       customTemplateShopifyDraftPreparation: true,
+      controlledExistingLiveProductReplacement: true,
+      existingProductHandlePreservation: true,
+      existingProductPricePreservation: true,
+      existingDigitalDeliveryAssociationPreservation: true,
+      replacementRollbackEvidence: true,
       manualCatalogEntryRequired: false,
     },
     safeguards: {
       manuscriptOperationsOnly: true,
-      shopifyAccess: shopifyDraftWritesEnabled ? "draft-only" : "none",
+      shopifyAccess: shopifyDraftWritesEnabled ? "exact-product-release-only" : "none",
       shopifyDraftWritesEnabled,
       shopifyLivePublishEnabled,
       shopifyDraftApprovalRequired: true,
       liveProductPublicationApprovalRequired: true,
+      liveProductReplacementApprovalRequired: true,
       websiteMutationAuthorized: false,
       navigationMutationAuthorized: false,
       homepageMutationAuthorized: false,
@@ -126,6 +143,7 @@ function stamp(response) {
   headers.set("X-Kairos-Manuscript-Online", BUILD);
   headers.set("X-Kairos-Manuscript-Boundary", KAIROS_MANUSCRIPT_OPERATION_BOUNDARY_BUILD);
   headers.set("X-Kairos-Manuscript-Auto-Pipeline", KAIROS_MANUSCRIPT_AUTO_PIPELINE_BUILD);
+  headers.set("X-Kairos-Live-Product-Replacement", KAIROS_MANUSCRIPT_LIVE_PRODUCT_REPLACEMENT_BUILD);
   headers.set("X-Kairos-Operation-Mode", "manuscript-only");
   return new Response(response.body, {
     status: response.status,
@@ -143,6 +161,7 @@ function json(value, status = 200) {
       "X-Kairos-Manuscript-Online": BUILD,
       "X-Kairos-Manuscript-Boundary": KAIROS_MANUSCRIPT_OPERATION_BOUNDARY_BUILD,
       "X-Kairos-Manuscript-Auto-Pipeline": KAIROS_MANUSCRIPT_AUTO_PIPELINE_BUILD,
+      "X-Kairos-Live-Product-Replacement": KAIROS_MANUSCRIPT_LIVE_PRODUCT_REPLACEMENT_BUILD,
       "X-Kairos-Operation-Mode": "manuscript-only",
     },
   });
