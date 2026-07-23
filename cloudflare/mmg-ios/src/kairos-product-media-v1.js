@@ -46,7 +46,7 @@ async function prepare(request, env) {
       cover: {
         name: cover.name,
         source: absoluteArtifactURL(request, cover.url),
-        alt: `${project.title || current.title} cover by Michael King`,
+        alt: `${project.title || current.title} cover — Mindset Media Group™`,
         role: "featured-product-image",
       },
       files: graphics.map((item, index) => ({
