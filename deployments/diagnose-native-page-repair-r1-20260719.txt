@@ -1,0 +1,1 @@
+Run the lightweight native Shopify page-repair diagnostic workflow.
