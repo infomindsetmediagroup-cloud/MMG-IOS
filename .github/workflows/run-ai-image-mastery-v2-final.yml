@@ -1,0 +1,150 @@
+name: Run Final AI Image Mastery V2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/run-ai-image-mastery-v2-final.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: run-final-ai-image-mastery-v2
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+      KAIROS_API_TOKEN: ${{ secrets.KAIROS_API_TOKEN }}
+
+    steps:
+      - name: Mark run pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --silent --show-error \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "{\"state\":\"pending\",\"context\":\"ai-image-mastery-v2-final\",\"description\":\"Generating final customer-facing V2 package\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+
+      - name: Locate AI Image Mastery project
+        id: locate
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=()
+          if [ -n "${KAIROS_API_TOKEN:-}" ]; then
+            auth=(-H "Authorization: Bearer ${KAIROS_API_TOKEN}" -H "X-Kairos-API-Token: ${KAIROS_API_TOKEN}")
+          fi
+          curl --fail --silent --show-error --max-time 30 "${auth[@]}" \
+            "${WORKER_URL}/api/production-registry/projects?type=manuscript-studio" \
+            -o projects.json
+          project_id="$(jq -r '[.projects[] | select((.title // "") | test("AI Image Mastery"; "i"))] | sort_by(.updatedAt) | reverse | .[0].projectId // empty' projects.json)"
+          test -n "${project_id}"
+          echo "project_id=${project_id}" >> "${GITHUB_OUTPUT}"
+          echo "Located ${project_id}"
+
+      - name: Verify source and cover readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=()
+          if [ -n "${KAIROS_API_TOKEN:-}" ]; then
+            auth=(-H "Authorization: Bearer ${KAIROS_API_TOKEN}" -H "X-Kairos-API-Token: ${KAIROS_API_TOKEN}")
+          fi
+          project_id='${{ steps.locate.outputs.project_id }}'
+          curl --fail --silent --show-error --max-time 30 "${auth[@]}" \
+            "${WORKER_URL}/api/production-registry/manuscripts/${project_id}/source/text" \
+            -o source-status.json
+          curl --fail --silent --show-error --max-time 30 "${auth[@]}" \
+            "${WORKER_URL}/api/production-registry/manuscripts/${project_id}/setup" \
+            -o setup-status.json
+          curl --fail --silent --show-error --max-time 30 "${auth[@]}" \
+            "${WORKER_URL}/api/production-registry/manuscripts/${project_id}/setup/cover" \
+            -o approved-cover.bin
+          test -s approved-cover.bin
+
+      - name: Run final Digital Asset Edition V2 production
+        id: production
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=()
+          if [ -n "${KAIROS_API_TOKEN:-}" ]; then
+            auth=(-H "Authorization: Bearer ${KAIROS_API_TOKEN}" -H "X-Kairos-API-Token: ${KAIROS_API_TOKEN}")
+          fi
+          project_id='${{ steps.locate.outputs.project_id }}'
+          status="$(curl --silent --show-error --max-time 600 \
+            "${auth[@]}" \
+            -X POST \
+            -H 'Content-Type: application/json' \
+            --data '{"requestedBy":"MMG Executive","edition":"MMG Digital Asset Edition V2","customerFacingOnly":true,"forceCurrentBuild":true}' \
+            "${WORKER_URL}/api/production-registry/manuscripts/${project_id}/auto-pipeline/run" \
+            -o production-result.json \
+            -w '%{http_code}')"
+          cat production-result.json
+          test "${status}" -ge 200
+          test "${status}" -lt 300
+          jq -e '.status == "production-ready"' production-result.json > /dev/null
+
+      - name: Download final customer package
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=()
+          if [ -n "${KAIROS_API_TOKEN:-}" ]; then
+            auth=(-H "Authorization: Bearer ${KAIROS_API_TOKEN}" -H "X-Kairos-API-Token: ${KAIROS_API_TOKEN}")
+          fi
+          project_id='${{ steps.locate.outputs.project_id }}'
+          curl --fail --silent --show-error --max-time 300 "${auth[@]}" \
+            "${WORKER_URL}/api/admin-asset-vault/projects/${project_id}/package" \
+            -o AI-Image-Mastery_Digital-Asset-Edition-V2_Customer-Package.zip
+          test -s AI-Image-Mastery_Digital-Asset-Edition-V2_Customer-Package.zip
+          unzip -l AI-Image-Mastery_Digital-Asset-Edition-V2_Customer-Package.zip | tee package-contents.txt
+          file_count="$(unzip -Z1 AI-Image-Mastery_Digital-Asset-Edition-V2_Customer-Package.zip | wc -l | tr -d ' ')"
+          test "${file_count}" = "6"
+
+      - name: Upload final package and evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-image-mastery-v2-final-customer-package
+          path: |
+            AI-Image-Mastery_Digital-Asset-Edition-V2_Customer-Package.zip
+            package-contents.txt
+            production-result.json
+            source-status.json
+            setup-status.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Report run success
+        if: ${{ success() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --silent --show-error \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "{\"state\":\"success\",\"context\":\"ai-image-mastery-v2-final\",\"description\":\"Final six-file customer package completed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+
+      - name: Report run failure
+        if: ${{ failure() || cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --silent --show-error \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "{\"state\":\"failure\",\"context\":\"ai-image-mastery-v2-final\",\"description\":\"Final V2 package requires correction\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
