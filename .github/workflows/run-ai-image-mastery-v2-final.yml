@@ -74,9 +74,10 @@ jobs:
 
       - name: Run final Digital Asset Edition V2 production
         id: production
+        continue-on-error: true
         shell: bash
         run: |
-          set -euo pipefail
+          set +e
           auth=()
           if [ -n "${KAIROS_API_TOKEN:-}" ]; then
             auth=(-H "Authorization: Bearer ${KAIROS_API_TOKEN}" -H "X-Kairos-API-Token: ${KAIROS_API_TOKEN}")
@@ -90,12 +91,13 @@ jobs:
             "${WORKER_URL}/api/production-registry/manuscripts/${project_id}/auto-pipeline/run" \
             -o production-result.json \
             -w '%{http_code}')"
-          cat production-result.json
-          test "${status}" -ge 200
-          test "${status}" -lt 300
+          cat production-result.json || true
+          echo "http_status=${status}" >> "${GITHUB_OUTPUT}"
+          if [ "${status}" -lt 200 ] || [ "${status}" -ge 300 ]; then exit 1; fi
           jq -e '.status == "production-ready"' production-result.json > /dev/null
 
       - name: Download final customer package
+        if: ${{ steps.production.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -113,6 +115,7 @@ jobs:
           test "${file_count}" = "6"
 
       - name: Upload final package and evidence
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: ai-image-mastery-v2-final-customer-package
@@ -122,8 +125,11 @@ jobs:
             production-result.json
             source-status.json
             setup-status.json
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 90
+
+      - name: Enforce production result
+        run: test '${{ steps.production.outcome }}' = 'success'
 
       - name: Report run success
         if: ${{ success() }}
