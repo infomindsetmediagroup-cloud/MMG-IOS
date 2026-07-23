@@ -1,0 +1,81 @@
+name: Verify Customer Delivery Live
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/verify-customer-delivery-live.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+
+    steps:
+      - name: Mark verification pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --silent --show-error \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "{\"state\":\"pending\",\"context\":\"kairos-customer-delivery\",\"description\":\"Verifying customer delivery readiness\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+
+      - name: Probe customer delivery readiness
+        run: |
+          set -euo pipefail
+          status="$(curl --silent --show-error --max-time 30 \
+            "${WORKER_URL}/api/customer-delivery/status" \
+            -o customer-delivery-status.json \
+            -w '%{http_code}')"
+          cat customer-delivery-status.json
+          test "${status}" = "200"
+          jq -e '.ready == true' customer-delivery-status.json > /dev/null
+          jq -e '.capabilities.productPackageAttachment == true' customer-delivery-status.json > /dev/null
+          jq -e '.capabilities.paidOrderWebhook == true' customer-delivery-status.json > /dev/null
+          jq -e '.capabilities.durableCustomerEntitlements == true' customer-delivery-status.json > /dev/null
+          jq -e '.capabilities.signedCustomerDownloads == true' customer-delivery-status.json > /dev/null
+          jq -e '.capabilities.shopifyOrderStatusDeliveryLink == true' customer-delivery-status.json > /dev/null
+          jq -e '.capabilities.customerNotificationThroughFulfillment == true' customer-delivery-status.json > /dev/null
+
+      - name: Upload readiness evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: customer-delivery-readiness
+          path: customer-delivery-status.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Report verification success
+        if: ${{ success() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --silent --show-error \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "{\"state\":\"success\",\"context\":\"kairos-customer-delivery\",\"description\":\"Customer delivery is live and ready\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+
+      - name: Report verification failure
+        if: ${{ failure() || cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --silent --show-error \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "{\"state\":\"failure\",\"context\":\"kairos-customer-delivery\",\"description\":\"Customer delivery configuration is incomplete\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
