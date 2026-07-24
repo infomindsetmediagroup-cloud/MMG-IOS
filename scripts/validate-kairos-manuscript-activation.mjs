@@ -14,7 +14,8 @@ const paths = {
   productPublication: "cloudflare/mmg-ios/src/kairos-product-publication-v1.js",
   digitalAssetContract: "cloudflare/mmg-ios/src/kairos-digital-asset-edition-v2-contract-v1.js",
   creationArtifacts: "cloudflare/mmg-ios/src/kairos-creation-artifacts-v1.js",
-  localUI: "web/kairos-dashboard/scripts/kairos-local-inference.js",
+  localUI: "web/kairos-dashboard/scripts/kairos-local-inference-same-origin.js",
+  webllmEntry: "web/kairos-dashboard/vendor/webllm-entry.js",
   governanceContract: "governance/mmg-digital-asset-edition-v2-contract-v1.json",
   doctrine: "docs/doctrine/mmg-digital-asset-edition-v2-customer-release-doctrine.md",
   registry: "governance/kairos-builder-plugin-registry-v1.json",
@@ -29,6 +30,7 @@ const wrangler = read(paths.wrangler);
 const localEntry = read(paths.localEntry);
 const localInference = read(paths.localInference);
 const localUI = read(paths.localUI);
+const webllmEntry = read(paths.webllmEntry);
 const entry = read(paths.entry);
 const deliveryEntry = read(paths.deliveryEntry);
 const delivery = read(paths.delivery);
@@ -51,8 +53,10 @@ assert(localEntry.includes("X-Kairos-Inference-Cost-Mode"), "The runtime must re
 assert(localInference.includes("externalPaidAPIUsed: false"), "Stored local inference records must prove that no paid API was used.");
 assert(localInference.includes("cloudflareNeuronsUsed: 0"), "Stored local inference records must prove zero Cloudflare neuron use.");
 assert(localInference.includes("backupOriginalText"), "The authoritative manuscript must be backed up before local inference replaces manufacturing text.");
-assert(localUI.includes("@mlc-ai/web-llm"), "The browser-native WebLLM inference runtime is missing.");
-assert(localUI.includes("navigator?.gpu"), "The local model must enforce WebGPU capability detection.");
+assert(webllmEntry.includes('@mlc-ai/web-llm'), "The bundled WebLLM package entry is missing.");
+assert(localUI.includes('../vendor/webllm-bundle.js'), "The browser runtime must load WebLLM from the Kairos origin.");
+assert(!localUI.includes('cdn.jsdelivr.net') && !localUI.includes('esm.run'), "The active inference controller must not import the runtime from a third-party CDN.");
+assert(localUI.includes("navigator.gpu"), "The local model must enforce WebGPU capability detection.");
 assert(localUI.includes("STORE LOCAL INFERENCE"), "The local inference storage approval contract is missing.");
 assert(wrangler.includes('KAIROS_MANUSCRIPT_RUNTIME_ENABLED = "true"'), "Manuscript runtime activation flag is missing.");
 assert(wrangler.includes('KAIROS_DIGITAL_ASSET_V2_REQUIRED = "true"'), "Digital Asset Edition V2 activation flag is missing.");
@@ -106,11 +110,13 @@ assert(deploy.includes("github.ref == 'refs/heads/main'"), "Production deploymen
 assert(deploy.includes("environment: production"), "Production deployment must use the protected GitHub production environment.");
 assert(deploy.includes("inputs.release_id"), "Production deployment must require a release identifier.");
 assert(deploy.includes("working-directory: cloudflare/mmg-ios"), "Deployment must use the configured manuscript Worker directory.");
+assert(deploy.includes("npm run build:webllm"), "Deployment must build the same-origin WebLLM runtime.");
+assert(deploy.includes("vendor/webllm-bundle.js"), "Deployment must verify the same-origin WebLLM bundle.");
 assert(deploy.includes("npx wrangler deploy --dry-run"), "Deployment must validate the Worker bundle before release.");
 assert(deploy.includes("run: npx wrangler deploy"), "Deployment must use the governed Wrangler production release command.");
 assert(deploy.includes("/api/kairos/manuscripts/status"), "Deployment must verify manuscript readiness.");
-assert(deploy.includes("kairos-local-inference.js"), "Deployment must verify the local-inference controller.");
-assert(deploy.includes("KairosLocalInference"), "Deployment must verify the local-inference runtime is active.");
+assert(deploy.includes("kairos-local-inference-same-origin.js"), "Deployment must verify the active same-origin inference controller.");
+assert(deploy.includes("CreateMLCEngine"), "Deployment must verify the bundled WebLLM runtime is active.");
 assert(deploy.includes("KairosManuscriptAutoPipelineController"), "Deployment must verify the publishing controller.");
 assert(deploy.includes("/api/shopify/page-shell/publish"), "Deployment must probe the direct Shopify denial boundary.");
 assert(!deploy.includes("REPAIR_MMG_AUDITED_PAGES_NOW"), "Legacy Shopify page repair must not be deployable.");
@@ -136,7 +142,7 @@ for (const advisor of registry.advisors || []) {
   assert(advisor.mutationAuthority !== true, `${advisor.id} cannot have unrestricted mutation authority.`);
 }
 
-console.log("Kairos local inference, Digital Asset Edition V2 customer release, customer delivery, Admin Asset Vault, and governed product-release validation passed.");
+console.log("Kairos same-origin local inference, Digital Asset Edition V2 customer release, customer delivery, Admin Asset Vault, and governed product-release validation passed.");
 
 function read(relative) { return fs.readFileSync(path.join(root, relative), "utf8"); }
 function assert(condition, message) { if (!condition) fail(message); }
