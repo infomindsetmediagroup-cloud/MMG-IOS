@@ -1,0 +1,55 @@
+name: Validate WebLLM Release
+
+on:
+  pull_request:
+    paths:
+      - "web/kairos-dashboard/scripts/kairos-local-inference.js"
+      - "web/kairos-dashboard/index.html"
+      - "backend-tests/kairos-local-inference-mobile.test.ts"
+      - ".github/workflows/validate-webllm-release.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "web/kairos-dashboard/scripts/kairos-local-inference.js"
+      - "web/kairos-dashboard/index.html"
+      - "backend-tests/kairos-local-inference-mobile.test.ts"
+      - ".github/workflows/validate-webllm-release.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify-published-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Resolve pinned WebLLM version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^const WEBLLM_VERSION = "\([^"]*\)";.*/\1/p' web/kairos-dashboard/scripts/kairos-local-inference.js)"
+          test -n "${version}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Verify npm release exists
+        env:
+          WEBLLM_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          metadata="$(curl --fail --silent --show-error --location --retry 3 --max-time 30 "https://registry.npmjs.org/@mlc-ai%2fweb-llm/${WEBLLM_VERSION}")"
+          node -e 'const value=JSON.parse(process.argv[1]); if(value.version!==process.env.WEBLLM_VERSION) process.exit(1);' "${metadata}"
+
+      - name: Verify browser module endpoints resolve
+        env:
+          WEBLLM_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 --max-time 60 --range 0-2047 \
+            "https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@${WEBLLM_VERSION}/+esm" > /dev/null
+          curl --fail --silent --show-error --location --retry 3 --max-time 60 --range 0-2047 \
+            "https://esm.run/@mlc-ai/web-llm@${WEBLLM_VERSION}" > /dev/null
