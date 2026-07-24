@@ -1,5 +1,5 @@
-const BUILD = "kairos-local-inference-ui-20260723-2-mobile-resilient";
-const WEBLLM_VERSION = "0.2.84";
+const BUILD = "kairos-local-inference-ui-20260724-3-published-runtime";
+const WEBLLM_VERSION = "0.2.82";
 const MODULE_URLS = Object.freeze([
   `https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@${WEBLLM_VERSION}/+esm`,
   `https://esm.run/@mlc-ai/web-llm@${WEBLLM_VERSION}`,

@@ -5,8 +5,9 @@ const source = readFileSync(new URL("../web/kairos-dashboard/scripts/kairos-loca
 const index = readFileSync(new URL("../web/kairos-dashboard/index.html", import.meta.url), "utf8");
 
 describe("Kairos mobile local inference loader", () => {
-  it("pins WebLLM and provides independent CDN recovery paths", () => {
-    expect(source).toContain('const WEBLLM_VERSION = "0.2.84"');
+  it("pins a published WebLLM release and provides independent CDN recovery paths", () => {
+    expect(source).toContain('const WEBLLM_VERSION = "0.2.82"');
+    expect(source).not.toContain('const WEBLLM_VERSION = "0.2.84"');
     expect(source).toContain("cdn.jsdelivr.net/npm/@mlc-ai/web-llm@");
     expect(source).toContain("esm.run/@mlc-ai/web-llm@");
     expect(source).toContain("All local inference runtime sources failed");
@@ -26,8 +27,8 @@ describe("Kairos mobile local inference loader", () => {
     expect(source).toContain("getDiagnostics");
   });
 
-  it("cache-busts the corrected loader in the production dashboard", () => {
-    expect(index).toContain("kairos-local-inference-mobile-resilient-20260723-2");
-    expect(index).toContain("kairos-command-hub-abos-v2-mobile-inference-20260723-2");
+  it("cache-busts the published-runtime correction in the production dashboard", () => {
+    expect(index).toContain("kairos-local-inference-published-runtime-20260724-3");
+    expect(index).toContain("kairos-command-hub-abos-v2-published-runtime-20260724-3");
   });
 });
