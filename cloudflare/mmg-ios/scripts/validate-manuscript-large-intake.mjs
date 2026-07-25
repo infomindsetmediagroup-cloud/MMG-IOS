@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
-const BUILD = "kairos-manuscript-large-intake-validator-20260717-1";
+const BUILD = "kairos-manuscript-large-intake-validator-20260725-2";
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
 const repoRoot = join(root, "..", "..");
@@ -19,9 +19,10 @@ const index = readFileSync(indexPath, "utf8");
 assert.ok(backend.includes('const MAX_CHARS = 600000'), "Backend manuscript intake is not aligned to 600,000 characters.");
 assert.ok(backend.includes('manuscript-studio-v5-large-intake'), "Backend large-intake capability version is missing.");
 assert.ok(frontend.includes('const MAX_TEXT_CHARS = 600000'), "Browser Manuscript Studio is not aligned to 600,000 characters.");
-assert.ok(frontend.includes('manuscript-studio-20260717-4'), "Updated Manuscript Studio browser build is missing.");
+assert.ok(frontend.includes('manuscript-studio-json-source-20260725-5'), "Current Safari-safe Manuscript Studio browser build is missing.");
 assert.ok(frontend.includes('Accepted source:'), "Accepted manuscript evidence is missing from the result view.");
-assert.ok(index.includes('manuscript-large-intake-20260717-1'), "The browser cache-busting marker is missing.");
+assert.ok(index.includes('manuscript-controller-20260722-3-json-pasted-source-20260725-7'), "The current Manuscript Studio cache-busting marker is missing.");
+assert.ok(index.includes('safari-intake-fix-20260725-6'), "The Safari intake compatibility layer is missing.");
 assert.ok(!backend.includes('180000'), "The stale 180,000-character backend limit remains.");
 assert.ok(!frontend.includes('180000'), "The stale 180,000-character browser limit remains.");
 
@@ -87,6 +88,7 @@ console.log(JSON.stringify({
     maximumCharactersAccepted: 600000,
     staleLimitRemoved: true,
     browserCacheBusted: true,
+    safariJsonSourceIntake: true,
     originalSourcePreservationReported: true,
   },
 }, null, 2));
