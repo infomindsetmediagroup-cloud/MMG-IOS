@@ -122,7 +122,7 @@ jobs:
 
       - name: Synchronize OpenAI Worker secret
         working-directory: cloudflare/mmg-ios
-        run: printf '%s' "${OPENAI_API_KEY}" | npx wrangler secret put OPENAI_API_KEY
+        run: printf '%s' "${OPENAI_API_KEY}" | npx wrangler versions secret put OPENAI_API_KEY
 
       - name: Deploy manuscript Worker
         working-directory: cloudflare/mmg-ios
@@ -196,4 +196,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          curl --fail --silent --show-error -X POST -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${GH_TOKEN}" "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" --data "{\"state\":\"failure\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Production release ${KAIROS_RELEASE_ID} failed validation\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"}
+          curl --fail --silent --show-error -X POST -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${GH_TOKEN}" "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" --data "{\"state\":\"failure\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Production release ${KAIROS_RELEASE_ID} failed validation\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
