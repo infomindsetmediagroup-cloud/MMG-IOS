@@ -7,7 +7,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "build:webllm": "esbuild web/kairos-dashboard/vendor/webllm-entry.js --bundle --format=esm --platform=browser --target=safari18 --outfile=web/kairos-dashboard/vendor/webllm-bundle.js",
+    "build:webllm": "esbuild web/kairos-dashboard/vendor/webllm-entry.js --bundle --format=esm --platform=browser --target=safari18 --alias:url=./web/kairos-dashboard/vendor/node-url-browser-shim.js --outfile=web/kairos-dashboard/vendor/webllm-bundle.js && node scripts/validate-webllm-browser-bundle.mjs",
     "typecheck": "tsc --noEmit",
     "typecheck:commerce-staging": "tsc -p tsconfig.commerce-staging.json --noEmit",
     "test": "vitest run",
