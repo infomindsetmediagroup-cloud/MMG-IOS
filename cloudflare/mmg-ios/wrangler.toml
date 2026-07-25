@@ -25,25 +25,24 @@ tag = "native-publishing-v1"
 new_sqlite_classes = ["KairosProject"]
 
 # Existing production secrets are retained by keep_vars=true.
-# Manuscript production remains isolated from direct Shopify, theme, page, and navigation routes.
-# Product DRAFT creation and live publication are available only through the exact auto-pipeline routes,
-# after vault integrity verification and explicit user actions in Manuscript Studio.
-# Digital Asset Edition V2 is mandatory for manuscript manufacturing and customer release packaging.
-# Customer delivery attachment is mandatory before a Shopify digital-product draft is considered complete.
+# Manuscript generation is backend-owned and durable; the phone only starts and monitors jobs.
+# Product DRAFT creation and live publication remain available only through the exact approval-gated routes.
+# Digital Asset Edition V2 and customer-delivery verification remain mandatory.
 # Canonical approvals: Start Production Job, Approve Package, Approve & Publish Product.
-# Kairos local inference runs in the user's browser through WebGPU and consumes zero Cloudflare neurons.
-# Paid OpenAI API usage is disabled by default and is not required by the local inference workflow.
-# The authoritative source is backed up before the locally inferred manuscript becomes the manufacturing text.
-# Project setup reconciles a uniquely matching stored manuscript when intake refresh changes the active project ID.
+# The production model uses the official OpenAI Responses API through the OPENAI_API_KEY Worker secret.
+# Cloudflare neuron use remains disabled. Direct Shopify, theme, page, and navigation routes remain denied.
 
 [vars]
 SHOPIFY_STORE_DOMAIN = "07kd8e-qw.myshopify.com"
 SHOPIFY_API_VERSION = "2026-07"
 MMG_STOREFRONT_ORIGIN = "https://themindsetmediagroup.com"
-KAIROS_OPENAI_MODEL = "gpt-5"
+KAIROS_OPENAI_MODEL = "gpt-5-mini"
+KAIROS_MODEL_PROVIDER = "openai"
+KAIROS_MODEL_ENDPOINT = "https://api.openai.com"
+KAIROS_MODEL_NAME = "gpt-5-mini"
 KAIROS_OPENAI_FREE_CREDITS_ENABLED = "false"
-KAIROS_NO_COST_MODE = "true"
-KAIROS_LOCAL_INFERENCE_ENABLED = "true"
+KAIROS_NO_COST_MODE = "false"
+KAIROS_LOCAL_INFERENCE_ENABLED = "false"
 KAIROS_CLOUDFLARE_NEURONS_ENABLED = "false"
 KAIROS_MANUSCRIPT_RUNTIME_ENABLED = "true"
 KAIROS_DIGITAL_ASSET_V2_REQUIRED = "true"
