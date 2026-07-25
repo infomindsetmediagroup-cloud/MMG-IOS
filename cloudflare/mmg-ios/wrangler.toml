@@ -31,6 +31,11 @@ name = "kairos-project-foundation-workflow"
 binding = "KAIROS_PROJECT_WORKFLOW"
 class_name = "KairosProjectFoundationWorkflow"
 
+[[workflows]]
+name = "kairos-manuscript-generation-workflow"
+binding = "KAIROS_MANUSCRIPT_WORKFLOW"
+class_name = "KairosManuscriptGenerationWorkflow"
+
 [[migrations]]
 tag = "native-publishing-v1"
 new_sqlite_classes = ["KairosProject"]
@@ -40,7 +45,8 @@ tag = "kairos-project-agent-v1"
 new_sqlite_classes = ["KairosProjectAgent"]
 
 # Existing production secrets are retained by keep_vars=true.
-# Manuscript generation is backend-owned and durable; the phone only starts and monitors jobs.
+# New manuscript generation runs through Cloudflare Workflows; the legacy alarm path remains a compatibility fallback during certification.
+# The phone only starts and monitors jobs. It never owns model execution or production state.
 # The KairosProjectAgent is the reconnect-safe project state owner; Cloudflare Workflows own long-running execution.
 # Product DRAFT creation and live publication remain available only through the exact approval-gated routes.
 # Digital Asset Edition V2 and customer-delivery verification remain mandatory.
