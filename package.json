@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "typecheck:commerce-staging": "tsc -p tsconfig.commerce-staging.json --noEmit",
     "test": "vitest run",
+    "test:contracts": "vitest run backend-tests/kairos-contracts.test.ts",
     "test:manuscript-ui": "playwright test browser-tests/manuscript-project-setup.spec.mjs browser-tests/manuscript-editorial-workbench.spec.mjs browser-tests/manuscript-auto-pipeline.spec.mjs --project=webkit",
     "validate:shopify": "node scripts/validate-shopify-governance.mjs",
     "validate:kairos-shopify": "node scripts/validate-kairos-shopify-policy.mjs",
@@ -24,7 +25,8 @@
   },
   "dependencies": {
     "@mlc-ai/web-llm": "0.2.82",
-    "pg": "^8.22.0"
+    "pg": "^8.22.0",
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",
