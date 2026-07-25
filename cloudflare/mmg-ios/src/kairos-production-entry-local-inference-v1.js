@@ -10,8 +10,13 @@ import {
   resumeManuscriptGenerationAlarm,
   KAIROS_MANUSCRIPT_GENERATION_BUILD,
 } from "./kairos-manuscript-generation-job-v1.js";
+import {
+  handlePastedManuscriptSource,
+  handlePastedManuscriptSourceObjectRequest,
+  KAIROS_PASTED_MANUSCRIPT_SOURCE_BUILD,
+} from "./kairos-pasted-manuscript-source-v1.js";
 
-const BUILD = "kairos-production-entry-backend-generation-20260725-2";
+const BUILD = "kairos-production-entry-json-pasted-source-20260725-3";
 
 export class KairosProject extends CurrentKairosProject {
   constructor(state, env) {
@@ -21,6 +26,8 @@ export class KairosProject extends CurrentKairosProject {
   }
 
   async fetch(request) {
+    const pastedSource = await handlePastedManuscriptSourceObjectRequest(this.state, request);
+    if (pastedSource) return stamp(pastedSource);
     const generation = await handleManuscriptGenerationObjectRequest(this.state, this.env, request);
     if (generation) return stamp(generation);
     const localInference = await handleLocalInferenceObjectRequest(this.state, request);
@@ -37,6 +44,8 @@ export class KairosProject extends CurrentKairosProject {
 
 export default {
   async fetch(request, env, ctx) {
+    const pastedSource = await handlePastedManuscriptSource(request.clone(), env);
+    if (pastedSource) return stamp(pastedSource);
     const generation = await handleManuscriptGeneration(request.clone(), env);
     if (generation) return stamp(generation);
     const localInference = await handleLocalInference(request.clone(), env);
@@ -53,6 +62,7 @@ function stamp(response) {
   const headers = new Headers(response.headers);
   headers.set("X-Kairos-Local-Inference", KAIROS_LOCAL_INFERENCE_BUILD);
   headers.set("X-Kairos-Manuscript-Generation", KAIROS_MANUSCRIPT_GENERATION_BUILD);
+  headers.set("X-Kairos-Pasted-Manuscript-Source", KAIROS_PASTED_MANUSCRIPT_SOURCE_BUILD);
   headers.set("X-Kairos-Local-Inference-Entry", BUILD);
   headers.set("X-Kairos-Inference-Cost-Mode", "backend-provider-governed");
   headers.set("X-Kairos-Cloudflare-Neurons", "0");
