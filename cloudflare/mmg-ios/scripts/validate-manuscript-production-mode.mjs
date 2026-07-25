@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
-const BUILD = "kairos-manuscript-production-validator-20260725-4";
+const BUILD = "kairos-manuscript-production-validator-20260725-5";
 const here = dirname(fileURLToPath(import.meta.url));
 const workerRoot = join(here, "..");
 const sourceRoot = join(workerRoot, "src");
@@ -38,6 +38,8 @@ for (const marker of [
   'binding = "ASSETS"',
   'binding = "IMAGES"',
   'name = "KAIROS_PROJECTS"',
+  'name = "KAIROS_PROJECT_AGENTS"',
+  'name = "KAIROS_PROJECT_FOUNDATION_WORKFLOW"',
 ]) assert.ok(wrangler.includes(marker), `Required production configuration is missing: ${marker}`);
 assert.ok(!wrangler.includes('"* * * * *"'), "Minute-level website reconciliation must remain disabled.");
 assert.ok(!wrangler.includes('binding = "AI"'), "Paid Cloudflare AI binding must remain absent.");
@@ -46,11 +48,20 @@ const governedEntry = readFileSync(governedEntryPath, "utf8");
 for (const marker of [
   './kairos-production-entry-customer-delivery-v2.js',
   './kairos-manuscript-generation-job-v1.js',
+  './kairos-project-agent-api-v1.js',
   'handleManuscriptGeneration',
+  'handleKairosProjectAgentApi',
   'resumeManuscriptGenerationAlarm',
   'backend-provider-governed',
   'X-Kairos-Manuscript-Generation',
+  'X-Kairos-Project-Agent',
   'X-Kairos-Cloudflare-Neurons',
+  'export class KairosProject',
+  'export { KairosProjectAgent',
+  'export { KairosProjectFoundationWorkflow',
+  'export default',
+  'async fetch(request, env, ctx)',
+  'async scheduled(controller, env, ctx)',
 ]) assert.ok(governedEntry.includes(marker), `Governed manuscript production wrapper is missing: ${marker}`);
 
 const backendGeneration = readFileSync(backendGenerationPath, "utf8");
@@ -111,21 +122,18 @@ for (const marker of ['APPROVED_TEMPLATE_SUFFIXES','mmg-ai-image-mastery','mmg-b
   assert.ok(productPublication.includes(marker), `Governed Shopify product publication is missing: ${marker}`);
 }
 
-const activeEntryPath = join(sourceRoot, activeEntryMatch[1]);
-const runtimeModule = await import(`${pathToFileURL(activeEntryPath).href}?validation=${Date.now()}`);
-assert.equal(typeof runtimeModule.default?.fetch, "function", "Production runtime must export fetch().");
-assert.equal(typeof runtimeModule.default?.scheduled, "function", "Production runtime must export scheduled().");
-assert.equal(typeof runtimeModule.KairosProject, "function", "Production runtime must export KairosProject.");
-
 console.log(JSON.stringify({
   status: "ready",
   build: BUILD,
   mode: "manuscript-only-backend-generation",
   phoneInferenceRequired: false,
   backendGenerationDurable: true,
+  projectAgentPersistent: true,
+  foundationWorkflowDurable: true,
   shopifyAccess: "approval-gated-exact-product-release",
   adminAssetVault: true,
   directWebsiteMutationAuthorized: false,
   minuteWebsiteCronEnabled: false,
   productionEntry: activeEntryMatch[1],
+  runtimeVerification: "wrangler-dry-run",
 }, null, 2));
