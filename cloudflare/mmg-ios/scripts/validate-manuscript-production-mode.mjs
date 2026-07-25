@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const BUILD = "kairos-manuscript-production-validator-20260725-7";
+const BUILD = "kairos-manuscript-production-validator-20260725-8";
 const here = dirname(fileURLToPath(import.meta.url));
 const workerRoot = join(here, "..");
 const sourceRoot = join(workerRoot, "src");
@@ -38,9 +38,6 @@ for (const marker of [
   'binding = "ASSETS"',
   'binding = "IMAGES"',
   'name = "KAIROS_PROJECTS"',
-  'name = "KAIROS_PROJECT_AGENT"',
-  'binding = "KAIROS_PROJECT_WORKFLOW"',
-  'class_name = "KairosProjectFoundationWorkflow"',
 ]) assert.ok(wrangler.includes(marker), `Required production configuration is missing: ${marker}`);
 assert.ok(!wrangler.includes('"* * * * *"'), "Minute-level website reconciliation must remain disabled.");
 assert.ok(!wrangler.includes('binding = "AI"'), "Paid Cloudflare AI binding must remain absent.");
@@ -49,16 +46,12 @@ const governedEntry = readFileSync(governedEntryPath, "utf8");
 for (const marker of [
   './kairos-production-entry-customer-delivery-v2.js',
   './kairos-manuscript-generation-job-v1.js',
-  './kairos-project-agent-api-v1.js',
   'handleManuscriptGeneration',
-  'handleKairosProjectAgentAPI',
   'resumeManuscriptGenerationAlarm',
   'backend-provider-governed',
   'X-Kairos-Manuscript-Generation',
-  'X-Kairos-Project-Agent',
   'X-Kairos-Cloudflare-Neurons',
   'export class KairosProject',
-  'export { KairosProjectAgent, KairosProjectFoundationWorkflow }',
   'export default',
   'async fetch(request, env, ctx)',
   'async scheduled(controller, env, ctx)',
@@ -128,8 +121,6 @@ console.log(JSON.stringify({
   mode: "manuscript-only-backend-generation",
   phoneInferenceRequired: false,
   backendGenerationDurable: true,
-  projectAgentPersistent: true,
-  foundationWorkflowDurable: true,
   shopifyAccess: "approval-gated-exact-product-release",
   adminAssetVault: true,
   directWebsiteMutationAuthorized: false,
