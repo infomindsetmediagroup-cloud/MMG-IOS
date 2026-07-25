@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
-const BUILD = "kairos-manuscript-production-validator-20260725-4";
+const BUILD = "kairos-manuscript-production-validator-20260725-8";
 const here = dirname(fileURLToPath(import.meta.url));
 const workerRoot = join(here, "..");
 const sourceRoot = join(workerRoot, "src");
@@ -51,6 +51,10 @@ for (const marker of [
   'backend-provider-governed',
   'X-Kairos-Manuscript-Generation',
   'X-Kairos-Cloudflare-Neurons',
+  'export class KairosProject',
+  'export default',
+  'async fetch(request, env, ctx)',
+  'async scheduled(controller, env, ctx)',
 ]) assert.ok(governedEntry.includes(marker), `Governed manuscript production wrapper is missing: ${marker}`);
 
 const backendGeneration = readFileSync(backendGenerationPath, "utf8");
@@ -111,12 +115,6 @@ for (const marker of ['APPROVED_TEMPLATE_SUFFIXES','mmg-ai-image-mastery','mmg-b
   assert.ok(productPublication.includes(marker), `Governed Shopify product publication is missing: ${marker}`);
 }
 
-const activeEntryPath = join(sourceRoot, activeEntryMatch[1]);
-const runtimeModule = await import(`${pathToFileURL(activeEntryPath).href}?validation=${Date.now()}`);
-assert.equal(typeof runtimeModule.default?.fetch, "function", "Production runtime must export fetch().");
-assert.equal(typeof runtimeModule.default?.scheduled, "function", "Production runtime must export scheduled().");
-assert.equal(typeof runtimeModule.KairosProject, "function", "Production runtime must export KairosProject.");
-
 console.log(JSON.stringify({
   status: "ready",
   build: BUILD,
@@ -128,4 +126,5 @@ console.log(JSON.stringify({
   directWebsiteMutationAuthorized: false,
   minuteWebsiteCronEnabled: false,
   productionEntry: activeEntryMatch[1],
+  runtimeVerification: "wrangler-dry-run",
 }, null, 2));

@@ -20,8 +20,23 @@ import {
   KAIROS_RUNTIME_HEALTH_BUILD,
   KAIROS_CONTRACT_VERSION,
 } from "./kairos-runtime-health-v1.js";
+import {
+  handleKairosProjectAgentAPI,
+  routeKairosProjectAgentRequest,
+  KAIROS_PROJECT_AGENT_API_BUILD,
+} from "./kairos-project-agent-api-v1.js";
+import {
+  KairosProjectAgent,
+  KAIROS_PROJECT_AGENT_BUILD,
+} from "./kairos-project-agent-v1.js";
+import {
+  KairosProjectFoundationWorkflow,
+  KAIROS_PROJECT_FOUNDATION_WORKFLOW_BUILD,
+} from "./kairos-project-foundation-workflow-v1.js";
 
-const BUILD = "kairos-production-entry-contract-health-20260725-4";
+const BUILD = "kairos-production-entry-project-agent-20260725-5";
+
+export { KairosProjectAgent, KairosProjectFoundationWorkflow };
 
 export class KairosProject extends CurrentKairosProject {
   constructor(state, env) {
@@ -49,6 +64,12 @@ export class KairosProject extends CurrentKairosProject {
 
 export default {
   async fetch(request, env, ctx) {
+    const projectAgentAPI = await handleKairosProjectAgentAPI(request.clone(), env);
+    if (projectAgentAPI) return stamp(projectAgentAPI);
+
+    const agentResponse = await routeKairosProjectAgentRequest(request, env);
+    if (agentResponse) return agentResponse;
+
     const runtimeHealth = handleKairosRuntimeHealth(request.clone(), env);
     if (runtimeHealth) return stamp(runtimeHealth);
     const pastedSource = await handlePastedManuscriptSource(request.clone(), env);
@@ -71,6 +92,9 @@ function stamp(response) {
   headers.set("X-Kairos-Manuscript-Generation", KAIROS_MANUSCRIPT_GENERATION_BUILD);
   headers.set("X-Kairos-Pasted-Manuscript-Source", KAIROS_PASTED_MANUSCRIPT_SOURCE_BUILD);
   headers.set("X-Kairos-Runtime-Health", KAIROS_RUNTIME_HEALTH_BUILD);
+  headers.set("X-Kairos-Project-Agent", KAIROS_PROJECT_AGENT_BUILD);
+  headers.set("X-Kairos-Project-Agent-API", KAIROS_PROJECT_AGENT_API_BUILD);
+  headers.set("X-Kairos-Project-Workflow", KAIROS_PROJECT_FOUNDATION_WORKFLOW_BUILD);
   headers.set("X-Kairos-Contract-Version", KAIROS_CONTRACT_VERSION);
   headers.set("X-Kairos-Local-Inference-Entry", BUILD);
   headers.set("X-Kairos-Inference-Cost-Mode", "backend-provider-governed");

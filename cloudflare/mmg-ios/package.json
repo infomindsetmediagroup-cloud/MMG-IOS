@@ -11,10 +11,11 @@
     "validate:production": "node scripts/validate-production-quiet.mjs"
   },
   "dependencies": {
+    "agents": "0.16.2",
     "fflate": "^0.8.2",
     "pdf-lib": "^1.17.1"
   },
   "devDependencies": {
-    "wrangler": "^4.24.3"
+    "wrangler": "4.114.0"
   }
 }

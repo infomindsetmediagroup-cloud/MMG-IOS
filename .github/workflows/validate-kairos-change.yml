@@ -34,7 +34,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
 
     steps:
       - name: Check out repository
@@ -60,6 +60,10 @@ jobs:
           node --check cloudflare/kairos/deterministic-planner.js
           node --check cloudflare/kairos/intelligence-runtime.js
           node --check cloudflare/kairos/intelligence-api.js
+          node --check cloudflare/mmg-ios/src/kairos-production-entry-local-inference-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-project-agent-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-project-agent-api-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-project-foundation-workflow-v1.js
           node --check cloudflare/mmg-ios/src/kairos-manuscript-operation-boundary-v1.js
           node --check cloudflare/mmg-ios/src/kairos-production-entry-manuscript-online-v1.js
           node --check web/kairos-dashboard/scripts/manuscript-project-setup.js
@@ -71,7 +75,7 @@ jobs:
           node --check scripts/validate-kairos-manuscript-activation.mjs
 
       - name: Test Kairos operation and intelligence boundaries
-        run: npx vitest run backend-tests/kairos-scope-firewall.test.js backend-tests/kairos-manuscript-operation-boundary.test.js backend-tests/kairos-self-hosted-runtime.test.ts
+        run: npx vitest run backend-tests/kairos-scope-firewall.test.js backend-tests/kairos-manuscript-operation-boundary.test.js backend-tests/kairos-self-hosted-runtime.test.ts backend-tests/kairos-project-agent-foundation.test.ts
 
       - name: Install WebKit browser
         run: npx playwright install --with-deps webkit > /dev/null
@@ -121,7 +125,7 @@ jobs:
       - name: Install active Worker dependencies
         if: ${{ always() }}
         working-directory: cloudflare/mmg-ios
-        run: npm install --ignore-scripts --no-audit --no-fund > /dev/null
+        run: npm install --ignore-scripts --legacy-peer-deps --no-audit --no-fund --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000
 
       - name: Validate active Cloudflare manuscript bundle
         if: ${{ always() }}
