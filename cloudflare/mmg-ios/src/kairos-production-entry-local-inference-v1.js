@@ -15,8 +15,13 @@ import {
   handlePastedManuscriptSourceObjectRequest,
   KAIROS_PASTED_MANUSCRIPT_SOURCE_BUILD,
 } from "./kairos-pasted-manuscript-source-v1.js";
+import {
+  handleKairosRuntimeHealth,
+  KAIROS_RUNTIME_HEALTH_BUILD,
+  KAIROS_CONTRACT_VERSION,
+} from "./kairos-runtime-health-v1.js";
 
-const BUILD = "kairos-production-entry-json-pasted-source-20260725-3";
+const BUILD = "kairos-production-entry-contract-health-20260725-4";
 
 export class KairosProject extends CurrentKairosProject {
   constructor(state, env) {
@@ -44,6 +49,8 @@ export class KairosProject extends CurrentKairosProject {
 
 export default {
   async fetch(request, env, ctx) {
+    const runtimeHealth = handleKairosRuntimeHealth(request.clone(), env);
+    if (runtimeHealth) return stamp(runtimeHealth);
     const pastedSource = await handlePastedManuscriptSource(request.clone(), env);
     if (pastedSource) return stamp(pastedSource);
     const generation = await handleManuscriptGeneration(request.clone(), env);
@@ -63,6 +70,8 @@ function stamp(response) {
   headers.set("X-Kairos-Local-Inference", KAIROS_LOCAL_INFERENCE_BUILD);
   headers.set("X-Kairos-Manuscript-Generation", KAIROS_MANUSCRIPT_GENERATION_BUILD);
   headers.set("X-Kairos-Pasted-Manuscript-Source", KAIROS_PASTED_MANUSCRIPT_SOURCE_BUILD);
+  headers.set("X-Kairos-Runtime-Health", KAIROS_RUNTIME_HEALTH_BUILD);
+  headers.set("X-Kairos-Contract-Version", KAIROS_CONTRACT_VERSION);
   headers.set("X-Kairos-Local-Inference-Entry", BUILD);
   headers.set("X-Kairos-Inference-Cost-Mode", "backend-provider-governed");
   headers.set("X-Kairos-Cloudflare-Neurons", "0");
