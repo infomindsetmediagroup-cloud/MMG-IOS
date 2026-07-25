@@ -3,13 +3,14 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const BUILD = "kairos-manuscript-production-validator-20260723-3";
+const BUILD = "kairos-manuscript-production-validator-20260725-4";
 const here = dirname(fileURLToPath(import.meta.url));
 const workerRoot = join(here, "..");
 const sourceRoot = join(workerRoot, "src");
 const wranglerPath = join(workerRoot, "wrangler.toml");
 const manuscriptEntryPath = join(sourceRoot, "kairos-production-entry-manuscript-online-v1.js");
-const localInferenceEntryPath = join(sourceRoot, "kairos-production-entry-local-inference-v1.js");
+const governedEntryPath = join(sourceRoot, "kairos-production-entry-local-inference-v1.js");
+const backendGenerationPath = join(sourceRoot, "kairos-manuscript-generation-job-v1.js");
 const boundaryPath = join(sourceRoot, "kairos-manuscript-operation-boundary-v1.js");
 const publishingEntryPath = join(sourceRoot, "kairos-production-entry-publishing-readiness-v1.js");
 const setupPath = join(sourceRoot, "kairos-manuscript-project-setup-v1.js");
@@ -17,7 +18,7 @@ const packagePath = join(sourceRoot, "kairos-publishing-package-v1.js");
 const autoPipelinePath = join(sourceRoot, "kairos-manuscript-auto-pipeline-v1.js");
 const productPublicationPath = join(sourceRoot, "kairos-product-publication-v1.js");
 
-for (const file of [wranglerPath, manuscriptEntryPath, localInferenceEntryPath, boundaryPath, publishingEntryPath, setupPath, packagePath, autoPipelinePath, productPublicationPath]) {
+for (const file of [wranglerPath, manuscriptEntryPath, governedEntryPath, backendGenerationPath, boundaryPath, publishingEntryPath, setupPath, packagePath, autoPipelinePath, productPublicationPath]) {
   assert.ok(existsSync(file), `Required manuscript production file is missing: ${file}`);
 }
 
@@ -26,7 +27,7 @@ const activeEntryMatch = wrangler.match(/^main\s*=\s*"src\/(kairos-production-en
 assert.ok(activeEntryMatch, "Wrangler must declare an explicit Kairos production entry.");
 assert.ok(
   ["kairos-production-entry-manuscript-online-v1.js", "kairos-production-entry-local-inference-v1.js"].includes(activeEntryMatch[1]),
-  "Wrangler must point to the manuscript runtime or its certified local-inference wrapper.",
+  "Wrangler must point to the manuscript runtime or its governed compatibility wrapper.",
 );
 
 for (const marker of [
@@ -39,15 +40,31 @@ for (const marker of [
   'name = "KAIROS_PROJECTS"',
 ]) assert.ok(wrangler.includes(marker), `Required production configuration is missing: ${marker}`);
 assert.ok(!wrangler.includes('"* * * * *"'), "Minute-level website reconciliation must remain disabled.");
-assert.ok(!wrangler.includes('binding = "AI"'), "Paid Cloudflare AI binding must remain absent in local-inference no-cost mode.");
+assert.ok(!wrangler.includes('binding = "AI"'), "Paid Cloudflare AI binding must remain absent.");
 
-const localInferenceEntry = readFileSync(localInferenceEntryPath, "utf8");
+const governedEntry = readFileSync(governedEntryPath, "utf8");
 for (const marker of [
   './kairos-production-entry-customer-delivery-v2.js',
-  './kairos-local-inference-v1.js',
-  'device-compute-no-paid-api',
+  './kairos-manuscript-generation-job-v1.js',
+  'handleManuscriptGeneration',
+  'resumeManuscriptGenerationAlarm',
+  'backend-provider-governed',
+  'X-Kairos-Manuscript-Generation',
   'X-Kairos-Cloudflare-Neurons',
-]) assert.ok(localInferenceEntry.includes(marker), `Local-inference production wrapper is missing: ${marker}`);
+]) assert.ok(governedEntry.includes(marker), `Governed manuscript production wrapper is missing: ${marker}`);
+
+const backendGeneration = readFileSync(backendGenerationPath, "utf8");
+for (const marker of [
+  '/generation-job',
+  'setAlarm',
+  'resumeManuscriptGenerationAlarm',
+  'KAIROS_MODEL_PROVIDER',
+  'KAIROS_MODEL_ENDPOINT',
+  'KAIROS_MODEL_AUTH_TOKEN',
+  'provider==="ollama"',
+  'provider==="openai-compatible"',
+  'cloudflareNeuronsUsed:0',
+]) assert.ok(backendGeneration.includes(marker), `Backend manuscript generation is missing: ${marker}`);
 
 const manuscriptEntry = readFileSync(manuscriptEntryPath, "utf8");
 for (const marker of [
@@ -103,8 +120,9 @@ assert.equal(typeof runtimeModule.KairosProject, "function", "Production runtime
 console.log(JSON.stringify({
   status: "ready",
   build: BUILD,
-  mode: "manuscript-only-local-inference",
-  noCostMode: true,
+  mode: "manuscript-only-backend-generation",
+  phoneInferenceRequired: false,
+  backendGenerationDurable: true,
   shopifyAccess: "approval-gated-exact-product-release",
   adminAssetVault: true,
   directWebsiteMutationAuthorized: false,

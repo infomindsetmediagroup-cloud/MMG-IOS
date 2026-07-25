@@ -37,12 +37,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          curl --fail --silent --show-error \
-            -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"pending\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Validating governed production release ${KAIROS_RELEASE_ID}\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+          curl --fail --silent --show-error -X POST -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${GH_TOKEN}" "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" --data "{\"state\":\"pending\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Validating governed production release ${KAIROS_RELEASE_ID}\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
       - name: Check out main
         uses: actions/checkout@v4
@@ -57,15 +52,10 @@ jobs:
       - name: Install validation dependencies
         run: npm install --ignore-scripts --no-audit --no-fund > /dev/null
 
-      - name: Build same-origin WebLLM runtime
-        run: |
-          npm run build:webllm
-          test -s web/kairos-dashboard/vendor/webllm-bundle.js
-          grep -q 'CreateMLCEngine' web/kairos-dashboard/vendor/webllm-bundle.js
-
       - name: Validate production runtime syntax
         run: |
           node --check cloudflare/mmg-ios/src/kairos-production-entry-local-inference-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-manuscript-generation-job-v1.js
           node --check cloudflare/mmg-ios/src/kairos-local-inference-v1.js
           node --check cloudflare/mmg-ios/src/kairos-manuscript-operation-boundary-v1.js
           node --check cloudflare/mmg-ios/src/kairos-production-entry-manuscript-online-v1.js
@@ -75,7 +65,6 @@ jobs:
           node --check cloudflare/mmg-ios/src/kairos-production-registry-v1.js
           node --check web/kairos-dashboard/scripts/manuscript-project-setup.js
           node --check web/kairos-dashboard/scripts/manuscript-editorial-workbench.js
-          node --check web/kairos-dashboard/scripts/kairos-local-inference-same-origin.js
           node --check web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
           node --check browser-tests/abos-live-smoke.spec.mjs
 
@@ -86,8 +75,9 @@ jobs:
           npm run validate:shopify
           npm run validate:service-product
 
-      - name: Test publication metadata and operation boundaries
+      - name: Test backend generation and publication boundaries
         run: |
+          npx vitest run backend-tests/kairos-backend-manuscript-generation.test.ts
           npx vitest run backend-tests/kairos-manuscript-auto-pipeline.test.js -t "extracts the AI Image Mastery publication record without a catalog form"
           npx vitest run backend-tests/kairos-manuscript-auto-pipeline.test.js -t "uses the durable project setup as the authoritative title and author"
           npx vitest run backend-tests/kairos-manuscript-auto-pipeline.test.js -t "routes non-AI publications to the canonical MMG book-product template"
@@ -121,58 +111,26 @@ jobs:
           set -euo pipefail
           for attempt in $(seq 1 30); do
             body="${RUNNER_TEMP}/manuscript-status.json"
-            status="$(curl --silent --show-error --max-time 20 \
-              "${WORKER_URL}/api/kairos/manuscripts/status?release=${KAIROS_RELEASE_ID}&attempt=${attempt}" \
-              -o "${body}" -w '%{http_code}' || true)"
-            if [ "${status}" = "200" ] \
-              && grep -q '"ready":true' "${body}" \
-              && grep -q '"automaticProductionPackage":true' "${body}" \
-              && grep -q '"adminAssetVault":true' "${body}" \
-              && grep -q '"manualCatalogEntryRequired":false' "${body}" \
-              && grep -q '"shopifyDraftApprovalRequired":true' "${body}" \
-              && grep -q '"liveProductPublicationApprovalRequired":true' "${body}" \
-              && grep -q '"websiteMutationAuthorized":false' "${body}"; then
-              cat "${body}"
-              break
-            fi
-            if [ "${attempt}" = "30" ]; then
-              cat "${body}" || true
-              exit 1
-            fi
+            status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/api/kairos/manuscripts/status?release=${KAIROS_RELEASE_ID}&attempt=${attempt}" -o "${body}" -w '%{http_code}' || true)"
+            if [ "${status}" = "200" ] && grep -q '"ready":true' "${body}" && grep -q '"automaticProductionPackage":true' "${body}" && grep -q '"adminAssetVault":true' "${body}" && grep -q '"shopifyDraftApprovalRequired":true' "${body}" && grep -q '"liveProductPublicationApprovalRequired":true' "${body}" && grep -q '"websiteMutationAuthorized":false' "${body}"; then cat "${body}"; break; fi
+            if [ "${attempt}" = "30" ]; then cat "${body}" || true; exit 1; fi
             sleep 5
           done
 
-      - name: Verify current production controllers deployed
+      - name: Verify backend generation controller deployed
         run: |
           set -euo pipefail
           root="${RUNNER_TEMP}/root.html"
           setup="${RUNNER_TEMP}/manuscript-project-setup.js"
           editorial="${RUNNER_TEMP}/manuscript-editorial-workbench.js"
-          inference="${RUNNER_TEMP}/kairos-local-inference-same-origin.js"
-          bundle="${RUNNER_TEMP}/webllm-bundle.js"
           automatic="${RUNNER_TEMP}/manuscript-auto-pipeline.js"
           for attempt in $(seq 1 30); do
             curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${root}" || true
             curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-project-setup.js?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${setup}" || true
             curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-editorial-workbench.js?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${editorial}" || true
-            curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/scripts/kairos-local-inference-same-origin.js?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${inference}" || true
-            curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/vendor/webllm-bundle.js?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${bundle}" || true
             curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-auto-pipeline.js?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${automatic}" || true
-            if grep -Eq '<meta name="mmg-build" content="kairos-command-hub-[^"]+">' "${root}" \
-              && grep -q 'kairos-local-inference-same-origin.js' "${root}" \
-              && grep -q '../vendor/webllm-bundle.js' "${inference}" \
-              && grep -q 'CreateMLCEngine' "${bundle}" \
-              && grep -q 'KairosManuscriptSetupController' "${setup}" \
-              && grep -q 'KairosEditorialWorkbenchController' "${editorial}" \
-              && grep -q 'KairosManuscriptAutoPipelineController' "${automatic}" \
-              && grep -q 'CREATE SHOPIFY PRODUCT DRAFT' "${automatic}" \
-              && grep -q 'PUBLISH PRODUCT LIVE' "${automatic}"; then
-              break
-            fi
-            if [ "${attempt}" = "30" ]; then
-              echo "Current production controllers or same-origin WebLLM bundle did not propagate completely."
-              exit 1
-            fi
+            if grep -Eq '<meta name="mmg-build" content="kairos-command-hub-[^"]+">' "${root}" && ! grep -q 'kairos-local-inference-same-origin.js' "${root}" && grep -q 'generation-job' "${automatic}" && grep -q 'phone-independent' "${automatic}" && grep -q 'KairosManuscriptSetupController' "${setup}" && grep -q 'KairosEditorialWorkbenchController' "${editorial}" && grep -q 'KairosManuscriptAutoPipelineController' "${automatic}" && grep -q 'CREATE SHOPIFY PRODUCT DRAFT' "${automatic}" && grep -q 'PUBLISH PRODUCT LIVE' "${automatic}"; then break; fi
+            if [ "${attempt}" = "30" ]; then echo "Backend generation controller did not propagate completely."; exit 1; fi
             sleep 5
           done
 
@@ -196,11 +154,7 @@ jobs:
         run: |
           set -euo pipefail
           body="${RUNNER_TEMP}/shopify-denial.json"
-          status="$(curl --silent --show-error --max-time 20 \
-            -X POST "${WORKER_URL}/api/shopify/page-shell/publish" \
-            -H 'Content-Type: application/json' \
-            --data '{}' \
-            -o "${body}" -w '%{http_code}' || true)"
+          status="$(curl --silent --show-error --max-time 20 -X POST "${WORKER_URL}/api/shopify/page-shell/publish" -H 'Content-Type: application/json' --data '{}' -o "${body}" -w '%{http_code}' || true)"
           cat "${body}"
           test "${status}" = "403"
           grep -q '"code":"WEBSITE_MUTATION_DENIED"' "${body}"
@@ -213,21 +167,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          curl --fail --silent --show-error \
-            -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"success\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Production release ${KAIROS_RELEASE_ID} passed all gates\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+          curl --fail --silent --show-error -X POST -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${GH_TOKEN}" "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" --data "{\"state\":\"success\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Production release ${KAIROS_RELEASE_ID} passed all gates\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
       - name: Report deployment failure
         if: ${{ failure() || cancelled() }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          curl --fail --silent --show-error \
-            -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"failure\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Production release ${KAIROS_RELEASE_ID} failed validation\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+          curl --fail --silent --show-error -X POST -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${GH_TOKEN}" "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" --data "{\"state\":\"failure\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Production release ${KAIROS_RELEASE_ID} failed validation\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"

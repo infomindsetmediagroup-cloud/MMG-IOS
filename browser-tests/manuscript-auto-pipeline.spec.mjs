@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 const controllerSource = readFileSync(new URL("../web/kairos-dashboard/scripts/manuscript-auto-pipeline.js", import.meta.url), "utf8");
 const PROJECT_ID = "manuscript-studio-auto-pipeline-12345678";
 const PIPELINE_PATH = `/api/production-registry/manuscripts/${PROJECT_ID}/auto-pipeline`;
+const GENERATION_PATH = `/api/production-registry/manuscripts/${PROJECT_ID}/generation-job`;
 const APPROVAL_PATH = `/api/production-registry/manuscripts/${PROJECT_ID}/experience/approve-package`;
 
 function fixtureHTML() {
@@ -37,6 +38,26 @@ function productionReadyRecord(status = "production-ready", shopify = { status: 
   };
 }
 
+function completedGeneration() {
+  return {
+    status: "completed",
+    job: {
+      status: "completed",
+      build: "kairos-manuscript-generation-job-test",
+      provider: "ollama",
+      model: "test-model",
+      step: 4,
+      maxSteps: 32,
+      totalWords: 25_500,
+      inference: {
+        build: "kairos-manuscript-generation-job-test",
+        model: "test-model",
+        wordCount: 25_500,
+      },
+    },
+  };
+}
+
 function draftRecord() {
   return productionReadyRecord("package-approved", {
     status: "draft-created-media-installed-awaiting-live-approval",
@@ -58,10 +79,11 @@ function liveRecord() {
   return record;
 }
 
-test("mobile Manuscript Studio uses the canonical three approvals", async ({ page }) => {
+test("mobile Manuscript Studio uses backend generation and the canonical three approvals", async ({ page }) => {
   const errors = [];
   const calls = [];
   let buildRuns = 0;
+  let generationReads = 0;
   page.on("pageerror", error => errors.push(error.message));
 
   await page.route("https://kairos.test/**", async route => {
@@ -69,12 +91,21 @@ test("mobile Manuscript Studio uses the canonical three approvals", async ({ pag
     const url = new URL(request.url());
     if (request.resourceType() === "document") return route.fulfill({ status:200, contentType:"text/html", body:fixtureHTML() });
     if (request.method() === "GET" && url.pathname === PIPELINE_PATH) return route.fulfill({ status:404, contentType:"application/json", body:JSON.stringify({ error:{ code:"auto_pipeline_not_started" } }) });
+    if (request.method() === "GET" && url.pathname === GENERATION_PATH) {
+      generationReads += 1;
+      if (generationReads === 1) return route.fulfill({ status:404, contentType:"application/json", body:JSON.stringify({ error:{ code:"generation_job_not_found" } }) });
+      return route.fulfill({ status:200, contentType:"application/json", body:JSON.stringify(completedGeneration()) });
+    }
+    if (request.method() === "POST" && url.pathname === GENERATION_PATH) {
+      calls.push("start-generation");
+      return route.fulfill({ status:202, contentType:"application/json", body:JSON.stringify({ status:"queued", job:{ status:"queued", provider:"ollama", model:"test-model", step:0, maxSteps:32, totalWords:1200 } }) });
+    }
     if (request.method() === "POST" && url.pathname === `${PIPELINE_PATH}/run`) {
       const payload = JSON.parse(request.postData() || "{}");
-      expect(payload.localInferenceBuild).toBe("kairos-local-inference-test");
+      expect(payload.localInferenceBuild).toBe("kairos-manuscript-generation-job-test");
       expect(payload.localInferenceModel).toBe("test-model");
       buildRuns += 1;
-      calls.push("start");
+      calls.push("manufacture-package");
       return route.fulfill({ status:201, contentType:"application/json", body:JSON.stringify(productionReadyRecord()) });
     }
     if (request.method() === "POST" && url.pathname === APPROVAL_PATH) {
@@ -101,20 +132,6 @@ test("mobile Manuscript Studio uses the canonical three approvals", async ({ pag
   await page.goto("https://kairos.test/");
   await page.evaluate(projectId => {
     sessionStorage.setItem("kairos.production.active-workspace", JSON.stringify({ workspace:"manuscript-studio", projectId }));
-    window.KairosLocalInference = Object.freeze({
-      ready: true,
-      build: "kairos-local-inference-test",
-      async run({ onProgress } = {}) {
-        onProgress?.("Local test inference complete");
-        return {
-          status: "local-inference-ready",
-          build: "kairos-local-inference-test",
-          model: "test-model",
-          wordCount: 25_500,
-          generatedSections: 4,
-        };
-      },
-    });
   }, PROJECT_ID);
   await page.addScriptTag({ type:"module", content:controllerSource });
 
@@ -123,7 +140,7 @@ test("mobile Manuscript Studio uses the canonical three approvals", async ({ pag
   expect(buildRuns).toBe(0);
 
   await page.locator("[data-start-production]").tap();
-  await expect(page.locator("#manuscript-auto-pipeline")).toContainText("Package Preview");
+  await expect(page.locator("#manuscript-auto-pipeline")).toContainText("Package Preview", { timeout: 10_000 });
   await expect(page.getByRole("link", { name:"Preview Package" })).toBeVisible();
   expect(buildRuns).toBe(1);
 
@@ -139,6 +156,6 @@ test("mobile Manuscript Studio uses the canonical three approvals", async ({ pag
   await expect(page.locator("#manuscript-auto-pipeline")).toContainText("Published and verified");
   await expect(page.getByRole("link", { name:"View Live Product" })).toHaveAttribute("href", "https://themindsetmediagroup.com/products/ai-image-mastery");
 
-  expect(calls).toEqual(["start","approve-package","preview-shopify","publish"]);
+  expect(calls).toEqual(["start-generation","manufacture-package","approve-package","preview-shopify","publish"]);
   expect(errors).toEqual([]);
 });
