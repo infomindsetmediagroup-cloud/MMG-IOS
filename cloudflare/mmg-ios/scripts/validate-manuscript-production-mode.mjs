@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const BUILD = "kairos-manuscript-production-validator-20260725-5";
+const BUILD = "kairos-manuscript-production-validator-20260725-6";
 const here = dirname(fileURLToPath(import.meta.url));
 const workerRoot = join(here, "..");
 const sourceRoot = join(workerRoot, "src");
@@ -50,15 +50,14 @@ for (const marker of [
   './kairos-manuscript-generation-job-v1.js',
   './kairos-project-agent-api-v1.js',
   'handleManuscriptGeneration',
-  'handleKairosProjectAgentApi',
+  'handleKairosProjectAgentAPI',
   'resumeManuscriptGenerationAlarm',
   'backend-provider-governed',
   'X-Kairos-Manuscript-Generation',
   'X-Kairos-Project-Agent',
   'X-Kairos-Cloudflare-Neurons',
   'export class KairosProject',
-  'export { KairosProjectAgent',
-  'export { KairosProjectFoundationWorkflow',
+  'export { KairosProjectAgent, KairosProjectFoundationWorkflow }',
   'export default',
   'async fetch(request, env, ctx)',
   'async scheduled(controller, env, ctx)',
