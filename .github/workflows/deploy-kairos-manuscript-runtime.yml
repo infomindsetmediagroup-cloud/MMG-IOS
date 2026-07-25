@@ -55,7 +55,7 @@ jobs:
           node-version: '22'
 
       - name: Install validation dependencies
-        run: npm install --ignore-scripts --no-audit --no-fund > /dev/null
+        run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund > /dev/null
 
       - name: Verify OpenAI Responses API production access
         env:
@@ -155,7 +155,7 @@ jobs:
 
       - name: Install Worker dependencies
         working-directory: cloudflare/mmg-ios
-        run: npm install --ignore-scripts --no-audit --no-fund > /dev/null
+        run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund > /dev/null
 
       - name: Validate manuscript setup transaction
         working-directory: cloudflare/mmg-ios
