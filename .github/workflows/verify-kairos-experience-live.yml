@@ -8,8 +8,11 @@ on:
       - "cloudflare/mmg-ios/src/kairos-production-entry-manuscript-online-v1.js"
       - "cloudflare/mmg-ios/src/kairos-manuscript-project-setup-v1.js"
       - "cloudflare/mmg-ios/src/kairos-production-registry-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-project-agent-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-project-foundation-workflow-v1.js"
       - "cloudflare/mmg-ios/scripts/validate-manuscript-production-mode.mjs"
       - "cloudflare/mmg-ios/test/kairos-manuscript-project-setup-*.test.js"
+      - "cloudflare/mmg-ios/package.json"
       - "cloudflare/mmg-ios/wrangler.toml"
       - "web/kairos-dashboard/index.html"
       - "web/kairos-dashboard/scripts/manuscript-project-setup.js"
@@ -28,7 +31,7 @@ concurrency:
 jobs:
   verify-contract:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - name: Download repository archive
         shell: bash
@@ -43,9 +46,14 @@ jobs:
           tar -xzf repository.tar.gz --strip-components=1 -C repository
           test -f repository/cloudflare/mmg-ios/wrangler.toml
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Install Worker dependencies
         working-directory: repository/cloudflare/mmg-ios
-        run: npm install --no-package-lock --no-audit --no-fund
+        run: npm install --no-package-lock --ignore-scripts --legacy-peer-deps --no-audit --no-fund --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000
 
       - name: Validate active manuscript experience contract
         working-directory: repository/cloudflare/mmg-ios
