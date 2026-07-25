@@ -53,22 +53,51 @@ jobs:
       - name: Install validation dependencies
         run: npm install --ignore-scripts --no-audit --no-fund > /dev/null
 
-      - name: Verify OpenAI production credential and model access
+      - name: Verify OpenAI Responses API production access
+        env:
+          KAIROS_OPENAI_MODEL: gpt-5-mini
         run: |
           set -euo pipefail
           test -n "${OPENAI_API_KEY:-}" || { echo "OPENAI_API_KEY is missing from the protected production environment."; exit 1; }
-          body="${RUNNER_TEMP}/openai-model.json"
-          status="$(curl --silent --show-error --max-time 30 \
+          request_body="${RUNNER_TEMP}/openai-responses-probe-request.json"
+          response_body="${RUNNER_TEMP}/openai-responses-probe-response.json"
+          cat > "${request_body}" <<'JSON'
+          {
+            "model": "gpt-5-mini",
+            "instructions": "Return only the token KAIROS_READY.",
+            "input": "Production credential health check.",
+            "max_output_tokens": 32,
+            "store": false
+          }
+          JSON
+          status="$(curl --silent --show-error --max-time 60 \
+            -X POST \
             -H "Authorization: Bearer ${OPENAI_API_KEY}" \
+            -H "Content-Type: application/json" \
             -H "Accept: application/json" \
-            "https://api.openai.com/v1/models/gpt-5-mini" \
-            -o "${body}" -w '%{http_code}' || true)"
+            --data-binary "@${request_body}" \
+            "https://api.openai.com/v1/responses" \
+            -o "${response_body}" -w '%{http_code}' || true)"
           if [ "${status}" != "200" ]; then
-            cat "${body}" || true
-            echo "The production OpenAI credential cannot access gpt-5-mini."
+            node - "${response_body}" "${status}" <<'NODE'
+          const fs = require('node:fs');
+          const [file, httpStatus] = process.argv.slice(2);
+          let body = {};
+          try { body = JSON.parse(fs.readFileSync(file, 'utf8')); } catch {}
+          const error = body?.error || {};
+          console.error(`OpenAI Responses API health check failed: HTTP ${httpStatus}; code=${error.code || 'unknown'}; type=${error.type || 'unknown'}.`);
+          NODE
             exit 1
           fi
-          grep -q '"id"[[:space:]]*:[[:space:]]*"gpt-5-mini"' "${body}"
+          node - "${response_body}" <<'NODE'
+          const fs = require('node:fs');
+          const file = process.argv[2];
+          const body = JSON.parse(fs.readFileSync(file, 'utf8'));
+          if (body?.object !== 'response' || !String(body?.id || '').startsWith('resp_') || body?.status === 'failed') {
+            throw new Error('OpenAI Responses API returned an invalid production health-check response.');
+          }
+          console.log(`OpenAI Responses API production access verified with ${body.model || 'configured model'}.`);
+          NODE
 
       - name: Validate production runtime syntax
         run: |
