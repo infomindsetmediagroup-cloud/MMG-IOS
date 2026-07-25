@@ -66,6 +66,8 @@ jobs:
           node --check cloudflare/mmg-ios/src/kairos-project-foundation-workflow-v1.js
           node --check cloudflare/mmg-ios/src/kairos-manuscript-generation-job-v1.js
           node --check cloudflare/mmg-ios/src/kairos-manuscript-generation-workflow-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-manuscript-start-router-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-runtime-health-v1.js
           node --check cloudflare/mmg-ios/src/kairos-manuscript-operation-boundary-v1.js
           node --check cloudflare/mmg-ios/src/kairos-production-entry-manuscript-online-v1.js
           node --check web/kairos-dashboard/scripts/manuscript-project-setup.js

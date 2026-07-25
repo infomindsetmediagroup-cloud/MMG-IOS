@@ -1,6 +1,7 @@
 import currentRuntime, { KairosProject as CurrentKairosProject } from "./kairos-production-entry-customer-delivery-v2.js";
 import { handleLocalInference, handleLocalInferenceObjectRequest, KAIROS_LOCAL_INFERENCE_BUILD } from "./kairos-local-inference-v1.js";
 import { handleManuscriptGeneration, handleManuscriptGenerationObjectRequest, resumeManuscriptGenerationAlarm, KAIROS_MANUSCRIPT_GENERATION_BUILD } from "./kairos-manuscript-generation-job-v1.js";
+import { handleCanonicalManuscriptStart, KAIROS_MANUSCRIPT_START_ROUTER_BUILD } from "./kairos-manuscript-start-router-v1.js";
 import { handlePastedManuscriptSource, handlePastedManuscriptSourceObjectRequest, KAIROS_PASTED_MANUSCRIPT_SOURCE_BUILD } from "./kairos-pasted-manuscript-source-v1.js";
 import { handleKairosRuntimeHealth, KAIROS_RUNTIME_HEALTH_BUILD, KAIROS_CONTRACT_VERSION } from "./kairos-runtime-health-v1.js";
 import { handleKairosProjectAgentAPI, routeKairosProjectAgentRequest, KAIROS_PROJECT_AGENT_API_BUILD } from "./kairos-project-agent-api-v1.js";
@@ -8,7 +9,7 @@ import { KairosProjectAgent, KAIROS_PROJECT_AGENT_BUILD } from "./kairos-project
 import { KairosProjectFoundationWorkflow, KAIROS_PROJECT_FOUNDATION_WORKFLOW_BUILD } from "./kairos-project-foundation-workflow-v1.js";
 import { KairosManuscriptGenerationWorkflow, KAIROS_MANUSCRIPT_GENERATION_WORKFLOW_BUILD } from "./kairos-manuscript-generation-workflow-v1.js";
 
-const BUILD = "kairos-production-entry-manuscript-workflow-20260725-6";
+const BUILD = "kairos-production-entry-canonical-manuscript-start-20260725-7";
 
 export { KairosProjectAgent, KairosProjectFoundationWorkflow };
 export { KairosManuscriptGenerationWorkflow };
@@ -30,6 +31,7 @@ export default {
     const agentResponse = await routeKairosProjectAgentRequest(request, env); if (agentResponse) return agentResponse;
     const runtimeHealth = handleKairosRuntimeHealth(request.clone(), env); if (runtimeHealth) return stamp(runtimeHealth);
     const pastedSource = await handlePastedManuscriptSource(request.clone(), env); if (pastedSource) return stamp(pastedSource);
+    const canonicalStart = await handleCanonicalManuscriptStart(request.clone(), env); if (canonicalStart) return stamp(canonicalStart);
     const generation = await handleManuscriptGeneration(request.clone(), env); if (generation) return stamp(generation);
     const localInference = await handleLocalInference(request.clone(), env); if (localInference) return stamp(localInference);
     return stamp(await currentRuntime.fetch(request, env, ctx));
@@ -42,6 +44,7 @@ function stamp(response) {
   headers.set("X-Kairos-Local-Inference", KAIROS_LOCAL_INFERENCE_BUILD);
   headers.set("X-Kairos-Manuscript-Generation", KAIROS_MANUSCRIPT_GENERATION_BUILD);
   headers.set("X-Kairos-Manuscript-Workflow", KAIROS_MANUSCRIPT_GENERATION_WORKFLOW_BUILD);
+  headers.set("X-Kairos-Manuscript-Start-Router", KAIROS_MANUSCRIPT_START_ROUTER_BUILD);
   headers.set("X-Kairos-Pasted-Manuscript-Source", KAIROS_PASTED_MANUSCRIPT_SOURCE_BUILD);
   headers.set("X-Kairos-Runtime-Health", KAIROS_RUNTIME_HEALTH_BUILD);
   headers.set("X-Kairos-Project-Agent", KAIROS_PROJECT_AGENT_BUILD);
