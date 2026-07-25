@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const BUILD = "kairos-manuscript-production-validator-20260725-6";
+const BUILD = "kairos-manuscript-production-validator-20260725-7";
 const here = dirname(fileURLToPath(import.meta.url));
 const workerRoot = join(here, "..");
 const sourceRoot = join(workerRoot, "src");
@@ -38,8 +38,9 @@ for (const marker of [
   'binding = "ASSETS"',
   'binding = "IMAGES"',
   'name = "KAIROS_PROJECTS"',
-  'name = "KAIROS_PROJECT_AGENTS"',
-  'name = "KAIROS_PROJECT_FOUNDATION_WORKFLOW"',
+  'name = "KAIROS_PROJECT_AGENT"',
+  'binding = "KAIROS_PROJECT_WORKFLOW"',
+  'class_name = "KairosProjectFoundationWorkflow"',
 ]) assert.ok(wrangler.includes(marker), `Required production configuration is missing: ${marker}`);
 assert.ok(!wrangler.includes('"* * * * *"'), "Minute-level website reconciliation must remain disabled.");
 assert.ok(!wrangler.includes('binding = "AI"'), "Paid Cloudflare AI binding must remain absent.");
