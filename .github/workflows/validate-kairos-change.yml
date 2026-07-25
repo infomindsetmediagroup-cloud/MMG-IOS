@@ -34,7 +34,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
 
     steps:
       - name: Check out repository
@@ -125,7 +125,7 @@ jobs:
       - name: Install active Worker dependencies
         if: ${{ always() }}
         working-directory: cloudflare/mmg-ios
-        run: npm install --ignore-scripts --no-audit --no-fund > /dev/null
+        run: npm install --ignore-scripts --legacy-peer-deps --no-audit --no-fund --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000
 
       - name: Validate active Cloudflare manuscript bundle
         if: ${{ always() }}
