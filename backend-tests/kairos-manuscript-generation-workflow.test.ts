@@ -51,8 +51,20 @@ describe("Kairos durable manuscript generation migration", () => {
     expect(router).toContain("KAIROS_MANUSCRIPT_START_MODE_WORKFLOW");
     expect(router).toContain("KAIROS_MANUSCRIPT_START_MODE_LEGACY");
     expect(router).toContain("Kairos will not silently fall back");
-    expect(entry.indexOf("handleCanonicalManuscriptStart")).toBeLessThan(entry.indexOf("handleManuscriptGeneration(request.clone()"));
+    const canonicalCall = entry.indexOf("const canonicalStart = await handleCanonicalManuscriptStart");
+    const compatibilityCall = entry.indexOf("const generation = await handleManuscriptGeneration(request.clone()");
+    expect(canonicalCall).toBeGreaterThan(-1);
+    expect(compatibilityCall).toBeGreaterThan(-1);
+    expect(canonicalCall).toBeLessThan(compatibilityCall);
     expect(ui).toContain("/generation-job");
+  });
+
+  it("bridges cold-start polling through reconnect-safe Agent state", () => {
+    expect(router).toContain("readCanonicalManuscriptState");
+    expect(router).toContain("registryResponse.status !== 404");
+    expect(router).toContain("activeManuscriptWorkflow");
+    expect(router).toContain("Durable manuscript Workflow is initializing");
+    expect(router).toContain("buildSyntheticJob");
   });
 
   it("reports the selected orchestration path and prohibits automatic legacy fallback", () => {
