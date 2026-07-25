@@ -45,6 +45,7 @@ tag = "kairos-project-agent-v1"
 new_sqlite_classes = ["KairosProjectAgent"]
 
 # Existing production secrets are retained by keep_vars=true.
+# OPENAI_API_KEY and KAIROS_API_ACCESS_TOKEN must be Worker secrets, never plaintext vars.
 # New manuscript generation starts through the persistent project Agent and Cloudflare Workflow.
 # The stable generation-job endpoint is retained as the client contract and routes POST requests to the durable Workflow.
 # The legacy alarm runner is available only when KAIROS_MANUSCRIPT_START_MODE is explicitly changed to legacy-alarm.
@@ -74,3 +75,7 @@ KAIROS_MANUSCRIPT_LEGACY_ALARM_ROLLBACK_ENABLED = "true"
 KAIROS_DIGITAL_ASSET_V2_REQUIRED = "true"
 KAIROS_SHOPIFY_WRITES_ENABLED = "true"
 KAIROS_SHOPIFY_LIVE_PUBLISH_ENABLED = "true"
+KAIROS_API_AUTH_MODE = "access-or-token"
+KAIROS_API_RATE_LIMIT = "30"
+KAIROS_API_RATE_WINDOW_SECONDS = "60"
+KAIROS_API_AUDIT_RETENTION = "500"
