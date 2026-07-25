@@ -4,11 +4,12 @@ import {
   KAIROS_MANUSCRIPT_WORKFLOW_VERSION,
 } from "./kairos-manuscript-generation-job-v1.js";
 
-export const KAIROS_MANUSCRIPT_START_ROUTER_BUILD = "kairos-manuscript-start-router-20260725-1";
+export const KAIROS_MANUSCRIPT_START_ROUTER_BUILD = "kairos-manuscript-start-router-20260725-2-reconnect";
 export const KAIROS_MANUSCRIPT_START_MODE_WORKFLOW = "workflow";
 export const KAIROS_MANUSCRIPT_START_MODE_LEGACY = "legacy-alarm";
 
 const MAX_STEPS = 32;
+const REGISTRY_OBJECT = "mmg-production-project-registry";
 
 export function resolveManuscriptStartMode(env) {
   const requested = String(env?.KAIROS_MANUSCRIPT_START_MODE || KAIROS_MANUSCRIPT_START_MODE_WORKFLOW)
@@ -24,7 +25,7 @@ export function resolveManuscriptStartMode(env) {
 }
 
 export async function handleCanonicalManuscriptStart(request, env) {
-  if (request.method !== "POST") return null;
+  if (!["GET", "POST"].includes(request.method)) return null;
   const url = new URL(request.url);
   const match = url.pathname.match(/^\/api\/production-registry\/manuscripts\/([a-z0-9-]{8,})\/generation-job$/i);
   if (!match) return null;
@@ -32,6 +33,10 @@ export async function handleCanonicalManuscriptStart(request, env) {
   const projectId = match[1].toLowerCase();
   const mode = resolveManuscriptStartMode(env);
   if (mode === KAIROS_MANUSCRIPT_START_MODE_LEGACY) return null;
+
+  if (request.method === "GET") {
+    return readCanonicalManuscriptState(request, env, projectId, mode);
+  }
 
   if (!env?.KAIROS_PROJECT_AGENT || !env?.KAIROS_MANUSCRIPT_WORKFLOW) {
     return jsonError(
@@ -45,34 +50,27 @@ export async function handleCanonicalManuscriptStart(request, env) {
   try {
     const body = await readJSON(request);
     const requestedBy = cleanText(body.requestedBy || body.actor, 120) || "kairos-owner";
-    const agent = await getAgentByName(env.KAIROS_PROJECT_AGENT, projectId, {
-      locationHint: "wnam",
-      routingRetry: { maxAttempts: 3 },
-    });
+    const agent = await getProjectAgent(env, projectId);
     const result = await agent.startManuscriptGenerationWorkflow({
       projectId,
       title: cleanText(body.title, 180) || "Untitled Kairos Project",
       requestedBy,
     });
     const active = result?.state?.activeManuscriptWorkflow || {};
-    const status = result?.reused ? String(active.status || "running") : "queued";
+    const status = result?.reused ? normalizePublicStatus(active.status) : "queued";
     const now = new Date().toISOString();
-    const job = {
-      build: KAIROS_MANUSCRIPT_GENERATION_BUILD,
-      workflowVersion: KAIROS_MANUSCRIPT_WORKFLOW_VERSION,
-      workflowInstanceId: result?.instanceId || active.instanceId || null,
+    const job = buildSyntheticJob({
       projectId,
       status,
-      executionMode: KAIROS_MANUSCRIPT_WORKFLOW_VERSION,
+      workflowInstanceId: result?.instanceId || active.instanceId || null,
       phase: result?.reused ? "Durable manuscript Workflow already active" : "Durable manuscript Workflow accepted",
-      step: 0,
-      maxSteps: MAX_STEPS,
       requestedBy,
       requestedAt: active.approvedAt || now,
       createdAt: active.startedAt || now,
       updatedAt: active.updatedAt || now,
-      error: null,
-    };
+      progress: result?.state?.progress,
+      error: result?.state?.lastError || null,
+    });
     return json({
       status,
       build: KAIROS_MANUSCRIPT_START_ROUTER_BUILD,
@@ -92,6 +90,76 @@ export async function handleCanonicalManuscriptStart(request, env) {
   }
 }
 
+async function readCanonicalManuscriptState(request, env, projectId, mode) {
+  if (!env?.KAIROS_PROJECTS) return null;
+  const stub = env.KAIROS_PROJECTS.get(env.KAIROS_PROJECTS.idFromName(REGISTRY_OBJECT));
+  const registryResponse = await stub.fetch(new Request(
+    `https://kairos.internal/registry/manuscripts/${projectId}/generation-job`,
+    request,
+  ));
+  if (registryResponse.status !== 404 || !env?.KAIROS_PROJECT_AGENT) return registryResponse;
+
+  try {
+    const agent = await getProjectAgent(env, projectId);
+    const state = await agent.getProjectState();
+    const active = state?.activeManuscriptWorkflow;
+    if (!active || !["running", "waiting_for_approval", "failed_retriable"].includes(active.status)) {
+      return registryResponse;
+    }
+    const status = normalizePublicStatus(active.status);
+    const job = buildSyntheticJob({
+      projectId,
+      status,
+      workflowInstanceId: active.instanceId || null,
+      phase: active.message || (status === "failed" ? "Durable manuscript Workflow requires attention" : "Durable manuscript Workflow is initializing"),
+      requestedBy: active.approvedBy || "kairos-owner",
+      requestedAt: active.approvedAt || active.startedAt || null,
+      createdAt: active.startedAt || null,
+      updatedAt: active.updatedAt || new Date().toISOString(),
+      progress: state?.progress,
+      error: state?.lastError || null,
+    });
+    return json({
+      status,
+      build: KAIROS_MANUSCRIPT_START_ROUTER_BUILD,
+      projectId,
+      startMode: mode,
+      initializing: true,
+      workflowInstanceId: job.workflowInstanceId,
+      job,
+    }, 200, mode);
+  } catch {
+    return registryResponse;
+  }
+}
+
+async function getProjectAgent(env, projectId) {
+  return getAgentByName(env.KAIROS_PROJECT_AGENT, projectId, {
+    locationHint: "wnam",
+    routingRetry: { maxAttempts: 3 },
+  });
+}
+
+function buildSyntheticJob(input) {
+  const progress = clampProgress(input.progress);
+  return {
+    build: KAIROS_MANUSCRIPT_GENERATION_BUILD,
+    workflowVersion: KAIROS_MANUSCRIPT_WORKFLOW_VERSION,
+    workflowInstanceId: input.workflowInstanceId || null,
+    projectId: input.projectId,
+    status: input.status,
+    executionMode: KAIROS_MANUSCRIPT_WORKFLOW_VERSION,
+    phase: input.phase,
+    step: Math.min(MAX_STEPS, Math.max(0, Math.floor(progress * MAX_STEPS))),
+    maxSteps: MAX_STEPS,
+    requestedBy: input.requestedBy || "kairos-owner",
+    requestedAt: input.requestedAt || null,
+    createdAt: input.createdAt || null,
+    updatedAt: input.updatedAt || new Date().toISOString(),
+    error: input.error || null,
+  };
+}
+
 async function readJSON(request) {
   const text = await request.text();
   if (!text.trim()) return {};
@@ -104,6 +172,20 @@ async function readJSON(request) {
 
 function cleanText(value, maximum) {
   return String(value || "").replace(/\s+/g, " ").trim().slice(0, maximum);
+}
+
+function clampProgress(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0;
+  return Math.max(0, Math.min(1, number));
+}
+
+function normalizePublicStatus(value) {
+  const status = String(value || "").toLowerCase();
+  if (status === "completed") return "completed";
+  if (status.startsWith("failed")) return "failed";
+  if (status === "cancelled") return "cancelled";
+  return "running";
 }
 
 function classifyStatus(error) {
