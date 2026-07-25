@@ -10,8 +10,11 @@ on:
       - 'cloudflare/mmg-ios/src/kairos-*package*'
       - 'cloudflare/mmg-ios/src/kairos-*cover*'
       - 'cloudflare/mmg-ios/src/kairos-*shopify-staging*'
+      - 'cloudflare/mmg-ios/src/kairos-project-agent-v1.js'
+      - 'cloudflare/mmg-ios/src/kairos-project-foundation-workflow-v1.js'
       - 'cloudflare/mmg-ios/scripts/validate-manuscript-*.mjs'
       - 'cloudflare/mmg-ios/test/kairos-*'
+      - 'cloudflare/mmg-ios/package.json'
       - 'cloudflare/mmg-ios/wrangler.toml'
       - 'server/kairos/publishing/**'
       - 'backend-tests/kairos-publishing-*'
@@ -30,7 +33,7 @@ permissions:
 jobs:
   publishing-pipeline:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     defaults:
       run:
         working-directory: cloudflare/mmg-ios
@@ -43,9 +46,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: cloudflare/mmg-ios/package.json
 
       - name: Install Worker dependencies
-        run: npm install --ignore-scripts --no-audit --no-fund
+        run: npm install --ignore-scripts --legacy-peer-deps --no-audit --no-fund --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000
 
       - name: Validate publishing orchestration
         shell: bash
