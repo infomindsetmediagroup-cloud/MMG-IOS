@@ -6,11 +6,12 @@ const source = readFileSync(new URL("../web/kairos-dashboard/scripts/executive-o
 const styles = readFileSync(new URL("../web/kairos-dashboard/styles/executive-os.css", import.meta.url), "utf8");
 
 describe("Kairos ABOS v2 executive operating system", () => {
-  it("loads one cache-busted executive shell while preserving manuscript production dependencies", () => {
+  it("loads one cache-busted executive shell and the backend manuscript controller", () => {
     expect(index.match(/scripts\/executive-os\.js\?v=/g)).toHaveLength(1);
     expect(index.match(/styles\/executive-os\.css\?v=/g)).toHaveLength(1);
-    expect(index.indexOf("kairos-local-inference.js?v=")).toBeLessThan(index.indexOf("manuscript-auto-pipeline.js?v="));
+    expect(index.match(/scripts\/manuscript-auto-pipeline\.js\?v=/g)).toHaveLength(1);
     expect(index).toContain("manuscript-project-setup.js?v=");
+    expect(index).not.toContain("kairos-local-inference-same-origin.js");
   });
 
   it("exposes the six simplified executive destinations", () => {
