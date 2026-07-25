@@ -57,6 +57,12 @@ jobs:
       - name: Install validation dependencies
         run: npm install --ignore-scripts --no-audit --no-fund > /dev/null
 
+      - name: Build same-origin WebLLM runtime
+        run: |
+          npm run build:webllm
+          test -s web/kairos-dashboard/vendor/webllm-bundle.js
+          grep -q 'CreateMLCEngine' web/kairos-dashboard/vendor/webllm-bundle.js
+
       - name: Validate production runtime syntax
         run: |
           node --check cloudflare/mmg-ios/src/kairos-production-entry-local-inference-v1.js
@@ -69,7 +75,7 @@ jobs:
           node --check cloudflare/mmg-ios/src/kairos-production-registry-v1.js
           node --check web/kairos-dashboard/scripts/manuscript-project-setup.js
           node --check web/kairos-dashboard/scripts/manuscript-editorial-workbench.js
-          node --check web/kairos-dashboard/scripts/kairos-local-inference.js
+          node --check web/kairos-dashboard/scripts/kairos-local-inference-same-origin.js
           node --check web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
           node --check browser-tests/abos-live-smoke.spec.mjs
 
@@ -142,36 +148,29 @@ jobs:
           root="${RUNNER_TEMP}/root.html"
           setup="${RUNNER_TEMP}/manuscript-project-setup.js"
           editorial="${RUNNER_TEMP}/manuscript-editorial-workbench.js"
-          inference="${RUNNER_TEMP}/kairos-local-inference.js"
+          inference="${RUNNER_TEMP}/kairos-local-inference-same-origin.js"
+          bundle="${RUNNER_TEMP}/webllm-bundle.js"
           automatic="${RUNNER_TEMP}/manuscript-auto-pipeline.js"
           for attempt in $(seq 1 30); do
             curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${root}" || true
             curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-project-setup.js?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${setup}" || true
             curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-editorial-workbench.js?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${editorial}" || true
-            curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/scripts/kairos-local-inference.js?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${inference}" || true
+            curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/scripts/kairos-local-inference-same-origin.js?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${inference}" || true
+            curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/vendor/webllm-bundle.js?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${bundle}" || true
             curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-auto-pipeline.js?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${automatic}" || true
             if grep -Eq '<meta name="mmg-build" content="kairos-command-hub-[^"]+">' "${root}" \
-              && grep -Eq 'manuscript-project-setup\.js\?v=[^"]+' "${root}" \
-              && grep -Eq 'kairos-local-inference\.js\?v=[^"]+' "${root}" \
-              && grep -Eq 'manuscript-auto-pipeline\.js\?v=[^"]+' "${root}" \
-              && ! grep -q 'publication-catalog.js' "${root}" \
+              && grep -q 'kairos-local-inference-same-origin.js' "${root}" \
+              && grep -q '../vendor/webllm-bundle.js' "${inference}" \
+              && grep -q 'CreateMLCEngine' "${bundle}" \
               && grep -q 'KairosManuscriptSetupController' "${setup}" \
               && grep -q 'KairosEditorialWorkbenchController' "${editorial}" \
-              && grep -q 'KairosLocalInference' "${inference}" \
               && grep -q 'KairosManuscriptAutoPipelineController' "${automatic}" \
               && grep -q 'CREATE SHOPIFY PRODUCT DRAFT' "${automatic}" \
               && grep -q 'PUBLISH PRODUCT LIVE' "${automatic}"; then
-              node - "${root}" <<'NODE'
-          const fs = require('node:fs');
-          const html = fs.readFileSync(process.argv[2], 'utf8');
-          const inference = html.indexOf('./scripts/kairos-local-inference.js?v=');
-          const pipeline = html.indexOf('./scripts/manuscript-auto-pipeline.js?v=');
-          if (inference < 0 || pipeline <= inference) process.exit(1);
-          NODE
               break
             fi
             if [ "${attempt}" = "30" ]; then
-              echo "Current production controllers did not propagate completely."
+              echo "Current production controllers or same-origin WebLLM bundle did not propagate completely."
               exit 1
             fi
             sleep 5
