@@ -38,7 +38,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          curl --fail --silent --show-error -X POST -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${GH_TOKEN}" "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" --data "{\"state\":\"pending\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Validating governed production release ${KAIROS_RELEASE_ID}\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+          curl --fail --silent --show-error -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "{\"state\":\"pending\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Validating governed production release ${KAIROS_RELEASE_ID}\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
       - name: Check out main
         uses: actions/checkout@v4
@@ -78,26 +82,38 @@ jobs:
             --data-binary "@${request_body}" \
             "https://api.openai.com/v1/responses" \
             -o "${response_body}" -w '%{http_code}' || true)"
-          if [ "${status}" != "200" ]; then
-            node - "${response_body}" "${status}" <<'NODE'
+          if [ "${status}" = "200" ]; then
+            node - "${response_body}" <<'NODE'
           const fs = require('node:fs');
-          const [file, httpStatus] = process.argv.slice(2);
-          let body = {};
-          try { body = JSON.parse(fs.readFileSync(file, 'utf8')); } catch {}
-          const error = body?.error || {};
-          console.error(`OpenAI Responses API health check failed: HTTP ${httpStatus}; code=${error.code || 'unknown'}; type=${error.type || 'unknown'}.`);
-          NODE
-            exit 1
-          fi
-          node - "${response_body}" <<'NODE'
-          const fs = require('node:fs');
-          const file = process.argv[2];
-          const body = JSON.parse(fs.readFileSync(file, 'utf8'));
+          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
           if (body?.object !== 'response' || !String(body?.id || '').startsWith('resp_') || body?.status === 'failed') {
             throw new Error('OpenAI Responses API returned an invalid production health-check response.');
           }
           console.log(`OpenAI Responses API production access verified with ${body.model || 'configured model'}.`);
           NODE
+            echo "KAIROS_OPENAI_PROVIDER_STATE=ready" >> "${GITHUB_ENV}"
+          else
+            classification="$(node - "${response_body}" "${status}" <<'NODE'
+          const fs = require('node:fs');
+          const [file, httpStatus] = process.argv.slice(2);
+          let body = {};
+          try { body = JSON.parse(fs.readFileSync(file, 'utf8')); } catch {}
+          const error = body?.error || {};
+          if (httpStatus === '429' && (error.code === 'insufficient_quota' || error.type === 'insufficient_quota')) {
+            process.stdout.write('quota');
+          } else {
+            console.error(`OpenAI Responses API health check failed: HTTP ${httpStatus}; code=${error.code || 'unknown'}; type=${error.type || 'unknown'}.`);
+            process.stdout.write('fatal');
+          }
+          NODE
+            )"
+            if [ "${classification}" = "quota" ]; then
+              echo "::warning title=OpenAI API credits required::The production key is valid, but the OpenAI project has insufficient quota. Deploying the application in provider-degraded mode; manuscript generation will remain blocked until API credits are added."
+              echo "KAIROS_OPENAI_PROVIDER_STATE=quota-blocked" >> "${GITHUB_ENV}"
+            else
+              exit 1
+            fi
+          fi
 
       - name: Validate production runtime syntax
         run: |
@@ -218,11 +234,23 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          curl --fail --silent --show-error -X POST -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${GH_TOKEN}" "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" --data "{\"state\":\"success\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Production release ${KAIROS_RELEASE_ID} passed all gates\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+          description="Production release ${KAIROS_RELEASE_ID} passed all gates"
+          if [ "${KAIROS_OPENAI_PROVIDER_STATE:-ready}" = "quota-blocked" ]; then
+            description="Production release ${KAIROS_RELEASE_ID} deployed; OpenAI credits required"
+          fi
+          curl --fail --silent --show-error -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "{\"state\":\"success\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"${description}\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
       - name: Report deployment failure
         if: ${{ failure() || cancelled() }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          curl --fail --silent --show-error -X POST -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${GH_TOKEN}" "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" --data "{\"state\":\"failure\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Production release ${KAIROS_RELEASE_ID} failed validation\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+          curl --fail --silent --show-error -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "{\"state\":\"failure\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Production release ${KAIROS_RELEASE_ID} failed validation\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
