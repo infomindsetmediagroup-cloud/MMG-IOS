@@ -1,149 +1,91 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const root = process.cwd();
-const paths = {
-  wrangler: "cloudflare/mmg-ios/wrangler.toml",
-  localEntry: "cloudflare/mmg-ios/src/kairos-production-entry-local-inference-v1.js",
-  localInference: "cloudflare/mmg-ios/src/kairos-local-inference-v1.js",
-  entry: "cloudflare/mmg-ios/src/kairos-production-entry-digital-asset-v2-v1.js",
-  deliveryEntry: "cloudflare/mmg-ios/src/kairos-production-entry-customer-delivery-v2.js",
-  delivery: "cloudflare/mmg-ios/src/kairos-customer-delivery-v2.js",
-  boundary: "cloudflare/mmg-ios/src/kairos-manuscript-operation-boundary-v1.js",
-  autoPipeline: "cloudflare/mmg-ios/src/kairos-manuscript-auto-pipeline-v1.js",
-  productPublication: "cloudflare/mmg-ios/src/kairos-product-publication-v1.js",
-  digitalAssetContract: "cloudflare/mmg-ios/src/kairos-digital-asset-edition-v2-contract-v1.js",
-  creationArtifacts: "cloudflare/mmg-ios/src/kairos-creation-artifacts-v1.js",
-  localUI: "web/kairos-dashboard/scripts/kairos-local-inference-same-origin.js",
-  webllmEntry: "web/kairos-dashboard/vendor/webllm-entry.js",
-  governanceContract: "governance/mmg-digital-asset-edition-v2-contract-v1.json",
-  doctrine: "docs/doctrine/mmg-digital-asset-edition-v2-customer-release-doctrine.md",
-  registry: "governance/kairos-builder-plugin-registry-v1.json",
-  deploy: ".github/workflows/deploy-kairos-manuscript-runtime.yml",
+const root=process.cwd();
+const paths={
+  wrangler:"cloudflare/mmg-ios/wrangler.toml",
+  localEntry:"cloudflare/mmg-ios/src/kairos-production-entry-local-inference-v1.js",
+  localInference:"cloudflare/mmg-ios/src/kairos-local-inference-v1.js",
+  backendGeneration:"cloudflare/mmg-ios/src/kairos-manuscript-generation-job-v1.js",
+  entry:"cloudflare/mmg-ios/src/kairos-production-entry-digital-asset-v2-v1.js",
+  deliveryEntry:"cloudflare/mmg-ios/src/kairos-production-entry-customer-delivery-v2.js",
+  delivery:"cloudflare/mmg-ios/src/kairos-customer-delivery-v2.js",
+  boundary:"cloudflare/mmg-ios/src/kairos-manuscript-operation-boundary-v1.js",
+  autoPipeline:"cloudflare/mmg-ios/src/kairos-manuscript-auto-pipeline-v1.js",
+  productPublication:"cloudflare/mmg-ios/src/kairos-product-publication-v1.js",
+  digitalAssetContract:"cloudflare/mmg-ios/src/kairos-digital-asset-edition-v2-contract-v1.js",
+  creationArtifacts:"cloudflare/mmg-ios/src/kairos-creation-artifacts-v1.js",
+  client:"web/kairos-dashboard/scripts/manuscript-auto-pipeline.js",
+  index:"web/kairos-dashboard/index.html",
+  governanceContract:"governance/mmg-digital-asset-edition-v2-contract-v1.json",
+  doctrine:"docs/doctrine/mmg-digital-asset-edition-v2-customer-release-doctrine.md",
+  registry:"governance/kairos-builder-plugin-registry-v1.json",
+  deploy:".github/workflows/deploy-kairos-manuscript-runtime.yml",
 };
+for(const[name,relative]of Object.entries(paths))if(!fs.existsSync(path.join(root,relative)))fail(`Missing ${name}: ${relative}`);
+const values=Object.fromEntries(Object.entries(paths).map(([name,relative])=>[name,name==="governanceContract"||name==="registry"?JSON.parse(read(relative)):read(relative)]));
+const{wrangler,localEntry,localInference,backendGeneration,entry,deliveryEntry,delivery,boundary,autoPipeline,productPublication,digitalAssetContract,creationArtifacts,client,index,governanceContract,doctrine,registry,deploy}=values;
 
-for (const [name, relative] of Object.entries(paths)) {
-  if (!fs.existsSync(path.join(root, relative))) fail(`Missing ${name}: ${relative}`);
-}
+assert(wrangler.includes('main = "src/kairos-production-entry-local-inference-v1.js"'),"The active Worker must use the governed manuscript entry.");
+assert(wrangler.includes('KAIROS_MANUSCRIPT_RUNTIME_ENABLED = "true"'),"Manuscript runtime activation flag is missing.");
+assert(wrangler.includes('KAIROS_CLOUDFLARE_NEURONS_ENABLED = "false"'),"Cloudflare neuron use must remain disabled.");
+assert(localEntry.includes("handleManuscriptGeneration"),"The active entry must route backend generation jobs.");
+assert(localEntry.includes("resumeManuscriptGenerationAlarm"),"The Durable Object alarm continuation is missing.");
+assert(localEntry.includes("X-Kairos-Manuscript-Generation"),"The runtime must report the backend generation build.");
+assert(backendGeneration.includes("/generation-job"),"The durable generation-job API is missing.");
+assert(backendGeneration.includes("setAlarm"),"Backend generation must continue through Durable Object alarms.");
+assert(backendGeneration.includes('provider==="ollama"'),"Ollama backend generation support is missing.");
+assert(backendGeneration.includes('provider==="openai-compatible"'),"OpenAI-compatible backend generation support is missing.");
+assert(backendGeneration.includes("KAIROS_MODEL_AUTH_TOKEN"),"Backend model authentication support is missing.");
+assert(backendGeneration.includes("cloudflareNeuronsUsed:0"),"Backend generation must prove zero Cloudflare neurons.");
+assert(localInference.includes("backupOriginalText"),"The authoritative manuscript backup path must remain available.");
+assert(client.includes("generationEndpoint"),"The mobile client must use the backend generation-job route.");
+assert(client.includes("You may close this page"),"The mobile client must state that backend work survives page closure.");
+assert(!client.includes("window.KairosLocalInference.run"),"The primary production client must not execute inference on the phone.");
+assert(!index.includes("kairos-local-inference-same-origin.js"),"The primary app must not load the WebLLM phone runtime.");
+assert(!index.includes("webllm-bundle.js"),"The primary app must not load a WebLLM bundle.");
+assert(!wrangler.includes('"* * * * *"'),"Minute-level website reconciliation must be removed.");
+assert(wrangler.includes('KAIROS_SHOPIFY_WRITES_ENABLED = "true"'),"The approval-gated Shopify draft capability must be enabled.");
+assert(wrangler.includes('KAIROS_SHOPIFY_LIVE_PUBLISH_ENABLED = "true"'),"The explicit live-publication control must be enabled.");
 
-const wrangler = read(paths.wrangler);
-const localEntry = read(paths.localEntry);
-const localInference = read(paths.localInference);
-const localUI = read(paths.localUI);
-const webllmEntry = read(paths.webllmEntry);
-const entry = read(paths.entry);
-const deliveryEntry = read(paths.deliveryEntry);
-const delivery = read(paths.delivery);
-const boundary = read(paths.boundary);
-const autoPipeline = read(paths.autoPipeline);
-const productPublication = read(paths.productPublication);
-const digitalAssetContract = read(paths.digitalAssetContract);
-const creationArtifacts = read(paths.creationArtifacts);
-const doctrine = read(paths.doctrine);
-const governanceContract = JSON.parse(read(paths.governanceContract));
-const deploy = read(paths.deploy);
-const registry = JSON.parse(read(paths.registry));
+for(const marker of["rewriteManufacturingRequest","enforceExistingSetupForRun","Mindset Media Group™","MINIMUM_FINISHED_PAGES","sanitizeText"])assert(entry.includes(marker),`Digital Asset V2 runtime is missing: ${marker}`);
+for(const marker of["executeDraftWithDelivery","rollbackAndFail"])assert(deliveryEntry.includes(marker),`Customer delivery entry is missing: ${marker}`);
+for(const marker of["webhookSubscriptionCreate",'webhookSubscription: { uri, format: "JSON" }',"unwrapOrderPayload"])assert(delivery.includes(marker),`Customer delivery runtime is missing: ${marker}`);
+for(const marker of["MINIMUM_FINISHED_PAGES = 100","buildCustomerSpecSheetPDF","buildThumbnailCoverPNG","digital_asset_v2_padding_detected"])assert(digitalAssetContract.includes(marker),`Digital Asset V2 contract is missing: ${marker}`);
+for(const marker of["CUSTOMER_DELIVERABLE_NAMES","customer-spec-sheet.pdf","kdp-interior-6x9.pdf","digital-asset-edition-v2.pdf","cover-portrait-2048x3072.png","cover-thumbnail-2048x2048.png","Object.keys(files).length !== 6"])assert(creationArtifacts.includes(marker),`Customer release artifact contract is missing: ${marker}`);
+assert(governanceContract.contractId==="mmg-digital-asset-edition-v2","The machine-readable V2 contract ID is incorrect.");
+assert(governanceContract.manuscript.minimumFinishedPages===100,"The machine-readable contract must require 100 finished pages.");
+assert(governanceContract.customerRelease.exactDeliverableCount===6,"The machine-readable contract must require six customer deliverables.");
+assert(governanceContract.publisherIdentity==="Mindset Media Group™","The publisher identity is incorrect.");
+assert(governanceContract.individualAttributionAllowed===false,"Individual attribution must remain prohibited.");
+assert(doctrine.includes("Everything in the customer release package must be written for the customer")||doctrine.includes("Every item in the customer release package must be written for the customer"),"The customer-facing doctrine is missing.");
+for(const marker of["MANUSCRIPT_AUTO_PIPELINE","approval-gated-shopify-draft","approval-gated-shopify-publication","WEBSITE_MUTATION_DENIED","OPERATION_OUT_OF_SCOPE"])assert(boundary.includes(marker),`Manuscript boundary is missing: ${marker}`);
+for(const marker of["derivePublicationMetadata","/admin-vault/manifest","complete-production-package.zip","CREATE SHOPIFY PRODUCT DRAFT","PUBLISH PRODUCT LIVE"])assert(autoPipeline.includes(marker),`Automatic production pipeline is missing: ${marker}`);
+assert(productPublication.includes("APPROVED_TEMPLATE_SUFFIXES"),"The custom product-template allowlist is missing.");
+assert(productPublication.includes('status: "DRAFT"'),"Shopify product creation must begin as DRAFT.");
 
-assert(wrangler.includes('main = "src/kairos-production-entry-local-inference-v1.js"'), "The active Worker must use the local-inference entry.");
-assert(wrangler.includes('KAIROS_LOCAL_INFERENCE_ENABLED = "true"'), "Kairos local inference must be enabled.");
-assert(wrangler.includes('KAIROS_OPENAI_FREE_CREDITS_ENABLED = "false"'), "Paid OpenAI use must remain disabled by default.");
-assert(wrangler.includes('KAIROS_CLOUDFLARE_NEURONS_ENABLED = "false"'), "Cloudflare neuron use must remain disabled.");
-assert(localEntry.includes("handleLocalInference"), "The active entry must route local inference requests.");
-assert(localEntry.includes("X-Kairos-Inference-Cost-Mode"), "The runtime must report device-compute no-paid-API mode.");
-assert(localInference.includes("externalPaidAPIUsed: false"), "Stored local inference records must prove that no paid API was used.");
-assert(localInference.includes("cloudflareNeuronsUsed: 0"), "Stored local inference records must prove zero Cloudflare neuron use.");
-assert(localInference.includes("backupOriginalText"), "The authoritative manuscript must be backed up before local inference replaces manufacturing text.");
-assert(webllmEntry.includes('@mlc-ai/web-llm'), "The bundled WebLLM package entry is missing.");
-assert(localUI.includes('../vendor/webllm-bundle.js'), "The browser runtime must load WebLLM from the Kairos origin.");
-assert(!localUI.includes('cdn.jsdelivr.net') && !localUI.includes('esm.run'), "The active inference controller must not import the runtime from a third-party CDN.");
-assert(localUI.includes("navigator.gpu"), "The local model must enforce WebGPU capability detection.");
-assert(localUI.includes("STORE LOCAL INFERENCE"), "The local inference storage approval contract is missing.");
-assert(wrangler.includes('KAIROS_MANUSCRIPT_RUNTIME_ENABLED = "true"'), "Manuscript runtime activation flag is missing.");
-assert(wrangler.includes('KAIROS_DIGITAL_ASSET_V2_REQUIRED = "true"'), "Digital Asset Edition V2 activation flag is missing.");
-assert(!wrangler.includes('"* * * * *"'), "Minute-level website reconciliation must be removed.");
-assert(wrangler.includes('KAIROS_SHOPIFY_WRITES_ENABLED = "true"'), "The approval-gated Shopify draft capability must be enabled.");
-assert(wrangler.includes('KAIROS_SHOPIFY_LIVE_PUBLISH_ENABLED = "true"'), "The explicit live-publication control must be enabled.");
-assert(entry.includes("rewriteManufacturingRequest"), "The V2 runtime must rewrite manufacturing requests through the customer-facing contract.");
-assert(entry.includes("enforceExistingSetupForRun"), "Existing manuscript setup records must be normalized before reruns.");
-assert(entry.includes("Mindset Media Group™"), "The V2 runtime must enforce the publisher identity.");
-assert(entry.includes("MINIMUM_FINISHED_PAGES"), "The V2 runtime must carry the minimum-page requirement into manufacturing.");
-assert(deliveryEntry.includes("executeDraftWithDelivery"), "Shopify draft execution must enforce customer delivery attachment.");
-assert(deliveryEntry.includes("rollbackAndFail"), "Delivery attachment failure must roll the Shopify draft back.");
-assert(delivery.includes("webhookSubscriptionCreate"), "The customer delivery runtime must register the paid-order webhook.");
-assert(delivery.includes('webhookSubscription: { uri, format: "JSON" }'), "The customer delivery runtime must use Shopify's current webhook uri contract.");
-assert(delivery.includes("unwrapOrderPayload"), "The delivery runtime must support current wrapped order webhook payloads.");
-assert(digitalAssetContract.includes("MINIMUM_FINISHED_PAGES = 100"), "The V2 contract must require at least 100 finished pages.");
-assert(digitalAssetContract.includes("buildCustomerSpecSheetPDF"), "The customer-facing PDF specification builder is missing.");
-assert(digitalAssetContract.includes("buildThumbnailCoverPNG"), "The square thumbnail cover builder is missing.");
-assert(digitalAssetContract.includes("digital_asset_v2_padding_detected"), "The no-padding and no-duplication release gate is missing.");
-assert(creationArtifacts.includes("CUSTOMER_DELIVERABLE_NAMES"), "The exact customer deliverable set is missing.");
-assert(creationArtifacts.includes("customer-spec-sheet.pdf"), "The customer-facing PDF specification sheet is missing.");
-assert(creationArtifacts.includes("kdp-interior-6x9.pdf"), "The 6x9 KDP interior deliverable is missing.");
-assert(creationArtifacts.includes("digital-asset-edition-v2.pdf"), "The Digital Asset Edition V2 PDF is missing.");
-assert(creationArtifacts.includes("cover-portrait-2048x3072.png"), "The portrait cover deliverable is missing.");
-assert(creationArtifacts.includes("cover-thumbnail-2048x2048.png"), "The square thumbnail deliverable is missing.");
-assert(creationArtifacts.includes("Object.keys(files).length !== 6"), "The six-item package count gate is missing.");
-assert(governanceContract.contractId === "mmg-digital-asset-edition-v2", "The machine-readable V2 contract ID is incorrect.");
-assert(governanceContract.manuscript.minimumFinishedPages === 100, "The machine-readable contract must require 100 finished pages.");
-assert(governanceContract.customerRelease.exactDeliverableCount === 6, "The machine-readable contract must require exactly six customer deliverables.");
-assert(governanceContract.publisherIdentity === "Mindset Media Group™", "The machine-readable contract must use Mindset Media Group™ as the publisher identity.");
-assert(governanceContract.individualAttributionAllowed === false, "Individual attribution must remain prohibited.");
-assert(doctrine.includes("Everything in the customer release package must be written for the customer") || doctrine.includes("Every item in the customer release package must be written for the customer"), "The customer-facing doctrine is missing.");
-assert(entry.includes("sanitizeText"), "The V2 runtime attribution sanitizer is missing.");
-assert(boundary.includes("MANUSCRIPT_AUTO_PIPELINE"), "The exact automatic manuscript release routes are missing.");
-assert(boundary.includes("approval-gated-shopify-draft"), "The governed Shopify draft scope is missing.");
-assert(boundary.includes("approval-gated-shopify-publication"), "The governed live-publication scope is missing.");
-assert(boundary.includes("WEBSITE_MUTATION_DENIED"), "Direct website mutation denial is missing.");
-assert(boundary.includes("OPERATION_OUT_OF_SCOPE"), "Default-deny operation handling is missing.");
-assert(autoPipeline.includes("derivePublicationMetadata"), "Automatic publication metadata extraction is missing.");
-assert(autoPipeline.includes("/admin-vault/manifest"), "Admin Asset Vault manifest storage is missing.");
-assert(autoPipeline.includes("complete-production-package.zip"), "The final production ZIP contract is missing.");
-assert(autoPipeline.includes("CREATE SHOPIFY PRODUCT DRAFT"), "Explicit Shopify DRAFT action is missing.");
-assert(autoPipeline.includes("PUBLISH PRODUCT LIVE"), "Explicit live-publication action is missing.");
-assert(productPublication.includes("APPROVED_TEMPLATE_SUFFIXES"), "The custom product-template allowlist is missing.");
-assert(productPublication.includes('status: "DRAFT"'), "Shopify product creation must begin as DRAFT.");
+assert(deploy.includes("workflow_dispatch:"),"Production deployment must be manually dispatched.");
+assert(!/^\s{2}push:/m.test(deploy),"Production deployment must not trigger automatically on repository pushes.");
+for(const marker of["DEPLOY KAIROS MANUSCRIPT RUNTIME","github.ref == 'refs/heads/main'","environment: production","inputs.release_id","working-directory: cloudflare/mmg-ios","npx wrangler deploy --dry-run","run: npx wrangler deploy","/api/kairos/manuscripts/status","kairos-manuscript-generation-job-v1.js","generation-job","phone-independent","KairosManuscriptAutoPipelineController","/api/shopify/page-shell/publish"])assert(deploy.includes(marker),`Deployment contract is missing: ${marker}`);
+assert(!deploy.includes("npm run build:webllm"),"Production deployment must not build the retired phone WebLLM runtime.");
+assert(!deploy.includes("CreateMLCEngine"),"Production deployment must not certify the retired phone WebLLM runtime.");
+assert(!deploy.includes("REPAIR_MMG_AUDITED_PAGES_NOW"),"Legacy Shopify page repair must not be deployable.");
+assert(!deploy.includes("PUBLISH_MMG_PAGE_SHELL_RECONCILIATION"),"Legacy page-shell publication must not be deployable.");
 
-assert(deploy.includes("workflow_dispatch:"), "Production deployment must be manually dispatched.");
-assert(!/^\s{2}push:/m.test(deploy), "Production deployment must not trigger automatically on repository pushes.");
-assert(deploy.includes("DEPLOY KAIROS MANUSCRIPT RUNTIME"), "Production deployment must require the exact executive confirmation phrase.");
-assert(deploy.includes("github.ref == 'refs/heads/main'"), "Production deployment must be restricted to main.");
-assert(deploy.includes("environment: production"), "Production deployment must use the protected GitHub production environment.");
-assert(deploy.includes("inputs.release_id"), "Production deployment must require a release identifier.");
-assert(deploy.includes("working-directory: cloudflare/mmg-ios"), "Deployment must use the configured manuscript Worker directory.");
-assert(deploy.includes("npm run build:webllm"), "Deployment must build the same-origin WebLLM runtime.");
-assert(deploy.includes("vendor/webllm-bundle.js"), "Deployment must verify the same-origin WebLLM bundle.");
-assert(deploy.includes("npx wrangler deploy --dry-run"), "Deployment must validate the Worker bundle before release.");
-assert(deploy.includes("run: npx wrangler deploy"), "Deployment must use the governed Wrangler production release command.");
-assert(deploy.includes("/api/kairos/manuscripts/status"), "Deployment must verify manuscript readiness.");
-assert(deploy.includes("kairos-local-inference-same-origin.js"), "Deployment must verify the active same-origin inference controller.");
-assert(deploy.includes("CreateMLCEngine"), "Deployment must verify the bundled WebLLM runtime is active.");
-assert(deploy.includes("KairosManuscriptAutoPipelineController"), "Deployment must verify the publishing controller.");
-assert(deploy.includes("/api/shopify/page-shell/publish"), "Deployment must probe the direct Shopify denial boundary.");
-assert(!deploy.includes("REPAIR_MMG_AUDITED_PAGES_NOW"), "Legacy Shopify page repair must not be deployable.");
-assert(!deploy.includes("PUBLISH_MMG_PAGE_SHELL_RECONCILIATION"), "Legacy page-shell publication must not be deployable.");
-
-assert(registry.defaultDecision === "deny-production-authority", "Builder plugins must default to no production authority.");
-assert(registry.runtime.openAiRuntimeRequired === false, "Builder guidance must not impose an OpenAI production runtime.");
-assert(registry.runtime.shopifyRuntimeAccessFromBuilderPlugins === "none", "Builder plugins must not gain Shopify runtime access.");
-assert(registry.enforcement.builderGuidanceCannotExpandTaskScope === true, "Builder guidance must not expand task scope.");
-assert(registry.enforcement.builderGuidanceCannotMutateShopify === true, "Builder plugins must not mutate Shopify.");
-assert(registry.enforcement.manuscriptWorkflowShopifyAccess === "approval-gated-exact-product-release", "Manuscript Shopify access must be limited to the exact approval-gated release pipeline.");
-assert(registry.productionReleasePolicy?.scope === "single-manuscript-product", "The production release must be scoped to one manuscript product.");
-assert(registry.productionReleasePolicy?.directShopifyRoutesAllowed === false, "Direct Shopify routes must remain denied.");
-assert(registry.productionReleasePolicy?.adminAssetVaultRequired === true, "Admin Asset Vault completion must be required.");
-assert(registry.productionReleasePolicy?.finalZipRequired === true, "A final production ZIP must be required.");
-assert(registry.productionReleasePolicy?.draftRequiresExplicitUserAction === true, "Shopify DRAFT creation must require explicit user action.");
-assert(registry.productionReleasePolicy?.livePublishRequiresExplicitUserAction === true, "Live publication must require explicit user action.");
-assert(registry.productionReleasePolicy?.themeMutationAuthorized === false, "Theme mutation must remain unauthorized.");
-assert(registry.productionReleasePolicy?.navigationMutationAuthorized === false, "Navigation mutation must remain unauthorized.");
-
-for (const advisor of registry.advisors || []) {
-  assert(advisor.productionDependency === false, `${advisor.id} cannot be a production dependency by default.`);
-  assert(advisor.mutationAuthority !== true, `${advisor.id} cannot have unrestricted mutation authority.`);
-}
-
-console.log("Kairos same-origin local inference, Digital Asset Edition V2 customer release, customer delivery, Admin Asset Vault, and governed product-release validation passed.");
-
-function read(relative) { return fs.readFileSync(path.join(root, relative), "utf8"); }
-function assert(condition, message) { if (!condition) fail(message); }
-function fail(message) { console.error(`Kairos manuscript activation validation failed: ${message}`); process.exit(1); }
+assert(registry.defaultDecision==="deny-production-authority","Builder plugins must default to no production authority.");
+assert(registry.runtime.openAiRuntimeRequired===false,"Builder guidance must not impose an OpenAI production runtime.");
+assert(registry.runtime.shopifyRuntimeAccessFromBuilderPlugins==="none","Builder plugins must not gain Shopify runtime access.");
+assert(registry.enforcement.builderGuidanceCannotExpandTaskScope===true,"Builder guidance must not expand task scope.");
+assert(registry.enforcement.builderGuidanceCannotMutateShopify===true,"Builder plugins must not mutate Shopify.");
+assert(registry.enforcement.manuscriptWorkflowShopifyAccess==="approval-gated-exact-product-release","Manuscript Shopify access must remain approval-gated.");
+assert(registry.productionReleasePolicy?.scope==="single-manuscript-product","The production release must be scoped to one manuscript product.");
+assert(registry.productionReleasePolicy?.directShopifyRoutesAllowed===false,"Direct Shopify routes must remain denied.");
+assert(registry.productionReleasePolicy?.adminAssetVaultRequired===true,"Admin Asset Vault completion must be required.");
+assert(registry.productionReleasePolicy?.finalZipRequired===true,"A final production ZIP must be required.");
+assert(registry.productionReleasePolicy?.draftRequiresExplicitUserAction===true,"Shopify DRAFT creation must require explicit user action.");
+assert(registry.productionReleasePolicy?.livePublishRequiresExplicitUserAction===true,"Live publication must require explicit user action.");
+assert(registry.productionReleasePolicy?.themeMutationAuthorized===false,"Theme mutation must remain unauthorized.");
+assert(registry.productionReleasePolicy?.navigationMutationAuthorized===false,"Navigation mutation must remain unauthorized.");
+for(const advisor of registry.advisors||[]){assert(advisor.productionDependency===false,`${advisor.id} cannot be a production dependency by default.`);assert(advisor.mutationAuthority!==true,`${advisor.id} cannot have unrestricted mutation authority.`);}
+console.log("Kairos backend-owned manuscript generation, Digital Asset Edition V2, customer delivery, Admin Asset Vault, and governed product-release validation passed.");
+function read(relative){return fs.readFileSync(path.join(root,relative),"utf8");}function assert(condition,message){if(!condition)fail(message);}function fail(message){console.error(`Kairos manuscript activation validation failed: ${message}`);process.exit(1);}
