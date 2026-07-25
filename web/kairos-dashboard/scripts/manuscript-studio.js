@@ -1,4 +1,4 @@
-const BUILD = "manuscript-studio-20260717-4";
+const BUILD = "manuscript-studio-json-source-20260725-5";
 const MAX_TEXT_CHARS = 600000;
 const MAX_DOCX_BYTES = 15 * 1024 * 1024;
 const MAX_PDF_BYTES = 20 * 1024 * 1024;
@@ -102,10 +102,21 @@ async function storeDurableSource(file){
 }
 
 async function storePastedText(){
-  const file=new File([state.manuscript],`${safeName(state.title||"manuscript")}.txt`,{type:"text/plain"});
-  state.source={name:file.name,size:file.size,format:"txt",pages:null,checksum:await fileChecksum(file),stored:false};
+  const projectId=ensureProjectId();
+  const filename=`${safeName(state.title||"manuscript")}.txt`;
   state.storing=true;render();
-  try{await storeDurableSource(file);}finally{state.storing=false;render();}
+  try{
+    const response=await fetch(`/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/source-text`,{
+      method:"POST",
+      credentials:"include",
+      headers:{"Content-Type":"application/json","X-MMG-Client-Build":BUILD},
+      body:JSON.stringify({title:state.title,manuscript:state.manuscript,filename})
+    });
+    const body=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(body?.error?.message||"The pasted manuscript source could not be stored.");
+    state.source={...normalizeSource(body.source),stored:true};
+    window.dispatchEvent(new CustomEvent("kairos:production:state-changed"));
+  }finally{state.storing=false;render();}
 }
 
 async function runIntake(){
@@ -114,14 +125,17 @@ async function runIntake(){
   if(state.manuscript.trim().length<50){state.error="Provide at least 50 characters of manuscript text.";render();return;}
   if(state.manuscript.length>MAX_TEXT_CHARS){state.error=`This manuscript contains ${state.manuscript.length.toLocaleString()} characters. Manuscript Studio supports up to ${MAX_TEXT_CHARS.toLocaleString()} characters.`;render();return;}
   state.working=true;state.error="";render();
+  let stage="source storage";
   try{
     if(!state.source?.stored)await storePastedText();
+    stage="production intake";
     const response=await fetch("/api/manuscript/intake/advance",{method:"POST",headers:{"Content-Type":"application/json","X-MMG-Client-Build":BUILD},credentials:"include",body:JSON.stringify({title:state.title,manuscript:state.manuscript,source:state.source})});
     const body=await response.json();
     if(!response.ok)throw new Error(body?.error?.message||"The manuscript could not advance into production intake.");
     state.result=body;
+    stage="registry update";
     await updateRegistry(body);
-  }catch(error){state.error=error.message||"The manuscript could not advance into production intake.";}
+  }catch(error){state.error=`Kairos stopped during ${stage}: ${error?.message||"The manuscript could not advance into production intake."}`;}
   finally{state.working=false;render();}
 }
 
