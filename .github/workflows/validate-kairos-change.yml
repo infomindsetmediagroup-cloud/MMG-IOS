@@ -78,8 +78,20 @@ jobs:
           node --check scripts/validate-kairos-shopify-policy.mjs
           node --check scripts/validate-kairos-manuscript-activation.mjs
 
-      - name: Test Kairos operation and intelligence boundaries
-        run: npx vitest run backend-tests/kairos-scope-firewall.test.js backend-tests/kairos-manuscript-operation-boundary.test.js backend-tests/kairos-self-hosted-runtime.test.ts backend-tests/kairos-project-agent-foundation.test.ts backend-tests/kairos-manuscript-generation-workflow.test.ts
+      - name: Test Kairos scope firewall
+        run: npx vitest run backend-tests/kairos-scope-firewall.test.js
+
+      - name: Test Kairos manuscript operation boundary
+        run: npx vitest run backend-tests/kairos-manuscript-operation-boundary.test.js
+
+      - name: Test Kairos self-hosted runtime
+        run: npx vitest run backend-tests/kairos-self-hosted-runtime.test.ts
+
+      - name: Test Kairos project agent foundation
+        run: npx vitest run backend-tests/kairos-project-agent-foundation.test.ts
+
+      - name: Test Kairos manuscript generation workflow
+        run: npx vitest run backend-tests/kairos-manuscript-generation-workflow.test.ts
 
       - name: Install WebKit browser
         run: npx playwright install --with-deps webkit > /dev/null

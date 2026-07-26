@@ -52,7 +52,7 @@ describe("Kairos durable manuscript generation migration", () => {
     expect(router).toContain("KAIROS_MANUSCRIPT_START_MODE_LEGACY");
     expect(router).toContain("Kairos will not silently fall back");
     const canonicalCall = entry.indexOf("const canonicalStart = await handleCanonicalManuscriptStart");
-    const compatibilityCall = entry.indexOf("const generation = await handleManuscriptGeneration(request.clone()");
+    const compatibilityCall = entry.indexOf("const generation = await handleManuscriptGeneration(observedRequest.clone()");
     expect(canonicalCall).toBeGreaterThan(-1);
     expect(compatibilityCall).toBeGreaterThan(-1);
     expect(canonicalCall).toBeLessThan(compatibilityCall);
