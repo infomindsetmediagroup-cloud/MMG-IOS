@@ -1,9 +1,9 @@
 import { classifyKairosToolRequest, getKairosTool } from "./kairos-tool-registry-v1.js";
-import { validateKairosToolArguments } from "./kairos-tool-schemas-v1.js";
+import { validateKairosToolArguments } from "./kairos-tool-arguments-v1.js";
 import { executeKairosTool, KAIROS_TOOL_EXECUTORS_BUILD } from "./kairos-tool-executors-v1.js";
 import { handleKairosToolApprovalAPI } from "./kairos-tool-approval-v1.js";
 
-export const KAIROS_TOOL_OBJECTIVE_INTEGRATION_BUILD = "kairos-tool-objective-integration-20260725-2";
+export const KAIROS_TOOL_OBJECTIVE_INTEGRATION_BUILD = "kairos-tool-objective-integration-20260725-3";
 const ROUTE = /^\/api\/kairos\/?$/i;
 const MAX_CONTEXT = 30000;
 
@@ -18,7 +18,7 @@ export async function handleToolAwareKairosObjective(request, env, handler) {
   if (!classification.allowed) return json({ success: false, status: "blocked", requiresApproval: false, actions: [], error: { code: "TOOL_NOT_REGISTERED", message: classification.reason } }, 403);
 
   const validation = validateKairosToolArguments(classification.tool.id, toolRequest.arguments || {});
-  if (!validation.ok) return json({ success: false, status: "failed", requiresApproval: false, actions: [], error: { code: "TOOL_ARGUMENTS_INVALID", message: validation.error } }, 400);
+  if (!validation.ok) return json({ success: false, status: "failed", requiresApproval: false, actions: [], error: validation.error }, 400);
 
   if (classification.tool.approvalRequired) {
     const proposalRequest = new Request(new URL("/api/kairos/tools/propose", request.url), {
