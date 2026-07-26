@@ -1,11 +1,11 @@
-export const KAIROS_TOOL_ARGUMENTS_BUILD = "kairos-tool-arguments-20260725-1";
+export const KAIROS_TOOL_ARGUMENTS_BUILD = "kairos-tool-arguments-20260725-2-publication-required";
 
 const SCHEMAS = Object.freeze({
   "knowledge.search": Object.freeze({ required: ["query"], optional: ["department", "limit"] }),
   "publishing.project.read": Object.freeze({ required: ["projectId"], optional: [] }),
   "shopify.product.read": Object.freeze({ required: ["productId"], optional: [] }),
   "shopify.product.update": Object.freeze({ required: ["productId", "changes"], optional: [] }),
-  "shopify.product.publish": Object.freeze({ required: ["productId"], optional: ["publicationId"] }),
+  "shopify.product.publish": Object.freeze({ required: ["productId", "publicationId"], optional: [] }),
 });
 
 export function validateKairosToolArguments(toolId, input) {
@@ -33,14 +33,14 @@ function sanitize(toolId, input) {
     case "publishing.project.read":
       return identifier(input.projectId, "projectId", 160);
     case "shopify.product.read":
-      return shopifyId(input.productId, "productId");
+      return shopifyId(input.productId, "productId", "Product");
     case "shopify.product.publish": {
-      const product = shopifyId(input.productId, "productId"); if (!product.ok) return product;
-      const publicationId = input.publicationId ? text(input.publicationId, 200) : "";
-      return { ok: true, arguments: { productId: product.arguments.productId, ...(publicationId ? { publicationId } : {}) } };
+      const product = shopifyId(input.productId, "productId", "Product"); if (!product.ok) return product;
+      const publication = shopifyId(input.publicationId, "publicationId", "Publication"); if (!publication.ok) return publication;
+      return { ok: true, arguments: { productId: product.arguments.productId, publicationId: publication.arguments.publicationId } };
     }
     case "shopify.product.update": {
-      const product = shopifyId(input.productId, "productId"); if (!product.ok) return product;
+      const product = shopifyId(input.productId, "productId", "Product"); if (!product.ok) return product;
       if (!input.changes || typeof input.changes !== "object" || Array.isArray(input.changes)) return failure("TOOL_ARGUMENTS_INVALID", "changes must be an object.");
       const allowed = new Set(["title", "descriptionHtml", "seoTitle", "seoDescription", "status"]);
       const extras = Object.keys(input.changes).filter((key) => !allowed.has(key));
@@ -63,7 +63,7 @@ function sanitize(toolId, input) {
 }
 
 function identifier(value, key, max) { const result = text(value, max); return result ? { ok: true, arguments: { [key]: result } } : failure("TOOL_ARGUMENT_INVALID_VALUE", `${key} is invalid.`); }
-function shopifyId(value, key) { const result = text(value, 220); return /^gid:\/\/shopify\/[A-Za-z]+\/\d+$/.test(result) ? { ok: true, arguments: { [key]: result } } : failure("TOOL_ARGUMENT_INVALID_VALUE", `${key} must be a Shopify GID.`); }
+function shopifyId(value, key, expectedType) { const result = text(value, 220); const pattern = new RegExp(`^gid:\/\/shopify\/${expectedType}\/\\d+$`); return pattern.test(result) ? { ok: true, arguments: { [key]: result } } : failure("TOOL_ARGUMENT_INVALID_VALUE", `${key} must be a Shopify ${expectedType} GID.`); }
 function present(value) { return value !== undefined && value !== null && String(value).trim() !== ""; }
 function text(value, max) { return String(value || "").replace(/\u0000/g, "").trim().slice(0, max); }
 function clamp(value, min, max, fallback) { const number = Number(value); return Number.isFinite(number) ? Math.max(min, Math.min(max, Math.floor(number))) : fallback; }
