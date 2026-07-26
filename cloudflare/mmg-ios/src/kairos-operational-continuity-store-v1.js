@@ -1,4 +1,4 @@
-import { createKairosOperationalContinuity, evaluateKairosOperationalContinuity, KAIROS_OPERATIONAL_CONTINUITY_BUILD } from "../kairos-operational-continuity-v1.js";
+import { createKairosOperationalContinuity, evaluateKairosOperationalContinuity, KAIROS_OPERATIONAL_CONTINUITY_BUILD } from "./kairos-operational-continuity-v1.js";
 
 export const KAIROS_OPERATIONAL_CONTINUITY_STORE_BUILD = "kairos-operational-continuity-store-20260726-1";
 const INTERNAL_PATH = "/registry/kairos-operational-continuity";
