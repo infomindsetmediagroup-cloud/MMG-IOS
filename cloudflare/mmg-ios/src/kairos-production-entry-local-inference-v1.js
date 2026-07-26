@@ -13,6 +13,7 @@ import { handleToolAwareKairosObjective, KAIROS_TOOL_OBJECTIVE_INTEGRATION_BUILD
 import { handleKairosObservabilityAPI, handleKairosObservabilityObjectRequest, KAIROS_OBSERVABILITY_STORE_BUILD } from "./kairos-observability-store-v1.js";
 import { observeKairosResponse, withKairosObservabilityStart, KAIROS_OBSERVABILITY_RUNTIME_BUILD } from "./kairos-observability-runtime-v1.js";
 import { KAIROS_OBSERVABILITY_EVENTS_BUILD } from "./kairos-observability-events-v1.js";
+import { handleKairosOperationsHealth, KAIROS_OPERATIONS_HEALTH_BUILD } from "./kairos-operations-health-v1.js";
 import { handleLocalInference, handleLocalInferenceObjectRequest, KAIROS_LOCAL_INFERENCE_BUILD } from "./kairos-local-inference-v1.js";
 import { handleManuscriptGeneration, handleManuscriptGenerationObjectRequest, resumeManuscriptGenerationAlarm, KAIROS_MANUSCRIPT_GENERATION_BUILD } from "./kairos-manuscript-generation-job-v1.js";
 import { handleCanonicalManuscriptStart, KAIROS_MANUSCRIPT_START_ROUTER_BUILD } from "./kairos-manuscript-start-router-v1.js";
@@ -23,7 +24,7 @@ import { KairosProjectAgent, KAIROS_PROJECT_AGENT_BUILD } from "./kairos-project
 import { KairosProjectFoundationWorkflow, KAIROS_PROJECT_FOUNDATION_WORKFLOW_BUILD } from "./kairos-project-foundation-workflow-v1.js";
 import { KairosManuscriptGenerationWorkflow, KAIROS_MANUSCRIPT_GENERATION_WORKFLOW_BUILD } from "./kairos-manuscript-generation-workflow-v1.js";
 
-const BUILD = "kairos-production-entry-observability-20260726-15";
+const BUILD = "kairos-production-entry-operations-health-20260726-16";
 
 export { KairosProjectAgent, KairosProjectFoundationWorkflow };
 export { KairosManuscriptGenerationWorkflow };
@@ -47,6 +48,7 @@ export class KairosProject extends CurrentKairosProject {
 export default {
   async fetch(request, env, ctx) {
     const observedRequest = withKairosObservabilityStart(request);
+    const health = await handleKairosOperationsHealth(observedRequest.clone(), env); if (health) return stamp(health);
     const operations = await handleKairosObservabilityAPI(observedRequest.clone(), env); if (operations) return stamp(operations);
     const toolApproval = await handleKairosToolApprovalAPI(observedRequest.clone(), env, (input) => executeKairosTool({ ...input, env })); if (toolApproval) return stamp(await observeKairosResponse(observedRequest, toolApproval, env, ctx));
     const kairosAPI = await handleGovernedKairosAPI(observedRequest.clone(), env, (governedRequest) => handleToolAwareKairosObjective(governedRequest, env, (toolAwareRequest) => handleContextualKairosAPI(toolAwareRequest, env, (contextualRequest) => handleKairosAPI(contextualRequest, env)))); if (kairosAPI) return stamp(await observeKairosResponse(observedRequest, kairosAPI, env, ctx));
@@ -79,6 +81,7 @@ function stamp(response) {
   headers.set("X-Kairos-Observability-Events", KAIROS_OBSERVABILITY_EVENTS_BUILD);
   headers.set("X-Kairos-Observability-Store", KAIROS_OBSERVABILITY_STORE_BUILD);
   headers.set("X-Kairos-Observability-Runtime", KAIROS_OBSERVABILITY_RUNTIME_BUILD);
+  headers.set("X-Kairos-Operations-Health", KAIROS_OPERATIONS_HEALTH_BUILD);
   headers.set("X-Kairos-Local-Inference", KAIROS_LOCAL_INFERENCE_BUILD);
   headers.set("X-Kairos-Manuscript-Generation", KAIROS_MANUSCRIPT_GENERATION_BUILD);
   headers.set("X-Kairos-Manuscript-Workflow", KAIROS_MANUSCRIPT_GENERATION_WORKFLOW_BUILD);
