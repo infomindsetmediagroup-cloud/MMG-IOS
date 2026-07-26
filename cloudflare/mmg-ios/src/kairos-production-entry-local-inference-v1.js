@@ -22,6 +22,8 @@ import { handleKairosProductionReadinessAPI, handleKairosProductionReadinessObje
 import { KAIROS_PRODUCTION_READINESS_CERTIFICATION_BUILD } from "./kairos-production-readiness-certification-v1.js";
 import { handleKairosControlledLaunchAPI, handleKairosControlledLaunchObjectRequest, KAIROS_CONTROLLED_LAUNCH_STORE_BUILD } from "./kairos-controlled-launch-store-v1.js";
 import { KAIROS_CONTROLLED_LAUNCH_GOVERNANCE_BUILD } from "./kairos-controlled-launch-governance-v1.js";
+import { handleKairosPostLaunchAssuranceAPI, handleKairosPostLaunchAssuranceObjectRequest, KAIROS_POST_LAUNCH_ASSURANCE_STORE_BUILD } from "./kairos-post-launch-assurance-store-v1.js";
+import { KAIROS_POST_LAUNCH_ASSURANCE_BUILD } from "./kairos-post-launch-assurance-v1.js";
 import { handleLocalInference, handleLocalInferenceObjectRequest, KAIROS_LOCAL_INFERENCE_BUILD } from "./kairos-local-inference-v1.js";
 import { handleManuscriptGeneration, handleManuscriptGenerationObjectRequest, resumeManuscriptGenerationAlarm, KAIROS_MANUSCRIPT_GENERATION_BUILD } from "./kairos-manuscript-generation-job-v1.js";
 import { handleCanonicalManuscriptStart, KAIROS_MANUSCRIPT_START_ROUTER_BUILD } from "./kairos-manuscript-start-router-v1.js";
@@ -32,7 +34,7 @@ import { KairosProjectAgent, KAIROS_PROJECT_AGENT_BUILD } from "./kairos-project
 import { KairosProjectFoundationWorkflow, KAIROS_PROJECT_FOUNDATION_WORKFLOW_BUILD } from "./kairos-project-foundation-workflow-v1.js";
 import { KairosManuscriptGenerationWorkflow, KAIROS_MANUSCRIPT_GENERATION_WORKFLOW_BUILD } from "./kairos-manuscript-generation-workflow-v1.js";
 
-const BUILD = "kairos-production-entry-controlled-launch-20260725-20";
+const BUILD = "kairos-production-entry-post-launch-assurance-20260726-21";
 
 export { KairosProjectAgent, KairosProjectFoundationWorkflow };
 export { KairosManuscriptGenerationWorkflow };
@@ -42,6 +44,7 @@ export class KairosProject extends CurrentKairosProject {
   async fetch(request) {
     const apiGovernance = await handleKairosAPIGovernanceObjectRequest(this.state, request); if (apiGovernance) return stamp(apiGovernance);
     const toolApproval = await handleKairosToolApprovalObjectRequest(this.state, request); if (toolApproval) return stamp(toolApproval);
+    const assurance = await handleKairosPostLaunchAssuranceObjectRequest(this.state, request); if (assurance) return stamp(assurance);
     const controlledLaunch = await handleKairosControlledLaunchObjectRequest(this.state, request); if (controlledLaunch) return stamp(controlledLaunch);
     const readiness = await handleKairosProductionReadinessObjectRequest(this.state, request); if (readiness) return stamp(readiness);
     const release = await handleKairosReleaseObjectRequest(this.state, request); if (release) return stamp(release);
@@ -61,6 +64,7 @@ export default {
   async fetch(request, env, ctx) {
     const observedRequest = withKairosObservabilityStart(request);
     const health = await handleKairosOperationsHealth(observedRequest.clone(), env); if (health) return stamp(health);
+    const assurance = await handleKairosPostLaunchAssuranceAPI(observedRequest.clone(), env); if (assurance) return stamp(assurance);
     const controlledLaunch = await handleKairosControlledLaunchAPI(observedRequest.clone(), env); if (controlledLaunch) return stamp(controlledLaunch);
     const readiness = await handleKairosProductionReadinessAPI(observedRequest.clone(), env); if (readiness) return stamp(readiness);
     const releases = await handleKairosReleaseAPI(observedRequest.clone(), env); if (releases) return stamp(releases);
@@ -106,6 +110,8 @@ function stamp(response) {
   headers.set("X-Kairos-Production-Readiness-Store", KAIROS_PRODUCTION_READINESS_STORE_BUILD);
   headers.set("X-Kairos-Controlled-Launch-Governance", KAIROS_CONTROLLED_LAUNCH_GOVERNANCE_BUILD);
   headers.set("X-Kairos-Controlled-Launch-Store", KAIROS_CONTROLLED_LAUNCH_STORE_BUILD);
+  headers.set("X-Kairos-Post-Launch-Assurance", KAIROS_POST_LAUNCH_ASSURANCE_BUILD);
+  headers.set("X-Kairos-Post-Launch-Assurance-Store", KAIROS_POST_LAUNCH_ASSURANCE_STORE_BUILD);
   headers.set("X-Kairos-Local-Inference", KAIROS_LOCAL_INFERENCE_BUILD);
   headers.set("X-Kairos-Manuscript-Generation", KAIROS_MANUSCRIPT_GENERATION_BUILD);
   headers.set("X-Kairos-Manuscript-Workflow", KAIROS_MANUSCRIPT_GENERATION_WORKFLOW_BUILD);
