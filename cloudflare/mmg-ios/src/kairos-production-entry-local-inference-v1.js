@@ -16,6 +16,8 @@ import { KAIROS_OBSERVABILITY_EVENTS_BUILD } from "./kairos-observability-events
 import { handleKairosOperationsHealth, KAIROS_OPERATIONS_HEALTH_BUILD } from "./kairos-operations-health-v1.js";
 import { handleKairosIncidentAPI, handleKairosIncidentObjectRequest, KAIROS_INCIDENT_STORE_BUILD } from "./kairos-incident-store-v1.js";
 import { KAIROS_INCIDENT_LIFECYCLE_BUILD } from "./kairos-incident-lifecycle-v1.js";
+import { handleKairosReleaseAPI, handleKairosReleaseObjectRequest, KAIROS_RELEASE_STORE_BUILD } from "./kairos-release-store-v1.js";
+import { KAIROS_RELEASE_RECOVERY_BUILD } from "./kairos-release-recovery-v1.js";
 import { handleLocalInference, handleLocalInferenceObjectRequest, KAIROS_LOCAL_INFERENCE_BUILD } from "./kairos-local-inference-v1.js";
 import { handleManuscriptGeneration, handleManuscriptGenerationObjectRequest, resumeManuscriptGenerationAlarm, KAIROS_MANUSCRIPT_GENERATION_BUILD } from "./kairos-manuscript-generation-job-v1.js";
 import { handleCanonicalManuscriptStart, KAIROS_MANUSCRIPT_START_ROUTER_BUILD } from "./kairos-manuscript-start-router-v1.js";
@@ -26,7 +28,7 @@ import { KairosProjectAgent, KAIROS_PROJECT_AGENT_BUILD } from "./kairos-project
 import { KairosProjectFoundationWorkflow, KAIROS_PROJECT_FOUNDATION_WORKFLOW_BUILD } from "./kairos-project-foundation-workflow-v1.js";
 import { KairosManuscriptGenerationWorkflow, KAIROS_MANUSCRIPT_GENERATION_WORKFLOW_BUILD } from "./kairos-manuscript-generation-workflow-v1.js";
 
-const BUILD = "kairos-production-entry-incident-operations-20260725-17";
+const BUILD = "kairos-production-entry-release-operations-20260725-18";
 
 export { KairosProjectAgent, KairosProjectFoundationWorkflow };
 export { KairosManuscriptGenerationWorkflow };
@@ -36,6 +38,7 @@ export class KairosProject extends CurrentKairosProject {
   async fetch(request) {
     const apiGovernance = await handleKairosAPIGovernanceObjectRequest(this.state, request); if (apiGovernance) return stamp(apiGovernance);
     const toolApproval = await handleKairosToolApprovalObjectRequest(this.state, request); if (toolApproval) return stamp(toolApproval);
+    const release = await handleKairosReleaseObjectRequest(this.state, request); if (release) return stamp(release);
     const incident = await handleKairosIncidentObjectRequest(this.state, request); if (incident) return stamp(incident);
     const observability = await handleKairosObservabilityObjectRequest(this.state, request); if (observability) return stamp(observability);
     const knowledgeLifecycle = await handleKairosKnowledgeLifecycleObjectRequest(this.state, request); if (knowledgeLifecycle) return stamp(knowledgeLifecycle);
@@ -52,6 +55,7 @@ export default {
   async fetch(request, env, ctx) {
     const observedRequest = withKairosObservabilityStart(request);
     const health = await handleKairosOperationsHealth(observedRequest.clone(), env); if (health) return stamp(health);
+    const releases = await handleKairosReleaseAPI(observedRequest.clone(), env); if (releases) return stamp(releases);
     const incidents = await handleKairosIncidentAPI(observedRequest.clone(), env); if (incidents) return stamp(incidents);
     const operations = await handleKairosObservabilityAPI(observedRequest.clone(), env); if (operations) return stamp(operations);
     const toolApproval = await handleKairosToolApprovalAPI(observedRequest.clone(), env, (input) => executeKairosTool({ ...input, env })); if (toolApproval) return stamp(await observeKairosResponse(observedRequest, toolApproval, env, ctx));
@@ -88,6 +92,8 @@ function stamp(response) {
   headers.set("X-Kairos-Operations-Health", KAIROS_OPERATIONS_HEALTH_BUILD);
   headers.set("X-Kairos-Incident-Lifecycle", KAIROS_INCIDENT_LIFECYCLE_BUILD);
   headers.set("X-Kairos-Incident-Store", KAIROS_INCIDENT_STORE_BUILD);
+  headers.set("X-Kairos-Release-Recovery", KAIROS_RELEASE_RECOVERY_BUILD);
+  headers.set("X-Kairos-Release-Store", KAIROS_RELEASE_STORE_BUILD);
   headers.set("X-Kairos-Local-Inference", KAIROS_LOCAL_INFERENCE_BUILD);
   headers.set("X-Kairos-Manuscript-Generation", KAIROS_MANUSCRIPT_GENERATION_BUILD);
   headers.set("X-Kairos-Manuscript-Workflow", KAIROS_MANUSCRIPT_GENERATION_WORKFLOW_BUILD);
