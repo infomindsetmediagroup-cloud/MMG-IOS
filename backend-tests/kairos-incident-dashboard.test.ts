@@ -27,23 +27,29 @@ describe("Kairos incident operator dashboard", () => {
     expect(controller).toContain("Operator note");
   });
 
-  it("renders ownership, correlation, timeline, and remediation guardrails", () => {
+  it("renders ownership, release correlation, timeline, and remediation guardrails", () => {
     expect(controller).toContain("ownerIdentityHash");
     expect(controller).toContain("sourceAlertCode");
     expect(controller).toContain("requestId");
     expect(controller).toContain("approvalId");
+    expect(controller).toContain("releaseId");
+    expect(controller).toContain("deploymentId");
+    expect(controller).toContain("environment");
+    expect(controller).toContain("commitSha");
     expect(controller).toContain("Timeline");
-    expect(controller).toContain("No incident control performs rollback, retry, unpublish, or commerce mutation.");
+    expect(controller).toContain("No incident control performs rollback, retry, unpublish, deployment, or commerce mutation.");
     expect(controller).not.toContain("/api/kairos/tools/continue");
   });
 
-  it("exports a bounded incident package without remediation authority", async () => {
+  it("exports a bounded incident package with release correlation and without remediation authority", async () => {
     const durable = state();
-    await handleKairosIncidentObjectRequest(durable, new Request("https://kairos.internal/registry/kairos-incidents", { method: "POST", body: JSON.stringify({ operation: "create", input: { title: "Verification failure", severity: "critical" } }) }));
+    await handleKairosIncidentObjectRequest(durable, new Request("https://kairos.internal/registry/kairos-incidents", { method: "POST", body: JSON.stringify({ operation: "create", input: { title: "Verification failure", severity: "critical", releaseId: "release-42", deploymentId: "deploy-42", environment: "production", commitSha: "a27d0bc201cfd49066b6821cf854da665df02113" } }) }));
     const response = await handleKairosIncidentObjectRequest(durable, new Request("https://kairos.internal/registry/kairos-incidents", { method: "POST", body: JSON.stringify({ operation: "export" }) }));
     const payload = await response!.json() as any;
-    expect(payload.exportVersion).toBe("kairos-incident-export-v1");
+    expect(payload.exportVersion).toBe("kairos-incident-export-v2-release-correlation");
     expect(payload.count).toBe(1);
+    expect(payload.correlationFields).toEqual(["releaseId", "deploymentId", "environment", "commitSha"]);
+    expect(payload.incidents[0]).toMatchObject({ releaseId: "release-42", deploymentId: "deploy-42", environment: "production" });
     expect(payload.automaticRemediationIncluded).toBe(false);
     expect(payload.incidents[0].automaticRemediationAllowed).toBe(false);
   });
