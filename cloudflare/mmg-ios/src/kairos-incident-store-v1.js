@@ -1,6 +1,6 @@
 import { createKairosIncident, transitionKairosIncident, KAIROS_INCIDENT_LIFECYCLE_BUILD } from "./kairos-incident-lifecycle-v1.js";
 
-export const KAIROS_INCIDENT_STORE_BUILD = "kairos-incident-store-20260725-2-export";
+export const KAIROS_INCIDENT_STORE_BUILD = "kairos-incident-store-20260725-3-release-correlation";
 const INTERNAL_PATH = "/registry/kairos-incidents";
 const COLLECTION_ROUTE = /^\/api\/kairos\/operations\/incidents\/?$/i;
 const EXPORT_ROUTE = /^\/api\/kairos\/operations\/incidents\/export\/?$/i;
@@ -22,7 +22,7 @@ export async function handleKairosIncidentAPI(request, env) {
     if (request.method === "GET") return forward(env, { operation: "list" });
     if (request.method === "POST") {
       const input = await request.json().catch(() => ({}));
-      return forward(env, { operation: "create", input: { ...input, ownerIdentityHash: hashIdentity(identity) } });
+      return forward(env, { operation: "create", input: { ...deploymentContext(env), ...input, ownerIdentityHash: hashIdentity(identity) } });
     }
     return json({ success: false, error: { code: "METHOD_NOT_ALLOWED", message: "Use GET or POST." } }, 405);
   }
@@ -71,10 +71,11 @@ async function exportPackage(state) {
   const incidents = sorted(await load(state));
   return json({
     success: true,
-    exportVersion: "kairos-incident-export-v1",
+    exportVersion: "kairos-incident-export-v2-release-correlation",
     generatedAt: new Date().toISOString(),
     count: incidents.length,
     incidents,
+    correlationFields: ["releaseId", "deploymentId", "environment", "commitSha"],
     automaticRemediationIncluded: false,
     builds: builds(),
   });
@@ -98,6 +99,14 @@ async function forward(env, body) {
   if (!env?.KAIROS_PROJECTS) return json({ success: false, error: { code: "INCIDENT_STORAGE_UNAVAILABLE", message: "Incident storage is unavailable." } }, 503);
   const stub = env.KAIROS_PROJECTS.get(env.KAIROS_PROJECTS.idFromName("mmg-production-project-registry"));
   return stub.fetch(new Request(`https://kairos.internal${INTERNAL_PATH}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }));
+}
+function deploymentContext(env) {
+  return {
+    releaseId: clean(env?.KAIROS_RELEASE_ID, 180) || null,
+    deploymentId: clean(env?.CF_VERSION_METADATA?.id || env?.KAIROS_DEPLOYMENT_ID, 180) || null,
+    environment: clean(env?.KAIROS_ENVIRONMENT, 80) || null,
+    commitSha: clean(env?.KAIROS_COMMIT_SHA || env?.CF_VERSION_METADATA?.tag, 64) || null,
+  };
 }
 function authenticate(request, env) { const email = clean(request.headers.get("cf-access-authenticated-user-email"), 320); if (email) return email.toLowerCase(); const auth = request.headers.get("authorization") || ""; const token = String(env?.KAIROS_API_ACCESS_TOKEN || ""); return token && auth === `Bearer ${token}` ? "service-token" : ""; }
 function hashIdentity(value) { let hash = 2166136261; for (const char of String(value)) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619); return `kid_${(hash >>> 0).toString(16).padStart(8, "0")}`; }
