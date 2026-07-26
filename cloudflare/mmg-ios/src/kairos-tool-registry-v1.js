@@ -1,4 +1,4 @@
-export const KAIROS_TOOL_REGISTRY_BUILD = "kairos-tool-registry-20260725-1";
+export const KAIROS_TOOL_REGISTRY_BUILD = "kairos-tool-registry-20260725-2";
 
 const TOOLS = Object.freeze({
   "shopify.product.read": Object.freeze({
@@ -85,6 +85,11 @@ export function classifyKairosToolRequest(id) {
       : "The requested tool is read-only and may execute through its governed adapter.",
     tool,
   };
+}
+
+export function assertKairosExecutor(toolId, executorId) {
+  const tool = getKairosTool(toolId);
+  return Boolean(tool && tool.executor === String(executorId || "").trim());
 }
 
 function publicTool(tool) {
