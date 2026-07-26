@@ -1,4 +1,4 @@
-export const KAIROS_KNOWLEDGE_VAULT_BUILD = "kairos-knowledge-vault-20260725-1";
+export const KAIROS_KNOWLEDGE_VAULT_BUILD = "kairos-knowledge-vault-20260725-2-lifecycle";
 
 const REGISTRY_OBJECT = "mmg-production-project-registry";
 const SEARCH_PATH = "/registry/kairos-knowledge/search";
@@ -88,7 +88,7 @@ export async function handleKairosKnowledgeObjectRequest(state, request) {
   const records = [];
   for (const id of index.slice(-500)) {
     const record = await state.storage.get(`kairos-knowledge:record:${id}`);
-    if (record?.id && record?.content && record.visibility !== "private-internal") records.push(record);
+    if (record?.id && record?.content && record.status === "active" && record.visibility !== "private-internal") records.push(record);
   }
   return json({ build: KAIROS_KNOWLEDGE_VAULT_BUILD, results: rankRecords(records, query, department).slice(0, limit) });
 }
@@ -129,6 +129,7 @@ function publicRecord(record, score) {
     authority: clean(record.authority, 80) || "operational",
     excerpt: clean(record.content, MAX_EXCERPT),
     source: clean(record.source, 300) || "MMG canonical doctrine",
+    version: Number(record.version || 0) || null,
     updatedAt: clean(record.updatedAt, 80) || null,
     relevance: score,
   };
