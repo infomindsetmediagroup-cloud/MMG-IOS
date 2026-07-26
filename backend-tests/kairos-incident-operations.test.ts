@@ -8,11 +8,29 @@ function state() {
 }
 
 describe("Kairos production incident operations", () => {
-  it("creates immutable alert-correlated incidents and prohibits automatic remediation", () => {
-    const incident = createKairosIncident({ title: "Verification failure", sourceAlertCode: "VERIFICATION_FAILURES_PRESENT", severity: "critical" });
-    expect(incident.sourceAlertCode).toBe("VERIFICATION_FAILURES_PRESENT");
-    expect(incident.automaticRemediationAllowed).toBe(false);
+  it("creates immutable alert- and release-correlated incidents without remediation authority", () => {
+    const incident = createKairosIncident({
+      title: "Verification failure",
+      sourceAlertCode: "VERIFICATION_FAILURES_PRESENT",
+      severity: "critical",
+      releaseId: "release-20260726",
+      deploymentId: "deployment-42",
+      environment: "production",
+      commitSha: "a27d0bc201cfd49066b6821cf854da665df02113",
+    });
+    expect(incident).toMatchObject({
+      sourceAlertCode: "VERIFICATION_FAILURES_PRESENT",
+      releaseId: "release-20260726",
+      deploymentId: "deployment-42",
+      environment: "production",
+      commitSha: "a27d0bc201cfd49066b6821cf854da665df02113",
+      automaticRemediationAllowed: false,
+    });
     expect(Object.isFrozen(incident)).toBe(true);
+  });
+
+  it("rejects invalid commit correlation", () => {
+    expect(() => createKairosIncident({ title: "Invalid release", commitSha: "not-a-sha" })).toThrow("hexadecimal Git commit SHA");
   });
 
   it("enforces lifecycle transitions and resolution codes", () => {
@@ -25,9 +43,10 @@ describe("Kairos production incident operations", () => {
 
   it("persists, lists, reads, and transitions incidents in the durable boundary", async () => {
     const durable = state();
-    const createResponse = await handleKairosIncidentObjectRequest(durable, new Request("https://kairos.internal/registry/kairos-incidents", { method: "POST", body: JSON.stringify({ operation: "create", input: { title: "Elevated failures", severity: "warning", sourceAlertCode: "ELEVATED_FAILURE_COUNT" } }) }));
+    const createResponse = await handleKairosIncidentObjectRequest(durable, new Request("https://kairos.internal/registry/kairos-incidents", { method: "POST", body: JSON.stringify({ operation: "create", input: { title: "Elevated failures", severity: "warning", sourceAlertCode: "ELEVATED_FAILURE_COUNT", releaseId: "release-1" } }) }));
     expect(createResponse?.status).toBe(201);
     const created = await createResponse!.json() as any;
+    expect(created.incident.releaseId).toBe("release-1");
     const listResponse = await handleKairosIncidentObjectRequest(durable, new Request("https://kairos.internal/registry/kairos-incidents", { method: "POST", body: JSON.stringify({ operation: "list" }) }));
     expect((await listResponse!.json() as any).count).toBe(1);
     const transitionResponse = await handleKairosIncidentObjectRequest(durable, new Request("https://kairos.internal/registry/kairos-incidents", { method: "POST", body: JSON.stringify({ operation: "transition", incidentId: created.incident.incidentId, input: { status: "acknowledged", ownerIdentityHash: "kid_operator", note: "Owner assigned" } }) }));
