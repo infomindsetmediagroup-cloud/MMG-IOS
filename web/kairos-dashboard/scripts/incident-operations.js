@@ -1,4 +1,4 @@
-const BUILD = "kairos-incident-dashboard-20260726-1";
+const BUILD = "kairos-incident-dashboard-20260726-2-release-correlation";
 const state = { loading: false, incidents: [], error: "", selectedId: "" };
 
 const observer = new MutationObserver(mount);
@@ -75,23 +75,23 @@ async function exportIncidents() {
 function render() { bind(); }
 function shell() {
   const selected = state.incidents.find((item) => item.incidentId === state.selectedId) || state.incidents[0];
-  return `<div class="kairos-incidents__header"><div><p class="kairos-incidents__eyebrow">Production operations</p><h2 id="kairos-incidents-title">Incident command</h2><p>Authenticated incident ownership, lifecycle, timeline, and bounded export.</p></div><div class="kairos-incidents__actions"><button type="button" data-incidents-refresh ${state.loading ? "disabled" : ""}>Refresh</button><button type="button" data-incidents-export ${state.loading ? "disabled" : ""}>Export JSON</button></div></div>
+  return `<div class="kairos-incidents__header"><div><p class="kairos-incidents__eyebrow">Production operations</p><h2 id="kairos-incidents-title">Incident command</h2><p>Authenticated incident ownership, lifecycle, release correlation, timeline, and bounded export.</p></div><div class="kairos-incidents__actions"><button type="button" data-incidents-refresh ${state.loading ? "disabled" : ""}>Refresh</button><button type="button" data-incidents-export ${state.loading ? "disabled" : ""}>Export JSON</button></div></div>
   ${state.error ? `<p class="kairos-incidents__error" role="alert">${escapeHTML(state.error)}</p>` : ""}
   <div class="kairos-incidents__layout"><div class="kairos-incidents__list">${incidentList()}</div><div class="kairos-incidents__detail">${selected ? incidentDetail(selected) : "<p>No incidents recorded.</p>"}</div></div>`;
 }
 
 function incidentList() {
   if (!state.incidents.length) return "<p>No incidents recorded.</p>";
-  return state.incidents.slice(0, 100).map((item) => `<button type="button" class="kairos-incidents__row${item.incidentId === state.selectedId ? " is-active" : ""}" data-incident-select="${escapeHTML(item.incidentId)}"><span><strong>${escapeHTML(item.title)}</strong><small>${escapeHTML(item.incidentId)}</small></span><em data-severity="${escapeHTML(item.severity)}">${escapeHTML(item.status)}</em></button>`).join("");
+  return state.incidents.slice(0, 100).map((item) => `<button type="button" class="kairos-incidents__row${item.incidentId === state.selectedId ? " is-active" : ""}" data-incident-select="${escapeHTML(item.incidentId)}"><span><strong>${escapeHTML(item.title)}</strong><small>${escapeHTML(item.releaseId || item.environment || item.incidentId)}</small></span><em data-severity="${escapeHTML(item.severity)}">${escapeHTML(item.status)}</em></button>`).join("");
 }
 
 function incidentDetail(item) {
   return `<article><div class="kairos-incidents__title"><div><p>${escapeHTML(item.severity)} · ${escapeHTML(item.status)}</p><h3>${escapeHTML(item.title)}</h3></div><code>${escapeHTML(item.incidentId)}</code></div>
   <p>${escapeHTML(item.summary || "No summary provided.")}</p>
-  <dl><div><dt>Owner</dt><dd>${escapeHTML(item.ownerIdentityHash || "Unassigned")}</dd></div><div><dt>Alert</dt><dd>${escapeHTML(item.sourceAlertCode || "None")}</dd></div><div><dt>Request</dt><dd>${escapeHTML(item.requestId || "None")}</dd></div><div><dt>Approval</dt><dd>${escapeHTML(item.approvalId || "None")}</dd></div><div><dt>Updated</dt><dd>${escapeHTML(item.updatedAt || "Unknown")}</dd></div><div><dt>Resolution</dt><dd>${escapeHTML(item.resolutionCode || "Pending")}</dd></div></dl>
+  <dl><div><dt>Owner</dt><dd>${escapeHTML(item.ownerIdentityHash || "Unassigned")}</dd></div><div><dt>Alert</dt><dd>${escapeHTML(item.sourceAlertCode || "None")}</dd></div><div><dt>Request</dt><dd>${escapeHTML(item.requestId || "None")}</dd></div><div><dt>Approval</dt><dd>${escapeHTML(item.approvalId || "None")}</dd></div><div><dt>Release</dt><dd>${escapeHTML(item.releaseId || "Unknown")}</dd></div><div><dt>Deployment</dt><dd>${escapeHTML(item.deploymentId || "Unknown")}</dd></div><div><dt>Environment</dt><dd>${escapeHTML(item.environment || "Unknown")}</dd></div><div><dt>Commit</dt><dd>${escapeHTML(item.commitSha || "Unknown")}</dd></div><div><dt>Updated</dt><dd>${escapeHTML(item.updatedAt || "Unknown")}</dd></div><div><dt>Resolution</dt><dd>${escapeHTML(item.resolutionCode || "Pending")}</dd></div></dl>
   <div class="kairos-incidents__transitions">${transitionButtons(item)}</div>
   <h4>Timeline</h4><ol class="kairos-incidents__timeline">${timeline(item)}</ol>
-  <p class="kairos-incidents__guardrail">No incident control performs rollback, retry, unpublish, or commerce mutation.</p></article>`;
+  <p class="kairos-incidents__guardrail">No incident control performs rollback, retry, unpublish, deployment, or commerce mutation.</p></article>`;
 }
 
 function transitionButtons(item) {
@@ -100,7 +100,8 @@ function transitionButtons(item) {
 }
 
 function timeline(item) {
-  const events = [{ at: item.createdAt, text: "Incident opened" }, ...(item.notes || []).map((note) => ({ at: note.at, text: note.text, identity: note.identityHash }))];
+  const release = [item.environment, item.releaseId, item.deploymentId, item.commitSha].filter(Boolean).join(" · ");
+  const events = [{ at: item.createdAt, text: release ? `Incident opened · ${release}` : "Incident opened" }, ...(item.notes || []).map((note) => ({ at: note.at, text: note.text, identity: note.identityHash }))];
   return events.map((event) => `<li><time>${escapeHTML(event.at || "Unknown")}</time><span>${escapeHTML(event.text || "Update")}${event.identity ? ` · ${escapeHTML(event.identity)}` : ""}</span></li>`).join("");
 }
 
