@@ -1,6 +1,9 @@
 import currentRuntime, { KairosProject as CurrentKairosProject } from "./kairos-production-entry-customer-delivery-v2.js";
 import { handleKairosAPI, KAIROS_API_RUNTIME_BUILD, KAIROS_API_CONTRACT_VERSION } from "./kairos-api-runtime-v1.js";
 import { handleGovernedKairosAPI, handleKairosAPIGovernanceObjectRequest, KAIROS_API_GOVERNANCE_BUILD } from "./kairos-api-governance-v1.js";
+import { handleContextualKairosAPI, KAIROS_CONTEXT_ORCHESTRATOR_BUILD } from "./kairos-context-orchestrator-v1.js";
+import { handleKairosKnowledgeObjectRequest, KAIROS_KNOWLEDGE_VAULT_BUILD } from "./kairos-knowledge-vault-v1.js";
+import { KAIROS_DEPARTMENT_REGISTRY_BUILD } from "./kairos-department-registry-v1.js";
 import { handleLocalInference, handleLocalInferenceObjectRequest, KAIROS_LOCAL_INFERENCE_BUILD } from "./kairos-local-inference-v1.js";
 import { handleManuscriptGeneration, handleManuscriptGenerationObjectRequest, resumeManuscriptGenerationAlarm, KAIROS_MANUSCRIPT_GENERATION_BUILD } from "./kairos-manuscript-generation-job-v1.js";
 import { handleCanonicalManuscriptStart, KAIROS_MANUSCRIPT_START_ROUTER_BUILD } from "./kairos-manuscript-start-router-v1.js";
@@ -11,7 +14,7 @@ import { KairosProjectAgent, KAIROS_PROJECT_AGENT_BUILD } from "./kairos-project
 import { KairosProjectFoundationWorkflow, KAIROS_PROJECT_FOUNDATION_WORKFLOW_BUILD } from "./kairos-project-foundation-workflow-v1.js";
 import { KairosManuscriptGenerationWorkflow, KAIROS_MANUSCRIPT_GENERATION_WORKFLOW_BUILD } from "./kairos-manuscript-generation-workflow-v1.js";
 
-const BUILD = "kairos-production-entry-api-governance-20260725-9";
+const BUILD = "kairos-production-entry-contextual-runtime-20260725-10";
 
 export { KairosProjectAgent, KairosProjectFoundationWorkflow };
 export { KairosManuscriptGenerationWorkflow };
@@ -20,6 +23,7 @@ export class KairosProject extends CurrentKairosProject {
   constructor(state, env) { super(state, env); this.state = state; this.env = env; }
   async fetch(request) {
     const apiGovernance = await handleKairosAPIGovernanceObjectRequest(this.state, request); if (apiGovernance) return stamp(apiGovernance);
+    const knowledge = await handleKairosKnowledgeObjectRequest(this.state, request); if (knowledge) return stamp(knowledge);
     const pastedSource = await handlePastedManuscriptSourceObjectRequest(this.state, request); if (pastedSource) return stamp(pastedSource);
     const generation = await handleManuscriptGenerationObjectRequest(this.state, this.env, request); if (generation) return stamp(generation);
     const localInference = await handleLocalInferenceObjectRequest(this.state, request); if (localInference) return stamp(localInference);
@@ -30,7 +34,7 @@ export class KairosProject extends CurrentKairosProject {
 
 export default {
   async fetch(request, env, ctx) {
-    const kairosAPI = await handleGovernedKairosAPI(request.clone(), env, (governedRequest) => handleKairosAPI(governedRequest, env)); if (kairosAPI) return stamp(kairosAPI);
+    const kairosAPI = await handleGovernedKairosAPI(request.clone(), env, (governedRequest) => handleContextualKairosAPI(governedRequest, env, (contextualRequest) => handleKairosAPI(contextualRequest, env))); if (kairosAPI) return stamp(kairosAPI);
     const projectAgentAPI = await handleKairosProjectAgentAPI(request.clone(), env); if (projectAgentAPI) return stamp(projectAgentAPI);
     const agentResponse = await routeKairosProjectAgentRequest(request, env); if (agentResponse) return agentResponse;
     const runtimeHealth = handleKairosRuntimeHealth(request.clone(), env); if (runtimeHealth) return stamp(runtimeHealth);
@@ -48,6 +52,9 @@ function stamp(response) {
   headers.set("X-Kairos-API-Runtime", KAIROS_API_RUNTIME_BUILD);
   headers.set("X-Kairos-API-Contract", KAIROS_API_CONTRACT_VERSION);
   headers.set("X-Kairos-API-Governance", KAIROS_API_GOVERNANCE_BUILD);
+  headers.set("X-Kairos-Context-Orchestrator", KAIROS_CONTEXT_ORCHESTRATOR_BUILD);
+  headers.set("X-Kairos-Knowledge-Vault", KAIROS_KNOWLEDGE_VAULT_BUILD);
+  headers.set("X-Kairos-Department-Registry", KAIROS_DEPARTMENT_REGISTRY_BUILD);
   headers.set("X-Kairos-Local-Inference", KAIROS_LOCAL_INFERENCE_BUILD);
   headers.set("X-Kairos-Manuscript-Generation", KAIROS_MANUSCRIPT_GENERATION_BUILD);
   headers.set("X-Kairos-Manuscript-Workflow", KAIROS_MANUSCRIPT_GENERATION_WORKFLOW_BUILD);
