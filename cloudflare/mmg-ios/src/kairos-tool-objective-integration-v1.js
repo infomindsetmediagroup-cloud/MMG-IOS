@@ -3,9 +3,10 @@ import { validateKairosToolArguments } from "./kairos-tool-arguments-v1.js";
 import { executeKairosTool, KAIROS_TOOL_EXECUTORS_BUILD } from "./kairos-tool-executors-v1.js";
 import { handleKairosToolApprovalAPI } from "./kairos-tool-approval-v1.js";
 
-export const KAIROS_TOOL_OBJECTIVE_INTEGRATION_BUILD = "kairos-tool-objective-integration-20260725-3";
+export const KAIROS_TOOL_OBJECTIVE_INTEGRATION_BUILD = "kairos-tool-objective-integration-20260725-4-operator-controls";
 const ROUTE = /^\/api\/kairos\/?$/i;
 const MAX_CONTEXT = 30000;
+const CONNECTED_MUTATION_EXECUTORS = new Set(["shopify-product-update", "shopify-product-publish"]);
 
 export async function handleToolAwareKairosObjective(request, env, handler) {
   const url = new URL(request.url);
@@ -29,6 +30,7 @@ export async function handleToolAwareKairosObjective(request, env, handler) {
     const proposalResponse = await handleKairosToolApprovalAPI(proposalRequest, env);
     const proposal = await proposalResponse.json().catch(() => ({}));
     if (!proposalResponse.ok) return stamp(json(proposal, proposalResponse.status));
+    const executorAvailable = CONNECTED_MUTATION_EXECUTORS.has(classification.tool.executor);
     return stamp(json({
       success: true,
       requestId: request.headers.get("X-Kairos-Request-Id") || null,
@@ -44,8 +46,9 @@ export async function handleToolAwareKairosObjective(request, env, handler) {
         risk: classification.tool.risk,
         expiresAt: proposal.expiresAt,
         confirmationRequired: proposal.confirmationRequired,
-        executorAvailable: false,
-        continuationStatus: "blocked_until_executor_available",
+        executorAvailable,
+        continuationStatus: executorAvailable ? "ready_for_explicit_confirmation" : "blocked_until_executor_available",
+        arguments: validation.arguments,
       }],
       governance: { classification: "approval_required", reason: classification.reason },
       toolEvidence: [],

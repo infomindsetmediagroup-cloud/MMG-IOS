@@ -27,17 +27,18 @@ describe("Kairos Shopify product publication", () => {
     expect(valid.arguments).toEqual(args);
   });
 
-  it("uses the fixed publishablePublish mutation and exact variables", async () => {
+  it("uses the fixed publishablePublish mutation and verifies the exact target", async () => {
     const fetchMock = vi.fn(async (_url, init) => {
       const body = JSON.parse(init.body);
       expect(body.query).toBe(SHOPIFY_PRODUCT_PUBLISH_MUTATION);
-      expect(body.variables).toEqual({ id: args.productId, input: [{ publicationId: args.publicationId }] });
+      expect(body.variables).toEqual({ id: args.productId, publicationId: args.publicationId, input: [{ publicationId: args.publicationId }] });
       expect(init.headers["X-Shopify-Access-Token"]).toBe("secret");
       expect(init.headers["X-Kairos-Approval-Id"]).toBe("kap_test");
       return new Response(JSON.stringify({
         data: {
           publishablePublish: {
             publishable: {
+              publishedOnPublication: true,
               availablePublicationsCount: { count: 3 },
               resourcePublicationsCount: { count: 2 },
             },
@@ -60,6 +61,34 @@ describe("Kairos Shopify product publication", () => {
     expect(result.productId).toBe(args.productId);
     expect(result.publicationId).toBe(args.publicationId);
     expect(result.publicationCounts).toEqual({ available: 3, active: 2 });
+    expect(result.verification).toMatchObject({
+      verified: true,
+      type: "shopify-publication-target",
+      productId: args.productId,
+      publicationId: args.publicationId,
+      publishedOnTarget: true,
+      automaticRollback: false,
+      requiresNewApprovalForUnpublish: true,
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it("fails when Shopify does not confirm the approved publication target", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      data: {
+        publishablePublish: {
+          publishable: {
+            publishedOnPublication: false,
+            availablePublicationsCount: { count: 3 },
+            resourcePublicationsCount: { count: 1 },
+          },
+          userErrors: [],
+        },
+      },
+    }), { status: 200, headers: { "content-type": "application/json" } })));
+
+    await expect(publishShopifyProduct(env, { tool, arguments: args, identity: "owner@example.com", approvalId: "kap_test" }))
+      .rejects.toMatchObject({ code: "SHOPIFY_PRODUCT_PUBLICATION_VERIFICATION_FAILED", status: 409 });
     vi.unstubAllGlobals();
   });
 

@@ -6,6 +6,8 @@ function storage() { const map = new Map(); return { async get(k){ return map.ge
 function env(state) { const stub = { fetch: (request) => handleKairosToolApprovalObjectRequest(state, request) }; return { KAIROS_API_ACCESS_TOKEN: "service-secret", KAIROS_PROJECTS: { idFromName: () => "registry", get: () => stub } }; }
 function request(path, body, token = "service-secret") { return new Request(`https://kairos.test${path}`, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: JSON.stringify(body) }); }
 
+const publicationArguments = { productId: "gid://shopify/Product/1", publicationId: "gid://shopify/Publication/2" };
+
 describe("Kairos governed tool approval", () => {
   it("rejects unregistered tools", async () => {
     const state = { storage: storage() };
@@ -16,12 +18,12 @@ describe("Kairos governed tool approval", () => {
   it("creates an identity-bound approval and blocks replay", async () => {
     const state = { storage: storage() };
     const runtimeEnv = env(state);
-    const proposed = await handleKairosToolApprovalAPI(request("/api/kairos/tools/propose", { toolId: "shopify.product.update", arguments: { productId: "gid://shopify/Product/1", title: "Approved title" } }), runtimeEnv);
+    const proposed = await handleKairosToolApprovalAPI(request("/api/kairos/tools/propose", { toolId: "shopify.product.publish", arguments: publicationArguments }), runtimeEnv);
     expect(proposed.status).toBe(202);
     const proposal = await proposed.json();
     expect(proposal.approvalId).toMatch(/^kap_/);
 
-    const executed = await handleKairosToolApprovalAPI(request("/api/kairos/tools/continue", { approvalId: proposal.approvalId, confirmation: `APPROVE ${proposal.approvalId}` }), runtimeEnv, async ({ arguments: args }) => ({ updated: true, productId: args.productId }));
+    const executed = await handleKairosToolApprovalAPI(request("/api/kairos/tools/continue", { approvalId: proposal.approvalId, confirmation: `APPROVE ${proposal.approvalId}` }), runtimeEnv, async ({ arguments: args }) => ({ published: true, productId: args.productId }));
     expect(executed.status).toBe(200);
     expect((await executed.json()).verified).toBe(true);
 
@@ -32,7 +34,7 @@ describe("Kairos governed tool approval", () => {
   it("requires exact confirmation and the same authenticated identity", async () => {
     const state = { storage: storage() };
     const runtimeEnv = env(state);
-    const proposed = await handleKairosToolApprovalAPI(request("/api/kairos/tools/propose", { toolId: "shopify.product.publish", arguments: { productId: "gid://shopify/Product/1" } }), runtimeEnv);
+    const proposed = await handleKairosToolApprovalAPI(request("/api/kairos/tools/propose", { toolId: "shopify.product.publish", arguments: publicationArguments }), runtimeEnv);
     const proposal = await proposed.json();
     const wrongConfirmation = await handleKairosToolApprovalAPI(request("/api/kairos/tools/continue", { approvalId: proposal.approvalId, confirmation: "APPROVE" }), runtimeEnv, async () => ({}));
     expect(wrongConfirmation.status).toBe(400);
