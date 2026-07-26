@@ -1,4 +1,4 @@
-export const KAIROS_TOOL_REGISTRY_BUILD = "kairos-tool-registry-20260725-2";
+export const KAIROS_TOOL_REGISTRY_BUILD = "kairos-tool-registry-20260725-3-shopify-mutations";
 
 const TOOLS = Object.freeze({
   "shopify.product.read": Object.freeze({
@@ -18,8 +18,8 @@ const TOOLS = Object.freeze({
     capability: "mutation",
     risk: "high",
     approvalRequired: true,
-    executor: "shopify-governed-mutation",
-    description: "Update approved product fields after an authorized continuation token is verified.",
+    executor: "shopify-product-update",
+    description: "Update only allowlisted product fields after a durable single-use approval is consumed.",
   }),
   "shopify.product.publish": Object.freeze({
     id: "shopify.product.publish",
@@ -28,8 +28,8 @@ const TOOLS = Object.freeze({
     capability: "mutation",
     risk: "critical",
     approvalRequired: true,
-    executor: "shopify-governed-mutation",
-    description: "Publish an approved Shopify product only through the production publication boundary.",
+    executor: "shopify-product-publish",
+    description: "Publish an approved Shopify product only through the separately governed publication boundary.",
   }),
   "knowledge.search": Object.freeze({
     id: "knowledge.search",
