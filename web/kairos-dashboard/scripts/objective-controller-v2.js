@@ -1,5 +1,5 @@
-const BUILD = "kairos-objective-controller-ui-20260725-2-governed-runtime";
-const state = { working: false, result: null, error: "", objective: "", requestId: "" };
+const BUILD = "kairos-objective-controller-ui-20260725-3-evidence-trace";
+const state = { working: false, result: null, error: "", objective: "", requestId: "", department: "", evidenceCount: 0, sourceMode: "" };
 
 const observer = new MutationObserver(upgrade);
 observer.observe(document.documentElement, { childList: true, subtree: true });
@@ -29,6 +29,9 @@ async function executeObjective(event) {
   state.error = "";
   state.result = null;
   state.requestId = "";
+  state.department = "";
+  state.evidenceCount = 0;
+  state.sourceMode = "";
   state.objective = objective;
   render();
   try {
@@ -45,6 +48,9 @@ async function executeObjective(event) {
     });
     const body = await response.json().catch(() => ({}));
     state.requestId = body?.requestId || response.headers.get("X-Kairos-Request-Id") || "";
+    state.department = response.headers.get("X-Kairos-Department") || "";
+    state.evidenceCount = Math.max(0, Number(response.headers.get("X-Kairos-Knowledge-Evidence") || 0));
+    state.sourceMode = response.headers.get("X-Kairos-Knowledge-Source-Mode") || "";
     if (!response.ok) throw new Error(body?.error?.message || `Kairos returned ${response.status}.`);
     state.result = body;
   } catch (error) {
@@ -65,12 +71,12 @@ function render() {
   if (!result) return;
   if (state.working) {
     result.hidden = false;
-    result.innerHTML = `<div class="objective-v2-progress"><div class="objective-v2-stages"><span class="done">1 · Request</span><span class="active">2 · Reason</span><span>3 · Govern</span><span>4 · Deliver</span></div><p><i></i>Kairos is evaluating the objective through the governed production runtime.</p></div>`;
+    result.innerHTML = `<div class="objective-v2-progress"><div class="objective-v2-stages"><span class="done">1 · Request</span><span class="active">2 · Retrieve</span><span>3 · Govern</span><span>4 · Deliver</span></div><p><i></i>Kairos is routing the objective and retrieving bounded MMG evidence.</p></div>`;
     return;
   }
   if (state.error) {
     result.hidden = false;
-    result.innerHTML = `<div class="objective-v2-error"><strong>Objective not completed</strong><p>${escapeHTML(state.error)}</p>${state.requestId ? `<small>Request ${escapeHTML(state.requestId)}</small>` : ""}<button type="button" data-objective-retry>Retry the same objective</button></div>`;
+    result.innerHTML = `<div class="objective-v2-error"><strong>Objective not completed</strong><p>${escapeHTML(state.error)}</p>${traceCopy()}<button type="button" data-objective-retry>Retry the same objective</button></div>`;
     result.querySelector("[data-objective-retry]")?.addEventListener("click", () => document.querySelector("#objective-router")?.requestSubmit());
     return;
   }
@@ -91,12 +97,15 @@ function render() {
   const actionCopy = actions.length
     ? `<div class="objective-v2-sections">${actions.slice(0, 8).map(action => `<article><h4>${escapeHTML(action.title || action.type || "Proposed action")}</h4><p>${escapeHTML(action.description || action.status || "")}</p></article>`).join("")}</div>`
     : "";
-  result.innerHTML = `<div class="objective-v2-result objective-v2-result--deliverable"><div><p class="eyebrow">${escapeHTML(classification)} · ${escapeHTML(status)}</p><strong>${escapeHTML(message)}</strong>${state.requestId ? `<p>Request ${escapeHTML(state.requestId)}</p>` : ""}</div>${approvalCopy}${actionCopy}<div class="objective-v2-actions"><button type="button" data-new-objective>Run another objective</button></div></div>`;
+  result.innerHTML = `<div class="objective-v2-result objective-v2-result--deliverable"><div><p class="eyebrow">${escapeHTML(classification)} · ${escapeHTML(status)}</p><strong>${escapeHTML(message)}</strong>${traceCopy()}</div>${approvalCopy}${actionCopy}<div class="objective-v2-actions"><button type="button" data-new-objective>Run another objective</button></div></div>`;
   result.querySelector("[data-new-objective]")?.addEventListener("click", () => {
     state.result = null;
     state.error = "";
     state.objective = "";
     state.requestId = "";
+    state.department = "";
+    state.evidenceCount = 0;
+    state.sourceMode = "";
     const input = document.querySelector("#objective-router-input");
     if (input) {
       input.value = "";
@@ -104,6 +113,15 @@ function render() {
     }
     render();
   });
+}
+
+function traceCopy() {
+  const parts = [];
+  if (state.department) parts.push(`Department: ${state.department}`);
+  parts.push(`Evidence: ${state.evidenceCount}`);
+  if (state.sourceMode) parts.push(`Source mode: ${state.sourceMode}`);
+  if (state.requestId) parts.push(`Request: ${state.requestId}`);
+  return `<p class="objective-v2-trace">${parts.map(escapeHTML).join(" · ")}</p>`;
 }
 
 function escapeHTML(value) {
