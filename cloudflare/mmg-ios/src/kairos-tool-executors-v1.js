@@ -1,8 +1,9 @@
 import { retrieveKairosKnowledge } from "./kairos-knowledge-vault-v1.js";
 import { readShopifyProduct } from "./kairos-shopify-product-read-v1.js";
 import { updateShopifyProduct } from "./kairos-shopify-product-update-v1.js";
+import { publishShopifyProduct } from "./kairos-shopify-product-publish-v1.js";
 
-export const KAIROS_TOOL_EXECUTORS_BUILD = "kairos-tool-executors-20260725-3-shopify-update";
+export const KAIROS_TOOL_EXECUTORS_BUILD = "kairos-tool-executors-20260725-4-shopify-publication";
 
 export async function executeKairosTool({ tool, arguments: args, env, identity, approvalId }) {
   if (!tool?.id || !tool.executor) throw executorError("TOOL_EXECUTOR_INVALID", "Registered tool metadata is required.");
@@ -17,7 +18,7 @@ export async function executeKairosTool({ tool, arguments: args, env, identity, 
     case "shopify-product-update":
       return updateShopifyProduct(env, { tool, arguments: args, identity, approvalId });
     case "shopify-product-publish":
-      throw executorError("SHOPIFY_PUBLICATION_EXECUTOR_UNAVAILABLE", "Shopify publication remains disconnected in this Sprint 5 increment.");
+      return publishShopifyProduct(env, { tool, arguments: args, identity, approvalId });
     default:
       if (tool.capability === "mutation") throw executorError("MUTATION_EXECUTOR_UNAVAILABLE", "This production mutation executor is not connected.");
       throw executorError("EXECUTOR_NOT_REGISTERED", "The registered executor has no governed adapter.");
