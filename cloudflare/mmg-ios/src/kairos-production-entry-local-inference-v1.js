@@ -25,7 +25,7 @@ import { KAIROS_CONTROLLED_LAUNCH_GOVERNANCE_BUILD } from "./kairos-controlled-l
 import { handleKairosPostLaunchAssuranceAPI, handleKairosPostLaunchAssuranceObjectRequest, KAIROS_POST_LAUNCH_ASSURANCE_STORE_BUILD } from "./kairos-post-launch-assurance-store-v1.js";
 import { KAIROS_POST_LAUNCH_ASSURANCE_BUILD } from "./kairos-post-launch-assurance-v1.js";
 import { handleKairosOperationalContinuityAPI, handleKairosOperationalContinuityObjectRequest, KAIROS_OPERATIONAL_CONTINUITY_STORE_BUILD } from "./kairos-operational-continuity-store-v1.js";
-import { KAIROS_OPERATIONAL_CONTINUITY_BUILD } from "../kairos-operational-continuity-v1.js";
+import { KAIROS_OPERATIONAL_CONTINUITY_BUILD } from "./kairos-operational-continuity-v1.js";
 import { handleLocalInference, handleLocalInferenceObjectRequest, KAIROS_LOCAL_INFERENCE_BUILD } from "./kairos-local-inference-v1.js";
 import { handleManuscriptGeneration, handleManuscriptGenerationObjectRequest, resumeManuscriptGenerationAlarm, KAIROS_MANUSCRIPT_GENERATION_BUILD } from "./kairos-manuscript-generation-job-v1.js";
 import { handleCanonicalManuscriptStart, KAIROS_MANUSCRIPT_START_ROUTER_BUILD } from "./kairos-manuscript-start-router-v1.js";
