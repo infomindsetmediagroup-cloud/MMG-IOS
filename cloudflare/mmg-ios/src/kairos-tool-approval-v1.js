@@ -1,6 +1,7 @@
 import { classifyKairosToolRequest, getKairosTool, KAIROS_TOOL_REGISTRY_BUILD } from "./kairos-tool-registry-v1.js";
+import { validateKairosToolArguments, KAIROS_TOOL_ARGUMENTS_BUILD } from "./kairos-tool-arguments-v1.js";
 
-export const KAIROS_TOOL_APPROVAL_BUILD = "kairos-tool-approval-20260725-1";
+export const KAIROS_TOOL_APPROVAL_BUILD = "kairos-tool-approval-20260725-2";
 const REGISTRY_OBJECT = "mmg-production-project-registry";
 const INTERNAL_PATH = "/registry/kairos-tools/approval";
 const PUBLIC_ROUTE = /^\/api\/kairos\/tools\/(propose|continue)\/?$/i;
@@ -20,8 +21,20 @@ export async function handleKairosToolApprovalAPI(request, env, executeTool) {
     : { operation, identity, approvalId: body.approvalId, confirmation: body.confirmation };
   const decision = await callObject(env, payload);
   if (!decision.ok) return json(decision.body, decision.status);
-  if (operation === "propose" || decision.body.status !== "approved_for_execution") return json(decision.body, decision.status);
 
+  if (operation === "propose" && decision.body.status === "read_only") {
+    const tool = getKairosTool(decision.body.tool?.id);
+    if (!tool || tool.executor !== decision.body.tool?.executor) return json({ success: false, error: { code: "EXECUTOR_MISMATCH", message: "Registered executor verification failed." } }, 409);
+    if (typeof executeTool !== "function") return json({ success: false, error: { code: "EXECUTOR_UNAVAILABLE", message: "No governed executor is configured for this tool." } }, 503);
+    try {
+      const result = await executeTool({ tool, arguments: decision.body.arguments, identity, approvalId: null });
+      return json({ success: true, status: "completed", approvalRequired: false, tool: tool.id, verified: true, result: sanitizeResult(result) });
+    } catch {
+      return json({ success: false, status: "failed", error: { code: "TOOL_EXECUTION_FAILED", message: "The governed read-only tool executor failed." } }, 502);
+    }
+  }
+
+  if (operation === "propose" || decision.body.status !== "approved_for_execution") return json(decision.body, decision.status);
   const tool = getKairosTool(decision.body.toolId);
   if (!tool || tool.executor !== decision.body.executor) return json({ success: false, error: { code: "EXECUTOR_MISMATCH", message: "Registered executor verification failed." } }, 409);
   if (typeof executeTool !== "function") return json({ success: false, error: { code: "EXECUTOR_UNAVAILABLE", message: "No governed executor is configured for this tool." } }, 503);
@@ -50,11 +63,13 @@ async function propose(state, body) {
   const classification = classifyKairosToolRequest(body.toolId);
   if (!classification.allowed) return json({ success: false, error: { code: "TOOL_NOT_REGISTERED", message: classification.reason } }, 403);
   const tool = classification.tool;
-  if (!tool.approvalRequired) return json({ success: true, status: "read_only", tool, approvalRequired: false });
+  const validated = validateKairosToolArguments(tool.id, body.arguments);
+  if (!validated.ok) return json({ success: false, error: validated.error }, 400);
+  if (!tool.approvalRequired) return json({ success: true, status: "read_only", tool, arguments: validated.arguments, approvalRequired: false });
   const approvalId = `kap_${crypto.randomUUID().replace(/-/g, "")}`;
   const now = Date.now();
   const expiresAt = now + clamp(body.ttlSeconds, 60, 3600, DEFAULT_TTL_SECONDS) * 1000;
-  const record = { approvalId, identity: clean(body.identity, 320), toolId: tool.id, executor: tool.executor, arguments: canonical(body.arguments), argumentDigest: await digest(body.arguments), status: "pending", createdAt: new Date(now).toISOString(), expiresAt: new Date(expiresAt).toISOString(), usedAt: null, result: null };
+  const record = { approvalId, identity: clean(body.identity, 320), toolId: tool.id, executor: tool.executor, arguments: validated.arguments, argumentDigest: await digest(validated.arguments), status: "pending", createdAt: new Date(now).toISOString(), expiresAt: new Date(expiresAt).toISOString(), usedAt: null, result: null };
   await state.storage.put(`kairos-tool-approval:${approvalId}`, record);
   await appendAudit(state, record, "proposed");
   return json({ success: true, status: "approval_required", approvalId, tool, expiresAt: record.expiresAt, confirmationRequired: `APPROVE ${approvalId}` }, 202);
@@ -95,4 +110,4 @@ async function appendAudit(state, record, event) { const key = "kairos-tool-appr
 function sanitizeResult(value) { if (value == null) return null; return JSON.parse(JSON.stringify(value, (key, item) => /secret|token|authorization|password|api.?key/i.test(key) ? "[redacted]" : item).slice(0, 20000)); }
 function clean(value, max) { return String(value || "").replace(/\u0000/g, "").trim().slice(0, max); }
 function clamp(value, min, max, fallback) { const number = Number(value); return Number.isFinite(number) ? Math.max(min, Math.min(max, Math.floor(number))) : fallback; }
-function json(value, status = 200) { return new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Kairos-Tool-Registry": KAIROS_TOOL_REGISTRY_BUILD, "X-Kairos-Tool-Approval": KAIROS_TOOL_APPROVAL_BUILD } }); }
+function json(value, status = 200) { return new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Kairos-Tool-Registry": KAIROS_TOOL_REGISTRY_BUILD, "X-Kairos-Tool-Arguments": KAIROS_TOOL_ARGUMENTS_BUILD, "X-Kairos-Tool-Approval": KAIROS_TOOL_APPROVAL_BUILD } }); }
