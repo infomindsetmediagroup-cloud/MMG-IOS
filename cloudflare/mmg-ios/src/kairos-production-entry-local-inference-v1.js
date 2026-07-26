@@ -7,6 +7,8 @@ import { handleKairosKnowledgeLifecycleObjectRequest, KAIROS_KNOWLEDGE_LIFECYCLE
 import { KAIROS_DEPARTMENT_REGISTRY_BUILD } from "./kairos-department-registry-v1.js";
 import { handleKairosToolApprovalAPI, handleKairosToolApprovalObjectRequest, KAIROS_TOOL_APPROVAL_BUILD } from "./kairos-tool-approval-v1.js";
 import { KAIROS_TOOL_REGISTRY_BUILD } from "./kairos-tool-registry-v1.js";
+import { KAIROS_TOOL_ARGUMENTS_BUILD } from "./kairos-tool-arguments-v1.js";
+import { executeKairosTool, KAIROS_TOOL_EXECUTORS_BUILD } from "./kairos-tool-executors-v1.js";
 import { handleLocalInference, handleLocalInferenceObjectRequest, KAIROS_LOCAL_INFERENCE_BUILD } from "./kairos-local-inference-v1.js";
 import { handleManuscriptGeneration, handleManuscriptGenerationObjectRequest, resumeManuscriptGenerationAlarm, KAIROS_MANUSCRIPT_GENERATION_BUILD } from "./kairos-manuscript-generation-job-v1.js";
 import { handleCanonicalManuscriptStart, KAIROS_MANUSCRIPT_START_ROUTER_BUILD } from "./kairos-manuscript-start-router-v1.js";
@@ -17,7 +19,7 @@ import { KairosProjectAgent, KAIROS_PROJECT_AGENT_BUILD } from "./kairos-project
 import { KairosProjectFoundationWorkflow, KAIROS_PROJECT_FOUNDATION_WORKFLOW_BUILD } from "./kairos-project-foundation-workflow-v1.js";
 import { KairosManuscriptGenerationWorkflow, KAIROS_MANUSCRIPT_GENERATION_WORKFLOW_BUILD } from "./kairos-manuscript-generation-workflow-v1.js";
 
-const BUILD = "kairos-production-entry-tool-approval-20260725-12";
+const BUILD = "kairos-production-entry-tool-executors-20260725-13";
 
 export { KairosProjectAgent, KairosProjectFoundationWorkflow };
 export { KairosManuscriptGenerationWorkflow };
@@ -39,7 +41,7 @@ export class KairosProject extends CurrentKairosProject {
 
 export default {
   async fetch(request, env, ctx) {
-    const toolApproval = await handleKairosToolApprovalAPI(request.clone(), env); if (toolApproval) return stamp(toolApproval);
+    const toolApproval = await handleKairosToolApprovalAPI(request.clone(), env, (input) => executeKairosTool({ ...input, env })); if (toolApproval) return stamp(toolApproval);
     const kairosAPI = await handleGovernedKairosAPI(request.clone(), env, (governedRequest) => handleContextualKairosAPI(governedRequest, env, (contextualRequest) => handleKairosAPI(contextualRequest, env))); if (kairosAPI) return stamp(kairosAPI);
     const projectAgentAPI = await handleKairosProjectAgentAPI(request.clone(), env); if (projectAgentAPI) return stamp(projectAgentAPI);
     const agentResponse = await routeKairosProjectAgentRequest(request, env); if (agentResponse) return agentResponse;
@@ -63,7 +65,9 @@ function stamp(response) {
   headers.set("X-Kairos-Knowledge-Lifecycle", KAIROS_KNOWLEDGE_LIFECYCLE_BUILD);
   headers.set("X-Kairos-Department-Registry", KAIROS_DEPARTMENT_REGISTRY_BUILD);
   headers.set("X-Kairos-Tool-Registry", KAIROS_TOOL_REGISTRY_BUILD);
+  headers.set("X-Kairos-Tool-Arguments", KAIROS_TOOL_ARGUMENTS_BUILD);
   headers.set("X-Kairos-Tool-Approval", KAIROS_TOOL_APPROVAL_BUILD);
+  headers.set("X-Kairos-Tool-Executors", KAIROS_TOOL_EXECUTORS_BUILD);
   headers.set("X-Kairos-Local-Inference", KAIROS_LOCAL_INFERENCE_BUILD);
   headers.set("X-Kairos-Manuscript-Generation", KAIROS_MANUSCRIPT_GENERATION_BUILD);
   headers.set("X-Kairos-Manuscript-Workflow", KAIROS_MANUSCRIPT_GENERATION_WORKFLOW_BUILD);
