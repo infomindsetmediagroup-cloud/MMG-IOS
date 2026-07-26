@@ -1,6 +1,6 @@
 import { assertShopifyReadConfiguration, buildShopifyAdminGraphQLEndpoint } from "./kairos-shopify-read-boundary-v1.js";
 
-export const KAIROS_SHOPIFY_PRODUCT_READ_BUILD = "kairos-shopify-product-read-20260725-1";
+export const KAIROS_SHOPIFY_PRODUCT_READ_BUILD = "kairos-shopify-product-read-20260725-2-least-privilege";
 const DEFAULT_TIMEOUT_MS = 15000;
 const MIN_TIMEOUT_MS = 3000;
 const MAX_TIMEOUT_MS = 30000;
@@ -15,8 +15,6 @@ export const SHOPIFY_PRODUCT_READ_QUERY = `query KairosProductRead($id: ID!) {
     vendor
     productType
     tags
-    totalInventory
-    tracksInventory
     createdAt
     updatedAt
     publishedAt
@@ -43,7 +41,6 @@ export const SHOPIFY_PRODUCT_READ_QUERY = `query KairosProductRead($id: ID!) {
         barcode
         price
         compareAtPrice
-        inventoryQuantity
         availableForSale
         selectedOptions {
           name
@@ -125,8 +122,6 @@ function normalizeProduct(product) {
     vendor: text(product.vendor, 500),
     productType: text(product.productType, 500),
     tags: Array.isArray(product.tags) ? product.tags.map((tag) => text(tag, 255)).filter(Boolean).slice(0, 250) : [],
-    totalInventory: integer(product.totalInventory),
-    tracksInventory: Boolean(product.tracksInventory),
     createdAt: iso(product.createdAt),
     updatedAt: iso(product.updatedAt),
     publishedAt: iso(product.publishedAt),
@@ -150,7 +145,6 @@ function normalizeVariant(variant) {
     barcode: text(variant?.barcode, 255),
     price: money(variant?.price),
     compareAtPrice: money(variant?.compareAtPrice),
-    inventoryQuantity: integer(variant?.inventoryQuantity),
     availableForSale: Boolean(variant?.availableForSale),
     selectedOptions: Array.isArray(variant?.selectedOptions)
       ? variant.selectedOptions.slice(0, 20).map((option) => ({ name: text(option?.name, 255), value: text(option?.value, 255) }))
