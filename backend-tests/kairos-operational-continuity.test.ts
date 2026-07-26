@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFile } from "node:fs/promises";
-import { createKairosOperationalContinuity, evaluateKairosOperationalContinuity } from "../cloudflare/mmg-ios/kairos-operational-continuity-v1.js";
+import { createKairosOperationalContinuity, evaluateKairosOperationalContinuity } from "../cloudflare/mmg-ios/src/kairos-operational-continuity-v1.js";
 import { handleKairosOperationalContinuityAPI, handleKairosOperationalContinuityObjectRequest } from "../cloudflare/mmg-ios/src/kairos-operational-continuity-store-v1.js";
 
 class MemoryStorage {
@@ -20,12 +20,15 @@ const readyInput = {
 };
 
 describe("Kairos operational continuity", () => {
-  it("creates immutable records with execution authority disabled", () => {
+  it("creates immutable records with execution authority and raw contact storage disabled", () => {
     const record = createKairosOperationalContinuity({ continuityId: "kcontinuity_test" });
     expect(Object.isFrozen(record)).toBe(true);
     expect(record.deploymentExecutionAllowed).toBe(false);
     expect(record.rollbackExecutionAllowed).toBe(false);
     expect(record.automaticRemediationAllowed).toBe(false);
+    expect(record.onCall.contactDataStored).toBe(false);
+    expect(record.maintenance.executionAuthorityGranted).toBe(false);
+    expect(record.handoff.executionAuthorityGranted).toBe(false);
   });
 
   it("attests ready continuity and escalates unresolved critical risk", () => {
@@ -52,6 +55,8 @@ describe("Kairos operational continuity", () => {
     const exported = await exportResponse?.json();
     expect(exported.exportVersion).toBe("kairos-operational-continuity-export-v1");
     expect(exported.deploymentExecutionIncluded).toBe(false);
+    expect(exported.rollbackExecutionIncluded).toBe(false);
+    expect(exported.retryExecutionIncluded).toBe(false);
     expect(exported.automaticRemediationIncluded).toBe(false);
   });
 
