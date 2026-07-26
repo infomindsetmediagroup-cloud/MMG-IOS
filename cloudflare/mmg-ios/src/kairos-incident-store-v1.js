@@ -1,17 +1,23 @@
 import { createKairosIncident, transitionKairosIncident, KAIROS_INCIDENT_LIFECYCLE_BUILD } from "./kairos-incident-lifecycle-v1.js";
 
-export const KAIROS_INCIDENT_STORE_BUILD = "kairos-incident-store-20260725-1";
+export const KAIROS_INCIDENT_STORE_BUILD = "kairos-incident-store-20260725-2-export";
 const INTERNAL_PATH = "/registry/kairos-incidents";
 const COLLECTION_ROUTE = /^\/api\/kairos\/operations\/incidents\/?$/i;
+const EXPORT_ROUTE = /^\/api\/kairos\/operations\/incidents\/export\/?$/i;
 const ITEM_ROUTE = /^\/api\/kairos\/operations\/incidents\/([^/]+)\/?$/i;
 const MAX_INCIDENTS = 500;
 
 export async function handleKairosIncidentAPI(request, env) {
   const pathname = new URL(request.url).pathname;
-  const item = pathname.match(ITEM_ROUTE);
-  if (!COLLECTION_ROUTE.test(pathname) && !item) return null;
+  const isExport = EXPORT_ROUTE.test(pathname);
+  const item = isExport ? null : pathname.match(ITEM_ROUTE);
+  if (!COLLECTION_ROUTE.test(pathname) && !isExport && !item) return null;
   const identity = authenticate(request, env);
   if (!identity) return json({ success: false, error: { code: "AUTH_REQUIRED", message: "Authenticated incident access is required." } }, 401);
+  if (isExport) {
+    if (request.method !== "GET") return json({ success: false, error: { code: "METHOD_NOT_ALLOWED", message: "Use GET." } }, 405);
+    return forward(env, { operation: "export" });
+  }
   if (COLLECTION_ROUTE.test(pathname)) {
     if (request.method === "GET") return forward(env, { operation: "list" });
     if (request.method === "POST") {
@@ -35,6 +41,7 @@ export async function handleKairosIncidentObjectRequest(state, request) {
   if (body.operation === "create") return create(state, body.input);
   if (body.operation === "read") return read(state, body.incidentId);
   if (body.operation === "list") return list(state);
+  if (body.operation === "export") return exportPackage(state);
   if (body.operation === "transition") return transition(state, body.incidentId, body.input);
   return json({ success: false, error: { code: "OPERATION_INVALID", message: "Unknown incident operation." } }, 400);
 }
@@ -56,8 +63,21 @@ async function read(state, incidentId) {
 }
 
 async function list(state) {
-  const incidents = (await load(state)).slice().sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  const incidents = sorted(await load(state));
   return json({ success: true, count: incidents.length, incidents, builds: builds() });
+}
+
+async function exportPackage(state) {
+  const incidents = sorted(await load(state));
+  return json({
+    success: true,
+    exportVersion: "kairos-incident-export-v1",
+    generatedAt: new Date().toISOString(),
+    count: incidents.length,
+    incidents,
+    automaticRemediationIncluded: false,
+    builds: builds(),
+  });
 }
 
 async function transition(state, incidentId, input) {
@@ -73,6 +93,7 @@ async function transition(state, incidentId, input) {
 
 async function load(state) { const value = await state.storage.get("kairos-incidents:records"); return Array.isArray(value) ? value : []; }
 async function save(state, incidents) { await state.storage.put("kairos-incidents:records", incidents.slice(-MAX_INCIDENTS)); }
+function sorted(incidents) { return incidents.slice().sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)); }
 async function forward(env, body) {
   if (!env?.KAIROS_PROJECTS) return json({ success: false, error: { code: "INCIDENT_STORAGE_UNAVAILABLE", message: "Incident storage is unavailable." } }, 503);
   const stub = env.KAIROS_PROJECTS.get(env.KAIROS_PROJECTS.idFromName("mmg-production-project-registry"));
