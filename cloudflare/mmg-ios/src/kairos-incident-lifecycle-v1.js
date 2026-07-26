@@ -1,4 +1,4 @@
-export const KAIROS_INCIDENT_LIFECYCLE_BUILD = "kairos-incident-lifecycle-20260725-1";
+export const KAIROS_INCIDENT_LIFECYCLE_BUILD = "kairos-incident-lifecycle-20260725-2-release-correlation";
 
 const STATUSES = new Set(["open", "acknowledged", "mitigated", "resolved", "closed"]);
 const SEVERITIES = new Set(["info", "warning", "critical"]);
@@ -23,6 +23,10 @@ export function createKairosIncident(input = {}) {
     sourceAlertCode: clean(input.sourceAlertCode, 180) || null,
     requestId: clean(input.requestId, 180) || null,
     approvalId: clean(input.approvalId, 180) || null,
+    releaseId: clean(input.releaseId, 180) || null,
+    deploymentId: clean(input.deploymentId, 180) || null,
+    environment: clean(input.environment, 80) || null,
+    commitSha: normalizeCommitSha(input.commitSha),
     severity,
     status,
     createdAt: now,
@@ -89,6 +93,13 @@ function normalizeIso(value) {
   if (!value) return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function normalizeCommitSha(value) {
+  const sha = clean(value, 64).toLowerCase();
+  if (!sha) return null;
+  if (!/^[a-f0-9]{7,64}$/.test(sha)) throw incidentError("INCIDENT_COMMIT_SHA_INVALID", "Commit correlation must be a hexadecimal Git commit SHA.");
+  return sha;
 }
 
 function clean(value, max) {
