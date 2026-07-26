@@ -1,12 +1,13 @@
 import { assertShopifyMutationConfiguration, assertApprovalExecutionContext } from "./kairos-shopify-mutation-boundary-v1.js";
 import { buildShopifyAdminGraphQLEndpoint } from "./kairos-shopify-read-boundary-v1.js";
 
-export const KAIROS_SHOPIFY_PRODUCT_PUBLISH_BUILD = "kairos-shopify-product-publish-20260725-1";
+export const KAIROS_SHOPIFY_PRODUCT_PUBLISH_BUILD = "kairos-shopify-product-publish-20260726-2-verified-target";
 const DEFAULT_TIMEOUT_MS = 15000;
 
-export const SHOPIFY_PRODUCT_PUBLISH_MUTATION = `mutation KairosProductPublish($id: ID!, $input: [PublicationInput!]!) {
+export const SHOPIFY_PRODUCT_PUBLISH_MUTATION = `mutation KairosProductPublish($id: ID!, $publicationId: ID!, $input: [PublicationInput!]!) {
   publishablePublish(id: $id, input: $input) {
     publishable {
+      publishedOnPublication(publicationId: $publicationId)
       availablePublicationsCount { count }
       resourcePublicationsCount { count }
     }
@@ -39,7 +40,7 @@ export async function publishShopifyProduct(env, { tool, arguments: args, identi
       },
       body: JSON.stringify({
         query: SHOPIFY_PRODUCT_PUBLISH_MUTATION,
-        variables: { id: productId, input: [{ publicationId }] },
+        variables: { id: productId, publicationId, input: [{ publicationId }] },
       }),
       signal: controller.signal,
     });
@@ -53,6 +54,19 @@ export async function publishShopifyProduct(env, { tool, arguments: args, identi
     const userErrors = mutation?.userErrors || [];
     if (userErrors.length) throw publicationError("SHOPIFY_PRODUCT_PUBLICATION_REJECTED", summarizeErrors(userErrors), 422);
     if (!mutation?.publishable) throw publicationError("SHOPIFY_PRODUCT_PUBLICATION_RESPONSE_INVALID", "Shopify did not confirm the publication.", 502);
+
+    const publishedOnTarget = mutation.publishable.publishedOnPublication === true;
+    const verification = {
+      verified: publishedOnTarget,
+      type: "shopify-publication-target",
+      productId,
+      publicationId,
+      publishedOnTarget,
+      automaticRollback: false,
+      requiresNewApprovalForUnpublish: true,
+      checkedAt: new Date().toISOString(),
+    };
+    if (!publishedOnTarget) throw publicationError("SHOPIFY_PRODUCT_PUBLICATION_VERIFICATION_FAILED", "Shopify did not confirm publication on the approved publication target.", 409);
 
     return {
       verified: true,
@@ -68,6 +82,7 @@ export async function publishShopifyProduct(env, { tool, arguments: args, identi
         available: integer(mutation.publishable.availablePublicationsCount?.count),
         active: integer(mutation.publishable.resourcePublicationsCount?.count),
       },
+      verification,
       build: KAIROS_SHOPIFY_PRODUCT_PUBLISH_BUILD,
     };
   } catch (error) {
