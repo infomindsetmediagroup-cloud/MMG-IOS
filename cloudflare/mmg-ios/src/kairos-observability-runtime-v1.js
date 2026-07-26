@@ -1,6 +1,6 @@
 import { recordKairosObservabilityEvent, KAIROS_OBSERVABILITY_STORE_BUILD } from "./kairos-observability-store-v1.js";
 
-export const KAIROS_OBSERVABILITY_RUNTIME_BUILD = "kairos-observability-runtime-20260726-1";
+export const KAIROS_OBSERVABILITY_RUNTIME_BUILD = "kairos-observability-runtime-20260726-2-ordered";
 
 export async function observeKairosResponse(request, response, env, ctx) {
   if (!response) return response;
@@ -41,7 +41,7 @@ export async function observeKairosResponse(request, response, env, ctx) {
     }
   }
 
-  const work = Promise.all(events.map((event) => safeRecord(env, event)));
+  const work = persistEventsInOrder(env, events);
   if (ctx?.waitUntil) ctx.waitUntil(work);
   else await work;
   return stamp(response, requestId);
@@ -52,6 +52,12 @@ export function withKairosObservabilityStart(request) {
   if (!headers.has("X-Kairos-Request-Id")) headers.set("X-Kairos-Request-Id", crypto.randomUUID());
   if (!headers.has("X-Kairos-Started-At")) headers.set("X-Kairos-Started-At", new Date().toISOString());
   return new Request(request, { headers });
+}
+
+async function persistEventsInOrder(env, events) {
+  const results = [];
+  for (const event of events) results.push(await safeRecord(env, event));
+  return results;
 }
 
 async function safeRecord(env, event) {
