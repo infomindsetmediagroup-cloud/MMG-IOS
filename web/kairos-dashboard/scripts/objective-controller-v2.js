@@ -1,4 +1,4 @@
-const BUILD = "kairos-objective-controller-ui-20260725-3-evidence-trace";
+const BUILD = "kairos-objective-controller-ui-20260725-4-tool-governance";
 const state = { working: false, result: null, error: "", objective: "", requestId: "", department: "", evidenceCount: 0, sourceMode: "" };
 
 const observer = new MutationObserver(upgrade);
@@ -25,25 +25,11 @@ async function executeObjective(event) {
   const input = document.querySelector("#objective-router-input");
   const objective = input?.value?.trim() || "";
   if (objective.length < 3) return;
-  state.working = true;
-  state.error = "";
-  state.result = null;
-  state.requestId = "";
-  state.department = "";
-  state.evidenceCount = 0;
-  state.sourceMode = "";
-  state.objective = objective;
-  render();
+  state.working = true; state.error = ""; state.result = null; state.requestId = ""; state.department = ""; state.evidenceCount = 0; state.sourceMode = ""; state.objective = objective; render();
   try {
     const response = await fetch("/api/kairos", {
-      method: "POST",
-      cache: "no-store",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "X-MMG-Client-Build": BUILD,
-      },
+      method: "POST", cache: "no-store", credentials: "include",
+      headers: { "Content-Type": "application/json", "Accept": "application/json", "X-MMG-Client-Build": BUILD },
       body: JSON.stringify({ objective, mode: "informational", client: "kairos-dashboard" }),
     });
     const body = await response.json().catch(() => ({}));
@@ -53,21 +39,14 @@ async function executeObjective(event) {
     state.sourceMode = response.headers.get("X-Kairos-Knowledge-Source-Mode") || "";
     if (!response.ok) throw new Error(body?.error?.message || `Kairos returned ${response.status}.`);
     state.result = body;
-  } catch (error) {
-    state.error = error.message || "Kairos could not process the objective.";
-  } finally {
-    state.working = false;
-    render();
-  }
+  } catch (error) { state.error = error.message || "Kairos could not process the objective."; }
+  finally { state.working = false; render(); }
 }
 
 function render() {
   const result = document.querySelector("#objective-router-result");
   const submit = document.querySelector('#objective-router button[type="submit"]');
-  if (submit) {
-    submit.disabled = state.working;
-    submit.textContent = state.working ? "Kairos is working…" : "Send to Kairos";
-  }
+  if (submit) { submit.disabled = state.working; submit.textContent = state.working ? "Kairos is working…" : "Send to Kairos"; }
   if (!result) return;
   if (state.working) {
     result.hidden = false;
@@ -80,39 +59,33 @@ function render() {
     result.querySelector("[data-objective-retry]")?.addEventListener("click", () => document.querySelector("#objective-router")?.requestSubmit());
     return;
   }
-  if (!state.result) {
-    result.hidden = true;
-    result.innerHTML = "";
-    return;
-  }
+  if (!state.result) { result.hidden = true; result.innerHTML = ""; return; }
+
   result.hidden = false;
   const status = String(state.result.status || "completed");
-  const classification = String(state.result.classification || state.result.mode || "informational");
+  const classification = String(state.result.classification || state.result.governance?.classification || state.result.mode || "informational");
   const message = state.result.message || state.result.output || state.result.summary || "Kairos completed the objective review.";
-  const requiresApproval = Boolean(state.result.requiresApproval);
   const actions = Array.isArray(state.result.actions) ? state.result.actions : [];
-  const approvalCopy = requiresApproval
-    ? `<div class="objective-v2-approval"><strong>Approval required</strong><p>Kairos identified a production-affecting action and did not execute it automatically.</p></div>`
-    : "";
-  const actionCopy = actions.length
-    ? `<div class="objective-v2-sections">${actions.slice(0, 8).map(action => `<article><h4>${escapeHTML(action.title || action.type || "Proposed action")}</h4><p>${escapeHTML(action.description || action.status || "")}</p></article>`).join("")}</div>`
-    : "";
-  result.innerHTML = `<div class="objective-v2-result objective-v2-result--deliverable"><div><p class="eyebrow">${escapeHTML(classification)} · ${escapeHTML(status)}</p><strong>${escapeHTML(message)}</strong>${traceCopy()}</div>${approvalCopy}${actionCopy}<div class="objective-v2-actions"><button type="button" data-new-objective>Run another objective</button></div></div>`;
-  result.querySelector("[data-new-objective]")?.addEventListener("click", () => {
-    state.result = null;
-    state.error = "";
-    state.objective = "";
-    state.requestId = "";
-    state.department = "";
-    state.evidenceCount = 0;
-    state.sourceMode = "";
-    const input = document.querySelector("#objective-router-input");
-    if (input) {
-      input.value = "";
-      input.focus();
-    }
-    render();
-  });
+  const evidence = Array.isArray(state.result.toolEvidence) ? state.result.toolEvidence : [];
+  const approvalCopy = actions.filter(action => action.type === "tool_approval").map(renderApproval).join("");
+  const actionCopy = actions.filter(action => action.type !== "tool_approval").length
+    ? `<div class="objective-v2-sections">${actions.filter(action => action.type !== "tool_approval").slice(0, 8).map(action => `<article><h4>${escapeHTML(action.title || action.type || "Proposed action")}</h4><p>${escapeHTML(action.description || action.status || "")}</p></article>`).join("")}</div>` : "";
+  const evidenceCopy = evidence.length ? `<div class="objective-v2-sections"><article><h4>Verified tool evidence</h4>${evidence.slice(0, 5).map(item => `<p><strong>${escapeHTML(item.toolId || "Governed tool")}</strong> · ${item.verified ? "verified" : "unverified"} · ${escapeHTML(item.executor || "")}</p>`).join("")}</article></div>` : "";
+  result.innerHTML = `<div class="objective-v2-result objective-v2-result--deliverable"><div><p class="eyebrow">${escapeHTML(classification)} · ${escapeHTML(status)}</p><strong>${escapeHTML(message)}</strong>${traceCopy()}</div>${approvalCopy}${evidenceCopy}${actionCopy}<div class="objective-v2-actions"><button type="button" data-new-objective>Run another objective</button></div></div>`;
+  result.querySelector("[data-new-objective]")?.addEventListener("click", reset);
+}
+
+function renderApproval(action) {
+  const available = action.executorAvailable === true;
+  const confirmation = action.confirmationRequired || (action.approvalId ? `APPROVE ${action.approvalId}` : "");
+  return `<div class="objective-v2-approval"><strong>Approval review</strong><p>${escapeHTML(action.toolLabel || action.toolId || "Governed action")} · risk: ${escapeHTML(action.risk || "unspecified")}</p><p>Approval: ${escapeHTML(action.approvalId || "not issued")}${action.expiresAt ? ` · expires ${escapeHTML(action.expiresAt)}` : ""}</p><p>Required confirmation: <code>${escapeHTML(confirmation)}</code></p><p>${available ? "The registered executor is available for explicit continuation." : "Continuation is disabled because no production executor is connected. No mutation can be performed."}</p><button type="button" disabled aria-disabled="true">${available ? "Continue approved action" : "Executor unavailable"}</button></div>`;
+}
+
+function reset() {
+  state.result = null; state.error = ""; state.objective = ""; state.requestId = ""; state.department = ""; state.evidenceCount = 0; state.sourceMode = "";
+  const input = document.querySelector("#objective-router-input");
+  if (input) { input.value = ""; input.focus(); }
+  render();
 }
 
 function traceCopy() {
@@ -124,6 +97,4 @@ function traceCopy() {
   return `<p class="objective-v2-trace">${parts.map(escapeHTML).join(" · ")}</p>`;
 }
 
-function escapeHTML(value) {
-  return String(value ?? "").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
-}
+function escapeHTML(value) { return String(value ?? "").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]); }
