@@ -1,10 +1,11 @@
 import { retrieveKairosKnowledge } from "./kairos-knowledge-vault-v1.js";
+import { readShopifyProduct } from "./kairos-shopify-product-read-v1.js";
 
-export const KAIROS_TOOL_EXECUTORS_BUILD = "kairos-tool-executors-20260725-1";
+export const KAIROS_TOOL_EXECUTORS_BUILD = "kairos-tool-executors-20260725-2-shopify-read";
 
 export async function executeKairosTool({ tool, arguments: args, env, identity, approvalId }) {
   if (!tool?.id || !tool.executor) throw executorError("TOOL_EXECUTOR_INVALID", "Registered tool metadata is required.");
-  if (tool.capability === "mutation") throw executorError("MUTATION_EXECUTOR_UNAVAILABLE", "Production mutation executors are not connected in this Sprint 3 increment.");
+  if (tool.capability === "mutation") throw executorError("MUTATION_EXECUTOR_UNAVAILABLE", "Production mutation executors are not connected in this Sprint 4 increment.");
 
   switch (tool.executor) {
     case "knowledge-vault":
@@ -12,7 +13,7 @@ export async function executeKairosTool({ tool, arguments: args, env, identity, 
     case "publishing-readonly":
       return executePublishingProjectRead(env, args);
     case "shopify-readonly":
-      throw executorError("SHOPIFY_READ_EXECUTOR_UNAVAILABLE", "The governed Shopify read adapter is not configured.");
+      return readShopifyProduct(env, { productId: args.productId, requestId: approvalId });
     default:
       throw executorError("EXECUTOR_NOT_REGISTERED", "The registered executor has no governed adapter.");
   }
