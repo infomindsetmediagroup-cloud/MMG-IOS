@@ -1,6 +1,8 @@
 import { createKairosGovernanceRemediationPlan, evaluateKairosGovernanceRemediationPlan, KAIROS_GOVERNANCE_REMEDIATION_PLANNING_BUILD } from "./kairos-governance-remediation-planning-v1.js";
+import { handleKairosGovernanceEffectivenessVerificationAPI, handleKairosGovernanceEffectivenessVerificationObjectRequest, KAIROS_GOVERNANCE_EFFECTIVENESS_VERIFICATION_STORE_BUILD } from "./kairos-governance-effectiveness-verification-store-v1.js";
+import { KAIROS_GOVERNANCE_EFFECTIVENESS_VERIFICATION_BUILD } from "./kairos-governance-effectiveness-verification-v1.js";
 
-export const KAIROS_GOVERNANCE_REMEDIATION_PLAN_STORE_BUILD = "kairos-governance-remediation-plan-store-20260727-1";
+export const KAIROS_GOVERNANCE_REMEDIATION_PLAN_STORE_BUILD = "kairos-governance-remediation-plan-store-20260727-2";
 const INTERNAL_PATH = "/registry/kairos-governance-remediation-plans";
 const COLLECTION_ROUTE = /^\/api\/kairos\/operations\/remediation-plans\/?$/i;
 const EXPORT_ROUTE = /^\/api\/kairos\/operations\/remediation-plans\/export\/?$/i;
@@ -8,6 +10,7 @@ const ITEM_ROUTE = /^\/api\/kairos\/operations\/remediation-plans\/([^/]+)\/?$/i
 const MAX_RECORDS = 200;
 
 export async function handleKairosGovernanceRemediationPlanAPI(request, env) {
+  const effectiveness = await handleKairosGovernanceEffectivenessVerificationAPI(request.clone(), env); if (effectiveness) return effectiveness;
   const pathname = new URL(request.url).pathname;
   const isExport = EXPORT_ROUTE.test(pathname);
   const item = isExport ? null : pathname.match(ITEM_ROUTE);
@@ -36,6 +39,7 @@ export async function handleKairosGovernanceRemediationPlanAPI(request, env) {
 }
 
 export async function handleKairosGovernanceRemediationPlanObjectRequest(state, request) {
+  const effectiveness = await handleKairosGovernanceEffectivenessVerificationObjectRequest(state, request.clone()); if (effectiveness) return effectiveness;
   if (new URL(request.url).pathname !== INTERNAL_PATH) return null;
   const body = await request.json().catch(() => ({}));
   if (body.operation === "create") return create(state, body.input);
@@ -77,6 +81,6 @@ async function forward(env, body) { if (!env?.KAIROS_PROJECTS) return json({ suc
 function authenticate(request, env) { const email = clean(request.headers.get("cf-access-authenticated-user-email"), 320); if (email) return email.toLowerCase(); const auth = request.headers.get("authorization") || ""; const token = String(env?.KAIROS_API_ACCESS_TOKEN || ""); return token && auth === `Bearer ${token}` ? "service-token" : ""; }
 function hashIdentity(value) { let hash = 2166136261; for (const char of String(value)) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619); return `kid_${(hash >>> 0).toString(16).padStart(8, "0")}`; }
 function clean(value, max) { return String(value || "").replace(/\u0000/g, "").trim().slice(0, max); }
-function builds() { return { planning: KAIROS_GOVERNANCE_REMEDIATION_PLANNING_BUILD, store: KAIROS_GOVERNANCE_REMEDIATION_PLAN_STORE_BUILD }; }
+function builds() { return { planning: KAIROS_GOVERNANCE_REMEDIATION_PLANNING_BUILD, store: KAIROS_GOVERNANCE_REMEDIATION_PLAN_STORE_BUILD, effectivenessVerification: KAIROS_GOVERNANCE_EFFECTIVENESS_VERIFICATION_BUILD, effectivenessVerificationStore: KAIROS_GOVERNANCE_EFFECTIVENESS_VERIFICATION_STORE_BUILD }; }
 function failure(error) { return json({ success: false, error: { code: error?.code || "REMEDIATION_PLAN_INVALID", message: error?.message || "Governance remediation-plan operation failed." } }, error?.status || 400); }
-function json(value, status = 200) { return new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Kairos-Governance-Remediation-Plan-Store": KAIROS_GOVERNANCE_REMEDIATION_PLAN_STORE_BUILD } }); }
+function json(value, status = 200) { return new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Kairos-Governance-Remediation-Plan-Store": KAIROS_GOVERNANCE_REMEDIATION_PLAN_STORE_BUILD, "X-Kairos-Governance-Effectiveness-Verification": KAIROS_GOVERNANCE_EFFECTIVENESS_VERIFICATION_BUILD, "X-Kairos-Governance-Effectiveness-Verification-Store": KAIROS_GOVERNANCE_EFFECTIVENESS_VERIFICATION_STORE_BUILD } }); }
