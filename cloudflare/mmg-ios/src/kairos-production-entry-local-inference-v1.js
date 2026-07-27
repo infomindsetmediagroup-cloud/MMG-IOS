@@ -28,6 +28,8 @@ import { handleKairosOperationalContinuityAPI, handleKairosOperationalContinuity
 import { KAIROS_OPERATIONAL_CONTINUITY_BUILD } from "./kairos-operational-continuity-v1.js";
 import { handleKairosContinuousOperationalReviewAPI, handleKairosContinuousOperationalReviewObjectRequest, KAIROS_CONTINUOUS_OPERATIONAL_REVIEW_STORE_BUILD } from "./kairos-continuous-operational-review-store-v1.js";
 import { KAIROS_CONTINUOUS_OPERATIONAL_REVIEW_BUILD } from "./kairos-continuous-operational-review-v1.js";
+import { handleKairosPolicyExceptionAPI, handleKairosPolicyExceptionObjectRequest, KAIROS_POLICY_EXCEPTION_STORE_BUILD } from "./kairos-policy-exception-store-v1.js";
+import { KAIROS_POLICY_EXCEPTION_GOVERNANCE_BUILD } from "./kairos-policy-exception-governance-v1.js";
 import { handleLocalInference, handleLocalInferenceObjectRequest, KAIROS_LOCAL_INFERENCE_BUILD } from "./kairos-local-inference-v1.js";
 import { handleManuscriptGeneration, handleManuscriptGenerationObjectRequest, resumeManuscriptGenerationAlarm, KAIROS_MANUSCRIPT_GENERATION_BUILD } from "./kairos-manuscript-generation-job-v1.js";
 import { handleCanonicalManuscriptStart, KAIROS_MANUSCRIPT_START_ROUTER_BUILD } from "./kairos-manuscript-start-router-v1.js";
@@ -38,7 +40,7 @@ import { KairosProjectAgent, KAIROS_PROJECT_AGENT_BUILD } from "./kairos-project
 import { KairosProjectFoundationWorkflow, KAIROS_PROJECT_FOUNDATION_WORKFLOW_BUILD } from "./kairos-project-foundation-workflow-v1.js";
 import { KairosManuscriptGenerationWorkflow, KAIROS_MANUSCRIPT_GENERATION_WORKFLOW_BUILD } from "./kairos-manuscript-generation-workflow-v1.js";
 
-const BUILD = "kairos-production-entry-continuous-operational-review-20260726-23";
+const BUILD = "kairos-production-entry-policy-exception-governance-20260726-24";
 
 export { KairosProjectAgent, KairosProjectFoundationWorkflow };
 export { KairosManuscriptGenerationWorkflow };
@@ -48,6 +50,7 @@ export class KairosProject extends CurrentKairosProject {
   async fetch(request) {
     const apiGovernance = await handleKairosAPIGovernanceObjectRequest(this.state, request); if (apiGovernance) return stamp(apiGovernance);
     const toolApproval = await handleKairosToolApprovalObjectRequest(this.state, request); if (toolApproval) return stamp(toolApproval);
+    const policyException = await handleKairosPolicyExceptionObjectRequest(this.state, request); if (policyException) return stamp(policyException);
     const operationalReview = await handleKairosContinuousOperationalReviewObjectRequest(this.state, request); if (operationalReview) return stamp(operationalReview);
     const continuity = await handleKairosOperationalContinuityObjectRequest(this.state, request); if (continuity) return stamp(continuity);
     const assurance = await handleKairosPostLaunchAssuranceObjectRequest(this.state, request); if (assurance) return stamp(assurance);
@@ -70,6 +73,7 @@ export default {
   async fetch(request, env, ctx) {
     const observedRequest = withKairosObservabilityStart(request);
     const health = await handleKairosOperationsHealth(observedRequest.clone(), env); if (health) return stamp(health);
+    const policyException = await handleKairosPolicyExceptionAPI(observedRequest.clone(), env); if (policyException) return stamp(policyException);
     const operationalReview = await handleKairosContinuousOperationalReviewAPI(observedRequest.clone(), env); if (operationalReview) return stamp(operationalReview);
     const continuity = await handleKairosOperationalContinuityAPI(observedRequest.clone(), env); if (continuity) return stamp(continuity);
     const assurance = await handleKairosPostLaunchAssuranceAPI(observedRequest.clone(), env); if (assurance) return stamp(assurance);
@@ -124,6 +128,8 @@ function stamp(response) {
   headers.set("X-Kairos-Operational-Continuity-Store", KAIROS_OPERATIONAL_CONTINUITY_STORE_BUILD);
   headers.set("X-Kairos-Continuous-Operational-Review", KAIROS_CONTINUOUS_OPERATIONAL_REVIEW_BUILD);
   headers.set("X-Kairos-Continuous-Operational-Review-Store", KAIROS_CONTINUOUS_OPERATIONAL_REVIEW_STORE_BUILD);
+  headers.set("X-Kairos-Policy-Exception-Governance", KAIROS_POLICY_EXCEPTION_GOVERNANCE_BUILD);
+  headers.set("X-Kairos-Policy-Exception-Store", KAIROS_POLICY_EXCEPTION_STORE_BUILD);
   headers.set("X-Kairos-Local-Inference", KAIROS_LOCAL_INFERENCE_BUILD);
   headers.set("X-Kairos-Manuscript-Generation", KAIROS_MANUSCRIPT_GENERATION_BUILD);
   headers.set("X-Kairos-Manuscript-Workflow", KAIROS_MANUSCRIPT_GENERATION_WORKFLOW_BUILD);
