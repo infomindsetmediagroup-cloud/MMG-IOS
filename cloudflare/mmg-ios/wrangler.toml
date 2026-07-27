@@ -1,5 +1,5 @@
 name = "mmg-ios"
-main = "src/kairos-production-entry-local-inference-v1.js"
+main = "src/kairos-production-entry-governance-portfolio-v1.js"
 compatibility_date = "2026-07-24"
 compatibility_flags = ["nodejs_compat"]
 keep_names = true
