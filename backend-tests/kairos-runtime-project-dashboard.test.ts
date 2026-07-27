@@ -21,11 +21,13 @@ describe("Kairos runtime project dashboard", () => {
     expect(script).toContain("role=\"progressbar\"");
   });
 
-  it("uses authenticated runtime actions without deployment or commerce controls", () => {
-    expect(script).toContain("/projects/${encodeURIComponent(id)}/analyze");
-    expect(script).toContain("/projects/${encodeURIComponent(id)}/queue");
-    expect(script).toContain("/projects/${encodeURIComponent(id)}/start");
-    expect(script).toContain("/projects/${encodeURIComponent(id)}/events");
+  it("uses authenticated governed runtime actions without deployment or commerce controls", () => {
+    expect(script).toContain('post(id,"analyze"');
+    expect(script).toContain('post(id,"queue"');
+    expect(script).toContain('post(id,"start"');
+    expect(script).toContain('post(id,"qa-pass"');
+    expect(script).toContain('post(id,"package"');
+    expect(script).toContain('post(id,"deliver"');
     expect(script).not.toContain("Deploy");
     expect(script).not.toContain("Publish product");
     expect(script).not.toContain("Rollback");
