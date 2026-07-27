@@ -4,6 +4,7 @@ import { createKairosGovernanceEffectivenessVerification, evaluateKairosGovernan
 import { handleKairosGovernanceEffectivenessVerificationAPI, handleKairosGovernanceEffectivenessVerificationObjectRequest } from "../cloudflare/mmg-ios/src/kairos-governance-effectiveness-verification-store-v1.js";
 
 const runtime = readFileSync("cloudflare/mmg-ios/src/kairos-production-entry-local-inference-v1.js", "utf8");
+const gateway = readFileSync("cloudflare/mmg-ios/src/kairos-governance-remediation-plan-store-v1.js", "utf8");
 
 describe("Kairos governance effectiveness verification", () => {
   it("creates immutable verification records with execution prohibited", () => {
@@ -63,10 +64,12 @@ describe("Kairos governance effectiveness verification", () => {
     expect(fetch).toHaveBeenCalledOnce();
   });
 
-  it("is integrated into the canonical runtime with explicit headers", () => {
-    expect(runtime).toContain("handleKairosGovernanceEffectivenessVerificationAPI");
-    expect(runtime).toContain("handleKairosGovernanceEffectivenessVerificationObjectRequest");
-    expect(runtime).toContain("X-Kairos-Governance-Effectiveness-Verification");
-    expect(runtime).toContain("X-Kairos-Governance-Effectiveness-Verification-Store");
+  it("is integrated through the canonical remediation runtime gateway with explicit headers", () => {
+    expect(runtime).toContain("handleKairosGovernanceRemediationPlanAPI");
+    expect(runtime).toContain("handleKairosGovernanceRemediationPlanObjectRequest");
+    expect(gateway).toContain("handleKairosGovernanceEffectivenessVerificationAPI");
+    expect(gateway).toContain("handleKairosGovernanceEffectivenessVerificationObjectRequest");
+    expect(gateway).toContain("X-Kairos-Governance-Effectiveness-Verification");
+    expect(gateway).toContain("X-Kairos-Governance-Effectiveness-Verification-Store");
   });
 });
