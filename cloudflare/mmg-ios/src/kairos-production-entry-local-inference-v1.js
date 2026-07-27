@@ -36,6 +36,8 @@ import { handleKairosGovernancePortfolioAPI, handleKairosGovernancePortfolioObje
 import { KAIROS_GOVERNANCE_PORTFOLIO_OVERSIGHT_BUILD } from "./kairos-governance-portfolio-oversight-v1.js";
 import { handleKairosGovernanceAssurancePlanAPI, handleKairosGovernanceAssurancePlanObjectRequest, KAIROS_GOVERNANCE_ASSURANCE_PLAN_STORE_BUILD } from "./kairos-governance-assurance-plan-store-v1.js";
 import { KAIROS_GOVERNANCE_ASSURANCE_PLANNING_BUILD } from "./kairos-governance-assurance-planning-v1.js";
+import { handleKairosGovernanceRemediationPlanAPI, handleKairosGovernanceRemediationPlanObjectRequest, KAIROS_GOVERNANCE_REMEDIATION_PLAN_STORE_BUILD } from "./kairos-governance-remediation-plan-store-v1.js";
+import { KAIROS_GOVERNANCE_REMEDIATION_PLANNING_BUILD } from "./kairos-governance-remediation-planning-v1.js";
 import { handleLocalInference, handleLocalInferenceObjectRequest, KAIROS_LOCAL_INFERENCE_BUILD } from "./kairos-local-inference-v1.js";
 import { handleManuscriptGeneration, handleManuscriptGenerationObjectRequest, resumeManuscriptGenerationAlarm, KAIROS_MANUSCRIPT_GENERATION_BUILD } from "./kairos-manuscript-generation-job-v1.js";
 import { handleCanonicalManuscriptStart, KAIROS_MANUSCRIPT_START_ROUTER_BUILD } from "./kairos-manuscript-start-router-v1.js";
@@ -46,7 +48,7 @@ import { KairosProjectAgent, KAIROS_PROJECT_AGENT_BUILD } from "./kairos-project
 import { KairosProjectFoundationWorkflow, KAIROS_PROJECT_FOUNDATION_WORKFLOW_BUILD } from "./kairos-project-foundation-workflow-v1.js";
 import { KairosManuscriptGenerationWorkflow, KAIROS_MANUSCRIPT_GENERATION_WORKFLOW_BUILD } from "./kairos-manuscript-generation-workflow-v1.js";
 
-const BUILD = "kairos-production-entry-governance-assurance-planning-20260727-27";
+const BUILD = "kairos-production-entry-governance-remediation-planning-20260727-28";
 export { KairosProjectAgent, KairosProjectFoundationWorkflow };
 export { KairosManuscriptGenerationWorkflow };
 
@@ -55,6 +57,7 @@ export class KairosProject extends CurrentKairosProject {
   async fetch(request) {
     const apiGovernance = await handleKairosAPIGovernanceObjectRequest(this.state, request); if (apiGovernance) return stamp(apiGovernance);
     const toolApproval = await handleKairosToolApprovalObjectRequest(this.state, request); if (toolApproval) return stamp(toolApproval);
+    const remediationPlan = await handleKairosGovernanceRemediationPlanObjectRequest(this.state, request); if (remediationPlan) return stamp(remediationPlan);
     const assurancePlan = await handleKairosGovernanceAssurancePlanObjectRequest(this.state, request); if (assurancePlan) return stamp(assurancePlan);
     const portfolio = await handleKairosGovernancePortfolioObjectRequest(this.state, request); if (portfolio) return stamp(portfolio);
     const obligation = await handleKairosGovernanceObligationObjectRequest(this.state, request); if (obligation) return stamp(obligation);
@@ -81,6 +84,7 @@ export default {
   async fetch(request, env, ctx) {
     const observedRequest = withKairosObservabilityStart(request);
     const health = await handleKairosOperationsHealth(observedRequest.clone(), env); if (health) return stamp(health);
+    const remediationPlan = await handleKairosGovernanceRemediationPlanAPI(observedRequest.clone(), env); if (remediationPlan) return stamp(remediationPlan);
     const assurancePlan = await handleKairosGovernanceAssurancePlanAPI(observedRequest.clone(), env); if (assurancePlan) return stamp(assurancePlan);
     const portfolio = await handleKairosGovernancePortfolioAPI(observedRequest.clone(), env); if (portfolio) return stamp(portfolio);
     const obligation = await handleKairosGovernanceObligationAPI(observedRequest.clone(), env); if (obligation) return stamp(obligation);
@@ -147,6 +151,8 @@ function stamp(response) {
   headers.set("X-Kairos-Governance-Portfolio-Store", KAIROS_GOVERNANCE_PORTFOLIO_STORE_BUILD);
   headers.set("X-Kairos-Governance-Assurance-Planning", KAIROS_GOVERNANCE_ASSURANCE_PLANNING_BUILD);
   headers.set("X-Kairos-Governance-Assurance-Plan-Store", KAIROS_GOVERNANCE_ASSURANCE_PLAN_STORE_BUILD);
+  headers.set("X-Kairos-Governance-Remediation-Planning", KAIROS_GOVERNANCE_REMEDIATION_PLANNING_BUILD);
+  headers.set("X-Kairos-Governance-Remediation-Plan-Store", KAIROS_GOVERNANCE_REMEDIATION_PLAN_STORE_BUILD);
   headers.set("X-Kairos-Local-Inference", KAIROS_LOCAL_INFERENCE_BUILD);
   headers.set("X-Kairos-Manuscript-Generation", KAIROS_MANUSCRIPT_GENERATION_BUILD);
   headers.set("X-Kairos-Manuscript-Workflow", KAIROS_MANUSCRIPT_GENERATION_WORKFLOW_BUILD);
