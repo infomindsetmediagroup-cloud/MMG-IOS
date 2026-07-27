@@ -1,13 +1,14 @@
 import { createKairosRuntimeProject, transitionKairosRuntimeProject, KAIROS_RUNTIME_PROJECT_BUILD } from "./kairos-runtime-project-v1.js";
 import { applyPublishingObjectiveAnalysis, queueApprovedPublishingProject, startQueuedPublishingProject, KAIROS_PUBLISHING_RUNTIME_ORCHESTRATOR_BUILD } from "./kairos-publishing-runtime-orchestrator-v1.js";
+import { applyKairosPublishingRuntimeAction, KAIROS_PUBLISHING_RUNTIME_ACTIONS_BUILD } from "./kairos-publishing-runtime-actions-v1.js";
 
-export const KAIROS_RUNTIME_PROJECT_STORE_BUILD = "kairos-runtime-project-store-20260727-2";
+export const KAIROS_RUNTIME_PROJECT_STORE_BUILD = "kairos-runtime-project-store-20260727-3";
 const INTERNAL_PATH = "/registry/kairos-runtime-projects";
 const COLLECTION_ROUTE = /^\/api\/kairos\/runtime\/projects\/?$/i;
 const EXPORT_ROUTE = /^\/api\/kairos\/runtime\/projects\/export\/?$/i;
 const ITEM_ROUTE = /^\/api\/kairos\/runtime\/projects\/([^/]+)\/?$/i;
 const EVENT_ROUTE = /^\/api\/kairos\/runtime\/projects\/([^/]+)\/events\/?$/i;
-const ACTION_ROUTE = /^\/api\/kairos\/runtime\/projects\/([^/]+)\/(analyze|queue|start)\/?$/i;
+const ACTION_ROUTE = /^\/api\/kairos\/runtime\/projects\/([^/]+)\/(analyze|queue|start|qa-pass|qa-fail|package|deliver)\/?$/i;
 const MAX_RECORDS = 500;
 
 export async function handleKairosRuntimeProjectAPI(request, env) {
@@ -49,6 +50,7 @@ export async function handleKairosRuntimeProjectObjectRequest(state, request) {
   if (input.operation === "analyze") return mutate(state, input.projectId, (record) => applyPublishingObjectiveAnalysis(record, input.input));
   if (input.operation === "queue") return mutate(state, input.projectId, (record) => queueApprovedPublishingProject(record, input.input));
   if (input.operation === "start") return mutate(state, input.projectId, (record) => startQueuedPublishingProject(record, input.input));
+  if (["qa-pass","qa-fail","package","deliver"].includes(input.operation)) return mutate(state, input.projectId, (record) => applyKairosPublishingRuntimeAction(record, input.operation, input.input));
   if (input.operation === "export") return exportPackage(state);
   return json({ success: false, error: { code: "OPERATION_INVALID", message: "Unknown Kairos runtime project operation." } }, 400);
 }
@@ -66,8 +68,8 @@ async function forward(env, input) { if (!env?.KAIROS_PROJECTS) return json({ su
 function authenticate(request, env) { const email = clean(request.headers.get("cf-access-authenticated-user-email"), 320); if (email) return email.toLowerCase(); const auth = request.headers.get("authorization") || ""; const token = String(env?.KAIROS_API_ACCESS_TOKEN || ""); return token && auth === `Bearer ${token}` ? "service-token" : ""; }
 function hashIdentity(value) { let hash = 2166136261; for (const char of String(value)) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619); return `kid_${(hash >>> 0).toString(16).padStart(8, "0")}`; }
 function clean(value, max) { return String(value || "").replace(/\u0000/g, "").trim().slice(0, max); }
-function builds() { return { runtime: KAIROS_RUNTIME_PROJECT_BUILD, store: KAIROS_RUNTIME_PROJECT_STORE_BUILD, orchestrator: KAIROS_PUBLISHING_RUNTIME_ORCHESTRATOR_BUILD }; }
+function builds() { return { runtime: KAIROS_RUNTIME_PROJECT_BUILD, store: KAIROS_RUNTIME_PROJECT_STORE_BUILD, orchestrator: KAIROS_PUBLISHING_RUNTIME_ORCHESTRATOR_BUILD, actions: KAIROS_PUBLISHING_RUNTIME_ACTIONS_BUILD }; }
 function failure(error) { return json({ success: false, error: { code: error?.code || "RUNTIME_PROJECT_INVALID", message: error?.message || "Kairos runtime project operation failed." } }, error?.status || 400); }
 function method(allowed) { return json({ success: false, error: { code: "METHOD_NOT_ALLOWED", message: `Use ${allowed}.` } }, 405); }
 async function body(request) { return request.json().catch(() => ({})); }
-function json(value, status = 200) { return new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Kairos-Runtime-Project-Store": KAIROS_RUNTIME_PROJECT_STORE_BUILD, "X-Kairos-Publishing-Runtime-Orchestrator": KAIROS_PUBLISHING_RUNTIME_ORCHESTRATOR_BUILD } }); }
+function json(value, status = 200) { return new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Kairos-Runtime-Project-Store": KAIROS_RUNTIME_PROJECT_STORE_BUILD, "X-Kairos-Publishing-Runtime-Orchestrator": KAIROS_PUBLISHING_RUNTIME_ORCHESTRATOR_BUILD, "X-Kairos-Publishing-Runtime-Actions": KAIROS_PUBLISHING_RUNTIME_ACTIONS_BUILD } }); }
