@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createKairosGovernanceObligation, evaluateKairosGovernanceObligation } from "../cloudflare/mmg-ios/src/kairos-governance-obligation-tracking-v1.js";
 import { handleKairosGovernanceObligationAPI, handleKairosGovernanceObligationObjectRequest } from "../cloudflare/mmg-ios/src/kairos-governance-obligation-store-v1.js";
+import productionRuntime from "../cloudflare/mmg-ios/src/kairos-production-entry-local-inference-v1.js";
 
 function state() {
   const values = new Map<string, unknown>();
@@ -49,5 +50,12 @@ describe("Kairos governance obligation tracking", () => {
   it("requires authentication on public APIs", async () => {
     const response = await handleKairosGovernanceObligationAPI(new Request("https://example.com/api/kairos/operations/obligations"), {} as any);
     expect(response?.status).toBe(401);
+  });
+
+  it("is registered in the canonical production entry", async () => {
+    const response = await productionRuntime.fetch(new Request("https://example.com/api/kairos/operations/obligations"), {} as any, {} as any);
+    expect(response.status).toBe(401);
+    expect(response.headers.get("X-Kairos-Governance-Obligation-Tracking")).toContain("kairos-governance-obligation-tracking");
+    expect(response.headers.get("X-Kairos-Governance-Obligation-Store")).toContain("kairos-governance-obligation-store");
   });
 });
