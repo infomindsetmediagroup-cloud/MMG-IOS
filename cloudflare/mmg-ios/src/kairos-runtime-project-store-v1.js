@@ -3,8 +3,9 @@ import { applyPublishingObjectiveAnalysis, queueApprovedPublishingProject, start
 import { applyKairosPublishingRuntimeAction, KAIROS_PUBLISHING_RUNTIME_ACTIONS_BUILD } from "./kairos-publishing-runtime-actions-v1.js";
 import { handleKairosCustomerRuntimeProjectionAPI, handleKairosCustomerRuntimeProjectionObjectRequest, KAIROS_CUSTOMER_RUNTIME_PROJECTION_STORE_BUILD } from "./kairos-customer-runtime-projection-store-v1.js";
 import { KAIROS_CUSTOMER_RUNTIME_PROJECTION_BUILD } from "./kairos-customer-runtime-projection-v1.js";
+import { handleKairosRevenueProductAPI, handleKairosRevenueProductObjectRequest, KAIROS_REVENUE_PRODUCT_STORE_BUILD } from "./kairos-revenue-product-store-v1.js";
 
-export const KAIROS_RUNTIME_PROJECT_STORE_BUILD = "kairos-runtime-project-store-20260727-4";
+export const KAIROS_RUNTIME_PROJECT_STORE_BUILD = "kairos-runtime-project-store-20260727-5";
 const INTERNAL_PATH = "/registry/kairos-runtime-projects";
 const COLLECTION_ROUTE = /^\/api\/kairos\/runtime\/projects\/?$/i;
 const EXPORT_ROUTE = /^\/api\/kairos\/runtime\/projects\/export\/?$/i;
@@ -14,6 +15,7 @@ const ACTION_ROUTE = /^\/api\/kairos\/runtime\/projects\/([^/]+)\/(analyze|queue
 const MAX_RECORDS = 500;
 
 export async function handleKairosRuntimeProjectAPI(request, env) {
+  const revenueProduct = await handleKairosRevenueProductAPI(request.clone(), env); if (revenueProduct) return stampRevenueProduct(revenueProduct);
   const customerProjection = await handleKairosCustomerRuntimeProjectionAPI(request.clone(), env); if (customerProjection) return stampCustomerProjection(customerProjection);
   const pathname = new URL(request.url).pathname;
   const isExport = EXPORT_ROUTE.test(pathname);
@@ -44,6 +46,7 @@ export async function handleKairosRuntimeProjectAPI(request, env) {
 }
 
 export async function handleKairosRuntimeProjectObjectRequest(state, request) {
+  const revenueProduct = await handleKairosRevenueProductObjectRequest(state, request.clone()); if (revenueProduct) return stampRevenueProduct(revenueProduct);
   const customerProjection = await handleKairosCustomerRuntimeProjectionObjectRequest(state, request.clone()); if (customerProjection) return stampCustomerProjection(customerProjection);
   if (new URL(request.url).pathname !== INTERNAL_PATH) return null;
   const input = await body(request);
@@ -72,9 +75,10 @@ async function forward(env, input) { if (!env?.KAIROS_PROJECTS) return json({ su
 function authenticate(request, env) { const email = clean(request.headers.get("cf-access-authenticated-user-email"), 320); if (email) return email.toLowerCase(); const auth = request.headers.get("authorization") || ""; const token = String(env?.KAIROS_API_ACCESS_TOKEN || ""); return token && auth === `Bearer ${token}` ? "service-token" : ""; }
 function hashIdentity(value) { let hash = 2166136261; for (const char of String(value)) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619); return `kid_${(hash >>> 0).toString(16).padStart(8, "0")}`; }
 function clean(value, max) { return String(value || "").replace(/\u0000/g, "").trim().slice(0, max); }
-function builds() { return { runtime: KAIROS_RUNTIME_PROJECT_BUILD, store: KAIROS_RUNTIME_PROJECT_STORE_BUILD, orchestrator: KAIROS_PUBLISHING_RUNTIME_ORCHESTRATOR_BUILD, actions: KAIROS_PUBLISHING_RUNTIME_ACTIONS_BUILD, customerProjection: KAIROS_CUSTOMER_RUNTIME_PROJECTION_BUILD, customerProjectionStore: KAIROS_CUSTOMER_RUNTIME_PROJECTION_STORE_BUILD }; }
+function builds() { return { runtime: KAIROS_RUNTIME_PROJECT_BUILD, store: KAIROS_RUNTIME_PROJECT_STORE_BUILD, orchestrator: KAIROS_PUBLISHING_RUNTIME_ORCHESTRATOR_BUILD, actions: KAIROS_PUBLISHING_RUNTIME_ACTIONS_BUILD, customerProjection: KAIROS_CUSTOMER_RUNTIME_PROJECTION_BUILD, customerProjectionStore: KAIROS_CUSTOMER_RUNTIME_PROJECTION_STORE_BUILD, revenueStore: KAIROS_REVENUE_PRODUCT_STORE_BUILD }; }
 function failure(error) { return json({ success: false, error: { code: error?.code || "RUNTIME_PROJECT_INVALID", message: error?.message || "Kairos runtime project operation failed." } }, error?.status || 400); }
 function method(allowed) { return json({ success: false, error: { code: "METHOD_NOT_ALLOWED", message: `Use ${allowed}.` } }, 405); }
 async function body(request) { return request.json().catch(() => ({})); }
 function stampCustomerProjection(response) { const headers = new Headers(response.headers); headers.set("X-Kairos-Customer-Runtime-Projection", KAIROS_CUSTOMER_RUNTIME_PROJECTION_BUILD); headers.set("X-Kairos-Customer-Runtime-Projection-Store", KAIROS_CUSTOMER_RUNTIME_PROJECTION_STORE_BUILD); return new Response(response.body, { status: response.status, statusText: response.statusText, headers }); }
+function stampRevenueProduct(response) { const headers = new Headers(response.headers); headers.set("X-Kairos-Revenue-Product-Store", KAIROS_REVENUE_PRODUCT_STORE_BUILD); return new Response(response.body, { status: response.status, statusText: response.statusText, headers }); }
 function json(value, status = 200) { return new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Kairos-Runtime-Project-Store": KAIROS_RUNTIME_PROJECT_STORE_BUILD, "X-Kairos-Publishing-Runtime-Orchestrator": KAIROS_PUBLISHING_RUNTIME_ORCHESTRATOR_BUILD, "X-Kairos-Publishing-Runtime-Actions": KAIROS_PUBLISHING_RUNTIME_ACTIONS_BUILD } }); }
