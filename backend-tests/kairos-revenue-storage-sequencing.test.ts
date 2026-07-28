@@ -4,6 +4,7 @@ import { getKairosRevenueExecutionQueue, requireNextKairosRevenueJob } from "../
 import { readFileSync } from "node:fs";
 
 const storeSource = readFileSync(new URL("../cloudflare/mmg-ios/src/kairos-revenue-product-store-v1.js", import.meta.url), "utf8");
+const storageSource = readFileSync(new URL("../cloudflare/mmg-ios/src/kairos-revenue-asset-storage-v1.js", import.meta.url), "utf8");
 const dashboardSource = readFileSync(new URL("../web/kairos-dashboard/scripts/revenue-engine-operations.js", import.meta.url), "utf8");
 
 describe("Kairos revenue storage and execution sequencing", () => {
@@ -38,11 +39,11 @@ describe("Kairos revenue storage and execution sequencing", () => {
     expect(storeSource).toContain("registerKairosRevenueAsset");
     expect(storeSource).toContain("completeKairosRevenueJob");
     expect(storeSource).toContain("execute-next");
-    expect(storeSource).toContain("KAIROS_REVENUE_ASSETS");
+    expect(storageSource).toContain("KAIROS_REVENUE_ASSETS");
   });
 
   it("keeps production execution separate from Shopify publication", () => {
-    expect(storeSource).toContain("automaticPublicationAllowed");
+    expect(storageSource).toContain("automaticPublicationAllowed: false");
     expect(storeSource).not.toContain("productCreate(");
     expect(storeSource).not.toContain("productSet(");
     expect(dashboardSource).not.toContain("PUBLISH PRODUCT LIVE");
