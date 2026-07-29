@@ -54,16 +54,31 @@ jobs:
       - name: Provision canonical revenue buckets
         working-directory: cloudflare/mmg-ios
         run: |
-          set -euo pipefail
-          buckets="$(npx wrangler r2 bucket list 2>&1)"
-          printf '%s\n' "${buckets}"
-          if ! grep -Fq 'mmg-kairos-revenue-assets' <<<"${buckets}"; then
-            npx wrangler r2 bucket create mmg-kairos-revenue-assets
-          fi
-          buckets="$(npx wrangler r2 bucket list 2>&1)"
-          if ! grep -Fq 'mmg-kairos-revenue-assets-preview' <<<"${buckets}"; then
-            npx wrangler r2 bucket create mmg-kairos-revenue-assets-preview
-          fi
+          set -uo pipefail
+          ensure_bucket() {
+            local bucket="$1"
+            local output status
+            output="$(npx wrangler r2 bucket create "${bucket}" 2>&1)"
+            status=$?
+            printf '%s\n' "${output}"
+            if [ "${status}" -eq 0 ]; then
+              return 0
+            fi
+            if grep -Eqi 'already exists|already been taken|duplicate' <<<"${output}"; then
+              echo "Bucket ${bucket} already exists; continuing."
+              return 0
+            fi
+            echo "Unable to provision ${bucket}."
+            return "${status}"
+          }
+          ensure_bucket mmg-kairos-revenue-assets
+          ensure_bucket mmg-kairos-revenue-assets-preview
+          list_output="$(npx wrangler r2 bucket list 2>&1)"
+          list_status=$?
+          printf '%s\n' "${list_output}"
+          test "${list_status}" -eq 0
+          grep -Fq 'mmg-kairos-revenue-assets' <<<"${list_output}"
+          grep -Fq 'mmg-kairos-revenue-assets-preview' <<<"${list_output}"
 
       - name: Validate production bundle
         working-directory: cloudflare/mmg-ios
