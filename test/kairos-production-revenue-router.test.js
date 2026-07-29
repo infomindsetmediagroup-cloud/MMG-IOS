@@ -12,11 +12,48 @@ describe("Kairos production revenue router", () => {
   it("registers the complete governed first-product action surface", () => {
     const actions = listProductionRevenueActions().map((item) => item.action);
     expect(actions).toEqual(expect.arrayContaining([
+      "bootstrap-live-runtime",
       "execute-content-batch", "review-content-asset", "content-gate",
       "execute-visual-batch", "review-visual-asset", "visual-gate",
       "execute-package-batch", "review-package-asset", "package-gate",
       "create-shopify-draft", "certify-launch", "status",
     ]));
+  });
+
+  it("routes the live bootstrap only with exact confirmation and operator identity", async () => {
+    const bootstrapLiveRuntime = vi.fn(async (input) => ({
+      runId: "run-1",
+      nextAction: "execute-content-batch",
+      automaticPublicationAllowed: input.automaticPublicationAllowed,
+    }));
+
+    const response = await routeProductionRevenueAction({ bootstrapLiveRuntime }, {
+      ...operator,
+      action: "bootstrap-live-runtime",
+      method: "POST",
+      confirmation: "BOOTSTRAP LIVE REVENUE RUNTIME",
+      revenueProductId: "product-1",
+    });
+
+    expect(bootstrapLiveRuntime).toHaveBeenCalledWith(expect.objectContaining({
+      revenueProductId: "product-1",
+      automaticPublicationAllowed: false,
+    }));
+    expect(response.result).toMatchObject({
+      runId: "run-1",
+      nextAction: "execute-content-batch",
+      automaticPublicationAllowed: false,
+    });
+    expect(response.headers["x-kairos-automatic-publication"]).toBe("disabled");
+  });
+
+  it("rejects an unconfirmed live bootstrap", async () => {
+    await expect(routeProductionRevenueAction({ bootstrapLiveRuntime: vi.fn() }, {
+      ...operator,
+      action: "bootstrap-live-runtime",
+      method: "POST",
+      revenueProductId: "product-1",
+    })).rejects.toMatchObject({ code: "REVENUE_CONFIRMATION_REQUIRED", status: 409 });
   });
 
   it("preserves exact confirmation and publication boundaries", async () => {
