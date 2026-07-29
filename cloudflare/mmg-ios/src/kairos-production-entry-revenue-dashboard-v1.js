@@ -4,6 +4,7 @@ import {
   handleKairosRevenueProductObjectRequest,
   KAIROS_REVENUE_PRODUCT_STORE_BUILD,
 } from "./kairos-revenue-product-store-v1.js";
+import { readShopifyDashboardAnalyticsV2 } from "./shopify-live-analytics-v2.js";
 
 export {
   KairosProjectAgent,
@@ -11,7 +12,7 @@ export {
   KairosManuscriptGenerationWorkflow,
 } from "./kairos-production-entry-local-inference-v1.js";
 
-export const KAIROS_REVENUE_DASHBOARD_ENTRY_BUILD = "kairos-revenue-dashboard-entry-20260729-2";
+export const KAIROS_REVENUE_DASHBOARD_ENTRY_BUILD = "kairos-revenue-dashboard-entry-20260729-3";
 
 export class KairosProject extends CurrentKairosProject {
   async fetch(request) {
@@ -27,6 +28,22 @@ export default {
 
     if (!url.pathname.startsWith("/api/")) {
       return serveDashboardAsset(request, env);
+    }
+
+    if (url.pathname === "/api/analytics/shopify" && request.method === "GET") {
+      try {
+        const analytics = await readShopifyDashboardAnalyticsV2(env);
+        return json({ status: analytics.status, analytics });
+      } catch (error) {
+        return json({
+          status: "needs-attention",
+          analytics: { status: "unavailable", metrics: [] },
+          error: {
+            code: error?.code || "shopify_analytics_unavailable",
+            message: error instanceof Error ? error.message : "Shopify analytics are unavailable.",
+          },
+        }, Number(error?.status || 503));
+      }
     }
 
     const revenueResponse = await handleKairosRevenueProductAPI(request.clone(), env);
@@ -75,5 +92,18 @@ function stampRevenueBoundary(response) {
     status: response.status,
     statusText: response.statusText,
     headers,
+  });
+}
+
+function json(value, status = 200) {
+  return new Response(JSON.stringify(value), {
+    status,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Kairos-Revenue-Dashboard-Entry": KAIROS_REVENUE_DASHBOARD_ENTRY_BUILD,
+      "X-Kairos-Shopify-Analytics": "verified-credential-selection-v2",
+      "X-Content-Type-Options": "nosniff",
+    },
   });
 }
