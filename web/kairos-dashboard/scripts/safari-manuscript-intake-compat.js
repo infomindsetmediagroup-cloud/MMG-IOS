@@ -1,4 +1,4 @@
-const BUILD = "safari-manuscript-intake-compat-20260729-4";
+const BUILD = "safari-manuscript-intake-compat-20260729-5";
 
 installRandomUUIDFallback();
 installSyntheticFileFallback();
@@ -9,11 +9,11 @@ window.KairosSafariManuscriptIntakeCompat = Object.freeze({ ready: true, build: 
 
 function activateExecutiveOperatingSystem() {
   if (document.querySelector("#kairos-executive-os")) {
-    activateLiveExecutionDetails();
+    activateBrowserLayers();
     return;
   }
   import("./executive-os.js?v=browser-finish-20260729-2")
-    .then(activateLiveExecutionDetails)
+    .then(activateBrowserLayers)
     .catch(error => {
       console.error("Kairos Executive OS failed to activate.", error);
       document.body.classList.remove("abos-active");
@@ -23,12 +23,26 @@ function activateExecutiveOperatingSystem() {
     });
 }
 
+function activateBrowserLayers() {
+  activateLiveExecutionDetails();
+  activateSuccessFeedback();
+}
+
 function activateLiveExecutionDetails() {
   if (document.querySelector('script[data-kairos-live-details]')) return;
   const script = document.createElement("script");
   script.type = "module";
   script.src = "./scripts/executive-os-live-details.js?v=20260729-2";
   script.dataset.kairosLiveDetails = "true";
+  document.body.append(script);
+}
+
+function activateSuccessFeedback() {
+  if (document.querySelector('script[data-kairos-feedback]')) return;
+  const script = document.createElement("script");
+  script.type = "module";
+  script.src = "./scripts/executive-os-feedback.js?v=20260729-1";
+  script.dataset.kairosFeedback = "true";
   document.body.append(script);
 }
 
