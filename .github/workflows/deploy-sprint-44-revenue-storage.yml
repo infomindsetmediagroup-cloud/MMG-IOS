@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 concurrency:
   group: deploy-sprint-44-revenue-storage-production
@@ -28,7 +29,16 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+      GH_TOKEN: ${{ github.token }}
     steps:
+      - name: Report deployment pending
+        run: |
+          curl --fail --silent --show-error -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "{\"state\":\"pending\",\"context\":\"sprint44-revenue-storage\",\"description\":\"Provisioning R2 and deploying mmg-ios\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+
       - name: Check out authorized main commit
         uses: actions/checkout@v4
 
@@ -79,3 +89,21 @@ jobs:
           cat "${body}" || true
           cat "${headers}" || true
           exit 1
+
+      - name: Report deployment success
+        if: ${{ success() }}
+        run: |
+          curl --fail --silent --show-error -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "{\"state\":\"success\",\"context\":\"sprint44-revenue-storage\",\"description\":\"R2 provisioned and mmg-ios deployed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+
+      - name: Report deployment failure
+        if: ${{ failure() || cancelled() }}
+        run: |
+          curl --fail --silent --show-error -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "{\"state\":\"failure\",\"context\":\"sprint44-revenue-storage\",\"description\":\"Sprint 44 Cloudflare deployment failed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
