@@ -1,4 +1,4 @@
-const BUILD = "safari-manuscript-intake-compat-20260729-5";
+const BUILD = "safari-manuscript-intake-compat-20260729-6";
 
 installRandomUUIDFallback();
 installSyntheticFileFallback();
@@ -32,7 +32,7 @@ function activateLiveExecutionDetails() {
   if (document.querySelector('script[data-kairos-live-details]')) return;
   const script = document.createElement("script");
   script.type = "module";
-  script.src = "./scripts/executive-os-live-details.js?v=20260729-2";
+  script.src = "./scripts/executive-os-live-details.js?v=20260729-3";
   script.dataset.kairosLiveDetails = "true";
   document.body.append(script);
 }
@@ -77,7 +77,7 @@ function installSyntheticFileFallback() {
   if (typeof NativeBlob !== "function") return;
   function SafariSafeFile(parts, name, options = {}) {
     const blob = new NativeBlob(parts, options);
-    const filename = String(name || "manuscript.txt").replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-");
+    const filename = String(name || "manuscript.txt").replace(/[\/:*?"<>|\u0000-\u001f]/g, "-");
     try {
       Object.defineProperties(blob, {
         name: { configurable: true, enumerable: true, value: filename },
