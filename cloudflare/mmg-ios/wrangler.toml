@@ -9,7 +9,7 @@ keep_vars = true
 [assets]
 directory = "../../web/kairos-dashboard"
 binding = "ASSETS"
-run_worker_first = true
+run_worker_first = ["/api/*"]
 not_found_handling = "single-page-application"
 
 [images]
@@ -46,6 +46,8 @@ new_sqlite_classes = ["KairosProjectAgent"]
 
 # Existing production secrets are retained by keep_vars=true.
 # OPENAI_API_KEY and KAIROS_API_ACCESS_TOKEN must be Worker secrets, never plaintext vars.
+# Browser navigation and dashboard assets bypass the Worker runtime and resolve through ASSETS.
+# Only /api/* executes Worker code before static-asset serving.
 # Revenue dashboard reads and Durable Object state remain available without R2.
 # Revenue asset generation stays readiness-blocked until R2 is enabled and KAIROS_REVENUE_ASSETS is restored.
 # New manuscript generation starts through the persistent project Agent and Cloudflare Workflow.
