@@ -1,5 +1,5 @@
 name = "mmg-ios"
-main = "src/kairos-production-entry-revenue-dashboard-v1.js"
+main = "src/kairos-production-entry-operational-execution-v1.js"
 compatibility_date = "2026-07-24"
 compatibility_flags = ["nodejs_compat"]
 keep_names = true
@@ -50,14 +50,16 @@ new_sqlite_classes = ["KairosProjectAgent"]
 # Only /api/* executes Worker code before static-asset serving.
 # Revenue asset storage remains disabled until its account binding is separately provisioned.
 # Browser, approval, manuscript, Shopify analytics, and governed runtime deployment must not depend on R2.
-# New manuscript generation starts through the persistent project Agent and Cloudflare Workflow.
+# New objectives enter through the operational browser execution bridge, persistent project Agent, and Cloudflare Workflows.
+# The project foundation requires explicit approval before Kairos generates and verifies an authoritative source.
+# Manuscript production requires an explicit Start Production action and runs through the durable Workflow binding.
 # The stable generation-job endpoint is retained as the client contract and routes POST requests to the durable Workflow.
 # The legacy alarm runner is available only when KAIROS_MANUSCRIPT_START_MODE is explicitly changed to legacy-alarm.
 # Kairos never falls back to the legacy alarm runner automatically.
 # The phone only starts and monitors jobs. It never owns model execution or production state.
 # Product DRAFT creation and live publication remain available only through the exact approval-gated routes.
 # Digital Asset Edition V2 and customer-delivery verification remain mandatory.
-# Canonical approvals: Start Production Job, Approve Package, Approve & Publish Product.
+# Canonical approvals: Approve Foundation, Start Production Job, Approve Package, Approve & Publish Product.
 # The production model uses the official OpenAI Responses API through the OPENAI_API_KEY Worker secret.
 # Cloudflare neuron use remains disabled. Direct Shopify, theme, page, and navigation routes remain denied.
 
