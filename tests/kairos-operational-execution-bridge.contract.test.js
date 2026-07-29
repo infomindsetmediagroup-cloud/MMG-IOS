@@ -6,6 +6,7 @@ const entry = readFileSync("cloudflare/mmg-ios/src/kairos-production-entry-opera
 const wrangler = readFileSync("cloudflare/mmg-ios/wrangler.toml", "utf8");
 const browser = readFileSync("web/kairos-dashboard/scripts/executive-os-live-details.js", "utf8");
 const safari = readFileSync("web/kairos-dashboard/scripts/safari-manuscript-intake-compat.js", "utf8");
+const index = readFileSync("web/kairos-dashboard/index.html", "utf8");
 
 test("the production Worker activates the operational execution bridge", () => {
   assert.match(wrangler, /main = "src\/kairos-production-entry-operational-execution-v1\.js"/);
@@ -61,6 +62,17 @@ test("the Executive OS renders and invokes governed workflow controls", () => {
   assert.match(browser, /\/api\/workflows\/\$\{encodeURIComponent\(id\)\}/);
   assert.match(browser, /kairos:workflow:changed/);
   assert.match(safari, /executive-os-live-details\.js\?v=20260729-3/);
+});
+
+test("Safari API requests cannot leave the dashboard refreshing forever", () => {
+  assert.match(safari, /installGovernedFetchTimeout/);
+  assert.match(safari, /API_GET_TIMEOUT_MS = 12000/);
+  assert.match(safari, /API_MUTATION_TIMEOUT_MS = 45000/);
+  assert.match(safari, /Promise\.race/);
+  assert.match(safari, /AbortController/);
+  assert.match(safari, /TimeoutError/);
+  assert.match(safari, /executive-os\.js\?v=browser-finish-20260729-3/);
+  assert.match(index, /safari-manuscript-intake-compat\.js\?v=safari-intake-fix-20260729-7/);
 });
 
 test("operational readiness is a non-mutating deployment gate", () => {
