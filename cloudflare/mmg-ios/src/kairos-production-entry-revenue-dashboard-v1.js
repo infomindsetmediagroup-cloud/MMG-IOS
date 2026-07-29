@@ -4,6 +4,11 @@ import {
   handleKairosRevenueProductObjectRequest,
   KAIROS_REVENUE_PRODUCT_STORE_BUILD,
 } from "./kairos-revenue-product-store-v1.js";
+import {
+  handleFirstRevenueRunObjectRequest,
+  handleProductionRevenueRuntime,
+  KAIROS_PRODUCTION_REVENUE_RUNTIME_COMPOSITION_BUILD,
+} from "./kairos-production-revenue-runtime-composition-v1.js";
 import { readShopifyDashboardAnalyticsV3 } from "./shopify-live-analytics-v3.js";
 
 export {
@@ -12,10 +17,12 @@ export {
   KairosManuscriptGenerationWorkflow,
 } from "./kairos-production-entry-local-inference-v1.js";
 
-export const KAIROS_REVENUE_DASHBOARD_ENTRY_BUILD = "kairos-revenue-dashboard-entry-20260729-4";
+export const KAIROS_REVENUE_DASHBOARD_ENTRY_BUILD = "kairos-revenue-dashboard-entry-20260729-5";
 
 export class KairosProject extends CurrentKairosProject {
   async fetch(request) {
+    const firstRunResponse = await handleFirstRevenueRunObjectRequest(this.state, request);
+    if (firstRunResponse) return stampRevenueBoundary(firstRunResponse);
     const revenueResponse = await handleKairosRevenueProductObjectRequest(this.state, request);
     if (revenueResponse) return stampRevenueBoundary(revenueResponse);
     return super.fetch(request);
@@ -48,7 +55,8 @@ export default {
 
     const revenueResponse = await handleKairosRevenueProductAPI(request.clone(), env);
     if (revenueResponse) return stampRevenueBoundary(revenueResponse);
-    return currentRuntime.fetch(request, env, ctx);
+
+    return handleProductionRevenueRuntime(request, env, (nextRequest) => currentRuntime.fetch(nextRequest, env, ctx));
   },
   async scheduled(controller, env, ctx) {
     if (typeof currentRuntime.scheduled === "function") {
@@ -87,6 +95,7 @@ function stampRevenueBoundary(response) {
   headers.set("Cache-Control", "no-store");
   headers.set("X-Kairos-Revenue-Dashboard-Entry", KAIROS_REVENUE_DASHBOARD_ENTRY_BUILD);
   headers.set("X-Kairos-Revenue-Product-Store", KAIROS_REVENUE_PRODUCT_STORE_BUILD);
+  headers.set("X-Kairos-Revenue-Runtime-Composition", KAIROS_PRODUCTION_REVENUE_RUNTIME_COMPOSITION_BUILD);
   headers.set("X-Kairos-Automatic-Publication", "disabled");
   return new Response(response.body, {
     status: response.status,
@@ -103,6 +112,7 @@ function json(value, status = 200) {
       "Cache-Control": "no-store",
       "X-Kairos-Revenue-Dashboard-Entry": KAIROS_REVENUE_DASHBOARD_ENTRY_BUILD,
       "X-Kairos-Shopify-Analytics": "orders-fallback-v3",
+      "X-Kairos-Automatic-Publication": "disabled",
       "X-Content-Type-Options": "nosniff",
     },
   });
