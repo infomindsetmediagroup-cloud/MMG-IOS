@@ -1,0 +1,55 @@
+name: Deploy Kairos to Cloudflare Workers
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: kairos-cloudflare-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy mmg-ios production Worker
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.2.15"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Deploy Kairos Worker to production traffic
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: 9f81b4b13a3053004c105ccc9e3de67b
+          workingDirectory: cloudflare/mmg-ios
+          command: deploy
+
+      - name: Verify production dashboard
+        run: |
+          set -euo pipefail
+          response_headers="$(curl --fail --silent --show-error --location --head --max-time 30 https://mmg-ios.info-mindsetmediagroup.workers.dev/)"
+          echo "$response_headers"
+          echo "$response_headers" | grep -qi '^content-type: text/html'
+
+      - name: Verify Shopify analytics endpoint
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 45 \
+            https://mmg-ios.info-mindsetmediagroup.workers.dev/api/analytics/shopify \
+            | tee /tmp/kairos-shopify-analytics.json
+          grep -q '"analytics"' /tmp/kairos-shopify-analytics.json
