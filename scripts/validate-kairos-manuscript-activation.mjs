@@ -6,6 +6,7 @@ const paths={
   wrangler:"cloudflare/mmg-ios/wrangler.toml",
   localEntry:"cloudflare/mmg-ios/src/kairos-production-entry-local-inference-v1.js",
   revenueEntry:"cloudflare/mmg-ios/src/kairos-production-entry-revenue-dashboard-v1.js",
+  operationalEntry:"cloudflare/mmg-ios/src/kairos-production-entry-operational-execution-v1.js",
   localInference:"cloudflare/mmg-ios/src/kairos-local-inference-v1.js",
   backendGeneration:"cloudflare/mmg-ios/src/kairos-manuscript-generation-job-v1.js",
   entry:"cloudflare/mmg-ios/src/kairos-production-entry-digital-asset-v2-v1.js",
@@ -25,18 +26,36 @@ const paths={
 };
 for(const[name,relative]of Object.entries(paths))if(!fs.existsSync(path.join(root,relative)))fail(`Missing ${name}: ${relative}`);
 const values=Object.fromEntries(Object.entries(paths).map(([name,relative])=>[name,name==="governanceContract"||name==="registry"?JSON.parse(read(relative)):read(relative)]));
-const{wrangler,localEntry,revenueEntry,localInference,backendGeneration,entry,deliveryEntry,delivery,boundary,autoPipeline,productPublication,digitalAssetContract,creationArtifacts,client,index,governanceContract,doctrine,registry,deploy}=values;
+const{wrangler,localEntry,revenueEntry,operationalEntry,localInference,backendGeneration,entry,deliveryEntry,delivery,boundary,autoPipeline,productPublication,digitalAssetContract,creationArtifacts,client,index,governanceContract,doctrine,registry,deploy}=values;
 
 const usesLocalEntry=wrangler.includes('main = "src/kairos-production-entry-local-inference-v1.js"');
 const usesRevenueEntry=wrangler.includes('main = "src/kairos-production-entry-revenue-dashboard-v1.js"');
-assert(usesLocalEntry||usesRevenueEntry,"The active Worker must use the governed manuscript entry or its governed revenue wrapper.");
-if(usesRevenueEntry){
+const usesOperationalEntry=wrangler.includes('main = "src/kairos-production-entry-operational-execution-v1.js"');
+assert(usesLocalEntry||usesRevenueEntry||usesOperationalEntry,"The active Worker must use the governed manuscript entry, revenue wrapper, or validated operational wrapper.");
+if(usesRevenueEntry||usesOperationalEntry){
   assert(revenueEntry.includes('from "./kairos-production-entry-local-inference-v1.js"'),"The revenue wrapper must import the governed manuscript entry.");
   assert(revenueEntry.includes("currentRuntime.fetch"),"The revenue wrapper must delegate unmatched requests to the governed manuscript runtime.");
   assert(revenueEntry.includes('X-Kairos-Automatic-Publication", "disabled"'),"The revenue wrapper must preserve the publication-disabled boundary.");
 }
+if(usesOperationalEntry){
+  for(const marker of[
+    'from "./kairos-production-entry-revenue-dashboard-v1.js"',
+    'KAIROS_PROJECT_AGENT',
+    'KAIROS_PROJECT_WORKFLOW',
+    'KAIROS_MANUSCRIPT_WORKFLOW',
+    'startFoundationWorkflow',
+    'approveFoundationWorkflow',
+    'createAndStoreAuthoritativeSource',
+    'startManuscriptGenerationWorkflow',
+    'approvalPolicy: "explicit"',
+    'automaticPublicationAllowed: false',
+    'commerceMutationAllowed: false',
+  ])assert(operationalEntry.includes(marker),`The operational wrapper is missing a governed manuscript contract: ${marker}`);
+}
 assert(wrangler.includes('KAIROS_MANUSCRIPT_RUNTIME_ENABLED = "true"'),"Manuscript runtime activation flag is missing.");
 assert(wrangler.includes('KAIROS_CLOUDFLARE_NEURONS_ENABLED = "false"'),"Cloudflare neuron use must remain disabled.");
+assert(wrangler.includes('binding = "KAIROS_PROJECT_WORKFLOW"'),"The foundation Workflow binding is missing.");
+assert(wrangler.includes('binding = "KAIROS_MANUSCRIPT_WORKFLOW"'),"The manuscript Workflow binding is missing.");
 assert(localEntry.includes("handleManuscriptGeneration"),"The active entry must route backend generation jobs.");
 assert(localEntry.includes("resumeManuscriptGenerationAlarm"),"The Durable Object alarm continuation is missing.");
 assert(localEntry.includes("X-Kairos-Manuscript-Generation"),"The runtime must report the backend generation build.");
@@ -95,5 +114,5 @@ assert(registry.productionReleasePolicy?.livePublishRequiresExplicitUserAction==
 assert(registry.productionReleasePolicy?.themeMutationAuthorized===false,"Theme mutation must remain unauthorized.");
 assert(registry.productionReleasePolicy?.navigationMutationAuthorized===false,"Navigation mutation must remain unauthorized.");
 for(const advisor of registry.advisors||[]){assert(advisor.productionDependency===false,`${advisor.id} cannot be a production dependency by default.`);assert(advisor.mutationAuthority!==true,`${advisor.id} cannot have unrestricted mutation authority.`);}
-console.log("Kairos backend-owned manuscript generation, Digital Asset Edition V2, customer delivery, Admin Asset Vault, and governed product-release validation passed.");
+console.log("Kairos backend-owned manuscript generation, operational browser execution, Digital Asset Edition V2, customer delivery, Admin Asset Vault, and governed product-release validation passed.");
 function read(relative){return fs.readFileSync(path.join(root,relative),"utf8");}function assert(condition,message){if(!condition)fail(message);}function fail(message){console.error(`Kairos manuscript activation validation failed: ${message}`);process.exit(1);}

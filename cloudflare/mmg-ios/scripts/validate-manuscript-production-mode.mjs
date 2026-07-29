@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const BUILD = "kairos-manuscript-production-validator-20260729-9";
+const BUILD = "kairos-manuscript-production-validator-20260729-10";
 const here = dirname(fileURLToPath(import.meta.url));
 const workerRoot = join(here, "..");
 const sourceRoot = join(workerRoot, "src");
@@ -11,6 +11,7 @@ const wranglerPath = join(workerRoot, "wrangler.toml");
 const manuscriptEntryPath = join(sourceRoot, "kairos-production-entry-manuscript-online-v1.js");
 const governedEntryPath = join(sourceRoot, "kairos-production-entry-local-inference-v1.js");
 const revenueEntryPath = join(sourceRoot, "kairos-production-entry-revenue-dashboard-v1.js");
+const operationalEntryPath = join(sourceRoot, "kairos-production-entry-operational-execution-v1.js");
 const backendGenerationPath = join(sourceRoot, "kairos-manuscript-generation-job-v1.js");
 const boundaryPath = join(sourceRoot, "kairos-manuscript-operation-boundary-v1.js");
 const publishingEntryPath = join(sourceRoot, "kairos-production-entry-publishing-readiness-v1.js");
@@ -19,7 +20,7 @@ const packagePath = join(sourceRoot, "kairos-publishing-package-v1.js");
 const autoPipelinePath = join(sourceRoot, "kairos-manuscript-auto-pipeline-v1.js");
 const productPublicationPath = join(sourceRoot, "kairos-product-publication-v1.js");
 
-for (const file of [wranglerPath, manuscriptEntryPath, governedEntryPath, revenueEntryPath, backendGenerationPath, boundaryPath, publishingEntryPath, setupPath, packagePath, autoPipelinePath, productPublicationPath]) {
+for (const file of [wranglerPath, manuscriptEntryPath, governedEntryPath, revenueEntryPath, operationalEntryPath, backendGenerationPath, boundaryPath, publishingEntryPath, setupPath, packagePath, autoPipelinePath, productPublicationPath]) {
   assert.ok(existsSync(file), `Required manuscript production file is missing: ${file}`);
 }
 
@@ -31,8 +32,9 @@ assert.ok(
     "kairos-production-entry-manuscript-online-v1.js",
     "kairos-production-entry-local-inference-v1.js",
     "kairos-production-entry-revenue-dashboard-v1.js",
+    "kairos-production-entry-operational-execution-v1.js",
   ].includes(activeEntryMatch[1]),
-  "Wrangler must point to the manuscript runtime or a governed compatibility wrapper.",
+  "Wrangler must point to the manuscript runtime or a validated governed compatibility wrapper.",
 );
 
 for (const marker of [
@@ -43,6 +45,9 @@ for (const marker of [
   'binding = "ASSETS"',
   'binding = "IMAGES"',
   'name = "KAIROS_PROJECTS"',
+  'name = "KAIROS_PROJECT_AGENT"',
+  'binding = "KAIROS_PROJECT_WORKFLOW"',
+  'binding = "KAIROS_MANUSCRIPT_WORKFLOW"',
 ]) assert.ok(wrangler.includes(marker), `Required production configuration is missing: ${marker}`);
 assert.ok(!wrangler.includes('"* * * * *"'), "Minute-level website reconciliation must remain disabled.");
 assert.ok(!wrangler.includes('binding = "AI"'), "Paid Cloudflare AI binding must remain absent.");
@@ -70,6 +75,26 @@ for (const marker of [
   'currentRuntime.scheduled',
   'X-Kairos-Automatic-Publication',
 ]) assert.ok(revenueEntry.includes(marker), `Governed revenue wrapper is missing: ${marker}`);
+
+const operationalEntry = readFileSync(operationalEntryPath, "utf8");
+for (const marker of [
+  './kairos-production-entry-revenue-dashboard-v1.js',
+  'KAIROS_OPERATIONAL_EXECUTION_BUILD',
+  'KAIROS_PROJECT_AGENT',
+  'KAIROS_PROJECT_WORKFLOW',
+  'KAIROS_MANUSCRIPT_WORKFLOW',
+  '/api/operational-readiness',
+  '/api/hub/run',
+  '/api/workflows',
+  'bootstrapProject',
+  'startFoundationWorkflow',
+  'approveFoundationWorkflow',
+  'createAndStoreAuthoritativeSource',
+  'startManuscriptGenerationWorkflow',
+  'approvalPolicy: "explicit"',
+  'automaticPublicationAllowed: false',
+  'commerceMutationAllowed: false',
+]) assert.ok(operationalEntry.includes(marker), `Operational execution wrapper is missing governed contract: ${marker}`);
 
 const backendGeneration = readFileSync(backendGenerationPath, "utf8");
 for (const marker of [
@@ -140,5 +165,6 @@ console.log(JSON.stringify({
   directWebsiteMutationAuthorized: false,
   minuteWebsiteCronEnabled: false,
   productionEntry: activeEntryMatch[1],
+  operationalExecutionValidated: activeEntryMatch[1] === "kairos-production-entry-operational-execution-v1.js",
   runtimeVerification: "wrangler-dry-run",
 }, null, 2));

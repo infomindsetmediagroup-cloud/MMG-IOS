@@ -10,6 +10,7 @@ on:
       - 'server/kairos/**'
       - 'backend-tests/**'
       - 'browser-tests/**'
+      - 'tests/**'
       - 'playwright.config.mjs'
       - 'governance/kairos-shopify-operation-scope-v1.json'
       - 'governance/kairos-builder-plugin-registry-v1.json'
@@ -22,6 +23,7 @@ on:
       - 'web/kairos-dashboard/**'
       - '.github/workflows/validate-kairos-change.yml'
       - '.github/workflows/deploy-kairos-manuscript-runtime.yml'
+      - '.github/workflows/deploy-sprint-44-revenue-storage.yml'
   workflow_dispatch:
 
 concurrency:
@@ -61,6 +63,7 @@ jobs:
           node --check cloudflare/kairos/intelligence-runtime.js
           node --check cloudflare/kairos/intelligence-api.js
           node --check cloudflare/mmg-ios/src/kairos-production-entry-local-inference-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-production-entry-operational-execution-v1.js
           node --check cloudflare/mmg-ios/src/kairos-project-agent-v1.js
           node --check cloudflare/mmg-ios/src/kairos-project-agent-api-v1.js
           node --check cloudflare/mmg-ios/src/kairos-project-foundation-workflow-v1.js
@@ -70,6 +73,8 @@ jobs:
           node --check cloudflare/mmg-ios/src/kairos-runtime-health-v1.js
           node --check cloudflare/mmg-ios/src/kairos-manuscript-operation-boundary-v1.js
           node --check cloudflare/mmg-ios/src/kairos-production-entry-manuscript-online-v1.js
+          node --check web/kairos-dashboard/scripts/executive-os-live-details.js
+          node --check web/kairos-dashboard/scripts/safari-manuscript-intake-compat.js
           node --check web/kairos-dashboard/scripts/manuscript-project-setup.js
           node --check web/kairos-dashboard/scripts/manuscript-editorial-workbench.js
           node --check web/kairos-dashboard/scripts/kairos-local-inference.js
@@ -92,6 +97,9 @@ jobs:
 
       - name: Test Kairos manuscript generation workflow
         run: npx vitest run backend-tests/kairos-manuscript-generation-workflow.test.ts
+
+      - name: Test operational browser execution bridge
+        run: node --test tests/kairos-operational-execution-bridge.contract.test.js
 
       - name: Install WebKit browser
         run: npx playwright install --with-deps webkit > /dev/null
