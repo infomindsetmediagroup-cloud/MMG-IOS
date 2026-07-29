@@ -10,6 +10,11 @@ import {
   KAIROS_PRODUCTION_REVENUE_RUNTIME_COMPOSITION_BUILD,
 } from "./kairos-production-revenue-runtime-composition-v1.js";
 import { readShopifyDashboardAnalyticsV3 } from "./shopify-live-analytics-v3.js";
+import {
+  buildExecutiveBriefing,
+  readLatestExecutiveBriefing,
+  decideExecutiveBriefingItem,
+} from "./kairos-executive-briefing-v1.js";
 
 export {
   KairosProjectAgent,
@@ -17,7 +22,7 @@ export {
   KairosManuscriptGenerationWorkflow,
 } from "./kairos-production-entry-local-inference-v1.js";
 
-export const KAIROS_REVENUE_DASHBOARD_ENTRY_BUILD = "kairos-revenue-dashboard-entry-20260729-5";
+export const KAIROS_REVENUE_DASHBOARD_ENTRY_BUILD = "kairos-revenue-dashboard-entry-20260729-6";
 
 export class KairosProject extends CurrentKairosProject {
   async fetch(request) {
@@ -36,6 +41,9 @@ export default {
     if (!url.pathname.startsWith("/api/")) {
       return serveDashboardAsset(request, env);
     }
+
+    const briefingResponse = await handleExecutiveBriefingRoute(request, env);
+    if (briefingResponse) return stampRevenueBoundary(briefingResponse);
 
     if (url.pathname === "/api/analytics/shopify" && request.method === "GET") {
       try {
@@ -65,6 +73,40 @@ export default {
     return undefined;
   },
 };
+
+async function handleExecutiveBriefingRoute(request, env) {
+  const url = new URL(request.url);
+  const path = url.pathname;
+  const method = request.method.toUpperCase();
+  if (!path.startsWith("/api/executive-briefing/")) return null;
+
+  try {
+    if (path === "/api/executive-briefing/latest" && method === "GET") {
+      const briefing = await readLatestExecutiveBriefing(request);
+      return briefing ? json({ briefing }) : json({ briefing: null }, 404);
+    }
+
+    if (path === "/api/executive-briefing/build" && method === "POST") {
+      const briefing = await buildExecutiveBriefing(request, env, "manual");
+      return json({ briefing });
+    }
+
+    if (path === "/api/executive-briefing/decide" && method === "POST") {
+      const payload = await request.json().catch(() => ({}));
+      const briefing = await decideExecutiveBriefingItem(request, payload);
+      return json({ briefing });
+    }
+
+    return null;
+  } catch (error) {
+    return json({
+      error: {
+        code: "executive_briefing_unavailable",
+        message: error instanceof Error ? error.message : "Kairos could not prepare the approval brief.",
+      },
+    }, 503);
+  }
+}
 
 async function serveDashboardAsset(request, env) {
   if (!env?.ASSETS?.fetch) {
