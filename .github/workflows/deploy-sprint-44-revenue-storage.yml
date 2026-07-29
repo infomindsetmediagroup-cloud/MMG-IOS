@@ -58,8 +58,11 @@ jobs:
           ensure_bucket() {
             local bucket="$1"
             local output status
-            output="$(npx wrangler r2 bucket create "${bucket}" 2>&1)"
-            status=$?
+            if output="$(npx wrangler r2 bucket create "${bucket}" 2>&1)"; then
+              status=0
+            else
+              status=$?
+            fi
             printf '%s\n' "${output}"
             if [ "${status}" -eq 0 ]; then
               return 0
@@ -73,8 +76,11 @@ jobs:
           }
           ensure_bucket mmg-kairos-revenue-assets
           ensure_bucket mmg-kairos-revenue-assets-preview
-          list_output="$(npx wrangler r2 bucket list 2>&1)"
-          list_status=$?
+          if list_output="$(npx wrangler r2 bucket list 2>&1)"; then
+            list_status=0
+          else
+            list_status=$?
+          fi
           printf '%s\n' "${list_output}"
           test "${list_status}" -eq 0
           grep -Fq 'mmg-kairos-revenue-assets' <<<"${list_output}"
