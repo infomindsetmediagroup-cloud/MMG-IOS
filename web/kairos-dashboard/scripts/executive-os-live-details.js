@@ -1,9 +1,10 @@
-const BUILD = "kairos-executive-live-details-20260729-2";
+const BUILD = "kairos-executive-live-details-20260729-3";
 const root = document.querySelector("#kairos-executive-os");
-const detailState = { workflows: [], loading: false, error: "", updatedAt: null, selectedID: "" };
+const detailState = { workflows: [], loading: false, error: "", actionError: "", updatedAt: null, selectedID: "", workingID: "" };
 
 if (root) {
   installStyles();
+  installOperationalStyles();
   observeShell();
   refreshDetails();
   setInterval(refreshDetails, 60000);
@@ -64,7 +65,7 @@ function renderDetails() {
 function selectWorkflows(assetsMode) {
   const sorted = [...detailState.workflows].sort((a, b) => dateValue(b.updatedAt || b.completedAt || b.createdAt) - dateValue(a.updatedAt || a.completedAt || a.createdAt));
   if (assetsMode) return sorted.filter(item => normalizeState(item) === "completed").slice(0, 12);
-  const priority = { blocked: 0, active: 1, pending: 2, queued: 3, completed: 4 };
+  const priority = { blocked: 0, pending: 1, queued: 2, active: 3, completed: 4 };
   return sorted.sort((a, b) => (priority[normalizeState(a)] ?? 5) - (priority[normalizeState(b)] ?? 5)).slice(0, 8);
 }
 
@@ -75,16 +76,19 @@ function workflowCard(item) {
   const nextAction = firstText(item.nextAction, item.nextStep, item.currentTask, item.currentStage, deriveNextAction(state));
   const evidence = evidenceItems(item).length;
   const meta = [item.department, item.workflowType, item.id].filter(Boolean).slice(0, 2).map(escapeHTML).join(" · ");
-  return `<article class="abos-execution-card" data-state="${escapeHTML(state)}"><button class="abos-card-open" data-workflow-open="${escapeHTML(workflowID(item))}" aria-label="Open workflow details"><div class="abos-execution-top"><div><p class="abos-execution-meta">${meta || "Kairos workflow"}</p><h3>${escapeHTML(item.title || item.objective || item.workflowType || "Governed work")}</h3><p>${escapeHTML(item.summary || item.objective || "Kairos is coordinating this work through the governed runtime.")}</p></div><span class="abos-pill">${escapeHTML(state)}</span></div><div class="abos-progress" role="progressbar" aria-label="Workflow progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress.percent}"><span style="--progress:${progress.percent}%"></span></div><div class="abos-execution-stats"><span><b>${progress.percent}%</b> complete</span><span><b>${progress.completed}${progress.total ? ` / ${progress.total}` : ""}</b> steps</span><span><b>${evidence}</b> evidence items</span></div>${blocker ? `<div class="abos-blocker"><strong>Blocked:</strong> ${escapeHTML(blocker)}</div>` : `<div class="abos-next"><strong>Next:</strong> ${escapeHTML(nextAction)}</div>`}<span class="abos-open-label">Open workflow →</span></button></article>`;
+  const actionLabel = actionRequiredLabel(item);
+  return `<article class="abos-execution-card" data-state="${escapeHTML(state)}"><button class="abos-card-open" data-workflow-open="${escapeHTML(workflowID(item))}" aria-label="Open workflow details"><div class="abos-execution-top"><div><p class="abos-execution-meta">${meta || "Kairos workflow"}</p><h3>${escapeHTML(item.title || item.objective || item.workflowType || "Governed work")}</h3><p>${escapeHTML(item.summary || item.objective || "Kairos is coordinating this work through the governed runtime.")}</p></div><span class="abos-pill">${escapeHTML(state)}</span></div><div class="abos-progress" role="progressbar" aria-label="Workflow progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress.percent}"><span style="--progress:${progress.percent}%"></span></div><div class="abos-execution-stats"><span><b>${progress.percent}%</b> complete</span><span><b>${progress.completed}${progress.total ? ` / ${progress.total}` : ""}</b> steps</span><span><b>${evidence}</b> evidence items</span></div>${blocker && state === "blocked" ? `<div class="abos-blocker"><strong>Blocked:</strong> ${escapeHTML(blocker)}</div>` : `<div class="abos-next"><strong>${actionLabel ? "Action required" : "Next"}:</strong> ${escapeHTML(nextAction)}</div>`}<span class="abos-open-label">${actionLabel ? `${escapeHTML(actionLabel)} →` : "Open workflow →"}</span></button></article>`;
 }
 
 function openWorkflow(id) {
   detailState.selectedID = id || "";
+  detailState.actionError = "";
   renderSelectedWorkflow();
 }
 
 function closeWorkflow() {
   detailState.selectedID = "";
+  detailState.actionError = "";
   document.querySelector("[data-workflow-dialog]")?.remove();
   document.body.classList.remove("abos-dialog-open");
 }
@@ -103,11 +107,56 @@ function renderSelectedWorkflow() {
   const dialog = document.createElement("div");
   dialog.className = "abos-workflow-dialog";
   dialog.dataset.workflowDialog = "true";
-  dialog.innerHTML = `<div class="abos-dialog-backdrop" data-dialog-close></div><section class="abos-dialog-panel" role="dialog" aria-modal="true" aria-labelledby="abos-workflow-title"><header class="abos-dialog-head"><div><p class="abos-kicker">${escapeHTML(item.department || item.workflowType || "Kairos workflow")}</p><h2 id="abos-workflow-title">${escapeHTML(item.title || item.objective || item.workflowType || "Governed work")}</h2></div><button class="abos-dialog-close" data-dialog-close aria-label="Close workflow details">×</button></header><p class="abos-dialog-summary">${escapeHTML(item.summary || item.objective || "Kairos is coordinating this work through the governed runtime.")}</p><div class="abos-dialog-metrics"><span><b>${progress.percent}%</b> complete</span><span><b>${progress.completed}${progress.total ? ` / ${progress.total}` : ""}</b> steps</span><span><b>${escapeHTML(state)}</b> status</span></div><div class="abos-progress" role="progressbar" aria-label="Workflow detail progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress.percent}"><span style="--progress:${progress.percent}%"></span></div>${blocker ? `<div class="abos-blocker"><strong>Blocked:</strong> ${escapeHTML(blocker)}</div>` : `<div class="abos-next"><strong>Next:</strong> ${escapeHTML(nextAction)}</div>`}<section class="abos-dialog-section"><h3>Execution timeline</h3>${tasks.length ? `<ol class="abos-task-list">${tasks.map(taskRow).join("")}</ol>` : `<div class="abos-empty">No task-level timeline is currently available.</div>`}</section><section class="abos-dialog-section"><h3>Evidence and deliverables</h3>${evidence.length ? `<div class="abos-evidence-list">${evidence.map(evidenceRow).join("")}</div>` : `<div class="abos-empty">No linked evidence is currently available.</div>`}</section><footer class="abos-dialog-footer"><span>Workflow ID: ${escapeHTML(workflowID(item))}</span><button class="abos-secondary" data-dialog-close>Close</button></footer></section>`;
+  dialog.dataset.workflowId = workflowID(item);
+  dialog.innerHTML = `<div class="abos-dialog-backdrop" data-dialog-close></div><section class="abos-dialog-panel" role="dialog" aria-modal="true" aria-labelledby="abos-workflow-title"><header class="abos-dialog-head"><div><p class="abos-kicker">${escapeHTML(item.department || item.workflowType || "Kairos workflow")}</p><h2 id="abos-workflow-title">${escapeHTML(item.title || item.objective || item.workflowType || "Governed work")}</h2></div><button class="abos-dialog-close" data-dialog-close aria-label="Close workflow details">×</button></header><p class="abos-dialog-summary">${escapeHTML(item.summary || item.objective || "Kairos is coordinating this work through the governed runtime.")}</p><div class="abos-dialog-metrics"><span><b>${progress.percent}%</b> complete</span><span><b>${progress.completed}${progress.total ? ` / ${progress.total}` : ""}</b> steps</span><span><b>${escapeHTML(state)}</b> status</span></div><div class="abos-progress" role="progressbar" aria-label="Workflow detail progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress.percent}"><span style="--progress:${progress.percent}%"></span></div>${blocker && state === "blocked" ? `<div class="abos-blocker"><strong>Blocked:</strong> ${escapeHTML(blocker)}</div>` : `<div class="abos-next"><strong>Next:</strong> ${escapeHTML(nextAction)}</div>`}${detailState.actionError ? `<div class="abos-action-error" role="alert">${escapeHTML(detailState.actionError)}</div>` : ""}<section class="abos-dialog-section"><h3>Execution timeline</h3>${tasks.length ? `<ol class="abos-task-list">${tasks.map(taskRow).join("")}</ol>` : `<div class="abos-empty">No task-level timeline is currently available.</div>`}</section><section class="abos-dialog-section"><h3>Evidence and deliverables</h3>${evidence.length ? `<div class="abos-evidence-list">${evidence.map(evidenceRow).join("")}</div>` : `<div class="abos-empty">No linked evidence is currently available.</div>`}</section>${workflowActions(item)}<footer class="abos-dialog-footer"><span>Workflow ID: ${escapeHTML(workflowID(item))}</span><button class="abos-secondary" data-dialog-close>Close</button></footer></section>`;
   document.body.append(dialog);
   document.body.classList.add("abos-dialog-open");
   dialog.querySelectorAll("[data-dialog-close]").forEach(button => button.addEventListener("click", closeWorkflow));
+  dialog.querySelectorAll("[data-workflow-action]").forEach(button => button.addEventListener("click", () => performWorkflowAction(item, button.dataset.workflowAction)));
   dialog.querySelector(".abos-dialog-close")?.focus();
+}
+
+function workflowActions(item) {
+  const disabled = detailState.workingID === workflowID(item) ? " disabled aria-busy=\"true\"" : "";
+  const buttons = [];
+  if (item.canResume) buttons.push(`<button class="abos-primary" data-workflow-action="resume"${disabled}>${detailState.workingID ? "Resuming…" : "Resume workflow"}</button>`);
+  if (item.canApprove) buttons.push(`<button class="abos-primary" data-workflow-action="approve"${disabled}>${detailState.workingID ? "Preparing source…" : "Approve foundation"}</button>`);
+  if (item.canReject) buttons.push(`<button class="abos-secondary" data-workflow-action="reject"${disabled}>Request revision</button>`);
+  if (item.canStartProduction) buttons.push(`<button class="abos-primary" data-workflow-action="start-production"${disabled}>${detailState.workingID ? "Starting…" : "Start production"}</button>`);
+  if (!buttons.length) return "";
+  return `<section class="abos-dialog-section abos-action-section"><h3>Governed action</h3><p>${escapeHTML(actionExplanation(item))}</p><div class="abos-dialog-actions">${buttons.join("")}</div></section>`;
+}
+
+async function performWorkflowAction(item, action) {
+  const id = workflowID(item);
+  if (!id || detailState.workingID) return;
+  if (action === "start-production" && !window.confirm("Start the approved Kairos production workflow now?")) return;
+  let reason = "";
+  if (action === "reject") {
+    reason = window.prompt("What revision does the foundation require?", "Revise the production foundation before execution.") || "";
+    if (!reason.trim()) return;
+  }
+  detailState.workingID = id;
+  detailState.actionError = "";
+  renderSelectedWorkflow();
+  try {
+    const response = await fetch(`/api/workflows/${encodeURIComponent(id)}/${encodeURIComponent(action)}`, {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json", "X-MMG-Client-Build": BUILD },
+      body: JSON.stringify(reason ? { reason } : {}),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body?.error?.message || `Kairos returned ${response.status}.`);
+    window.dispatchEvent(new CustomEvent("kairos:workflow:changed", { detail: { workflowID: id, action } }));
+    await refreshDetails();
+  } catch (error) {
+    detailState.actionError = String(error?.message || "Kairos could not complete the governed action.");
+  } finally {
+    detailState.workingID = "";
+    renderSelectedWorkflow();
+  }
 }
 
 function taskRow(task, index) {
@@ -154,6 +203,18 @@ function deriveNextAction(state) {
   if (state === "active") return "Complete the current governed execution step.";
   return "Wait for Kairos to advance the workflow or request approval.";
 }
+function actionRequiredLabel(item) {
+  if (item.canApprove) return "Approve foundation";
+  if (item.canStartProduction) return "Start production";
+  if (item.canResume) return "Resume workflow";
+  return "";
+}
+function actionExplanation(item) {
+  if (item.canApprove) return "Approval authorizes Kairos to generate and durably store the authoritative source. It does not publish or modify Shopify.";
+  if (item.canStartProduction) return "Start Production authorizes the durable manuscript workflow. Publication and commerce changes remain separately approval-gated.";
+  if (item.canResume) return "Resume reconnects this intake record to the persistent project Agent and foundation Workflow.";
+  return "This action remains governed by Kairos approval policy.";
+}
 function firstText(...values) { return values.find(value => typeof value === "string" && value.trim()) || "Review the workflow status."; }
 function number(value) { const parsed = Number(value); return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0; }
 function dateValue(value) { const parsed = Date.parse(value || ""); return Number.isFinite(parsed) ? parsed : 0; }
@@ -164,6 +225,13 @@ function installStyles() {
   link.href = "./styles/executive-os-live-details.css?v=20260729-2";
   link.dataset.kairosLiveDetails = "true";
   document.head.append(link);
+}
+function installOperationalStyles() {
+  if (document.querySelector("style[data-kairos-operational-actions]")) return;
+  const style = document.createElement("style");
+  style.dataset.kairosOperationalActions = "true";
+  style.textContent = ".abos-action-section{padding:16px;border:1px solid rgba(47,155,255,.28);border-radius:16px;background:rgba(47,155,255,.06)}.abos-action-section>p{margin:0 0 14px;color:var(--abos-muted);font-size:12px;line-height:1.5}.abos-dialog-actions{display:flex;gap:10px;flex-wrap:wrap}.abos-dialog-actions button[disabled]{opacity:.55;cursor:wait}.abos-action-error{margin-top:12px;padding:11px 12px;border-radius:12px;background:rgba(255,101,119,.1);color:#ffb0ba;font-size:12px;line-height:1.45}@media(max-width:640px){.abos-dialog-actions{display:grid}.abos-dialog-actions button{width:100%}}";
+  document.head.append(style);
 }
 function escapeHTML(value) {
   return String(value ?? "").replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
