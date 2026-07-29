@@ -8,7 +8,7 @@ const cssSource = fs.readFileSync("web/kairos-dashboard/styles/executive-os-live
 describe("Kairos Executive OS live execution details", () => {
   it("loads through the existing Safari-safe browser chain", () => {
     expect(compatSource).toContain("activateLiveExecutionDetails");
-    expect(compatSource).toContain("executive-os-live-details.js?v=20260729-1");
+    expect(compatSource).toContain("executive-os-live-details.js?v=20260729-2");
     expect(compatSource).toContain("data-kairos-live-details");
   });
 
@@ -27,9 +27,28 @@ describe("Kairos Executive OS live execution details", () => {
     expect(moduleSource).toContain('role="progressbar"');
   });
 
+  it("opens a complete workflow detail dialog", () => {
+    expect(moduleSource).toContain("data-workflow-open");
+    expect(moduleSource).toContain('role="dialog"');
+    expect(moduleSource).toContain('aria-modal="true"');
+    expect(moduleSource).toContain("Execution timeline");
+    expect(moduleSource).toContain("Evidence and deliverables");
+    expect(moduleSource).toContain("taskItems(item)");
+    expect(moduleSource).toContain("evidenceItems(item)");
+  });
+
+  it("allows only safe evidence links", () => {
+    expect(moduleSource).toContain("function safeHref");
+    expect(moduleSource).toContain("/^https?:\\/\\//i");
+    expect(moduleSource).toContain('rel="noopener noreferrer"');
+    expect(moduleSource).not.toContain("javascript:");
+  });
+
   it("retains mobile and reduced-motion behavior", () => {
     expect(cssSource).toContain("@media(max-width:640px)");
     expect(cssSource).toContain("@media(prefers-reduced-motion:reduce)");
     expect(cssSource).toContain("grid-template-columns:repeat(3,1fr)");
+    expect(cssSource).toContain("safe-area-inset-bottom");
+    expect(cssSource).toContain("abos-dialog-panel");
   });
 });
