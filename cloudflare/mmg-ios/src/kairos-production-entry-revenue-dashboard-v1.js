@@ -4,7 +4,7 @@ import {
   handleKairosRevenueProductObjectRequest,
   KAIROS_REVENUE_PRODUCT_STORE_BUILD,
 } from "./kairos-revenue-product-store-v1.js";
-import { readShopifyDashboardAnalyticsV2 } from "./shopify-live-analytics-v2.js";
+import { readShopifyDashboardAnalyticsV3 } from "./shopify-live-analytics-v3.js";
 
 export {
   KairosProjectAgent,
@@ -12,7 +12,7 @@ export {
   KairosManuscriptGenerationWorkflow,
 } from "./kairos-production-entry-local-inference-v1.js";
 
-export const KAIROS_REVENUE_DASHBOARD_ENTRY_BUILD = "kairos-revenue-dashboard-entry-20260729-3";
+export const KAIROS_REVENUE_DASHBOARD_ENTRY_BUILD = "kairos-revenue-dashboard-entry-20260729-4";
 
 export class KairosProject extends CurrentKairosProject {
   async fetch(request) {
@@ -32,7 +32,7 @@ export default {
 
     if (url.pathname === "/api/analytics/shopify" && request.method === "GET") {
       try {
-        const analytics = await readShopifyDashboardAnalyticsV2(env);
+        const analytics = await readShopifyDashboardAnalyticsV3(env);
         return json({ status: analytics.status, analytics });
       } catch (error) {
         return json({
@@ -102,7 +102,7 @@ function json(value, status = 200) {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store",
       "X-Kairos-Revenue-Dashboard-Entry": KAIROS_REVENUE_DASHBOARD_ENTRY_BUILD,
-      "X-Kairos-Shopify-Analytics": "verified-credential-selection-v2",
+      "X-Kairos-Shopify-Analytics": "orders-fallback-v3",
       "X-Content-Type-Options": "nosniff",
     },
   });
