@@ -5,6 +5,7 @@ import test from "node:test";
 const entry = readFileSync("cloudflare/mmg-ios/src/kairos-production-entry-operational-execution-v1.js", "utf8");
 const wrangler = readFileSync("cloudflare/mmg-ios/wrangler.toml", "utf8");
 const browser = readFileSync("web/kairos-dashboard/scripts/executive-os-live-details.js", "utf8");
+const executive = readFileSync("web/kairos-dashboard/scripts/executive-os.js", "utf8");
 const safari = readFileSync("web/kairos-dashboard/scripts/safari-manuscript-intake-compat.js", "utf8");
 const index = readFileSync("web/kairos-dashboard/index.html", "utf8");
 
@@ -71,8 +72,18 @@ test("Safari API requests cannot leave the dashboard refreshing forever", () => 
   assert.match(safari, /Promise\.race/);
   assert.match(safari, /AbortController/);
   assert.match(safari, /TimeoutError/);
-  assert.match(safari, /executive-os\.js\?v=browser-finish-20260729-3/);
-  assert.match(index, /safari-manuscript-intake-compat\.js\?v=safari-intake-fix-20260729-7/);
+  assert.match(safari, /executive-os\.js\?v=browser-finish-20260729-4/);
+  assert.match(index, /safari-manuscript-intake-compat\.js\?v=safari-intake-fix-20260729-8/);
+});
+
+test("the Executive OS core always releases its loading state", () => {
+  assert.match(executive, /API_GET_TIMEOUT_MS = 12000/);
+  assert.match(executive, /API_MUTATION_TIMEOUT_MS = 45000/);
+  assert.match(executive, /Promise\.race/);
+  assert.match(executive, /finally\s*\{[\s\S]*state\.loading = false/);
+  assert.match(executive, /root\.setAttribute\("aria-busy", "false"\)/);
+  assert.match(executive, /renderEmergencyRecovery/);
+  assert.match(executive, /data-hard-reload/);
 });
 
 test("operational readiness is a non-mutating deployment gate", () => {

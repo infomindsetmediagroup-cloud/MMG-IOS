@@ -1,4 +1,4 @@
-const BUILD = "safari-manuscript-intake-compat-20260729-7";
+const BUILD = "safari-manuscript-intake-compat-20260729-8";
 const API_GET_TIMEOUT_MS = 12000;
 const API_MUTATION_TIMEOUT_MS = 45000;
 
@@ -15,7 +15,7 @@ function activateExecutiveOperatingSystem() {
     activateBrowserLayers();
     return;
   }
-  import("./executive-os.js?v=browser-finish-20260729-3")
+  import("./executive-os.js?v=browser-finish-20260729-4")
     .then(activateBrowserLayers)
     .catch(error => {
       console.error("Kairos Executive OS failed to activate.", error);
