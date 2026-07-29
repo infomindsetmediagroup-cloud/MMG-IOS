@@ -1,5 +1,7 @@
-const BUILD = "kairos-abos-v2-browser-finish-20260729-2";
+const BUILD = "kairos-abos-v2-browser-finish-20260729-4";
 const STORAGE_KEY = "kairos.executive-os.session.v2";
+const API_GET_TIMEOUT_MS = 12000;
+const API_MUTATION_TIMEOUT_MS = 45000;
 const root = document.createElement("main");
 root.id = "kairos-executive-os";
 root.className = "abos-shell";
@@ -37,36 +39,52 @@ async function refresh({ quiet = false } = {}) {
   root.setAttribute("aria-busy", "true");
   if (!quiet) render();
 
-  const requests = [
-    ["Runtime health", "/api/health"],
-    ["Workflows", "/api/workflows"],
-    ["Executive briefing", "/api/executive-briefing/latest"],
-  ];
-  const results = await Promise.allSettled(requests.map(([, url]) => json(url)));
+  try {
+    const requests = [
+      ["Runtime health", "/api/health"],
+      ["Workflows", "/api/workflows"],
+      ["Executive briefing", "/api/executive-briefing/latest"],
+    ];
+    const results = await Promise.allSettled(requests.map(([, url]) => json(url)));
 
-  results.forEach((result, index) => {
-    const [name] = requests[index];
-    if (result.status === "rejected") {
-      state.warnings.push(`${name} is temporarily unavailable.`);
-      return;
-    }
-    const { response, body } = result.value;
-    if (!response.ok) {
-      state.warnings.push(`${name} returned ${response.status}.`);
-      return;
-    }
-    if (index === 0) state.health = body;
-    if (index === 1) state.workflows = Array.isArray(body?.workflows) ? body.workflows : [];
-    if (index === 2) state.briefing = body?.briefing || null;
-  });
+    results.forEach((result, index) => {
+      const [name] = requests[index];
+      if (result.status === "rejected") {
+        state.warnings.push(`${name} is temporarily unavailable.`);
+        return;
+      }
+      const { response, body } = result.value;
+      if (!response.ok) {
+        state.warnings.push(`${name} returned ${response.status}.`);
+        return;
+      }
+      if (index === 0) state.health = body;
+      if (index === 1) state.workflows = Array.isArray(body?.workflows) ? body.workflows : [];
+      if (index === 2) state.briefing = body?.briefing || null;
+    });
 
-  if (state.warnings.length === requests.length && !state.health && !state.workflows.length && !state.briefing) {
-    state.error = "Kairos could not reach the governed browser APIs. Check the connection and retry.";
+    if (state.warnings.length === requests.length && !state.health && !state.workflows.length && !state.briefing) {
+      state.error = "Kairos could not reach the governed browser APIs. Check the connection and retry.";
+    }
+    state.lastUpdated = new Date();
+  } catch (error) {
+    state.error = String(error?.message || "Kairos could not refresh the browser runtime.");
+  } finally {
+    state.loading = false;
+    root.setAttribute("aria-busy", "false");
+    try {
+      render();
+    } catch (error) {
+      renderEmergencyRecovery(error);
+    }
   }
+}
+
+function renderEmergencyRecovery(error) {
   state.loading = false;
-  state.lastUpdated = new Date();
   root.setAttribute("aria-busy", "false");
-  render();
+  root.innerHTML = `<section class="abos-hero abos-recovery" role="alert"><p class="abos-kicker">Browser recovery</p><h1>Kairos stopped safely.</h1><p>${esc(error?.message || "The dashboard could not finish rendering.")}</p><div class="abos-actions"><button class="abos-primary" data-hard-reload>Reload dashboard</button></div></section>`;
+  root.querySelector("[data-hard-reload]")?.addEventListener("click", () => window.location.reload());
 }
 
 function render() {
@@ -279,12 +297,41 @@ function windowTitle() {
 function label(value) { return value[0].toUpperCase() + value.slice(1); }
 function headers() { return { "Content-Type": "application/json", "X-MMG-Client-Build": BUILD }; }
 async function json(url, init = {}) {
-  const response = await fetch(url, { cache: "no-store", credentials: "include", ...init });
-  const text = await response.text();
-  let body = {};
-  try { body = text ? JSON.parse(text) : {}; }
-  catch { body = { message: text }; }
-  return { response, body };
+  const method = String(init?.method || "GET").toUpperCase();
+  const timeoutMs = method === "GET" || method === "HEAD" ? API_GET_TIMEOUT_MS : API_MUTATION_TIMEOUT_MS;
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  let timeoutID;
+
+  const operation = (async () => {
+    const response = await fetch(url, { cache: "no-store", credentials: "include", ...init, ...(controller ? { signal: controller.signal } : {}) });
+    const text = await response.text();
+    let body = {};
+    try { body = text ? JSON.parse(text) : {}; }
+    catch { body = { message: text }; }
+    return { response, body };
+  })();
+
+  const deadline = new Promise((_, reject) => {
+    timeoutID = setTimeout(() => {
+      try { controller?.abort(); } catch {}
+      const error = new Error(`Kairos request timed out after ${Math.round(timeoutMs / 1000)} seconds.`);
+      error.name = "TimeoutError";
+      reject(error);
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([operation, deadline]);
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      const timeoutError = new Error(`Kairos request timed out after ${Math.round(timeoutMs / 1000)} seconds.`);
+      timeoutError.name = "TimeoutError";
+      throw timeoutError;
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutID);
+  }
 }
 function esc(value) {
   return String(value ?? "").replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
