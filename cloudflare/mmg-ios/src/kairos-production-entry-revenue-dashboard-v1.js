@@ -31,6 +31,7 @@ export default {
     if (typeof currentRuntime.scheduled === "function") {
       return currentRuntime.scheduled(controller, env, ctx);
     }
+    return undefined;
   },
 };
 
