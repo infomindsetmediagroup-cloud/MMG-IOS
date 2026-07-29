@@ -66,12 +66,16 @@ jobs:
           set -euo pipefail
           for attempt in $(seq 1 24); do
             html="${RUNNER_TEMP}/kairos.html"
+            safari="${RUNNER_TEMP}/safari.js"
+            executive="${RUNNER_TEMP}/executive.js"
             health="${RUNNER_TEMP}/health.json"
             readiness="${RUNNER_TEMP}/readiness.json"
             workflows="${RUNNER_TEMP}/workflows.json"
             brief="${RUNNER_TEMP}/brief.json"
 
             html_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/?release=${GITHUB_SHA}&attempt=${attempt}" -o "${html}" -w '%{http_code}' || true)"
+            safari_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/safari-manuscript-intake-compat.js?v=safari-intake-fix-20260729-8&release=${GITHUB_SHA}&attempt=${attempt}" -o "${safari}" -w '%{http_code}' || true)"
+            executive_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/executive-os.js?v=browser-finish-20260729-4&release=${GITHUB_SHA}&attempt=${attempt}" -o "${executive}" -w '%{http_code}' || true)"
             health_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/api/health?release=${GITHUB_SHA}&attempt=${attempt}" -o "${health}" -w '%{http_code}' || true)"
             readiness_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/api/operational-readiness?release=${GITHUB_SHA}&attempt=${attempt}" -o "${readiness}" -w '%{http_code}' || true)"
             workflows_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/api/workflows?release=${GITHUB_SHA}&attempt=${attempt}" -o "${workflows}" -w '%{http_code}' || true)"
@@ -79,6 +83,16 @@ jobs:
 
             if [ "${html_status}" = "200" ] \
               && grep -q 'Kairos Executive Operating System' "${html}" \
+              && grep -q 'safari-intake-fix-20260729-8' "${html}" \
+              && [ "${safari_status}" = "200" ] \
+              && grep -q 'safari-manuscript-intake-compat-20260729-8' "${safari}" \
+              && grep -q 'browser-finish-20260729-4' "${safari}" \
+              && grep -q 'installGovernedFetchTimeout' "${safari}" \
+              && [ "${executive_status}" = "200" ] \
+              && grep -q 'kairos-abos-v2-browser-finish-20260729-4' "${executive}" \
+              && grep -q 'renderEmergencyRecovery' "${executive}" \
+              && grep -q 'Promise.race' "${executive}" \
+              && grep -q 'API_GET_TIMEOUT_MS = 12000' "${executive}" \
               && [ "${health_status}" = "200" ] \
               && grep -q '"status":"ready"' "${health}" \
               && [ "${readiness_status}" = "200" ] \
@@ -92,6 +106,7 @@ jobs:
               && grep -q '"workflows":\[' "${workflows}" \
               && grep -q '"executionSource":"kairos-project-agent-workflows"' "${workflows}" \
               && { [ "${brief_status}" = "200" ] || [ "${brief_status}" = "404" ]; }; then
+              echo "Live Safari compatibility and Executive OS cleanup assets verified."
               cat "${health}"
               cat "${readiness}"
               cat "${workflows}"
@@ -102,11 +117,15 @@ jobs:
           done
 
           echo "HTML status: ${html_status}"
+          echo "Safari module status: ${safari_status}"
+          echo "Executive OS module status: ${executive_status}"
           echo "Health status: ${health_status}"
           echo "Operational readiness status: ${readiness_status}"
           echo "Workflows status: ${workflows_status}"
           echo "Brief status: ${brief_status}"
           cat "${html}" || true
+          cat "${safari}" || true
+          cat "${executive}" || true
           cat "${health}" || true
           cat "${readiness}" || true
           cat "${workflows}" || true
