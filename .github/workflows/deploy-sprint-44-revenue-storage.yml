@@ -1,0 +1,81 @@
+name: Deploy Sprint 44 Revenue Storage
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/deploy-sprint-44-revenue-storage.yml'
+      - 'cloudflare/mmg-ios/wrangler.toml'
+      - 'cloudflare/mmg-ios/src/**'
+      - 'cloudflare/mmg-ios/scripts/**'
+      - 'backend-tests/kairos-production-revenue-r2-binding.test.ts'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-sprint-44-revenue-storage-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+    steps:
+      - name: Check out authorized main commit
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Worker dependencies
+        working-directory: cloudflare/mmg-ios
+        run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund > /dev/null
+
+      - name: Provision canonical revenue buckets
+        working-directory: cloudflare/mmg-ios
+        run: |
+          set -euo pipefail
+          buckets="$(npx wrangler r2 bucket list 2>&1)"
+          printf '%s\n' "${buckets}"
+          if ! grep -Fq 'mmg-kairos-revenue-assets' <<<"${buckets}"; then
+            npx wrangler r2 bucket create mmg-kairos-revenue-assets
+          fi
+          buckets="$(npx wrangler r2 bucket list 2>&1)"
+          if ! grep -Fq 'mmg-kairos-revenue-assets-preview' <<<"${buckets}"; then
+            npx wrangler r2 bucket create mmg-kairos-revenue-assets-preview
+          fi
+
+      - name: Validate production bundle
+        working-directory: cloudflare/mmg-ios
+        run: npx wrangler deploy --dry-run
+
+      - name: Deploy production Worker
+        working-directory: cloudflare/mmg-ios
+        run: npx wrangler deploy
+
+      - name: Verify live Worker and publication boundary
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 24); do
+            headers="${RUNNER_TEMP}/headers.txt"
+            body="${RUNNER_TEMP}/status.json"
+            status="$(curl --silent --show-error --max-time 20 -D "${headers}" "${WORKER_URL}/api/kairos/manuscripts/status?release=sprint-44-${GITHUB_SHA}&attempt=${attempt}" -o "${body}" -w '%{http_code}' || true)"
+            if [ "${status}" = "200" ] && grep -qi 'x-kairos-automatic-publication: disabled' "${headers}" && grep -q '"ready":true' "${body}"; then
+              cat "${body}"
+              exit 0
+            fi
+            sleep 5
+          done
+          cat "${body}" || true
+          cat "${headers}" || true
+          exit 1
