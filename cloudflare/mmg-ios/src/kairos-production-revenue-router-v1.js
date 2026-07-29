@@ -1,6 +1,7 @@
-export const KAIROS_PRODUCTION_REVENUE_ROUTER_BUILD = "kairos-production-revenue-router-20260728-1";
+export const KAIROS_PRODUCTION_REVENUE_ROUTER_BUILD = "kairos-production-revenue-router-20260729-2";
 
 const ACTIONS = Object.freeze({
+  "bootstrap-live-runtime": { method: "POST", confirmation: "BOOTSTRAP LIVE REVENUE RUNTIME", handler: "bootstrapLiveRuntime" },
   "execute-content-batch": { method: "POST", confirmation: "EXECUTE FIRST CONTENT BATCH", handler: "executeContentBatch" },
   "review-content-asset": { method: "POST", handler: "reviewContentAsset" },
   "content-gate": { method: "GET", handler: "projectContentGate" },
