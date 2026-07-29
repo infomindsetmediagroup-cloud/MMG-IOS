@@ -15,11 +15,6 @@ not_found_handling = "single-page-application"
 [images]
 binding = "IMAGES"
 
-[[r2_buckets]]
-binding = "KAIROS_REVENUE_ASSETS"
-bucket_name = "mmg-kairos-revenue-assets"
-preview_bucket_name = "mmg-kairos-revenue-assets-preview"
-
 [triggers]
 crons = ["0 15 * * *", "0 2 * * *"]
 
@@ -51,6 +46,8 @@ new_sqlite_classes = ["KairosProjectAgent"]
 
 # Existing production secrets are retained by keep_vars=true.
 # OPENAI_API_KEY and KAIROS_API_ACCESS_TOKEN must be Worker secrets, never plaintext vars.
+# Revenue dashboard reads and Durable Object state remain available without R2.
+# Revenue asset generation stays readiness-blocked until R2 is enabled and KAIROS_REVENUE_ASSETS is restored.
 # New manuscript generation starts through the persistent project Agent and Cloudflare Workflow.
 # The stable generation-job endpoint is retained as the client contract and routes POST requests to the durable Workflow.
 # The legacy alarm runner is available only when KAIROS_MANUSCRIPT_START_MODE is explicitly changed to legacy-alarm.
@@ -80,6 +77,7 @@ KAIROS_MANUSCRIPT_LEGACY_ALARM_ROLLBACK_ENABLED = "true"
 KAIROS_DIGITAL_ASSET_V2_REQUIRED = "true"
 KAIROS_SHOPIFY_WRITES_ENABLED = "true"
 KAIROS_SHOPIFY_LIVE_PUBLISH_ENABLED = "true"
+KAIROS_REVENUE_ASSET_STORAGE_ENABLED = "false"
 KAIROS_API_AUTH_MODE = "access-or-token"
 KAIROS_API_RATE_LIMIT = "30"
 KAIROS_API_RATE_WINDOW_SECONDS = "60"
