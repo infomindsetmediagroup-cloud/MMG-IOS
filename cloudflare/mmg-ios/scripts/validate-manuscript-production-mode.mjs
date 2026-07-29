@@ -3,13 +3,14 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const BUILD = "kairos-manuscript-production-validator-20260725-8";
+const BUILD = "kairos-manuscript-production-validator-20260729-9";
 const here = dirname(fileURLToPath(import.meta.url));
 const workerRoot = join(here, "..");
 const sourceRoot = join(workerRoot, "src");
 const wranglerPath = join(workerRoot, "wrangler.toml");
 const manuscriptEntryPath = join(sourceRoot, "kairos-production-entry-manuscript-online-v1.js");
 const governedEntryPath = join(sourceRoot, "kairos-production-entry-local-inference-v1.js");
+const revenueEntryPath = join(sourceRoot, "kairos-production-entry-revenue-dashboard-v1.js");
 const backendGenerationPath = join(sourceRoot, "kairos-manuscript-generation-job-v1.js");
 const boundaryPath = join(sourceRoot, "kairos-manuscript-operation-boundary-v1.js");
 const publishingEntryPath = join(sourceRoot, "kairos-production-entry-publishing-readiness-v1.js");
@@ -18,7 +19,7 @@ const packagePath = join(sourceRoot, "kairos-publishing-package-v1.js");
 const autoPipelinePath = join(sourceRoot, "kairos-manuscript-auto-pipeline-v1.js");
 const productPublicationPath = join(sourceRoot, "kairos-product-publication-v1.js");
 
-for (const file of [wranglerPath, manuscriptEntryPath, governedEntryPath, backendGenerationPath, boundaryPath, publishingEntryPath, setupPath, packagePath, autoPipelinePath, productPublicationPath]) {
+for (const file of [wranglerPath, manuscriptEntryPath, governedEntryPath, revenueEntryPath, backendGenerationPath, boundaryPath, publishingEntryPath, setupPath, packagePath, autoPipelinePath, productPublicationPath]) {
   assert.ok(existsSync(file), `Required manuscript production file is missing: ${file}`);
 }
 
@@ -26,8 +27,12 @@ const wrangler = readFileSync(wranglerPath, "utf8");
 const activeEntryMatch = wrangler.match(/^main\s*=\s*"src\/(kairos-production-entry-[^"]+\.js)"/m);
 assert.ok(activeEntryMatch, "Wrangler must declare an explicit Kairos production entry.");
 assert.ok(
-  ["kairos-production-entry-manuscript-online-v1.js", "kairos-production-entry-local-inference-v1.js"].includes(activeEntryMatch[1]),
-  "Wrangler must point to the manuscript runtime or its governed compatibility wrapper.",
+  [
+    "kairos-production-entry-manuscript-online-v1.js",
+    "kairos-production-entry-local-inference-v1.js",
+    "kairos-production-entry-revenue-dashboard-v1.js",
+  ].includes(activeEntryMatch[1]),
+  "Wrangler must point to the manuscript runtime or a governed compatibility wrapper.",
 );
 
 for (const marker of [
@@ -56,6 +61,15 @@ for (const marker of [
   'async fetch(request, env, ctx)',
   'async scheduled(controller, env, ctx)',
 ]) assert.ok(governedEntry.includes(marker), `Governed manuscript production wrapper is missing: ${marker}`);
+
+const revenueEntry = readFileSync(revenueEntryPath, "utf8");
+for (const marker of [
+  './kairos-production-entry-local-inference-v1.js',
+  'CurrentKairosProject',
+  'currentRuntime.fetch',
+  'currentRuntime.scheduled',
+  'X-Kairos-Automatic-Publication',
+]) assert.ok(revenueEntry.includes(marker), `Governed revenue wrapper is missing: ${marker}`);
 
 const backendGeneration = readFileSync(backendGenerationPath, "utf8");
 for (const marker of [
