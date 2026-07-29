@@ -1,8 +1,11 @@
-const BUILD = "safari-manuscript-intake-compat-20260729-6";
+const BUILD = "safari-manuscript-intake-compat-20260729-7";
+const API_GET_TIMEOUT_MS = 12000;
+const API_MUTATION_TIMEOUT_MS = 45000;
 
 installRandomUUIDFallback();
 installSyntheticFileFallback();
 installDigestIdentifierFallback();
+installGovernedFetchTimeout();
 activateExecutiveOperatingSystem();
 
 window.KairosSafariManuscriptIntakeCompat = Object.freeze({ ready: true, build: BUILD });
@@ -12,7 +15,7 @@ function activateExecutiveOperatingSystem() {
     activateBrowserLayers();
     return;
   }
-  import("./executive-os.js?v=browser-finish-20260729-2")
+  import("./executive-os.js?v=browser-finish-20260729-3")
     .then(activateBrowserLayers)
     .catch(error => {
       console.error("Kairos Executive OS failed to activate.", error);
@@ -44,6 +47,49 @@ function activateSuccessFeedback() {
   script.src = "./scripts/executive-os-feedback.js?v=20260729-1";
   script.dataset.kairosFeedback = "true";
   document.body.append(script);
+}
+
+function installGovernedFetchTimeout() {
+  const nativeFetch = globalThis.fetch;
+  if (typeof nativeFetch !== "function" || nativeFetch.__kairosGovernedTimeout === true) return;
+
+  const wrappedFetch = function kairosGovernedFetch(input, init = {}) {
+    if (!isGovernedAPIRequest(input) || init?.signal) return nativeFetch.call(globalThis, input, init);
+
+    const method = String(init?.method || input?.method || "GET").toUpperCase();
+    const timeoutMs = method === "GET" || method === "HEAD" ? API_GET_TIMEOUT_MS : API_MUTATION_TIMEOUT_MS;
+    const controller = typeof AbortController === "function" ? new AbortController() : null;
+    let timeoutID;
+
+    const request = nativeFetch.call(globalThis, input, controller ? { ...init, signal: controller.signal } : init);
+    const deadline = new Promise((_, reject) => {
+      timeoutID = setTimeout(() => {
+        try { controller?.abort(); } catch {}
+        const error = new Error(`Kairos request timed out after ${Math.round(timeoutMs / 1000)} seconds.`);
+        error.name = "TimeoutError";
+        reject(error);
+      }, timeoutMs);
+    });
+
+    return Promise.race([request, deadline]).finally(() => clearTimeout(timeoutID));
+  };
+
+  try { Object.defineProperty(wrappedFetch, "__kairosGovernedTimeout", { value: true }); }
+  catch { wrappedFetch.__kairosGovernedTimeout = true; }
+
+  try { globalThis.fetch = wrappedFetch; }
+  catch (error) { console.error("Kairos could not install the governed request timeout.", error); }
+}
+
+function isGovernedAPIRequest(input) {
+  try {
+    const raw = typeof input === "string" ? input : input?.url;
+    if (!raw) return false;
+    const url = new URL(raw, globalThis.location?.href || "https://kairos.invalid/");
+    return url.origin === globalThis.location?.origin && url.pathname.startsWith("/api/");
+  } catch {
+    return false;
+  }
 }
 
 function installRandomUUIDFallback() {
