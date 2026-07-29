@@ -10,6 +10,7 @@ const workerPath = path.join(root, "cloudflare/mmg-ios-worker.js");
 const rootWranglerPath = path.join(root, "wrangler.toml");
 const productionWranglerPath = path.join(root, "cloudflare/mmg-ios/wrangler.toml");
 const localInferenceEntryPath = path.join(root, "cloudflare/mmg-ios/src/kairos-production-entry-local-inference-v1.js");
+const revenueDashboardEntryPath = path.join(root, "cloudflare/mmg-ios/src/kairos-production-entry-revenue-dashboard-v1.js");
 const manuscriptGenerationPath = path.join(root, "cloudflare/mmg-ios/src/kairos-manuscript-generation-job-v1.js");
 const manuscriptEntryPath = path.join(root, "cloudflare/mmg-ios/src/kairos-production-entry-manuscript-online-v1.js");
 const manuscriptBoundaryPath = path.join(root, "cloudflare/mmg-ios/src/kairos-manuscript-operation-boundary-v1.js");
@@ -17,7 +18,7 @@ const manuscriptReleasePath = path.join(root, "cloudflare/mmg-ios/src/kairos-man
 const productPublicationPath = path.join(root, "cloudflare/mmg-ios/src/kairos-product-publication-v1.js");
 const builderRegistryPath = path.join(root, "governance/kairos-builder-plugin-registry-v1.json");
 
-const requiredFiles = [policyPath,doctrinePath,workflowPath,firewallPath,workerPath,rootWranglerPath,productionWranglerPath,localInferenceEntryPath,manuscriptGenerationPath,manuscriptEntryPath,manuscriptBoundaryPath,manuscriptReleasePath,productPublicationPath,builderRegistryPath];
+const requiredFiles = [policyPath,doctrinePath,workflowPath,firewallPath,workerPath,rootWranglerPath,productionWranglerPath,localInferenceEntryPath,revenueDashboardEntryPath,manuscriptGenerationPath,manuscriptEntryPath,manuscriptBoundaryPath,manuscriptReleasePath,productPublicationPath,builderRegistryPath];
 for (const file of requiredFiles) if (!fs.existsSync(file)) fail(`Missing required Kairos policy file: ${path.relative(root, file)}`);
 
 for (const workflow of [
@@ -36,6 +37,7 @@ const worker = fs.readFileSync(workerPath, "utf8");
 const rootWrangler = fs.readFileSync(rootWranglerPath, "utf8");
 const productionWrangler = fs.readFileSync(productionWranglerPath, "utf8");
 const localInferenceEntry = fs.readFileSync(localInferenceEntryPath, "utf8");
+const revenueDashboardEntry = fs.readFileSync(revenueDashboardEntryPath, "utf8");
 const manuscriptGeneration = fs.readFileSync(manuscriptGenerationPath, "utf8");
 const manuscriptEntry = fs.readFileSync(manuscriptEntryPath, "utf8");
 const manuscriptBoundary = fs.readFileSync(manuscriptBoundaryPath, "utf8");
@@ -58,7 +60,14 @@ assert(rootWrangler.includes('name = "mmg-ios-staging-host"'), "Root Wrangler co
 assert(!rootWrangler.includes('name = "mmg-ios"'), "Root Wrangler config must not collide with the production Worker name.");
 assert(rootWrangler.includes('KAIROS_SHOPIFY_WRITES_ENABLED = "false"'), "Root staging Shopify writes must default to disabled.");
 assert(productionWrangler.includes('name = "mmg-ios"'), "Production Wrangler config must retain the canonical Worker name.");
-assert(productionWrangler.includes('main = "src/kairos-production-entry-local-inference-v1.js"'), "Production Worker must use the governed compatibility entry.");
+const usesCompatibilityEntry = productionWrangler.includes('main = "src/kairos-production-entry-local-inference-v1.js"');
+const usesRevenueWrapper = productionWrangler.includes('main = "src/kairos-production-entry-revenue-dashboard-v1.js"');
+assert(usesCompatibilityEntry || usesRevenueWrapper, "Production Worker must use the governed compatibility entry or its governed revenue wrapper.");
+if (usesRevenueWrapper) {
+  assert(revenueDashboardEntry.includes('from "./kairos-production-entry-local-inference-v1.js"'), "Revenue wrapper must import the governed compatibility entry.");
+  assert(revenueDashboardEntry.includes("currentRuntime.fetch"), "Revenue wrapper must delegate unmatched requests to the governed compatibility runtime.");
+  assert(revenueDashboardEntry.includes('X-Kairos-Automatic-Publication", "disabled"'), "Revenue wrapper must preserve the automatic-publication-disabled boundary.");
+}
 assert(productionWrangler.includes('KAIROS_MODEL_PROVIDER = "openai"'), "Production manuscript generation must use the governed OpenAI provider.");
 assert(productionWrangler.includes('KAIROS_MODEL_ENDPOINT = "https://api.openai.com"'), "Production must use the official OpenAI API endpoint.");
 assert(productionWrangler.includes('KAIROS_MODEL_NAME = "gpt-5-mini"'), "Production must pin the approved manuscript model.");

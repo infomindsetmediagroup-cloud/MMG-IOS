@@ -5,6 +5,7 @@ const root=process.cwd();
 const paths={
   wrangler:"cloudflare/mmg-ios/wrangler.toml",
   localEntry:"cloudflare/mmg-ios/src/kairos-production-entry-local-inference-v1.js",
+  revenueEntry:"cloudflare/mmg-ios/src/kairos-production-entry-revenue-dashboard-v1.js",
   localInference:"cloudflare/mmg-ios/src/kairos-local-inference-v1.js",
   backendGeneration:"cloudflare/mmg-ios/src/kairos-manuscript-generation-job-v1.js",
   entry:"cloudflare/mmg-ios/src/kairos-production-entry-digital-asset-v2-v1.js",
@@ -24,9 +25,16 @@ const paths={
 };
 for(const[name,relative]of Object.entries(paths))if(!fs.existsSync(path.join(root,relative)))fail(`Missing ${name}: ${relative}`);
 const values=Object.fromEntries(Object.entries(paths).map(([name,relative])=>[name,name==="governanceContract"||name==="registry"?JSON.parse(read(relative)):read(relative)]));
-const{wrangler,localEntry,localInference,backendGeneration,entry,deliveryEntry,delivery,boundary,autoPipeline,productPublication,digitalAssetContract,creationArtifacts,client,index,governanceContract,doctrine,registry,deploy}=values;
+const{wrangler,localEntry,revenueEntry,localInference,backendGeneration,entry,deliveryEntry,delivery,boundary,autoPipeline,productPublication,digitalAssetContract,creationArtifacts,client,index,governanceContract,doctrine,registry,deploy}=values;
 
-assert(wrangler.includes('main = "src/kairos-production-entry-local-inference-v1.js"'),"The active Worker must use the governed manuscript entry.");
+const usesLocalEntry=wrangler.includes('main = "src/kairos-production-entry-local-inference-v1.js"');
+const usesRevenueEntry=wrangler.includes('main = "src/kairos-production-entry-revenue-dashboard-v1.js"');
+assert(usesLocalEntry||usesRevenueEntry,"The active Worker must use the governed manuscript entry or its governed revenue wrapper.");
+if(usesRevenueEntry){
+  assert(revenueEntry.includes('from "./kairos-production-entry-local-inference-v1.js"'),"The revenue wrapper must import the governed manuscript entry.");
+  assert(revenueEntry.includes("currentRuntime.fetch"),"The revenue wrapper must delegate unmatched requests to the governed manuscript runtime.");
+  assert(revenueEntry.includes('X-Kairos-Automatic-Publication", "disabled"'),"The revenue wrapper must preserve the publication-disabled boundary.");
+}
 assert(wrangler.includes('KAIROS_MANUSCRIPT_RUNTIME_ENABLED = "true"'),"Manuscript runtime activation flag is missing.");
 assert(wrangler.includes('KAIROS_CLOUDFLARE_NEURONS_ENABLED = "false"'),"Cloudflare neuron use must remain disabled.");
 assert(localEntry.includes("handleManuscriptGeneration"),"The active entry must route backend generation jobs.");
