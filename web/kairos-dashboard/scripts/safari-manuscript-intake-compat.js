@@ -1,10 +1,22 @@
-const BUILD = "safari-manuscript-intake-compat-20260725-1";
+const BUILD = "safari-manuscript-intake-compat-20260729-2";
 
 installRandomUUIDFallback();
 installSyntheticFileFallback();
 installDigestIdentifierFallback();
+activateExecutiveOperatingSystem();
 
 window.KairosSafariManuscriptIntakeCompat = Object.freeze({ ready: true, build: BUILD });
+
+function activateExecutiveOperatingSystem() {
+  if (document.querySelector("#kairos-executive-os")) return;
+  import("./executive-os.js?v=browser-finish-20260729-2").catch(error => {
+    console.error("Kairos Executive OS failed to activate.", error);
+    document.body.classList.remove("abos-active");
+    window.dispatchEvent(new CustomEvent("kairos:executive-os:error", {
+      detail: { message: String(error?.message || "Executive OS activation failed.") },
+    }));
+  });
+}
 
 function installRandomUUIDFallback() {
   const cryptoObject = globalThis.crypto;
