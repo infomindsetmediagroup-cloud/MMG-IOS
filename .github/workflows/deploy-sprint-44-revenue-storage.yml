@@ -3,7 +3,7 @@ name: Deploy Sprint 44 Revenue Storage
 on:
   push:
     branches:
-      - sprint-44/restore-revenue-r2-binding
+      - main
     paths:
       - '.github/workflows/deploy-sprint-44-revenue-storage.yml'
       - 'cloudflare/mmg-ios/wrangler.toml'
@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ github.ref == 'refs/heads/sprint-44/restore-revenue-r2-binding' }}
+    if: ${{ github.ref == 'refs/heads/main' }}
     environment: production
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -29,7 +29,7 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
     steps:
-      - name: Check out authorized branch
+      - name: Check out authorized main commit
         uses: actions/checkout@v4
 
       - name: Set up Node.js
