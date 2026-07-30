@@ -194,13 +194,17 @@ test("Command Center manuscript event routes through the production workspace co
   await expect.poll(() => page.evaluate(() => window.__openedWorkspace)).toBe("manuscript-studio");
 });
 
-test("dashboard isolates no-form production controllers behind the advanced loader", async () => {
-  expect(indexSource).toMatch(/<meta name="mmg-build" content="kairos-executive-local-inference-[^"]+">/);
-  expect(indexSource).toMatch(/kairos-runtime-loader\.js\?v=kairos-local-inference-[^"]+/);
+test("dashboard keeps production controllers behind the restored five-center command runtime", async () => {
+  expect(indexSource).toMatch(/<meta name="mmg-build" content="kairos-five-center-dashboard-restored-[^"]+">/);
+  expect(indexSource).toMatch(/legacy-runtime-loader\.js\?v=five-center-dashboard-restored-[^"]+/);
   expect((indexSource.match(/<script type="module"/g) || [])).toHaveLength(2);
+  expect(indexSource).not.toContain("executive-local-inference.js");
+  expect(indexSource).not.toContain("kairos-runtime-loader.js");
   expect(indexSource).not.toContain("manuscript-runtime-cache-guard.js");
   expect(runtimeLoaderSource).toContain('import "./legacy-runtime-loader.js"');
-  expect(runtimeLoaderSource).toContain('import "./executive-local-inference.js"');
+  expect(runtimeLoaderSource).not.toContain("executive-local-inference.js");
+  expect(loaderSource).toContain("commandHubMode");
+  expect(loaderSource).toContain('"command-hub.js"');
 
   const requiredScripts = [
     "command-center-governance.js",
@@ -212,9 +216,9 @@ test("dashboard isolates no-form production controllers behind the advanced load
   ];
 
   for (const filename of requiredScripts) {
-    expect(indexSource, `${filename} must not execute on the Executive OS homepage`).not.toContain(filename);
+    expect(indexSource, `${filename} must not execute directly from the five-center homepage HTML`).not.toContain(filename);
     const matches = [...loaderSource.matchAll(new RegExp(`"${filename.replace(".", "\\.")}"`, "g"))];
-    expect(matches, `${filename} must be declared exactly once in the isolated loader`).toHaveLength(1);
+    expect(matches, `${filename} must be declared exactly once in the governed command runtime`).toHaveLength(1);
   }
 
   const inferenceIndex = loaderSource.indexOf('"kairos-local-inference.js"');
