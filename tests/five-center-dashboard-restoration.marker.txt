@@ -1,0 +1,4 @@
+Kairos five-center dashboard restoration validation marker.
+Default route: Knowledge, Content, Business, Customers, Operations.
+Global local-inference overlay: prohibited.
+Governed local WebGPU production: retained.
