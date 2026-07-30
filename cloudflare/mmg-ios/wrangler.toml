@@ -1,5 +1,5 @@
 name = "mmg-ios"
-main = "src/kairos-production-entry-operational-execution-v1.js"
+main = "src/kairos-production-entry-local-operational-v1.js"
 compatibility_date = "2026-07-24"
 compatibility_flags = ["nodejs_compat"]
 keep_names = true
@@ -44,40 +44,35 @@ new_sqlite_classes = ["KairosProject"]
 tag = "kairos-project-agent-v1"
 new_sqlite_classes = ["KairosProjectAgent"]
 
-# Existing production secrets are retained by keep_vars=true.
-# OPENAI_API_KEY and KAIROS_API_ACCESS_TOKEN must be Worker secrets, never plaintext vars.
+# Existing production secrets are retained by keep_vars=true but are masked by the active local-only entry.
 # Browser navigation and dashboard assets bypass the Worker runtime and resolve through ASSETS.
 # Only /api/* executes Worker code before static-asset serving.
 # Revenue asset storage remains disabled until its account binding is separately provisioned.
 # Browser, approval, manuscript, Shopify analytics, and governed runtime deployment must not depend on R2.
 # New objectives enter through the operational browser execution bridge, persistent project Agent, and Cloudflare Workflows.
-# The project foundation requires explicit approval before Kairos generates and verifies an authoritative source.
-# Manuscript production requires an explicit Start Production action and runs through the durable Workflow binding.
-# The stable generation-job endpoint is retained as the client contract and routes POST requests to the durable Workflow.
-# The legacy alarm runner is available only when KAIROS_MANUSCRIPT_START_MODE is explicitly changed to legacy-alarm.
-# Kairos never falls back to the legacy alarm runner automatically.
-# The phone only starts and monitors jobs. It never owns model execution or production state.
+# The project foundation requires explicit approval before local authoritative-source generation begins.
+# Authoritative-source and manuscript generation execute in the operator browser through WebGPU/WebLLM.
+# The Worker stores, verifies, and reconciles local output; it never calls OpenAI or another paid inference API.
+# The manuscript Workflow binding is retained only for historical record compatibility and is not started by the active entry.
 # Product DRAFT creation and live publication remain available only through the exact approval-gated routes.
 # Digital Asset Edition V2 and customer-delivery verification remain mandatory.
 # Canonical approvals: Approve Foundation, Start Production Job, Approve Package, Approve & Publish Product.
-# The production model uses the official OpenAI Responses API through the OPENAI_API_KEY Worker secret.
 # Cloudflare neuron use remains disabled. Direct Shopify, theme, page, and navigation routes remain denied.
 
 [vars]
 SHOPIFY_STORE_DOMAIN = "07kd8e-qw.myshopify.com"
 SHOPIFY_API_VERSION = "2026-07"
 MMG_STOREFRONT_ORIGIN = "https://themindsetmediagroup.com"
-KAIROS_OPENAI_MODEL = "gpt-5-mini"
-KAIROS_MODEL_PROVIDER = "openai"
-KAIROS_MODEL_ENDPOINT = "https://api.openai.com"
-KAIROS_MODEL_NAME = "gpt-5-mini"
+KAIROS_MODEL_PROVIDER = "browser-webgpu"
+KAIROS_MODEL_ENDPOINT = ""
+KAIROS_MODEL_NAME = "Kairos Local WebLLM"
 KAIROS_OPENAI_FREE_CREDITS_ENABLED = "false"
-KAIROS_NO_COST_MODE = "false"
-KAIROS_LOCAL_INFERENCE_ENABLED = "false"
+KAIROS_NO_COST_MODE = "true"
+KAIROS_LOCAL_INFERENCE_ENABLED = "true"
 KAIROS_CLOUDFLARE_NEURONS_ENABLED = "false"
 KAIROS_MANUSCRIPT_RUNTIME_ENABLED = "true"
-KAIROS_MANUSCRIPT_START_MODE = "workflow"
-KAIROS_MANUSCRIPT_LEGACY_ALARM_ROLLBACK_ENABLED = "true"
+KAIROS_MANUSCRIPT_START_MODE = "local-browser"
+KAIROS_MANUSCRIPT_LEGACY_ALARM_ROLLBACK_ENABLED = "false"
 KAIROS_DIGITAL_ASSET_V2_REQUIRED = "true"
 KAIROS_SHOPIFY_WRITES_ENABLED = "true"
 KAIROS_SHOPIFY_LIVE_PUBLISH_ENABLED = "true"
