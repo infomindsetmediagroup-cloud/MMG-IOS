@@ -20,11 +20,22 @@ export async function handleProductionRegistry(request, env) {
   const suffix = url.pathname.replace(/^\/api\/production-registry/, "") || "/";
   const targetURL = `https://kairos.internal/registry${suffix}${url.search}`;
 
-  if (isBufferedManuscriptMutation(url.pathname, request.method)) {
-    return stub.fetch(await bufferedForwardRequest(request, targetURL));
+  try {
+    if (isBufferedManuscriptMutation(url.pathname, request.method)) {
+      return await stub.fetch(await bufferedForwardRequest(request, targetURL));
+    }
+    return await stub.fetch(new Request(targetURL, request));
+  } catch (error) {
+    return json({
+      status: "failed",
+      build: BUILD,
+      error: {
+        code: error?.code || "production_registry_forwarding_failed",
+        message: error instanceof Error ? error.message : "The production registry request failed.",
+        retriable: Boolean(error?.retriable),
+      },
+    }, Number(error?.status || 500));
   }
-
-  return stub.fetch(new Request(targetURL, request));
 }
 
 export async function handleRegistryObjectRequest(state, request) {
