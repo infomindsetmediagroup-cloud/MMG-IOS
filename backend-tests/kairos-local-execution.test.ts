@@ -53,6 +53,7 @@ describe("Kairos local operational execution", () => {
     expect(index).toContain("kairos-runtime-loader.js");
     expect(loader).toContain('import "./legacy-runtime-loader.js"');
     expect(loader).toContain('import "./executive-local-inference.js"');
+    expect(bridge).toContain('const EXECUTION_MODE = "browser-webgpu"');
     expect(bridge).toContain('import("../vendor/webllm-bundle.js")');
     expect(bridge).toContain("KairosLocalInference.run");
     expect(compatibility).toContain('import "./kairos-local-inference-same-origin.js"');
