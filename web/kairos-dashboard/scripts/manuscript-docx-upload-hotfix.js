@@ -1,10 +1,13 @@
-const BUILD = "manuscript-docx-upload-hotfix-20260730-2-source-recovery";
-const PREVIOUS_BUILD = "manuscript-docx-upload-hotfix-20260730-1";
+const BUILD = "manuscript-docx-upload-hotfix-20260730-3-chunked-source";
+const PREVIOUS_BUILD = "manuscript-docx-upload-hotfix-20260730-2-source-recovery";
 const ACTIVE_KEY = "kairos.production.active-workspace";
 const MAX_TEXT_CHARS = 600000;
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
-const SOURCE_UPLOAD_TIMEOUT_MS = 5 * 60 * 1000;
-const TRANSIENT_SOURCE_STATUSES = new Set([502, 503, 504]);
+const FILE_CHUNK_BYTES = 512 * 1024;
+const TEXT_CHUNK_BYTES = 128 * 1024;
+const REQUEST_TIMEOUT_MS = 75 * 1000;
+const CHUNK_RETRY_LIMIT = 3;
+const TRANSIENT_SOURCE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 const MAMMOTH_URLS = [
   "https://cdn.jsdelivr.net/npm/mammoth@1.8.0/+esm",
   "https://esm.sh/mammoth@1.8.0",
@@ -12,12 +15,14 @@ const MAMMOTH_URLS = [
 
 const pending = {
   file: null,
+  fileBytes: null,
   manuscript: "",
   title: "",
   projectId: null,
   source: null,
   saving: false,
   recoveryCount: 0,
+  uploadId: null,
 };
 
 document.addEventListener("change", interceptDocxSelection, true);
@@ -28,6 +33,9 @@ window.KairosManuscriptDocxHotfix = Object.freeze({
   previousBuild: PREVIOUS_BUILD,
   ready: true,
   sourceRecovery: true,
+  chunkedSourceUpload: true,
+  fileChunkBytes: FILE_CHUNK_BYTES,
+  textChunkBytes: TEXT_CHUNK_BYTES,
 });
 
 async function interceptDocxSelection(event) {
@@ -40,11 +48,13 @@ async function interceptDocxSelection(event) {
   event.stopImmediatePropagation();
 
   pending.file = file;
+  pending.fileBytes = null;
   pending.manuscript = "";
   pending.title = currentTitle(file);
   pending.projectId = ensureProjectId();
   pending.source = null;
   pending.recoveryCount = 0;
+  pending.uploadId = null;
 
   setBusy(true, "Extracting DOCX manuscript…");
   clearError();
@@ -54,8 +64,10 @@ async function interceptDocxSelection(event) {
       throw new Error(`The DOCX file is ${formatBytes(file.size)}. Source storage supports files up to ${formatBytes(MAX_FILE_BYTES)}.`);
     }
 
+    const sourceBuffer = await file.arrayBuffer();
+    pending.fileBytes = new Uint8Array(sourceBuffer);
     const extractor = await loadMammothExtractor();
-    const result = await extractor({ arrayBuffer: await file.arrayBuffer() });
+    const result = await extractor({ arrayBuffer: sourceBuffer.slice(0) });
     const fatal = (result?.messages || []).find(message => message?.type === "error");
     if (fatal) throw new Error(fatal.message || "The DOCX file could not be read.");
 
@@ -74,13 +86,14 @@ async function interceptDocxSelection(event) {
       format: "docx",
       checksum: "",
       stored: false,
+      uploadMode: "chunked-v1",
     };
 
     restoreIntoStudio(pending.source);
-    setBusy(true, "Preserving original DOCX source…");
+    setBusy(true, "Securing manuscript source in verified chunks…");
     await persistPendingDocx();
   } catch (error) {
-    showError(error?.message || "Kairos could not extract this DOCX manuscript.");
+    showError(error?.message || "Kairos could not extract or store this DOCX manuscript.");
   } finally {
     setBusy(false);
   }
@@ -93,13 +106,13 @@ async function interceptPendingAdvance(event) {
   event.preventDefault();
   event.stopImmediatePropagation();
 
-  setBusy(true, "Retrying original DOCX source save…");
+  setBusy(true, "Resuming verified chunk storage…");
   clearError();
   try {
     await persistPendingDocx();
     requestAnimationFrame(() => document.querySelector("[data-advance]")?.click());
   } catch (error) {
-    showError(`Source storage failed. Your extracted manuscript is retained (${pending.manuscript.length.toLocaleString()} characters). Tap Continue to retry. ${error?.message || "The original DOCX could not be stored."}`);
+    showError(`Source storage failed. Your extracted manuscript remains retained (${pending.manuscript.length.toLocaleString()} characters). ${error?.message || "The original DOCX could not be stored."}`);
   } finally {
     setBusy(false);
   }
@@ -107,75 +120,167 @@ async function interceptPendingAdvance(event) {
 
 async function persistPendingDocx() {
   if (pending.saving) return;
-  if (!pending.file || !pending.manuscript || !pending.projectId) {
+  if (!pending.file || !pending.fileBytes || !pending.manuscript || !pending.projectId) {
     throw new Error("Select the DOCX manuscript again before retrying source storage.");
   }
 
   pending.saving = true;
   try {
     if (!pending.source?.checksum) {
-      pending.source.checksum = await checksumFile(pending.file);
+      pending.source.checksum = await checksumBytes(pending.fileBytes);
     }
 
-    let attempt = 1;
-    while (attempt <= 2) {
-      const result = await submitPendingSource(attempt);
-      if (result.response.ok) {
-        applyStoredSource(result.body);
+    let projectAttempt = 1;
+    while (projectAttempt <= 2) {
+      try {
+        const stored = await storeChunkedSource();
+        applyStoredSource(stored);
         return;
+      } catch (error) {
+        if (projectAttempt === 1 && TRANSIENT_SOURCE_STATUSES.has(Number(error?.status || 0))) {
+          pending.recoveryCount += 1;
+          rotateProjectId(error.status);
+          setStatus("Starting a clean chunked source transaction…");
+          projectAttempt += 1;
+          continue;
+        }
+        throw error;
       }
-
-      if (attempt === 1 && TRANSIENT_SOURCE_STATUSES.has(result.response.status)) {
-        pending.recoveryCount += 1;
-        rotateProjectId(result.response.status);
-        setStatus("Rebuilding the source transaction in a clean Kairos project…");
-        attempt += 1;
-        continue;
-      }
-
-      throw sourceStorageError(result.response, result.body, result.rawBody);
     }
   } finally {
     pending.saving = false;
   }
 }
 
-async function submitPendingSource(attempt) {
-  const form = new FormData();
-  form.append("file", pending.file, safeUploadName(pending.file.name));
-  form.append("extractedText", pending.manuscript);
-  form.append("title", pending.title || "Untitled manuscript");
-  form.append("format", "docx");
-  form.append("pages", "");
-  form.append("checksum", pending.source.checksum);
+async function storeChunkedSource() {
+  const textBytes = new TextEncoder().encode(pending.manuscript);
+  const fileChunks = Math.ceil(pending.fileBytes.length / FILE_CHUNK_BYTES);
+  const textChunks = Math.ceil(textBytes.length / TEXT_CHUNK_BYTES);
+  const uploadId = createUploadId();
+  pending.uploadId = uploadId;
 
+  setStatus(`Preparing ${fileChunks + textChunks} verified source chunks…`);
+  const session = await requestJSON(sourcePath("session"), {
+    method: "POST",
+    body: {
+      uploadId,
+      title: pending.title || "Untitled manuscript",
+      filename: safeUploadName(pending.file.name),
+      contentType: pending.file.type || "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      format: "docx",
+      size: pending.fileBytes.length,
+      textBytes: textBytes.length,
+      fileChunks,
+      textChunks,
+      pages: null,
+      checksum: pending.source.checksum,
+    },
+    stage: "source session",
+  });
+
+  if (session?.upload?.uploadId !== uploadId) {
+    throw storageFailure(409, "The source session returned an unexpected upload identifier.");
+  }
+
+  await uploadChunkSet("file", pending.fileBytes, FILE_CHUNK_BYTES, fileChunks, uploadId, 0, fileChunks + textChunks);
+  await uploadChunkSet("text-chunk", textBytes, TEXT_CHUNK_BYTES, textChunks, uploadId, fileChunks, fileChunks + textChunks);
+
+  setStatus("Verifying the complete DOCX and extracted manuscript…");
+  return requestJSON(sourcePath("commit"), {
+    method: "POST",
+    headers: { "X-Kairos-Upload-Id": uploadId },
+    body: { uploadId },
+    stage: "source commit",
+  });
+}
+
+async function uploadChunkSet(routeKind, bytes, chunkSize, count, uploadId, completedBefore, totalChunks) {
+  const label = routeKind === "file" ? "DOCX" : "manuscript text";
+  for (let index = 0; index < count; index += 1) {
+    const start = index * chunkSize;
+    const end = Math.min(bytes.length, start + chunkSize);
+    const chunk = bytes.slice(start, end);
+    const completed = completedBefore + index;
+    const percent = Math.max(1, Math.round((completed / totalChunks) * 100));
+    setStatus(`Securing ${label} chunk ${index + 1} of ${count} (${percent}%)…`);
+    await uploadChunkWithRetry(routeKind, index, chunk, uploadId);
+  }
+}
+
+async function uploadChunkWithRetry(kind, index, chunk, uploadId) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= CHUNK_RETRY_LIMIT; attempt += 1) {
+    try {
+      return await requestBinary(sourcePath(`${kind}/${index}`), chunk, {
+        uploadId,
+        attempt,
+        stage: `${kind} chunk ${index + 1}`,
+      });
+    } catch (error) {
+      lastError = error;
+      if (!TRANSIENT_SOURCE_STATUSES.has(Number(error?.status || 0)) || attempt === CHUNK_RETRY_LIMIT) throw error;
+      await delay(350 * attempt);
+    }
+  }
+  throw lastError || new Error("The source chunk could not be stored.");
+}
+
+async function requestJSON(path, { method, body, headers = {}, stage }) {
+  const response = await governedFetch(path, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      "X-MMG-Client-Build": BUILD,
+      "X-Kairos-Source-Stage": stage,
+      ...headers,
+    },
+    body: JSON.stringify(body || {}),
+  });
+  return parseStorageResponse(response, stage);
+}
+
+async function requestBinary(path, bytes, { uploadId, attempt, stage }) {
+  const response = await governedFetch(path, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/octet-stream",
+      "X-MMG-Client-Build": BUILD,
+      "X-Kairos-Upload-Id": uploadId,
+      "X-Kairos-Chunk-Length": String(bytes.length),
+      "X-Kairos-Chunk-Attempt": String(attempt),
+      "X-Kairos-Source-Stage": stage,
+    },
+    body: bytes,
+  });
+  return parseStorageResponse(response, stage);
+}
+
+async function governedFetch(path, init) {
   const controller = typeof AbortController === "function" ? new AbortController() : null;
-  const timeout = setTimeout(() => controller?.abort(), SOURCE_UPLOAD_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller?.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const response = await fetch(`/api/production-registry/manuscripts/${encodeURIComponent(pending.projectId)}/source?sourceAttempt=${attempt}&clientBuild=${encodeURIComponent(BUILD)}`, {
-      method: "POST",
+    return await fetch(path, {
+      ...init,
       credentials: "include",
       cache: "no-store",
-      headers: {
-        "X-MMG-Client-Build": BUILD,
-        "X-Kairos-Source-Attempt": String(attempt),
-        "X-Kairos-Recovery-Count": String(pending.recoveryCount),
-      },
-      body: form,
       signal: controller?.signal,
     });
-    const rawBody = await response.text();
-    let body = {};
-    try { body = rawBody ? JSON.parse(rawBody) : {}; } catch {}
-    return { response, body, rawBody };
   } catch (error) {
     if (error?.name === "AbortError") {
-      throw new Error(`The DOCX source upload exceeded ${Math.round(SOURCE_UPLOAD_TIMEOUT_MS / 60000)} minutes. The extracted manuscript remains retained.`);
+      throw storageFailure(504, `The source request exceeded ${Math.round(REQUEST_TIMEOUT_MS / 1000)} seconds. The manuscript remains retained.`);
     }
     throw error;
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function parseStorageResponse(response, stage) {
+  const rawBody = await response.text();
+  let body = {};
+  try { body = rawBody ? JSON.parse(rawBody) : {}; } catch {}
+  if (!response.ok) throw sourceStorageError(response, body, rawBody, stage);
+  return body;
 }
 
 function applyStoredSource(body) {
@@ -189,29 +294,41 @@ function applyStoredSource(body) {
     format: body.source.format || "docx",
     checksum: body.source.checksum || pending.source.checksum,
     stored: true,
+    uploadMode: body.source.uploadMode || "chunked-v1",
   };
   restoreIntoStudio(pending.source);
   clearError();
+  setStatus("Original DOCX and manuscript text stored and verified.");
 }
 
-function sourceStorageError(response, body, rawBody) {
+function sourceStorageError(response, body, rawBody, stage) {
   const serverMessage = body?.error?.message || body?.message || "";
   const serverBuild = response.headers.get("x-kairos-manuscript-source") || response.headers.get("x-kairos-registry") || "";
   const ray = response.headers.get("cf-ray") || "";
-  const evidence = [serverBuild && `build ${serverBuild}`, ray && `ray ${ray}`].filter(Boolean).join(", ");
+  const evidence = [stage && `stage ${stage}`, serverBuild && `build ${serverBuild}`, ray && `ray ${ray}`].filter(Boolean).join(", ");
   const fallback = `The manuscript source could not be stored (HTTP ${response.status}${evidence ? `; ${evidence}` : ""}).`;
   const rawMessage = !serverMessage && rawBody && rawBody.length < 500 ? rawBody.trim() : "";
-  return new Error(serverMessage || rawMessage || fallback);
+  return storageFailure(response.status, serverMessage || rawMessage || fallback, { ray, stage, build: serverBuild });
+}
+
+function storageFailure(status, message, evidence = {}) {
+  return Object.assign(new Error(message), { status: Number(status || 500), evidence });
+}
+
+function sourcePath(suffix) {
+  return `/api/production-registry/manuscripts/${encodeURIComponent(pending.projectId)}/source/${suffix}?clientBuild=${encodeURIComponent(BUILD)}&recovery=${pending.recoveryCount}`;
 }
 
 function rotateProjectId(status) {
   const previousProjectId = pending.projectId;
   const projectId = createProjectId();
   pending.projectId = projectId;
+  pending.uploadId = null;
   pending.source = {
     ...(pending.source || {}),
     projectId,
     stored: false,
+    uploadMode: "chunked-v1",
   };
   sessionStorage.setItem(ACTIVE_KEY, JSON.stringify({
     workspace: "manuscript-studio",
@@ -243,9 +360,7 @@ async function loadMammothExtractor() {
 function resolveMammothExtractor(namespace) {
   const candidates = [namespace, namespace?.default, namespace?.default?.default];
   for (const candidate of candidates) {
-    if (typeof candidate?.extractRawText === "function") {
-      return candidate.extractRawText.bind(candidate);
-    }
+    if (typeof candidate?.extractRawText === "function") return candidate.extractRawText.bind(candidate);
   }
   throw new Error("DOCX extraction service loaded without the required extractRawText function.");
 }
@@ -277,6 +392,10 @@ function createProjectId() {
   return `manuscript-studio-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
 }
 
+function createUploadId() {
+  return `upload-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
+}
+
 function currentTitle(file) {
   return document.querySelector("#ms-title")?.value.trim()
     || String(file.name || "Untitled manuscript").replace(/\.[^.]+$/, "")
@@ -298,8 +417,8 @@ function normalizeText(value) {
     .trim();
 }
 
-async function checksumFile(file) {
-  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+async function checksumBytes(bytes) {
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
 }
 
@@ -365,4 +484,8 @@ function readJSON(key) {
   } catch {
     return null;
   }
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
