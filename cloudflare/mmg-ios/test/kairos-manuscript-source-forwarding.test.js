@@ -43,7 +43,7 @@ function createRuntime() {
   return { env, values, getLastForwardedRequest: () => lastForwardedRequest };
 }
 
-test("multipart manuscript source uploads are buffered and durably stored through the object runtime", async () => {
+test("multipart manuscript source uploads remain backward compatible and buffered", async () => {
   const runtime = createRuntime();
   const form = new FormData();
   form.append(
@@ -69,7 +69,7 @@ test("multipart manuscript source uploads are buffered and durably stored throug
   assert.match(forwarded.headers.get("content-type") || "", /^multipart\/form-data; boundary=/i);
   assert.equal(
     forwarded.headers.get("x-kairos-registry-forwarding"),
-    "kairos-production-registry-20260730-3-source-buffering",
+    "kairos-production-registry-20260730-4-chunked-source",
   );
 
   assert.equal(response.status, 201);
@@ -80,6 +80,7 @@ test("multipart manuscript source uploads are buffered and durably stored throug
   assert.equal(stored.source.format, "docx");
   assert.equal(stored.source.checksum, "source-forwarding-checksum");
   assert.equal(stored.source.wordCount, 13);
+  assert.equal(stored.source.uploadMode, "legacy-multipart");
 
   const metadata = runtime.values.get(`manuscript:${PROJECT_ID}:metadata`);
   assert.equal(metadata.textBytes, new TextEncoder().encode(EXTRACTED_TEXT).length);
