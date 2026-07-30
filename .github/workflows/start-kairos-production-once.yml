@@ -104,11 +104,8 @@ jobs:
           git diff --check
           git diff -- cloudflare/mmg-ios/src/kairos-production-entry-operational-execution-v1.js backend-tests/kairos-operational-approval-idempotency.test.ts
 
-      - name: Install test dependencies
-        run: npm ci --ignore-scripts
-
-      - name: Run focused regression test
-        run: npx vitest run backend-tests/kairos-operational-approval-idempotency.test.ts backend-tests/kairos-project-agent-foundation.test.ts
+      - name: Run focused regression tests
+        run: npx --yes vitest@3.2.0 run backend-tests/kairos-operational-approval-idempotency.test.ts backend-tests/kairos-project-agent-foundation.test.ts
 
       - name: Commit hotfix branch
         run: |
