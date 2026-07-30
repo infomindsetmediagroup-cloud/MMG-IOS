@@ -1,6 +1,6 @@
 const BUILD = "kairos-five-center-runtime-loader-20260730-1";
 const RELEASE = "five-center-dashboard-restored-20260730-1";
-const ASSET_RELEASE = "five-center-dashboard-chunked-source-20260730-3";
+const ASSET_RELEASE = "five-center-dashboard-direct-studio-chunks-20260730-4";
 const params = new URLSearchParams(window.location.search);
 const requestedMode = params.get("mode");
 const executiveMode = requestedMode === "executive";
@@ -104,7 +104,6 @@ const SCRIPT_FILES = [
   "social-production.js",
   "website-production-mobile-route.js",
   "publishing-operations-center.js",
-  "manuscript-docx-upload-hotfix.js",
   "manuscript-studio.js",
   "manuscript-project-setup.js",
   "manuscript-editorial-workbench.js",
