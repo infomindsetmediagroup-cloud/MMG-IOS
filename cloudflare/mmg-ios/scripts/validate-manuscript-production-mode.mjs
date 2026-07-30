@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const BUILD = "kairos-manuscript-production-validator-20260730-local-only-1";
+const BUILD = "kairos-manuscript-production-validator-20260730-local-only-2";
 const here = dirname(fileURLToPath(import.meta.url));
 const workerRoot = join(here, "..");
 const sourceRoot = join(workerRoot, "src");
@@ -87,10 +87,10 @@ for (const marker of [
   './kairos-production-entry-operational-execution-v1.js',
   '/api/operational-readiness',
   '/api/kairos',
-  '/prepare-source',
-  '/sync-source',
-  '/start-production',
-  '/complete-production',
+  'prepare-source',
+  'sync-source',
+  'start-production',
+  'complete-production',
   'browser-webgpu',
   'same-origin-webllm',
   'externalPaidAPIUsed: false',
