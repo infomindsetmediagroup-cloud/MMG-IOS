@@ -13,6 +13,10 @@ test("DOCX extraction resolves Mammoth named and default export shapes", () => {
   assert.match(source, /moduleNamespace\?\.default\?\.default/);
   assert.match(source, /typeof candidate\?\.extractRawText === "function"/);
   assert.doesNotMatch(source, /const api = mammoth\.default \|\| mammoth/);
+  assert.ok(
+    source.indexOf("moduleNamespace,\n") < source.indexOf("moduleNamespace?.default,"),
+    "Mammoth named exports must be checked before the default export.",
+  );
   assert.match(loader, /manuscript-docx-export-resolution-20260730-1/);
   assert.match(index, /legacy-runtime-loader\.js\?v=legacy-docx-export-resolution-20260730-1/);
 });
