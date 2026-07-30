@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
-const BUILD = "kairos-manuscript-large-intake-validator-20260730-7-five-center";
+const BUILD = "kairos-manuscript-large-intake-validator-20260730-8-native-docx";
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
 const repoRoot = join(root, "..", "..");
@@ -39,7 +39,7 @@ assert.ok(docxResolver.includes('typeof candidate?.extractRawText === "function"
 assert.ok(docxResolver.includes('form.append("file", pending.file'), "Original DOCX source preservation is missing.");
 assert.ok(docxResolver.includes('form.append("extractedText", pending.manuscript)'), "Extracted DOCX text is not included in durable source storage.");
 assert.ok(index.includes('kairos-five-center-dashboard-restored-20260730-1'), "The restored five-center dashboard build marker is missing.");
-assert.ok(index.includes('safari-manuscript-intake-compat.js?v=five-center-dashboard-restored-20260730-1'), "The restored Safari compatibility layer is missing.");
+assert.ok(index.includes('safari-manuscript-intake-compat.js?v=safari-native-docx-20260730-1'), "The native Safari DOCX compatibility layer is missing.");
 assert.ok(index.includes('legacy-runtime-loader.js?v=five-center-dashboard-restored-20260730-1'), "The restored command runtime loader marker is missing.");
 assert.ok(!index.includes('kairos-runtime-loader.js'), "The compatibility loader must not replace the five-center homepage.");
 assert.ok(!index.includes('executive-local-inference.js'), "The local-inference panel must not mount globally on the homepage.");
@@ -48,6 +48,12 @@ assert.ok(!index.includes('manuscript-studio.js'), "Manuscript Studio must not e
 assert.ok(runtimeLoader.includes('import "./legacy-runtime-loader.js"'), "The compatibility loader must retain the command and advanced runtime.");
 assert.ok(!runtimeLoader.includes('executive-local-inference.js'), "The compatibility loader must not globally mount the local-inference panel.");
 assert.ok(safari.includes('safari-manuscript-intake-compat-20260730-12-five-center'), "The five-center Safari compatibility build is missing.");
+assert.ok(safari.includes('kairos-native-docx-extractor-20260730-1'), "The native Safari DOCX extractor build is missing.");
+assert.ok(safari.includes('installNativeDocxExtractor'), "The native DOCX extractor is not installed before manuscript intake loads.");
+assert.ok(safari.includes('new DecompressionStream("deflate-raw")'), "The native DOCX ZIP decoder is missing.");
+assert.ok(safari.includes('word/document.xml'), "The native DOCX document-part reader is missing.");
+assert.ok(!safari.includes('cdn.jsdelivr.net'), "Safari DOCX extraction must not depend on jsDelivr.");
+assert.ok(!safari.includes('esm.sh'), "Safari DOCX extraction must not depend on esm.sh.");
 assert.ok(safari.includes('COMMAND_HUB_MODE'), "The five-center default route is missing.");
 assert.ok(loader.includes('const RELEASE = "five-center-dashboard-restored-20260730-1"'), "The restored command runtime release is missing.");
 assert.ok(loader.includes('commandHubMode'), "The command hub default-mode contract is missing.");
@@ -127,6 +133,8 @@ console.log(JSON.stringify({
     globalInferenceOverlayDisabled: true,
     localInferenceRetained: true,
     safariUploadRetention: true,
+    nativeDocxExtraction: true,
+    noExternalDocxModuleImport: true,
     docxNamedExportResolution: true,
     originalDocxSourcePreserved: true,
     recoverableSourceRetry: true,
