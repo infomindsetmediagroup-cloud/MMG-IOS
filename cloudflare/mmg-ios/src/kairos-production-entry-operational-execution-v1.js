@@ -14,7 +14,7 @@ export {
   KairosManuscriptGenerationWorkflow,
 };
 
-export const KAIROS_OPERATIONAL_EXECUTION_BUILD = "kairos-operational-execution-20260729-1";
+export const KAIROS_OPERATIONAL_EXECUTION_BUILD = "kairos-operational-execution-20260730-2-approval-recovery";
 
 const RUNTIME_PROJECT_PATH = "/registry/kairos-runtime-projects";
 const REGISTRY_OBJECT = "mmg-production-project-registry";
@@ -237,8 +237,12 @@ async function resumeFoundation(env, runtimeProject, agent, agentProjectId, oper
 async function approveFoundation(env, runtimeProject, agent, agentProjectId, operator) {
   const agentState = await agent.getProjectState();
   const instanceId = agentState?.pendingApproval?.workflowInstanceId || agentState?.activeWorkflow?.instanceId;
-  if (!instanceId) throw runtimeError("No pending foundation approval was found.", "FOUNDATION_APPROVAL_NOT_FOUND", 409);
-  await agent.approveFoundationWorkflow(instanceId, { approvedBy: operator, reason: "Approved in the Kairos Executive OS." });
+  const foundationStatus = clean(agentState?.activeWorkflow?.status, 80).toLowerCase();
+  const foundationAlreadyCompleted = foundationStatus === "completed" && !agentState?.pendingApproval;
+  if (!instanceId) throw runtimeError("No foundation workflow was found.", "FOUNDATION_APPROVAL_NOT_FOUND", 409);
+  if (!foundationAlreadyCompleted) {
+    await agent.approveFoundationWorkflow(instanceId, { approvedBy: operator, reason: "Approved in the Kairos Executive OS." });
+  }
 
   try {
     const source = await createAndStoreAuthoritativeSource(env, runtimeProject, agentProjectId);
