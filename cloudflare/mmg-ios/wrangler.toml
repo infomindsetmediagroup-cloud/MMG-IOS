@@ -1,5 +1,5 @@
 name = "mmg-ios"
-main = "src/kairos-production-entry-local-execution-v1.js"
+main = "src/kairos-production-entry-local-only-v1.js"
 compatibility_date = "2026-07-24"
 compatibility_flags = ["nodejs_compat"]
 keep_names = true
@@ -53,6 +53,7 @@ new_sqlite_classes = ["KairosProjectAgent"]
 # Foundation approval queues local source generation; it does not call an external model provider.
 # Authoritative-source and manuscript generation run locally through the same-origin WebLLM/WebGPU runtime.
 # The Worker verifies and stores checksums, local-inference evidence, runtime transitions, and approval receipts.
+# Legacy backend manuscript and revenue-generation routes are blocked by the local-only entry boundary.
 # Product DRAFT creation and live publication remain available only through exact approval-gated routes.
 # Digital Asset Edition V2 and customer-delivery verification remain mandatory.
 # Canonical approvals: Approve Foundation, Start Local Production, Approve Package, Approve & Publish Product.
