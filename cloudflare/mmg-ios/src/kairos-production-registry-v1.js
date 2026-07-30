@@ -1,4 +1,4 @@
-const BUILD = "kairos-production-registry-20260722-2";
+const BUILD = "kairos-production-registry-20260730-3-source-buffering";
 const REGISTRY_OBJECT = "mmg-production-project-registry";
 const MAX_PROJECTS = 250;
 
@@ -20,7 +20,7 @@ export async function handleProductionRegistry(request, env) {
   const suffix = url.pathname.replace(/^\/api\/production-registry/, "") || "/";
   const targetURL = `https://kairos.internal/registry${suffix}${url.search}`;
 
-  if (isManuscriptSetupMutation(url.pathname, request.method)) {
+  if (isBufferedManuscriptMutation(url.pathname, request.method)) {
     return stub.fetch(await bufferedForwardRequest(request, targetURL));
   }
 
@@ -102,9 +102,10 @@ export async function handleRegistryObjectRequest(state, request) {
   return json({ status: "not-found", error: { code: "production_registry_route_not_found", message: "Production registry route not found." } }, 404);
 }
 
-function isManuscriptSetupMutation(pathname, method) {
-  return !["GET", "HEAD"].includes(String(method || "GET").toUpperCase())
-    && /^\/api\/production-registry\/manuscripts\/[a-z0-9-]{8,}\/setup(?:\/cover)?$/i.test(pathname);
+function isBufferedManuscriptMutation(pathname, method) {
+  const normalizedMethod = String(method || "GET").toUpperCase();
+  if (!["POST", "PUT", "PATCH"].includes(normalizedMethod)) return false;
+  return /^\/api\/production-registry\/manuscripts\/[a-z0-9-]{8,}\/(?:setup(?:\/cover)?|source)$/i.test(pathname);
 }
 
 async function bufferedForwardRequest(request, targetURL) {
