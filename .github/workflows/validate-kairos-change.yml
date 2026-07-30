@@ -64,6 +64,7 @@ jobs:
           node --check cloudflare/kairos/intelligence-api.js
           node --check cloudflare/mmg-ios/src/kairos-production-entry-local-inference-v1.js
           node --check cloudflare/mmg-ios/src/kairos-production-entry-operational-execution-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-production-registry-v1.js
           node --check cloudflare/mmg-ios/src/kairos-project-agent-v1.js
           node --check cloudflare/mmg-ios/src/kairos-project-agent-api-v1.js
           node --check cloudflare/mmg-ios/src/kairos-project-foundation-workflow-v1.js
@@ -84,6 +85,9 @@ jobs:
           node --check web/kairos-dashboard/scripts/publication-performance.js
           node --check scripts/validate-kairos-shopify-policy.mjs
           node --check scripts/validate-kairos-manuscript-activation.mjs
+
+      - name: Test buffered manuscript source forwarding
+        run: node --test cloudflare/mmg-ios/test/kairos-manuscript-source-forwarding.test.js
 
       - name: Test Kairos scope firewall
         run: npx vitest run backend-tests/kairos-scope-firewall.test.js
