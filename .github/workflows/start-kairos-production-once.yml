@@ -1,4 +1,4 @@
-name: Start Kairos Production Job Once
+name: Run Kairos Growth Job Once
 
 on:
   push:
@@ -12,19 +12,17 @@ permissions:
   statuses: write
 
 concurrency:
-  group: start-kairos-production-kproject-browser-20c52f4b
+  group: run-kairos-growth-job-once
   cancel-in-progress: false
 
 jobs:
-  start-production:
+  run-growth-job:
     if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 12
     env:
       WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
       EXPECTED_BUILD: kairos-operational-execution-20260730-2-approval-recovery
-      RUNTIME_PROJECT_ID: kproject_browser_20c52f4b-93d5-4482-aba2-0b9f3d47867f
-      AGENT_PROJECT_ID: kproject-browser-20c52f4b-93d5-4482-aba2-0b9f3d47867f
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Report job pending
@@ -33,168 +31,107 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"pending\",\"context\":\"kairos-supervised-job\",\"description\":\"Waiting for recovery build and starting one governed Kairos job\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"pending\",\"context\":\"kairos-growth-job\",\"description\":\"Starting one governed quota-independent Kairos growth job\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
-      - name: Synchronize source and start exact job
+      - name: Start and verify governed growth job
         run: |
           set -euo pipefail
-          workdir="${RUNNER_TEMP}/kairos-supervised-job"
+          workdir="${RUNNER_TEMP}/kairos-growth-job"
           mkdir -p "${workdir}"
 
           readiness="${workdir}/readiness.json"
-          build_ready=false
-          for attempt in $(seq 1 60); do
-            code="$(curl --silent --show-error --max-time 30 \
-              "${WORKER_URL}/api/operational-readiness?job_run=${GITHUB_RUN_ID}&attempt=${attempt}" \
-              -o "${readiness}" -w '%{http_code}' || true)"
-            if [ "${code}" = "200" ] \
-              && jq -e --arg build "${EXPECTED_BUILD}" '.status == "ready" and .build == $build' "${readiness}" >/dev/null 2>&1; then
-              build_ready=true
-              echo "Expected operational recovery build is live."
-              cat "${readiness}"
-              break
-            fi
-            echo "Build readiness attempt ${attempt}: HTTP ${code}"
-            cat "${readiness}" || true
-            sleep 5
-          done
-          [ "${build_ready}" = "true" ] || { echo "Expected recovery build did not become live."; exit 1; }
+          readiness_code="$(curl --silent --show-error --max-time 30 \
+            "${WORKER_URL}/api/operational-readiness?growth_job=${GITHUB_RUN_ID}" \
+            -o "${readiness}" -w '%{http_code}' || true)"
+          echo "Readiness HTTP ${readiness_code}"
+          cat "${readiness}" || true
+          [ "${readiness_code}" = "200" ] || exit 1
+          jq -e --arg build "${EXPECTED_BUILD}" '
+            .status == "ready"
+            and .objectiveSubmission == "ready"
+            and .build == $build
+            and .automaticPublicationAllowed == false
+            and .commerceMutationAllowed == false
+          ' "${readiness}" >/dev/null
 
-          before="${workdir}/before.json"
-          agent_before="${workdir}/agent-before.json"
-          before_code="$(curl --silent --show-error --max-time 30 \
-            "${WORKER_URL}/api/workflows?job_run=${GITHUB_RUN_ID}&phase=before" \
-            -o "${before}" -w '%{http_code}' || true)"
-          agent_code="$(curl --silent --show-error --max-time 30 \
-            "${WORKER_URL}/api/kairos/project-agents/${AGENT_PROJECT_ID}/state?job_run=${GITHUB_RUN_ID}&phase=before" \
-            -o "${agent_before}" -w '%{http_code}' || true)"
-          echo "Projection before: HTTP ${before_code}"
-          cat "${before}" || true
-          echo "Agent before: HTTP ${agent_code}"
-          cat "${agent_before}" || true
-          [ "${before_code}" = "200" ] && [ "${agent_code}" = "200" ] || exit 1
-
-          jq -e --arg pid "${RUNTIME_PROJECT_ID}" '
-            .workflows | map(select((.projectId == $pid) or (.id == $pid))) | length == 1
-          ' "${before}" >/dev/null || { echo "Exact runtime project missing or duplicated."; exit 1; }
-          jq -e '
-            .state.activeWorkflow.status == "completed"
-            and (.state.pendingApproval == null)
-            and (.state.activeManuscriptWorkflow == null)
-          ' "${agent_before}" >/dev/null || { echo "Exact project Agent is not idle after completed foundation."; exit 1; }
-
-          source_ready="$(jq -r --arg pid "${RUNTIME_PROJECT_ID}" '
-            .workflows | map(select((.projectId == $pid) or (.id == $pid)))[0]
-            | if .sourceReady == true then "true" else "false" end
-          ' "${before}")"
-
-          if [ "${source_ready}" != "true" ]; then
-            approval="${workdir}/approval.json"
-            approval_code="$(curl --silent --show-error --max-time 240 -X POST \
-              -H 'Content-Type: application/json' \
-              -H 'X-MMG-Approval-Source: owner-chat-recovery' \
-              --data '{"reason":"Synchronize the completed approved foundation and generate its authoritative source for one supervised Kairos job."}' \
-              "${WORKER_URL}/api/workflows/${RUNTIME_PROJECT_ID}/approve" \
-              -o "${approval}" -w '%{http_code}' || true)"
-            echo "Operational synchronization: HTTP ${approval_code}"
-            cat "${approval}" || true
-            [ "${approval_code}" = "202" ] || exit 1
-            jq -e --arg build "${EXPECTED_BUILD}" '
-              .status == "accepted"
-              and .action == "approve"
-              and .automaticPublicationAllowed == false
-              and .build == $build
-              and (.source.checksum | type == "string" and length > 10)
-            ' "${approval}" >/dev/null || { echo "Source synchronization receipt is incomplete or unsafe."; exit 1; }
-          fi
-
-          ready="${workdir}/ready.json"
-          source_boundary=false
-          for attempt in $(seq 1 48); do
-            code="$(curl --silent --show-error --max-time 30 \
-              "${WORKER_URL}/api/workflows?job_run=${GITHUB_RUN_ID}&phase=ready&attempt=${attempt}" \
-              -o "${ready}" -w '%{http_code}' || true)"
-            if [ "${code}" = "200" ] \
-              && jq -e --arg pid "${RUNTIME_PROJECT_ID}" '
-                .workflows | map(select((.projectId == $pid) or (.id == $pid)))[0]
-                | .sourceReady == true
-                  and .canStartProduction == true
-                  and .actionRequired == "start-production"
-                  and (.state == "queued" or .rawState == "queued")
-              ' "${ready}" >/dev/null 2>&1; then
-              source_boundary=true
-              echo "Verified authoritative source and production boundary."
-              cat "${ready}"
-              break
-            fi
-            echo "Source boundary attempt ${attempt}: HTTP ${code}"
-            cat "${ready}" || true
-            sleep 5
-          done
-          [ "${source_boundary}" = "true" ] || { echo "Source-ready production boundary was not reached."; exit 1; }
-
-          start="${workdir}/start.json"
-          start_code="$(curl --silent --show-error --max-time 90 -X POST \
+          launch="${workdir}/launch.json"
+          objective="Create a draft-only 30-day Mindset Media Group growth experiment plan focused on improving TikTok-to-Shopify conversion. Define the audience hypothesis, content pillars, three measurable experiments, weekly KPIs, evidence requirements, risk controls, and an approval-gated execution sequence. Do not publish content, change pricing, mutate Shopify, spend funds, contact customers, or delete data."
+          payload="$(jq -cn --arg action "growth-plan" --arg objective "${objective}" '{action:$action, objective:$objective}')"
+          launch_code="$(curl --silent --show-error --max-time 60 -X POST \
             -H 'Content-Type: application/json' \
-            -H 'X-MMG-Approval-Source: owner-chat-job-test' \
-            --data '{"reason":"Start one supervised Kairos manuscript-production job approved by the MMG owner on July 30, 2026."}' \
-            "${WORKER_URL}/api/workflows/${RUNTIME_PROJECT_ID}/start-production" \
-            -o "${start}" -w '%{http_code}' || true)"
-          echo "Start production: HTTP ${start_code}"
-          cat "${start}" || true
-          [ "${start_code}" = "202" ] || exit 1
+            -H 'X-MMG-Job-Source: owner-chat-test' \
+            --data "${payload}" \
+            "${WORKER_URL}/api/hub/run" \
+            -o "${launch}" -w '%{http_code}' || true)"
+          echo "Launch HTTP ${launch_code}"
+          cat "${launch}" || true
+          [ "${launch_code}" = "202" ] || exit 1
           jq -e '
             .status == "accepted"
-            and .action == "start-production"
+            and (.runtimeProjectId | startswith("kproject_browser_"))
+            and (.agentProjectId | startswith("kproject-browser-"))
             and (.workflowInstanceId | type == "string" and length > 5)
             and .automaticPublicationAllowed == false
-          ' "${start}" >/dev/null || { echo "Production start receipt is incomplete or unsafe."; exit 1; }
-          instance_id="$(jq -r '.workflowInstanceId' "${start}")"
+            and .commerceMutationAllowed == false
+          ' "${launch}" >/dev/null
+
+          runtime_id="$(jq -r '.runtimeProjectId' "${launch}")"
+          agent_id="$(jq -r '.agentProjectId' "${launch}")"
+          instance_id="$(jq -r '.workflowInstanceId' "${launch}")"
+          echo "RUNTIME_ID=${runtime_id}" >> "${GITHUB_ENV}"
+          echo "AGENT_ID=${agent_id}" >> "${GITHUB_ENV}"
           echo "INSTANCE_ID=${instance_id}" >> "${GITHUB_ENV}"
 
-          verified_state="${workdir}/verified-state.json"
-          verified_projection="${workdir}/verified-projection.json"
-          for attempt in $(seq 1 72); do
+          state="${workdir}/state.json"
+          projection="${workdir}/projection.json"
+          for attempt in $(seq 1 60); do
             state_code="$(curl --silent --show-error --max-time 30 \
-              "${WORKER_URL}/api/kairos/project-agents/${AGENT_PROJECT_ID}/state?job_verify=${GITHUB_RUN_ID}&attempt=${attempt}" \
-              -o "${verified_state}" -w '%{http_code}' || true)"
+              "${WORKER_URL}/api/kairos/project-agents/${agent_id}/state?growth_job=${GITHUB_RUN_ID}&attempt=${attempt}" \
+              -o "${state}" -w '%{http_code}' || true)"
             projection_code="$(curl --silent --show-error --max-time 30 \
-              "${WORKER_URL}/api/workflows?job_verify=${GITHUB_RUN_ID}&attempt=${attempt}" \
-              -o "${verified_projection}" -w '%{http_code}' || true)"
+              "${WORKER_URL}/api/workflows?growth_job=${GITHUB_RUN_ID}&attempt=${attempt}" \
+              -o "${projection}" -w '%{http_code}' || true)"
+
             if [ "${state_code}" = "200" ] \
               && [ "${projection_code}" = "200" ] \
               && jq -e --arg iid "${instance_id}" '
-                .state.activeManuscriptWorkflow.instanceId == $iid
-                and (
-                  .state.activeManuscriptWorkflow.status == "running"
-                  or .state.activeManuscriptWorkflow.status == "waiting_for_approval"
-                  or .state.activeManuscriptWorkflow.status == "completed"
-                )
-              ' "${verified_state}" >/dev/null 2>&1 \
-              && jq -e --arg pid "${RUNTIME_PROJECT_ID}" '
-                .workflows | map(select((.projectId == $pid) or (.id == $pid)))[0]
-                | (.state == "active" or .state == "completed" or .rawState == "executing")
-              ' "${verified_projection}" >/dev/null 2>&1; then
-              echo "Kairos production job durably verified."
-              cat "${verified_state}"
-              cat "${verified_projection}"
+                .state.activeWorkflow.instanceId == $iid
+                and .state.activeWorkflow.status == "waiting_for_approval"
+                and .state.pendingApproval.workflowInstanceId == $iid
+                and .state.pendingApproval.type == "FOUNDATION_APPROVAL"
+              ' "${state}" >/dev/null 2>&1 \
+              && jq -e --arg rid "${runtime_id}" --arg iid "${instance_id}" '
+                .workflows
+                | map(select((.projectId == $rid) or (.id == $rid)))[0]
+                | .workflowInstanceId == $iid
+                  and .state == "pending"
+                  and .actionRequired == "approve-foundation"
+                  and .canApprove == true
+                  and .automaticPublicationAllowed == false
+                  and .commerceMutationAllowed == false
+              ' "${projection}" >/dev/null 2>&1; then
+              echo "Kairos growth job durably reached its approval gate."
+              cat "${state}"
+              cat "${projection}"
               {
-                echo "## Kairos supervised production job"
-                echo "- Runtime project: ${RUNTIME_PROJECT_ID}"
-                echo "- Project Agent: ${AGENT_PROJECT_ID}"
-                echo "- Manuscript Workflow instance: ${instance_id}"
-                echo "- Manuscript status: $(jq -r '.state.activeManuscriptWorkflow.status' "${verified_state}")"
-                echo "- Stage: $(jq -r '.state.stage // "unknown"' "${verified_state}")"
+                echo "## Kairos growth job"
+                echo "- Runtime project: ${runtime_id}"
+                echo "- Project Agent: ${agent_id}"
+                echo "- Foundation Workflow: ${instance_id}"
+                echo "- Status: waiting_for_approval"
+                echo "- Required action: approve-foundation"
                 echo "- Automatic publication: disabled"
-                echo "- Commerce mutation: not authorized"
+                echo "- Commerce mutation: disabled"
               } >> "${GITHUB_STEP_SUMMARY}"
               exit 0
             fi
-            echo "Durable verification attempt ${attempt}: agent ${state_code}; projection ${projection_code}"
-            cat "${verified_state}" || true
+
+            echo "Verification attempt ${attempt}: agent ${state_code}; projection ${projection_code}"
+            cat "${state}" || true
             sleep 5
           done
-          echo "Kairos accepted the job but durable verification did not converge."
+
+          echo "Growth job did not reach the durable approval gate."
           exit 1
 
       - name: Report job success
@@ -204,7 +141,7 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"success\",\"context\":\"kairos-supervised-job\",\"description\":\"Governed Kairos production job started and durably verified\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"success\",\"context\":\"kairos-growth-job\",\"description\":\"Kairos growth job reached its durable approval gate\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
       - name: Report job failure
         if: ${{ failure() || cancelled() }}
@@ -213,4 +150,4 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"failure\",\"context\":\"kairos-supervised-job\",\"description\":\"Kairos job was refused, failed, or could not be durably verified\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"failure\",\"context\":\"kairos-growth-job\",\"description\":\"Kairos growth job failed or did not reach approval\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
