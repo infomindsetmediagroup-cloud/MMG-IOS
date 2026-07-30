@@ -1,4 +1,4 @@
-const BUILD = "safari-manuscript-intake-compat-20260730-11-docx";
+const BUILD = "safari-manuscript-intake-compat-20260730-12-local-production";
 const API_GET_TIMEOUT_MS = 12000;
 const API_MUTATION_TIMEOUT_MS = 45000;
 const ADVANCED_MODE = new URLSearchParams(globalThis.location?.search || "").get("mode") === "advanced";
@@ -19,6 +19,7 @@ window.KairosSafariManuscriptIntakeCompat = Object.freeze({
   ready: true,
   build: BUILD,
   advancedMode: ADVANCED_MODE,
+  localProduction: true,
 });
 
 function activateExecutiveOperatingSystem() {
@@ -38,8 +39,18 @@ function activateExecutiveOperatingSystem() {
 }
 
 function activateBrowserLayers() {
+  activateLocalProductionBridge();
   activateLiveExecutionDetails();
   activateSuccessFeedback();
+}
+
+function activateLocalProductionBridge() {
+  if (document.querySelector("script[data-kairos-local-production]")) return;
+  const script = document.createElement("script");
+  script.type = "module";
+  script.src = "./scripts/executive-os-local-production-bridge.js?v=20260730-1";
+  script.dataset.kairosLocalProduction = "true";
+  document.body.append(script);
 }
 
 function activateLiveExecutionDetails() {
