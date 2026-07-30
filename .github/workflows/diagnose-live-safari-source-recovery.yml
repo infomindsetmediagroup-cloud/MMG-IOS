@@ -1,0 +1,53 @@
+name: Diagnose Live Safari Source Recovery
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnose-live-safari-source-recovery.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+    steps:
+      - name: Verify exact deployed recovery build
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="${RUNNER_TEMP}/root.html"
+          loader="${RUNNER_TEMP}/loader.js"
+          docx="${RUNNER_TEMP}/docx.js"
+          command="${RUNNER_TEMP}/command.js"
+
+          root_status="$(curl --silent --show-error --max-time 30 "${WORKER_URL}/?release=cdbf3dc2e3cab738fbd640864adaa7ad2f974715" -o "${root}" -w '%{http_code}')"
+          loader_status="$(curl --silent --show-error --max-time 30 "${WORKER_URL}/scripts/legacy-runtime-loader.js?release=cdbf3dc2e3cab738fbd640864adaa7ad2f974715" -o "${loader}" -w '%{http_code}')"
+          docx_status="$(curl --silent --show-error --max-time 30 "${WORKER_URL}/scripts/manuscript-docx-upload-hotfix.js?release=cdbf3dc2e3cab738fbd640864adaa7ad2f974715" -o "${docx}" -w '%{http_code}')"
+          command_status="$(curl --silent --show-error --max-time 30 "${WORKER_URL}/scripts/command-hub.js?release=cdbf3dc2e3cab738fbd640864adaa7ad2f974715" -o "${command}" -w '%{http_code}')"
+          parent_count="$(grep -o 'id: "\(knowledge\|content\|business\|customers\|operations\)"' "${command}" | wc -l | tr -d ' ')"
+
+          printf 'root=%s loader=%s docx=%s command=%s parents=%s\n' "${root_status}" "${loader_status}" "${docx_status}" "${command_status}" "${parent_count}"
+          grep -n 'mmg-release' "${root}"
+          grep -n 'ASSET_RELEASE' "${loader}" | head
+          grep -n 'manuscript-docx-upload-hotfix-20260730-2-source-recovery' "${docx}"
+          grep -n 'SOURCE_UPLOAD_TIMEOUT_MS' "${docx}"
+          grep -n 'rotateProjectId(result.response.status)' "${docx}"
+
+          test "${root_status}" = '200'
+          test "${loader_status}" = '200'
+          test "${docx_status}" = '200'
+          test "${command_status}" = '200'
+          test "${parent_count}" = '5'
+          grep -q 'five-center-dashboard-source-recovery-20260730-2' "${root}"
+          grep -q 'const ASSET_RELEASE = "five-center-dashboard-source-recovery-20260730-2"' "${loader}"
+          grep -q 'scripts/${filename}?v=${ASSET_RELEASE}' "${loader}"
+          grep -q 'manuscript-docx-upload-hotfix-20260730-2-source-recovery' "${docx}"
+          grep -q 'SOURCE_UPLOAD_TIMEOUT_MS = 5 \* 60 \* 1000' "${docx}"
+          grep -q 'TRANSIENT_SOURCE_STATUSES = new Set(\[502, 503, 504\])' "${docx}"
+          grep -q 'rotateProjectId(result.response.status)' "${docx}"
+          echo 'Exact live Safari source recovery build verified.'
