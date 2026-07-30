@@ -1,0 +1,48 @@
+name: One-shot integrate validated DOCX hotfix
+
+on:
+  push:
+    branches:
+      - hotfix/docx-mammoth-export-resolution
+    paths:
+      - '.github/workflows/one-shot-integrate-docx-hotfix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: hotfix/docx-mammoth-export-resolution
+          fetch-depth: 0
+
+      - name: Merge validated DOCX hotfix onto latest main atomically
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          for attempt in 1 2 3 4 5; do
+            git fetch origin main hotfix/docx-mammoth-export-resolution
+            git checkout -B docx-integration origin/main
+            git merge --no-edit origin/hotfix/docx-mammoth-export-resolution
+            rm -f .github/workflows/one-shot-integrate-docx-hotfix.yml
+            git add -A
+            if ! git diff --cached --quiet; then
+              git commit -m "chore: remove one-shot DOCX integration workflow"
+            fi
+
+            if git push origin HEAD:main; then
+              echo "DOCX hotfix integrated into latest main."
+              exit 0
+            fi
+
+            echo "Main advanced during push attempt ${attempt}; rebuilding from latest main."
+            sleep 5
+          done
+
+          echo "Unable to integrate DOCX hotfix after five retries."
+          exit 1
