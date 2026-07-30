@@ -78,7 +78,6 @@ test("Safari compatibility exposes the native extractor to the existing DOCX int
 
 test("iPhone Safari stores retained DOCX and manuscript text through verified raw chunks", async ({ page }) => {
   const requests = [];
-  const restored = [];
   let uploadId = "";
   let firstFileChunkFailed = false;
 
@@ -176,12 +175,15 @@ test("iPhone Safari stores retained DOCX and manuscript text through verified ra
   });
   await page.addScriptTag({ type: "module", content: compatibilitySource });
   await page.evaluate(() => {
-    window.__KAIROS_MAMMOTH_TEST_MODULE__ = {
-      extractRawText: async () => ({
-        value: "AI Video Prompt Mastery production manuscript. ".repeat(7000),
-        messages: [],
-      }),
-    };
+    Object.defineProperty(window, "__KAIROS_MAMMOTH_TEST_MODULE__", {
+      configurable: true,
+      value: {
+        extractRawText: async () => ({
+          value: "AI Video Prompt Mastery production manuscript. ".repeat(7000),
+          messages: [],
+        }),
+      },
+    });
   });
   await page.addScriptTag({ type: "module", content: docxHotfixSource });
 
