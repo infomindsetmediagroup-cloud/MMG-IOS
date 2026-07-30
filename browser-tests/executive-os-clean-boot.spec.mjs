@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 const indexSource = readFileSync(new URL("../web/kairos-dashboard/index.html", import.meta.url), "utf8");
 const safariSource = readFileSync(new URL("../web/kairos-dashboard/scripts/safari-manuscript-intake-compat.js", import.meta.url), "utf8");
 const executiveSource = readFileSync(new URL("../web/kairos-dashboard/scripts/executive-os.js", import.meta.url), "utf8");
+const liveDetailsSource = readFileSync(new URL("../web/kairos-dashboard/scripts/executive-os-live-details.js", import.meta.url), "utf8");
 const legacySource = readFileSync(new URL("../web/kairos-dashboard/scripts/legacy-runtime-loader.js", import.meta.url), "utf8");
 const executiveCSS = readFileSync(new URL("../web/kairos-dashboard/styles/executive-os.css", import.meta.url), "utf8");
 
@@ -44,12 +45,17 @@ async function installDashboardRoutes(page, { slowAPIs = false } = {}) {
       return;
     }
 
+    if (path === "/scripts/executive-os-live-details.js") {
+      await route.fulfill({ status: 200, contentType: "text/javascript", body: liveDetailsSource });
+      return;
+    }
+
     if (path === "/scripts/legacy-runtime-loader.js") {
       await route.fulfill({ status: 200, contentType: "text/javascript", body: legacySource });
       return;
     }
 
-    if (path === "/scripts/executive-os-live-details.js" || path === "/scripts/executive-os-feedback.js") {
+    if (path === "/scripts/executive-os-feedback.js") {
       await route.fulfill({ status: 200, contentType: "text/javascript", body: "export {};" });
       return;
     }
@@ -100,6 +106,21 @@ test("iPhone WebKit remains tappable while executive API refresh is pending", as
   await page.getByRole("button", { name: "Open manuscript production" }).tap();
   await expect(page).toHaveURL(/mode=advanced/);
   await expect(page).toHaveURL(/open=manuscript/);
+});
+
+test("real live-details module does not lock the iPhone WebKit event loop", async ({ page }) => {
+  await installDashboardRoutes(page);
+
+  await page.goto("https://kairos.test/?test=observer-loop", { waitUntil: "domcontentloaded" });
+  await expect(page.locator("#kairos-executive-os")).toBeVisible();
+  await expect(page.locator("[data-execution-detail]")).toBeVisible();
+
+  await page.waitForTimeout(350);
+  await page.getByRole("button", { name: "Create" }).tap({ timeout: 3_000 });
+  await expect(page.getByRole("heading", { name: "What should Kairos accomplish?" })).toBeVisible();
+  await page.getByRole("button", { name: "Today" }).tap({ timeout: 3_000 });
+  await expect(page.getByRole("heading", { name: "Kairos is working." })).toBeVisible();
+  await expect(page.locator("[data-execution-detail]")).toHaveCount(1);
 });
 
 test("advanced mode loads the legacy runtime without mounting Executive OS", async ({ page }) => {
