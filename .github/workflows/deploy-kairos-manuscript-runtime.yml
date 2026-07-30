@@ -65,6 +65,7 @@ jobs:
       - name: Validate local-only runtime syntax
         run: |
           node --check cloudflare/mmg-ios/src/kairos-production-entry-local-execution-v1.js
+          node --check web/kairos-dashboard/scripts/kairos-runtime-loader.js
           node --check web/kairos-dashboard/scripts/executive-local-inference.js
           node --check web/kairos-dashboard/scripts/kairos-local-inference.js
           node --check web/kairos-dashboard/scripts/kairos-local-inference-same-origin.js
@@ -114,15 +115,21 @@ jobs:
         run: |
           set -euo pipefail
           root="${RUNNER_TEMP}/root.html"
+          loader="${RUNNER_TEMP}/kairos-runtime-loader.js"
           bridge="${RUNNER_TEMP}/executive-local-inference.js"
           inference="${RUNNER_TEMP}/kairos-local-inference-same-origin.js"
           bundle="${RUNNER_TEMP}/webllm-bundle.js"
           for attempt in $(seq 1 30); do
             curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${root}" || true
+            curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/scripts/kairos-runtime-loader.js?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${loader}" || true
             curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/scripts/executive-local-inference.js?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${bridge}" || true
             curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/scripts/kairos-local-inference-same-origin.js?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${inference}" || true
             curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/vendor/webllm-bundle.js?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${bundle}" || true
-            if grep -q 'executive-local-inference.js' "${root}" \
+            module_count="$(grep -o '<script type="module"' "${root}" | wc -l | tr -d ' ')"
+            if [ "${module_count}" = "2" ] \
+              && grep -q 'kairos-runtime-loader.js' "${root}" \
+              && grep -q 'legacy-runtime-loader.js' "${loader}" \
+              && grep -q 'executive-local-inference.js' "${loader}" \
               && grep -q 'browser-webgpu' "${bridge}" \
               && grep -q '../vendor/webllm-bundle.js' "${inference}" \
               && grep -q 'CreateMLCEngine' "${bundle}"; then
