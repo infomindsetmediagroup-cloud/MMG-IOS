@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
-const BUILD = "kairos-manuscript-large-intake-validator-20260730-6-local";
+const BUILD = "kairos-manuscript-large-intake-validator-20260730-7-five-center";
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
 const repoRoot = join(root, "..", "..");
@@ -15,6 +15,7 @@ const safariPath = join(repoRoot, "web", "kairos-dashboard", "scripts", "safari-
 const indexPath = join(repoRoot, "web", "kairos-dashboard", "index.html");
 const runtimeLoaderPath = join(repoRoot, "web", "kairos-dashboard", "scripts", "kairos-runtime-loader.js");
 const loaderPath = join(repoRoot, "web", "kairos-dashboard", "scripts", "legacy-runtime-loader.js");
+const localInferencePath = join(repoRoot, "web", "kairos-dashboard", "scripts", "kairos-local-inference.js");
 
 const backend = readFileSync(backendPath, "utf8");
 const frontend = readFileSync(frontendPath, "utf8");
@@ -23,6 +24,7 @@ const safari = readFileSync(safariPath, "utf8");
 const index = readFileSync(indexPath, "utf8");
 const runtimeLoader = readFileSync(runtimeLoaderPath, "utf8");
 const loader = readFileSync(loaderPath, "utf8");
+const localInference = readFileSync(localInferencePath, "utf8");
 
 assert.ok(backend.includes('const MAX_CHARS = 600000'), "Backend manuscript intake is not aligned to 600,000 characters.");
 assert.ok(backend.includes('manuscript-studio-v5-large-intake'), "Backend large-intake capability version is missing.");
@@ -36,23 +38,30 @@ assert.ok(docxResolver.includes('const MAX_TEXT_CHARS = 600000'), "DOCX extracti
 assert.ok(docxResolver.includes('typeof candidate?.extractRawText === "function"'), "DOCX export-shape resolution is missing.");
 assert.ok(docxResolver.includes('form.append("file", pending.file'), "Original DOCX source preservation is missing.");
 assert.ok(docxResolver.includes('form.append("extractedText", pending.manuscript)'), "Extracted DOCX text is not included in durable source storage.");
-assert.ok(index.includes('kairos-executive-local-inference-20260730-1'), "The local-inference Executive OS build marker is missing.");
-assert.ok(index.includes('safari-manuscript-intake-compat.js?v=safari-docx-export-resolver-20260730-1'), "The current Safari DOCX compatibility layer is missing.");
-assert.ok(index.includes('kairos-runtime-loader.js?v=kairos-local-inference-20260730-1'), "The composed Kairos runtime loader marker is missing.");
-assert.ok(!index.includes('manuscript-docx-upload-hotfix.js'), "The DOCX resolver must not execute on the Executive OS homepage.");
-assert.ok(!index.includes('manuscript-studio.js'), "Manuscript Studio must not load on the Executive OS homepage.");
-assert.ok(runtimeLoader.includes('import "./legacy-runtime-loader.js"'), "The composed runtime must retain isolated advanced manuscript operations.");
-assert.ok(runtimeLoader.includes('import "./executive-local-inference.js"'), "The composed runtime must load Kairos local inference.");
-assert.ok(safari.includes('safari-manuscript-intake-compat-20260730-11-docx'), "The current Safari intake compatibility build is missing.");
-assert.ok(loader.includes('const RELEASE = "manuscript-docx-export-resolver-20260730-1"'), "The isolated DOCX runtime release is missing.");
-assert.ok(loader.includes('"manuscript-docx-upload-hotfix.js"'), "The DOCX resolver is missing from Advanced Operations.");
-assert.ok(loader.includes('"manuscript-studio.js"'), "Manuscript Studio is missing from Advanced Operations.");
-assert.ok(loader.includes('"manuscript-project-setup.js"'), "Manuscript project setup is missing from Advanced Operations.");
+assert.ok(index.includes('kairos-five-center-dashboard-restored-20260730-1'), "The restored five-center dashboard build marker is missing.");
+assert.ok(index.includes('safari-manuscript-intake-compat.js?v=five-center-dashboard-restored-20260730-1'), "The restored Safari compatibility layer is missing.");
+assert.ok(index.includes('legacy-runtime-loader.js?v=five-center-dashboard-restored-20260730-1'), "The restored command runtime loader marker is missing.");
+assert.ok(!index.includes('kairos-runtime-loader.js'), "The compatibility loader must not replace the five-center homepage.");
+assert.ok(!index.includes('executive-local-inference.js'), "The local-inference panel must not mount globally on the homepage.");
+assert.ok(!index.includes('manuscript-docx-upload-hotfix.js'), "The DOCX resolver must not execute directly from the homepage HTML.");
+assert.ok(!index.includes('manuscript-studio.js'), "Manuscript Studio must not execute directly from the homepage HTML.");
+assert.ok(runtimeLoader.includes('import "./legacy-runtime-loader.js"'), "The compatibility loader must retain the command and advanced runtime.");
+assert.ok(!runtimeLoader.includes('executive-local-inference.js'), "The compatibility loader must not globally mount the local-inference panel.");
+assert.ok(safari.includes('safari-manuscript-intake-compat-20260730-12-five-center'), "The five-center Safari compatibility build is missing.");
+assert.ok(safari.includes('COMMAND_HUB_MODE'), "The five-center default route is missing.");
+assert.ok(loader.includes('const RELEASE = "five-center-dashboard-restored-20260730-1"'), "The restored command runtime release is missing.");
+assert.ok(loader.includes('commandHubMode'), "The command hub default-mode contract is missing.");
+assert.ok(loader.includes('"command-hub.js"'), "The five-center Command Hub is missing from the runtime.");
+assert.ok(loader.includes('"kairos-local-inference.js"'), "Local manuscript inference is missing from the governed runtime.");
+assert.ok(loader.includes('"manuscript-docx-upload-hotfix.js"'), "The DOCX resolver is missing from the governed runtime.");
+assert.ok(loader.includes('"manuscript-studio.js"'), "Manuscript Studio is missing from the governed runtime.");
+assert.ok(loader.includes('"manuscript-project-setup.js"'), "Manuscript project setup is missing from the governed runtime.");
 assert.ok(loader.indexOf('"manuscript-docx-upload-hotfix.js"') < loader.indexOf('"manuscript-studio.js"'), "The DOCX resolver must load before Manuscript Studio.");
+assert.ok(localInference.includes('kairos-local-inference-same-origin.js'), "The same-origin local manuscript inference module is missing.");
 assert.ok(!backend.includes('180000'), "The stale 180,000-character backend limit remains.");
 assert.ok(!frontend.includes('180000'), "The stale 180,000-character browser limit remains.");
 
-for (const file of [backendPath, frontendPath, docxResolverPath, safariPath, runtimeLoaderPath, loaderPath]) {
+for (const file of [backendPath, frontendPath, docxResolverPath, safariPath, runtimeLoaderPath, loaderPath, localInferencePath]) {
   const checked = spawnSync(process.execPath, ["--check", file], { encoding: "utf8" });
   assert.equal(checked.status, 0, `${file} failed syntax validation:\n${checked.stderr || checked.stdout}`);
 }
@@ -114,8 +123,9 @@ console.log(JSON.stringify({
     maximumCharactersAccepted: 600000,
     staleLimitRemoved: true,
     browserCacheBusted: true,
-    isolatedAdvancedRuntime: true,
-    localInferenceComposed: true,
+    fiveCenterDashboardRestored: true,
+    globalInferenceOverlayDisabled: true,
+    localInferenceRetained: true,
     safariUploadRetention: true,
     docxNamedExportResolution: true,
     originalDocxSourcePreserved: true,

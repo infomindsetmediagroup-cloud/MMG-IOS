@@ -19,6 +19,8 @@ const paths = {
   localBridge: "web/kairos-dashboard/scripts/executive-local-inference.js",
   localBrowserRuntime: "web/kairos-dashboard/scripts/kairos-local-inference-same-origin.js",
   runtimeLoader: "web/kairos-dashboard/scripts/kairos-runtime-loader.js",
+  commandLoader: "web/kairos-dashboard/scripts/legacy-runtime-loader.js",
+  commandHub: "web/kairos-dashboard/scripts/command-hub.js",
   index: "web/kairos-dashboard/index.html",
   governanceContract: "governance/mmg-digital-asset-edition-v2-contract-v1.json",
   doctrine: "docs/doctrine/mmg-digital-asset-edition-v2-customer-release-doctrine.md",
@@ -27,7 +29,7 @@ const paths = {
 };
 for (const [name, relative] of Object.entries(paths)) if (!fs.existsSync(path.join(root, relative))) fail(`Missing ${name}: ${relative}`);
 const values = Object.fromEntries(Object.entries(paths).map(([name, relative]) => [name, name === "governanceContract" || name === "registry" ? JSON.parse(read(relative)) : read(relative)]));
-const { wrangler, canonicalEntry, localOnlyEntry, localExecutionEntry, localInference, entry, deliveryEntry, delivery, boundary, autoPipeline, productPublication, digitalAssetContract, creationArtifacts, localBridge, localBrowserRuntime, runtimeLoader, index, governanceContract, doctrine, registry, deploy } = values;
+const { wrangler, canonicalEntry, localOnlyEntry, localExecutionEntry, localInference, entry, deliveryEntry, delivery, boundary, autoPipeline, productPublication, digitalAssetContract, creationArtifacts, localBridge, localBrowserRuntime, runtimeLoader, commandLoader, commandHub, index, governanceContract, doctrine, registry, deploy } = values;
 
 assert(wrangler.includes('main = "src/kairos-production-entry-local-canonical-v1.js"'), "The active Worker must use the canonical local provider firewall.");
 for (const marker of ['KAIROS_MANUSCRIPT_RUNTIME_ENABLED = "true"','KAIROS_MANUSCRIPT_START_MODE = "local-browser"','KAIROS_MODEL_PROVIDER = "browser-webgpu"','KAIROS_NO_COST_MODE = "true"','KAIROS_LOCAL_INFERENCE_ENABLED = "true"','KAIROS_CLOUDFLARE_NEURONS_ENABLED = "false"','binding = "KAIROS_PROJECT_WORKFLOW"','binding = "KAIROS_MANUSCRIPT_WORKFLOW"']) assert(wrangler.includes(marker), `Local manuscript runtime configuration is missing: ${marker}`);
@@ -50,13 +52,22 @@ assert(localInference.includes('provider:"browser-webgpu"') || localInference.in
 assert(localInference.includes("externalPaidAPIUsed:false") || localInference.includes("externalPaidAPIUsed: false"), "Stored inference evidence must prove no paid API use.");
 assert(localInference.includes("cloudflareNeuronsUsed:0") || localInference.includes("cloudflareNeuronsUsed: 0"), "Stored inference evidence must prove zero Cloudflare neurons.");
 
-for (const marker of ['import("../vendor/webllm-bundle.js")','KairosLocalInference.run','/prepare-source','/sync-source','/start-production','/complete-production','No OpenAI API call']) assert(localBridge.includes(marker), `The Executive OS local bridge is missing: ${marker}`);
+for (const marker of ['import("../vendor/webllm-bundle.js")','KairosLocalInference.run','/prepare-source','/sync-source','/start-production','/complete-production','No OpenAI API call']) assert(localBridge.includes(marker), `The governed local inference bridge is missing: ${marker}`);
 assert(localBrowserRuntime.includes('../vendor/webllm-bundle.js'), "The manuscript runtime must load the same-origin WebLLM bundle.");
-assert(runtimeLoader.includes('import "./legacy-runtime-loader.js"'), "Advanced manuscript tools must remain isolated behind the runtime loader.");
-assert(runtimeLoader.includes('import "./executive-local-inference.js"'), "The runtime loader must compose local inference.");
-assert((index.match(/<script type="module"/g) || []).length === 2, "The Executive OS must preserve its two-module clean boot.");
-assert(index.includes("kairos-runtime-loader.js"), "The Executive OS must load the composed Kairos runtime.");
-assert(!index.includes("webllm-bundle.js"), "The large WebLLM bundle must load lazily, not at initial page boot.");
+assert(runtimeLoader.includes('import "./legacy-runtime-loader.js"'), "The compatibility loader must retain the command and advanced runtime.");
+assert(!runtimeLoader.includes('executive-local-inference.js'), "The compatibility loader must not globally mount the local inference panel.");
+assert(commandLoader.includes('commandHubMode'), "The five-center command-mode contract is missing.");
+assert(commandLoader.includes('if (commandHubMode) loadCommandRuntime()'), "The five-center command runtime must boot by default.");
+assert(commandLoader.includes('"command-hub.js"'), "The Command Hub is missing from the default runtime.");
+assert(commandLoader.includes('"kairos-local-inference.js"'), "Local manuscript inference must remain available inside governed operations.");
+assert((commandHub.match(/id: "(?:knowledge|content|business|customers|operations)"/g) || []).length === 5, "The Command Hub must contain exactly five canonical parent centers.");
+assert(commandHub.includes("Five operating centers"), "The five-center dashboard contract is missing.");
+assert((index.match(/<script type="module"/g) || []).length === 2, "The dashboard must preserve a two-module boot.");
+assert(index.includes("kairos-five-center-dashboard-restored-20260730-1"), "The restored five-center dashboard marker is missing.");
+assert(index.includes("legacy-runtime-loader.js"), "The five-center dashboard must load the command runtime.");
+assert(!index.includes("kairos-runtime-loader.js"), "The compatibility loader must not replace the five-center homepage.");
+assert(!index.includes("executive-local-inference.js"), "The local inference panel must not mount globally.");
+assert(!index.includes("webllm-bundle.js"), "The large WebLLM bundle must load lazily during governed production, not at initial page boot.");
 
 for (const marker of ["rewriteManufacturingRequest","enforceExistingSetupForRun","Mindset Media Group™","MINIMUM_FINISHED_PAGES","sanitizeText"]) assert(entry.includes(marker), `Digital Asset V2 runtime is missing: ${marker}`);
 for (const marker of ["executeDraftWithDelivery","rollbackAndFail"]) assert(deliveryEntry.includes(marker), `Customer delivery entry is missing: ${marker}`);
@@ -97,7 +108,7 @@ assert(registry.productionReleasePolicy?.livePublishRequiresExplicitUserAction =
 assert(registry.productionReleasePolicy?.themeMutationAuthorized === false, "Theme mutation must remain unauthorized.");
 assert(registry.productionReleasePolicy?.navigationMutationAuthorized === false, "Navigation mutation must remain unauthorized.");
 for (const advisor of registry.advisors || []) { assert(advisor.productionDependency === false, `${advisor.id} cannot be a production dependency by default.`); assert(advisor.mutationAuthority !== true, `${advisor.id} cannot have unrestricted mutation authority.`); }
-console.log("Kairos canonical local-only manuscript generation, Digital Asset Edition V2, customer delivery, Admin Asset Vault, and governed product-release validation passed.");
+console.log("Kairos five-center dashboard, canonical local-only manuscript generation, Digital Asset Edition V2, customer delivery, Admin Asset Vault, and governed product-release validation passed.");
 function read(relative) { return fs.readFileSync(path.join(root, relative), "utf8"); }
 function assert(condition, message) { if (!condition) fail(message); }
 function fail(message) { console.error(`Kairos manuscript activation validation failed: ${message}`); process.exit(1); }

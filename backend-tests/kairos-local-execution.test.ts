@@ -7,10 +7,12 @@ const entry = readFileSync(new URL("../cloudflare/mmg-ios/src/kairos-production-
 const wrangler = readFileSync(new URL("../cloudflare/mmg-ios/wrangler.toml", import.meta.url), "utf8");
 const index = readFileSync(new URL("../web/kairos-dashboard/index.html", import.meta.url), "utf8");
 const loader = readFileSync(new URL("../web/kairos-dashboard/scripts/kairos-runtime-loader.js", import.meta.url), "utf8");
+const legacy = readFileSync(new URL("../web/kairos-dashboard/scripts/legacy-runtime-loader.js", import.meta.url), "utf8");
+const commandHub = readFileSync(new URL("../web/kairos-dashboard/scripts/command-hub.js", import.meta.url), "utf8");
 const bridge = readFileSync(new URL("../web/kairos-dashboard/scripts/executive-local-inference.js", import.meta.url), "utf8");
 const compatibility = readFileSync(new URL("../web/kairos-dashboard/scripts/kairos-local-inference.js", import.meta.url), "utf8");
 
-const combined = `${canonical}\n${guard}\n${entry}\n${wrangler}\n${index}\n${loader}\n${bridge}\n${compatibility}`;
+const combined = `${canonical}\n${guard}\n${entry}\n${wrangler}\n${index}\n${loader}\n${legacy}\n${commandHub}\n${bridge}\n${compatibility}`;
 
 describe("Kairos local operational execution", () => {
   it("uses the canonical provider-firewalled entry and no-cost browser inference policy", () => {
@@ -48,11 +50,18 @@ describe("Kairos local operational execution", () => {
     expect(entry).not.toContain("handleKairosAPI");
   });
 
-  it("preserves the two-module clean boot and loads same-origin local inference", () => {
+  it("restores the five-center dashboard while retaining same-origin local inference", () => {
     expect((index.match(/<script type="module"/g) || []).length).toBe(2);
-    expect(index).toContain("kairos-runtime-loader.js");
+    expect(index).toContain("kairos-five-center-dashboard-restored-20260730-1");
+    expect(index).toContain("legacy-runtime-loader.js");
+    expect(index).not.toContain("kairos-runtime-loader.js");
+    expect(index).not.toContain("executive-local-inference.js");
     expect(loader).toContain('import "./legacy-runtime-loader.js"');
-    expect(loader).toContain('import "./executive-local-inference.js"');
+    expect(loader).not.toContain("executive-local-inference.js");
+    expect(legacy).toContain("commandHubMode");
+    expect(legacy).toContain('"command-hub.js"');
+    expect((commandHub.match(/id: "(?:knowledge|content|business|customers|operations)"/g) || []).length).toBe(5);
+    expect(commandHub).toContain("Five operating centers");
     expect(bridge).toContain('const EXECUTION_MODE = "browser-webgpu"');
     expect(bridge).toContain('import("../vendor/webllm-bundle.js")');
     expect(bridge).toContain("KairosLocalInference.run");
