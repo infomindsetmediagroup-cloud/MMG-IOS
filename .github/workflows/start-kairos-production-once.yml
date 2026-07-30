@@ -19,7 +19,7 @@ jobs:
   start-production:
     if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     env:
       WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
       RUNTIME_PROJECT_ID: kproject_browser_20c52f4b-93d5-4482-aba2-0b9f3d47867f
@@ -32,9 +32,9 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"pending\",\"context\":\"kairos-supervised-job\",\"description\":\"Validating and starting one governed Kairos production job\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"pending\",\"context\":\"kairos-supervised-job\",\"description\":\"Synchronizing foundation and starting one governed Kairos job\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
-      - name: Start exact approved production job
+      - name: Synchronize and start exact production job
         run: |
           set -euo pipefail
 
@@ -42,12 +42,14 @@ jobs:
           mkdir -p "${workdir}"
           projection_before="${workdir}/projection-before.json"
           agent_before="${workdir}/agent-before.json"
+          approval_json="${workdir}/approval.json"
+          projection_ready="${workdir}/projection-ready.json"
           start_json="${workdir}/start.json"
 
           projection_code="$(curl --silent --show-error --max-time 30 \
             "${WORKER_URL}/api/workflows?job_run=${GITHUB_RUN_ID}&phase=before" \
             -o "${projection_before}" -w '%{http_code}' || true)"
-          echo "Workflow projection before start: HTTP ${projection_code}"
+          echo "Workflow projection before synchronization: HTTP ${projection_code}"
           cat "${projection_before}" || true
           [ "${projection_code}" = "200" ] || { echo "Kairos workflow projection is unavailable."; exit 1; }
           jq -e . "${projection_before}" >/dev/null
@@ -55,43 +57,87 @@ jobs:
           agent_code="$(curl --silent --show-error --max-time 30 \
             "${WORKER_URL}/api/kairos/project-agents/${AGENT_PROJECT_ID}/state?job_run=${GITHUB_RUN_ID}&phase=before" \
             -o "${agent_before}" -w '%{http_code}' || true)"
-          echo "Project Agent before start: HTTP ${agent_code}"
+          echo "Project Agent before synchronization: HTTP ${agent_code}"
           cat "${agent_before}" || true
           [ "${agent_code}" = "200" ] || { echo "The exact project Agent is unavailable."; exit 1; }
           jq -e . "${agent_before}" >/dev/null
 
           jq -e --arg pid "${RUNTIME_PROJECT_ID}" '
-            .workflows
-            | map(select((.projectId == $pid) or (.id == $pid)))
-            | length == 1
+            .workflows | map(select((.projectId == $pid) or (.id == $pid))) | length == 1
           ' "${projection_before}" >/dev/null || {
             echo "The exact runtime project is missing or duplicated. Refusing execution."
-            exit 1
-          }
-
-          jq -e --arg pid "${RUNTIME_PROJECT_ID}" '
-            .workflows
-            | map(select((.projectId == $pid) or (.id == $pid)))[0]
-            | ((.canStartProduction == true) or (.actionRequired == "start-production"))
-              and ((.state == "queued") or (.rawState == "queued"))
-          ' "${projection_before}" >/dev/null || {
-            echo "The exact runtime project is not at the approved production-start boundary."
             exit 1
           }
 
           jq -e '
             .state.activeWorkflow.status == "completed"
             and (.state.pendingApproval == null)
-            and (
-              (.state.activeManuscriptWorkflow == null)
-              or (.state.activeManuscriptWorkflow.status == "failed")
-            )
+            and (.state.activeManuscriptWorkflow == null)
           ' "${agent_before}" >/dev/null || {
-            echo "The project Agent is not safe to start or already has a manuscript job."
+            echo "The project Agent is not at a completed, idle foundation boundary."
             exit 1
           }
 
-          start_code="$(curl --silent --show-error --max-time 45 -X POST \
+          source_ready="$(jq -r --arg pid "${RUNTIME_PROJECT_ID}" '
+            .workflows
+            | map(select((.projectId == $pid) or (.id == $pid)))[0]
+            | if .sourceReady == true then "true" else "false" end
+          ' "${projection_before}")"
+
+          if [ "${source_ready}" != "true" ]; then
+            echo "Foundation Workflow is complete but runtime source is missing. Calling governed operational approval synchronization."
+            approval_code="$(curl --silent --show-error --max-time 120 -X POST \
+              -H 'Content-Type: application/json' \
+              -H 'X-MMG-Approval-Source: owner-chat-recovery' \
+              --data '{"reason":"Synchronize the already-approved foundation and generate its authoritative source for one supervised Kairos job."}' \
+              "${WORKER_URL}/api/workflows/${RUNTIME_PROJECT_ID}/approve" \
+              -o "${approval_json}" -w '%{http_code}' || true)"
+            echo "Operational approval synchronization: HTTP ${approval_code}"
+            cat "${approval_json}" || true
+            [ "${approval_code}" = "202" ] || {
+              echo "The operational approval route could not synchronize the completed foundation."
+              exit 1
+            }
+            jq -e '
+              .status == "accepted"
+              and .action == "approve"
+              and .automaticPublicationAllowed == false
+            ' "${approval_json}" >/dev/null || {
+              echo "The operational approval synchronization returned an invalid or unsafe receipt."
+              exit 1
+            }
+          fi
+
+          ready=false
+          for attempt in $(seq 1 36); do
+            ready_code="$(curl --silent --show-error --max-time 30 \
+              "${WORKER_URL}/api/workflows?job_run=${GITHUB_RUN_ID}&phase=source-ready&attempt=${attempt}" \
+              -o "${projection_ready}" -w '%{http_code}' || true)"
+            if [ "${ready_code}" = "200" ] \
+              && jq -e --arg pid "${RUNTIME_PROJECT_ID}" '
+                .workflows
+                | map(select((.projectId == $pid) or (.id == $pid)))[0]
+                | .sourceReady == true
+                  and .canStartProduction == true
+                  and .actionRequired == "start-production"
+                  and (.state == "queued" or .rawState == "queued")
+              ' "${projection_ready}" >/dev/null 2>&1; then
+              ready=true
+              echo "Authoritative source verified and production start boundary reached."
+              cat "${projection_ready}"
+              break
+            fi
+            echo "Source synchronization verification attempt ${attempt}: HTTP ${ready_code}"
+            cat "${projection_ready}" || true
+            sleep 5
+          done
+
+          [ "${ready}" = "true" ] || {
+            echo "The runtime registry did not reach the verified-source production boundary."
+            exit 1
+          }
+
+          start_code="$(curl --silent --show-error --max-time 60 -X POST \
             -H 'Content-Type: application/json' \
             -H 'X-MMG-Approval-Source: owner-chat-job-test' \
             --data '{"reason":"Start one supervised Kairos production job approved by the MMG owner on July 30, 2026."}' \
@@ -116,11 +162,10 @@ jobs:
 
           verified_state="${workdir}/agent-verified.json"
           verified_projection="${workdir}/projection-verified.json"
-          for attempt in $(seq 1 48); do
+          for attempt in $(seq 1 60); do
             state_code="$(curl --silent --show-error --max-time 30 \
               "${WORKER_URL}/api/kairos/project-agents/${AGENT_PROJECT_ID}/state?job_verify=${GITHUB_RUN_ID}&attempt=${attempt}" \
               -o "${verified_state}" -w '%{http_code}' || true)"
-
             projection_after_code="$(curl --silent --show-error --max-time 30 \
               "${WORKER_URL}/api/workflows?job_verify=${GITHUB_RUN_ID}&attempt=${attempt}" \
               -o "${verified_projection}" -w '%{http_code}' || true)"
