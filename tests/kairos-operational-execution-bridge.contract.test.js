@@ -122,7 +122,7 @@ test("Safari API requests cannot leave the dashboard refreshing forever", () => 
   assert.match(safari, /AbortController/);
   assert.match(safari, /TimeoutError/);
   assert.match(safari, /executive-os\.js\?v=browser-finish-20260729-5/);
-  assert.match(index, /safari-manuscript-intake-compat\.js\?v=five-center-dashboard-restored-20260730-1/);
+  assert.match(index, /safari-manuscript-intake-compat\.js\?v=safari-native-docx-20260730-1/);
 });
 
 test("Safari manuscript checksums preserve the native digest identifier first", () => {
@@ -147,6 +147,12 @@ test("Safari DOCX upload and same-origin inference remain inside the governed co
   const studioIndex = legacy.indexOf('"manuscript-studio.js"');
   assert.ok(resolverIndex > -1, "DOCX resolver must be included in the governed command runtime");
   assert.ok(studioIndex > resolverIndex, "DOCX resolver must load before Manuscript Studio");
+  assert.match(safari, /kairos-native-docx-extractor-20260730-1/);
+  assert.match(safari, /installNativeDocxExtractor/);
+  assert.match(safari, /new DecompressionStream\("deflate-raw"\)/);
+  assert.match(safari, /word\/document\.xml/);
+  assert.doesNotMatch(safari, /cdn\.jsdelivr\.net/);
+  assert.doesNotMatch(safari, /esm\.sh/);
   assert.doesNotMatch(safari, /manuscript-docx-upload-hotfix\.js/);
   assert.match(docxHotfix, /document\.addEventListener\("change", interceptDocxSelection, true\)/);
   assert.match(docxHotfix, /const candidates = \[namespace, namespace\?\.default, namespace\?\.default\?\.default\]/);
