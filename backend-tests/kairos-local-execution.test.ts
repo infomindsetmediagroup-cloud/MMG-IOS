@@ -4,10 +4,11 @@ import { readFileSync } from "node:fs";
 const entry = readFileSync(new URL("../cloudflare/mmg-ios/src/kairos-production-entry-local-execution-v1.js", import.meta.url), "utf8");
 const wrangler = readFileSync(new URL("../cloudflare/mmg-ios/wrangler.toml", import.meta.url), "utf8");
 const index = readFileSync(new URL("../web/kairos-dashboard/index.html", import.meta.url), "utf8");
+const loader = readFileSync(new URL("../web/kairos-dashboard/scripts/kairos-runtime-loader.js", import.meta.url), "utf8");
 const bridge = readFileSync(new URL("../web/kairos-dashboard/scripts/executive-local-inference.js", import.meta.url), "utf8");
 const compatibility = readFileSync(new URL("../web/kairos-dashboard/scripts/kairos-local-inference.js", import.meta.url), "utf8");
 
-const combined = `${entry}\n${wrangler}\n${index}\n${bridge}\n${compatibility}`;
+const combined = `${entry}\n${wrangler}\n${index}\n${loader}\n${bridge}\n${compatibility}`;
 
 describe("Kairos local operational execution", () => {
   it("uses the local execution entrypoint and no-cost browser inference policy", () => {
@@ -27,8 +28,11 @@ describe("Kairos local operational execution", () => {
     expect(entry).not.toContain("handleKairosAPI");
   });
 
-  it("loads the same-origin local bridge and retires the CDN compatibility entry", () => {
-    expect(index).toContain("executive-local-inference.js");
+  it("preserves the two-module clean boot and loads same-origin local inference", () => {
+    expect((index.match(/<script type="module"/g) || []).length).toBe(2);
+    expect(index).toContain("kairos-runtime-loader.js");
+    expect(loader).toContain('import "./legacy-runtime-loader.js"');
+    expect(loader).toContain('import "./executive-local-inference.js"');
     expect(bridge).toContain('import("../vendor/webllm-bundle.js")');
     expect(bridge).toContain("KairosLocalInference.run");
     expect(compatibility).toContain('import "./kairos-local-inference-same-origin.js"');
