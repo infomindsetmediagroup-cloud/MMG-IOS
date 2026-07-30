@@ -1,5 +1,5 @@
-const BUILD = "kairos-legacy-runtime-loader-20260730-2";
-const RELEASE = "manuscript-upload-retention-20260730-1";
+const BUILD = "kairos-legacy-runtime-loader-20260730-3";
+const RELEASE = "manuscript-docx-export-resolution-20260730-1";
 const params = new URLSearchParams(window.location.search);
 const advancedMode = params.get("mode") === "advanced";
 

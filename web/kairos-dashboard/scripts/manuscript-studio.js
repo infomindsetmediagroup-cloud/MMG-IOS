@@ -1,4 +1,4 @@
-const BUILD = "manuscript-studio-upload-retention-20260730-1";
+const BUILD = "manuscript-studio-docx-export-resolution-20260730-1";
 const MAX_TEXT_CHARS = 600000;
 const MAX_DOCX_BYTES = 15 * 1024 * 1024;
 const MAX_PDF_BYTES = 20 * 1024 * 1024;
@@ -490,11 +490,25 @@ async function extractFile(file, format) {
 
 async function extractDocx(file) {
   const mammoth = await importWithFallback(LIBRARIES.mammoth, "DOCX extraction service");
-  const api = mammoth.default || mammoth;
-  const result = await api.extractRawText({ arrayBuffer: await file.arrayBuffer() });
+  const extractRawText = resolveMammothExtractRawText(mammoth);
+  const result = await extractRawText({ arrayBuffer: await file.arrayBuffer() });
   const warnings = (result.messages || []).filter(message => message.type === "error");
   if (warnings.length) throw new Error(warnings[0].message || "The DOCX file could not be read.");
   return { text: result.value || "" };
+}
+
+function resolveMammothExtractRawText(moduleNamespace) {
+  const candidates = [
+    moduleNamespace,
+    moduleNamespace?.default,
+    moduleNamespace?.default?.default,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate?.extractRawText === "function") {
+      return candidate.extractRawText.bind(candidate);
+    }
+  }
+  throw new Error("DOCX extraction service loaded without a usable extractRawText function.");
 }
 
 async function extractPdf(file) {

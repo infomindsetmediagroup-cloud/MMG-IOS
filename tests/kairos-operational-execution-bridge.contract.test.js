@@ -10,7 +10,7 @@ const safari = readFileSync("web/kairos-dashboard/scripts/safari-manuscript-inta
 const legacy = readFileSync("web/kairos-dashboard/scripts/legacy-runtime-loader.js", "utf8");
 const index = readFileSync("web/kairos-dashboard/index.html", "utf8");
 
-test("the production Worker activates the operational execution bridge", () => {
+ test("the production Worker activates the operational execution bridge", () => {
   assert.match(wrangler, /main = "src\/kairos-production-entry-operational-execution-v1\.js"/);
   assert.match(entry, /KAIROS_OPERATIONAL_EXECUTION_BUILD/);
   assert.match(entry, /getAgentByName/);
@@ -115,7 +115,7 @@ test("read-only startup refresh never owns the mutation loading lock", () => {
 
 test("the normal page is an isolated Executive OS boot", () => {
   assert.match(index, /kairos-executive-clean-boot-20260729-1/);
-  assert.match(index, /legacy-runtime-loader\.js\?v=legacy-manuscript-retention-20260730-1/);
+  assert.match(index, /legacy-runtime-loader\.js\?v=legacy-docx-export-resolution-20260730-1/);
   assert.doesNotMatch(index, /command-hub\.js/);
   assert.doesNotMatch(index, /manuscript-studio\.js/);
   assert.doesNotMatch(index, /objective-controller-v2\.js/);
@@ -128,6 +128,7 @@ test("the normal page is an isolated Executive OS boot", () => {
 test("advanced operations preserve the complete legacy runtime behind explicit navigation", () => {
   assert.match(legacy, /advancedMode/);
   assert.match(legacy, /if \(advancedMode\) loadLegacyRuntime\(\)/);
+  assert.match(legacy, /manuscript-docx-export-resolution-20260730-1/);
   assert.match(legacy, /command-hub\.js/);
   assert.match(legacy, /command-center-governance\.js/);
   assert.match(legacy, /manuscript-studio\.js/);
