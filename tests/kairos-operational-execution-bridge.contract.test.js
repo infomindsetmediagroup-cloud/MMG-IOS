@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+const canonical = readFileSync("cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js", "utf8");
 const localOnly = readFileSync("cloudflare/mmg-ios/src/kairos-production-entry-local-only-v1.js", "utf8");
 const localExecution = readFileSync("cloudflare/mmg-ios/src/kairos-production-entry-local-execution-v1.js", "utf8");
 const operational = readFileSync("cloudflare/mmg-ios/src/kairos-production-entry-operational-execution-v1.js", "utf8");
@@ -15,17 +16,33 @@ const docxHotfix = readFileSync("web/kairos-dashboard/scripts/manuscript-docx-up
 const legacy = readFileSync("web/kairos-dashboard/scripts/legacy-runtime-loader.js", "utf8");
 const index = readFileSync("web/kairos-dashboard/index.html", "utf8");
 
-test("the production Worker activates the local-only operational boundary", () => {
-  assert.match(wrangler, /main = "src\/kairos-production-entry-local-only-v1\.js"/);
+test("the production Worker activates the canonical local provider firewall", () => {
+  assert.match(wrangler, /main = "src\/kairos-production-entry-local-canonical-v1\.js"/);
   assert.match(wrangler, /KAIROS_MODEL_PROVIDER = "browser-webgpu"/);
   assert.match(wrangler, /KAIROS_MANUSCRIPT_START_MODE = "local-browser"/);
+  assert.match(canonical, /KAIROS_LOCAL_CANONICAL_ENTRY_BUILD/);
+  assert.match(canonical, /PROVIDER_INDEPENDENT_OPERATIONAL_PATHS/);
+  assert.match(canonical, /providerBlockedEnv/);
+  assert.match(canonical, /operationalCompatibilityEnv/);
+  assert.match(canonical, /property === "OPENAI_API_KEY"/);
+  assert.match(canonical, /return ""/);
+  assert.match(canonical, /kairos-local-readiness-sentinel-not-a-provider-key/);
+  assert.match(canonical, /X-Kairos-OpenAI-Calls", "disabled"/);
+  assert.doesNotMatch(canonical, /handleKairosAPI/);
+  assert.doesNotMatch(canonical, /api\.openai\.com/);
   assert.match(localOnly, /KAIROS_LOCAL_ONLY_ENTRY_BUILD/);
-  assert.match(localOnly, /getAgentByName/);
-  assert.match(localOnly, /KAIROS_PROJECT_AGENT/);
   assert.match(localOnly, /LEGACY_MANUSCRIPT_GENERATION/);
   assert.match(localOnly, /REVENUE_GENERATION/);
   assert.match(localOnly, /LOCAL_INFERENCE_REQUIRED/);
   assert.match(localExecution, /KAIROS_LOCAL_OPERATIONAL_EXECUTION_BUILD/);
+});
+
+test("the readiness sentinel is limited to non-generative operational routes", () => {
+  assert.match(canonical, /"\/api\/hub\/run"/);
+  assert.match(canonical, /"\/api\/workflows"/);
+  assert.match(canonical, /PROVIDER_INDEPENDENT_OPERATIONAL_PATHS\.has\(url\.pathname\)/);
+  assert.match(canonical, /operationalCompatibilityEnv\(env\)/);
+  assert.match(canonical, /providerBlockedEnv\(env\)/);
 });
 
 test("objective submission still launches the persistent project Agent and foundation Workflow", () => {
