@@ -52,9 +52,11 @@ test("the controller preserves retry state and always clears busy", () => {
 
 test("the clean dashboard defers manuscript modules to isolated advanced operations", () => {
   assert.match(index, /kairos-executive-clean-boot-20260729-1/);
-  assert.match(index, /legacy-runtime-loader\.js\?v=legacy-isolated-20260729-1/);
+  assert.match(index, /legacy-runtime-loader\.js\?v=legacy-[^"]+/);
+  assert.doesNotMatch(index, /manuscript-runtime-cache-guard\.js/);
   assert.doesNotMatch(index, /manuscript-studio\.js/);
   assert.doesNotMatch(index, /manuscript-project-setup\.js/);
+  assert.match(loader, /const RELEASE = "manuscript-upload-retention-20260730-1"/);
   assert.match(loader, /"manuscript-studio\.js"/);
   assert.match(loader, /"manuscript-project-setup\.js"/);
   assert.match(loader, /if \(advancedMode\) loadLegacyRuntime\(\)/);
