@@ -1,0 +1,97 @@
+name: Validate Safari Source Recovery
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'web/kairos-dashboard/index.html'
+      - 'web/kairos-dashboard/scripts/legacy-runtime-loader.js'
+      - 'web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js'
+      - 'browser-tests/manuscript-docx-native-extractor.spec.mjs'
+      - '.github/workflows/validate-safari-source-recovery.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'web/kairos-dashboard/index.html'
+      - 'web/kairos-dashboard/scripts/legacy-runtime-loader.js'
+      - 'web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js'
+      - 'browser-tests/manuscript-docx-native-extractor.spec.mjs'
+      - '.github/workflows/validate-safari-source-recovery.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-webkit:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install validation dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund > /dev/null
+      - name: Validate recovery syntax and release wiring
+        run: |
+          node --check web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
+          node --check web/kairos-dashboard/scripts/legacy-runtime-loader.js
+          grep -q 'five-center-dashboard-source-recovery-20260730-2' web/kairos-dashboard/index.html
+          grep -q 'const ASSET_RELEASE = "five-center-dashboard-source-recovery-20260730-2"' web/kairos-dashboard/scripts/legacy-runtime-loader.js
+          grep -q 'manuscript-docx-upload-hotfix-20260730-2-source-recovery' web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
+          grep -q 'SOURCE_UPLOAD_TIMEOUT_MS = 5 \* 60 \* 1000' web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
+          grep -q 'rotateProjectId(result.response.status)' web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
+      - name: Install WebKit
+        run: npx playwright install --with-deps webkit > /dev/null
+      - name: Test native DOCX extraction and 502 recovery in iPhone WebKit
+        run: npx playwright test browser-tests/manuscript-docx-native-extractor.spec.mjs --project=webkit
+
+  verify-live:
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+    steps:
+      - name: Verify deployed source-recovery runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            root="${RUNNER_TEMP}/root.html"
+            loader="${RUNNER_TEMP}/loader.js"
+            docx="${RUNNER_TEMP}/docx.js"
+            command="${RUNNER_TEMP}/command.js"
+
+            root_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/?release=${GITHUB_SHA}&attempt=${attempt}" -o "${root}" -w '%{http_code}' || true)"
+            loader_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/legacy-runtime-loader.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${loader}" -w '%{http_code}' || true)"
+            docx_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-docx-upload-hotfix.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${docx}" -w '%{http_code}' || true)"
+            command_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/command-hub.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${command}" -w '%{http_code}' || true)"
+            parent_count="$(grep -o 'id: "\(knowledge\|content\|business\|customers\|operations\)"' "${command}" 2>/dev/null | wc -l | tr -d ' ')"
+
+            if [ "${root_status}" = "200" ] \
+              && grep -q 'five-center-dashboard-source-recovery-20260730-2' "${root}" \
+              && [ "${loader_status}" = "200" ] \
+              && grep -q 'const ASSET_RELEASE = "five-center-dashboard-source-recovery-20260730-2"' "${loader}" \
+              && grep -q 'scripts/${filename}?v=${ASSET_RELEASE}' "${loader}" \
+              && [ "${docx_status}" = "200" ] \
+              && grep -q 'manuscript-docx-upload-hotfix-20260730-2-source-recovery' "${docx}" \
+              && grep -q 'SOURCE_UPLOAD_TIMEOUT_MS = 5 \* 60 \* 1000' "${docx}" \
+              && grep -q 'rotateProjectId(result.response.status)' "${docx}" \
+              && [ "${command_status}" = "200" ] \
+              && [ "${parent_count}" = "5" ]; then
+              echo "Safari source recovery and five-center dashboard verified live."
+              exit 0
+            fi
+
+            if [ "${attempt}" = "60" ]; then
+              echo "Live Safari source-recovery verification failed."
+              printf 'root=%s loader=%s docx=%s command=%s parents=%s\n' "${root_status}" "${loader_status}" "${docx_status}" "${command_status}" "${parent_count}"
+              cat "${root}" || true
+              cat "${loader}" || true
+              cat "${docx}" || true
+              exit 1
+            fi
+            sleep 5
+          done
