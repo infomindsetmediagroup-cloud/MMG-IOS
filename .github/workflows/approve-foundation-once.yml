@@ -1,0 +1,165 @@
+name: Approve Kairos Foundation Once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/approve-foundation-once.yml'
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: approve-kairos-foundation-wf-fdYU3aWf8NH-qKLcV4nSz
+  cancel-in-progress: false
+
+jobs:
+  approve:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+      TARGET_INSTANCE_ID: wf_fdYU3aWf8NH-qKLcV4nSz
+      REPORTED_PROJECT_ID: kproject_browser_20c52f4b-93d5-4482-aba2-0b9f3d47867f
+      CANONICAL_PROJECT_ID: kproject-browser-20c52f4b-93d5-4482-aba2-0b9f3d47867f
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Report approval pending
+        run: |
+          curl --fail --silent --show-error -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "{\"state\":\"pending\",\"context\":\"kairos-foundation-approval\",\"description\":\"Validating and approving the supervised foundation checkpoint\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+
+      - name: Approve matching foundation checkpoint
+        run: |
+          set -euo pipefail
+
+          workdir="${RUNNER_TEMP}/kairos-foundation-approval"
+          mkdir -p "${workdir}"
+          workflows_json="${workdir}/workflows.json"
+          candidates_file="${workdir}/candidates.txt"
+          : > "${candidates_file}"
+
+          workflows_code="$(curl --silent --show-error --max-time 30 \
+            "${WORKER_URL}/api/workflows?approval_run=${GITHUB_RUN_ID}" \
+            -o "${workflows_json}" -w '%{http_code}' || true)"
+          echo "Workflow projection HTTP ${workflows_code}"
+          cat "${workflows_json}" || true
+
+          printf '%s\n' "${REPORTED_PROJECT_ID}" "${CANONICAL_PROJECT_ID}" >> "${candidates_file}"
+          if [ "${workflows_code}" = "200" ] && jq -e . "${workflows_json}" >/dev/null 2>&1; then
+            jq -r '.. | objects | .projectId? // empty' "${workflows_json}" >> "${candidates_file}" || true
+            jq -r --arg iid "${TARGET_INSTANCE_ID}" '.. | objects | select((.instanceId? == $iid) or (.workflowInstanceId? == $iid)) | .projectId? // empty' "${workflows_json}" >> "${candidates_file}" || true
+          fi
+
+          matched_project=""
+          matched_state="${workdir}/matched-state.json"
+
+          while IFS= read -r raw_project; do
+            [ -n "${raw_project}" ] || continue
+            for candidate in "${raw_project}" "${raw_project//_/-}"; do
+              candidate="$(printf '%s' "${candidate}" | tr '[:upper:]' '[:lower:]')"
+              [[ "${candidate}" =~ ^[a-z0-9][a-z0-9-]{7,127}$ ]] || continue
+              state_json="${workdir}/state-${candidate}.json"
+              state_code="$(curl --silent --show-error --max-time 30 \
+                "${WORKER_URL}/api/kairos/project-agents/${candidate}/state?approval_run=${GITHUB_RUN_ID}" \
+                -o "${state_json}" -w '%{http_code}' || true)"
+              echo "Project candidate ${candidate}: HTTP ${state_code}"
+              cat "${state_json}" || true
+              if [ "${state_code}" = "200" ] \
+                && jq -e --arg iid "${TARGET_INSTANCE_ID}" '.state.activeWorkflow.instanceId == $iid' "${state_json}" >/dev/null 2>&1; then
+                matched_project="${candidate}"
+                cp "${state_json}" "${matched_state}"
+                break 2
+              fi
+            done
+          done < <(awk 'NF && !seen[$0]++' "${candidates_file}")
+
+          if [ -z "${matched_project}" ]; then
+            echo "No live project Agent matched Workflow instance ${TARGET_INSTANCE_ID}. Refusing approval."
+            exit 1
+          fi
+
+          echo "Matched project Agent: ${matched_project}"
+          current_status="$(jq -r '.state.activeWorkflow.status // .state.status // "unknown"' "${matched_state}")"
+          pending_instance="$(jq -r '.state.pendingApproval.workflowInstanceId // empty' "${matched_state}")"
+
+          if [ "${pending_instance}" = "${TARGET_INSTANCE_ID}" ] \
+            && [ "${current_status}" = "waiting_for_approval" ]; then
+            approval_json="${workdir}/approval.json"
+            approval_payload='{"approvedBy":"mmg-owner","reason":"Foundation approved by the MMG owner on July 30, 2026."}'
+            approval_code="$(curl --silent --show-error --max-time 45 -X POST \
+              -H 'Content-Type: application/json' \
+              -H 'X-MMG-Approval-Source: owner-chat-approval' \
+              --data "${approval_payload}" \
+              "${WORKER_URL}/api/kairos/project-agents/${matched_project}/workflow/${TARGET_INSTANCE_ID}/approve" \
+              -o "${approval_json}" -w '%{http_code}' || true)"
+            echo "Approval HTTP ${approval_code}"
+            cat "${approval_json}" || true
+            if { [ "${approval_code}" != "200" ] && [ "${approval_code}" != "202" ]; } \
+              || ! jq -e --arg iid "${TARGET_INSTANCE_ID}" '.status == "accepted" and .accepted == true and .instanceId == $iid' "${approval_json}" >/dev/null 2>&1; then
+              echo "The live approval endpoint did not accept the exact foundation Workflow instance."
+              exit 1
+            fi
+          elif [ -z "${pending_instance}" ] \
+            && { [ "${current_status}" = "running" ] || [ "${current_status}" = "completed" ]; }; then
+            echo "The exact Workflow instance was already approved; continuing with state verification."
+          else
+            echo "The exact Workflow instance is not at an approvable foundation checkpoint. Status: ${current_status}; pending instance: ${pending_instance:-none}."
+            exit 1
+          fi
+
+          verified_state="${workdir}/verified-state.json"
+          for attempt in $(seq 1 36); do
+            verified_code="$(curl --silent --show-error --max-time 30 \
+              "${WORKER_URL}/api/kairos/project-agents/${matched_project}/state?approval_verify=${GITHUB_RUN_ID}&attempt=${attempt}" \
+              -o "${verified_state}" -w '%{http_code}' || true)"
+            if [ "${verified_code}" = "200" ] \
+              && jq -e --arg iid "${TARGET_INSTANCE_ID}" '
+                .state.activeWorkflow.instanceId == $iid
+                and (.state.pendingApproval == null)
+                and (.state.activeWorkflow.status != "waiting_for_approval")
+                and (.state.status != "waiting_for_approval")
+              ' "${verified_state}" >/dev/null 2>&1; then
+              echo "Foundation approval verified on live project Agent."
+              cat "${verified_state}"
+              {
+                echo "## Kairos foundation approval"
+                echo "- Project Agent: ${matched_project}"
+                echo "- Workflow instance: ${TARGET_INSTANCE_ID}"
+                echo "- Result: approved and resumed"
+                echo "- Live state: $(jq -r '.state.status // "unknown"' "${verified_state}")"
+                echo "- Live stage: $(jq -r '.state.stage // "unknown"' "${verified_state}")"
+              } >> "${GITHUB_STEP_SUMMARY}"
+              exit 0
+            fi
+            echo "Approval verification attempt ${attempt}: HTTP ${verified_code}"
+            cat "${verified_state}" || true
+            sleep 5
+          done
+
+          echo "Approval was accepted but the live project Agent did not leave the approval checkpoint within the verification window."
+          exit 1
+
+      - name: Report approval success
+        if: ${{ success() }}
+        run: |
+          curl --fail --silent --show-error -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "{\"state\":\"success\",\"context\":\"kairos-foundation-approval\",\"description\":\"Foundation checkpoint approved and Workflow resumed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+
+      - name: Report approval failure
+        if: ${{ failure() || cancelled() }}
+        run: |
+          curl --fail --silent --show-error -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "{\"state\":\"failure\",\"context\":\"kairos-foundation-approval\",\"description\":\"Foundation approval was refused or could not be verified\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
