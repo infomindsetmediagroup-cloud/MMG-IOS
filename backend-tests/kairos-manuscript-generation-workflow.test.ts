@@ -7,23 +7,27 @@ const router = readFileSync("cloudflare/mmg-ios/src/kairos-manuscript-start-rout
 const health = readFileSync("cloudflare/mmg-ios/src/kairos-runtime-health-v1.js", "utf8");
 const agent = readFileSync("cloudflare/mmg-ios/src/kairos-project-agent-v1.js", "utf8");
 const api = readFileSync("cloudflare/mmg-ios/src/kairos-project-agent-api-v1.js", "utf8");
-const entry = readFileSync("cloudflare/mmg-ios/src/kairos-production-entry-local-inference-v1.js", "utf8");
+const compatibilityEntry = readFileSync("cloudflare/mmg-ios/src/kairos-production-entry-local-inference-v1.js", "utf8");
+const activeEntry = readFileSync("cloudflare/mmg-ios/src/kairos-production-entry-local-operational-v1.js", "utf8");
 const wrangler = readFileSync("cloudflare/mmg-ios/wrangler.toml", "utf8");
 const ui = readFileSync("web/kairos-dashboard/scripts/manuscript-auto-pipeline.js", "utf8");
 
 describe("Kairos durable manuscript generation migration", () => {
-  it("binds a dedicated Cloudflare Workflow and preserves a controlled rollback path", () => {
+  it("retains the historical Workflow binding while the active production path is local-only", () => {
     expect(wrangler).toContain('binding = "KAIROS_MANUSCRIPT_WORKFLOW"');
     expect(wrangler).toContain('class_name = "KairosManuscriptGenerationWorkflow"');
-    expect(wrangler).toContain('KAIROS_MANUSCRIPT_START_MODE = "workflow"');
-    expect(wrangler).toContain('KAIROS_MANUSCRIPT_LEGACY_ALARM_ROLLBACK_ENABLED = "true"');
-    expect(entry).toContain("export { KairosManuscriptGenerationWorkflow }");
-    expect(entry).toContain("resumeManuscriptGenerationAlarm");
+    expect(wrangler).toContain('KAIROS_MANUSCRIPT_START_MODE = "local-browser"');
+    expect(wrangler).toContain('KAIROS_MANUSCRIPT_LEGACY_ALARM_ROLLBACK_ENABLED = "false"');
+    expect(activeEntry).toContain("export {");
+    expect(activeEntry).toContain("KairosManuscriptGenerationWorkflow");
+    expect(activeEntry).toContain("LOCAL_BROWSER_INFERENCE_REQUIRED");
+    expect(activeEntry).not.toContain("startManuscriptGenerationWorkflow");
+    expect(compatibilityEntry).toContain("resumeManuscriptGenerationAlarm");
     expect(generation).toContain('executionMode: "legacy-alarm-v1"');
     expect(generation).toContain("KAIROS_MANUSCRIPT_WORKFLOW_VERSION");
   });
 
-  it("moves new expansion units into versioned durable steps", () => {
+  it("keeps historical expansion units versioned for record compatibility", () => {
     expect(workflow).toContain("extends AgentWorkflow");
     expect(workflow).toContain('step.do("initialize-manuscript-generation"');
     expect(workflow).toContain("expand-manuscript-unit-");
@@ -44,18 +48,13 @@ describe("Kairos durable manuscript generation migration", () => {
     expect(generation).toContain("outputSha256");
   });
 
-  it("makes the stable generation-job POST route start the Agent Workflow by default", () => {
+  it("blocks the stable server generation POST in the active entry and preserves legacy code only as inactive compatibility", () => {
+    expect(activeEntry).toContain("SERVER_GENERATION_ROUTE");
+    expect(activeEntry).toContain("Server-side provider generation is disabled");
+    expect(activeEntry).toContain('provider: "browser-webgpu"');
     expect(router).toContain("handleCanonicalManuscriptStart");
-    expect(router).toContain("getAgentByName(env.KAIROS_PROJECT_AGENT");
     expect(router).toContain("startManuscriptGenerationWorkflow");
-    expect(router).toContain("KAIROS_MANUSCRIPT_START_MODE_WORKFLOW");
-    expect(router).toContain("KAIROS_MANUSCRIPT_START_MODE_LEGACY");
-    expect(router).toContain("Kairos will not silently fall back");
-    const canonicalCall = entry.indexOf("const canonicalStart = await handleCanonicalManuscriptStart");
-    const compatibilityCall = entry.indexOf("const generation = await handleManuscriptGeneration(observedRequest.clone()");
-    expect(canonicalCall).toBeGreaterThan(-1);
-    expect(compatibilityCall).toBeGreaterThan(-1);
-    expect(canonicalCall).toBeLessThan(compatibilityCall);
+    expect(compatibilityEntry).toContain("const canonicalStart = await handleCanonicalManuscriptStart");
     expect(ui).toContain("/generation-job");
   });
 
@@ -74,7 +73,7 @@ describe("Kairos durable manuscript generation migration", () => {
     expect(health).toContain("automaticLegacyFallback: false");
   });
 
-  it("starts and reconnects through the persistent project Agent without granting Shopify authority", () => {
+  it("retains project Agent compatibility without granting Shopify authority", () => {
     expect(agent).toContain("KAIROS_MANUSCRIPT_WORKFLOW_BINDING");
     expect(agent).toContain("startManuscriptGenerationWorkflow");
     expect(agent).toContain("activeManuscriptWorkflow");
