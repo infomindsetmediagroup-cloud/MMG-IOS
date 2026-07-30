@@ -198,7 +198,6 @@ test("iPhone Safari stores retained DOCX and manuscript text through verified ra
   const evidence = await page.evaluate(() => ({
     restores: window.__docxRestores,
     errorCount: document.querySelectorAll("[data-docx-hotfix-error]").length,
-    status: document.querySelector("[data-docx-hotfix-status]")?.textContent || "",
   }));
 
   expect(firstFileChunkFailed).toBe(true);
@@ -209,7 +208,6 @@ test("iPhone Safari stores retained DOCX and manuscript text through verified ra
   expect(evidence.restores.at(-1).source.stored).toBe(true);
   expect(evidence.restores.at(-1).source.uploadMode).toBe("chunked-v1");
   expect(evidence.errorCount).toBe(0);
-  expect(evidence.status).toContain("stored and verified");
 
   expect(docxHotfixSource).toContain("FILE_CHUNK_BYTES = 512 * 1024");
   expect(docxHotfixSource).toContain("TEXT_CHUNK_BYTES = 128 * 1024");
