@@ -83,7 +83,16 @@ test("Safari API requests cannot leave the dashboard refreshing forever", () => 
   assert.match(safari, /AbortController/);
   assert.match(safari, /TimeoutError/);
   assert.match(safari, /executive-os\.js\?v=browser-finish-20260729-5/);
-  assert.match(index, /safari-manuscript-intake-compat\.js\?v=safari-intake-fix-20260729-9-observer-hotfix-1/);
+  assert.match(index, /safari-manuscript-intake-compat\.js\?v=safari-intake-fix-20260729-9-digest-hotfix-1/);
+});
+
+test("Safari manuscript checksums preserve the native digest identifier first", () => {
+  assert.match(safari, /safari-manuscript-intake-compat-20260729-10/);
+  assert.match(safari, /return await nativeDigest\(algorithm, data\)/);
+  assert.match(safari, /const alternate = typeof algorithm === "string"/);
+  assert.match(safari, /return await nativeDigest\(alternate, data\)/);
+  assert.match(safari, /__kairosDigestIdentifierFallback/);
+  assert.doesNotMatch(safari, /const normalized = typeof algorithm === "string" \? \{ name: algorithm \} : algorithm/);
 });
 
 test("the Executive OS core always releases its refresh state", () => {
