@@ -1,4 +1,4 @@
-const BUILD = "safari-manuscript-intake-compat-20260729-10";
+const BUILD = "safari-manuscript-intake-compat-20260730-11-docx";
 const API_GET_TIMEOUT_MS = 12000;
 const API_MUTATION_TIMEOUT_MS = 45000;
 const ADVANCED_MODE = new URLSearchParams(globalThis.location?.search || "").get("mode") === "advanced";
@@ -10,6 +10,14 @@ installGovernedFetchTimeout();
 
 if (ADVANCED_MODE) {
   document.documentElement.dataset.kairosMode = "advanced";
+  try {
+    await import("./manuscript-docx-upload-hotfix.js?v=docx-export-resolver-20260730-1");
+  } catch (error) {
+    console.error("Kairos DOCX upload compatibility failed to activate.", error);
+    window.dispatchEvent(new CustomEvent("kairos:manuscript-docx:error", {
+      detail: { message: String(error?.message || "DOCX upload compatibility failed to activate.") },
+    }));
+  }
 } else {
   document.documentElement.dataset.kairosMode = "executive";
   activateExecutiveOperatingSystem();
