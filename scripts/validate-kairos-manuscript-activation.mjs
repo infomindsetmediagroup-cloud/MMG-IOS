@@ -4,6 +4,7 @@ import path from "node:path";
 const root = process.cwd();
 const paths = {
   wrangler: "cloudflare/mmg-ios/wrangler.toml",
+  canonicalEntry: "cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js",
   localOnlyEntry: "cloudflare/mmg-ios/src/kairos-production-entry-local-only-v1.js",
   localExecutionEntry: "cloudflare/mmg-ios/src/kairos-production-entry-local-execution-v1.js",
   localInference: "cloudflare/mmg-ios/src/kairos-local-inference-v1.js",
@@ -28,6 +29,7 @@ for (const [name, relative] of Object.entries(paths)) if (!fs.existsSync(path.jo
 const values = Object.fromEntries(Object.entries(paths).map(([name, relative]) => [name, name === "governanceContract" || name === "registry" ? JSON.parse(read(relative)) : read(relative)]));
 const {
   wrangler,
+  canonicalEntry,
   localOnlyEntry,
   localExecutionEntry,
   localInference,
@@ -49,7 +51,7 @@ const {
   deploy,
 } = values;
 
-assert(wrangler.includes('main = "src/kairos-production-entry-local-only-v1.js"'), "The active Worker must use the governed local-only entry.");
+assert(wrangler.includes('main = "src/kairos-production-entry-local-canonical-v1.js"'), "The active Worker must use the canonical local provider firewall.");
 for (const marker of [
   'KAIROS_MANUSCRIPT_RUNTIME_ENABLED = "true"',
   'KAIROS_MANUSCRIPT_START_MODE = "local-browser"',
@@ -66,6 +68,19 @@ assert(!wrangler.includes('KAIROS_MODEL_AUTH_TOKEN ='), "A backend model auth to
 assert(!wrangler.includes('"* * * * *"'), "Minute-level website reconciliation must be removed.");
 assert(wrangler.includes('KAIROS_SHOPIFY_WRITES_ENABLED = "true"'), "The approval-gated Shopify draft capability must be enabled.");
 assert(wrangler.includes('KAIROS_SHOPIFY_LIVE_PUBLISH_ENABLED = "true"'), "The explicit live-publication control must be enabled.");
+
+for (const marker of [
+  './kairos-production-entry-local-only-v1.js',
+  'PROVIDER_INDEPENDENT_OPERATIONAL_PATHS',
+  'providerBlockedEnv',
+  'operationalCompatibilityEnv',
+  'property === "OPENAI_API_KEY"',
+  'return ""',
+  'kairos-local-readiness-sentinel-not-a-provider-key',
+  'X-Kairos-OpenAI-Calls", "disabled"',
+]) assert(canonicalEntry.includes(marker), `The canonical local provider firewall is missing: ${marker}`);
+assert(!canonicalEntry.includes("handleKairosAPI"), "The canonical provider firewall must not invoke the provider-backed API handler.");
+assert(!canonicalEntry.includes("api.openai.com"), "The canonical provider firewall must not contain an OpenAI endpoint.");
 
 for (const marker of [
   './kairos-production-entry-local-execution-v1.js',
@@ -143,12 +158,14 @@ for (const marker of [
   "npx wrangler deploy --dry-run",
   "run: npx wrangler deploy",
   "/api/operational-readiness",
+  "/api/workflows",
   "LOCAL_INFERENCE_REQUIRED",
   "browser-webgpu",
   "externalPaidAPIUsed",
   "cloudflareNeuronsUsed",
+  "X-Kairos-OpenAI-Calls",
 ]) assert(deploy.includes(marker), `Local deployment contract is missing: ${marker}`);
-assert(!deploy.includes("OPENAI_API_KEY"), "Local deployment must not synchronize or require an OpenAI API key.");
+assert(!deploy.includes("OPENAI_API_KEY: ${{"), "Local deployment must not synchronize or require an OpenAI API key secret.");
 assert(deploy.includes("! grep -q 'api.openai.com'"), "Local deployment must explicitly reject an OpenAI endpoint from the active production entry.");
 assert(!deploy.includes("REPAIR_MMG_AUDITED_PAGES_NOW"), "Legacy Shopify page repair must not be deployable.");
 assert(!deploy.includes("PUBLISH_MMG_PAGE_SHELL_RECONCILIATION"), "Legacy page-shell publication must not be deployable.");
@@ -171,7 +188,7 @@ for (const advisor of registry.advisors || []) {
   assert(advisor.productionDependency === false, `${advisor.id} cannot be a production dependency by default.`);
   assert(advisor.mutationAuthority !== true, `${advisor.id} cannot have unrestricted mutation authority.`);
 }
-console.log("Kairos local-only manuscript generation, Digital Asset Edition V2, customer delivery, Admin Asset Vault, and governed product-release validation passed.");
+console.log("Kairos canonical local-only manuscript generation, Digital Asset Edition V2, customer delivery, Admin Asset Vault, and governed product-release validation passed.");
 function read(relative) { return fs.readFileSync(path.join(root, relative), "utf8"); }
 function assert(condition, message) { if (!condition) fail(message); }
 function fail(message) { console.error(`Kairos manuscript activation validation failed: ${message}`); process.exit(1); }
