@@ -11,6 +11,10 @@ const index = readFileSync(
   resolve(process.cwd(), "../../web/kairos-dashboard/index.html"),
   "utf8",
 );
+const loader = readFileSync(
+  resolve(process.cwd(), "../../web/kairos-dashboard/scripts/legacy-runtime-loader.js"),
+  "utf8",
+);
 
 test("mobile manuscript setup is a complete initialized controller", () => {
   assert.match(source, /kairos-manuscript-project-setup-ui-20260722-3/);
@@ -46,10 +50,13 @@ test("the controller preserves retry state and always clears busy", () => {
   assert.match(source, /Kairos did not respond in time/);
 });
 
-test("the dashboard loads manuscript modules directly", () => {
-  assert.match(index, /manuscript-studio\.js\?v=manuscript-controller-20260722-3/);
-  assert.match(index, /manuscript-project-setup\.js\?v=manuscript-controller-20260722-3/);
-  const delayed = index.match(/const modules=\[(.*?)\];/s)?.[1] || "";
-  assert.doesNotMatch(delayed, /manuscript-studio\.js/);
-  assert.doesNotMatch(delayed, /manuscript-project-setup\.js/);
+test("the clean dashboard defers manuscript modules to isolated advanced operations", () => {
+  assert.match(index, /kairos-executive-clean-boot-20260729-1/);
+  assert.match(index, /legacy-runtime-loader\.js\?v=legacy-isolated-20260729-1/);
+  assert.doesNotMatch(index, /manuscript-studio\.js/);
+  assert.doesNotMatch(index, /manuscript-project-setup\.js/);
+  assert.match(loader, /"manuscript-studio\.js"/);
+  assert.match(loader, /"manuscript-project-setup\.js"/);
+  assert.match(loader, /if \(advancedMode\) loadLegacyRuntime\(\)/);
+  assert.ok(loader.indexOf('"manuscript-studio.js"') < loader.indexOf('"manuscript-project-setup.js"'));
 });
