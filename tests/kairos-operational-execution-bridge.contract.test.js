@@ -2,68 +2,86 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const entry = readFileSync("cloudflare/mmg-ios/src/kairos-production-entry-operational-execution-v1.js", "utf8");
+const localOnly = readFileSync("cloudflare/mmg-ios/src/kairos-production-entry-local-only-v1.js", "utf8");
+const localExecution = readFileSync("cloudflare/mmg-ios/src/kairos-production-entry-local-execution-v1.js", "utf8");
+const operational = readFileSync("cloudflare/mmg-ios/src/kairos-production-entry-operational-execution-v1.js", "utf8");
 const wrangler = readFileSync("cloudflare/mmg-ios/wrangler.toml", "utf8");
 const browser = readFileSync("web/kairos-dashboard/scripts/executive-os-live-details.js", "utf8");
+const localBrowser = readFileSync("web/kairos-dashboard/scripts/executive-local-inference.js", "utf8");
+const runtimeLoader = readFileSync("web/kairos-dashboard/scripts/kairos-runtime-loader.js", "utf8");
 const executive = readFileSync("web/kairos-dashboard/scripts/executive-os.js", "utf8");
 const safari = readFileSync("web/kairos-dashboard/scripts/safari-manuscript-intake-compat.js", "utf8");
 const docxHotfix = readFileSync("web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js", "utf8");
 const legacy = readFileSync("web/kairos-dashboard/scripts/legacy-runtime-loader.js", "utf8");
 const index = readFileSync("web/kairos-dashboard/index.html", "utf8");
 
-test("the production Worker activates the operational execution bridge", () => {
-  assert.match(wrangler, /main = "src\/kairos-production-entry-operational-execution-v1\.js"/);
-  assert.match(entry, /KAIROS_OPERATIONAL_EXECUTION_BUILD/);
-  assert.match(entry, /getAgentByName/);
-  assert.match(entry, /KAIROS_PROJECT_AGENT/);
-  assert.match(entry, /KAIROS_PROJECT_WORKFLOW/);
-  assert.match(entry, /KAIROS_MANUSCRIPT_WORKFLOW/);
+test("the production Worker activates the local-only operational boundary", () => {
+  assert.match(wrangler, /main = "src\/kairos-production-entry-local-only-v1\.js"/);
+  assert.match(wrangler, /KAIROS_MODEL_PROVIDER = "browser-webgpu"/);
+  assert.match(wrangler, /KAIROS_MANUSCRIPT_START_MODE = "local-browser"/);
+  assert.match(localOnly, /KAIROS_LOCAL_ONLY_ENTRY_BUILD/);
+  assert.match(localOnly, /getAgentByName/);
+  assert.match(localOnly, /KAIROS_PROJECT_AGENT/);
+  assert.match(localOnly, /LEGACY_MANUSCRIPT_GENERATION/);
+  assert.match(localOnly, /REVENUE_GENERATION/);
+  assert.match(localOnly, /LOCAL_INFERENCE_REQUIRED/);
+  assert.match(localExecution, /KAIROS_LOCAL_OPERATIONAL_EXECUTION_BUILD/);
 });
 
-test("objective submission launches the persistent project Agent and foundation Workflow", () => {
-  assert.match(entry, /path === "\/api\/hub\/run"/);
-  assert.match(entry, /bootstrapProject/);
-  assert.match(entry, /startFoundationWorkflow/);
-  assert.match(entry, /advanceToApproval/);
-  assert.match(entry, /foundation_approval_required/);
-  assert.doesNotMatch(entry, /automaticPublicationAllowed:\s*true/);
-  assert.doesNotMatch(entry, /commerceMutationAllowed:\s*true/);
+test("objective submission still launches the persistent project Agent and foundation Workflow", () => {
+  assert.match(operational, /path === "\/api\/hub\/run"/);
+  assert.match(operational, /bootstrapProject/);
+  assert.match(operational, /startFoundationWorkflow/);
+  assert.match(operational, /advanceToApproval/);
+  assert.match(operational, /foundation_approval_required/);
+  assert.doesNotMatch(operational, /automaticPublicationAllowed:\s*true/);
+  assert.doesNotMatch(operational, /commerceMutationAllowed:\s*true/);
 });
 
-test("foundation approval generates and verifies an authoritative source", () => {
-  assert.match(entry, /approveFoundationWorkflow/);
-  assert.match(entry, /createAndStoreAuthoritativeSource/);
-  assert.match(entry, /handleKairosAPI/);
-  assert.match(entry, /mode:\s*"draft"/);
-  assert.match(entry, /\/source-text/);
-  assert.match(entry, /authoritative_source/);
-  assert.match(entry, /status:\s*"verified"/);
+test("foundation approval queues authoritative source generation on the local device", () => {
+  assert.match(localOnly, /approveFoundationWorkflow\(foundation\.instanceId/);
+  assert.match(localOnly, /local_source_generation_required/);
+  assert.match(localOnly, /mode:\s*"browser-webgpu"/);
+  assert.match(localOnly, /externalPaidAPIUsed:\s*false/);
+  assert.match(localBrowser, /createAuthoritativeSource/);
+  assert.match(localBrowser, /import\("\.\.\/vendor\/webllm-bundle\.js"\)/);
+  assert.match(localBrowser, /\/source-text/);
+  assert.match(localBrowser, /\/sync-source/);
+  assert.doesNotMatch(localExecution, /handleKairosAPI/);
 });
 
-test("production starts only through an explicit workflow action", () => {
-  assert.match(entry, /start-production/);
-  assert.match(entry, /PRODUCTION_SOURCE_REQUIRED/);
-  assert.match(entry, /PRODUCTION_APPROVAL_REQUIRED/);
-  assert.match(entry, /startManuscriptGenerationWorkflow/);
-  assert.match(entry, /execution_started/);
+test("production starts only through an explicit local workflow action", () => {
+  assert.match(localExecution, /start-production/);
+  assert.match(localExecution, /AUTHORITATIVE_SOURCE_REQUIRED/);
+  assert.match(localExecution, /FOUNDATION_APPROVAL_REQUIRED/);
+  assert.match(localExecution, /execution_started/);
+  assert.match(localBrowser, /\/start-production/);
+  assert.match(localBrowser, /KairosLocalInference\.run/);
+  assert.match(localBrowser, /\/complete-production/);
+  assert.doesNotMatch(localBrowser, /\/generation-job/);
 });
 
-test("workflow projection exposes real operational actions", () => {
-  assert.match(entry, /canResume/);
-  assert.match(entry, /canApprove/);
-  assert.match(entry, /canReject/);
-  assert.match(entry, /canStartProduction/);
-  assert.match(entry, /pendingApproval/);
-  assert.match(entry, /manuscriptWorkflow/);
+test("workflow projection exposes local operational actions", () => {
+  assert.match(localExecution, /prepare-source/);
+  assert.match(localExecution, /sync-source/);
+  assert.match(localExecution, /start-production/);
+  assert.match(localExecution, /complete-production/);
+  assert.match(localExecution, /sourceReady/);
+  assert.match(localExecution, /executionMode:\s*"browser-webgpu"/);
+  assert.match(localExecution, /automaticPublicationAllowed:\s*false/);
+  assert.match(localExecution, /commerceMutationAllowed:\s*false/);
 });
 
-test("the Executive OS renders and invokes governed workflow controls", () => {
+test("the Executive OS renders governed foundation and local production controls", () => {
   assert.match(browser, /Approve foundation/);
-  assert.match(browser, /Start production/);
   assert.match(browser, /Request revision/);
   assert.match(browser, /Resume workflow/);
   assert.match(browser, /\/api\/workflows\/\$\{encodeURIComponent\(id\)\}/);
   assert.match(browser, /kairos:workflow:changed/);
+  assert.match(localBrowser, /Approve & generate locally/);
+  assert.match(localBrowser, /Generate source locally/);
+  assert.match(localBrowser, /Run production locally/);
+  assert.match(localBrowser, /No OpenAI API call/);
   assert.match(safari, /executive-os-live-details\.js\?v=20260729-4/);
 });
 
@@ -96,8 +114,10 @@ test("Safari manuscript checksums preserve the native digest identifier first", 
   assert.doesNotMatch(safari, /const normalized = typeof algorithm === "string" \? \{ name: algorithm \} : algorithm/);
 });
 
-test("Safari DOCX upload resolves the Mammoth named export before Manuscript Studio", () => {
-  assert.match(index, /legacy-runtime-loader\.js\?v=legacy-docx-export-resolver-20260730-1/);
+test("Safari DOCX upload resolves the Mammoth named export behind the composed runtime loader", () => {
+  assert.match(index, /kairos-runtime-loader\.js\?v=kairos-local-inference-20260730-1/);
+  assert.match(runtimeLoader, /import "\.\/legacy-runtime-loader\.js"/);
+  assert.match(runtimeLoader, /import "\.\/executive-local-inference\.js"/);
   assert.match(legacy, /kairos-legacy-runtime-loader-20260730-3-docx/);
   assert.match(legacy, /manuscript-docx-export-resolver-20260730-1/);
   const resolverIndex = legacy.indexOf('"manuscript-docx-upload-hotfix.js"');
@@ -133,9 +153,10 @@ test("read-only startup refresh never owns the mutation loading lock", () => {
   assert.match(executive, /data-run-objective \$\{state\.loading/);
 });
 
-test("the normal page is an isolated Executive OS boot", () => {
-  assert.match(index, /kairos-executive-clean-boot-20260729-1/);
-  assert.match(index, /legacy-runtime-loader\.js\?v=legacy-docx-export-resolver-20260730-1/);
+test("the normal page preserves the isolated two-module Executive OS boot", () => {
+  assert.match(index, /kairos-executive-local-inference-20260730-1/);
+  assert.match(index, /kairos-runtime-loader\.js\?v=kairos-local-inference-20260730-1/);
+  assert.equal((index.match(/<script type="module"/g) || []).length, 2);
   assert.doesNotMatch(index, /command-hub\.js/);
   assert.doesNotMatch(index, /manuscript-studio\.js/);
   assert.doesNotMatch(index, /objective-controller-v2\.js/);
@@ -159,10 +180,11 @@ test("advanced operations preserve the complete legacy runtime behind explicit n
   assert.match(legacy, /kairos:legacy-runtime:ready/);
 });
 
-test("operational readiness is a non-mutating deployment gate", () => {
-  assert.match(entry, /\/api\/operational-readiness/);
-  assert.match(entry, /objectiveSubmission/);
-  assert.match(entry, /sourceGeneration/);
-  assert.match(entry, /productionExecution/);
-  assert.match(entry, /approvalPolicy:\s*"explicit"/);
+test("operational readiness is a non-mutating local-only deployment gate", () => {
+  assert.match(localExecution, /\/api\/operational-readiness/);
+  assert.match(localExecution, /sourceGeneration:\s*checks\.localInference/);
+  assert.match(localExecution, /manuscriptProduction:\s*checks\.localInference/);
+  assert.match(localExecution, /backendProviderCalls:\s*"disabled"/);
+  assert.match(localExecution, /automaticPublication:\s*"disabled"/);
+  assert.match(localExecution, /commerceMutation:\s*"approval-gated"/);
 });
