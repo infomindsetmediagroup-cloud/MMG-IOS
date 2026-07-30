@@ -40,7 +40,7 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"pending\",\"context\":\"kairos-browser-runtime\",\"description\":\"Deploying local-only Kairos runtime\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"pending\",\"context\":\"kairos-browser-runtime\",\"description\":\"Deploying canonical local-only Kairos runtime\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
       - name: Check out authorized main commit
         uses: actions/checkout@v4
@@ -61,6 +61,7 @@ jobs:
 
       - name: Validate local-only contracts
         run: |
+          node --check cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
           node --check cloudflare/mmg-ios/src/kairos-production-entry-local-only-v1.js
           node --check cloudflare/mmg-ios/src/kairos-production-entry-local-execution-v1.js
           node --check web/kairos-dashboard/scripts/kairos-runtime-loader.js
@@ -68,11 +69,14 @@ jobs:
           node --check web/kairos-dashboard/scripts/kairos-local-inference.js
           node --check web/kairos-dashboard/scripts/kairos-local-inference-same-origin.js
           npx vitest run backend-tests/kairos-local-execution.test.ts backend-tests/kairos-local-inference-same-origin.test.ts
-          grep -q 'main = "src/kairos-production-entry-local-only-v1.js"' cloudflare/mmg-ios/wrangler.toml
+          grep -q 'main = "src/kairos-production-entry-local-canonical-v1.js"' cloudflare/mmg-ios/wrangler.toml
           grep -q 'KAIROS_MODEL_PROVIDER = "browser-webgpu"' cloudflare/mmg-ios/wrangler.toml
           grep -q 'KAIROS_NO_COST_MODE = "true"' cloudflare/mmg-ios/wrangler.toml
           grep -q 'KAIROS_LOCAL_INFERENCE_ENABLED = "true"' cloudflare/mmg-ios/wrangler.toml
+          ! grep -q 'api.openai.com' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
           ! grep -q 'api.openai.com' cloudflare/mmg-ios/src/kairos-production-entry-local-only-v1.js
+          grep -q 'OPENAI_API_KEY.*return ""' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
+          grep -q 'kairos-local-readiness-sentinel-not-a-provider-key' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
           ! grep -q 'cdn.jsdelivr.net' web/kairos-dashboard/scripts/executive-local-inference.js
           ! grep -q 'esm.run' web/kairos-dashboard/scripts/executive-local-inference.js
 
@@ -105,13 +109,14 @@ jobs:
             shopify_denial="${RUNNER_TEMP}/shopify-denial.json"
             safari="${RUNNER_TEMP}/safari.js"
             docx="${RUNNER_TEMP}/docx.js"
+            canonical_headers="${RUNNER_TEMP}/canonical-headers.txt"
 
             root_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/?release=${GITHUB_SHA}&attempt=${attempt}" -o "${root}" -w '%{http_code}' || true)"
             loader_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/kairos-runtime-loader.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${loader}" -w '%{http_code}' || true)"
             bridge_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/executive-local-inference.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${bridge}" -w '%{http_code}' || true)"
             inference_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/kairos-local-inference-same-origin.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${inference}" -w '%{http_code}' || true)"
             bundle_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/vendor/webllm-bundle.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${bundle}" -w '%{http_code}' || true)"
-            readiness_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/api/operational-readiness?release=${GITHUB_SHA}&attempt=${attempt}" -o "${readiness}" -w '%{http_code}' || true)"
+            readiness_status="$(curl --silent --show-error --max-time 20 -D "${canonical_headers}" "${WORKER_URL}/api/operational-readiness?release=${GITHUB_SHA}&attempt=${attempt}" -o "${readiness}" -w '%{http_code}' || true)"
             workflows_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/api/workflows?release=${GITHUB_SHA}&attempt=${attempt}" -o "${workflows}" -w '%{http_code}' || true)"
             api_denial_status="$(curl --silent --show-error --max-time 20 -X POST "${WORKER_URL}/api/kairos" -H 'Content-Type: application/json' --data '{"objective":"provider denial probe"}' -o "${api_denial}" -w '%{http_code}' || true)"
             manuscript_denial_status="$(curl --silent --show-error --max-time 20 -X POST "${WORKER_URL}/api/production-registry/manuscripts/test-project-12345678/generation-job" -H 'Content-Type: application/json' --data '{}' -o "${manuscript_denial}" -w '%{http_code}' || true)"
@@ -136,6 +141,8 @@ jobs:
               && [ "${bundle_status}" = "200" ] \
               && grep -q 'CreateMLCEngine' "${bundle}" \
               && [ "${readiness_status}" = "200" ] \
+              && grep -qi 'x-kairos-canonical-local: kairos-local-canonical-entry-20260730-1' "${canonical_headers}" \
+              && grep -qi 'x-kairos-openai-calls: disabled' "${canonical_headers}" \
               && grep -q '"ready":true' "${readiness}" \
               && grep -q '"provider":"browser-webgpu"' "${readiness}" \
               && grep -q '"externalPaidAPIUsed":false' "${readiness}" \
@@ -155,16 +162,21 @@ jobs:
               && grep -q 'safari-manuscript-intake-compat-20260730-11-docx' "${safari}" \
               && [ "${docx_status}" = "200" ] \
               && grep -q 'manuscript-docx-upload-hotfix-20260730-1' "${docx}"; then
-              echo "Local-only Kairos production runtime verified."
+              echo "Canonical local-only Kairos production runtime verified."
               cat "${readiness}"
+              cat "${workflows}"
               cat "${api_denial}"
               exit 0
             fi
 
             if [ "${attempt}" = "30" ]; then
-              echo "Local-only verification failed."
+              echo "Canonical local-only verification failed."
+              printf 'root=%s loader=%s bridge=%s inference=%s bundle=%s readiness=%s workflows=%s api=%s manuscript=%s revenue=%s shopify=%s safari=%s docx=%s\n' \
+                "${root_status}" "${loader_status}" "${bridge_status}" "${inference_status}" "${bundle_status}" "${readiness_status}" "${workflows_status}" "${api_denial_status}" "${manuscript_denial_status}" "${revenue_denial_status}" "${shopify_denial_status}" "${safari_status}" "${docx_status}"
+              cat "${canonical_headers}" || true
               cat "${root}" || true
               cat "${readiness}" || true
+              cat "${workflows}" || true
               cat "${api_denial}" || true
               cat "${manuscript_denial}" || true
               cat "${revenue_denial}" || true
@@ -181,7 +193,7 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"success\",\"context\":\"kairos-browser-runtime\",\"description\":\"Local-only Kairos runtime deployed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"success\",\"context\":\"kairos-browser-runtime\",\"description\":\"Canonical local-only Kairos runtime deployed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
       - name: Report deployment failure
         if: ${{ failure() || cancelled() }}
@@ -190,4 +202,4 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"failure\",\"context\":\"kairos-browser-runtime\",\"description\":\"Kairos local-only deployment failed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}" || true
+            --data "{\"state\":\"failure\",\"context\":\"kairos-browser-runtime\",\"description\":\"Canonical Kairos local-only deployment failed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}" || true
