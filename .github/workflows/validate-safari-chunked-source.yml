@@ -13,8 +13,10 @@ on:
       - 'cloudflare/mmg-ios/scripts/validate-manuscript-large-intake.mjs'
       - 'web/kairos-dashboard/index.html'
       - 'web/kairos-dashboard/scripts/legacy-runtime-loader.js'
+      - 'web/kairos-dashboard/scripts/manuscript-studio.js'
       - 'web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js'
       - 'browser-tests/manuscript-docx-native-extractor.spec.mjs'
+      - 'browser-tests/manuscript-studio-direct-chunk.spec.mjs'
       - 'tests/kairos-operational-execution-bridge.contract.test.js'
       - 'cloudflare/mmg-ios/test/kairos-manuscript-project-setup-ui-v2.test.js'
   workflow_dispatch:
@@ -40,7 +42,7 @@ jobs:
         run: |
           node --check cloudflare/mmg-ios/src/kairos-manuscript-source-v1.js
           node --check cloudflare/mmg-ios/src/kairos-production-registry-v1.js
-          node --check web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
+          node --check web/kairos-dashboard/scripts/manuscript-studio.js
           node --check web/kairos-dashboard/scripts/legacy-runtime-loader.js
           node --test cloudflare/mmg-ios/test/kairos-manuscript-source-forwarding.test.js
           node --test cloudflare/mmg-ios/test/kairos-manuscript-chunked-upload.test.js
@@ -52,14 +54,17 @@ jobs:
       - name: Install WebKit
         run: npx playwright install --with-deps webkit > /dev/null
 
-      - name: Verify raw chunk storage in iPhone WebKit
-        run: npx playwright test browser-tests/manuscript-docx-native-extractor.spec.mjs --project=webkit
+      - name: Verify direct Studio chunk storage in iPhone WebKit
+        run: npx playwright test browser-tests/manuscript-studio-direct-chunk.spec.mjs --project=webkit
 
-      - name: Enforce no multipart Safari source path
+      - name: Enforce one authoritative non-multipart source path
         run: |
-          grep -q 'manuscript-docx-upload-hotfix-20260730-3-chunked-source' web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
-          grep -q 'chunkedSourceUpload: true' web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
-          grep -q 'sourcePath("session")' web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
-          grep -q 'sourcePath("commit")' web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
-          ! grep -q 'new FormData' web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
-          grep -q 'five-center-dashboard-chunked-source-20260730-3' web/kairos-dashboard/index.html
+          grep -q 'manuscript-studio-direct-chunks-20260730-4' web/kairos-dashboard/scripts/manuscript-studio.js
+          grep -q 'chunkedSourceUpload: true' web/kairos-dashboard/scripts/manuscript-studio.js
+          grep -q 'multipartSourceUpload: false' web/kairos-dashboard/scripts/manuscript-studio.js
+          grep -q 'sourcePath(projectId, "session")' web/kairos-dashboard/scripts/manuscript-studio.js
+          grep -q 'sourcePath(projectId, "commit")' web/kairos-dashboard/scripts/manuscript-studio.js
+          ! grep -q 'new FormData' web/kairos-dashboard/scripts/manuscript-studio.js
+          ! grep -q '"manuscript-docx-upload-hotfix.js"' web/kairos-dashboard/scripts/legacy-runtime-loader.js
+          grep -q 'five-center-dashboard-direct-studio-chunks-20260730-4' web/kairos-dashboard/index.html
+          grep -q 'five-center-dashboard-direct-studio-chunks-20260730-4' web/kairos-dashboard/scripts/legacy-runtime-loader.js
