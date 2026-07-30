@@ -4,13 +4,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
-const BUILD = "kairos-manuscript-large-intake-validator-20260730-9-chunked-source";
+const BUILD = "kairos-manuscript-large-intake-validator-20260730-10-direct-studio-chunks";
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
 const repoRoot = join(root, "..", "..");
 const backendPath = join(root, "src", "manuscript-studio-v1.js");
 const frontendPath = join(repoRoot, "web", "kairos-dashboard", "scripts", "manuscript-studio.js");
-const docxResolverPath = join(repoRoot, "web", "kairos-dashboard", "scripts", "manuscript-docx-upload-hotfix.js");
 const safariPath = join(repoRoot, "web", "kairos-dashboard", "scripts", "safari-manuscript-intake-compat.js");
 const indexPath = join(repoRoot, "web", "kairos-dashboard", "index.html");
 const runtimeLoaderPath = join(repoRoot, "web", "kairos-dashboard", "scripts", "kairos-runtime-loader.js");
@@ -19,36 +18,36 @@ const localInferencePath = join(repoRoot, "web", "kairos-dashboard", "scripts", 
 
 const backend = readFileSync(backendPath, "utf8");
 const frontend = readFileSync(frontendPath, "utf8");
-const docxResolver = readFileSync(docxResolverPath, "utf8");
 const safari = readFileSync(safariPath, "utf8");
 const index = readFileSync(indexPath, "utf8");
 const runtimeLoader = readFileSync(runtimeLoaderPath, "utf8");
 const loader = readFileSync(loaderPath, "utf8");
 const localInference = readFileSync(localInferencePath, "utf8");
+const activeScripts = loader.match(/const SCRIPT_FILES = \[([\s\S]*?)\];/)?.[1] || "";
 
 assert.ok(backend.includes('const MAX_CHARS = 600000'), "Backend manuscript intake is not aligned to 600,000 characters.");
 assert.ok(backend.includes('manuscript-studio-v5-large-intake'), "Backend large-intake capability version is missing.");
 assert.ok(frontend.includes('const MAX_TEXT_CHARS = 600000'), "Browser Manuscript Studio is not aligned to 600,000 characters.");
-assert.ok(frontend.includes('manuscript-studio-upload-retention-20260730-1'), "Current Safari-safe Manuscript Studio retention build is missing.");
+assert.ok(frontend.includes('manuscript-studio-direct-chunks-20260730-4'), "Direct chunked Manuscript Studio build is missing.");
 assert.ok(frontend.includes('kairos.manuscript-studio.recoverable-draft.v1'), "Recoverable manuscript draft state is missing.");
-assert.ok(frontend.includes('Retry source save'), "Recoverable source-storage retry is missing.");
+assert.ok(frontend.includes('Retry verified chunk save'), "Recoverable verified source-storage retry is missing.");
+assert.ok(frontend.includes('Select the original manuscript file once'), "Legacy failed-draft migration guidance is missing.");
 assert.ok(frontend.includes('Accepted source:'), "Accepted manuscript evidence is missing from the result view.");
-assert.ok(docxResolver.includes('manuscript-docx-upload-hotfix-20260730-3-chunked-source'), "The chunked DOCX source resolver build is missing.");
-assert.ok(docxResolver.includes('const MAX_TEXT_CHARS = 600000'), "DOCX extraction is not aligned to the 600,000-character intake boundary.");
-assert.ok(docxResolver.includes('typeof candidate?.extractRawText === "function"'), "DOCX export-shape resolution is missing.");
-assert.ok(docxResolver.includes('FILE_CHUNK_BYTES = 512 * 1024'), "The Safari DOCX chunk size contract is missing.");
-assert.ok(docxResolver.includes('TEXT_CHUNK_BYTES = 128 * 1024'), "The Safari manuscript-text chunk size contract is missing.");
-assert.ok(docxResolver.includes('chunkedSourceUpload: true'), "The chunked Safari source-upload capability is missing.");
-assert.ok(docxResolver.includes('sourcePath("session")'), "The chunked source session request is missing.");
-assert.ok(docxResolver.includes('sourcePath("commit")'), "The chunked source commit request is missing.");
-assert.ok(!docxResolver.includes('new FormData'), "Safari source storage must not use multipart FormData.");
+assert.ok(frontend.includes('FILE_CHUNK_BYTES = 512 * 1024'), "The direct Studio file chunk size contract is missing.");
+assert.ok(frontend.includes('TEXT_CHUNK_BYTES = 128 * 1024'), "The direct Studio manuscript-text chunk size contract is missing.");
+assert.ok(frontend.includes('chunkedSourceUpload: true'), "The direct Studio chunked source-upload capability is missing.");
+assert.ok(frontend.includes('multipartSourceUpload: false'), "The direct Studio multipart-denial capability is missing.");
+assert.ok(frontend.includes('sourcePath(projectId, "session")'), "The direct Studio chunked source session request is missing.");
+assert.ok(frontend.includes('sourcePath(projectId, "commit")'), "The direct Studio chunked source commit request is missing.");
+assert.ok(frontend.includes('uploadChunkWithRetry'), "The direct Studio chunk retry controller is missing.");
+assert.ok(!frontend.includes('new FormData'), "The active Manuscript Studio source path must not use multipart FormData.");
 assert.ok(index.includes('kairos-five-center-dashboard-restored-20260730-1'), "The restored five-center dashboard build marker is missing.");
 assert.ok(index.includes('safari-manuscript-intake-compat.js?v=safari-native-docx-20260730-1'), "The native Safari DOCX compatibility layer is missing.");
-assert.ok(index.includes('legacy-runtime-loader.js?v=five-center-dashboard-chunked-source-20260730-3'), "The chunked-source command runtime loader marker is missing.");
-assert.ok(index.includes('five-center-dashboard-chunked-source-20260730-3'), "The chunked-source release marker is missing.");
+assert.ok(index.includes('legacy-runtime-loader.js?v=five-center-dashboard-direct-studio-chunks-20260730-4'), "The direct-Studio command runtime loader marker is missing.");
+assert.ok(index.includes('five-center-dashboard-direct-studio-chunks-20260730-4'), "The direct-Studio release marker is missing.");
 assert.ok(!index.includes('kairos-runtime-loader.js'), "The compatibility loader must not replace the five-center homepage.");
 assert.ok(!index.includes('executive-local-inference.js'), "The local-inference panel must not mount globally on the homepage.");
-assert.ok(!index.includes('manuscript-docx-upload-hotfix.js'), "The DOCX resolver must not execute directly from the homepage HTML.");
+assert.ok(!index.includes('manuscript-docx-upload-hotfix.js'), "The retired DOCX sidecar must not execute directly from the homepage HTML.");
 assert.ok(!index.includes('manuscript-studio.js'), "Manuscript Studio must not execute directly from the homepage HTML.");
 assert.ok(runtimeLoader.includes('import "./legacy-runtime-loader.js"'), "The compatibility loader must retain the command and advanced runtime.");
 assert.ok(!runtimeLoader.includes('executive-local-inference.js'), "The compatibility loader must not globally mount the local-inference panel.");
@@ -61,19 +60,19 @@ assert.ok(!safari.includes('cdn.jsdelivr.net'), "Safari DOCX extraction must not
 assert.ok(!safari.includes('esm.sh'), "Safari DOCX extraction must not depend on esm.sh.");
 assert.ok(safari.includes('COMMAND_HUB_MODE'), "The five-center default route is missing.");
 assert.ok(loader.includes('const RELEASE = "five-center-dashboard-restored-20260730-1"'), "The restored command runtime release is missing.");
-assert.ok(loader.includes('const ASSET_RELEASE = "five-center-dashboard-chunked-source-20260730-3"'), "The chunked-source asset release is missing.");
+assert.ok(loader.includes('const ASSET_RELEASE = "five-center-dashboard-direct-studio-chunks-20260730-4"'), "The direct-Studio asset release is missing.");
 assert.ok(loader.includes('commandHubMode'), "The command hub default-mode contract is missing.");
-assert.ok(loader.includes('"command-hub.js"'), "The five-center Command Hub is missing from the runtime.");
-assert.ok(loader.includes('"kairos-local-inference.js"'), "Local manuscript inference is missing from the governed runtime.");
-assert.ok(loader.includes('"manuscript-docx-upload-hotfix.js"'), "The DOCX resolver is missing from the governed runtime.");
-assert.ok(loader.includes('"manuscript-studio.js"'), "Manuscript Studio is missing from the governed runtime.");
-assert.ok(loader.includes('"manuscript-project-setup.js"'), "Manuscript project setup is missing from the governed runtime.");
-assert.ok(loader.indexOf('"manuscript-docx-upload-hotfix.js"') < loader.indexOf('"manuscript-studio.js"'), "The DOCX resolver must load before Manuscript Studio.");
+assert.ok(activeScripts.includes('"command-hub.js"'), "The five-center Command Hub is missing from the runtime.");
+assert.ok(activeScripts.includes('"kairos-local-inference.js"'), "Local manuscript inference is missing from the governed runtime.");
+assert.ok(activeScripts.includes('"manuscript-studio.js"'), "Manuscript Studio is missing from the governed runtime.");
+assert.ok(activeScripts.includes('"manuscript-project-setup.js"'), "Manuscript project setup is missing from the governed runtime.");
+assert.ok(!activeScripts.includes('manuscript-docx-upload-hotfix.js'), "The retired DOCX sidecar remains active in the governed runtime.");
+assert.ok(activeScripts.indexOf('"manuscript-studio.js"') < activeScripts.indexOf('"manuscript-project-setup.js"'), "Manuscript Studio must load before project setup.");
 assert.ok(localInference.includes('kairos-local-inference-same-origin.js'), "The same-origin local manuscript inference module is missing.");
 assert.ok(!backend.includes('180000'), "The stale 180,000-character backend limit remains.");
 assert.ok(!frontend.includes('180000'), "The stale 180,000-character browser limit remains.");
 
-for (const file of [backendPath, frontendPath, docxResolverPath, safariPath, runtimeLoaderPath, loaderPath, localInferencePath]) {
+for (const file of [backendPath, frontendPath, safariPath, runtimeLoaderPath, loaderPath, localInferencePath]) {
   const checked = spawnSync(process.execPath, ["--check", file], { encoding: "utf8" });
   assert.equal(checked.status, 0, `${file} failed syntax validation:\n${checked.stderr || checked.stdout}`);
 }
@@ -100,6 +99,8 @@ const acceptedResponse = await handleManuscriptRequest(new Request("https://kair
       format: "txt",
       checksum: "verification-checksum",
       size: screenshotLengthManuscript.length,
+      stored: true,
+      uploadMode: "chunked-v1",
     },
   }),
 }));
@@ -138,10 +139,12 @@ console.log(JSON.stringify({
     fiveCenterDashboardRestored: true,
     globalInferenceOverlayDisabled: true,
     localInferenceRetained: true,
-    safariUploadRetention: true,
+    safariDraftRecovery: true,
+    stale502StateRemoved: true,
     nativeDocxExtraction: true,
     noExternalDocxModuleImport: true,
-    docxNamedExportResolution: true,
+    directStudioOwnsSourceStorage: true,
+    retiredSidecarInactive: true,
     originalDocxSourcePreserved: true,
     recoverableSourceRetry: true,
     chunkedSourceUpload: true,
