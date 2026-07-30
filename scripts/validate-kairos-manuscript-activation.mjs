@@ -149,7 +149,7 @@ for (const marker of [
   "cloudflareNeuronsUsed",
 ]) assert(deploy.includes(marker), `Local deployment contract is missing: ${marker}`);
 assert(!deploy.includes("OPENAI_API_KEY"), "Local deployment must not synchronize or require an OpenAI API key.");
-assert(!deploy.includes("api.openai.com"), "Local deployment must not probe an OpenAI endpoint.");
+assert(deploy.includes("! grep -q 'api.openai.com'"), "Local deployment must explicitly reject an OpenAI endpoint from the active production entry.");
 assert(!deploy.includes("REPAIR_MMG_AUDITED_PAGES_NOW"), "Legacy Shopify page repair must not be deployable.");
 assert(!deploy.includes("PUBLISH_MMG_PAGE_SHELL_RECONCILIATION"), "Legacy page-shell publication must not be deployable.");
 
