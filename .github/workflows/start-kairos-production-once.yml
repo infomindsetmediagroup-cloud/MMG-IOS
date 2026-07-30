@@ -57,18 +57,34 @@ jobs:
           launch="${workdir}/launch.json"
           objective="Create a draft-only 30-day Mindset Media Group growth experiment plan focused on improving TikTok-to-Shopify conversion. Define the audience hypothesis, content pillars, three measurable experiments, weekly KPIs, evidence requirements, risk controls, and an approval-gated execution sequence. Do not publish content, change pricing, mutate Shopify, spend funds, contact customers, or delete data."
           payload="$(jq -cn --arg action "growth-plan" --arg objective "${objective}" '{action:$action, objective:$objective}')"
-          launch_code="$(curl --silent --show-error --max-time 60 -X POST \
-            -H 'Content-Type: application/json' \
-            -H 'X-MMG-Job-Source: owner-chat-test' \
-            --data "${payload}" \
-            "${WORKER_URL}/api/hub/run" \
-            -o "${launch}" -w '%{http_code}' || true)"
-          echo "Launch HTTP ${launch_code}"
-          cat "${launch}" || true
-          [ "${launch_code}" = "202" ] || exit 1
+
+          launched=false
+          for launch_attempt in $(seq 1 6); do
+            launch_code="$(curl --silent --show-error --max-time 60 -X POST \
+              -H 'Content-Type: application/json' \
+              -H 'X-MMG-Job-Source: owner-chat-test' \
+              --data "${payload}" \
+              "${WORKER_URL}/api/hub/run?launch_attempt=${launch_attempt}" \
+              -o "${launch}" -w '%{http_code}' || true)"
+            echo "Launch attempt ${launch_attempt}: HTTP ${launch_code}"
+            cat "${launch}" || true
+            if [ "${launch_code}" = "202" ] && jq -e '.status == "accepted"' "${launch}" >/dev/null 2>&1; then
+              launched=true
+              break
+            fi
+            if [ "${launch_code}" = "503" ] \
+              && jq -e '.error.retriable == true and (.error.message | contains("Durable Object reset"))' "${launch}" >/dev/null 2>&1; then
+              echo "Transient Durable Object deployment reset detected; retrying the exact launch after stabilization."
+              sleep 10
+              continue
+            fi
+            echo "Launch failed with a non-approved or non-transient response."
+            exit 1
+          done
+          [ "${launched}" = "true" ] || { echo "Growth job launch did not recover from the bounded reset window."; exit 1; }
+
           jq -e '
-            .status == "accepted"
-            and (.runtimeProjectId | startswith("kproject_browser_"))
+            (.runtimeProjectId | startswith("kproject_browser_"))
             and (.agentProjectId | startswith("kproject-browser-"))
             and (.workflowInstanceId | type == "string" and length > 5)
             and .automaticPublicationAllowed == false
