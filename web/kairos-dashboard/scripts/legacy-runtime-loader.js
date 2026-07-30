@@ -1,7 +1,10 @@
-const BUILD = "kairos-legacy-runtime-loader-20260730-3-docx";
-const RELEASE = "manuscript-docx-export-resolver-20260730-1";
+const BUILD = "kairos-five-center-runtime-loader-20260730-1";
+const RELEASE = "five-center-dashboard-restored-20260730-1";
 const params = new URLSearchParams(window.location.search);
-const advancedMode = params.get("mode") === "advanced";
+const requestedMode = params.get("mode");
+const executiveMode = requestedMode === "executive";
+const advancedMode = requestedMode === "advanced";
+const commandHubMode = !executiveMode;
 
 const STYLE_FILES = [
   "command-hub.css",
@@ -123,39 +126,43 @@ let loadPromise = null;
 
 window.KairosLegacyRuntime = Object.freeze({
   build: BUILD,
+  requestedMode: requestedMode || "command",
+  commandHubMode,
   advancedMode,
-  load: loadLegacyRuntime,
+  executiveMode,
+  load: loadCommandRuntime,
 });
 
-if (advancedMode) loadLegacyRuntime();
+if (commandHubMode) loadCommandRuntime();
 
-async function loadLegacyRuntime() {
-  if (!advancedMode) return { status: "not-requested", build: BUILD };
+async function loadCommandRuntime() {
+  if (!commandHubMode) return { status: "not-requested", build: BUILD };
   if (loadPromise) return loadPromise;
 
   loadPromise = (async () => {
-    document.documentElement.dataset.kairosMode = "advanced";
-    const ui = installAdvancedBootUI();
+    document.documentElement.dataset.kairosMode = advancedMode ? "advanced" : "command";
+    const ui = installBootUI();
 
     try {
-      ui.update("Loading advanced styles…");
-      await Promise.allSettled(STYLE_FILES.map(loadStyle));
+      ui.update("Loading command-center styles…");
+      await Promise.all(STYLE_FILES.map(loadStyle));
 
       for (let index = 0; index < SCRIPT_FILES.length; index += 1) {
-        const filename = SCRIPT_FILES[index];
-        ui.update(`Loading advanced operations ${index + 1} of ${SCRIPT_FILES.length}…`);
-        await loadModule(filename);
+        ui.update(`Loading Kairos operations ${index + 1} of ${SCRIPT_FILES.length}…`);
+        await loadModule(SCRIPT_FILES[index]);
       }
 
       ui.remove();
       document.body.dataset.kairosLegacyReady = "true";
+      document.body.dataset.kairosCommandHubReady = "true";
       window.dispatchEvent(new CustomEvent("kairos:legacy-runtime:ready", {
-        detail: { build: BUILD, scripts: SCRIPT_FILES.length },
+        detail: { build: BUILD, scripts: SCRIPT_FILES.length, mode: advancedMode ? "advanced" : "command" },
       }));
+      if (advancedMode) installPersistentReturnButton();
       openRequestedWorkspace();
-      return { status: "ready", build: BUILD };
+      return { status: "ready", build: BUILD, mode: advancedMode ? "advanced" : "command" };
     } catch (error) {
-      console.error("Kairos advanced operations failed to load.", error);
+      console.error("Kairos command center failed to load.", error);
       ui.fail(error);
       throw error;
     }
@@ -166,16 +173,12 @@ async function loadLegacyRuntime() {
 
 function loadStyle(filename) {
   return new Promise((resolve, reject) => {
-    const selector = `link[data-kairos-legacy-style="${cssEscape(filename)}"]`;
-    if (document.querySelector(selector)) {
-      resolve();
-      return;
-    }
-
+    const selector = `link[data-kairos-command-style="${cssEscape(filename)}"]`;
+    if (document.querySelector(selector)) return resolve();
     const link = document.createElement("link");
     link.rel = "stylesheet";
     link.href = `./styles/${filename}?v=${RELEASE}`;
-    link.dataset.kairosLegacyStyle = filename;
+    link.dataset.kairosCommandStyle = filename;
     link.onload = () => resolve();
     link.onerror = () => reject(new Error(`Could not load ${filename}.`));
     document.head.append(link);
@@ -184,30 +187,26 @@ function loadStyle(filename) {
 
 function loadModule(filename) {
   return new Promise((resolve, reject) => {
-    const selector = `script[data-kairos-legacy-script="${cssEscape(filename)}"]`;
-    if (document.querySelector(selector)) {
-      resolve();
-      return;
-    }
-
+    const selector = `script[data-kairos-command-script="${cssEscape(filename)}"]`;
+    if (document.querySelector(selector)) return resolve();
     const script = document.createElement("script");
     script.type = "module";
     script.src = `./scripts/${filename}?v=${RELEASE}`;
-    script.dataset.kairosLegacyScript = filename;
+    script.dataset.kairosCommandScript = filename;
     script.onload = () => resolve();
     script.onerror = () => reject(new Error(`Could not load ${filename}.`));
     document.body.append(script);
   });
 }
 
-function installAdvancedBootUI() {
-  const existing = document.querySelector("#kairos-advanced-boot");
+function installBootUI() {
+  const existing = document.querySelector("#kairos-command-boot");
   if (existing) return bootUI(existing);
 
   const panel = document.createElement("section");
-  panel.id = "kairos-advanced-boot";
+  panel.id = "kairos-command-boot";
   panel.setAttribute("role", "status");
-  panel.innerHTML = `<div><strong>Kairos Advanced Operations</strong><p data-kairos-advanced-status>Preparing isolated runtime…</p><button type="button" data-kairos-return>Return to Executive OS</button></div>`;
+  panel.innerHTML = `<div><strong>${advancedMode ? "Kairos Advanced Operations" : "Kairos Command Center"}</strong><p data-kairos-command-status>${advancedMode ? "Preparing advanced operations…" : "Restoring the five operating centers…"}</p></div>`;
   Object.assign(panel.style, {
     position: "fixed",
     inset: "0",
@@ -227,30 +226,16 @@ function installAdvancedBootUI() {
     borderRadius: "22px",
     background: "#0b1017",
   });
-  const button = panel.querySelector("[data-kairos-return]");
-  Object.assign(button.style, {
-    marginTop: "16px",
-    padding: "12px 16px",
-    border: "1px solid #202a36",
-    borderRadius: "12px",
-    background: "#151d27",
-    color: "#f7f9fc",
-    font: "inherit",
-  });
-  button.addEventListener("click", returnToExecutiveOS);
   document.body.append(panel);
-  installPersistentReturnButton();
   return bootUI(panel);
 }
 
 function bootUI(panel) {
-  const status = panel.querySelector("[data-kairos-advanced-status]");
+  const status = panel.querySelector("[data-kairos-command-status]");
   return {
     update(message) { if (status) status.textContent = message; },
     remove() { panel.remove(); },
-    fail(error) {
-      if (status) status.textContent = String(error?.message || "Advanced operations could not load.");
-    },
+    fail(error) { if (status) status.textContent = String(error?.message || "The command center could not load."); },
   };
 }
 
@@ -259,7 +244,7 @@ function installPersistentReturnButton() {
   const button = document.createElement("button");
   button.type = "button";
   button.dataset.kairosPersistentReturn = "true";
-  button.textContent = "Return to Executive OS";
+  button.textContent = "Return to Command Center";
   Object.assign(button.style, {
     position: "fixed",
     top: "max(12px, env(safe-area-inset-top))",
@@ -272,11 +257,11 @@ function installPersistentReturnButton() {
     color: "#fff",
     font: "700 13px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif",
   });
-  button.addEventListener("click", returnToExecutiveOS);
+  button.addEventListener("click", returnToCommandCenter);
   document.body.append(button);
 }
 
-function returnToExecutiveOS() {
+function returnToCommandCenter() {
   const url = new URL(window.location.href);
   url.search = "";
   url.hash = "";
@@ -286,18 +271,12 @@ function returnToExecutiveOS() {
 function openRequestedWorkspace() {
   const target = params.get("open");
   if (!target) return;
-
   requestAnimationFrame(() => {
     if (target === "manuscript") {
-      if (typeof window.KairosProductionWorkspace?.open === "function") {
-        window.KairosProductionWorkspace.open("manuscript-studio");
-      } else {
-        window.dispatchEvent(new CustomEvent("kairos:manuscript-studio:open"));
-      }
+      if (typeof window.KairosProductionWorkspace?.open === "function") window.KairosProductionWorkspace.open("manuscript-studio");
+      else window.dispatchEvent(new CustomEvent("kairos:manuscript-studio:open"));
     }
-    if (target === "social") {
-      window.dispatchEvent(new CustomEvent("kairos:social-production:open"));
-    }
+    if (target === "social") window.dispatchEvent(new CustomEvent("kairos:social-production:open"));
   });
 }
 
