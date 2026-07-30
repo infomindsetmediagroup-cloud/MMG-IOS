@@ -11,6 +11,10 @@ const index = readFileSync(
   resolve(process.cwd(), "../../web/kairos-dashboard/index.html"),
   "utf8",
 );
+const runtimeLoader = readFileSync(
+  resolve(process.cwd(), "../../web/kairos-dashboard/scripts/kairos-runtime-loader.js"),
+  "utf8",
+);
 const loader = readFileSync(
   resolve(process.cwd(), "../../web/kairos-dashboard/scripts/legacy-runtime-loader.js"),
   "utf8",
@@ -54,12 +58,14 @@ test("the controller preserves retry state and always clears busy", () => {
   assert.match(source, /Kairos did not respond in time/);
 });
 
-test("the clean dashboard defers manuscript modules to isolated advanced operations", () => {
-  assert.match(index, /kairos-executive-clean-boot-20260729-1/);
-  assert.match(index, /legacy-runtime-loader\.js\?v=legacy-docx-export-resolver-20260730-1/);
+test("the clean dashboard composes advanced manuscript operations with local inference", () => {
+  assert.match(index, /kairos-executive-local-inference-20260730-1/);
+  assert.match(index, /kairos-runtime-loader\.js\?v=kairos-local-inference-20260730-1/);
   assert.doesNotMatch(index, /manuscript-docx-upload-hotfix\.js/);
   assert.doesNotMatch(index, /manuscript-studio\.js/);
   assert.doesNotMatch(index, /manuscript-project-setup\.js/);
+  assert.match(runtimeLoader, /import "\.\/legacy-runtime-loader\.js"/);
+  assert.match(runtimeLoader, /import "\.\/executive-local-inference\.js"/);
   assert.match(loader, /const RELEASE = "manuscript-docx-export-resolver-20260730-1"/);
   assert.match(loader, /"manuscript-docx-upload-hotfix\.js"/);
   assert.match(loader, /"manuscript-studio\.js"/);

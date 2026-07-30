@@ -3,53 +3,88 @@ name: Validate WebLLM Release
 on:
   pull_request:
     paths:
+      - "package.json"
+      - "scripts/build-webllm.mjs"
+      - "scripts/validate-webllm-browser-bundle.mjs"
+      - "web/kairos-dashboard/vendor/webllm-entry.js"
+      - "web/kairos-dashboard/vendor/node-url-browser-shim.js"
       - "web/kairos-dashboard/scripts/kairos-local-inference.js"
+      - "web/kairos-dashboard/scripts/kairos-local-inference-same-origin.js"
+      - "web/kairos-dashboard/scripts/executive-local-inference.js"
       - "web/kairos-dashboard/index.html"
-      - "backend-tests/kairos-local-inference-mobile.test.ts"
+      - "backend-tests/kairos-local-inference-same-origin.test.ts"
+      - "backend-tests/kairos-local-execution.test.ts"
       - ".github/workflows/validate-webllm-release.yml"
   push:
     branches:
       - main
     paths:
+      - "package.json"
+      - "scripts/build-webllm.mjs"
+      - "scripts/validate-webllm-browser-bundle.mjs"
+      - "web/kairos-dashboard/vendor/webllm-entry.js"
+      - "web/kairos-dashboard/vendor/node-url-browser-shim.js"
       - "web/kairos-dashboard/scripts/kairos-local-inference.js"
+      - "web/kairos-dashboard/scripts/kairos-local-inference-same-origin.js"
+      - "web/kairos-dashboard/scripts/executive-local-inference.js"
       - "web/kairos-dashboard/index.html"
-      - "backend-tests/kairos-local-inference-mobile.test.ts"
+      - "backend-tests/kairos-local-inference-same-origin.test.ts"
+      - "backend-tests/kairos-local-execution.test.ts"
       - ".github/workflows/validate-webllm-release.yml"
 
 permissions:
   contents: read
 
 jobs:
-  verify-published-runtime:
+  verify-same-origin-runtime:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Resolve pinned WebLLM version
-        id: version
-        shell: bash
-        run: |
-          set -euo pipefail
-          version="$(sed -n 's/^const WEBLLM_VERSION = "\([^"]*\)";.*/\1/p' web/kairos-dashboard/scripts/kairos-local-inference.js)"
-          test -n "${version}"
-          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
 
-      - name: Verify npm release exists
-        env:
-          WEBLLM_VERSION: ${{ steps.version.outputs.version }}
+      - name: Verify WebLLM dependency is exactly pinned
         run: |
           set -euo pipefail
-          metadata="$(curl --fail --silent --show-error --location --retry 3 --max-time 30 "https://registry.npmjs.org/@mlc-ai%2fweb-llm/${WEBLLM_VERSION}")"
-          node -e 'const value=JSON.parse(process.argv[1]); if(value.version!==process.env.WEBLLM_VERSION) process.exit(1);' "${metadata}"
+          node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs";
+          const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+          const version = pkg.dependencies?.["@mlc-ai/web-llm"];
+          if (!/^\d+\.\d+\.\d+$/.test(String(version || ""))) {
+            throw new Error(`@mlc-ai/web-llm must be pinned exactly; received ${version || "missing"}`);
+          }
+          if (version !== "0.2.82") {
+            throw new Error(`Expected certified WebLLM 0.2.82; received ${version}`);
+          }
+          console.log(`Certified WebLLM version: ${version}`);
+          NODE
 
-      - name: Verify browser module endpoints resolve
-        env:
-          WEBLLM_VERSION: ${{ steps.version.outputs.version }}
+      - name: Install validation dependencies
+        run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund > /dev/null
+
+      - name: Build and validate same-origin browser runtime
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --location --retry 3 --max-time 60 --range 0-2047 \
-            "https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@${WEBLLM_VERSION}/+esm" > /dev/null
-          curl --fail --silent --show-error --location --retry 3 --max-time 60 --range 0-2047 \
-            "https://esm.run/@mlc-ai/web-llm@${WEBLLM_VERSION}" > /dev/null
+          npm run build:webllm
+          test -s web/kairos-dashboard/vendor/webllm-bundle.js
+          grep -q 'CreateMLCEngine' web/kairos-dashboard/vendor/webllm-bundle.js
+          node scripts/validate-webllm-browser-bundle.mjs
+
+      - name: Verify local-only loading contract
+        run: |
+          set -euo pipefail
+          node --check web/kairos-dashboard/scripts/kairos-local-inference.js
+          node --check web/kairos-dashboard/scripts/kairos-local-inference-same-origin.js
+          node --check web/kairos-dashboard/scripts/executive-local-inference.js
+          npx vitest run backend-tests/kairos-local-inference-same-origin.test.ts backend-tests/kairos-local-execution.test.ts
+          grep -q '../vendor/webllm-bundle.js' web/kairos-dashboard/scripts/kairos-local-inference-same-origin.js
+          grep -q '../vendor/webllm-bundle.js' web/kairos-dashboard/scripts/executive-local-inference.js
+          ! grep -R -n -E 'cdn\.jsdelivr\.net|esm\.run' \
+            web/kairos-dashboard/scripts/kairos-local-inference.js \
+            web/kairos-dashboard/scripts/kairos-local-inference-same-origin.js \
+            web/kairos-dashboard/scripts/executive-local-inference.js

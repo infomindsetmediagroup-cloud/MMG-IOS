@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
-const BUILD = "kairos-manuscript-large-intake-validator-20260730-5-docx";
+const BUILD = "kairos-manuscript-large-intake-validator-20260730-6-local";
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
 const repoRoot = join(root, "..", "..");
@@ -13,6 +13,7 @@ const frontendPath = join(repoRoot, "web", "kairos-dashboard", "scripts", "manus
 const docxResolverPath = join(repoRoot, "web", "kairos-dashboard", "scripts", "manuscript-docx-upload-hotfix.js");
 const safariPath = join(repoRoot, "web", "kairos-dashboard", "scripts", "safari-manuscript-intake-compat.js");
 const indexPath = join(repoRoot, "web", "kairos-dashboard", "index.html");
+const runtimeLoaderPath = join(repoRoot, "web", "kairos-dashboard", "scripts", "kairos-runtime-loader.js");
 const loaderPath = join(repoRoot, "web", "kairos-dashboard", "scripts", "legacy-runtime-loader.js");
 
 const backend = readFileSync(backendPath, "utf8");
@@ -20,6 +21,7 @@ const frontend = readFileSync(frontendPath, "utf8");
 const docxResolver = readFileSync(docxResolverPath, "utf8");
 const safari = readFileSync(safariPath, "utf8");
 const index = readFileSync(indexPath, "utf8");
+const runtimeLoader = readFileSync(runtimeLoaderPath, "utf8");
 const loader = readFileSync(loaderPath, "utf8");
 
 assert.ok(backend.includes('const MAX_CHARS = 600000'), "Backend manuscript intake is not aligned to 600,000 characters.");
@@ -34,11 +36,13 @@ assert.ok(docxResolver.includes('const MAX_TEXT_CHARS = 600000'), "DOCX extracti
 assert.ok(docxResolver.includes('typeof candidate?.extractRawText === "function"'), "DOCX export-shape resolution is missing.");
 assert.ok(docxResolver.includes('form.append("file", pending.file'), "Original DOCX source preservation is missing.");
 assert.ok(docxResolver.includes('form.append("extractedText", pending.manuscript)'), "Extracted DOCX text is not included in durable source storage.");
-assert.ok(index.includes('kairos-executive-clean-boot-20260729-1'), "The clean Executive OS build marker is missing.");
+assert.ok(index.includes('kairos-executive-local-inference-20260730-1'), "The local-inference Executive OS build marker is missing.");
 assert.ok(index.includes('safari-manuscript-intake-compat.js?v=safari-docx-export-resolver-20260730-1'), "The current Safari DOCX compatibility layer is missing.");
-assert.ok(index.includes('legacy-runtime-loader.js?v=legacy-docx-export-resolver-20260730-1'), "The isolated DOCX runtime loader marker is missing.");
+assert.ok(index.includes('kairos-runtime-loader.js?v=kairos-local-inference-20260730-1'), "The composed Kairos runtime loader marker is missing.");
 assert.ok(!index.includes('manuscript-docx-upload-hotfix.js'), "The DOCX resolver must not execute on the Executive OS homepage.");
 assert.ok(!index.includes('manuscript-studio.js'), "Manuscript Studio must not load on the Executive OS homepage.");
+assert.ok(runtimeLoader.includes('import "./legacy-runtime-loader.js"'), "The composed runtime must retain isolated advanced manuscript operations.");
+assert.ok(runtimeLoader.includes('import "./executive-local-inference.js"'), "The composed runtime must load Kairos local inference.");
 assert.ok(safari.includes('safari-manuscript-intake-compat-20260730-11-docx'), "The current Safari intake compatibility build is missing.");
 assert.ok(loader.includes('const RELEASE = "manuscript-docx-export-resolver-20260730-1"'), "The isolated DOCX runtime release is missing.");
 assert.ok(loader.includes('"manuscript-docx-upload-hotfix.js"'), "The DOCX resolver is missing from Advanced Operations.");
@@ -48,7 +52,7 @@ assert.ok(loader.indexOf('"manuscript-docx-upload-hotfix.js"') < loader.indexOf(
 assert.ok(!backend.includes('180000'), "The stale 180,000-character backend limit remains.");
 assert.ok(!frontend.includes('180000'), "The stale 180,000-character browser limit remains.");
 
-for (const file of [backendPath, frontendPath, docxResolverPath, safariPath, loaderPath]) {
+for (const file of [backendPath, frontendPath, docxResolverPath, safariPath, runtimeLoaderPath, loaderPath]) {
   const checked = spawnSync(process.execPath, ["--check", file], { encoding: "utf8" });
   assert.equal(checked.status, 0, `${file} failed syntax validation:\n${checked.stderr || checked.stdout}`);
 }
@@ -111,6 +115,7 @@ console.log(JSON.stringify({
     staleLimitRemoved: true,
     browserCacheBusted: true,
     isolatedAdvancedRuntime: true,
+    localInferenceComposed: true,
     safariUploadRetention: true,
     docxNamedExportResolution: true,
     originalDocxSourcePreserved: true,

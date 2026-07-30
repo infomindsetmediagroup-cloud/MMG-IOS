@@ -13,6 +13,10 @@ const indexSource = readFileSync(
   new URL("../web/kairos-dashboard/index.html", import.meta.url),
   "utf8",
 );
+const runtimeLoaderSource = readFileSync(
+  new URL("../web/kairos-dashboard/scripts/kairos-runtime-loader.js", import.meta.url),
+  "utf8",
+);
 const loaderSource = readFileSync(
   new URL("../web/kairos-dashboard/scripts/legacy-runtime-loader.js", import.meta.url),
   "utf8",
@@ -191,9 +195,12 @@ test("Command Center manuscript event routes through the production workspace co
 });
 
 test("dashboard isolates no-form production controllers behind the advanced loader", async () => {
-  expect(indexSource).toMatch(/<meta name="mmg-build" content="kairos-executive-clean-boot-[^"]+">/);
-  expect(indexSource).toMatch(/legacy-runtime-loader\.js\?v=legacy-[^"]+/);
+  expect(indexSource).toMatch(/<meta name="mmg-build" content="kairos-executive-local-inference-[^"]+">/);
+  expect(indexSource).toMatch(/kairos-runtime-loader\.js\?v=kairos-local-inference-[^"]+/);
+  expect((indexSource.match(/<script type="module"/g) || [])).toHaveLength(2);
   expect(indexSource).not.toContain("manuscript-runtime-cache-guard.js");
+  expect(runtimeLoaderSource).toContain('import "./legacy-runtime-loader.js"');
+  expect(runtimeLoaderSource).toContain('import "./executive-local-inference.js"');
 
   const requiredScripts = [
     "command-center-governance.js",
