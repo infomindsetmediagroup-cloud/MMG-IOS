@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
-const BUILD = "kairos-manuscript-large-intake-validator-20260730-4";
+const BUILD = "kairos-manuscript-large-intake-validator-20260730-5";
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
 const repoRoot = join(root, "..", "..");
@@ -21,16 +21,20 @@ const loader = readFileSync(loaderPath, "utf8");
 assert.ok(backend.includes('const MAX_CHARS = 600000'), "Backend manuscript intake is not aligned to 600,000 characters.");
 assert.ok(backend.includes('manuscript-studio-v5-large-intake'), "Backend large-intake capability version is missing.");
 assert.ok(frontend.includes('const MAX_TEXT_CHARS = 600000'), "Browser Manuscript Studio is not aligned to 600,000 characters.");
-assert.ok(frontend.includes('manuscript-studio-upload-retention-20260730-1'), "Current Safari-safe Manuscript Studio retention build is missing.");
+assert.ok(frontend.includes('manuscript-studio-docx-export-resolution-20260730-1'), "Current Safari-safe DOCX resolver build is missing.");
+assert.ok(frontend.includes('resolveMammothExtractRawText(mammoth)'), "DOCX extraction does not resolve the Mammoth module namespace.");
+assert.ok(frontend.includes('moduleNamespace?.default'), "DOCX extraction does not support Mammoth default exports.");
+assert.ok(frontend.includes('moduleNamespace?.default?.default'), "DOCX extraction does not support nested Mammoth default exports.");
+assert.ok(!frontend.includes('const api = mammoth.default || mammoth'), "Broken Mammoth default-export preference remains.");
 assert.ok(frontend.includes('kairos.manuscript-studio.recoverable-draft.v1'), "Recoverable manuscript draft state is missing.");
 assert.ok(frontend.includes('Retry source save'), "Recoverable source-storage retry is missing.");
 assert.ok(frontend.includes('Accepted source:'), "Accepted manuscript evidence is missing from the result view.");
 assert.ok(index.includes('kairos-executive-clean-boot-20260729-1'), "The clean Executive OS build marker is missing.");
-assert.match(index, /legacy-runtime-loader\.js\?v=legacy-[^"]+/, "The isolated advanced-runtime loader marker is missing.");
+assert.match(index, /legacy-runtime-loader\.js\?v=legacy-docx-export-resolution-20260730-1/, "The DOCX resolver advanced-runtime loader marker is missing.");
 assert.ok(index.includes('safari-intake-fix-20260729-9'), "The current Safari intake compatibility layer is missing.");
 assert.ok(!index.includes('manuscript-runtime-cache-guard.js'), "A global manuscript cache guard must not execute on the Executive OS homepage.");
 assert.ok(!index.includes('manuscript-studio.js'), "Manuscript Studio must not load on the Executive OS homepage.");
-assert.ok(loader.includes('const RELEASE = "manuscript-upload-retention-20260730-1"'), "The isolated manuscript runtime release is missing.");
+assert.ok(loader.includes('const RELEASE = "manuscript-docx-export-resolution-20260730-1"'), "The isolated DOCX resolver runtime release is missing.");
 assert.ok(loader.includes('"manuscript-studio.js"'), "Manuscript Studio is missing from Advanced Operations.");
 assert.ok(loader.includes('"manuscript-project-setup.js"'), "Manuscript project setup is missing from Advanced Operations.");
 assert.ok(!backend.includes('180000'), "The stale 180,000-character backend limit remains.");
@@ -101,6 +105,7 @@ console.log(JSON.stringify({
     isolatedAdvancedRuntime: true,
     safariUploadRetention: true,
     recoverableSourceRetry: true,
+    docxExportResolution: true,
     originalSourcePreservationReported: true,
   },
 }, null, 2));
