@@ -1,4 +1,4 @@
-const BUILD = "kairos-abos-v2-browser-finish-20260729-4";
+const BUILD = "kairos-abos-v2-browser-finish-20260729-5";
 const STORAGE_KEY = "kairos.executive-os.session.v2";
 const API_GET_TIMEOUT_MS = 12000;
 const API_MUTATION_TIMEOUT_MS = 45000;
@@ -15,6 +15,7 @@ const state = {
   health: null,
   workflows: [],
   briefing: null,
+  refreshing: false,
   loading: false,
   error: "",
   warnings: [],
@@ -27,13 +28,14 @@ start();
 
 function start() {
   bindGlobalEvents();
-  refresh();
+  render();
+  refresh({ quiet: true });
   setInterval(() => refresh({ quiet: true }), 60000);
 }
 
 async function refresh({ quiet = false } = {}) {
-  if (state.loading) return;
-  state.loading = true;
+  if (state.refreshing) return;
+  state.refreshing = true;
   state.error = "";
   state.warnings = [];
   root.setAttribute("aria-busy", "true");
@@ -70,7 +72,7 @@ async function refresh({ quiet = false } = {}) {
   } catch (error) {
     state.error = String(error?.message || "Kairos could not refresh the browser runtime.");
   } finally {
-    state.loading = false;
+    state.refreshing = false;
     root.setAttribute("aria-busy", "false");
     try {
       render();
@@ -81,17 +83,19 @@ async function refresh({ quiet = false } = {}) {
 }
 
 function renderEmergencyRecovery(error) {
+  state.refreshing = false;
   state.loading = false;
   root.setAttribute("aria-busy", "false");
-  root.innerHTML = `<section class="abos-hero abos-recovery" role="alert"><p class="abos-kicker">Browser recovery</p><h1>Kairos stopped safely.</h1><p>${esc(error?.message || "The dashboard could not finish rendering.")}</p><div class="abos-actions"><button class="abos-primary" data-hard-reload>Reload dashboard</button></div></section>`;
+  root.innerHTML = `<section class="abos-hero abos-recovery" role="alert"><p class="abos-kicker">Browser recovery</p><h1>Kairos stopped safely.</h1><p>${esc(error?.message || "The dashboard could not finish rendering.")}</p><div class="abos-actions"><button class="abos-primary" data-hard-reload>Reload dashboard</button><button class="abos-secondary" data-open-legacy>Open advanced operations</button></div></section>`;
   root.querySelector("[data-hard-reload]")?.addEventListener("click", () => window.location.reload());
+  root.querySelector("[data-open-legacy]")?.addEventListener("click", openLegacy);
 }
 
 function render() {
   persistSession();
   const ready = ["ready", "ok"].includes(state.health?.status);
-  const statusText = state.loading ? "Refreshing" : ready ? "Operating normally" : state.error ? "Connection issue" : "Runtime limited";
-  root.innerHTML = `<header class="abos-topbar"><div class="abos-brand"><div class="abos-mark" aria-hidden="true">K</div><div><strong>Kairos</strong><span>Executive Operating System</span></div></div><div class="abos-topbar-actions"><button class="abos-refresh" data-refresh ${state.loading ? "disabled" : ""} aria-label="Refresh Kairos browser">${state.loading ? "Refreshing…" : "Refresh"}</button><div class="abos-status" data-ready="${ready}"><i></i>${statusText}</div></div></header>${state.warnings.length ? `<div class="abos-warning" role="status">${state.warnings.map(esc).join(" · ")}</div>` : ""}<div class="abos-layout"><section class="abos-main">${view()}</section><aside class="abos-sidebar"><nav class="abos-nav" aria-label="Primary">${nav.map(item => `<button data-view="${item}" aria-current="${state.view === item ? "page" : "false"}">${label(item)}</button>`).join("")}</nav></aside></div>`;
+  const statusText = state.refreshing ? "Refreshing" : ready ? "Operating normally" : state.error ? "Connection issue" : "Runtime limited";
+  root.innerHTML = `<header class="abos-topbar"><div class="abos-brand"><div class="abos-mark" aria-hidden="true">K</div><div><strong>Kairos</strong><span>Executive Operating System</span></div></div><div class="abos-topbar-actions"><button class="abos-refresh" data-refresh ${state.refreshing ? "disabled" : ""} aria-label="Refresh Kairos browser">${state.refreshing ? "Refreshing…" : "Refresh"}</button><div class="abos-status" data-ready="${ready}"><i></i>${statusText}</div></div></header>${state.warnings.length ? `<div class="abos-warning" role="status">${state.warnings.map(esc).join(" · ")}</div>` : ""}<div class="abos-layout"><section class="abos-main">${view()}</section><aside class="abos-sidebar"><nav class="abos-nav" aria-label="Primary">${nav.map(item => `<button data-view="${item}" aria-current="${state.view === item ? "page" : "false"}">${label(item)}</button>`).join("")}</nav></aside></div>`;
   bind();
 }
 
@@ -162,8 +166,8 @@ function bind() {
     const counter = root.querySelector(".abos-objective-meta span");
     if (counter) counter.textContent = `${state.objective.length.toLocaleString()} / 12,000`;
   });
-  root.querySelector("[data-manuscript]")?.addEventListener("click", () => window.dispatchEvent(new CustomEvent("kairos:manuscript-studio:open")));
-  root.querySelector("[data-social]")?.addEventListener("click", () => window.dispatchEvent(new CustomEvent("kairos:social-production:open")));
+  root.querySelector("[data-manuscript]")?.addEventListener("click", () => openAdvancedWorkspace("manuscript"));
+  root.querySelector("[data-social]")?.addEventListener("click", () => openAdvancedWorkspace("social"));
   root.querySelector("[data-growth]")?.addEventListener("click", () => runHub("growth-plan", "Build the next evidence-based growth plan for Mindset Media Group."));
   root.querySelector("[data-revenue]")?.addEventListener("click", () => runHub("revenue-intelligence", "Review current verified commerce performance and identify the next best action."));
   root.querySelector("[data-reset-browser]")?.addEventListener("click", resetBrowserSession);
@@ -238,19 +242,17 @@ async function runHub(action, objective) {
 }
 
 function openLegacy() {
-  document.body.classList.remove("abos-active");
-  root.classList.add("abos-hidden");
-  document.querySelector(".abos-legacy-close")?.remove();
-  const close = document.createElement("button");
-  close.className = "abos-legacy-close";
-  close.textContent = "Return to Executive OS";
-  close.onclick = () => {
-    close.remove();
-    root.classList.remove("abos-hidden");
-    document.body.classList.add("abos-active");
-    render();
-  };
-  document.body.append(close);
+  openAdvancedWorkspace();
+}
+
+function openAdvancedWorkspace(workspace = "") {
+  persistSession();
+  const url = new URL(window.location.href);
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("mode", "advanced");
+  if (workspace) url.searchParams.set("open", workspace);
+  window.location.assign(url.href);
 }
 
 function resetBrowserSession() {
@@ -262,11 +264,7 @@ function resetBrowserSession() {
 }
 
 function bindGlobalEvents() {
-  window.addEventListener("kairos:executive-os:open", () => {
-    root.classList.remove("abos-hidden");
-    document.body.classList.add("abos-active");
-    setView("today");
-  });
+  window.addEventListener("kairos:executive-os:open", () => setView("today"));
   window.addEventListener("online", () => refresh());
   window.addEventListener("offline", () => {
     state.error = "This device is offline. Kairos preserved the current browser session.";
