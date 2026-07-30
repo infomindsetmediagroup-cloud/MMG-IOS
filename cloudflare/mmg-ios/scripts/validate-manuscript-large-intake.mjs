@@ -4,29 +4,36 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
-const BUILD = "kairos-manuscript-large-intake-validator-20260725-2";
+const BUILD = "kairos-manuscript-large-intake-validator-20260730-3";
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
 const repoRoot = join(root, "..", "..");
 const backendPath = join(root, "src", "manuscript-studio-v1.js");
 const frontendPath = join(repoRoot, "web", "kairos-dashboard", "scripts", "manuscript-studio.js");
 const indexPath = join(repoRoot, "web", "kairos-dashboard", "index.html");
+const loaderPath = join(repoRoot, "web", "kairos-dashboard", "scripts", "legacy-runtime-loader.js");
 
 const backend = readFileSync(backendPath, "utf8");
 const frontend = readFileSync(frontendPath, "utf8");
 const index = readFileSync(indexPath, "utf8");
+const loader = readFileSync(loaderPath, "utf8");
 
 assert.ok(backend.includes('const MAX_CHARS = 600000'), "Backend manuscript intake is not aligned to 600,000 characters.");
 assert.ok(backend.includes('manuscript-studio-v5-large-intake'), "Backend large-intake capability version is missing.");
 assert.ok(frontend.includes('const MAX_TEXT_CHARS = 600000'), "Browser Manuscript Studio is not aligned to 600,000 characters.");
 assert.ok(frontend.includes('manuscript-studio-json-source-20260725-5'), "Current Safari-safe Manuscript Studio browser build is missing.");
 assert.ok(frontend.includes('Accepted source:'), "Accepted manuscript evidence is missing from the result view.");
-assert.ok(index.includes('manuscript-controller-20260722-3-json-pasted-source-20260725-7'), "The current Manuscript Studio cache-busting marker is missing.");
-assert.ok(index.includes('safari-intake-fix-20260725-6'), "The Safari intake compatibility layer is missing.");
+assert.ok(index.includes('kairos-executive-clean-boot-20260729-1'), "The clean Executive OS build marker is missing.");
+assert.ok(index.includes('legacy-runtime-loader.js?v=legacy-isolated-20260729-1'), "The isolated advanced-runtime loader marker is missing.");
+assert.ok(index.includes('safari-intake-fix-20260729-9'), "The current Safari intake compatibility layer is missing.");
+assert.ok(!index.includes('manuscript-studio.js'), "Manuscript Studio must not load on the Executive OS homepage.");
+assert.ok(loader.includes('const RELEASE = "legacy-isolated-20260729-1"'), "The isolated runtime cache-busting release is missing.");
+assert.ok(loader.includes('"manuscript-studio.js"'), "Manuscript Studio is missing from Advanced Operations.");
+assert.ok(loader.includes('"manuscript-project-setup.js"'), "Manuscript project setup is missing from Advanced Operations.");
 assert.ok(!backend.includes('180000'), "The stale 180,000-character backend limit remains.");
 assert.ok(!frontend.includes('180000'), "The stale 180,000-character browser limit remains.");
 
-for (const file of [backendPath, frontendPath]) {
+for (const file of [backendPath, frontendPath, loaderPath]) {
   const checked = spawnSync(process.execPath, ["--check", file], { encoding: "utf8" });
   assert.equal(checked.status, 0, `${file} failed syntax validation:\n${checked.stderr || checked.stdout}`);
 }
@@ -88,6 +95,7 @@ console.log(JSON.stringify({
     maximumCharactersAccepted: 600000,
     staleLimitRemoved: true,
     browserCacheBusted: true,
+    isolatedAdvancedRuntime: true,
     safariJsonSourceIntake: true,
     originalSourcePreservationReported: true,
   },
