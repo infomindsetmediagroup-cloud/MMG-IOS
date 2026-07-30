@@ -1,4 +1,4 @@
-const BUILD = "safari-manuscript-intake-compat-20260729-9";
+const BUILD = "safari-manuscript-intake-compat-20260729-10";
 const API_GET_TIMEOUT_MS = 12000;
 const API_MUTATION_TIMEOUT_MS = 45000;
 const ADVANCED_MODE = new URLSearchParams(globalThis.location?.search || "").get("mode") === "advanced";
@@ -134,7 +134,7 @@ function installSyntheticFileFallback() {
   if (typeof NativeBlob !== "function") return;
   function SafariSafeFile(parts, name, options = {}) {
     const blob = new NativeBlob(parts, options);
-    const filename = String(name || "manuscript.txt").replace(/[\/:*?"<>|\u0000-\u001f]/g, "-");
+    const filename = String(name || "manuscript.txt").replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-");
     try {
       Object.defineProperties(blob, {
         name: { configurable: true, enumerable: true, value: filename },
@@ -153,12 +153,30 @@ function installSyntheticFileFallback() {
 
 function installDigestIdentifierFallback() {
   const subtle = globalThis.crypto?.subtle;
-  if (!subtle || typeof subtle.digest !== "function") return;
+  if (!subtle || typeof subtle.digest !== "function" || subtle.digest.__kairosDigestIdentifierFallback === true) return;
   const nativeDigest = subtle.digest.bind(subtle);
-  try {
-    subtle.digest = (algorithm, data) => {
-      const normalized = typeof algorithm === "string" ? { name: algorithm } : algorithm;
-      return nativeDigest(normalized, data);
-    };
-  } catch {}
+
+  const wrappedDigest = async (algorithm, data) => {
+    try {
+      return await nativeDigest(algorithm, data);
+    } catch (primaryError) {
+      const alternate = typeof algorithm === "string"
+        ? { name: algorithm }
+        : typeof algorithm?.name === "string"
+          ? algorithm.name
+          : null;
+      if (!alternate) throw primaryError;
+      try {
+        return await nativeDigest(alternate, data);
+      } catch {
+        throw primaryError;
+      }
+    }
+  };
+
+  try { Object.defineProperty(wrappedDigest, "__kairosDigestIdentifierFallback", { value: true }); }
+  catch { wrappedDigest.__kairosDigestIdentifierFallback = true; }
+
+  try { Object.defineProperty(subtle, "digest", { configurable: true, value: wrappedDigest }); }
+  catch { try { subtle.digest = wrappedDigest; } catch {} }
 }
