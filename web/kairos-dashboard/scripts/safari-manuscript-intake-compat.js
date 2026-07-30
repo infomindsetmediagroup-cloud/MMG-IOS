@@ -46,7 +46,7 @@ function activateLiveExecutionDetails() {
   if (document.querySelector('script[data-kairos-live-details]')) return;
   const script = document.createElement("script");
   script.type = "module";
-  script.src = "./scripts/executive-os-live-details.js?v=20260729-3";
+  script.src = "./scripts/executive-os-live-details.js?v=20260729-4";
   script.dataset.kairosLiveDetails = "true";
   document.body.append(script);
 }
