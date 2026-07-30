@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
+const canonical = readFileSync(new URL("../cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js", import.meta.url), "utf8");
 const guard = readFileSync(new URL("../cloudflare/mmg-ios/src/kairos-production-entry-local-only-v1.js", import.meta.url), "utf8");
 const entry = readFileSync(new URL("../cloudflare/mmg-ios/src/kairos-production-entry-local-execution-v1.js", import.meta.url), "utf8");
 const wrangler = readFileSync(new URL("../cloudflare/mmg-ios/wrangler.toml", import.meta.url), "utf8");
@@ -9,15 +10,30 @@ const loader = readFileSync(new URL("../web/kairos-dashboard/scripts/kairos-runt
 const bridge = readFileSync(new URL("../web/kairos-dashboard/scripts/executive-local-inference.js", import.meta.url), "utf8");
 const compatibility = readFileSync(new URL("../web/kairos-dashboard/scripts/kairos-local-inference.js", import.meta.url), "utf8");
 
-const combined = `${guard}\n${entry}\n${wrangler}\n${index}\n${loader}\n${bridge}\n${compatibility}`;
+const combined = `${canonical}\n${guard}\n${entry}\n${wrangler}\n${index}\n${loader}\n${bridge}\n${compatibility}`;
 
 describe("Kairos local operational execution", () => {
-  it("uses the local-only entry boundary and no-cost browser inference policy", () => {
-    expect(wrangler).toContain('main = "src/kairos-production-entry-local-only-v1.js"');
+  it("uses the canonical provider-firewalled entry and no-cost browser inference policy", () => {
+    expect(wrangler).toContain('main = "src/kairos-production-entry-local-canonical-v1.js"');
     expect(wrangler).toContain('KAIROS_MODEL_PROVIDER = "browser-webgpu"');
     expect(wrangler).toContain('KAIROS_NO_COST_MODE = "true"');
     expect(wrangler).toContain('KAIROS_LOCAL_INFERENCE_ENABLED = "true"');
     expect(wrangler).toContain('KAIROS_MANUSCRIPT_START_MODE = "local-browser"');
+    expect(canonical).toContain("providerBlockedEnv");
+    expect(canonical).toContain('property === "OPENAI_API_KEY"');
+    expect(canonical).toContain('return ""');
+    expect(canonical).toContain("kairos-local-readiness-sentinel-not-a-provider-key");
+    expect(canonical).toContain('X-Kairos-OpenAI-Calls", "disabled"');
+  });
+
+  it("limits the readiness sentinel to non-generative objective and workflow projection routes", () => {
+    expect(canonical).toContain('"/api/hub/run"');
+    expect(canonical).toContain('"/api/workflows"');
+    expect(canonical).toContain("PROVIDER_INDEPENDENT_OPERATIONAL_PATHS.has(url.pathname)");
+    expect(canonical).toContain("operationalCompatibilityEnv(env)");
+    expect(canonical).toContain("providerBlockedEnv(env)");
+    expect(canonical).not.toContain("handleKairosAPI");
+    expect(canonical).not.toContain("api.openai.com");
   });
 
   it("blocks direct and legacy paid-provider generation routes", () => {
