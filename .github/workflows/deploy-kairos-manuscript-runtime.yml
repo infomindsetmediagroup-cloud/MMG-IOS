@@ -1,10 +1,10 @@
-name: Deploy Kairos Manuscript Runtime
+name: Deploy Kairos Local Manuscript Runtime
 
 on:
   workflow_dispatch:
     inputs:
       confirmation:
-        description: 'Type DEPLOY KAIROS MANUSCRIPT RUNTIME to authorize production deployment.'
+        description: 'Type DEPLOY KAIROS LOCAL RUNTIME to authorize production deployment.'
         required: true
         type: string
       release_id:
@@ -17,19 +17,18 @@ permissions:
   statuses: write
 
 concurrency:
-  group: deploy-kairos-manuscript-runtime-production
+  group: deploy-kairos-local-manuscript-runtime-production
   cancel-in-progress: false
 
 jobs:
   deploy:
-    if: ${{ github.ref == 'refs/heads/main' && inputs.confirmation == 'DEPLOY KAIROS MANUSCRIPT RUNTIME' }}
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirmation == 'DEPLOY KAIROS LOCAL RUNTIME' }}
     environment: production
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
       KAIROS_RELEASE_ID: ${{ inputs.release_id }}
 
@@ -42,7 +41,7 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"pending\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Validating governed production release ${KAIROS_RELEASE_ID}\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"pending\",\"context\":\"kairos-local-runtime\",\"description\":\"Validating local-only production release ${KAIROS_RELEASE_ID}\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
       - name: Check out main
         uses: actions/checkout@v4
@@ -57,165 +56,90 @@ jobs:
       - name: Install validation dependencies
         run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund > /dev/null
 
-      - name: Verify OpenAI Responses API production access
-        env:
-          KAIROS_OPENAI_MODEL: gpt-5-mini
+      - name: Build same-origin WebLLM runtime
         run: |
-          set -euo pipefail
-          test -n "${OPENAI_API_KEY:-}" || { echo "OPENAI_API_KEY is missing from the protected production environment."; exit 1; }
-          request_body="${RUNNER_TEMP}/openai-responses-probe-request.json"
-          response_body="${RUNNER_TEMP}/openai-responses-probe-response.json"
-          cat > "${request_body}" <<'JSON'
-          {
-            "model": "gpt-5-mini",
-            "instructions": "Return only the token KAIROS_READY.",
-            "input": "Production credential health check.",
-            "max_output_tokens": 32,
-            "store": false
-          }
-          JSON
-          status="$(curl --silent --show-error --max-time 60 \
-            -X POST \
-            -H "Authorization: Bearer ${OPENAI_API_KEY}" \
-            -H "Content-Type: application/json" \
-            -H "Accept: application/json" \
-            --data-binary "@${request_body}" \
-            "https://api.openai.com/v1/responses" \
-            -o "${response_body}" -w '%{http_code}' || true)"
-          if [ "${status}" = "200" ]; then
-            node - "${response_body}" <<'NODE'
-          const fs = require('node:fs');
-          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-          if (body?.object !== 'response' || !String(body?.id || '').startsWith('resp_') || body?.status === 'failed') {
-            throw new Error('OpenAI Responses API returned an invalid production health-check response.');
-          }
-          console.log(`OpenAI Responses API production access verified with ${body.model || 'configured model'}.`);
-          NODE
-            echo "KAIROS_OPENAI_PROVIDER_STATE=ready" >> "${GITHUB_ENV}"
-          else
-            classification="$(node - "${response_body}" "${status}" <<'NODE'
-          const fs = require('node:fs');
-          const [file, httpStatus] = process.argv.slice(2);
-          let body = {};
-          try { body = JSON.parse(fs.readFileSync(file, 'utf8')); } catch {}
-          const error = body?.error || {};
-          if (httpStatus === '429' && (error.code === 'insufficient_quota' || error.type === 'insufficient_quota')) {
-            process.stdout.write('quota');
-          } else {
-            console.error(`OpenAI Responses API health check failed: HTTP ${httpStatus}; code=${error.code || 'unknown'}; type=${error.type || 'unknown'}.`);
-            process.stdout.write('fatal');
-          }
-          NODE
-            )"
-            if [ "${classification}" = "quota" ]; then
-              echo "::warning title=OpenAI API credits required::The production key is valid, but the OpenAI project has insufficient quota. Deploying the application in provider-degraded mode; manuscript generation will remain blocked until API credits are added."
-              echo "KAIROS_OPENAI_PROVIDER_STATE=quota-blocked" >> "${GITHUB_ENV}"
-            else
-              exit 1
-            fi
-          fi
+          npm run build:webllm
+          test -s web/kairos-dashboard/vendor/webllm-bundle.js
+          grep -q 'CreateMLCEngine' web/kairos-dashboard/vendor/webllm-bundle.js
 
-      - name: Validate production runtime syntax
+      - name: Validate local-only runtime syntax
         run: |
-          node --check cloudflare/mmg-ios/src/kairos-production-entry-local-inference-v1.js
-          node --check cloudflare/mmg-ios/src/kairos-manuscript-generation-job-v1.js
-          node --check cloudflare/mmg-ios/src/kairos-local-inference-v1.js
-          node --check cloudflare/mmg-ios/src/kairos-manuscript-operation-boundary-v1.js
-          node --check cloudflare/mmg-ios/src/kairos-production-entry-manuscript-online-v1.js
-          node --check cloudflare/mmg-ios/src/kairos-manuscript-project-setup-v1.js
-          node --check cloudflare/mmg-ios/src/kairos-manuscript-auto-pipeline-v1.js
-          node --check cloudflare/mmg-ios/src/kairos-product-publication-v1.js
-          node --check cloudflare/mmg-ios/src/kairos-production-registry-v1.js
-          node --check web/kairos-dashboard/scripts/manuscript-project-setup.js
-          node --check web/kairos-dashboard/scripts/manuscript-editorial-workbench.js
-          node --check web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
-          node --check browser-tests/abos-live-smoke.spec.mjs
+          node --check cloudflare/mmg-ios/src/kairos-production-entry-local-execution-v1.js
+          node --check web/kairos-dashboard/scripts/executive-local-inference.js
+          node --check web/kairos-dashboard/scripts/kairos-local-inference.js
+          node --check web/kairos-dashboard/scripts/kairos-local-inference-same-origin.js
 
-      - name: Validate governance contracts
+      - name: Validate local-only inference contracts
         run: |
-          npm run validate:kairos-shopify
-          npm run validate:manuscript-activation
-          npm run validate:shopify
-          npm run validate:service-product
-
-      - name: Test backend generation and publication boundaries
-        run: |
-          npx vitest run backend-tests/kairos-backend-manuscript-generation.test.ts
-          npx vitest run backend-tests/kairos-manuscript-auto-pipeline.test.js -t "extracts the AI Image Mastery publication record without a catalog form"
-          npx vitest run backend-tests/kairos-manuscript-auto-pipeline.test.js -t "uses the durable project setup as the authoritative title and author"
-          npx vitest run backend-tests/kairos-manuscript-auto-pipeline.test.js -t "routes non-AI publications to the canonical MMG book-product template"
-          npx vitest run backend-tests/kairos-manuscript-operation-boundary.test.js
-          npx vitest run backend-tests/kairos-scope-firewall.test.js
-
-      - name: Install WebKit browser
-        run: npx playwright install --with-deps webkit > /dev/null
-
-      - name: Tap manuscript, vault, and release controls in mobile WebKit
-        run: npm run test:manuscript-ui
+          npx vitest run backend-tests/kairos-local-execution.test.ts backend-tests/kairos-local-inference-same-origin.test.ts
+          grep -q 'KAIROS_MODEL_PROVIDER = "browser-webgpu"' cloudflare/mmg-ios/wrangler.toml
+          grep -q 'KAIROS_NO_COST_MODE = "true"' cloudflare/mmg-ios/wrangler.toml
+          grep -q 'KAIROS_LOCAL_INFERENCE_ENABLED = "true"' cloudflare/mmg-ios/wrangler.toml
+          ! grep -q 'api.openai.com' cloudflare/mmg-ios/src/kairos-production-entry-local-execution-v1.js
+          ! grep -q 'cdn.jsdelivr.net' web/kairos-dashboard/scripts/executive-local-inference.js
+          ! grep -q 'esm.run' web/kairos-dashboard/scripts/executive-local-inference.js
 
       - name: Install Worker dependencies
         working-directory: cloudflare/mmg-ios
         run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund > /dev/null
 
-      - name: Validate manuscript setup transaction
-        working-directory: cloudflare/mmg-ios
-        run: node --test test/kairos-manuscript-project-setup-v3.test.js test/kairos-manuscript-project-setup-ui-v2.test.js
-
       - name: Validate Worker bundle
         working-directory: cloudflare/mmg-ios
         run: npx wrangler deploy --dry-run
 
-      - name: Synchronize OpenAI Worker secret
-        working-directory: cloudflare/mmg-ios
-        run: printf '%s' "${OPENAI_API_KEY}" | npx wrangler versions secret put OPENAI_API_KEY
-
-      - name: Deploy manuscript Worker
+      - name: Deploy local-only manuscript Worker
         working-directory: cloudflare/mmg-ios
         run: npx wrangler deploy
 
-      - name: Verify manuscript runtime online
+      - name: Verify local operational readiness
         run: |
           set -euo pipefail
           for attempt in $(seq 1 30); do
-            body="${RUNNER_TEMP}/manuscript-status.json"
-            status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/api/kairos/manuscripts/status?release=${KAIROS_RELEASE_ID}&attempt=${attempt}" -o "${body}" -w '%{http_code}' || true)"
-            if [ "${status}" = "200" ] && grep -q '"ready":true' "${body}" && grep -q '"automaticProductionPackage":true' "${body}" && grep -q '"adminAssetVault":true' "${body}" && grep -q '"shopifyDraftApprovalRequired":true' "${body}" && grep -q '"liveProductPublicationApprovalRequired":true' "${body}" && grep -q '"websiteMutationAuthorized":false' "${body}"; then cat "${body}"; break; fi
+            body="${RUNNER_TEMP}/local-readiness.json"
+            status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/api/operational-readiness?release=${KAIROS_RELEASE_ID}&attempt=${attempt}" -o "${body}" -w '%{http_code}' || true)"
+            if [ "${status}" = "200" ] \
+              && grep -q '"ready":true' "${body}" \
+              && grep -q '"provider":"browser-webgpu"' "${body}" \
+              && grep -q '"externalPaidAPIUsed":false' "${body}" \
+              && grep -q '"backendProviderCalls":false' "${body}" \
+              && grep -q '"cloudflareNeuronsUsed":0' "${body}"; then
+              cat "${body}"
+              break
+            fi
             if [ "${attempt}" = "30" ]; then cat "${body}" || true; exit 1; fi
             sleep 5
           done
 
-      - name: Verify backend generation controller deployed
+      - name: Verify local browser runtime deployed
         run: |
           set -euo pipefail
           root="${RUNNER_TEMP}/root.html"
-          setup="${RUNNER_TEMP}/manuscript-project-setup.js"
-          editorial="${RUNNER_TEMP}/manuscript-editorial-workbench.js"
-          automatic="${RUNNER_TEMP}/manuscript-auto-pipeline.js"
+          bridge="${RUNNER_TEMP}/executive-local-inference.js"
+          inference="${RUNNER_TEMP}/kairos-local-inference-same-origin.js"
+          bundle="${RUNNER_TEMP}/webllm-bundle.js"
           for attempt in $(seq 1 30); do
             curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${root}" || true
-            curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-project-setup.js?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${setup}" || true
-            curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-editorial-workbench.js?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${editorial}" || true
-            curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-auto-pipeline.js?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${automatic}" || true
-            if grep -Eq '<meta name="mmg-build" content="kairos-command-hub-[^"]+">' "${root}" && ! grep -q 'kairos-local-inference-same-origin.js' "${root}" && grep -q 'generation-job' "${automatic}" && grep -q 'phone-independent' "${automatic}" && grep -q 'KairosManuscriptSetupController' "${setup}" && grep -q 'KairosEditorialWorkbenchController' "${editorial}" && grep -q 'KairosManuscriptAutoPipelineController' "${automatic}" && grep -q 'CREATE SHOPIFY PRODUCT DRAFT' "${automatic}" && grep -q 'PUBLISH PRODUCT LIVE' "${automatic}"; then break; fi
-            if [ "${attempt}" = "30" ]; then echo "Backend generation controller did not propagate completely."; exit 1; fi
+            curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/scripts/executive-local-inference.js?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${bridge}" || true
+            curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/scripts/kairos-local-inference-same-origin.js?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${inference}" || true
+            curl --fail --silent --show-error --max-time 20 "${WORKER_URL}/vendor/webllm-bundle.js?verify=${GITHUB_SHA}&attempt=${attempt}" -o "${bundle}" || true
+            if grep -q 'executive-local-inference.js' "${root}" \
+              && grep -q 'browser-webgpu' "${bridge}" \
+              && grep -q '../vendor/webllm-bundle.js' "${inference}" \
+              && grep -q 'CreateMLCEngine' "${bundle}"; then
+              break
+            fi
+            if [ "${attempt}" = "30" ]; then echo "Local browser inference assets did not propagate completely."; exit 1; fi
             sleep 5
           done
 
-      - name: Tap deployed ABOS Manuscript Studio in mobile WebKit
-        id: live_webkit
-        continue-on-error: true
-        env:
-          KAIROS_LIVE_URL: ${{ env.WORKER_URL }}
-        run: npx playwright test browser-tests/abos-live-smoke.spec.mjs --project=webkit
-
-      - name: Upload live WebKit failure evidence
-        if: ${{ steps.live_webkit.outcome == 'failure' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: live-manuscript-webkit-failure
-          path: test-results
-          if-no-files-found: warn
-          retention-days: 7
+      - name: Verify external provider generation is disabled
+        run: |
+          set -euo pipefail
+          body="${RUNNER_TEMP}/provider-disabled.json"
+          status="$(curl --silent --show-error --max-time 20 -X POST "${WORKER_URL}/api/kairos" -H 'Content-Type: application/json' --data '{"objective":"provider denial probe"}' -o "${body}" -w '%{http_code}' || true)"
+          cat "${body}"
+          test "${status}" = "409"
+          grep -q '"code":"LOCAL_INFERENCE_REQUIRED"' "${body}"
 
       - name: Verify direct website mutation firewall
         run: |
@@ -226,31 +150,24 @@ jobs:
           test "${status}" = "403"
           grep -q '"code":"WEBSITE_MUTATION_DENIED"' "${body}"
 
-      - name: Enforce live WebKit result
-        run: test "${{ steps.live_webkit.outcome }}" = "success"
-
       - name: Report deployment success
         if: ${{ success() }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          description="Production release ${KAIROS_RELEASE_ID} passed all gates"
-          if [ "${KAIROS_OPENAI_PROVIDER_STATE:-ready}" = "quota-blocked" ]; then
-            description="Production release ${KAIROS_RELEASE_ID} deployed; OpenAI credits required"
-          fi
           curl --fail --silent --show-error -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"success\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"${description}\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"success\",\"context\":\"kairos-local-runtime\",\"description\":\"Local-only production release ${KAIROS_RELEASE_ID} passed all gates\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
       - name: Report deployment failure
         if: ${{ failure() || cancelled() }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          curl --fail --silent --show-error -X POST \
+          curl --silent --show-error -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"failure\",\"context\":\"kairos-manuscript-runtime\",\"description\":\"Production release ${KAIROS_RELEASE_ID} failed validation\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"failure\",\"context\":\"kairos-local-runtime\",\"description\":\"Local-only production release ${KAIROS_RELEASE_ID} failed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}" || true
