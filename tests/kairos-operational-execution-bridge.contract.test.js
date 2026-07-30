@@ -115,7 +115,7 @@ test("read-only startup refresh never owns the mutation loading lock", () => {
 
 test("the normal page is an isolated Executive OS boot", () => {
   assert.match(index, /kairos-executive-clean-boot-20260729-1/);
-  assert.match(index, /legacy-runtime-loader\.js\?v=legacy-isolated-20260729-1/);
+  assert.match(index, /legacy-runtime-loader\.js\?v=legacy-manuscript-retention-20260730-1/);
   assert.doesNotMatch(index, /command-hub\.js/);
   assert.doesNotMatch(index, /manuscript-studio\.js/);
   assert.doesNotMatch(index, /objective-controller-v2\.js/);
