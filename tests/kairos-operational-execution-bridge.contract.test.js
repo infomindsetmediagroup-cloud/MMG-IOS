@@ -10,11 +10,14 @@ const wrangler = readFileSync("cloudflare/mmg-ios/wrangler.toml", "utf8");
 const browser = readFileSync("web/kairos-dashboard/scripts/executive-os-live-details.js", "utf8");
 const localBrowser = readFileSync("web/kairos-dashboard/scripts/executive-local-inference.js", "utf8");
 const runtimeLoader = readFileSync("web/kairos-dashboard/scripts/kairos-runtime-loader.js", "utf8");
+const commandHub = readFileSync("web/kairos-dashboard/scripts/command-hub.js", "utf8");
 const executive = readFileSync("web/kairos-dashboard/scripts/executive-os.js", "utf8");
 const safari = readFileSync("web/kairos-dashboard/scripts/safari-manuscript-intake-compat.js", "utf8");
 const docxHotfix = readFileSync("web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js", "utf8");
 const legacy = readFileSync("web/kairos-dashboard/scripts/legacy-runtime-loader.js", "utf8");
 const index = readFileSync("web/kairos-dashboard/index.html", "utf8");
+
+const parentCenters = commandHub.match(/id: "(?:knowledge|content|business|customers|operations)"/g) || [];
 
 test("the production Worker activates the canonical local provider firewall", () => {
   assert.match(wrangler, /main = "src\/kairos-production-entry-local-canonical-v1\.js"/);
@@ -89,7 +92,7 @@ test("workflow projection exposes local operational actions", () => {
   assert.match(localExecution, /commerceMutationAllowed:\s*false/);
 });
 
-test("the Executive OS renders governed foundation and local production controls", () => {
+test("the optional Executive OS retains governed foundation and local production controls", () => {
   assert.match(browser, /Approve foundation/);
   assert.match(browser, /Request revision/);
   assert.match(browser, /Resume workflow/);
@@ -119,11 +122,11 @@ test("Safari API requests cannot leave the dashboard refreshing forever", () => 
   assert.match(safari, /AbortController/);
   assert.match(safari, /TimeoutError/);
   assert.match(safari, /executive-os\.js\?v=browser-finish-20260729-5/);
-  assert.match(index, /safari-manuscript-intake-compat\.js\?v=safari-docx-export-resolver-20260730-1/);
+  assert.match(index, /safari-manuscript-intake-compat\.js\?v=five-center-dashboard-restored-20260730-1/);
 });
 
 test("Safari manuscript checksums preserve the native digest identifier first", () => {
-  assert.match(safari, /safari-manuscript-intake-compat-20260730-11-docx/);
+  assert.match(safari, /safari-manuscript-intake-compat-20260730-12-five-center/);
   assert.match(safari, /return await nativeDigest\(algorithm, data\)/);
   assert.match(safari, /const alternate = typeof algorithm === "string"/);
   assert.match(safari, /return await nativeDigest\(alternate, data\)/);
@@ -131,15 +134,18 @@ test("Safari manuscript checksums preserve the native digest identifier first", 
   assert.doesNotMatch(safari, /const normalized = typeof algorithm === "string" \? \{ name: algorithm \} : algorithm/);
 });
 
-test("Safari DOCX upload resolves the Mammoth named export behind the composed runtime loader", () => {
-  assert.match(index, /kairos-runtime-loader\.js\?v=kairos-local-inference-20260730-1/);
+test("Safari DOCX upload and same-origin inference remain inside the governed command runtime", () => {
+  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-restored-20260730-1/);
+  assert.doesNotMatch(index, /executive-local-inference\.js/);
+  assert.doesNotMatch(index, /kairos-runtime-loader\.js/);
   assert.match(runtimeLoader, /import "\.\/legacy-runtime-loader\.js"/);
-  assert.match(runtimeLoader, /import "\.\/executive-local-inference\.js"/);
-  assert.match(legacy, /kairos-legacy-runtime-loader-20260730-3-docx/);
-  assert.match(legacy, /manuscript-docx-export-resolver-20260730-1/);
+  assert.doesNotMatch(runtimeLoader, /executive-local-inference\.js/);
+  assert.match(legacy, /kairos-five-center-runtime-loader-20260730-1/);
+  assert.match(legacy, /five-center-dashboard-restored-20260730-1/);
+  assert.match(legacy, /"kairos-local-inference\.js"/);
   const resolverIndex = legacy.indexOf('"manuscript-docx-upload-hotfix.js"');
   const studioIndex = legacy.indexOf('"manuscript-studio.js"');
-  assert.ok(resolverIndex > -1, "DOCX resolver must be included in Advanced Operations");
+  assert.ok(resolverIndex > -1, "DOCX resolver must be included in the governed command runtime");
   assert.ok(studioIndex > resolverIndex, "DOCX resolver must load before Manuscript Studio");
   assert.doesNotMatch(safari, /manuscript-docx-upload-hotfix\.js/);
   assert.match(docxHotfix, /document\.addEventListener\("change", interceptDocxSelection, true\)/);
@@ -170,22 +176,30 @@ test("read-only startup refresh never owns the mutation loading lock", () => {
   assert.match(executive, /data-run-objective \$\{state\.loading/);
 });
 
-test("the normal page preserves the isolated two-module Executive OS boot", () => {
-  assert.match(index, /kairos-executive-local-inference-20260730-1/);
-  assert.match(index, /kairos-runtime-loader\.js\?v=kairos-local-inference-20260730-1/);
+test("the normal page restores the original five-parent-card command dashboard", () => {
+  assert.match(index, /kairos-five-center-dashboard-restored-20260730-1/);
+  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-restored-20260730-1/);
   assert.equal((index.match(/<script type="module"/g) || []).length, 2);
-  assert.doesNotMatch(index, /command-hub\.js/);
+  assert.doesNotMatch(index, /executive-local-inference\.js/);
+  assert.doesNotMatch(index, /kairos-runtime-loader\.js/);
   assert.doesNotMatch(index, /manuscript-studio\.js/);
-  assert.doesNotMatch(index, /objective-controller-v2\.js/);
-  assert.match(safari, /ADVANCED_MODE/);
-  assert.match(safari, /if \(ADVANCED_MODE\)/);
-  assert.match(executive, /openAdvancedWorkspace/);
-  assert.match(executive, /searchParams\.set\("mode", "advanced"\)/);
+  assert.match(safari, /COMMAND_HUB_MODE/);
+  assert.match(safari, /const EXECUTIVE_MODE = ROUTE_MODE === "executive"/);
+  assert.match(legacy, /commandHubMode/);
+  assert.match(legacy, /if \(commandHubMode\) loadCommandRuntime\(\)/);
+  assert.equal(parentCenters.length, 5);
+  assert.match(commandHub, /Five operating centers/);
+  assert.match(commandHub, /Knowledge/);
+  assert.match(commandHub, /Content/);
+  assert.match(commandHub, /Business/);
+  assert.match(commandHub, /Customers/);
+  assert.match(commandHub, /Operations/);
 });
 
-test("advanced operations preserve the complete legacy runtime behind explicit navigation", () => {
+test("advanced operations preserve the complete command runtime behind explicit navigation", () => {
   assert.match(legacy, /advancedMode/);
-  assert.match(legacy, /if \(advancedMode\) loadLegacyRuntime\(\)/);
+  assert.match(legacy, /commandHubMode/);
+  assert.match(legacy, /if \(commandHubMode\) loadCommandRuntime\(\)/);
   assert.match(legacy, /command-hub\.js/);
   assert.match(legacy, /command-center-governance\.js/);
   assert.match(legacy, /manuscript-docx-upload-hotfix\.js/);
