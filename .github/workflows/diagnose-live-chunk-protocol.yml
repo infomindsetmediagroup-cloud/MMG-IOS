@@ -1,0 +1,77 @@
+name: Diagnose Live Chunk Protocol
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnose-live-chunk-protocol.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+    steps:
+      - name: Print every live chunk protocol response
+        shell: bash
+        run: |
+          set -uo pipefail
+          root="${RUNNER_TEMP}/chunk-probe"
+          mkdir -p "${root}"
+          project_id="chunk-diag-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          upload_id="upload-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          base="${WORKER_URL}/api/production-registry/manuscripts/${project_id}/source"
+          printf 'PK\003\004chunked-docx' > "${root}/source.bin"
+          printf '%s' 'Kairos chunked live source verification.' > "${root}/text.bin"
+          file_size="$(wc -c < "${root}/source.bin" | tr -d ' ')"
+          text_size="$(wc -c < "${root}/text.bin" | tr -d ' ')"
+
+          call() {
+            name="$1"; shift
+            status="$(curl --silent --show-error --max-time 60 -D "${root}/${name}.headers" -o "${root}/${name}.body" -w '%{http_code}' "$@" || echo curl-error)"
+            echo "===== ${name} status=${status} ====="
+            cat "${root}/${name}.headers" 2>/dev/null || true
+            echo '--- body ---'
+            cat "${root}/${name}.body" 2>/dev/null || true
+            echo
+            printf '%s' "${status}" > "${root}/${name}.status"
+          }
+
+          call session -X POST "${base}/session" \
+            -H 'Content-Type: application/json' \
+            --data "{\"uploadId\":\"${upload_id}\",\"title\":\"Live Chunk Diagnostic\",\"filename\":\"probe.docx\",\"format\":\"docx\",\"size\":${file_size},\"textBytes\":${text_size},\"fileChunks\":1,\"textChunks\":1}"
+
+          call file -X PUT "${base}/file/0" \
+            -H 'Content-Type: application/octet-stream' \
+            -H "X-Kairos-Upload-Id: ${upload_id}" \
+            --data-binary "@${root}/source.bin"
+
+          call text -X PUT "${base}/text-chunk/0" \
+            -H 'Content-Type: application/octet-stream' \
+            -H "X-Kairos-Upload-Id: ${upload_id}" \
+            --data-binary "@${root}/text.bin"
+
+          call commit -X POST "${base}/commit" \
+            -H 'Content-Type: application/json' \
+            -H "X-Kairos-Upload-Id: ${upload_id}" \
+            --data "{\"uploadId\":\"${upload_id}\"}"
+
+          call read "${base}/text"
+          call cleanup -X DELETE "${base}"
+
+          echo '===== summary ====='
+          for name in session file text commit read cleanup; do
+            echo "${name}=$(cat "${root}/${name}.status")"
+          done
+
+          test "$(cat "${root}/session.status")" = '201'
+          test "$(cat "${root}/file.status")" = '201'
+          test "$(cat "${root}/text.status")" = '201'
+          test "$(cat "${root}/commit.status")" = '201'
+          test "$(cat "${root}/read.status")" = '200'
+          test "$(cat "${root}/cleanup.status")" = '200'
