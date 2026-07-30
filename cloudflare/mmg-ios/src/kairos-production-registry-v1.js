@@ -1,4 +1,4 @@
-const BUILD = "kairos-production-registry-20260730-3-source-buffering";
+const BUILD = "kairos-production-registry-20260730-4-chunked-source";
 const REGISTRY_OBJECT = "mmg-production-project-registry";
 const MAX_PROJECTS = 250;
 
@@ -105,7 +105,7 @@ export async function handleRegistryObjectRequest(state, request) {
 function isBufferedManuscriptMutation(pathname, method) {
   const normalizedMethod = String(method || "GET").toUpperCase();
   if (!["POST", "PUT", "PATCH"].includes(normalizedMethod)) return false;
-  return /^\/api\/production-registry\/manuscripts\/[a-z0-9-]{8,}\/(?:setup(?:\/cover)?|source)$/i.test(pathname);
+  return /^\/api\/production-registry\/manuscripts\/[a-z0-9-]{8,}\/(?:setup(?:\/cover)?|source(?:\/(?:session|commit|file\/\d+|text-chunk\/\d+))?)$/i.test(pathname);
 }
 
 async function bufferedForwardRequest(request, targetURL) {
