@@ -1,21 +1,32 @@
-const BUILD = "safari-manuscript-intake-compat-20260729-8";
+const BUILD = "safari-manuscript-intake-compat-20260729-9";
 const API_GET_TIMEOUT_MS = 12000;
 const API_MUTATION_TIMEOUT_MS = 45000;
+const ADVANCED_MODE = new URLSearchParams(globalThis.location?.search || "").get("mode") === "advanced";
 
 installRandomUUIDFallback();
 installSyntheticFileFallback();
 installDigestIdentifierFallback();
 installGovernedFetchTimeout();
-activateExecutiveOperatingSystem();
 
-window.KairosSafariManuscriptIntakeCompat = Object.freeze({ ready: true, build: BUILD });
+if (ADVANCED_MODE) {
+  document.documentElement.dataset.kairosMode = "advanced";
+} else {
+  document.documentElement.dataset.kairosMode = "executive";
+  activateExecutiveOperatingSystem();
+}
+
+window.KairosSafariManuscriptIntakeCompat = Object.freeze({
+  ready: true,
+  build: BUILD,
+  advancedMode: ADVANCED_MODE,
+});
 
 function activateExecutiveOperatingSystem() {
   if (document.querySelector("#kairos-executive-os")) {
     activateBrowserLayers();
     return;
   }
-  import("./executive-os.js?v=browser-finish-20260729-4")
+  import("./executive-os.js?v=browser-finish-20260729-5")
     .then(activateBrowserLayers)
     .catch(error => {
       console.error("Kairos Executive OS failed to activate.", error);
