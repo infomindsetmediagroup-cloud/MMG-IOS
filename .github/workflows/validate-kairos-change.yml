@@ -73,8 +73,10 @@ jobs:
           node --check cloudflare/mmg-ios/src/kairos-runtime-health-v1.js
           node --check cloudflare/mmg-ios/src/kairos-manuscript-operation-boundary-v1.js
           node --check cloudflare/mmg-ios/src/kairos-production-entry-manuscript-online-v1.js
+          node --check web/kairos-dashboard/scripts/executive-os.js
           node --check web/kairos-dashboard/scripts/executive-os-live-details.js
           node --check web/kairos-dashboard/scripts/safari-manuscript-intake-compat.js
+          node --check web/kairos-dashboard/scripts/legacy-runtime-loader.js
           node --check web/kairos-dashboard/scripts/manuscript-project-setup.js
           node --check web/kairos-dashboard/scripts/manuscript-editorial-workbench.js
           node --check web/kairos-dashboard/scripts/kairos-local-inference.js

@@ -13,6 +13,10 @@ const indexSource = readFileSync(
   new URL("../web/kairos-dashboard/index.html", import.meta.url),
   "utf8",
 );
+const loaderSource = readFileSync(
+  new URL("../web/kairos-dashboard/scripts/legacy-runtime-loader.js", import.meta.url),
+  "utf8",
+);
 
 const PROJECT_ID = "manuscript-studio-12345678";
 const SETUP_PATH = `/api/production-registry/manuscripts/${PROJECT_ID}/setup`;
@@ -48,7 +52,7 @@ function savedRecord() {
 }
 
 async function openFixture(page, apiHandler) {
-  await page.route("https://kairos.test/**", async (route) => {
+  await page.route("https://kairos.test/**", async route => {
     const request = route.request();
     const url = new URL(request.url());
 
@@ -138,8 +142,8 @@ test("controller mounts and an iPhone tap completes cover upload plus assignment
 
   await expect(page.locator("#manuscript-project-setup h3")).toHaveText("assigned-to-production");
   await expect(page.locator("#manuscript-project-setup")).toContainText("Begin the assigned editorial and production queue.");
-  expect(calls.some((call) => call.method === "PUT" && call.path === COVER_PATH)).toBe(true);
-  expect(calls.some((call) => call.method === "POST" && call.path === SETUP_PATH)).toBe(true);
+  expect(calls.some(call => call.method === "PUT" && call.path === COVER_PATH)).toBe(true);
+  expect(calls.some(call => call.method === "POST" && call.path === SETUP_PATH)).toBe(true);
 });
 
 test("Check saved status is bound and restores a durable assignment", async ({ page }) => {
@@ -186,8 +190,9 @@ test("Command Center manuscript event routes through the production workspace co
   await expect.poll(() => page.evaluate(() => window.__openedWorkspace)).toBe("manuscript-studio");
 });
 
-test("dashboard force-loads the no-form production controllers with cache-busted versions", async () => {
-  expect(indexSource).toMatch(/<meta name="mmg-build" content="kairos-command-hub-[^"]+">/);
+test("dashboard isolates no-form production controllers behind the advanced loader", async () => {
+  expect(indexSource).toMatch(/<meta name="mmg-build" content="kairos-executive-clean-boot-[^"]+">/);
+  expect(indexSource).toMatch(/legacy-runtime-loader\.js\?v=legacy-isolated-[^"]+/);
 
   const requiredScripts = [
     "command-center-governance.js",
@@ -199,22 +204,17 @@ test("dashboard force-loads the no-form production controllers with cache-busted
   ];
 
   for (const filename of requiredScripts) {
-    const matches = [...indexSource.matchAll(new RegExp(`src="\\./scripts/${filename.replace(".", "\\.")}\\?v=([^"]+)"`, "g"))];
-    expect(matches, `${filename} must be loaded exactly once with a cache-busting version`).toHaveLength(1);
-    expect(matches[0][1].trim().length).toBeGreaterThan(0);
+    expect(indexSource, `${filename} must not execute on the Executive OS homepage`).not.toContain(filename);
+    const matches = [...loaderSource.matchAll(new RegExp(`"${filename.replace(".", "\\.")}"`, "g"))];
+    expect(matches, `${filename} must be declared exactly once in the isolated loader`).toHaveLength(1);
   }
 
-  const inferenceIndex = indexSource.indexOf("./scripts/kairos-local-inference.js?v=");
-  const pipelineIndex = indexSource.indexOf("./scripts/manuscript-auto-pipeline.js?v=");
+  const inferenceIndex = loaderSource.indexOf('"kairos-local-inference.js"');
+  const pipelineIndex = loaderSource.indexOf('"manuscript-auto-pipeline.js"');
   expect(inferenceIndex).toBeGreaterThan(-1);
   expect(pipelineIndex).toBeGreaterThan(inferenceIndex);
 
-  const delayedModuleList = indexSource.match(/const modules=\[(.*?)\];/s)?.[1] || "";
-  expect(delayedModuleList).not.toContain("manuscript-studio.js");
-  expect(delayedModuleList).not.toContain("manuscript-project-setup.js");
-  expect(delayedModuleList).not.toContain("manuscript-editorial-workbench.js");
-  expect(delayedModuleList).not.toContain("kairos-local-inference.js");
-  expect(delayedModuleList).not.toContain("manuscript-auto-pipeline.js");
-  expect(delayedModuleList).not.toContain("publication-catalog.js");
-  expect(delayedModuleList).not.toContain("manuscript-manufacturing.js");
+  expect(loaderSource).toContain('"production-workspace-controller.js"');
+  expect(loaderSource).toContain('"publishing-production-center.js"');
+  expect(loaderSource).toContain('"shopify-page-compiler.js"');
 });
