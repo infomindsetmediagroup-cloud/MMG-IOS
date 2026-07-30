@@ -1,5 +1,5 @@
 name = "mmg-ios"
-main = "src/kairos-production-entry-local-only-v1.js"
+main = "src/kairos-production-entry-local-canonical-v1.js"
 compatibility_date = "2026-07-24"
 compatibility_flags = ["nodejs_compat"]
 keep_names = true
@@ -44,7 +44,7 @@ new_sqlite_classes = ["KairosProject"]
 tag = "kairos-project-agent-v1"
 new_sqlite_classes = ["KairosProjectAgent"]
 
-# Existing production secrets are retained by keep_vars=true, but operational generation never reads OPENAI_API_KEY.
+# Existing production secrets are retained by keep_vars=true, but the canonical local entry masks them from runtime execution.
 # Browser navigation and dashboard assets bypass the Worker runtime and resolve through ASSETS.
 # Only /api/* executes Worker code before static-asset serving.
 # Revenue asset storage remains disabled until its account binding is separately provisioned.
@@ -54,6 +54,8 @@ new_sqlite_classes = ["KairosProjectAgent"]
 # Authoritative-source and manuscript generation run locally through the same-origin WebLLM/WebGPU runtime.
 # The Worker verifies and stores checksums, local-inference evidence, runtime transitions, and approval receipts.
 # Legacy backend manuscript and revenue-generation routes are blocked by the local-only entry boundary.
+# The canonical wrapper supplies a non-secret readiness sentinel only to non-generative objective and workflow projection routes.
+# All other delegated routes receive empty provider credentials and cannot issue an OpenAI request.
 # Product DRAFT creation and live publication remain available only through exact approval-gated routes.
 # Digital Asset Edition V2 and customer-delivery verification remain mandatory.
 # Canonical approvals: Approve Foundation, Start Local Production, Approve Package, Approve & Publish Product.

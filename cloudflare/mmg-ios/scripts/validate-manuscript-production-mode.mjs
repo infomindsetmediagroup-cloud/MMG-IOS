@@ -3,11 +3,12 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const BUILD = "kairos-manuscript-production-validator-20260730-local-only-2";
+const BUILD = "kairos-manuscript-production-validator-20260730-local-canonical-1";
 const here = dirname(fileURLToPath(import.meta.url));
 const workerRoot = join(here, "..");
 const sourceRoot = join(workerRoot, "src");
 const wranglerPath = join(workerRoot, "wrangler.toml");
+const canonicalEntryPath = join(sourceRoot, "kairos-production-entry-local-canonical-v1.js");
 const localOnlyEntryPath = join(sourceRoot, "kairos-production-entry-local-only-v1.js");
 const localExecutionEntryPath = join(sourceRoot, "kairos-production-entry-local-execution-v1.js");
 const manuscriptEntryPath = join(sourceRoot, "kairos-production-entry-manuscript-online-v1.js");
@@ -20,6 +21,7 @@ const productPublicationPath = join(sourceRoot, "kairos-product-publication-v1.j
 
 for (const file of [
   wranglerPath,
+  canonicalEntryPath,
   localOnlyEntryPath,
   localExecutionEntryPath,
   manuscriptEntryPath,
@@ -29,17 +31,15 @@ for (const file of [
   packagePath,
   autoPipelinePath,
   productPublicationPath,
-]) {
-  assert.ok(existsSync(file), `Required manuscript production file is missing: ${file}`);
-}
+]) assert.ok(existsSync(file), `Required manuscript production file is missing: ${file}`);
 
 const wrangler = readFileSync(wranglerPath, "utf8");
 const activeEntryMatch = wrangler.match(/^main\s*=\s*"src\/(kairos-production-entry-[^"]+\.js)"/m);
 assert.ok(activeEntryMatch, "Wrangler must declare an explicit Kairos production entry.");
 assert.equal(
   activeEntryMatch[1],
-  "kairos-production-entry-local-only-v1.js",
-  "Wrangler must point to the governed local-only Kairos production boundary.",
+  "kairos-production-entry-local-canonical-v1.js",
+  "Wrangler must point to the canonical local provider firewall.",
 );
 
 for (const marker of [
@@ -59,12 +59,26 @@ for (const marker of [
   'binding = "KAIROS_PROJECT_WORKFLOW"',
   'binding = "KAIROS_MANUSCRIPT_WORKFLOW"',
 ]) assert.ok(wrangler.includes(marker), `Required local production configuration is missing: ${marker}`);
-
 assert.ok(!wrangler.includes('binding = "AI"'), "Paid Cloudflare AI binding must remain absent.");
 assert.ok(!wrangler.includes('KAIROS_MODEL_PROVIDER = "openai"'), "OpenAI must not be configured as the production model provider.");
 assert.ok(!wrangler.includes('KAIROS_MODEL_ENDPOINT ='), "A backend model endpoint must not be configured for local-only production.");
 assert.ok(!wrangler.includes('KAIROS_MODEL_AUTH_TOKEN ='), "A backend model auth token must not be configured for local-only production.");
 assert.ok(!wrangler.includes('"* * * * *"'), "Minute-level website reconciliation must remain disabled.");
+
+const canonicalEntry = readFileSync(canonicalEntryPath, "utf8");
+for (const marker of [
+  './kairos-production-entry-local-only-v1.js',
+  'PROVIDER_INDEPENDENT_OPERATIONAL_PATHS',
+  'providerBlockedEnv',
+  'operationalCompatibilityEnv',
+  'property === "OPENAI_API_KEY"',
+  'return ""',
+  'kairos-local-readiness-sentinel-not-a-provider-key',
+  'X-Kairos-Canonical-Local',
+  'X-Kairos-OpenAI-Calls", "disabled"',
+]) assert.ok(canonicalEntry.includes(marker), `Canonical local provider firewall is missing: ${marker}`);
+assert.ok(!canonicalEntry.includes("handleKairosAPI"), "Canonical local execution must not invoke a provider-backed API handler.");
+assert.ok(!canonicalEntry.includes("api.openai.com"), "Canonical local execution must not contain an OpenAI endpoint.");
 
 const localOnlyEntry = readFileSync(localOnlyEntryPath, "utf8");
 for (const marker of [
@@ -131,20 +145,12 @@ for (const marker of [
   '/api/manuscript/',
   '/api/production-registry/manuscripts/',
 ]) assert.ok(boundary.includes(marker), `Manuscript operation boundary is missing: ${marker}`);
-
-for (const prohibitedCapability of ['shopify','navigation','page-shell','theme','main-menu','website-builder','product-launch','product-publication','product-media']) {
-  assert.ok(boundary.includes(prohibitedCapability), `Direct website mutation denial is missing: ${prohibitedCapability}`);
-}
+for (const prohibitedCapability of ['shopify','navigation','page-shell','theme','main-menu','website-builder','product-launch','product-publication','product-media']) assert.ok(boundary.includes(prohibitedCapability), `Direct website mutation denial is missing: ${prohibitedCapability}`);
 
 const autoPipeline = readFileSync(autoPipelinePath, "utf8");
-for (const marker of ['derivePublicationMetadata','/admin-vault/manifest','complete-production-package.zip','CREATE SHOPIFY PRODUCT DRAFT','PUBLISH PRODUCT LIVE','websiteThemeMutationAuthorized: false','navigationMutationAuthorized: false']) {
-  assert.ok(autoPipeline.includes(marker), `Automatic manuscript production pipeline is missing: ${marker}`);
-}
-
+for (const marker of ['derivePublicationMetadata','/admin-vault/manifest','complete-production-package.zip','CREATE SHOPIFY PRODUCT DRAFT','PUBLISH PRODUCT LIVE','websiteThemeMutationAuthorized: false','navigationMutationAuthorized: false']) assert.ok(autoPipeline.includes(marker), `Automatic manuscript production pipeline is missing: ${marker}`);
 const productPublication = readFileSync(productPublicationPath, "utf8");
-for (const marker of ['APPROVED_TEMPLATE_SUFFIXES','mmg-ai-image-mastery','mmg-book-product','status: "DRAFT"','product_template_verification_failed']) {
-  assert.ok(productPublication.includes(marker), `Governed Shopify product publication is missing: ${marker}`);
-}
+for (const marker of ['APPROVED_TEMPLATE_SUFFIXES','mmg-ai-image-mastery','mmg-book-product','status: "DRAFT"','product_template_verification_failed']) assert.ok(productPublication.includes(marker), `Governed Shopify product publication is missing: ${marker}`);
 
 console.log(JSON.stringify({
   status: "ready",
@@ -160,6 +166,6 @@ console.log(JSON.stringify({
   directWebsiteMutationAuthorized: false,
   minuteWebsiteCronEnabled: false,
   productionEntry: activeEntryMatch[1],
-  localOnlyBoundaryValidated: true,
+  canonicalProviderFirewallValidated: true,
   runtimeVerification: "wrangler-dry-run-and-live-local-evidence",
 }, null, 2));
