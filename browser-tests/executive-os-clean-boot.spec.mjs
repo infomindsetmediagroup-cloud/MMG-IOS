@@ -5,6 +5,8 @@ const indexSource = readFileSync(new URL("../web/kairos-dashboard/index.html", i
 const safariSource = readFileSync(new URL("../web/kairos-dashboard/scripts/safari-manuscript-intake-compat.js", import.meta.url), "utf8");
 const executiveSource = readFileSync(new URL("../web/kairos-dashboard/scripts/executive-os.js", import.meta.url), "utf8");
 const liveDetailsSource = readFileSync(new URL("../web/kairos-dashboard/scripts/executive-os-live-details.js", import.meta.url), "utf8");
+const runtimeLoaderSource = readFileSync(new URL("../web/kairos-dashboard/scripts/kairos-runtime-loader.js", import.meta.url), "utf8");
+const localInferenceSource = readFileSync(new URL("../web/kairos-dashboard/scripts/executive-local-inference.js", import.meta.url), "utf8");
 const legacySource = readFileSync(new URL("../web/kairos-dashboard/scripts/legacy-runtime-loader.js", import.meta.url), "utf8");
 const executiveCSS = readFileSync(new URL("../web/kairos-dashboard/styles/executive-os.css", import.meta.url), "utf8");
 
@@ -47,6 +49,16 @@ async function installDashboardRoutes(page, { slowAPIs = false } = {}) {
 
     if (path === "/scripts/executive-os-live-details.js") {
       await route.fulfill({ status: 200, contentType: "text/javascript", body: liveDetailsSource });
+      return;
+    }
+
+    if (path === "/scripts/kairos-runtime-loader.js") {
+      await route.fulfill({ status: 200, contentType: "text/javascript", body: runtimeLoaderSource });
+      return;
+    }
+
+    if (path === "/scripts/executive-local-inference.js") {
+      await route.fulfill({ status: 200, contentType: "text/javascript", body: localInferenceSource });
       return;
     }
 
