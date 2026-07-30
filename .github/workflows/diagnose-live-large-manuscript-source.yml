@@ -1,0 +1,85 @@
+name: Diagnose Live Large Manuscript Source
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnose-live-large-manuscript-source.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+    steps:
+      - name: Build exact-size diagnostic DOCX and manuscript
+        id: fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROJECT_ID="diagnostic-large-source-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "project_id=${PROJECT_ID}" >> "$GITHUB_OUTPUT"
+          python - <<'PY'
+          import os, pathlib, zipfile
+          root = pathlib.Path('/tmp/kairos-source-diagnostic')
+          root.mkdir(parents=True, exist_ok=True)
+          sentence = 'AI Video Prompt Mastery production manuscript diagnostic paragraph for durable source storage. '
+          text = (sentence * ((279045 // len(sentence)) + 2))[:279045]
+          (root / 'manuscript.txt').write_text(text, encoding='utf-8')
+          document = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+          <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+          <w:p><w:r><w:t>AI Video Prompt Mastery diagnostic source</w:t></w:r></w:p>
+          </w:body></w:document>'''
+          with zipfile.ZipFile(root / 'AI-Video-Prompt-Mastery-Diagnostic.docx', 'w', zipfile.ZIP_DEFLATED) as archive:
+              archive.writestr('[Content_Types].xml', '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"></Types>')
+              archive.writestr('word/document.xml', document)
+              archive.writestr('word/media/diagnostic.bin', os.urandom(1024 * 1024))
+          print({'characters': len(text), 'docx_bytes': (root / 'AI-Video-Prompt-Mastery-Diagnostic.docx').stat().st_size})
+          PY
+
+      - name: Submit exact live payload and print full response
+        id: submit
+        shell: bash
+        run: |
+          set -uo pipefail
+          PROJECT_ID='${{ steps.fixture.outputs.project_id }}'
+          ROOT=/tmp/kairos-source-diagnostic
+          STATUS=$(curl --silent --show-error --max-time 120 \
+            -D "$ROOT/headers.txt" \
+            -o "$ROOT/response.txt" \
+            -w '%{http_code}' \
+            -F "file=@$ROOT/AI-Video-Prompt-Mastery-Diagnostic.docx;type=application/vnd.openxmlformats-officedocument.wordprocessingml.document" \
+            -F "extractedText=<$ROOT/manuscript.txt" \
+            -F 'title=AI Video Prompt Mastery Diagnostic' \
+            -F 'format=docx' \
+            -F 'checksum=diagnostic-large-source-checksum' \
+            "$WORKER_URL/api/production-registry/manuscripts/$PROJECT_ID/source")
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          echo '--- RESPONSE HEADERS ---'
+          cat "$ROOT/headers.txt"
+          echo '--- RESPONSE BODY ---'
+          cat "$ROOT/response.txt"
+          echo
+
+          if [ "$STATUS" = '201' ]; then
+            echo '--- METADATA READBACK ---'
+            curl --fail --silent --show-error --max-time 30 \
+              "$WORKER_URL/api/production-registry/manuscripts/$PROJECT_ID/source"
+            echo
+            echo '--- TEXT READBACK LENGTH ---'
+            curl --fail --silent --show-error --max-time 60 \
+              "$WORKER_URL/api/production-registry/manuscripts/$PROJECT_ID/source/text" \
+              | python -c 'import json,sys; print(len(json.load(sys.stdin)["manuscript"]))'
+          fi
+
+          curl --silent --show-error --max-time 30 -X DELETE \
+            "$WORKER_URL/api/production-registry/manuscripts/$PROJECT_ID/source" \
+            -o "$ROOT/delete.txt" -w '\ncleanup_http=%{http_code}\n' || true
+          cat "$ROOT/delete.txt" || true
+
+          test "$STATUS" = '201'
