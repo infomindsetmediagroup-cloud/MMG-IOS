@@ -9,17 +9,30 @@ const firewallPath = path.join(root, "cloudflare/kairos/scope-firewall.js");
 const workerPath = path.join(root, "cloudflare/mmg-ios-worker.js");
 const rootWranglerPath = path.join(root, "wrangler.toml");
 const productionWranglerPath = path.join(root, "cloudflare/mmg-ios/wrangler.toml");
-const localInferenceEntryPath = path.join(root, "cloudflare/mmg-ios/src/kairos-production-entry-local-inference-v1.js");
-const revenueDashboardEntryPath = path.join(root, "cloudflare/mmg-ios/src/kairos-production-entry-revenue-dashboard-v1.js");
-const operationalExecutionEntryPath = path.join(root, "cloudflare/mmg-ios/src/kairos-production-entry-operational-execution-v1.js");
-const manuscriptGenerationPath = path.join(root, "cloudflare/mmg-ios/src/kairos-manuscript-generation-job-v1.js");
+const localOnlyEntryPath = path.join(root, "cloudflare/mmg-ios/src/kairos-production-entry-local-only-v1.js");
+const localExecutionEntryPath = path.join(root, "cloudflare/mmg-ios/src/kairos-production-entry-local-execution-v1.js");
 const manuscriptEntryPath = path.join(root, "cloudflare/mmg-ios/src/kairos-production-entry-manuscript-online-v1.js");
 const manuscriptBoundaryPath = path.join(root, "cloudflare/mmg-ios/src/kairos-manuscript-operation-boundary-v1.js");
 const manuscriptReleasePath = path.join(root, "cloudflare/mmg-ios/src/kairos-manuscript-auto-pipeline-v1.js");
 const productPublicationPath = path.join(root, "cloudflare/mmg-ios/src/kairos-product-publication-v1.js");
 const builderRegistryPath = path.join(root, "governance/kairos-builder-plugin-registry-v1.json");
 
-const requiredFiles = [policyPath,doctrinePath,workflowPath,firewallPath,workerPath,rootWranglerPath,productionWranglerPath,localInferenceEntryPath,revenueDashboardEntryPath,operationalExecutionEntryPath,manuscriptGenerationPath,manuscriptEntryPath,manuscriptBoundaryPath,manuscriptReleasePath,productPublicationPath,builderRegistryPath];
+const requiredFiles = [
+  policyPath,
+  doctrinePath,
+  workflowPath,
+  firewallPath,
+  workerPath,
+  rootWranglerPath,
+  productionWranglerPath,
+  localOnlyEntryPath,
+  localExecutionEntryPath,
+  manuscriptEntryPath,
+  manuscriptBoundaryPath,
+  manuscriptReleasePath,
+  productPublicationPath,
+  builderRegistryPath,
+];
 for (const file of requiredFiles) if (!fs.existsSync(file)) fail(`Missing required Kairos policy file: ${path.relative(root, file)}`);
 
 for (const workflow of [
@@ -27,7 +40,7 @@ for (const workflow of [
   ".github/workflows/diagnose-native-page-repair-on-pr.yml",
   ".github/workflows/execute-native-page-repair-on-pr.yml",
   ".github/workflows/verify-audited-page-shell-on-pr.yml",
-]) assert(!fs.existsSync(path.join(root, workflow)),`Deprecated broad-scope storefront workflow must remain removed: ${workflow}`);
+]) assert(!fs.existsSync(path.join(root, workflow)), `Deprecated broad-scope storefront workflow must remain removed: ${workflow}`);
 
 const policy = JSON.parse(fs.readFileSync(policyPath, "utf8"));
 const builderRegistry = JSON.parse(fs.readFileSync(builderRegistryPath, "utf8"));
@@ -37,23 +50,23 @@ const firewall = fs.readFileSync(firewallPath, "utf8");
 const worker = fs.readFileSync(workerPath, "utf8");
 const rootWrangler = fs.readFileSync(rootWranglerPath, "utf8");
 const productionWrangler = fs.readFileSync(productionWranglerPath, "utf8");
-const localInferenceEntry = fs.readFileSync(localInferenceEntryPath, "utf8");
-const revenueDashboardEntry = fs.readFileSync(revenueDashboardEntryPath, "utf8");
-const operationalExecutionEntry = fs.readFileSync(operationalExecutionEntryPath, "utf8");
-const manuscriptGeneration = fs.readFileSync(manuscriptGenerationPath, "utf8");
+const localOnlyEntry = fs.readFileSync(localOnlyEntryPath, "utf8");
+const localExecutionEntry = fs.readFileSync(localExecutionEntryPath, "utf8");
 const manuscriptEntry = fs.readFileSync(manuscriptEntryPath, "utf8");
 const manuscriptBoundary = fs.readFileSync(manuscriptBoundaryPath, "utf8");
 const manuscriptRelease = fs.readFileSync(manuscriptReleasePath, "utf8");
 const productPublication = fs.readFileSync(productPublicationPath, "utf8");
 
 assert(policy.defaultDecision === "deny", "Policy must default deny.");
-assert(policy.runtime.requiredProvider === "cloudflare", "Cloudflare must be the required runtime.");
+assert(policy.runtime.requiredProvider === "cloudflare", "Cloudflare must remain the hosting and governance runtime.");
 assert(policy.runtime.vercelAllowed === false, "Vercel must be prohibited.");
 assert(policy.authority.taskIntentGrantsStoreWideAuthority === false, "Task intent must not grant store-wide authority.");
 assert(policy.workflows["manuscript.write.v1"].shopifyAccess === "none", "The generic manuscript artifact workflow must retain zero Shopify access.");
-assert(JSON.stringify(policy.workflows["manuscript.write.v1"].allowedOperations) === JSON.stringify(["artifact.manuscript.write"]),"The generic manuscript workflow may only assemble manuscript artifacts.");
+assert(JSON.stringify(policy.workflows["manuscript.write.v1"].allowedOperations) === JSON.stringify(["artifact.manuscript.write"]), "The generic manuscript workflow may only assemble manuscript artifacts.");
 
-for (const denied of ["shopify.arbitraryGraphql.execute","shopify.theme.publish","shopify.theme.mainFiles.upsert","shopify.theme.delete"]) assert(policy.permanentlyDeniedOperations.includes(denied), `Missing permanent denial: ${denied}`);
+for (const denied of ["shopify.arbitraryGraphql.execute", "shopify.theme.publish", "shopify.theme.mainFiles.upsert", "shopify.theme.delete"]) {
+  assert(policy.permanentlyDeniedOperations.includes(denied), `Missing permanent denial: ${denied}`);
+}
 
 assert(!worker.includes("vercel"), "Cloudflare Worker must not contain a Vercel proxy or origin.");
 assert(!worker.includes("VERCEL_RUNTIME_ORIGIN"), "Legacy Vercel runtime constant is prohibited.");
@@ -61,42 +74,51 @@ assert(worker.includes("handleKairosApiRequest"), "Cloudflare Worker must route 
 assert(rootWrangler.includes('name = "mmg-ios-staging-host"'), "Root Wrangler config must use a non-production staging Worker name.");
 assert(!rootWrangler.includes('name = "mmg-ios"'), "Root Wrangler config must not collide with the production Worker name.");
 assert(rootWrangler.includes('KAIROS_SHOPIFY_WRITES_ENABLED = "false"'), "Root staging Shopify writes must default to disabled.");
+
 assert(productionWrangler.includes('name = "mmg-ios"'), "Production Wrangler config must retain the canonical Worker name.");
-const usesCompatibilityEntry = productionWrangler.includes('main = "src/kairos-production-entry-local-inference-v1.js"');
-const usesRevenueWrapper = productionWrangler.includes('main = "src/kairos-production-entry-revenue-dashboard-v1.js"');
-const usesOperationalWrapper = productionWrangler.includes('main = "src/kairos-production-entry-operational-execution-v1.js"');
-assert(usesCompatibilityEntry || usesRevenueWrapper || usesOperationalWrapper, "Production Worker must use the governed compatibility entry, revenue wrapper, or validated operational wrapper.");
-if (usesRevenueWrapper || usesOperationalWrapper) {
-  assert(revenueDashboardEntry.includes('from "./kairos-production-entry-local-inference-v1.js"'), "Revenue wrapper must import the governed compatibility entry.");
-  assert(revenueDashboardEntry.includes("currentRuntime.fetch"), "Revenue wrapper must delegate unmatched requests to the governed compatibility runtime.");
-  assert(revenueDashboardEntry.includes('X-Kairos-Automatic-Publication", "disabled"'), "Revenue wrapper must preserve the automatic-publication-disabled boundary.");
-}
-if (usesOperationalWrapper) {
-  for (const marker of [
-    'from "./kairos-production-entry-revenue-dashboard-v1.js"',
-    'KAIROS_OPERATIONAL_EXECUTION_BUILD',
-    'approvalPolicy: "explicit"',
-    'automaticPublicationAllowed: false',
-    'commerceMutationAllowed: false',
-    'X-Kairos-Automatic-Publication", "disabled"',
-    'X-Kairos-Commerce-Mutation", "approval-gated"',
-  ]) assert(operationalExecutionEntry.includes(marker), `Operational wrapper must preserve Shopify governance: ${marker}`);
-  assert(!operationalExecutionEntry.includes("shopifyAdminGraphql"), "Operational objective execution must not gain direct Shopify GraphQL authority.");
-  assert(!operationalExecutionEntry.includes("productCreate("), "Operational objective execution must not create Shopify products directly.");
-}
-assert(productionWrangler.includes('KAIROS_MODEL_PROVIDER = "openai"'), "Production manuscript generation must use the governed OpenAI provider.");
-assert(productionWrangler.includes('KAIROS_MODEL_ENDPOINT = "https://api.openai.com"'), "Production must use the official OpenAI API endpoint.");
-assert(productionWrangler.includes('KAIROS_MODEL_NAME = "gpt-5-mini"'), "Production must pin the approved manuscript model.");
-assert(productionWrangler.includes('KAIROS_NO_COST_MODE = "false"'), "Production must accurately report paid API mode.");
-assert(productionWrangler.includes('KAIROS_LOCAL_INFERENCE_ENABLED = "false"'), "Production must disable browser inference.");
-assert(productionWrangler.includes('KAIROS_CLOUDFLARE_NEURONS_ENABLED = "false"'), "Production Worker must keep paid Cloudflare inference disabled.");
-assert(productionWrangler.includes('KAIROS_SHOPIFY_WRITES_ENABLED = "true"'), "The exact approval-gated product DRAFT capability must be enabled.");
-assert(productionWrangler.includes('KAIROS_SHOPIFY_LIVE_PUBLISH_ENABLED = "true"'), "The exact live-publication approval capability must be enabled.");
+assert(productionWrangler.includes('main = "src/kairos-production-entry-local-only-v1.js"'), "Production Worker must use the governed local-only entry boundary.");
+for (const marker of [
+  'KAIROS_MODEL_PROVIDER = "browser-webgpu"',
+  'KAIROS_NO_COST_MODE = "true"',
+  'KAIROS_LOCAL_INFERENCE_ENABLED = "true"',
+  'KAIROS_CLOUDFLARE_NEURONS_ENABLED = "false"',
+  'KAIROS_MANUSCRIPT_START_MODE = "local-browser"',
+  'KAIROS_SHOPIFY_WRITES_ENABLED = "true"',
+  'KAIROS_SHOPIFY_LIVE_PUBLISH_ENABLED = "true"',
+]) assert(productionWrangler.includes(marker), `Production local/governed configuration is missing: ${marker}`);
+assert(!productionWrangler.includes('KAIROS_MODEL_PROVIDER = "openai"'), "OpenAI must not be configured as the production provider.");
+assert(!productionWrangler.includes('KAIROS_MODEL_ENDPOINT ='), "A backend model endpoint must not be configured.");
+assert(!productionWrangler.includes('KAIROS_MODEL_AUTH_TOKEN ='), "A backend model token must not be configured.");
 assert(!productionWrangler.includes('"* * * * *"'), "Minute-level website mutation cron must remain removed.");
-assert(manuscriptGeneration.includes('/v1/responses'), "Manuscript generation must use the OpenAI Responses API.");
-assert(manuscriptGeneration.includes('env?.OPENAI_API_KEY'), "Manuscript generation must read the protected Worker secret.");
-assert(localInferenceEntry.includes("currentRuntime.fetch"), "Compatibility entry must delegate to the governed runtime chain.");
-assert(localInferenceEntry.includes('X-Kairos-Cloudflare-Neurons", "0"'), "Production entry must stamp zero Cloudflare neurons.");
+
+for (const marker of [
+  './kairos-production-entry-local-execution-v1.js',
+  'LOCAL_APPROVAL',
+  'LEGACY_MANUSCRIPT_GENERATION',
+  'REVENUE_GENERATION',
+  'LOCAL_INFERENCE_REQUIRED',
+  'provider: "browser-webgpu"',
+  'externalPaidAPIUsed: false',
+  'cloudflareNeuronsUsed: 0',
+  'backendProviderCalls: false',
+]) assert(localOnlyEntry.includes(marker), `Local-only entry must preserve the production boundary: ${marker}`);
+assert(!localOnlyEntry.includes("shopifyAdminGraphql"), "Local-only objective execution must not gain direct Shopify GraphQL authority.");
+assert(!localOnlyEntry.includes("productCreate("), "Local-only objective execution must not create Shopify products directly.");
+
+for (const marker of [
+  '/api/operational-readiness',
+  '/api/kairos',
+  'browser-webgpu',
+  'same-origin-webllm',
+  'automaticPublicationAllowed: false',
+  'commerceMutationAllowed: false',
+  'externalPaidAPIUsed: false',
+  'cloudflareNeuronsUsed: 0',
+]) assert(localExecutionEntry.includes(marker), `Local execution wrapper must preserve governance: ${marker}`);
+assert(!localExecutionEntry.includes("handleKairosAPI"), "Local execution must not invoke the provider-backed API handler.");
+assert(!localExecutionEntry.includes("shopifyAdminGraphql"), "Local execution must not gain direct Shopify GraphQL authority.");
+assert(!localExecutionEntry.includes("productCreate("), "Local execution must not create Shopify products directly.");
+
 assert(manuscriptEntry.includes("inspectManuscriptOperation"), "Production manuscript entry must enforce the operation boundary.");
 assert(manuscriptEntry.includes('shopifyAccess: shopifyDraftWritesEnabled ? "draft-only" : "none"'), "Production status must describe only the gated draft capability.");
 assert(manuscriptEntry.includes("liveProductPublicationApprovalRequired: true"), "Live product publication must require explicit approval.");
@@ -115,6 +137,7 @@ assert(manuscriptRelease.includes("navigationMutationAuthorized: false"), "The r
 assert(productPublication.includes("APPROVED_TEMPLATE_SUFFIXES"), "Product publication must enforce a custom-template allowlist.");
 assert(productPublication.includes('status: "DRAFT"'), "Product creation must begin as DRAFT.");
 assert(productPublication.includes("product_template_verification_failed"), "The exact custom template must be verified after creation.");
+
 assert(builderRegistry.runtime.shopifyRuntimeAccessFromBuilderPlugins === "none", "Builder plugins must not gain Shopify runtime access.");
 assert(builderRegistry.enforcement.builderGuidanceCannotExpandTaskScope === true, "Builder guidance must not expand task scope.");
 assert(builderRegistry.enforcement.builderGuidanceCannotMutateShopify === true, "Builder plugins must not mutate Shopify.");
@@ -131,6 +154,6 @@ assert(firewall.includes("RECEIPT_STORE_REQUIRED"), "Persistent receipt requirem
 assert(doctrine.includes("storeWideAuthorityFromTaskIntent: false"), "Doctrine must deny implied store-wide authority.");
 assert(doctrine.includes("arbitraryGraphqlAllowed: false"), "Doctrine must deny arbitrary GraphQL.");
 
-console.log("Kairos Shopify operation policy validation passed.");
+console.log("Kairos local-only generation and Shopify operation policy validation passed.");
 function assert(condition, message) { if (!condition) fail(message); }
 function fail(message) { console.error(`Kairos Shopify policy validation failed: ${message}`); process.exit(1); }
