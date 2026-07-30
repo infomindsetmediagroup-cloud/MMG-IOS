@@ -7,6 +7,7 @@ const wrangler = readFileSync("cloudflare/mmg-ios/wrangler.toml", "utf8");
 const browser = readFileSync("web/kairos-dashboard/scripts/executive-os-live-details.js", "utf8");
 const executive = readFileSync("web/kairos-dashboard/scripts/executive-os.js", "utf8");
 const safari = readFileSync("web/kairos-dashboard/scripts/safari-manuscript-intake-compat.js", "utf8");
+const docxHotfix = readFileSync("web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js", "utf8");
 const legacy = readFileSync("web/kairos-dashboard/scripts/legacy-runtime-loader.js", "utf8");
 const index = readFileSync("web/kairos-dashboard/index.html", "utf8");
 
@@ -83,16 +84,28 @@ test("Safari API requests cannot leave the dashboard refreshing forever", () => 
   assert.match(safari, /AbortController/);
   assert.match(safari, /TimeoutError/);
   assert.match(safari, /executive-os\.js\?v=browser-finish-20260729-5/);
-  assert.match(index, /safari-manuscript-intake-compat\.js\?v=safari-intake-fix-20260729-9-digest-hotfix-1/);
+  assert.match(index, /safari-manuscript-intake-compat\.js\?v=safari-docx-export-resolver-20260730-1/);
 });
 
 test("Safari manuscript checksums preserve the native digest identifier first", () => {
-  assert.match(safari, /safari-manuscript-intake-compat-20260729-10/);
+  assert.match(safari, /safari-manuscript-intake-compat-20260730-11-docx/);
   assert.match(safari, /return await nativeDigest\(algorithm, data\)/);
   assert.match(safari, /const alternate = typeof algorithm === "string"/);
   assert.match(safari, /return await nativeDigest\(alternate, data\)/);
   assert.match(safari, /__kairosDigestIdentifierFallback/);
   assert.doesNotMatch(safari, /const normalized = typeof algorithm === "string" \? \{ name: algorithm \} : algorithm/);
+});
+
+test("Safari DOCX upload resolves the Mammoth named export and preserves the original source", () => {
+  assert.match(safari, /await import\("\.\/manuscript-docx-upload-hotfix\.js\?v=docx-export-resolver-20260730-1"\)/);
+  assert.match(docxHotfix, /document\.addEventListener\("change", interceptDocxSelection, true\)/);
+  assert.match(docxHotfix, /const candidates = \[namespace, namespace\?\.default, namespace\?\.default\?\.default\]/);
+  assert.match(docxHotfix, /typeof candidate\?\.extractRawText === "function"/);
+  assert.match(docxHotfix, /candidate\.extractRawText\.bind\(candidate\)/);
+  assert.match(docxHotfix, /form\.append\("file", pending\.file/);
+  assert.match(docxHotfix, /form\.append\("extractedText", pending\.manuscript\)/);
+  assert.match(docxHotfix, /kairos:manuscript:restore/);
+  assert.doesNotMatch(docxHotfix, /const api = .*default \|\|/);
 });
 
 test("the Executive OS core always releases its refresh state", () => {
