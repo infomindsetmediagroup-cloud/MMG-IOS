@@ -8,6 +8,8 @@ on:
       - 'web/kairos-dashboard/scripts/legacy-runtime-loader.js'
       - 'web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js'
       - 'browser-tests/manuscript-docx-native-extractor.spec.mjs'
+      - 'cloudflare/mmg-ios/src/kairos-manuscript-source-v1.js'
+      - 'cloudflare/mmg-ios/src/kairos-production-registry-v1.js'
       - '.github/workflows/validate-safari-source-recovery.yml'
   push:
     branches: [main]
@@ -16,6 +18,8 @@ on:
       - 'web/kairos-dashboard/scripts/legacy-runtime-loader.js'
       - 'web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js'
       - 'browser-tests/manuscript-docx-native-extractor.spec.mjs'
+      - 'cloudflare/mmg-ios/src/kairos-manuscript-source-v1.js'
+      - 'cloudflare/mmg-ios/src/kairos-production-registry-v1.js'
       - '.github/workflows/validate-safari-source-recovery.yml'
 
 permissions:
@@ -33,18 +37,22 @@ jobs:
           node-version: '22'
       - name: Install validation dependencies
         run: npm install --ignore-scripts --no-audit --no-fund > /dev/null
-      - name: Validate recovery syntax and release wiring
+      - name: Validate chunked recovery syntax and release wiring
         run: |
+          node --check cloudflare/mmg-ios/src/kairos-manuscript-source-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-production-registry-v1.js
           node --check web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
           node --check web/kairos-dashboard/scripts/legacy-runtime-loader.js
-          grep -q 'five-center-dashboard-source-recovery-20260730-2' web/kairos-dashboard/index.html
-          grep -q 'const ASSET_RELEASE = "five-center-dashboard-source-recovery-20260730-2"' web/kairos-dashboard/scripts/legacy-runtime-loader.js
-          grep -q 'manuscript-docx-upload-hotfix-20260730-2-source-recovery' web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
-          grep -q 'SOURCE_UPLOAD_TIMEOUT_MS = 5 \* 60 \* 1000' web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
-          grep -q 'rotateProjectId(result.response.status)' web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
+          grep -q 'five-center-dashboard-chunked-source-20260730-3' web/kairos-dashboard/index.html
+          grep -q 'const ASSET_RELEASE = "five-center-dashboard-chunked-source-20260730-3"' web/kairos-dashboard/scripts/legacy-runtime-loader.js
+          grep -q 'manuscript-docx-upload-hotfix-20260730-3-chunked-source' web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
+          grep -q 'chunkedSourceUpload: true' web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
+          grep -q 'FILE_CHUNK_BYTES = 512 \* 1024' web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
+          grep -q 'TEXT_CHUNK_BYTES = 128 \* 1024' web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
+          ! grep -q 'new FormData' web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
       - name: Install WebKit
         run: npx playwright install --with-deps webkit > /dev/null
-      - name: Test native DOCX extraction and 502 recovery in iPhone WebKit
+      - name: Test native DOCX extraction and raw chunk recovery in iPhone WebKit
         run: npx playwright test browser-tests/manuscript-docx-native-extractor.spec.mjs --project=webkit
 
   verify-live:
@@ -54,7 +62,7 @@ jobs:
     env:
       WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
     steps:
-      - name: Verify deployed source-recovery runtime
+      - name: Verify deployed chunked source runtime
         shell: bash
         run: |
           set -euo pipefail
@@ -71,22 +79,22 @@ jobs:
             parent_count="$(grep -o 'id: "\(knowledge\|content\|business\|customers\|operations\)"' "${command}" 2>/dev/null | wc -l | tr -d ' ')"
 
             if [ "${root_status}" = "200" ] \
-              && grep -q 'five-center-dashboard-source-recovery-20260730-2' "${root}" \
+              && grep -q 'five-center-dashboard-chunked-source-20260730-3' "${root}" \
               && [ "${loader_status}" = "200" ] \
-              && grep -q 'const ASSET_RELEASE = "five-center-dashboard-source-recovery-20260730-2"' "${loader}" \
+              && grep -q 'const ASSET_RELEASE = "five-center-dashboard-chunked-source-20260730-3"' "${loader}" \
               && grep -q 'scripts/${filename}?v=${ASSET_RELEASE}' "${loader}" \
               && [ "${docx_status}" = "200" ] \
-              && grep -q 'manuscript-docx-upload-hotfix-20260730-2-source-recovery' "${docx}" \
-              && grep -q 'SOURCE_UPLOAD_TIMEOUT_MS = 5 \* 60 \* 1000' "${docx}" \
-              && grep -q 'rotateProjectId(result.response.status)' "${docx}" \
+              && grep -q 'manuscript-docx-upload-hotfix-20260730-3-chunked-source' "${docx}" \
+              && grep -q 'chunkedSourceUpload: true' "${docx}" \
+              && ! grep -q 'new FormData' "${docx}" \
               && [ "${command_status}" = "200" ] \
               && [ "${parent_count}" = "5" ]; then
-              echo "Safari source recovery and five-center dashboard verified live."
+              echo "Safari chunked source recovery and five-center dashboard verified live."
               exit 0
             fi
 
             if [ "${attempt}" = "60" ]; then
-              echo "Live Safari source-recovery verification failed."
+              echo "Live Safari chunked-source verification failed."
               printf 'root=%s loader=%s docx=%s command=%s parents=%s\n' "${root_status}" "${loader_status}" "${docx_status}" "${command_status}" "${parent_count}"
               cat "${root}" || true
               cat "${loader}" || true
