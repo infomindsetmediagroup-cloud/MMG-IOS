@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { strToU8, zipSync } from "fflate";
 
@@ -11,11 +12,12 @@ const docxHotfixSource = readFileSync(
   "utf8",
 );
 
-function docxFixture() {
+function docxFixture({ large = false } = {}) {
   const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
+  <Default Extension="bin" ContentType="application/octet-stream"/>
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
 </Types>`;
   const relationships = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -30,11 +32,13 @@ function docxFixture() {
   </w:body>
 </w:document>`;
 
-  return zipSync({
+  const entries = {
     "[Content_Types].xml": strToU8(contentTypes),
     "_rels/.rels": strToU8(relationships),
     "word/document.xml": strToU8(document),
-  }, { level: 6 });
+  };
+  if (large) entries["word/media/source-payload.bin"] = new Uint8Array(randomBytes(900_000));
+  return zipSync(entries, { level: large ? 0 : 6 });
 }
 
 test("iPhone WebKit extracts DOCX text locally without loading a module service", async ({ page }) => {
@@ -72,9 +76,11 @@ test("Safari compatibility exposes the native extractor to the existing DOCX int
   expect(compatibilitySource).not.toContain("esm.sh");
 });
 
-test("iPhone Safari rebuilds a retained DOCX source transaction after one HTTP 502", async ({ page }) => {
-  const attempts = [];
+test("iPhone Safari stores retained DOCX and manuscript text through verified raw chunks", async ({ page }) => {
+  const requests = [];
   const restored = [];
+  let uploadId = "";
+  let firstFileChunkFailed = false;
 
   await page.route("https://kairos.test/**", async route => {
     const request = route.request();
@@ -92,38 +98,68 @@ test("iPhone Safari rebuilds a retained DOCX source transaction after one HTTP 5
       return;
     }
 
-    if (request.method() === "POST" && /\/api\/production-registry\/manuscripts\/[^/]+\/source$/.test(url.pathname)) {
-      const projectId = decodeURIComponent(url.pathname.split("/").at(-2));
-      attempts.push({
-        projectId,
-        sourceAttempt: request.headers()["x-kairos-source-attempt"],
-        recoveryCount: request.headers()["x-kairos-recovery-count"],
+    if (url.pathname.includes("/api/production-registry/manuscripts/")) {
+      const bodyLength = request.postDataBuffer()?.length || 0;
+      requests.push({
+        method: request.method(),
+        path: url.pathname,
+        contentType: request.headers()["content-type"] || "",
+        bodyLength,
+        uploadId: request.headers()["x-kairos-upload-id"] || "",
       });
-      if (attempts.length === 1) {
+
+      if (request.method() === "POST" && url.pathname.endsWith("/source/session")) {
+        const payload = request.postDataJSON();
+        uploadId = payload.uploadId;
+        expect(payload.fileChunks).toBeGreaterThan(1);
+        expect(payload.textChunks).toBeGreaterThan(1);
         await route.fulfill({
-          status: 502,
+          status: 201,
           contentType: "application/json",
-          headers: { "cf-ray": "stale-source-transaction" },
-          body: JSON.stringify({ error: { message: "The retained source transaction is unavailable." } }),
+          body: JSON.stringify({ status: "upload-session-ready", upload: { uploadId, projectId: "manuscript-studio-chunked-12345678" } }),
         });
         return;
       }
-      await route.fulfill({
-        status: 201,
-        contentType: "application/json",
-        body: JSON.stringify({
-          status: "stored-and-verified",
-          source: {
-            projectId,
-            filename: "AI-Video-Prompt-Mastery.docx",
-            format: "docx",
-            size: docxFixture().length,
-            checksum: "recovered-source-checksum",
-            stored: true,
-          },
-        }),
-      });
-      return;
+
+      if (request.method() === "PUT" && /\/source\/file\/0$/.test(url.pathname) && !firstFileChunkFailed) {
+        firstFileChunkFailed = true;
+        await route.fulfill({
+          status: 502,
+          contentType: "application/json",
+          headers: { "cf-ray": "forced-file-chunk-retry" },
+          body: JSON.stringify({ error: { message: "Transient chunk transport failure." } }),
+        });
+        return;
+      }
+
+      if (request.method() === "PUT" && /\/source\/(?:file|text-chunk)\/\d+$/.test(url.pathname)) {
+        expect(request.headers()["x-kairos-upload-id"]).toBe(uploadId);
+        expect(bodyLength).toBeGreaterThan(0);
+        expect(bodyLength).toBeLessThanOrEqual(512 * 1024);
+        await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ status: "chunk-stored" }) });
+        return;
+      }
+
+      if (request.method() === "POST" && url.pathname.endsWith("/source/commit")) {
+        const projectId = decodeURIComponent(url.pathname.split("/").at(-3));
+        await route.fulfill({
+          status: 201,
+          contentType: "application/json",
+          body: JSON.stringify({
+            status: "stored-and-verified",
+            source: {
+              projectId,
+              filename: "AI-Video-Prompt-Mastery.docx",
+              format: "docx",
+              size: docxFixture({ large: true }).length,
+              checksum: "chunked-source-checksum",
+              uploadMode: "chunked-v1",
+              stored: true,
+            },
+          }),
+        });
+        return;
+      }
     }
 
     await route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ error: "not found" }) });
@@ -133,44 +169,48 @@ test("iPhone Safari rebuilds a retained DOCX source transaction after one HTTP 5
   await page.evaluate(() => {
     sessionStorage.setItem("kairos.production.active-workspace", JSON.stringify({
       workspace: "manuscript-studio",
-      projectId: "manuscript-studio-stale-source-12345678",
+      projectId: "manuscript-studio-chunked-12345678",
     }));
     window.__docxRestores = [];
     window.addEventListener("kairos:manuscript:restore", event => window.__docxRestores.push(event.detail));
   });
   await page.addScriptTag({ type: "module", content: compatibilitySource });
+  await page.evaluate(() => {
+    window.__KAIROS_MAMMOTH_TEST_MODULE__ = {
+      extractRawText: async () => ({
+        value: "AI Video Prompt Mastery production manuscript. ".repeat(7000),
+        messages: [],
+      }),
+    };
+  });
   await page.addScriptTag({ type: "module", content: docxHotfixSource });
 
-  await expect.poll(() => page.evaluate(() => window.KairosManuscriptDocxHotfix?.sourceRecovery)).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.KairosManuscriptDocxHotfix?.chunkedSourceUpload)).toBe(true);
   await page.locator("[data-file]").setInputFiles({
     name: "AI-Video-Prompt-Mastery.docx",
     mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    buffer: Buffer.from(docxFixture()),
+    buffer: Buffer.from(docxFixture({ large: true })),
   });
 
-  await expect.poll(() => attempts.length).toBe(2);
-  expect(attempts[0]).toEqual({
-    projectId: "manuscript-studio-stale-source-12345678",
-    sourceAttempt: "1",
-    recoveryCount: "0",
-  });
-  expect(attempts[1].projectId).not.toBe(attempts[0].projectId);
-  expect(attempts[1].sourceAttempt).toBe("2");
-  expect(attempts[1].recoveryCount).toBe("1");
-
+  await expect.poll(() => requests.filter(item => item.path.endsWith("/source/commit")).length, { timeout: 30_000 }).toBe(1);
   const evidence = await page.evaluate(() => ({
-    active: JSON.parse(sessionStorage.getItem("kairos.production.active-workspace") || "{}"),
     restores: window.__docxRestores,
     errorCount: document.querySelectorAll("[data-docx-hotfix-error]").length,
+    status: document.querySelector("[data-docx-hotfix-status]")?.textContent || "",
   }));
-  expect(evidence.active.projectId).toBe(attempts[1].projectId);
-  expect(evidence.active.recoveryFrom).toBe(attempts[0].projectId);
-  expect(evidence.active.recoveryStatus).toBe(502);
-  expect(evidence.restores.at(-1).source.stored).toBe(true);
-  expect(evidence.restores.at(-1).manuscript).toContain("Kairos native DOCX extraction works on iPhone Safari.");
-  expect(evidence.errorCount).toBe(0);
 
-  expect(docxHotfixSource).toContain("SOURCE_UPLOAD_TIMEOUT_MS = 5 * 60 * 1000");
-  expect(docxHotfixSource).toContain("TRANSIENT_SOURCE_STATUSES = new Set([502, 503, 504])");
-  expect(docxHotfixSource).toContain("rotateProjectId(result.response.status)");
+  expect(firstFileChunkFailed).toBe(true);
+  expect(requests.filter(item => /\/source\/file\/0$/.test(item.path))).toHaveLength(2);
+  expect(requests.some(item => item.path.includes("/source/file/"))).toBe(true);
+  expect(requests.some(item => item.path.includes("/source/text-chunk/"))).toBe(true);
+  expect(requests.every(item => !item.contentType.toLowerCase().includes("multipart/form-data"))).toBe(true);
+  expect(evidence.restores.at(-1).source.stored).toBe(true);
+  expect(evidence.restores.at(-1).source.uploadMode).toBe("chunked-v1");
+  expect(evidence.errorCount).toBe(0);
+  expect(evidence.status).toContain("stored and verified");
+
+  expect(docxHotfixSource).toContain("FILE_CHUNK_BYTES = 512 * 1024");
+  expect(docxHotfixSource).toContain("TEXT_CHUNK_BYTES = 128 * 1024");
+  expect(docxHotfixSource).toContain("chunkedSourceUpload: true");
+  expect(docxHotfixSource).not.toContain("new FormData");
 });
