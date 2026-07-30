@@ -192,7 +192,8 @@ test("Command Center manuscript event routes through the production workspace co
 
 test("dashboard isolates no-form production controllers behind the advanced loader", async () => {
   expect(indexSource).toMatch(/<meta name="mmg-build" content="kairos-executive-clean-boot-[^"]+">/);
-  expect(indexSource).toMatch(/legacy-runtime-loader\.js\?v=legacy-isolated-[^"]+/);
+  expect(indexSource).toMatch(/legacy-runtime-loader\.js\?v=legacy-[^"]+/);
+  expect(indexSource).not.toContain("manuscript-runtime-cache-guard.js");
 
   const requiredScripts = [
     "command-center-governance.js",
