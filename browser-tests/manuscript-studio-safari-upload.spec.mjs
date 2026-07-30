@@ -53,6 +53,7 @@ async function installSafariStudio(page, projectId = PROJECT_ID) {
 
 function storedSource(projectId = PROJECT_ID) {
   return {
+    status: "stored-and-verified",
     source: {
       projectId,
       filename: "Draft-One.txt",
@@ -60,6 +61,8 @@ function storedSource(projectId = PROJECT_ID) {
       size: Buffer.byteLength(MANUSCRIPT),
       format: "txt",
       checksum: "webkit-checksum",
+      stored: true,
+      uploadMode: "chunked-v1",
       storedAt: "2026-07-30T02:00:00.000Z",
     },
   };
@@ -76,44 +79,67 @@ function intakeResult() {
   };
 }
 
-test("iPhone Safari uploads a manuscript, computes its checksum, and advances to production intake", async ({ page }) => {
+function sourceBase(projectId = PROJECT_ID) {
+  return `/api/production-registry/manuscripts/${projectId}/source`;
+}
+
+test("iPhone Safari stores a manuscript through direct chunks and advances to production intake", async ({ page }) => {
   const calls = [];
+  let uploadId = "";
 
   await page.route("https://kairos.test/**", async route => {
     const request = route.request();
     const url = new URL(request.url());
+    const contentType = request.headers()["content-type"] || "";
 
     if (request.resourceType() === "document") {
       await route.fulfill({ status: 200, contentType: "text/html", body: fixtureHTML() });
       return;
     }
 
-    if (request.method() === "POST" && url.pathname === `/api/production-registry/manuscripts/${PROJECT_ID}/source`) {
-      calls.push({ method: request.method(), path: url.pathname });
-      expect(request.headers()["content-type"]).toContain("multipart/form-data");
+    if (request.method() === "POST" && url.pathname === `${sourceBase()}/session`) {
+      calls.push({ method: request.method(), path: url.pathname, contentType });
+      const payload = request.postDataJSON();
+      uploadId = payload.uploadId;
+      expect(payload.fileChunks).toBe(1);
+      expect(payload.textChunks).toBe(1);
+      expect(payload.checksum).toMatch(/^[0-9a-f]{64}$/);
+      expect(contentType).toContain("application/json");
       await route.fulfill({
         status: 201,
         contentType: "application/json",
-        body: JSON.stringify(storedSource()),
+        body: JSON.stringify({ status: "upload-session-created", upload: { uploadId } }),
       });
+      return;
+    }
+
+    if (request.method() === "PUT" && (url.pathname === `${sourceBase()}/file/0` || url.pathname === `${sourceBase()}/text-chunk/0`)) {
+      calls.push({ method: request.method(), path: url.pathname, contentType });
+      expect(contentType).toContain("application/octet-stream");
+      expect(request.headers()["x-kairos-upload-id"]).toBe(uploadId);
+      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ status: "chunk-stored" }) });
+      return;
+    }
+
+    if (request.method() === "POST" && url.pathname === `${sourceBase()}/commit`) {
+      calls.push({ method: request.method(), path: url.pathname, contentType });
+      expect(request.postDataJSON().uploadId).toBe(uploadId);
+      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify(storedSource()) });
       return;
     }
 
     if (request.method() === "POST" && url.pathname === "/api/manuscript/intake/advance") {
-      calls.push({ method: request.method(), path: url.pathname });
+      calls.push({ method: request.method(), path: url.pathname, contentType });
       const payload = JSON.parse(request.postData() || "{}");
       expect(payload.manuscript).toContain("Safari upload path");
       expect(payload.source?.stored).toBe(true);
-      await route.fulfill({
-        status: 201,
-        contentType: "application/json",
-        body: JSON.stringify(intakeResult()),
-      });
+      expect(payload.source?.uploadMode).toBe("chunked-v1");
+      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify(intakeResult()) });
       return;
     }
 
     if (request.method() === "PATCH" && url.pathname === `/api/production-registry/projects/${PROJECT_ID}`) {
-      calls.push({ method: request.method(), path: url.pathname });
+      calls.push({ method: request.method(), path: url.pathname, contentType });
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ status: "updated" }) });
       return;
     }
@@ -129,7 +155,7 @@ test("iPhone Safari uploads a manuscript, computes its checksum, and advances to
     buffer: Buffer.from(MANUSCRIPT),
   });
 
-  await expect(page.locator(".manuscript-source")).toContainText("stored and verified");
+  await expect(page.locator(".manuscript-source")).toContainText("stored and verified through chunks");
   await expect(page.locator(".manuscript-error")).toHaveCount(0);
   await expect(page.locator("#ms-body")).toHaveValue(MANUSCRIPT);
 
@@ -138,59 +164,76 @@ test("iPhone Safari uploads a manuscript, computes its checksum, and advances to
   await expect(page.locator(".manuscript-result")).toContainText("Production intake created");
   await expect(page.locator(".manuscript-result")).toContainText("Your manuscript has advanced into MMG production intake.");
   expect(calls.map(call => `${call.method} ${call.path}`)).toEqual([
-    `POST /api/production-registry/manuscripts/${PROJECT_ID}/source`,
+    `POST ${sourceBase()}/session`,
+    `PUT ${sourceBase()}/file/0`,
+    `PUT ${sourceBase()}/text-chunk/0`,
+    `POST ${sourceBase()}/commit`,
     "POST /api/manuscript/intake/advance",
     `PATCH /api/production-registry/projects/${PROJECT_ID}`,
   ]);
+  expect(calls.some(call => /multipart\/form-data/i.test(call.contentType))).toBe(false);
 });
 
-test("Safari retains extracted text and retries the same file after source storage fails", async ({ page }) => {
+test("Safari retains file bytes and manually retries a rejected chunk session", async ({ page }) => {
   const calls = [];
-  let sourceAttempts = 0;
+  let sessionAttempts = 0;
+  let uploadId = "";
 
   await page.route("https://kairos.test/**", async route => {
     const request = route.request();
     const url = new URL(request.url());
+    const contentType = request.headers()["content-type"] || "";
 
     if (request.resourceType() === "document") {
       await route.fulfill({ status: 200, contentType: "text/html", body: fixtureHTML() });
       return;
     }
 
-    if (request.method() === "POST" && url.pathname === `/api/production-registry/manuscripts/${PROJECT_ID}/source`) {
-      sourceAttempts += 1;
-      calls.push({ method: request.method(), path: url.pathname });
-      if (sourceAttempts === 1) {
+    if (request.method() === "POST" && url.pathname === `${sourceBase()}/session`) {
+      sessionAttempts += 1;
+      calls.push({ method: request.method(), path: url.pathname, contentType });
+      if (sessionAttempts === 1) {
         await route.fulfill({
-          status: 502,
+          status: 409,
           contentType: "application/json",
-          body: JSON.stringify({ error: { message: "Temporary source storage failure." } }),
+          body: JSON.stringify({ error: { message: "Temporary source session conflict." } }),
         });
         return;
       }
+      const payload = request.postDataJSON();
+      uploadId = payload.uploadId;
       await route.fulfill({
         status: 201,
         contentType: "application/json",
-        body: JSON.stringify(storedSource()),
+        body: JSON.stringify({ status: "upload-session-created", upload: { uploadId } }),
       });
+      return;
+    }
+
+    if (request.method() === "PUT" && (url.pathname === `${sourceBase()}/file/0` || url.pathname === `${sourceBase()}/text-chunk/0`)) {
+      calls.push({ method: request.method(), path: url.pathname, contentType });
+      expect(request.headers()["x-kairos-upload-id"]).toBe(uploadId);
+      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ status: "chunk-stored" }) });
+      return;
+    }
+
+    if (request.method() === "POST" && url.pathname === `${sourceBase()}/commit`) {
+      calls.push({ method: request.method(), path: url.pathname, contentType });
+      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify(storedSource()) });
       return;
     }
 
     if (request.method() === "POST" && url.pathname === "/api/manuscript/intake/advance") {
-      calls.push({ method: request.method(), path: url.pathname });
+      calls.push({ method: request.method(), path: url.pathname, contentType });
       const payload = JSON.parse(request.postData() || "{}");
       expect(payload.manuscript).toBe(MANUSCRIPT);
       expect(payload.source?.stored).toBe(true);
-      await route.fulfill({
-        status: 201,
-        contentType: "application/json",
-        body: JSON.stringify(intakeResult()),
-      });
+      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify(intakeResult()) });
       return;
     }
 
     if (request.method() === "PATCH" && url.pathname === `/api/production-registry/projects/${PROJECT_ID}`) {
-      calls.push({ method: request.method(), path: url.pathname });
+      calls.push({ method: request.method(), path: url.pathname, contentType });
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ status: "updated" }) });
       return;
     }
@@ -207,10 +250,10 @@ test("Safari retains extracted text and retries the same file after source stora
   });
 
   await expect(page.locator("#ms-body")).toHaveValue(MANUSCRIPT);
-  await expect(page.locator(".manuscript-source")).toContainText("text extracted and retained");
+  await expect(page.locator(".manuscript-source")).toContainText("text and original source retained; verified chunk save can retry");
   await expect(page.locator(".manuscript-source")).toContainText(`${MANUSCRIPT.length} characters retained`);
   await expect(page.locator("[data-retry-source]")).toBeVisible();
-  await expect(page.locator(".manuscript-error")).toContainText("Temporary source storage failure.");
+  await expect(page.locator(".manuscript-error")).toContainText("Temporary source session conflict.");
   await expect.poll(() => page.evaluate(() => {
     const draft = JSON.parse(sessionStorage.getItem("kairos.manuscript-studio.recoverable-draft.v1") || "{}");
     return draft.manuscript?.length || 0;
@@ -218,18 +261,22 @@ test("Safari retains extracted text and retries the same file after source stora
 
   await page.locator("[data-retry-source]").tap();
 
-  await expect(page.locator(".manuscript-source")).toContainText("stored and verified");
+  await expect(page.locator(".manuscript-source")).toContainText("stored and verified through chunks");
   await expect(page.locator("#ms-body")).toHaveValue(MANUSCRIPT);
   await expect(page.locator("[data-retry-source]")).toHaveCount(0);
   await expect(page.locator(".manuscript-error")).toHaveCount(0);
 
   await page.locator("[data-advance]").tap();
   await expect(page.locator(".manuscript-result")).toContainText("Production intake created");
-  expect(sourceAttempts).toBe(2);
+  expect(sessionAttempts).toBe(2);
   expect(calls.map(call => `${call.method} ${call.path}`)).toEqual([
-    `POST /api/production-registry/manuscripts/${PROJECT_ID}/source`,
-    `POST /api/production-registry/manuscripts/${PROJECT_ID}/source`,
+    `POST ${sourceBase()}/session`,
+    `POST ${sourceBase()}/session`,
+    `PUT ${sourceBase()}/file/0`,
+    `PUT ${sourceBase()}/text-chunk/0`,
+    `POST ${sourceBase()}/commit`,
     "POST /api/manuscript/intake/advance",
     `PATCH /api/production-registry/projects/${PROJECT_ID}`,
   ]);
+  expect(calls.some(call => /multipart\/form-data/i.test(call.contentType))).toBe(false);
 });
