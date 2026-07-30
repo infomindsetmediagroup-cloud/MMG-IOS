@@ -1,6 +1,10 @@
-const BUILD = "manuscript-docx-upload-hotfix-20260730-1";
+const BUILD = "manuscript-docx-upload-hotfix-20260730-2-source-recovery";
+const PREVIOUS_BUILD = "manuscript-docx-upload-hotfix-20260730-1";
 const ACTIVE_KEY = "kairos.production.active-workspace";
 const MAX_TEXT_CHARS = 600000;
+const MAX_FILE_BYTES = 20 * 1024 * 1024;
+const SOURCE_UPLOAD_TIMEOUT_MS = 5 * 60 * 1000;
+const TRANSIENT_SOURCE_STATUSES = new Set([502, 503, 504]);
 const MAMMOTH_URLS = [
   "https://cdn.jsdelivr.net/npm/mammoth@1.8.0/+esm",
   "https://esm.sh/mammoth@1.8.0",
@@ -13,6 +17,7 @@ const pending = {
   projectId: null,
   source: null,
   saving: false,
+  recoveryCount: 0,
 };
 
 document.addEventListener("change", interceptDocxSelection, true);
@@ -20,7 +25,9 @@ document.addEventListener("click", interceptPendingAdvance, true);
 
 window.KairosManuscriptDocxHotfix = Object.freeze({
   build: BUILD,
+  previousBuild: PREVIOUS_BUILD,
   ready: true,
+  sourceRecovery: true,
 });
 
 async function interceptDocxSelection(event) {
@@ -37,11 +44,16 @@ async function interceptDocxSelection(event) {
   pending.title = currentTitle(file);
   pending.projectId = ensureProjectId();
   pending.source = null;
+  pending.recoveryCount = 0;
 
   setBusy(true, "Extracting DOCX manuscript…");
   clearError();
 
   try {
+    if (file.size > MAX_FILE_BYTES) {
+      throw new Error(`The DOCX file is ${formatBytes(file.size)}. Source storage supports files up to ${formatBytes(MAX_FILE_BYTES)}.`);
+    }
+
     const extractor = await loadMammothExtractor();
     const result = await extractor({ arrayBuffer: await file.arrayBuffer() });
     const fatal = (result?.messages || []).find(message => message?.type === "error");
@@ -105,39 +117,111 @@ async function persistPendingDocx() {
       pending.source.checksum = await checksumFile(pending.file);
     }
 
-    const form = new FormData();
-    form.append("file", pending.file, safeUploadName(pending.file.name));
-    form.append("extractedText", pending.manuscript);
-    form.append("title", pending.title || "Untitled manuscript");
-    form.append("format", "docx");
-    form.append("pages", "");
-    form.append("checksum", pending.source.checksum);
+    let attempt = 1;
+    while (attempt <= 2) {
+      const result = await submitPendingSource(attempt);
+      if (result.response.ok) {
+        applyStoredSource(result.body);
+        return;
+      }
 
-    const response = await fetch(`/api/production-registry/manuscripts/${encodeURIComponent(pending.projectId)}/source`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "X-MMG-Client-Build": BUILD },
-      body: form,
-    });
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body?.error?.message || `The manuscript source could not be stored (HTTP ${response.status}).`);
-    if (!body?.source) throw new Error("The source-storage response did not include the stored manuscript record.");
+      if (attempt === 1 && TRANSIENT_SOURCE_STATUSES.has(result.response.status)) {
+        pending.recoveryCount += 1;
+        rotateProjectId(result.response.status);
+        setStatus("Rebuilding the source transaction in a clean Kairos project…");
+        attempt += 1;
+        continue;
+      }
 
-    pending.source = {
-      ...body.source,
-      projectId: body.source.projectId || pending.projectId,
-      name: body.source.name || body.source.filename || pending.file.name,
-      filename: body.source.filename || body.source.name || pending.file.name,
-      size: Number(body.source.size || pending.file.size),
-      format: body.source.format || "docx",
-      checksum: body.source.checksum || pending.source.checksum,
-      stored: true,
-    };
-    restoreIntoStudio(pending.source);
-    clearError();
+      throw sourceStorageError(result.response, result.body, result.rawBody);
+    }
   } finally {
     pending.saving = false;
   }
+}
+
+async function submitPendingSource(attempt) {
+  const form = new FormData();
+  form.append("file", pending.file, safeUploadName(pending.file.name));
+  form.append("extractedText", pending.manuscript);
+  form.append("title", pending.title || "Untitled manuscript");
+  form.append("format", "docx");
+  form.append("pages", "");
+  form.append("checksum", pending.source.checksum);
+
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  const timeout = setTimeout(() => controller?.abort(), SOURCE_UPLOAD_TIMEOUT_MS);
+  try {
+    const response = await fetch(`/api/production-registry/manuscripts/${encodeURIComponent(pending.projectId)}/source?sourceAttempt=${attempt}&clientBuild=${encodeURIComponent(BUILD)}`, {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+      headers: {
+        "X-MMG-Client-Build": BUILD,
+        "X-Kairos-Source-Attempt": String(attempt),
+        "X-Kairos-Recovery-Count": String(pending.recoveryCount),
+      },
+      body: form,
+      signal: controller?.signal,
+    });
+    const rawBody = await response.text();
+    let body = {};
+    try { body = rawBody ? JSON.parse(rawBody) : {}; } catch {}
+    return { response, body, rawBody };
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(`The DOCX source upload exceeded ${Math.round(SOURCE_UPLOAD_TIMEOUT_MS / 60000)} minutes. The extracted manuscript remains retained.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function applyStoredSource(body) {
+  if (!body?.source) throw new Error("The source-storage response did not include the stored manuscript record.");
+  pending.source = {
+    ...body.source,
+    projectId: body.source.projectId || pending.projectId,
+    name: body.source.name || body.source.filename || pending.file.name,
+    filename: body.source.filename || body.source.name || pending.file.name,
+    size: Number(body.source.size || pending.file.size),
+    format: body.source.format || "docx",
+    checksum: body.source.checksum || pending.source.checksum,
+    stored: true,
+  };
+  restoreIntoStudio(pending.source);
+  clearError();
+}
+
+function sourceStorageError(response, body, rawBody) {
+  const serverMessage = body?.error?.message || body?.message || "";
+  const serverBuild = response.headers.get("x-kairos-manuscript-source") || response.headers.get("x-kairos-registry") || "";
+  const ray = response.headers.get("cf-ray") || "";
+  const evidence = [serverBuild && `build ${serverBuild}`, ray && `ray ${ray}`].filter(Boolean).join(", ");
+  const fallback = `The manuscript source could not be stored (HTTP ${response.status}${evidence ? `; ${evidence}` : ""}).`;
+  const rawMessage = !serverMessage && rawBody && rawBody.length < 500 ? rawBody.trim() : "";
+  return new Error(serverMessage || rawMessage || fallback);
+}
+
+function rotateProjectId(status) {
+  const previousProjectId = pending.projectId;
+  const projectId = createProjectId();
+  pending.projectId = projectId;
+  pending.source = {
+    ...(pending.source || {}),
+    projectId,
+    stored: false,
+  };
+  sessionStorage.setItem(ACTIVE_KEY, JSON.stringify({
+    workspace: "manuscript-studio",
+    projectId,
+    openedAt: new Date().toISOString(),
+    build: BUILD,
+    recoveryFrom: previousProjectId,
+    recoveryStatus: Number(status || 0),
+  }));
+  restoreIntoStudio(pending.source);
 }
 
 async function loadMammothExtractor() {
@@ -179,7 +263,7 @@ function restoreIntoStudio(source) {
 function ensureProjectId() {
   const active = readJSON(ACTIVE_KEY);
   if (active?.workspace === "manuscript-studio" && active.projectId) return active.projectId;
-  const id = `manuscript-studio-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
+  const id = createProjectId();
   sessionStorage.setItem(ACTIVE_KEY, JSON.stringify({
     workspace: "manuscript-studio",
     projectId: id,
@@ -187,6 +271,10 @@ function ensureProjectId() {
     build: BUILD,
   }));
   return id;
+}
+
+function createProjectId() {
+  return `manuscript-studio-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
 }
 
 function currentTitle(file) {
@@ -223,6 +311,13 @@ function safeUploadName(value) {
     .replace(/\s+/g, " ")
     .trim();
   return cleaned || "manuscript.docx";
+}
+
+function formatBytes(value) {
+  const bytes = Number(value || 0);
+  if (bytes < 1024) return `${bytes} bytes`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function setBusy(busy, message = "") {
