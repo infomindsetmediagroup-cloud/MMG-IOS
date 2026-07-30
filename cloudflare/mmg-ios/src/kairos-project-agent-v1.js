@@ -1,6 +1,6 @@
 import { Agent } from "agents";
 
-export const KAIROS_PROJECT_AGENT_BUILD = "kairos-project-agent-20260725-2-manuscript-workflow";
+export const KAIROS_PROJECT_AGENT_BUILD = "kairos-project-agent-20260730-3-workflow-id-fix";
 export const KAIROS_PROJECT_WORKFLOW_BINDING = "KAIROS_PROJECT_WORKFLOW";
 export const KAIROS_MANUSCRIPT_WORKFLOW_BINDING = "KAIROS_MANUSCRIPT_WORKFLOW";
 
@@ -59,7 +59,6 @@ export class KairosProjectAgent extends Agent {
         requestedAt: new Date().toISOString(),
       },
       {
-        id: `kairos-project-${projectId}-${crypto.randomUUID()}`,
         metadata: { projectId, workflowVersion: "project-foundation-v1" },
         agentBinding: "KAIROS_PROJECT_AGENT",
       },
@@ -107,7 +106,6 @@ export class KairosProjectAgent extends Agent {
         requestedAt,
       },
       {
-        id: `kairos-manuscript-${projectId}-${crypto.randomUUID()}`,
         metadata: { projectId, workflowVersion: "manuscript-generation-v1", approvalType: "START_PRODUCTION_JOB" },
         agentBinding: "KAIROS_PROJECT_AGENT",
       },
