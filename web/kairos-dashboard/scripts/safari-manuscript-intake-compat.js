@@ -1,23 +1,29 @@
-const BUILD = "safari-manuscript-intake-compat-20260730-11-docx";
+const BUILD = "safari-manuscript-intake-compat-20260730-12-five-center";
 const API_GET_TIMEOUT_MS = 12000;
 const API_MUTATION_TIMEOUT_MS = 45000;
-const ADVANCED_MODE = new URLSearchParams(globalThis.location?.search || "").get("mode") === "advanced";
+const ROUTE_MODE = new URLSearchParams(globalThis.location?.search || "").get("mode");
+const EXECUTIVE_MODE = ROUTE_MODE === "executive";
+const ADVANCED_MODE = ROUTE_MODE === "advanced";
+const COMMAND_HUB_MODE = !EXECUTIVE_MODE;
 
 installRandomUUIDFallback();
 installSyntheticFileFallback();
 installDigestIdentifierFallback();
 installGovernedFetchTimeout();
 
-if (ADVANCED_MODE) {
-  document.documentElement.dataset.kairosMode = "advanced";
-} else {
+if (EXECUTIVE_MODE) {
   document.documentElement.dataset.kairosMode = "executive";
   activateExecutiveOperatingSystem();
+} else {
+  document.documentElement.dataset.kairosMode = ADVANCED_MODE ? "advanced" : "command";
 }
 
 window.KairosSafariManuscriptIntakeCompat = Object.freeze({
   ready: true,
   build: BUILD,
+  routeMode: ROUTE_MODE || "command",
+  commandHubMode: COMMAND_HUB_MODE,
+  executiveMode: EXECUTIVE_MODE,
   advancedMode: ADVANCED_MODE,
 });
 
