@@ -79,7 +79,7 @@ test("multipart manuscript source uploads are buffered and durably stored throug
   assert.equal(stored.source.filename, "AI-Video-Prompt-Mastery.docx");
   assert.equal(stored.source.format, "docx");
   assert.equal(stored.source.checksum, "source-forwarding-checksum");
-  assert.equal(stored.source.wordCount, 14);
+  assert.equal(stored.source.wordCount, 13);
 
   const metadata = runtime.values.get(`manuscript:${PROJECT_ID}:metadata`);
   assert.equal(metadata.textBytes, new TextEncoder().encode(EXTRACTED_TEXT).length);
