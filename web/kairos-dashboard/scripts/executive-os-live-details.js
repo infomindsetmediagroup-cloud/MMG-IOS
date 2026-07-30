@@ -1,6 +1,10 @@
-const BUILD = "kairos-executive-live-details-20260729-3";
+const BUILD = "kairos-executive-live-details-20260729-4";
 const root = document.querySelector("#kairos-executive-os");
 const detailState = { workflows: [], loading: false, error: "", actionError: "", updatedAt: null, selectedID: "", workingID: "" };
+const OBSERVER_OPTIONS = { childList: true, subtree: true };
+let shellObserver = null;
+let renderQueued = false;
+let renderingDetails = false;
 
 if (root) {
   installStyles();
@@ -30,36 +34,58 @@ async function refreshDetails() {
 }
 
 function observeShell() {
-  const observer = new MutationObserver(() => queueMicrotask(renderDetails));
-  observer.observe(root, { childList: true, subtree: true });
+  shellObserver = new MutationObserver(scheduleDetailsRender);
+  reconnectShellObserver();
   window.addEventListener("online", refreshDetails);
   window.addEventListener("kairos:workflow:changed", refreshDetails);
   window.addEventListener("keydown", event => { if (event.key === "Escape") closeWorkflow(); });
 }
 
+function reconnectShellObserver() {
+  if (!shellObserver || !root.isConnected) return;
+  shellObserver.observe(root, OBSERVER_OPTIONS);
+}
+
+function scheduleDetailsRender() {
+  if (renderingDetails || renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => {
+    renderQueued = false;
+    renderDetails();
+  });
+}
+
 function renderDetails() {
-  root.querySelectorAll("[data-execution-detail]").forEach(node => node.remove());
-  const isToday = root.querySelector('[data-view="today"][aria-current="page"]');
-  const isAssets = root.querySelector('[data-view="assets"][aria-current="page"]');
-  if (!isToday && !isAssets) return;
+  if (renderingDetails || !root.isConnected) return;
+  renderingDetails = true;
+  shellObserver?.disconnect();
+  try {
+    root.querySelectorAll("[data-execution-detail]").forEach(node => node.remove());
+    const isToday = root.querySelector('[data-view="today"][aria-current="page"]');
+    const isAssets = root.querySelector('[data-view="assets"][aria-current="page"]');
+    if (!isToday && !isAssets) return;
 
-  const host = isToday ? root.querySelector(".abos-section") : root.querySelector(".abos-main");
-  if (!host) return;
-  const section = document.createElement("section");
-  section.className = "abos-execution-detail";
-  section.dataset.executionDetail = "true";
+    const host = isToday ? root.querySelector(".abos-section") : root.querySelector(".abos-main");
+    if (!host) return;
+    const section = document.createElement("section");
+    section.className = "abos-execution-detail";
+    section.dataset.executionDetail = "true";
 
-  if (detailState.error && !detailState.workflows.length) {
-    section.innerHTML = `<div class="abos-section-head"><div><p class="abos-kicker">Live execution</p><h2>Workflow detail unavailable</h2></div><button class="abos-secondary" data-detail-refresh>Retry</button></div><p class="abos-detail-error">${escapeHTML(detailState.error)}</p>`;
-  } else {
-    const workflows = selectWorkflows(Boolean(isAssets));
-    section.innerHTML = `<div class="abos-section-head"><div><p class="abos-kicker">${isAssets ? "Completion evidence" : "Live execution map"}</p><h2>${isAssets ? "Completed work and deliverables" : "What Kairos is doing next"}</h2></div><span class="abos-muted">${detailState.updatedAt ? `Updated ${detailState.updatedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Syncing"}</span></div>${workflows.length ? `<div class="abos-execution-list">${workflows.map(workflowCard).join("")}</div>` : emptyState(Boolean(isAssets))}`;
+    if (detailState.error && !detailState.workflows.length) {
+      section.innerHTML = `<div class="abos-section-head"><div><p class="abos-kicker">Live execution</p><h2>Workflow detail unavailable</h2></div><button class="abos-secondary" data-detail-refresh>Retry</button></div><p class="abos-detail-error">${escapeHTML(detailState.error)}</p>`;
+    } else {
+      const workflows = selectWorkflows(Boolean(isAssets));
+      section.innerHTML = `<div class="abos-section-head"><div><p class="abos-kicker">${isAssets ? "Completion evidence" : "Live execution map"}</p><h2>${isAssets ? "Completed work and deliverables" : "What Kairos is doing next"}</h2></div><span class="abos-muted">${detailState.updatedAt ? `Updated ${detailState.updatedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Syncing"}</span></div>${workflows.length ? `<div class="abos-execution-list">${workflows.map(workflowCard).join("")}</div>` : emptyState(Boolean(isAssets))}`;
+    }
+
+    host.insertAdjacentElement("afterend", section);
+    section.querySelector("[data-detail-refresh]")?.addEventListener("click", refreshDetails);
+    section.querySelector("[data-detail-create]")?.addEventListener("click", () => root.querySelector('[data-view="create"]')?.click());
+    section.querySelectorAll("[data-workflow-open]").forEach(button => button.addEventListener("click", () => openWorkflow(button.dataset.workflowOpen)));
+  } finally {
+    renderingDetails = false;
+    reconnectShellObserver();
   }
-
-  host.insertAdjacentElement("afterend", section);
-  section.querySelector("[data-detail-refresh]")?.addEventListener("click", refreshDetails);
-  section.querySelector("[data-detail-create]")?.addEventListener("click", () => root.querySelector('[data-view="create"]')?.click());
-  section.querySelectorAll("[data-workflow-open]").forEach(button => button.addEventListener("click", () => openWorkflow(button.dataset.workflowOpen)));
 }
 
 function selectWorkflows(assetsMode) {
