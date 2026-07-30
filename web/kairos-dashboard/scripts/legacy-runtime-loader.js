@@ -1,5 +1,5 @@
-const BUILD = "kairos-legacy-runtime-loader-20260730-2";
-const RELEASE = "manuscript-upload-retention-20260730-1";
+const BUILD = "kairos-legacy-runtime-loader-20260730-3-docx";
+const RELEASE = "manuscript-docx-export-resolver-20260730-1";
 const params = new URLSearchParams(window.location.search);
 const advancedMode = params.get("mode") === "advanced";
 
@@ -100,6 +100,7 @@ const SCRIPT_FILES = [
   "social-production.js",
   "website-production-mobile-route.js",
   "publishing-operations-center.js",
+  "manuscript-docx-upload-hotfix.js",
   "manuscript-studio.js",
   "manuscript-project-setup.js",
   "manuscript-editorial-workbench.js",

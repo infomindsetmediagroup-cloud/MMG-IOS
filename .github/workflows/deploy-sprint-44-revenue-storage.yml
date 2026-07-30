@@ -61,7 +61,7 @@ jobs:
         working-directory: cloudflare/mmg-ios
         run: npx wrangler deploy
 
-      - name: Verify live clean Executive OS and isolated advanced runtime
+      - name: Verify live DOCX extraction, clean Executive OS, and isolated advanced runtime
         run: |
           set -euo pipefail
           for attempt in $(seq 1 24); do
@@ -69,6 +69,7 @@ jobs:
             safari="${RUNNER_TEMP}/safari.js"
             executive="${RUNNER_TEMP}/executive.js"
             legacy="${RUNNER_TEMP}/legacy.js"
+            docx="${RUNNER_TEMP}/docx-resolver.js"
             manuscript="${RUNNER_TEMP}/manuscript.js"
             health="${RUNNER_TEMP}/health.json"
             readiness="${RUNNER_TEMP}/readiness.json"
@@ -76,9 +77,10 @@ jobs:
             brief="${RUNNER_TEMP}/brief.json"
 
             html_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/?release=${GITHUB_SHA}&attempt=${attempt}" -o "${html}" -w '%{http_code}' || true)"
-            safari_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/safari-manuscript-intake-compat.js?v=safari-intake-fix-20260729-9-digest-hotfix-1&release=${GITHUB_SHA}&attempt=${attempt}" -o "${safari}" -w '%{http_code}' || true)"
+            safari_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/safari-manuscript-intake-compat.js?v=safari-docx-export-resolver-20260730-1&release=${GITHUB_SHA}&attempt=${attempt}" -o "${safari}" -w '%{http_code}' || true)"
             executive_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/executive-os.js?v=browser-finish-20260729-5&release=${GITHUB_SHA}&attempt=${attempt}" -o "${executive}" -w '%{http_code}' || true)"
-            legacy_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/legacy-runtime-loader.js?v=legacy-manuscript-retention-20260730-1&release=${GITHUB_SHA}&attempt=${attempt}" -o "${legacy}" -w '%{http_code}' || true)"
+            legacy_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/legacy-runtime-loader.js?v=legacy-docx-export-resolver-20260730-1&release=${GITHUB_SHA}&attempt=${attempt}" -o "${legacy}" -w '%{http_code}' || true)"
+            docx_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-docx-upload-hotfix.js?v=manuscript-docx-export-resolver-20260730-1&release=${GITHUB_SHA}&attempt=${attempt}" -o "${docx}" -w '%{http_code}' || true)"
             manuscript_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-studio.js?v=manuscript-upload-retention-20260730-1&release=${GITHUB_SHA}&attempt=${attempt}" -o "${manuscript}" -w '%{http_code}' || true)"
             health_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/api/health?release=${GITHUB_SHA}&attempt=${attempt}" -o "${health}" -w '%{http_code}' || true)"
             readiness_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/api/operational-readiness?release=${GITHUB_SHA}&attempt=${attempt}" -o "${readiness}" -w '%{http_code}' || true)"
@@ -86,17 +88,20 @@ jobs:
             brief_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/api/executive-briefing/latest?release=${GITHUB_SHA}&attempt=${attempt}" -o "${brief}" -w '%{http_code}' || true)"
 
             module_count="$(grep -o '<script type="module"' "${html}" | wc -l | tr -d ' ')"
+            resolver_line="$(grep -n 'manuscript-docx-upload-hotfix.js' "${legacy}" | head -1 | cut -d: -f1 || true)"
+            studio_line="$(grep -n 'manuscript-studio.js' "${legacy}" | head -1 | cut -d: -f1 || true)"
 
             if [ "${html_status}" = "200" ] \
               && grep -q 'Kairos Executive Operating System' "${html}" \
               && grep -q 'kairos-executive-clean-boot-20260729-1' "${html}" \
-              && grep -q 'safari-intake-fix-20260729-9-digest-hotfix-1' "${html}" \
-              && grep -q 'legacy-manuscript-retention-20260730-1' "${html}" \
+              && grep -q 'safari-docx-export-resolver-20260730-1' "${html}" \
+              && grep -q 'legacy-docx-export-resolver-20260730-1' "${html}" \
               && [ "${module_count}" = "2" ] \
               && ! grep -q 'command-hub.js' "${html}" \
               && ! grep -q 'manuscript-studio.js' "${html}" \
+              && ! grep -q 'manuscript-docx-upload-hotfix.js' "${html}" \
               && [ "${safari_status}" = "200" ] \
-              && grep -q 'safari-manuscript-intake-compat-20260729-10' "${safari}" \
+              && grep -q 'safari-manuscript-intake-compat-20260730-11-docx' "${safari}" \
               && grep -q 'browser-finish-20260729-5' "${safari}" \
               && grep -q 'ADVANCED_MODE' "${safari}" \
               && grep -q 'installGovernedFetchTimeout' "${safari}" \
@@ -109,13 +114,24 @@ jobs:
               && grep -q 'Promise.race' "${executive}" \
               && grep -q 'API_GET_TIMEOUT_MS = 12000' "${executive}" \
               && [ "${legacy_status}" = "200" ] \
-              && grep -q 'kairos-legacy-runtime-loader-20260730-2' "${legacy}" \
-              && grep -q 'manuscript-upload-retention-20260730-1' "${legacy}" \
+              && grep -q 'kairos-legacy-runtime-loader-20260730-3-docx' "${legacy}" \
+              && grep -q 'manuscript-docx-export-resolver-20260730-1' "${legacy}" \
               && grep -q 'if (advancedMode) loadLegacyRuntime()' "${legacy}" \
               && grep -q 'command-hub.js' "${legacy}" \
+              && grep -q 'manuscript-docx-upload-hotfix.js' "${legacy}" \
               && grep -q 'manuscript-studio.js' "${legacy}" \
               && grep -q 'production-workspace-controller.js' "${legacy}" \
               && grep -q 'shopify-page-compiler.js' "${legacy}" \
+              && [ -n "${resolver_line}" ] \
+              && [ -n "${studio_line}" ] \
+              && [ "${resolver_line}" -lt "${studio_line}" ] \
+              && [ "${docx_status}" = "200" ] \
+              && grep -q 'manuscript-docx-upload-hotfix-20260730-1' "${docx}" \
+              && grep -Fq 'const candidates = [namespace, namespace?.default, namespace?.default?.default]' "${docx}" \
+              && grep -Fq 'typeof candidate?.extractRawText === "function"' "${docx}" \
+              && grep -Fq 'form.append("file", pending.file' "${docx}" \
+              && grep -Fq 'form.append("extractedText", pending.manuscript)' "${docx}" \
+              && grep -q 'kairos:manuscript:restore' "${docx}" \
               && [ "${manuscript_status}" = "200" ] \
               && grep -q 'manuscript-studio-upload-retention-20260730-1' "${manuscript}" \
               && grep -q 'kairos.manuscript-studio.recoverable-draft.v1' "${manuscript}" \
@@ -135,7 +151,7 @@ jobs:
               && grep -q '"workflows":\[' "${workflows}" \
               && grep -q '"executionSource":"kairos-project-agent-workflows"' "${workflows}" \
               && { [ "${brief_status}" = "200" ] || [ "${brief_status}" = "404" ]; }; then
-              echo "Live clean Executive OS, isolated advanced runtime, and retained manuscript upload verified."
+              echo "Live DOCX named-export extraction, original-source preservation, clean Executive OS, and isolated advanced runtime verified."
               cat "${health}"
               cat "${readiness}"
               cat "${workflows}"
@@ -150,6 +166,7 @@ jobs:
           echo "Safari module status: ${safari_status}"
           echo "Executive OS module status: ${executive_status}"
           echo "Legacy runtime loader status: ${legacy_status}"
+          echo "DOCX resolver status: ${docx_status}"
           echo "Manuscript Studio status: ${manuscript_status}"
           echo "Health status: ${health_status}"
           echo "Operational readiness status: ${readiness_status}"
@@ -159,6 +176,7 @@ jobs:
           cat "${safari}" || true
           cat "${executive}" || true
           cat "${legacy}" || true
+          cat "${docx}" || true
           cat "${manuscript}" || true
           cat "${health}" || true
           cat "${readiness}" || true
@@ -173,7 +191,7 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"success\",\"context\":\"kairos-browser-runtime\",\"description\":\"Clean Executive OS and retained manuscript runtime deployed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"success\",\"context\":\"kairos-browser-runtime\",\"description\":\"DOCX extraction and Kairos runtime deployed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
       - name: Report deployment failure
         if: ${{ failure() || cancelled() }}

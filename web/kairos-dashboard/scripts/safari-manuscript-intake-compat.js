@@ -1,4 +1,4 @@
-const BUILD = "safari-manuscript-intake-compat-20260729-10";
+const BUILD = "safari-manuscript-intake-compat-20260730-11-docx";
 const API_GET_TIMEOUT_MS = 12000;
 const API_MUTATION_TIMEOUT_MS = 45000;
 const ADVANCED_MODE = new URLSearchParams(globalThis.location?.search || "").get("mode") === "advanced";

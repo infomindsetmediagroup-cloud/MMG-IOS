@@ -7,6 +7,7 @@ const wrangler = readFileSync("cloudflare/mmg-ios/wrangler.toml", "utf8");
 const browser = readFileSync("web/kairos-dashboard/scripts/executive-os-live-details.js", "utf8");
 const executive = readFileSync("web/kairos-dashboard/scripts/executive-os.js", "utf8");
 const safari = readFileSync("web/kairos-dashboard/scripts/safari-manuscript-intake-compat.js", "utf8");
+const docxHotfix = readFileSync("web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js", "utf8");
 const legacy = readFileSync("web/kairos-dashboard/scripts/legacy-runtime-loader.js", "utf8");
 const index = readFileSync("web/kairos-dashboard/index.html", "utf8");
 
@@ -83,16 +84,35 @@ test("Safari API requests cannot leave the dashboard refreshing forever", () => 
   assert.match(safari, /AbortController/);
   assert.match(safari, /TimeoutError/);
   assert.match(safari, /executive-os\.js\?v=browser-finish-20260729-5/);
-  assert.match(index, /safari-manuscript-intake-compat\.js\?v=safari-intake-fix-20260729-9-digest-hotfix-1/);
+  assert.match(index, /safari-manuscript-intake-compat\.js\?v=safari-docx-export-resolver-20260730-1/);
 });
 
 test("Safari manuscript checksums preserve the native digest identifier first", () => {
-  assert.match(safari, /safari-manuscript-intake-compat-20260729-10/);
+  assert.match(safari, /safari-manuscript-intake-compat-20260730-11-docx/);
   assert.match(safari, /return await nativeDigest\(algorithm, data\)/);
   assert.match(safari, /const alternate = typeof algorithm === "string"/);
   assert.match(safari, /return await nativeDigest\(alternate, data\)/);
   assert.match(safari, /__kairosDigestIdentifierFallback/);
   assert.doesNotMatch(safari, /const normalized = typeof algorithm === "string" \? \{ name: algorithm \} : algorithm/);
+});
+
+test("Safari DOCX upload resolves the Mammoth named export before Manuscript Studio", () => {
+  assert.match(index, /legacy-runtime-loader\.js\?v=legacy-docx-export-resolver-20260730-1/);
+  assert.match(legacy, /kairos-legacy-runtime-loader-20260730-3-docx/);
+  assert.match(legacy, /manuscript-docx-export-resolver-20260730-1/);
+  const resolverIndex = legacy.indexOf('"manuscript-docx-upload-hotfix.js"');
+  const studioIndex = legacy.indexOf('"manuscript-studio.js"');
+  assert.ok(resolverIndex > -1, "DOCX resolver must be included in Advanced Operations");
+  assert.ok(studioIndex > resolverIndex, "DOCX resolver must load before Manuscript Studio");
+  assert.doesNotMatch(safari, /manuscript-docx-upload-hotfix\.js/);
+  assert.match(docxHotfix, /document\.addEventListener\("change", interceptDocxSelection, true\)/);
+  assert.match(docxHotfix, /const candidates = \[namespace, namespace\?\.default, namespace\?\.default\?\.default\]/);
+  assert.match(docxHotfix, /typeof candidate\?\.extractRawText === "function"/);
+  assert.match(docxHotfix, /candidate\.extractRawText\.bind\(candidate\)/);
+  assert.match(docxHotfix, /form\.append\("file", pending\.file/);
+  assert.match(docxHotfix, /form\.append\("extractedText", pending\.manuscript\)/);
+  assert.match(docxHotfix, /kairos:manuscript:restore/);
+  assert.doesNotMatch(docxHotfix, /const api = .*default \|\|/);
 });
 
 test("the Executive OS core always releases its refresh state", () => {
@@ -115,7 +135,7 @@ test("read-only startup refresh never owns the mutation loading lock", () => {
 
 test("the normal page is an isolated Executive OS boot", () => {
   assert.match(index, /kairos-executive-clean-boot-20260729-1/);
-  assert.match(index, /legacy-runtime-loader\.js\?v=legacy-manuscript-retention-20260730-1/);
+  assert.match(index, /legacy-runtime-loader\.js\?v=legacy-docx-export-resolver-20260730-1/);
   assert.doesNotMatch(index, /command-hub\.js/);
   assert.doesNotMatch(index, /manuscript-studio\.js/);
   assert.doesNotMatch(index, /objective-controller-v2\.js/);
@@ -130,6 +150,7 @@ test("advanced operations preserve the complete legacy runtime behind explicit n
   assert.match(legacy, /if \(advancedMode\) loadLegacyRuntime\(\)/);
   assert.match(legacy, /command-hub\.js/);
   assert.match(legacy, /command-center-governance\.js/);
+  assert.match(legacy, /manuscript-docx-upload-hotfix\.js/);
   assert.match(legacy, /manuscript-studio\.js/);
   assert.match(legacy, /manuscript-project-setup\.js/);
   assert.match(legacy, /production-workspace-controller\.js/);
