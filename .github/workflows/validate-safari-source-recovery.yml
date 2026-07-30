@@ -6,8 +6,8 @@ on:
     paths:
       - 'web/kairos-dashboard/index.html'
       - 'web/kairos-dashboard/scripts/legacy-runtime-loader.js'
-      - 'web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js'
-      - 'browser-tests/manuscript-docx-native-extractor.spec.mjs'
+      - 'web/kairos-dashboard/scripts/manuscript-studio.js'
+      - 'browser-tests/manuscript-studio-direct-chunk.spec.mjs'
       - 'cloudflare/mmg-ios/src/kairos-manuscript-source-v1.js'
       - 'cloudflare/mmg-ios/src/kairos-production-registry-v1.js'
       - '.github/workflows/validate-safari-source-recovery.yml'
@@ -16,8 +16,8 @@ on:
     paths:
       - 'web/kairos-dashboard/index.html'
       - 'web/kairos-dashboard/scripts/legacy-runtime-loader.js'
-      - 'web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js'
-      - 'browser-tests/manuscript-docx-native-extractor.spec.mjs'
+      - 'web/kairos-dashboard/scripts/manuscript-studio.js'
+      - 'browser-tests/manuscript-studio-direct-chunk.spec.mjs'
       - 'cloudflare/mmg-ios/src/kairos-manuscript-source-v1.js'
       - 'cloudflare/mmg-ios/src/kairos-production-registry-v1.js'
       - '.github/workflows/validate-safari-source-recovery.yml'
@@ -37,23 +37,25 @@ jobs:
           node-version: '22'
       - name: Install validation dependencies
         run: npm install --ignore-scripts --no-audit --no-fund > /dev/null
-      - name: Validate chunked recovery syntax and release wiring
+      - name: Validate direct Studio recovery syntax and release wiring
         run: |
           node --check cloudflare/mmg-ios/src/kairos-manuscript-source-v1.js
           node --check cloudflare/mmg-ios/src/kairos-production-registry-v1.js
-          node --check web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
+          node --check web/kairos-dashboard/scripts/manuscript-studio.js
           node --check web/kairos-dashboard/scripts/legacy-runtime-loader.js
-          grep -q 'five-center-dashboard-chunked-source-20260730-3' web/kairos-dashboard/index.html
-          grep -q 'const ASSET_RELEASE = "five-center-dashboard-chunked-source-20260730-3"' web/kairos-dashboard/scripts/legacy-runtime-loader.js
-          grep -q 'manuscript-docx-upload-hotfix-20260730-3-chunked-source' web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
-          grep -q 'chunkedSourceUpload: true' web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
-          grep -q 'FILE_CHUNK_BYTES = 512 \* 1024' web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
-          grep -q 'TEXT_CHUNK_BYTES = 128 \* 1024' web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
-          ! grep -q 'new FormData' web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
+          grep -q 'five-center-dashboard-direct-studio-chunks-20260730-4' web/kairos-dashboard/index.html
+          grep -q 'const ASSET_RELEASE = "five-center-dashboard-direct-studio-chunks-20260730-4"' web/kairos-dashboard/scripts/legacy-runtime-loader.js
+          grep -q 'manuscript-studio-direct-chunks-20260730-4' web/kairos-dashboard/scripts/manuscript-studio.js
+          grep -q 'chunkedSourceUpload: true' web/kairos-dashboard/scripts/manuscript-studio.js
+          grep -q 'multipartSourceUpload: false' web/kairos-dashboard/scripts/manuscript-studio.js
+          grep -q 'FILE_CHUNK_BYTES = 512 \* 1024' web/kairos-dashboard/scripts/manuscript-studio.js
+          grep -q 'TEXT_CHUNK_BYTES = 128 \* 1024' web/kairos-dashboard/scripts/manuscript-studio.js
+          ! grep -q 'new FormData' web/kairos-dashboard/scripts/manuscript-studio.js
+          node -e 'const fs=require("fs");const s=fs.readFileSync("web/kairos-dashboard/scripts/legacy-runtime-loader.js","utf8");const a=s.match(/const SCRIPT_FILES = \[([\s\S]*?)\];/)?.[1]||"";if(a.includes("manuscript-docx-upload-hotfix.js"))process.exit(1);if(!a.includes("manuscript-studio.js"))process.exit(1);'
       - name: Install WebKit
         run: npx playwright install --with-deps webkit > /dev/null
-      - name: Test native DOCX extraction and raw chunk recovery in iPhone WebKit
-        run: npx playwright test browser-tests/manuscript-docx-native-extractor.spec.mjs --project=webkit
+      - name: Test direct Studio stale-draft migration and forced-502 recovery in iPhone WebKit
+        run: npx playwright test browser-tests/manuscript-studio-direct-chunk.spec.mjs --project=webkit
 
   verify-live:
     if: ${{ github.event_name == 'push' }}
@@ -62,43 +64,47 @@ jobs:
     env:
       WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
     steps:
-      - name: Verify deployed chunked source runtime
+      - name: Verify deployed direct Studio source runtime
         shell: bash
         run: |
           set -euo pipefail
           for attempt in $(seq 1 60); do
             root="${RUNNER_TEMP}/root.html"
             loader="${RUNNER_TEMP}/loader.js"
-            docx="${RUNNER_TEMP}/docx.js"
+            studio="${RUNNER_TEMP}/studio.js"
             command="${RUNNER_TEMP}/command.js"
 
             root_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/?release=${GITHUB_SHA}&attempt=${attempt}" -o "${root}" -w '%{http_code}' || true)"
             loader_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/legacy-runtime-loader.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${loader}" -w '%{http_code}' || true)"
-            docx_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-docx-upload-hotfix.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${docx}" -w '%{http_code}' || true)"
+            studio_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-studio.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${studio}" -w '%{http_code}' || true)"
             command_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/command-hub.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${command}" -w '%{http_code}' || true)"
             parent_count="$(grep -o 'id: "\(knowledge\|content\|business\|customers\|operations\)"' "${command}" 2>/dev/null | wc -l | tr -d ' ')"
+            active_scripts="$(node -e 'const fs=require("fs");const s=fs.readFileSync(process.argv[1],"utf8");process.stdout.write(s.match(/const SCRIPT_FILES = \[([\s\S]*?)\];/)?.[1]||"")' "${loader}")"
 
             if [ "${root_status}" = "200" ] \
-              && grep -q 'five-center-dashboard-chunked-source-20260730-3' "${root}" \
+              && grep -q 'five-center-dashboard-direct-studio-chunks-20260730-4' "${root}" \
               && [ "${loader_status}" = "200" ] \
-              && grep -q 'const ASSET_RELEASE = "five-center-dashboard-chunked-source-20260730-3"' "${loader}" \
+              && grep -q 'const ASSET_RELEASE = "five-center-dashboard-direct-studio-chunks-20260730-4"' "${loader}" \
               && grep -q 'scripts/${filename}?v=${ASSET_RELEASE}' "${loader}" \
-              && [ "${docx_status}" = "200" ] \
-              && grep -q 'manuscript-docx-upload-hotfix-20260730-3-chunked-source' "${docx}" \
-              && grep -q 'chunkedSourceUpload: true' "${docx}" \
-              && ! grep -q 'new FormData' "${docx}" \
+              && printf '%s' "${active_scripts}" | grep -q 'manuscript-studio.js' \
+              && ! printf '%s' "${active_scripts}" | grep -q 'manuscript-docx-upload-hotfix.js' \
+              && [ "${studio_status}" = "200" ] \
+              && grep -q 'manuscript-studio-direct-chunks-20260730-4' "${studio}" \
+              && grep -q 'chunkedSourceUpload: true' "${studio}" \
+              && grep -q 'multipartSourceUpload: false' "${studio}" \
+              && ! grep -q 'new FormData' "${studio}" \
               && [ "${command_status}" = "200" ] \
               && [ "${parent_count}" = "5" ]; then
-              echo "Safari chunked source recovery and five-center dashboard verified live."
+              echo "Safari direct Studio source recovery and five-center dashboard verified live."
               exit 0
             fi
 
             if [ "${attempt}" = "60" ]; then
-              echo "Live Safari chunked-source verification failed."
-              printf 'root=%s loader=%s docx=%s command=%s parents=%s\n' "${root_status}" "${loader_status}" "${docx_status}" "${command_status}" "${parent_count}"
+              echo "Live Safari direct-Studio verification failed."
+              printf 'root=%s loader=%s studio=%s command=%s parents=%s\n' "${root_status}" "${loader_status}" "${studio_status}" "${command_status}" "${parent_count}"
               cat "${root}" || true
               cat "${loader}" || true
-              cat "${docx}" || true
+              cat "${studio}" || true
               exit 1
             fi
             sleep 5
