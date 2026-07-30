@@ -10,14 +10,6 @@ installGovernedFetchTimeout();
 
 if (ADVANCED_MODE) {
   document.documentElement.dataset.kairosMode = "advanced";
-  try {
-    await import("./manuscript-docx-upload-hotfix.js?v=docx-export-resolver-20260730-1");
-  } catch (error) {
-    console.error("Kairos DOCX upload compatibility failed to activate.", error);
-    window.dispatchEvent(new CustomEvent("kairos:manuscript-docx:error", {
-      detail: { message: String(error?.message || "DOCX upload compatibility failed to activate.") },
-    }));
-  }
 } else {
   document.documentElement.dataset.kairosMode = "executive";
   activateExecutiveOperatingSystem();
