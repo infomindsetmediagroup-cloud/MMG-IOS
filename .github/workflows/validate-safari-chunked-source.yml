@@ -1,0 +1,65 @@
+name: Validate Safari Chunked Source
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/validate-safari-chunked-source.yml'
+      - '.github/workflows/deploy-sprint-44-revenue-storage.yml'
+      - 'cloudflare/mmg-ios/src/kairos-manuscript-source-v1.js'
+      - 'cloudflare/mmg-ios/src/kairos-production-registry-v1.js'
+      - 'cloudflare/mmg-ios/test/kairos-manuscript-source-forwarding.test.js'
+      - 'cloudflare/mmg-ios/test/kairos-manuscript-chunked-upload.test.js'
+      - 'cloudflare/mmg-ios/scripts/validate-manuscript-large-intake.mjs'
+      - 'web/kairos-dashboard/index.html'
+      - 'web/kairos-dashboard/scripts/legacy-runtime-loader.js'
+      - 'web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js'
+      - 'browser-tests/manuscript-docx-native-extractor.spec.mjs'
+      - 'tests/kairos-operational-execution-bridge.contract.test.js'
+      - 'cloudflare/mmg-ios/test/kairos-manuscript-project-setup-ui-v2.test.js'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-chunked-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install validation dependencies
+        run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund > /dev/null
+
+      - name: Validate chunked source syntax and contracts
+        run: |
+          node --check cloudflare/mmg-ios/src/kairos-manuscript-source-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-production-registry-v1.js
+          node --check web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
+          node --check web/kairos-dashboard/scripts/legacy-runtime-loader.js
+          node --test cloudflare/mmg-ios/test/kairos-manuscript-source-forwarding.test.js
+          node --test cloudflare/mmg-ios/test/kairos-manuscript-chunked-upload.test.js
+          node cloudflare/mmg-ios/scripts/validate-manuscript-large-intake.mjs
+          node --test tests/kairos-operational-execution-bridge.contract.test.js
+          cd cloudflare/mmg-ios
+          node --test test/kairos-manuscript-project-setup-ui-v2.test.js
+
+      - name: Install WebKit
+        run: npx playwright install --with-deps webkit > /dev/null
+
+      - name: Verify raw chunk storage in iPhone WebKit
+        run: npx playwright test browser-tests/manuscript-docx-native-extractor.spec.mjs --project=webkit
+
+      - name: Enforce no multipart Safari source path
+        run: |
+          grep -q 'manuscript-docx-upload-hotfix-20260730-3-chunked-source' web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
+          grep -q 'chunkedSourceUpload: true' web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
+          grep -q 'sourcePath("session")' web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
+          grep -q 'sourcePath("commit")' web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
+          ! grep -q 'new FormData' web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js
+          grep -q 'five-center-dashboard-chunked-source-20260730-3' web/kairos-dashboard/index.html
