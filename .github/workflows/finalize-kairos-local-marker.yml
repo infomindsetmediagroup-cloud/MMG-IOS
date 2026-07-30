@@ -1,0 +1,61 @@
+name: Finalize Kairos Local Marker
+
+on:
+  push:
+    branches:
+      - agent/kairos-local-live-diagnostic
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/kairos-local-live-diagnostic
+          fetch-depth: 0
+      - name: Add canonical browser execution marker
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          bridge = Path('web/kairos-dashboard/scripts/executive-local-inference.js')
+          text = bridge.read_text()
+          build = 'const BUILD = "kairos-executive-local-inference-20260730-1";\n'
+          marker = build + 'const EXECUTION_MODE = "browser-webgpu";\n'
+          if 'const EXECUTION_MODE = "browser-webgpu";' not in text:
+              if build not in text:
+                  raise SystemExit('Kairos bridge build marker not found')
+              text = text.replace(build, marker, 1)
+          panel = '    panel.id = PANEL_ID;\n'
+          evidence = panel + '    panel.dataset.executionMode = EXECUTION_MODE;\n'
+          if 'panel.dataset.executionMode = EXECUTION_MODE;' not in text:
+              if panel not in text:
+                  raise SystemExit('Kairos local panel marker not found')
+              text = text.replace(panel, evidence, 1)
+          bridge.write_text(text)
+
+          test = Path('backend-tests/kairos-local-execution.test.ts')
+          text = test.read_text()
+          anchor = '    expect(bridge).toContain(\'import("../vendor/webllm-bundle.js")\');\n'
+          assertion = '    expect(bridge).toContain(\'const EXECUTION_MODE = "browser-webgpu"\');\n' + anchor
+          if 'const EXECUTION_MODE = "browser-webgpu"' not in text:
+              if anchor not in text:
+                  raise SystemExit('Local execution test anchor not found')
+              text = text.replace(anchor, assertion, 1)
+          test.write_text(text)
+          PY
+      - name: Remove one-time diagnostic workflows
+        run: |
+          git rm -f .github/workflows/diagnose-kairos-local-live.yml .github/workflows/finalize-kairos-local-marker.yml
+      - name: Commit finalized marker
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add web/kairos-dashboard/scripts/executive-local-inference.js backend-tests/kairos-local-execution.test.ts
+          git commit -m 'fix: expose Kairos local execution mode'
+          git push origin HEAD:agent/kairos-local-live-diagnostic
