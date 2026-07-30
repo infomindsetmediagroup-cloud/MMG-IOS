@@ -1,5 +1,6 @@
 const BUILD = "kairos-five-center-runtime-loader-20260730-1";
 const RELEASE = "five-center-dashboard-restored-20260730-1";
+const ASSET_RELEASE = "five-center-dashboard-source-recovery-20260730-2";
 const params = new URLSearchParams(window.location.search);
 const requestedMode = params.get("mode");
 const executiveMode = requestedMode === "executive";
@@ -126,6 +127,7 @@ let loadPromise = null;
 
 window.KairosLegacyRuntime = Object.freeze({
   build: BUILD,
+  release: ASSET_RELEASE,
   requestedMode: requestedMode || "command",
   commandHubMode,
   advancedMode,
@@ -155,12 +157,13 @@ async function loadCommandRuntime() {
       ui.remove();
       document.body.dataset.kairosLegacyReady = "true";
       document.body.dataset.kairosCommandHubReady = "true";
+      document.body.dataset.kairosAssetRelease = ASSET_RELEASE;
       window.dispatchEvent(new CustomEvent("kairos:legacy-runtime:ready", {
-        detail: { build: BUILD, scripts: SCRIPT_FILES.length, mode: advancedMode ? "advanced" : "command" },
+        detail: { build: BUILD, release: ASSET_RELEASE, scripts: SCRIPT_FILES.length, mode: advancedMode ? "advanced" : "command" },
       }));
       if (advancedMode) installPersistentReturnButton();
       openRequestedWorkspace();
-      return { status: "ready", build: BUILD, mode: advancedMode ? "advanced" : "command" };
+      return { status: "ready", build: BUILD, release: ASSET_RELEASE, mode: advancedMode ? "advanced" : "command" };
     } catch (error) {
       console.error("Kairos command center failed to load.", error);
       ui.fail(error);
@@ -177,7 +180,7 @@ function loadStyle(filename) {
     if (document.querySelector(selector)) return resolve();
     const link = document.createElement("link");
     link.rel = "stylesheet";
-    link.href = `./styles/${filename}?v=${RELEASE}`;
+    link.href = `./styles/${filename}?v=${ASSET_RELEASE}`;
     link.dataset.kairosCommandStyle = filename;
     link.onload = () => resolve();
     link.onerror = () => reject(new Error(`Could not load ${filename}.`));
@@ -191,7 +194,7 @@ function loadModule(filename) {
     if (document.querySelector(selector)) return resolve();
     const script = document.createElement("script");
     script.type = "module";
-    script.src = `./scripts/${filename}?v=${RELEASE}`;
+    script.src = `./scripts/${filename}?v=${ASSET_RELEASE}`;
     script.dataset.kairosCommandScript = filename;
     script.onload = () => resolve();
     script.onerror = () => reject(new Error(`Could not load ${filename}.`));
