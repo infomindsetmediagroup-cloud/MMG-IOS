@@ -31,6 +31,13 @@ const wrangler = readFileSync("cloudflare/mmg-ios/wrangler.toml", "utf8");
     expect(workflow).toContain("step.reportComplete");
   });
 
+  it("lets Cloudflare generate valid workflow instance IDs", () => {
+    expect(agent).not.toMatch(/id:\s*`kairos-project-/);
+    expect(agent).not.toMatch(/id:\s*`kairos-manuscript-/);
+    expect(agent).toContain('metadata: { projectId, workflowVersion: "project-foundation-v1" }');
+    expect(agent).toContain('metadata: { projectId, workflowVersion: "manuscript-generation-v1", approvalType: "START_PRODUCTION_JOB" }');
+  });
+
   it("exposes reconnect-safe state and approval routes without granting Shopify authority", () => {
     expect(api).toContain("getAgentByName(env.KAIROS_PROJECT_AGENT");
     expect(api).toContain('action === "state"');
