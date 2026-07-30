@@ -3,19 +3,12 @@ import { readFileSync } from "node:fs";
 
 const indexSource = readFileSync(new URL("../web/kairos-dashboard/index.html", import.meta.url), "utf8");
 const safariSource = readFileSync(new URL("../web/kairos-dashboard/scripts/safari-manuscript-intake-compat.js", import.meta.url), "utf8");
-const executiveSource = readFileSync(new URL("../web/kairos-dashboard/scripts/executive-os.js", import.meta.url), "utf8");
-const liveDetailsSource = readFileSync(new URL("../web/kairos-dashboard/scripts/executive-os-live-details.js", import.meta.url), "utf8");
-const runtimeLoaderSource = readFileSync(new URL("../web/kairos-dashboard/scripts/kairos-runtime-loader.js", import.meta.url), "utf8");
-const localInferenceSource = readFileSync(new URL("../web/kairos-dashboard/scripts/executive-local-inference.js", import.meta.url), "utf8");
 const legacySource = readFileSync(new URL("../web/kairos-dashboard/scripts/legacy-runtime-loader.js", import.meta.url), "utf8");
-const executiveCSS = readFileSync(new URL("../web/kairos-dashboard/styles/executive-os.css", import.meta.url), "utf8");
+const commandHubSource = readFileSync(new URL("../web/kairos-dashboard/scripts/command-hub.js", import.meta.url), "utf8");
+const executiveSource = readFileSync(new URL("../web/kairos-dashboard/scripts/executive-os.js", import.meta.url), "utf8");
 
-function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-async function installDashboardRoutes(page, { slowAPIs = false } = {}) {
-  const legacyRequests = [];
+async function installDashboardRoutes(page) {
+  const scriptRequests = [];
 
   await page.route("https://kairos.test/**", async route => {
     const request = route.request();
@@ -24,11 +17,6 @@ async function installDashboardRoutes(page, { slowAPIs = false } = {}) {
 
     if (request.resourceType() === "document") {
       await route.fulfill({ status: 200, contentType: "text/html", body: indexSource });
-      return;
-    }
-
-    if (path === "/styles/executive-os.css") {
-      await route.fulfill({ status: 200, contentType: "text/css", body: executiveCSS });
       return;
     }
 
@@ -42,40 +30,35 @@ async function installDashboardRoutes(page, { slowAPIs = false } = {}) {
       return;
     }
 
-    if (path === "/scripts/executive-os.js") {
-      await route.fulfill({ status: 200, contentType: "text/javascript", body: executiveSource });
-      return;
-    }
-
-    if (path === "/scripts/executive-os-live-details.js") {
-      await route.fulfill({ status: 200, contentType: "text/javascript", body: liveDetailsSource });
-      return;
-    }
-
-    if (path === "/scripts/kairos-runtime-loader.js") {
-      await route.fulfill({ status: 200, contentType: "text/javascript", body: runtimeLoaderSource });
-      return;
-    }
-
-    if (path === "/scripts/executive-local-inference.js") {
-      await route.fulfill({ status: 200, contentType: "text/javascript", body: localInferenceSource });
-      return;
-    }
-
     if (path === "/scripts/legacy-runtime-loader.js") {
       await route.fulfill({ status: 200, contentType: "text/javascript", body: legacySource });
       return;
     }
 
-    if (path === "/scripts/executive-os-feedback.js") {
+    if (path === "/scripts/command-hub.js") {
+      scriptRequests.push("command-hub.js");
+      await route.fulfill({ status: 200, contentType: "text/javascript", body: commandHubSource });
+      return;
+    }
+
+    if (path === "/scripts/executive-os.js") {
+      scriptRequests.push("executive-os.js");
+      await route.fulfill({ status: 200, contentType: "text/javascript", body: executiveSource });
+      return;
+    }
+
+    if (path === "/scripts/executive-os-live-details.js" || path === "/scripts/executive-os-feedback.js") {
       await route.fulfill({ status: 200, contentType: "text/javascript", body: "export {};" });
       return;
     }
 
     if (path.startsWith("/api/")) {
-      if (slowAPIs) await delay(4_000);
       if (path === "/api/health") {
-        await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ status: "ready" }) });
+        await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ status: "ready", build: "test" }) });
+        return;
+      }
+      if (path === "/api/capabilities") {
+        await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ status: "ready", capabilities: [] }) });
         return;
       }
       if (path === "/api/workflows") {
@@ -91,7 +74,7 @@ async function installDashboardRoutes(page, { slowAPIs = false } = {}) {
     }
 
     if (path.startsWith("/scripts/") && path.endsWith(".js")) {
-      legacyRequests.push(path.split("/").pop());
+      scriptRequests.push(path.split("/").pop());
       await route.fulfill({ status: 200, contentType: "text/javascript", body: "export {};" });
       return;
     }
@@ -99,52 +82,51 @@ async function installDashboardRoutes(page, { slowAPIs = false } = {}) {
     await route.fulfill({ status: 404, body: "not found" });
   });
 
-  return legacyRequests;
+  return scriptRequests;
 }
 
-test("iPhone WebKit remains tappable while executive API refresh is pending", async ({ page }) => {
-  const legacyRequests = await installDashboardRoutes(page, { slowAPIs: true });
+test("default iPhone route restores the five-parent-card Kairos command dashboard", async ({ page }) => {
+  const scriptRequests = await installDashboardRoutes(page);
 
-  await page.goto("https://kairos.test/?test=clean-boot", { waitUntil: "domcontentloaded" });
-  await expect(page.locator("#kairos-executive-os")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Create" })).toBeVisible();
+  await page.goto("https://kairos.test/?test=five-center-dashboard", { waitUntil: "domcontentloaded" });
+  await expect.poll(() => page.locator("body").getAttribute("data-kairos-command-hub-ready"), { timeout: 20_000 }).toBe("true");
 
-  await page.getByRole("button", { name: "Create" }).tap();
-  await expect(page.getByRole("heading", { name: "What should Kairos accomplish?" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Start governed work" })).toBeEnabled();
-  await expect(page.getByRole("button", { name: "Open manuscript production" })).toBeEnabled();
-  expect(legacyRequests).toEqual([]);
+  await expect(page.locator("#kairos-executive-os")).toHaveCount(0);
+  await expect(page.locator("#kairos-local-production-panel")).toHaveCount(0);
+  await expect(page.locator(".parent-card")).toHaveCount(5);
+  await expect(page.getByRole("button", { name: /Knowledge/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Content/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Business/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Customers/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Operations/ })).toBeVisible();
 
-  await page.getByRole("button", { name: "Open manuscript production" }).tap();
-  await expect(page).toHaveURL(/mode=advanced/);
-  await expect(page).toHaveURL(/open=manuscript/);
+  await page.getByRole("button", { name: /Content/ }).tap();
+  await expect(page.getByRole("heading", { name: "Choose an action" })).toBeVisible();
+  await expect(page.locator(".child-card")).toHaveCount(5);
+  await expect(page.getByRole("button", { name: "Open Manuscript Studio" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Return to Command Center" })).toBeEnabled();
+
+  expect(scriptRequests[0]).toBe("command-hub.js");
+  expect(scriptRequests).not.toContain("executive-local-inference.js");
 });
 
-test("real live-details module does not lock the iPhone WebKit event loop", async ({ page }) => {
+test("Executive OS remains an explicit opt-in route and does not replace the command dashboard", async ({ page }) => {
+  const scriptRequests = await installDashboardRoutes(page);
+
+  await page.goto("https://kairos.test/?mode=executive", { waitUntil: "domcontentloaded" });
+  await expect(page.locator("#kairos-executive-os")).toBeVisible();
+  await expect(page.locator(".parent-card")).toHaveCount(0);
+  await expect(page.locator("#kairos-local-production-panel")).toHaveCount(0);
+  expect(scriptRequests).toContain("executive-os.js");
+  expect(scriptRequests).not.toContain("command-hub.js");
+});
+
+test("advanced workspace still returns to the five-center command dashboard", async ({ page }) => {
   await installDashboardRoutes(page);
 
-  await page.goto("https://kairos.test/?test=observer-loop", { waitUntil: "domcontentloaded" });
-  await expect(page.locator("#kairos-executive-os")).toBeVisible();
-  await expect(page.locator("[data-execution-detail]")).toBeVisible();
-
-  await page.waitForTimeout(350);
-  await page.getByRole("button", { name: "Create" }).tap({ timeout: 3_000 });
-  await expect(page.getByRole("heading", { name: "What should Kairos accomplish?" })).toBeVisible();
-  await page.getByRole("button", { name: "Today" }).tap({ timeout: 3_000 });
-  await expect(page.getByRole("heading", { name: "Kairos is working." })).toBeVisible();
-  await expect(page.locator("[data-execution-detail]")).toHaveCount(1);
-});
-
-test("advanced mode loads the legacy runtime without mounting Executive OS", async ({ page }) => {
-  const legacyRequests = await installDashboardRoutes(page);
-
   await page.goto("https://kairos.test/?mode=advanced", { waitUntil: "domcontentloaded" });
-  await expect(page.locator("#kairos-executive-os")).toHaveCount(0);
+  await expect.poll(() => page.locator("body").getAttribute("data-kairos-command-hub-ready"), { timeout: 20_000 }).toBe("true");
+  await expect(page.locator(".parent-card")).toHaveCount(5);
   await expect(page.locator("[data-kairos-persistent-return]")).toBeVisible();
-  await expect.poll(() => page.locator("body").getAttribute("data-kairos-legacy-ready"), { timeout: 15_000 }).toBe("true");
-
-  expect(legacyRequests.length).toBeGreaterThan(40);
-  expect(legacyRequests[0]).toBe("command-hub.js");
-  expect(legacyRequests).toContain("manuscript-studio.js");
-  expect(legacyRequests).toContain("production-workspace-controller.js");
+  await expect(page.locator("#kairos-executive-os")).toHaveCount(0);
 });
