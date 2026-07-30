@@ -62,9 +62,9 @@ test("the controller preserves retry state and always clears busy", () => {
   assert.match(source, /Kairos did not respond in time/);
 });
 
-test("the five-center dashboard retains advanced manuscript operations and local inference", () => {
+test("the five-center dashboard retains chunked manuscript operations and local inference", () => {
   assert.match(index, /kairos-five-center-dashboard-restored-20260730-1/);
-  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-restored-20260730-1/);
+  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-chunked-source-20260730-3/);
   assert.doesNotMatch(index, /executive-local-inference\.js/);
   assert.doesNotMatch(index, /kairos-runtime-loader\.js/);
   assert.doesNotMatch(index, /manuscript-docx-upload-hotfix\.js/);
@@ -73,6 +73,7 @@ test("the five-center dashboard retains advanced manuscript operations and local
   assert.match(runtimeLoader, /import "\.\/legacy-runtime-loader\.js"/);
   assert.doesNotMatch(runtimeLoader, /executive-local-inference\.js/);
   assert.match(loader, /const RELEASE = "five-center-dashboard-restored-20260730-1"/);
+  assert.match(loader, /const ASSET_RELEASE = "five-center-dashboard-chunked-source-20260730-3"/);
   assert.match(loader, /commandHubMode/);
   assert.match(loader, /"command-hub\.js"/);
   assert.match(loader, /"kairos-local-inference\.js"/);
@@ -88,4 +89,8 @@ test("the five-center dashboard retains advanced manuscript operations and local
   assert.ok(studioIndex > resolverIndex);
   assert.ok(setupIndex > studioIndex);
   assert.match(docxResolver, /typeof candidate\?\.extractRawText === "function"/);
+  assert.match(docxResolver, /chunkedSourceUpload:\s*true/);
+  assert.match(docxResolver, /FILE_CHUNK_BYTES = 512 \* 1024/);
+  assert.match(docxResolver, /TEXT_CHUNK_BYTES = 128 \* 1024/);
+  assert.doesNotMatch(docxResolver, /new FormData/);
 });

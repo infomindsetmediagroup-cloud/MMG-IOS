@@ -134,14 +134,15 @@ test("Safari manuscript checksums preserve the native digest identifier first", 
   assert.doesNotMatch(safari, /const normalized = typeof algorithm === "string" \? \{ name: algorithm \} : algorithm/);
 });
 
-test("Safari DOCX upload and same-origin inference remain inside the governed command runtime", () => {
-  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-restored-20260730-1/);
+test("Safari DOCX upload uses verified raw chunks inside the governed command runtime", () => {
+  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-chunked-source-20260730-3/);
   assert.doesNotMatch(index, /executive-local-inference\.js/);
   assert.doesNotMatch(index, /kairos-runtime-loader\.js/);
   assert.match(runtimeLoader, /import "\.\/legacy-runtime-loader\.js"/);
   assert.doesNotMatch(runtimeLoader, /executive-local-inference\.js/);
   assert.match(legacy, /kairos-five-center-runtime-loader-20260730-1/);
   assert.match(legacy, /five-center-dashboard-restored-20260730-1/);
+  assert.match(legacy, /five-center-dashboard-chunked-source-20260730-3/);
   assert.match(legacy, /"kairos-local-inference\.js"/);
   const resolverIndex = legacy.indexOf('"manuscript-docx-upload-hotfix.js"');
   const studioIndex = legacy.indexOf('"manuscript-studio.js"');
@@ -158,8 +159,12 @@ test("Safari DOCX upload and same-origin inference remain inside the governed co
   assert.match(docxHotfix, /const candidates = \[namespace, namespace\?\.default, namespace\?\.default\?\.default\]/);
   assert.match(docxHotfix, /typeof candidate\?\.extractRawText === "function"/);
   assert.match(docxHotfix, /candidate\.extractRawText\.bind\(candidate\)/);
-  assert.match(docxHotfix, /form\.append\("file", pending\.file/);
-  assert.match(docxHotfix, /form\.append\("extractedText", pending\.manuscript\)/);
+  assert.match(docxHotfix, /chunkedSourceUpload:\s*true/);
+  assert.match(docxHotfix, /FILE_CHUNK_BYTES = 512 \* 1024/);
+  assert.match(docxHotfix, /TEXT_CHUNK_BYTES = 128 \* 1024/);
+  assert.match(docxHotfix, /sourcePath\("session"\)/);
+  assert.match(docxHotfix, /sourcePath\("commit"\)/);
+  assert.doesNotMatch(docxHotfix, /new FormData/);
   assert.match(docxHotfix, /kairos:manuscript:restore/);
   assert.doesNotMatch(docxHotfix, /const api = .*default \|\|/);
 });
@@ -184,7 +189,7 @@ test("read-only startup refresh never owns the mutation loading lock", () => {
 
 test("the normal page restores the original five-parent-card command dashboard", () => {
   assert.match(index, /kairos-five-center-dashboard-restored-20260730-1/);
-  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-restored-20260730-1/);
+  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-chunked-source-20260730-3/);
   assert.equal((index.match(/<script type="module"/g) || []).length, 2);
   assert.doesNotMatch(index, /executive-local-inference\.js/);
   assert.doesNotMatch(index, /kairos-runtime-loader\.js/);

@@ -1,4 +1,4 @@
-const BUILD = "kairos-production-registry-20260730-3-source-buffering";
+const BUILD = "kairos-production-registry-20260730-4-chunked-source";
 const REGISTRY_OBJECT = "mmg-production-project-registry";
 const MAX_PROJECTS = 250;
 
@@ -20,11 +20,22 @@ export async function handleProductionRegistry(request, env) {
   const suffix = url.pathname.replace(/^\/api\/production-registry/, "") || "/";
   const targetURL = `https://kairos.internal/registry${suffix}${url.search}`;
 
-  if (isBufferedManuscriptMutation(url.pathname, request.method)) {
-    return stub.fetch(await bufferedForwardRequest(request, targetURL));
+  try {
+    if (isBufferedManuscriptMutation(url.pathname, request.method)) {
+      return await stub.fetch(await bufferedForwardRequest(request, targetURL));
+    }
+    return await stub.fetch(new Request(targetURL, request));
+  } catch (error) {
+    return json({
+      status: "failed",
+      build: BUILD,
+      error: {
+        code: error?.code || "production_registry_forwarding_failed",
+        message: error instanceof Error ? error.message : "The production registry request failed.",
+        retriable: Boolean(error?.retriable),
+      },
+    }, Number(error?.status || 500));
   }
-
-  return stub.fetch(new Request(targetURL, request));
 }
 
 export async function handleRegistryObjectRequest(state, request) {
@@ -105,7 +116,7 @@ export async function handleRegistryObjectRequest(state, request) {
 function isBufferedManuscriptMutation(pathname, method) {
   const normalizedMethod = String(method || "GET").toUpperCase();
   if (!["POST", "PUT", "PATCH"].includes(normalizedMethod)) return false;
-  return /^\/api\/production-registry\/manuscripts\/[a-z0-9-]{8,}\/(?:setup(?:\/cover)?|source)$/i.test(pathname);
+  return /^\/api\/production-registry\/manuscripts\/[a-z0-9-]{8,}\/(?:setup(?:\/cover)?|source(?:\/(?:session|commit|file\/\d+|text-chunk\/\d+))?)$/i.test(pathname);
 }
 
 async function bufferedForwardRequest(request, targetURL) {

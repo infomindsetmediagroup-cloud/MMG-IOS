@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
-const BUILD = "kairos-manuscript-large-intake-validator-20260730-8-native-docx";
+const BUILD = "kairos-manuscript-large-intake-validator-20260730-9-chunked-source";
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
 const repoRoot = join(root, "..", "..");
@@ -33,14 +33,19 @@ assert.ok(frontend.includes('manuscript-studio-upload-retention-20260730-1'), "C
 assert.ok(frontend.includes('kairos.manuscript-studio.recoverable-draft.v1'), "Recoverable manuscript draft state is missing.");
 assert.ok(frontend.includes('Retry source save'), "Recoverable source-storage retry is missing.");
 assert.ok(frontend.includes('Accepted source:'), "Accepted manuscript evidence is missing from the result view.");
-assert.ok(docxResolver.includes('manuscript-docx-upload-hotfix-20260730-1'), "The DOCX export resolver build is missing.");
+assert.ok(docxResolver.includes('manuscript-docx-upload-hotfix-20260730-3-chunked-source'), "The chunked DOCX source resolver build is missing.");
 assert.ok(docxResolver.includes('const MAX_TEXT_CHARS = 600000'), "DOCX extraction is not aligned to the 600,000-character intake boundary.");
 assert.ok(docxResolver.includes('typeof candidate?.extractRawText === "function"'), "DOCX export-shape resolution is missing.");
-assert.ok(docxResolver.includes('form.append("file", pending.file'), "Original DOCX source preservation is missing.");
-assert.ok(docxResolver.includes('form.append("extractedText", pending.manuscript)'), "Extracted DOCX text is not included in durable source storage.");
+assert.ok(docxResolver.includes('FILE_CHUNK_BYTES = 512 * 1024'), "The Safari DOCX chunk size contract is missing.");
+assert.ok(docxResolver.includes('TEXT_CHUNK_BYTES = 128 * 1024'), "The Safari manuscript-text chunk size contract is missing.");
+assert.ok(docxResolver.includes('chunkedSourceUpload: true'), "The chunked Safari source-upload capability is missing.");
+assert.ok(docxResolver.includes('sourcePath("session")'), "The chunked source session request is missing.");
+assert.ok(docxResolver.includes('sourcePath("commit")'), "The chunked source commit request is missing.");
+assert.ok(!docxResolver.includes('new FormData'), "Safari source storage must not use multipart FormData.");
 assert.ok(index.includes('kairos-five-center-dashboard-restored-20260730-1'), "The restored five-center dashboard build marker is missing.");
 assert.ok(index.includes('safari-manuscript-intake-compat.js?v=safari-native-docx-20260730-1'), "The native Safari DOCX compatibility layer is missing.");
-assert.ok(index.includes('legacy-runtime-loader.js?v=five-center-dashboard-restored-20260730-1'), "The restored command runtime loader marker is missing.");
+assert.ok(index.includes('legacy-runtime-loader.js?v=five-center-dashboard-chunked-source-20260730-3'), "The chunked-source command runtime loader marker is missing.");
+assert.ok(index.includes('five-center-dashboard-chunked-source-20260730-3'), "The chunked-source release marker is missing.");
 assert.ok(!index.includes('kairos-runtime-loader.js'), "The compatibility loader must not replace the five-center homepage.");
 assert.ok(!index.includes('executive-local-inference.js'), "The local-inference panel must not mount globally on the homepage.");
 assert.ok(!index.includes('manuscript-docx-upload-hotfix.js'), "The DOCX resolver must not execute directly from the homepage HTML.");
@@ -56,6 +61,7 @@ assert.ok(!safari.includes('cdn.jsdelivr.net'), "Safari DOCX extraction must not
 assert.ok(!safari.includes('esm.sh'), "Safari DOCX extraction must not depend on esm.sh.");
 assert.ok(safari.includes('COMMAND_HUB_MODE'), "The five-center default route is missing.");
 assert.ok(loader.includes('const RELEASE = "five-center-dashboard-restored-20260730-1"'), "The restored command runtime release is missing.");
+assert.ok(loader.includes('const ASSET_RELEASE = "five-center-dashboard-chunked-source-20260730-3"'), "The chunked-source asset release is missing.");
 assert.ok(loader.includes('commandHubMode'), "The command hub default-mode contract is missing.");
 assert.ok(loader.includes('"command-hub.js"'), "The five-center Command Hub is missing from the runtime.");
 assert.ok(loader.includes('"kairos-local-inference.js"'), "Local manuscript inference is missing from the governed runtime.");
@@ -138,6 +144,8 @@ console.log(JSON.stringify({
     docxNamedExportResolution: true,
     originalDocxSourcePreserved: true,
     recoverableSourceRetry: true,
+    chunkedSourceUpload: true,
+    multipartSourceUploadDisabled: true,
     originalSourcePreservationReported: true,
   },
 }, null, 2));
