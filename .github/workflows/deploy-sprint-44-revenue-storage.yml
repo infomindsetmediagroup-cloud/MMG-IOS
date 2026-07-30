@@ -69,15 +69,17 @@ jobs:
             safari="${RUNNER_TEMP}/safari.js"
             executive="${RUNNER_TEMP}/executive.js"
             legacy="${RUNNER_TEMP}/legacy.js"
+            manuscript="${RUNNER_TEMP}/manuscript.js"
             health="${RUNNER_TEMP}/health.json"
             readiness="${RUNNER_TEMP}/readiness.json"
             workflows="${RUNNER_TEMP}/workflows.json"
             brief="${RUNNER_TEMP}/brief.json"
 
             html_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/?release=${GITHUB_SHA}&attempt=${attempt}" -o "${html}" -w '%{http_code}' || true)"
-            safari_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/safari-manuscript-intake-compat.js?v=safari-intake-fix-20260729-9&release=${GITHUB_SHA}&attempt=${attempt}" -o "${safari}" -w '%{http_code}' || true)"
+            safari_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/safari-manuscript-intake-compat.js?v=safari-intake-fix-20260729-9-digest-hotfix-1&release=${GITHUB_SHA}&attempt=${attempt}" -o "${safari}" -w '%{http_code}' || true)"
             executive_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/executive-os.js?v=browser-finish-20260729-5&release=${GITHUB_SHA}&attempt=${attempt}" -o "${executive}" -w '%{http_code}' || true)"
-            legacy_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/legacy-runtime-loader.js?v=legacy-isolated-20260729-1&release=${GITHUB_SHA}&attempt=${attempt}" -o "${legacy}" -w '%{http_code}' || true)"
+            legacy_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/legacy-runtime-loader.js?v=legacy-manuscript-retention-20260730-1&release=${GITHUB_SHA}&attempt=${attempt}" -o "${legacy}" -w '%{http_code}' || true)"
+            manuscript_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-studio.js?v=manuscript-upload-retention-20260730-1&release=${GITHUB_SHA}&attempt=${attempt}" -o "${manuscript}" -w '%{http_code}' || true)"
             health_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/api/health?release=${GITHUB_SHA}&attempt=${attempt}" -o "${health}" -w '%{http_code}' || true)"
             readiness_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/api/operational-readiness?release=${GITHUB_SHA}&attempt=${attempt}" -o "${readiness}" -w '%{http_code}' || true)"
             workflows_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/api/workflows?release=${GITHUB_SHA}&attempt=${attempt}" -o "${workflows}" -w '%{http_code}' || true)"
@@ -88,16 +90,17 @@ jobs:
             if [ "${html_status}" = "200" ] \
               && grep -q 'Kairos Executive Operating System' "${html}" \
               && grep -q 'kairos-executive-clean-boot-20260729-1' "${html}" \
-              && grep -q 'safari-intake-fix-20260729-9' "${html}" \
-              && grep -q 'legacy-isolated-20260729-1' "${html}" \
+              && grep -q 'safari-intake-fix-20260729-9-digest-hotfix-1' "${html}" \
+              && grep -q 'legacy-manuscript-retention-20260730-1' "${html}" \
               && [ "${module_count}" = "2" ] \
               && ! grep -q 'command-hub.js' "${html}" \
               && ! grep -q 'manuscript-studio.js' "${html}" \
               && [ "${safari_status}" = "200" ] \
-              && grep -q 'safari-manuscript-intake-compat-20260729-9' "${safari}" \
+              && grep -q 'safari-manuscript-intake-compat-20260729-10' "${safari}" \
               && grep -q 'browser-finish-20260729-5' "${safari}" \
               && grep -q 'ADVANCED_MODE' "${safari}" \
               && grep -q 'installGovernedFetchTimeout' "${safari}" \
+              && grep -q 'nativeDigest(algorithm, data)' "${safari}" \
               && [ "${executive_status}" = "200" ] \
               && grep -q 'kairos-abos-v2-browser-finish-20260729-5' "${executive}" \
               && grep -q 'refreshing: false' "${executive}" \
@@ -106,12 +109,19 @@ jobs:
               && grep -q 'Promise.race' "${executive}" \
               && grep -q 'API_GET_TIMEOUT_MS = 12000' "${executive}" \
               && [ "${legacy_status}" = "200" ] \
-              && grep -q 'kairos-legacy-runtime-loader-20260729-1' "${legacy}" \
+              && grep -q 'kairos-legacy-runtime-loader-20260730-2' "${legacy}" \
+              && grep -q 'manuscript-upload-retention-20260730-1' "${legacy}" \
               && grep -q 'if (advancedMode) loadLegacyRuntime()' "${legacy}" \
               && grep -q 'command-hub.js' "${legacy}" \
               && grep -q 'manuscript-studio.js' "${legacy}" \
               && grep -q 'production-workspace-controller.js' "${legacy}" \
               && grep -q 'shopify-page-compiler.js' "${legacy}" \
+              && [ "${manuscript_status}" = "200" ] \
+              && grep -q 'manuscript-studio-upload-retention-20260730-1' "${manuscript}" \
+              && grep -q 'kairos.manuscript-studio.recoverable-draft.v1' "${manuscript}" \
+              && grep -q 'Retry source save' "${manuscript}" \
+              && grep -q 'state.sourceFile = file' "${manuscript}" \
+              && ! grep -q 'state.manuscript = "";' "${manuscript}" \
               && [ "${health_status}" = "200" ] \
               && grep -q '"status":"ready"' "${health}" \
               && [ "${readiness_status}" = "200" ] \
@@ -125,7 +135,7 @@ jobs:
               && grep -q '"workflows":\[' "${workflows}" \
               && grep -q '"executionSource":"kairos-project-agent-workflows"' "${workflows}" \
               && { [ "${brief_status}" = "200" ] || [ "${brief_status}" = "404" ]; }; then
-              echo "Live clean Executive OS and isolated advanced runtime verified."
+              echo "Live clean Executive OS, isolated advanced runtime, and retained manuscript upload verified."
               cat "${health}"
               cat "${readiness}"
               cat "${workflows}"
@@ -140,6 +150,7 @@ jobs:
           echo "Safari module status: ${safari_status}"
           echo "Executive OS module status: ${executive_status}"
           echo "Legacy runtime loader status: ${legacy_status}"
+          echo "Manuscript Studio status: ${manuscript_status}"
           echo "Health status: ${health_status}"
           echo "Operational readiness status: ${readiness_status}"
           echo "Workflows status: ${workflows_status}"
@@ -148,6 +159,7 @@ jobs:
           cat "${safari}" || true
           cat "${executive}" || true
           cat "${legacy}" || true
+          cat "${manuscript}" || true
           cat "${health}" || true
           cat "${readiness}" || true
           cat "${workflows}" || true
@@ -161,7 +173,7 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"success\",\"context\":\"kairos-browser-runtime\",\"description\":\"Clean Executive OS and isolated runtime deployed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"success\",\"context\":\"kairos-browser-runtime\",\"description\":\"Clean Executive OS and retained manuscript runtime deployed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
       - name: Report deployment failure
         if: ${{ failure() || cancelled() }}
