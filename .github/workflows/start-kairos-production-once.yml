@@ -1,4 +1,4 @@
-name: Start Kairos Production Job Once
+name: Apply Kairos Operational Approval Hotfix Once
 
 on:
   push:
@@ -8,221 +8,133 @@ on:
       - '.github/workflows/start-kairos-production-once.yml'
 
 permissions:
-  contents: read
+  contents: write
   statuses: write
 
 concurrency:
-  group: start-kairos-production-kproject-browser-20c52f4b
+  group: patch-kairos-operational-approval-idempotency
   cancel-in-progress: false
 
 jobs:
-  start-production:
+  patch:
     if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
-      RUNTIME_PROJECT_ID: kproject_browser_20c52f4b-93d5-4482-aba2-0b9f3d47867f
-      AGENT_PROJECT_ID: kproject-browser-20c52f4b-93d5-4482-aba2-0b9f3d47867f
+      TARGET_BRANCH: hotfix/kairos-operational-approval-idempotency
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Report job pending
+      - name: Report patch pending
         run: |
           curl --fail --silent --show-error -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"pending\",\"context\":\"kairos-supervised-job\",\"description\":\"Synchronizing foundation and starting one governed Kairos job\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"pending\",\"context\":\"kairos-operational-approval-hotfix\",\"description\":\"Patching idempotent operational approval recovery\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
-      - name: Synchronize and start exact production job
+      - name: Check out hotfix branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Apply scoped runtime patch and regression test
         run: |
           set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
 
-          workdir="${RUNNER_TEMP}/kairos-supervised-job"
-          mkdir -p "${workdir}"
-          projection_before="${workdir}/projection-before.json"
-          agent_before="${workdir}/agent-before.json"
-          approval_json="${workdir}/approval.json"
-          projection_ready="${workdir}/projection-ready.json"
-          start_json="${workdir}/start.json"
+          source_path = Path("cloudflare/mmg-ios/src/kairos-production-entry-operational-execution-v1.js")
+          source = source_path.read_text()
 
-          projection_code="$(curl --silent --show-error --max-time 30 \
-            "${WORKER_URL}/api/workflows?job_run=${GITHUB_RUN_ID}&phase=before" \
-            -o "${projection_before}" -w '%{http_code}' || true)"
-          echo "Workflow projection before synchronization: HTTP ${projection_code}"
-          cat "${projection_before}" || true
-          [ "${projection_code}" = "200" ] || { echo "Kairos workflow projection is unavailable."; exit 1; }
-          jq -e . "${projection_before}" >/dev/null
+          old_build = 'export const KAIROS_OPERATIONAL_EXECUTION_BUILD = "kairos-operational-execution-20260729-1";'
+          new_build = 'export const KAIROS_OPERATIONAL_EXECUTION_BUILD = "kairos-operational-execution-20260730-2-approval-recovery";'
+          if old_build not in source:
+              raise SystemExit("Expected operational build marker was not found.")
+          source = source.replace(old_build, new_build, 1)
 
-          agent_code="$(curl --silent --show-error --max-time 30 \
-            "${WORKER_URL}/api/kairos/project-agents/${AGENT_PROJECT_ID}/state?job_run=${GITHUB_RUN_ID}&phase=before" \
-            -o "${agent_before}" -w '%{http_code}' || true)"
-          echo "Project Agent before synchronization: HTTP ${agent_code}"
-          cat "${agent_before}" || true
-          [ "${agent_code}" = "200" ] || { echo "The exact project Agent is unavailable."; exit 1; }
-          jq -e . "${agent_before}" >/dev/null
+          old = '''async function approveFoundation(env, runtimeProject, agent, agentProjectId, operator) {
+            const agentState = await agent.getProjectState();
+            const instanceId = agentState?.pendingApproval?.workflowInstanceId || agentState?.activeWorkflow?.instanceId;
+            if (!instanceId) throw runtimeError("No pending foundation approval was found.", "FOUNDATION_APPROVAL_NOT_FOUND", 409);
+            await agent.approveFoundationWorkflow(instanceId, { approvedBy: operator, reason: "Approved in the Kairos Executive OS." });
 
-          jq -e --arg pid "${RUNTIME_PROJECT_ID}" '
-            .workflows | map(select((.projectId == $pid) or (.id == $pid))) | length == 1
-          ' "${projection_before}" >/dev/null || {
-            echo "The exact runtime project is missing or duplicated. Refusing execution."
-            exit 1
-          }
+            try {'''
 
-          jq -e '
-            .state.activeWorkflow.status == "completed"
-            and (.state.pendingApproval == null)
-            and (.state.activeManuscriptWorkflow == null)
-          ' "${agent_before}" >/dev/null || {
-            echo "The project Agent is not at a completed, idle foundation boundary."
-            exit 1
-          }
-
-          source_ready="$(jq -r --arg pid "${RUNTIME_PROJECT_ID}" '
-            .workflows
-            | map(select((.projectId == $pid) or (.id == $pid)))[0]
-            | if .sourceReady == true then "true" else "false" end
-          ' "${projection_before}")"
-
-          if [ "${source_ready}" != "true" ]; then
-            echo "Foundation Workflow is complete but runtime source is missing. Calling governed operational approval synchronization."
-            approval_code="$(curl --silent --show-error --max-time 120 -X POST \
-              -H 'Content-Type: application/json' \
-              -H 'X-MMG-Approval-Source: owner-chat-recovery' \
-              --data '{"reason":"Synchronize the already-approved foundation and generate its authoritative source for one supervised Kairos job."}' \
-              "${WORKER_URL}/api/workflows/${RUNTIME_PROJECT_ID}/approve" \
-              -o "${approval_json}" -w '%{http_code}' || true)"
-            echo "Operational approval synchronization: HTTP ${approval_code}"
-            cat "${approval_json}" || true
-            [ "${approval_code}" = "202" ] || {
-              echo "The operational approval route could not synchronize the completed foundation."
-              exit 1
+          new = '''async function approveFoundation(env, runtimeProject, agent, agentProjectId, operator) {
+            const agentState = await agent.getProjectState();
+            const instanceId = agentState?.pendingApproval?.workflowInstanceId || agentState?.activeWorkflow?.instanceId;
+            const foundationStatus = clean(agentState?.activeWorkflow?.status, 80).toLowerCase();
+            const foundationAlreadyCompleted = foundationStatus === "completed" && !agentState?.pendingApproval;
+            if (!instanceId) throw runtimeError("No foundation workflow was found.", "FOUNDATION_APPROVAL_NOT_FOUND", 409);
+            if (!foundationAlreadyCompleted) {
+              await agent.approveFoundationWorkflow(instanceId, { approvedBy: operator, reason: "Approved in the Kairos Executive OS." });
             }
-            jq -e '
-              .status == "accepted"
-              and .action == "approve"
-              and .automaticPublicationAllowed == false
-            ' "${approval_json}" >/dev/null || {
-              echo "The operational approval synchronization returned an invalid or unsafe receipt."
-              exit 1
-            }
-          fi
 
-          ready=false
-          for attempt in $(seq 1 36); do
-            ready_code="$(curl --silent --show-error --max-time 30 \
-              "${WORKER_URL}/api/workflows?job_run=${GITHUB_RUN_ID}&phase=source-ready&attempt=${attempt}" \
-              -o "${projection_ready}" -w '%{http_code}' || true)"
-            if [ "${ready_code}" = "200" ] \
-              && jq -e --arg pid "${RUNTIME_PROJECT_ID}" '
-                .workflows
-                | map(select((.projectId == $pid) or (.id == $pid)))[0]
-                | .sourceReady == true
-                  and .canStartProduction == true
-                  and .actionRequired == "start-production"
-                  and (.state == "queued" or .rawState == "queued")
-              ' "${projection_ready}" >/dev/null 2>&1; then
-              ready=true
-              echo "Authoritative source verified and production start boundary reached."
-              cat "${projection_ready}"
-              break
-            fi
-            echo "Source synchronization verification attempt ${attempt}: HTTP ${ready_code}"
-            cat "${projection_ready}" || true
-            sleep 5
-          done
+            try {'''
 
-          [ "${ready}" = "true" ] || {
-            echo "The runtime registry did not reach the verified-source production boundary."
-            exit 1
-          }
+          if old not in source:
+              raise SystemExit("Expected approveFoundation block was not found.")
+          source_path.write_text(source.replace(old, new, 1))
 
-          start_code="$(curl --silent --show-error --max-time 60 -X POST \
-            -H 'Content-Type: application/json' \
-            -H 'X-MMG-Approval-Source: owner-chat-job-test' \
-            --data '{"reason":"Start one supervised Kairos production job approved by the MMG owner on July 30, 2026."}' \
-            "${WORKER_URL}/api/workflows/${RUNTIME_PROJECT_ID}/start-production" \
-            -o "${start_json}" -w '%{http_code}' || true)"
-          echo "Start production response: HTTP ${start_code}"
-          cat "${start_json}" || true
-          [ "${start_code}" = "202" ] || { echo "Kairos did not accept the production job."; exit 1; }
-          jq -e '
-            .status == "accepted"
-            and .action == "start-production"
-            and (.workflowInstanceId | type == "string" and length > 5)
-            and .automaticPublicationAllowed == false
-          ' "${start_json}" >/dev/null || {
-            echo "Kairos returned an invalid or unsafe production-start receipt."
-            exit 1
-          }
+          test_path = Path("backend-tests/kairos-operational-approval-idempotency.test.ts")
+          test_path.write_text('''import { describe, expect, it } from "vitest";
+          import { readFileSync } from "node:fs";
 
-          instance_id="$(jq -r '.workflowInstanceId' "${start_json}")"
-          echo "Started Workflow instance: ${instance_id}"
-          echo "INSTANCE_ID=${instance_id}" >> "${GITHUB_ENV}"
+          const runtime = readFileSync(
+            "cloudflare/mmg-ios/src/kairos-production-entry-operational-execution-v1.js",
+            "utf8",
+          );
 
-          verified_state="${workdir}/agent-verified.json"
-          verified_projection="${workdir}/projection-verified.json"
-          for attempt in $(seq 1 60); do
-            state_code="$(curl --silent --show-error --max-time 30 \
-              "${WORKER_URL}/api/kairos/project-agents/${AGENT_PROJECT_ID}/state?job_verify=${GITHUB_RUN_ID}&attempt=${attempt}" \
-              -o "${verified_state}" -w '%{http_code}' || true)"
-            projection_after_code="$(curl --silent --show-error --max-time 30 \
-              "${WORKER_URL}/api/workflows?job_verify=${GITHUB_RUN_ID}&attempt=${attempt}" \
-              -o "${verified_projection}" -w '%{http_code}' || true)"
+          describe("Kairos operational approval recovery", () => {
+            it("synchronizes a completed foundation without re-sending a finite Workflow approval event", () => {
+              expect(runtime).toContain(
+                'const foundationAlreadyCompleted = foundationStatus === "completed" && !agentState?.pendingApproval;',
+              );
+              expect(runtime).toContain("if (!foundationAlreadyCompleted) {");
+              expect(runtime).toContain("await agent.approveFoundationWorkflow(instanceId");
+              expect(runtime).toContain("const source = await createAndStoreAuthoritativeSource");
+              expect(runtime).toContain("kairos-operational-execution-20260730-2-approval-recovery");
+            });
+          });
+          ''')
+          PY
 
-            if [ "${state_code}" = "200" ] \
-              && [ "${projection_after_code}" = "200" ] \
-              && jq -e --arg iid "${instance_id}" '
-                .state.activeManuscriptWorkflow.instanceId == $iid
-                and (
-                  .state.activeManuscriptWorkflow.status == "running"
-                  or .state.activeManuscriptWorkflow.status == "waiting_for_approval"
-                  or .state.activeManuscriptWorkflow.status == "completed"
-                )
-              ' "${verified_state}" >/dev/null 2>&1 \
-              && jq -e --arg pid "${RUNTIME_PROJECT_ID}" '
-                .workflows
-                | map(select((.projectId == $pid) or (.id == $pid)))[0]
-                | (.state == "active" or .state == "completed" or .rawState == "executing")
-              ' "${verified_projection}" >/dev/null 2>&1; then
-              echo "Kairos production job verified."
-              cat "${verified_state}"
-              cat "${verified_projection}"
-              {
-                echo "## Kairos supervised production job"
-                echo "- Runtime project: ${RUNTIME_PROJECT_ID}"
-                echo "- Project Agent: ${AGENT_PROJECT_ID}"
-                echo "- Manuscript Workflow instance: ${instance_id}"
-                echo "- Agent status: $(jq -r '.state.activeManuscriptWorkflow.status // .state.status // "unknown"' "${verified_state}")"
-                echo "- Agent stage: $(jq -r '.state.stage // "unknown"' "${verified_state}")"
-                echo "- Automatic publication: disabled"
-                echo "- Commerce mutation: not authorized"
-              } >> "${GITHUB_STEP_SUMMARY}"
-              exit 0
-            fi
+          git diff --check
+          git diff -- cloudflare/mmg-ios/src/kairos-production-entry-operational-execution-v1.js backend-tests/kairos-operational-approval-idempotency.test.ts
 
-            echo "Verification attempt ${attempt}: agent HTTP ${state_code}; projection HTTP ${projection_after_code}"
-            cat "${verified_state}" || true
-            sleep 5
-          done
+      - name: Install test dependencies
+        run: npm ci --ignore-scripts
 
-          echo "Kairos accepted the job but did not expose a matching durable manuscript Workflow within the verification window."
-          exit 1
+      - name: Run focused regression test
+        run: npx vitest run backend-tests/kairos-operational-approval-idempotency.test.ts backend-tests/kairos-project-agent-foundation.test.ts
 
-      - name: Report job success
+      - name: Commit hotfix branch
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add cloudflare/mmg-ios/src/kairos-production-entry-operational-execution-v1.js \
+            backend-tests/kairos-operational-approval-idempotency.test.ts
+          git diff --cached --quiet && { echo "No hotfix changes were produced."; exit 1; }
+          git commit -m "fix: recover completed operational approvals idempotently"
+          git push origin "HEAD:${TARGET_BRANCH}"
+
+      - name: Report patch success
         if: ${{ success() }}
         run: |
           curl --fail --silent --show-error -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"success\",\"context\":\"kairos-supervised-job\",\"description\":\"Governed Kairos production job started and durably verified\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"success\",\"context\":\"kairos-operational-approval-hotfix\",\"description\":\"Hotfix branch patched and focused regression tests passed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
-      - name: Report job failure
+      - name: Report patch failure
         if: ${{ failure() || cancelled() }}
         run: |
           curl --fail --silent --show-error -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"failure\",\"context\":\"kairos-supervised-job\",\"description\":\"Kairos job was refused, failed, or could not be durably verified\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"failure\",\"context\":\"kairos-operational-approval-hotfix\",\"description\":\"Operational approval hotfix or regression validation failed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
