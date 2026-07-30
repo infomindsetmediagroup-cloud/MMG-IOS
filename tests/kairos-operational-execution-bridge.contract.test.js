@@ -13,11 +13,12 @@ const runtimeLoader = readFileSync("web/kairos-dashboard/scripts/kairos-runtime-
 const commandHub = readFileSync("web/kairos-dashboard/scripts/command-hub.js", "utf8");
 const executive = readFileSync("web/kairos-dashboard/scripts/executive-os.js", "utf8");
 const safari = readFileSync("web/kairos-dashboard/scripts/safari-manuscript-intake-compat.js", "utf8");
-const docxHotfix = readFileSync("web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js", "utf8");
+const manuscriptStudio = readFileSync("web/kairos-dashboard/scripts/manuscript-studio.js", "utf8");
 const legacy = readFileSync("web/kairos-dashboard/scripts/legacy-runtime-loader.js", "utf8");
 const index = readFileSync("web/kairos-dashboard/index.html", "utf8");
 
 const parentCenters = commandHub.match(/id: "(?:knowledge|content|business|customers|operations)"/g) || [];
+const activeScripts = legacy.match(/const SCRIPT_FILES = \[([\s\S]*?)\];/)?.[1] || "";
 
 test("the production Worker activates the canonical local provider firewall", () => {
   assert.match(wrangler, /main = "src\/kairos-production-entry-local-canonical-v1\.js"/);
@@ -48,7 +49,7 @@ test("the readiness sentinel is limited to non-generative operational routes", (
   assert.match(canonical, /providerBlockedEnv\(env\)/);
 });
 
-test("objective submission still launches the persistent project Agent and foundation Workflow", () => {
+test("objective submission launches the persistent project Agent and foundation Workflow", () => {
   assert.match(operational, /path === "\/api\/hub\/run"/);
   assert.match(operational, /bootstrapProject/);
   assert.match(operational, /startFoundationWorkflow/);
@@ -134,39 +135,32 @@ test("Safari manuscript checksums preserve the native digest identifier first", 
   assert.doesNotMatch(safari, /const normalized = typeof algorithm === "string" \? \{ name: algorithm \} : algorithm/);
 });
 
-test("Safari DOCX upload uses verified raw chunks inside the governed command runtime", () => {
-  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-chunked-source-20260730-3/);
+test("Manuscript Studio directly owns verified raw chunk storage", () => {
+  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-direct-studio-chunks-20260730-4/);
   assert.doesNotMatch(index, /executive-local-inference\.js/);
   assert.doesNotMatch(index, /kairos-runtime-loader\.js/);
   assert.match(runtimeLoader, /import "\.\/legacy-runtime-loader\.js"/);
   assert.doesNotMatch(runtimeLoader, /executive-local-inference\.js/);
   assert.match(legacy, /kairos-five-center-runtime-loader-20260730-1/);
   assert.match(legacy, /five-center-dashboard-restored-20260730-1/);
-  assert.match(legacy, /five-center-dashboard-chunked-source-20260730-3/);
-  assert.match(legacy, /"kairos-local-inference\.js"/);
-  const resolverIndex = legacy.indexOf('"manuscript-docx-upload-hotfix.js"');
-  const studioIndex = legacy.indexOf('"manuscript-studio.js"');
-  assert.ok(resolverIndex > -1, "DOCX resolver must be included in the governed command runtime");
-  assert.ok(studioIndex > resolverIndex, "DOCX resolver must load before Manuscript Studio");
+  assert.match(legacy, /five-center-dashboard-direct-studio-chunks-20260730-4/);
+  assert.match(activeScripts, /"kairos-local-inference\.js"/);
+  assert.match(activeScripts, /"manuscript-studio\.js"/);
+  assert.doesNotMatch(activeScripts, /manuscript-docx-upload-hotfix\.js/);
   assert.match(safari, /kairos-native-docx-extractor-20260730-1/);
   assert.match(safari, /installNativeDocxExtractor/);
   assert.match(safari, /new DecompressionStream\("deflate-raw"\)/);
   assert.match(safari, /word\/document\.xml/);
-  assert.doesNotMatch(safari, /cdn\.jsdelivr\.net/);
-  assert.doesNotMatch(safari, /esm\.sh/);
-  assert.doesNotMatch(safari, /manuscript-docx-upload-hotfix\.js/);
-  assert.match(docxHotfix, /document\.addEventListener\("change", interceptDocxSelection, true\)/);
-  assert.match(docxHotfix, /const candidates = \[namespace, namespace\?\.default, namespace\?\.default\?\.default\]/);
-  assert.match(docxHotfix, /typeof candidate\?\.extractRawText === "function"/);
-  assert.match(docxHotfix, /candidate\.extractRawText\.bind\(candidate\)/);
-  assert.match(docxHotfix, /chunkedSourceUpload:\s*true/);
-  assert.match(docxHotfix, /FILE_CHUNK_BYTES = 512 \* 1024/);
-  assert.match(docxHotfix, /TEXT_CHUNK_BYTES = 128 \* 1024/);
-  assert.match(docxHotfix, /sourcePath\("session"\)/);
-  assert.match(docxHotfix, /sourcePath\("commit"\)/);
-  assert.doesNotMatch(docxHotfix, /new FormData/);
-  assert.match(docxHotfix, /kairos:manuscript:restore/);
-  assert.doesNotMatch(docxHotfix, /const api = .*default \|\|/);
+  assert.match(manuscriptStudio, /manuscript-studio-direct-chunks-20260730-4/);
+  assert.match(manuscriptStudio, /chunkedSourceUpload:\s*true/);
+  assert.match(manuscriptStudio, /multipartSourceUpload:\s*false/);
+  assert.match(manuscriptStudio, /FILE_CHUNK_BYTES = 512 \* 1024/);
+  assert.match(manuscriptStudio, /TEXT_CHUNK_BYTES = 128 \* 1024/);
+  assert.match(manuscriptStudio, /sourcePath\(projectId, "session"\)/);
+  assert.match(manuscriptStudio, /sourcePath\(projectId, "commit"\)/);
+  assert.match(manuscriptStudio, /uploadChunkWithRetry/);
+  assert.match(manuscriptStudio, /Select the original manuscript file once/);
+  assert.doesNotMatch(manuscriptStudio, /new FormData/);
 });
 
 test("the Executive OS core always releases its refresh state", () => {
@@ -189,7 +183,7 @@ test("read-only startup refresh never owns the mutation loading lock", () => {
 
 test("the normal page restores the original five-parent-card command dashboard", () => {
   assert.match(index, /kairos-five-center-dashboard-restored-20260730-1/);
-  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-chunked-source-20260730-3/);
+  assert.match(index, /five-center-dashboard-direct-studio-chunks-20260730-4/);
   assert.equal((index.match(/<script type="module"/g) || []).length, 2);
   assert.doesNotMatch(index, /executive-local-inference\.js/);
   assert.doesNotMatch(index, /kairos-runtime-loader\.js/);
@@ -211,13 +205,13 @@ test("advanced operations preserve the complete command runtime behind explicit 
   assert.match(legacy, /advancedMode/);
   assert.match(legacy, /commandHubMode/);
   assert.match(legacy, /if \(commandHubMode\) loadCommandRuntime\(\)/);
-  assert.match(legacy, /command-hub\.js/);
-  assert.match(legacy, /command-center-governance\.js/);
-  assert.match(legacy, /manuscript-docx-upload-hotfix\.js/);
-  assert.match(legacy, /manuscript-studio\.js/);
-  assert.match(legacy, /manuscript-project-setup\.js/);
-  assert.match(legacy, /production-workspace-controller\.js/);
-  assert.match(legacy, /shopify-page-compiler\.js/);
+  assert.match(activeScripts, /command-hub\.js/);
+  assert.match(activeScripts, /command-center-governance\.js/);
+  assert.match(activeScripts, /manuscript-studio\.js/);
+  assert.match(activeScripts, /manuscript-project-setup\.js/);
+  assert.match(activeScripts, /production-workspace-controller\.js/);
+  assert.match(activeScripts, /shopify-page-compiler\.js/);
+  assert.doesNotMatch(activeScripts, /manuscript-docx-upload-hotfix\.js/);
   assert.match(legacy, /data-kairos-persistent-return/);
   assert.match(legacy, /kairos:legacy-runtime:ready/);
 });

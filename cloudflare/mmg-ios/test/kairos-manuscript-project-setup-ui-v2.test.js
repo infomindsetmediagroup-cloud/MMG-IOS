@@ -23,10 +23,14 @@ const localInference = readFileSync(
   resolve(process.cwd(), "../../web/kairos-dashboard/scripts/kairos-local-inference.js"),
   "utf8",
 );
-const docxResolver = readFileSync(
-  resolve(process.cwd(), "../../web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js"),
+const manuscriptStudio = readFileSync(
+  resolve(process.cwd(), "../../web/kairos-dashboard/scripts/manuscript-studio.js"),
   "utf8",
 );
+
+function activeScripts() {
+  return loader.match(/const SCRIPT_FILES = \[([\s\S]*?)\];/)?.[1] || "";
+}
 
 test("mobile manuscript setup is a complete initialized controller", () => {
   assert.match(source, /kairos-manuscript-project-setup-ui-20260722-3/);
@@ -62,9 +66,9 @@ test("the controller preserves retry state and always clears busy", () => {
   assert.match(source, /Kairos did not respond in time/);
 });
 
-test("the five-center dashboard retains chunked manuscript operations and local inference", () => {
+test("the five-center dashboard loads direct chunked Manuscript Studio and local inference", () => {
   assert.match(index, /kairos-five-center-dashboard-restored-20260730-1/);
-  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-chunked-source-20260730-3/);
+  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-direct-studio-chunks-20260730-4/);
   assert.doesNotMatch(index, /executive-local-inference\.js/);
   assert.doesNotMatch(index, /kairos-runtime-loader\.js/);
   assert.doesNotMatch(index, /manuscript-docx-upload-hotfix\.js/);
@@ -73,24 +77,25 @@ test("the five-center dashboard retains chunked manuscript operations and local 
   assert.match(runtimeLoader, /import "\.\/legacy-runtime-loader\.js"/);
   assert.doesNotMatch(runtimeLoader, /executive-local-inference\.js/);
   assert.match(loader, /const RELEASE = "five-center-dashboard-restored-20260730-1"/);
-  assert.match(loader, /const ASSET_RELEASE = "five-center-dashboard-chunked-source-20260730-3"/);
+  assert.match(loader, /const ASSET_RELEASE = "five-center-dashboard-direct-studio-chunks-20260730-4"/);
   assert.match(loader, /commandHubMode/);
   assert.match(loader, /"command-hub\.js"/);
   assert.match(loader, /"kairos-local-inference\.js"/);
-  assert.match(loader, /"manuscript-docx-upload-hotfix\.js"/);
   assert.match(loader, /"manuscript-studio\.js"/);
   assert.match(loader, /"manuscript-project-setup\.js"/);
+  assert.doesNotMatch(activeScripts(), /manuscript-docx-upload-hotfix\.js/);
   assert.match(loader, /if \(commandHubMode\) loadCommandRuntime\(\)/);
   assert.match(localInference, /kairos-local-inference-same-origin\.js/);
-  const resolverIndex = loader.indexOf('"manuscript-docx-upload-hotfix.js"');
-  const studioIndex = loader.indexOf('"manuscript-studio.js"');
-  const setupIndex = loader.indexOf('"manuscript-project-setup.js"');
-  assert.ok(resolverIndex > -1);
-  assert.ok(studioIndex > resolverIndex);
+  const studioIndex = activeScripts().indexOf('"manuscript-studio.js"');
+  const setupIndex = activeScripts().indexOf('"manuscript-project-setup.js"');
+  assert.ok(studioIndex > -1);
   assert.ok(setupIndex > studioIndex);
-  assert.match(docxResolver, /typeof candidate\?\.extractRawText === "function"/);
-  assert.match(docxResolver, /chunkedSourceUpload:\s*true/);
-  assert.match(docxResolver, /FILE_CHUNK_BYTES = 512 \* 1024/);
-  assert.match(docxResolver, /TEXT_CHUNK_BYTES = 128 \* 1024/);
-  assert.doesNotMatch(docxResolver, /new FormData/);
+  assert.match(manuscriptStudio, /manuscript-studio-direct-chunks-20260730-4/);
+  assert.match(manuscriptStudio, /chunkedSourceUpload:\s*true/);
+  assert.match(manuscriptStudio, /multipartSourceUpload:\s*false/);
+  assert.match(manuscriptStudio, /FILE_CHUNK_BYTES = 512 \* 1024/);
+  assert.match(manuscriptStudio, /TEXT_CHUNK_BYTES = 128 \* 1024/);
+  assert.match(manuscriptStudio, /sourcePath\(projectId, "session"\)/);
+  assert.match(manuscriptStudio, /sourcePath\(projectId, "commit"\)/);
+  assert.doesNotMatch(manuscriptStudio, /new FormData/);
 });
