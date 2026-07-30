@@ -1,4 +1,5 @@
 const BUILD = "kairos-executive-local-inference-20260730-1";
+const EXECUTION_MODE = "browser-webgpu";
 const POLL_MS = 20000;
 const PANEL_ID = "kairos-local-production-panel";
 const MODEL_PREFERENCES_F16 = [
@@ -52,6 +53,7 @@ function render() {
   if (!panel) {
     panel = document.createElement("section");
     panel.id = PANEL_ID;
+    panel.dataset.executionMode = EXECUTION_MODE;
     panel.setAttribute("aria-live", "polite");
     document.body.append(panel);
   }
