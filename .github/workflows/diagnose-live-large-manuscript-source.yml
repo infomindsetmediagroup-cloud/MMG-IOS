@@ -13,11 +13,11 @@ permissions:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
     steps:
-      - name: Build exact-size diagnostic DOCX and manuscript
+      - name: Build exact-text near-limit DOCX diagnostic
         id: fixture
         shell: bash
         run: |
@@ -38,18 +38,18 @@ jobs:
           with zipfile.ZipFile(root / 'AI-Video-Prompt-Mastery-Diagnostic.docx', 'w', zipfile.ZIP_DEFLATED) as archive:
               archive.writestr('[Content_Types].xml', '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"></Types>')
               archive.writestr('word/document.xml', document)
-              archive.writestr('word/media/diagnostic.bin', os.urandom(1024 * 1024))
+              archive.writestr('word/media/diagnostic.bin', os.urandom(18 * 1024 * 1024))
           print({'characters': len(text), 'docx_bytes': (root / 'AI-Video-Prompt-Mastery-Diagnostic.docx').stat().st_size})
           PY
 
-      - name: Submit exact live payload and print full response
+      - name: Submit near-limit live payload and print full response
         id: submit
         shell: bash
         run: |
           set -uo pipefail
           PROJECT_ID='${{ steps.fixture.outputs.project_id }}'
           ROOT=/tmp/kairos-source-diagnostic
-          STATUS=$(curl --silent --show-error --max-time 120 \
+          STATUS=$(curl --silent --show-error --max-time 300 \
             -D "$ROOT/headers.txt" \
             -o "$ROOT/response.txt" \
             -w '%{http_code}' \
@@ -68,7 +68,7 @@ jobs:
 
           if [ "$STATUS" = '201' ]; then
             echo '--- METADATA READBACK ---'
-            curl --fail --silent --show-error --max-time 30 \
+            curl --fail --silent --show-error --max-time 60 \
               "$WORKER_URL/api/production-registry/manuscripts/$PROJECT_ID/source"
             echo
             echo '--- TEXT READBACK LENGTH ---'
@@ -77,7 +77,7 @@ jobs:
               | python -c 'import json,sys; print(len(json.load(sys.stdin)["manuscript"]))'
           fi
 
-          curl --silent --show-error --max-time 30 -X DELETE \
+          curl --silent --show-error --max-time 120 -X DELETE \
             "$WORKER_URL/api/production-registry/manuscripts/$PROJECT_ID/source" \
             -o "$ROOT/delete.txt" -w '\ncleanup_http=%{http_code}\n' || true
           cat "$ROOT/delete.txt" || true
