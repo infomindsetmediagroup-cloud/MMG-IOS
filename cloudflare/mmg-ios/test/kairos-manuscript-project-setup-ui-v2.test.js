@@ -19,6 +19,10 @@ const loader = readFileSync(
   resolve(process.cwd(), "../../web/kairos-dashboard/scripts/legacy-runtime-loader.js"),
   "utf8",
 );
+const localInference = readFileSync(
+  resolve(process.cwd(), "../../web/kairos-dashboard/scripts/kairos-local-inference.js"),
+  "utf8",
+);
 const docxResolver = readFileSync(
   resolve(process.cwd(), "../../web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js"),
   "utf8",
@@ -58,19 +62,25 @@ test("the controller preserves retry state and always clears busy", () => {
   assert.match(source, /Kairos did not respond in time/);
 });
 
-test("the clean dashboard composes advanced manuscript operations with local inference", () => {
-  assert.match(index, /kairos-executive-local-inference-20260730-1/);
-  assert.match(index, /kairos-runtime-loader\.js\?v=kairos-local-inference-20260730-1/);
+test("the five-center dashboard retains advanced manuscript operations and local inference", () => {
+  assert.match(index, /kairos-five-center-dashboard-restored-20260730-1/);
+  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-restored-20260730-1/);
+  assert.doesNotMatch(index, /executive-local-inference\.js/);
+  assert.doesNotMatch(index, /kairos-runtime-loader\.js/);
   assert.doesNotMatch(index, /manuscript-docx-upload-hotfix\.js/);
   assert.doesNotMatch(index, /manuscript-studio\.js/);
   assert.doesNotMatch(index, /manuscript-project-setup\.js/);
   assert.match(runtimeLoader, /import "\.\/legacy-runtime-loader\.js"/);
-  assert.match(runtimeLoader, /import "\.\/executive-local-inference\.js"/);
-  assert.match(loader, /const RELEASE = "manuscript-docx-export-resolver-20260730-1"/);
+  assert.doesNotMatch(runtimeLoader, /executive-local-inference\.js/);
+  assert.match(loader, /const RELEASE = "five-center-dashboard-restored-20260730-1"/);
+  assert.match(loader, /commandHubMode/);
+  assert.match(loader, /"command-hub\.js"/);
+  assert.match(loader, /"kairos-local-inference\.js"/);
   assert.match(loader, /"manuscript-docx-upload-hotfix\.js"/);
   assert.match(loader, /"manuscript-studio\.js"/);
   assert.match(loader, /"manuscript-project-setup\.js"/);
-  assert.match(loader, /if \(advancedMode\) loadLegacyRuntime\(\)/);
+  assert.match(loader, /if \(commandHubMode\) loadCommandRuntime\(\)/);
+  assert.match(localInference, /kairos-local-inference-same-origin\.js/);
   const resolverIndex = loader.indexOf('"manuscript-docx-upload-hotfix.js"');
   const studioIndex = loader.indexOf('"manuscript-studio.js"');
   const setupIndex = loader.indexOf('"manuscript-project-setup.js"');
