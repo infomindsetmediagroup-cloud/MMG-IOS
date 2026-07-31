@@ -1,0 +1,38 @@
+name: Validate Manuscript Production Flow Guard
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'web/kairos-dashboard/index.html'
+      - 'web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js'
+      - 'web/kairos-dashboard/scripts/manuscript-production-flow-guard.js'
+      - 'tests/manuscript-production-flow-guard.contract.test.js'
+      - '.github/workflows/validate-manuscript-production-flow-guard.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'web/kairos-dashboard/index.html'
+      - 'web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js'
+      - 'web/kairos-dashboard/scripts/manuscript-production-flow-guard.js'
+      - 'tests/manuscript-production-flow-guard.contract.test.js'
+      - '.github/workflows/validate-manuscript-production-flow-guard.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-production-flow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate browser modules
+        run: |
+          node --check web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js
+          node --check web/kairos-dashboard/scripts/manuscript-production-flow-guard.js
+      - name: Validate production flow contract
+        run: node --test tests/manuscript-production-flow-guard.contract.test.js
