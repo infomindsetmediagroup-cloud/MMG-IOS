@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'web/kairos-dashboard/index.html'
+      - 'web/kairos-dashboard/scripts/legacy-runtime-loader.js'
       - 'web/kairos-dashboard/scripts/manuscript-auto-pipeline.js'
       - 'web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js'
       - 'web/kairos-dashboard/scripts/manuscript-production-flow-guard.js'
@@ -14,6 +15,7 @@ on:
     branches: [main]
     paths:
       - 'web/kairos-dashboard/index.html'
+      - 'web/kairos-dashboard/scripts/legacy-runtime-loader.js'
       - 'web/kairos-dashboard/scripts/manuscript-auto-pipeline.js'
       - 'web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js'
       - 'web/kairos-dashboard/scripts/manuscript-production-flow-guard.js'
@@ -34,6 +36,7 @@ jobs:
           node-version: '22'
       - name: Validate browser modules
         run: |
+          node --check web/kairos-dashboard/scripts/legacy-runtime-loader.js
           node --check web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
           node --check web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js
           node --check web/kairos-dashboard/scripts/manuscript-production-flow-guard.js
