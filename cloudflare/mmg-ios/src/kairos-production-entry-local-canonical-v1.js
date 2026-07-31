@@ -4,15 +4,21 @@ import canonicalRuntime, {
   KairosProjectFoundationWorkflow,
   KairosManuscriptGenerationWorkflow,
 } from "./kairos-production-entry-local-only-v1.js";
+import {
+  handleDedicatedManuscriptSource,
+  KairosManuscriptSource,
+  KAIROS_MANUSCRIPT_SOURCE_SHARD_BUILD,
+} from "./kairos-manuscript-source-shard-v1.js";
 
 export {
   KairosProject,
   KairosProjectAgent,
   KairosProjectFoundationWorkflow,
   KairosManuscriptGenerationWorkflow,
+  KairosManuscriptSource,
 };
 
-export const KAIROS_LOCAL_CANONICAL_ENTRY_BUILD = "kairos-local-canonical-entry-20260730-1";
+export const KAIROS_LOCAL_CANONICAL_ENTRY_BUILD = "kairos-local-canonical-entry-20260730-2-source-shards";
 
 const PROVIDER_INDEPENDENT_OPERATIONAL_PATHS = new Set([
   "/api/hub/run",
@@ -21,6 +27,9 @@ const PROVIDER_INDEPENDENT_OPERATIONAL_PATHS = new Set([
 
 export default {
   async fetch(request, env, ctx) {
+    const dedicatedSource = await handleDedicatedManuscriptSource(request, env);
+    if (dedicatedSource) return stamp(dedicatedSource);
+
     const url = new URL(request.url);
     const runtimeEnv = PROVIDER_INDEPENDENT_OPERATIONAL_PATHS.has(url.pathname)
       ? operationalCompatibilityEnv(env)
@@ -70,6 +79,7 @@ function stamp(response) {
   headers.set("X-Kairos-Inference-Provider", "browser-webgpu");
   headers.set("X-Kairos-External-Provider", "disabled");
   headers.set("X-Kairos-OpenAI-Calls", "disabled");
+  headers.set("X-Kairos-Source-Shard", headers.get("X-Kairos-Source-Shard") || KAIROS_MANUSCRIPT_SOURCE_SHARD_BUILD);
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
