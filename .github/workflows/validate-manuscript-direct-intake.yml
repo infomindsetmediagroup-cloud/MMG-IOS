@@ -1,0 +1,44 @@
+name: Validate Direct Manuscript Intake
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js'
+      - 'cloudflare/mmg-ios/src/manuscript-studio-v1.js'
+      - 'cloudflare/mmg-ios/test/kairos-manuscript-direct-intake.test.js'
+      - '.github/workflows/validate-manuscript-direct-intake.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js'
+      - 'cloudflare/mmg-ios/src/manuscript-studio-v1.js'
+      - 'cloudflare/mmg-ios/test/kairos-manuscript-direct-intake.test.js'
+      - '.github/workflows/validate-manuscript-direct-intake.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-direct-intake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install runtime dependencies
+        working-directory: cloudflare/mmg-ios
+        run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund > /dev/null
+      - name: Validate canonical intake syntax
+        working-directory: cloudflare/mmg-ios
+        run: |
+          node --check src/kairos-production-entry-local-canonical-v1.js
+          node --check src/manuscript-studio-v1.js
+      - name: Test real 279045-character intake at canonical boundary
+        working-directory: cloudflare/mmg-ios
+        run: node --test test/kairos-manuscript-direct-intake.test.js
+      - name: Validate deployable Worker bundle
+        working-directory: cloudflare/mmg-ios
+        run: npx wrangler deploy --dry-run
