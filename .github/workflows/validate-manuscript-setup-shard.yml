@@ -1,0 +1,37 @@
+name: Validate Manuscript Setup Shard
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'cloudflare/mmg-ios/src/kairos-manuscript-source-shard-v1.js'
+      - 'cloudflare/mmg-ios/src/kairos-manuscript-project-setup-v1.js'
+      - 'cloudflare/mmg-ios/test/kairos-manuscript-setup-shard.test.js'
+      - '.github/workflows/validate-manuscript-setup-shard.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'cloudflare/mmg-ios/src/kairos-manuscript-source-shard-v1.js'
+      - 'cloudflare/mmg-ios/src/kairos-manuscript-project-setup-v1.js'
+      - 'cloudflare/mmg-ios/test/kairos-manuscript-setup-shard.test.js'
+      - '.github/workflows/validate-manuscript-setup-shard.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-setup-shard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate shard syntax
+        run: |
+          node --check cloudflare/mmg-ios/src/kairos-manuscript-source-shard-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-manuscript-project-setup-v1.js
+          node --check cloudflare/mmg-ios/test/kairos-manuscript-setup-shard.test.js
+      - name: Test source to setup transition
+        run: node --test cloudflare/mmg-ios/test/kairos-manuscript-setup-shard.test.js
