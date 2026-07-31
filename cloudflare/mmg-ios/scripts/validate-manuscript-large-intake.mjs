@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
-const BUILD = "kairos-manuscript-large-intake-validator-20260730-10-direct-studio-chunks";
+const BUILD = "kairos-manuscript-large-intake-validator-20260731-11-local-production";
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
 const repoRoot = join(root, "..", "..");
@@ -15,6 +15,8 @@ const indexPath = join(repoRoot, "web", "kairos-dashboard", "index.html");
 const runtimeLoaderPath = join(repoRoot, "web", "kairos-dashboard", "scripts", "kairos-runtime-loader.js");
 const loaderPath = join(repoRoot, "web", "kairos-dashboard", "scripts", "legacy-runtime-loader.js");
 const localInferencePath = join(repoRoot, "web", "kairos-dashboard", "scripts", "kairos-local-inference.js");
+const productionBootstrapPath = join(repoRoot, "web", "kairos-dashboard", "scripts", "manuscript-production-flow-bootstrap.js");
+const productionControllerPath = join(repoRoot, "web", "kairos-dashboard", "scripts", "manuscript-auto-pipeline.js");
 
 const backend = readFileSync(backendPath, "utf8");
 const frontend = readFileSync(frontendPath, "utf8");
@@ -23,6 +25,8 @@ const index = readFileSync(indexPath, "utf8");
 const runtimeLoader = readFileSync(runtimeLoaderPath, "utf8");
 const loader = readFileSync(loaderPath, "utf8");
 const localInference = readFileSync(localInferencePath, "utf8");
+const productionBootstrap = readFileSync(productionBootstrapPath, "utf8");
+const productionController = readFileSync(productionControllerPath, "utf8");
 const activeScripts = loader.match(/const SCRIPT_FILES = \[([\s\S]*?)\];/)?.[1] || "";
 
 assert.ok(backend.includes('const MAX_CHARS = 600000'), "Backend manuscript intake is not aligned to 600,000 characters.");
@@ -43,12 +47,13 @@ assert.ok(frontend.includes('uploadChunkWithRetry'), "The direct Studio chunk re
 assert.ok(!frontend.includes('new FormData'), "The active Manuscript Studio source path must not use multipart FormData.");
 assert.ok(index.includes('kairos-five-center-dashboard-restored-20260730-1'), "The restored five-center dashboard build marker is missing.");
 assert.ok(index.includes('safari-manuscript-intake-compat.js?v=safari-native-docx-20260730-1'), "The native Safari DOCX compatibility layer is missing.");
-assert.ok(index.includes('legacy-runtime-loader.js?v=five-center-dashboard-direct-studio-chunks-20260730-4'), "The direct-Studio command runtime loader marker is missing.");
-assert.ok(index.includes('five-center-dashboard-direct-studio-chunks-20260730-4'), "The direct-Studio release marker is missing.");
+assert.ok(index.includes('legacy-runtime-loader.js?v=five-center-dashboard-local-production-20260731-5'), "The fresh command runtime loader marker is missing.");
+assert.ok(index.includes('manuscript-production-flow-bootstrap.js?v=manuscript-local-production-controller-20260731-4'), "The fresh local-production bootstrap marker is missing.");
+assert.ok(index.includes('five-center-dashboard-direct-studio-chunks-20260730-4'), "The direct-Studio lineage marker is missing.");
 assert.ok(!index.includes('kairos-runtime-loader.js'), "The compatibility loader must not replace the five-center homepage.");
 assert.ok(!index.includes('executive-local-inference.js'), "The local-inference panel must not mount globally on the homepage.");
 assert.ok(!index.includes('manuscript-docx-upload-hotfix.js'), "The retired DOCX sidecar must not execute directly from the homepage HTML.");
-assert.ok(!index.includes('manuscript-studio.js'), "Manuscript Studio must not execute directly from the homepage HTML.");
+assert.ok(!index.match(/<script[^>]+manuscript-studio\.js/), "Manuscript Studio must not execute directly from the homepage HTML.");
 assert.ok(runtimeLoader.includes('import "./legacy-runtime-loader.js"'), "The compatibility loader must retain the command and advanced runtime.");
 assert.ok(!runtimeLoader.includes('executive-local-inference.js'), "The compatibility loader must not globally mount the local-inference panel.");
 assert.ok(safari.includes('safari-manuscript-intake-compat-20260730-12-five-center'), "The five-center Safari compatibility build is missing.");
@@ -59,20 +64,30 @@ assert.ok(safari.includes('word/document.xml'), "The native DOCX document-part r
 assert.ok(!safari.includes('cdn.jsdelivr.net'), "Safari DOCX extraction must not depend on jsDelivr.");
 assert.ok(!safari.includes('esm.sh'), "Safari DOCX extraction must not depend on esm.sh.");
 assert.ok(safari.includes('COMMAND_HUB_MODE'), "The five-center default route is missing.");
-assert.ok(loader.includes('const RELEASE = "five-center-dashboard-restored-20260730-1"'), "The restored command runtime release is missing.");
-assert.ok(loader.includes('const ASSET_RELEASE = "five-center-dashboard-direct-studio-chunks-20260730-4"'), "The direct-Studio asset release is missing.");
+assert.ok(loader.includes('const BUILD = "kairos-five-center-runtime-loader-20260731-2"'), "The fresh command runtime build is missing.");
+assert.ok(loader.includes('const RELEASE = "five-center-dashboard-restored-20260731-2"'), "The fresh command runtime release is missing.");
+assert.ok(loader.includes('const ASSET_RELEASE = "five-center-dashboard-local-production-20260731-5"'), "The local-production asset release is missing.");
+assert.ok(!loader.includes('const ASSET_RELEASE = "five-center-dashboard-direct-studio-chunks-20260730-4"'), "The retired command asset cache key remains active.");
 assert.ok(loader.includes('commandHubMode'), "The command hub default-mode contract is missing.");
 assert.ok(activeScripts.includes('"command-hub.js"'), "The five-center Command Hub is missing from the runtime.");
 assert.ok(activeScripts.includes('"kairos-local-inference.js"'), "Local manuscript inference is missing from the governed runtime.");
 assert.ok(activeScripts.includes('"manuscript-studio.js"'), "Manuscript Studio is missing from the governed runtime.");
 assert.ok(activeScripts.includes('"manuscript-project-setup.js"'), "Manuscript project setup is missing from the governed runtime.");
+assert.ok(activeScripts.includes('"manuscript-auto-pipeline.js"'), "The canonical manuscript production controller is missing from the governed runtime.");
 assert.ok(!activeScripts.includes('manuscript-docx-upload-hotfix.js'), "The retired DOCX sidecar remains active in the governed runtime.");
 assert.ok(activeScripts.indexOf('"manuscript-studio.js"') < activeScripts.indexOf('"manuscript-project-setup.js"'), "Manuscript Studio must load before project setup.");
+assert.ok(activeScripts.indexOf('"kairos-local-inference.js"') < activeScripts.indexOf('"manuscript-auto-pipeline.js"'), "Local inference must load before the production controller.");
 assert.ok(localInference.includes('kairos-local-inference-same-origin.js'), "The same-origin local manuscript inference module is missing.");
+assert.ok(productionBootstrap.includes('five-center-dashboard-local-production-20260731-5'), "The production bootstrap does not use the fresh command asset release.");
+assert.ok(productionBootstrap.includes('manuscript-local-production-controller-20260731-4'), "The production bootstrap does not use the fresh controller release.");
+assert.ok(productionController.includes('KairosLocalInference'), "The local production controller does not invoke local inference.");
+assert.ok(productionController.includes('data-start-local-production'), "The local production action is missing.");
+assert.ok(!productionController.includes('generation-job'), "The retired backend generation route remains in the active controller.");
+assert.ok(!productionController.includes('Start Production Job'), "The retired backend production action remains in the active controller.");
 assert.ok(!backend.includes('180000'), "The stale 180,000-character backend limit remains.");
 assert.ok(!frontend.includes('180000'), "The stale 180,000-character browser limit remains.");
 
-for (const file of [backendPath, frontendPath, safariPath, runtimeLoaderPath, loaderPath, localInferencePath]) {
+for (const file of [backendPath, frontendPath, safariPath, runtimeLoaderPath, loaderPath, localInferencePath, productionBootstrapPath, productionControllerPath]) {
   const checked = spawnSync(process.execPath, ["--check", file], { encoding: "utf8" });
   assert.equal(checked.status, 0, `${file} failed syntax validation:\n${checked.stderr || checked.stdout}`);
 }
@@ -139,6 +154,8 @@ console.log(JSON.stringify({
     fiveCenterDashboardRestored: true,
     globalInferenceOverlayDisabled: true,
     localInferenceRetained: true,
+    localProductionControllerActive: true,
+    retiredBackendGenerationInactive: true,
     safariDraftRecovery: true,
     stale502StateRemoved: true,
     nativeDocxExtraction: true,
