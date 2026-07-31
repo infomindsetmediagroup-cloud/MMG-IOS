@@ -42,7 +42,7 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"pending\",\"context\":\"kairos-browser-runtime\",\"description\":\"Deploying manuscript editorial shard runtime\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"pending\",\"context\":\"kairos-browser-runtime\",\"description\":\"Deploying manuscript production flow runtime\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
       - name: Check out authorized main commit
         uses: actions/checkout@v4
@@ -78,6 +78,8 @@ jobs:
           node --check web/kairos-dashboard/scripts/manuscript-studio.js
           node --check web/kairos-dashboard/scripts/manuscript-project-setup.js
           node --check web/kairos-dashboard/scripts/manuscript-editorial-workbench.js
+          node --check web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js
+          node --check web/kairos-dashboard/scripts/manuscript-production-flow-guard.js
           node --check web/kairos-dashboard/scripts/executive-local-inference.js
           node --check web/kairos-dashboard/scripts/kairos-local-inference.js
           node --check web/kairos-dashboard/scripts/kairos-local-inference-same-origin.js
@@ -87,12 +89,18 @@ jobs:
           npx vitest run backend-tests/kairos-local-execution.test.ts backend-tests/kairos-local-inference-same-origin.test.ts
           node cloudflare/mmg-ios/scripts/validate-manuscript-large-intake.mjs
           node --test tests/kairos-operational-execution-bridge.contract.test.js
+          node --test tests/manuscript-production-flow-guard.contract.test.js
           node --check browser-tests/manuscript-studio-direct-chunk.spec.mjs
           grep -q 'kairos-five-center-dashboard-restored-20260730-1' web/kairos-dashboard/index.html
           grep -q 'five-center-dashboard-direct-studio-chunks-20260730-4' web/kairos-dashboard/index.html
+          grep -q 'manuscript-production-flow-guard-20260731-1' web/kairos-dashboard/index.html
           grep -q 'legacy-runtime-loader.js' web/kairos-dashboard/index.html
           grep -q 'manuscript-studio-direct-chunks-20260730-4' web/kairos-dashboard/scripts/manuscript-studio.js
           grep -q 'kairos-manuscript-editorial-workbench-ui-20260722-2' web/kairos-dashboard/scripts/manuscript-editorial-workbench.js
+          grep -q 'data-start-local-production' web/kairos-dashboard/scripts/manuscript-production-flow-guard.js
+          grep -q 'KairosLocalInference' web/kairos-dashboard/scripts/manuscript-production-flow-guard.js
+          grep -q 'auto-pipeline' web/kairos-dashboard/scripts/manuscript-production-flow-guard.js
+          ! grep -q 'generation-job' web/kairos-dashboard/scripts/manuscript-production-flow-guard.js
           grep -q 'chunkedSourceUpload: true' web/kairos-dashboard/scripts/manuscript-studio.js
           grep -q 'multipartSourceUpload: false' web/kairos-dashboard/scripts/manuscript-studio.js
           grep -q 'FILE_CHUNK_BYTES = 512 \* 1024' web/kairos-dashboard/scripts/manuscript-studio.js
@@ -134,6 +142,8 @@ jobs:
             loader="${RUNNER_TEMP}/legacy-loader.js"
             command="${RUNNER_TEMP}/command-hub.js"
             studio="${RUNNER_TEMP}/manuscript-studio.js"
+            production_bootstrap="${RUNNER_TEMP}/manuscript-production-flow-bootstrap.js"
+            production_guard="${RUNNER_TEMP}/manuscript-production-flow-guard.js"
             readiness="${RUNNER_TEMP}/readiness.json"
             workflows="${RUNNER_TEMP}/workflows.json"
             canonical_headers="${RUNNER_TEMP}/canonical-headers.txt"
@@ -146,6 +156,8 @@ jobs:
             loader_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/legacy-runtime-loader.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${loader}" -w '%{http_code}' || true)"
             command_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/command-hub.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${command}" -w '%{http_code}' || true)"
             studio_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-studio.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${studio}" -w '%{http_code}' || true)"
+            production_bootstrap_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-production-flow-bootstrap.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${production_bootstrap}" -w '%{http_code}' || true)"
+            production_guard_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-production-flow-guard.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${production_guard}" -w '%{http_code}' || true)"
             readiness_status="$(curl --silent --show-error --max-time 20 -D "${canonical_headers}" "${WORKER_URL}/api/operational-readiness?release=${GITHUB_SHA}&attempt=${attempt}" -o "${readiness}" -w '%{http_code}' || true)"
             workflows_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/api/workflows?release=${GITHUB_SHA}&attempt=${attempt}" -o "${workflows}" -w '%{http_code}' || true)"
             api_denial_status="$(curl --silent --show-error --max-time 20 -X POST "${WORKER_URL}/api/kairos" -H 'Content-Type: application/json' --data '{"objective":"provider denial probe"}' -o "${api_denial}" -w '%{http_code}' || true)"
@@ -158,6 +170,7 @@ jobs:
             if [ "${root_status}" = "200" ] \
               && [ "${module_count}" = "2" ] \
               && grep -q 'five-center-dashboard-direct-studio-chunks-20260730-4' "${root}" \
+              && grep -q 'manuscript-production-flow-guard-20260731-1' "${root}" \
               && [ "${safari_status}" = "200" ] \
               && grep -q 'COMMAND_HUB_MODE' "${safari}" \
               && [ "${loader_status}" = "200" ] \
@@ -167,8 +180,15 @@ jobs:
               && [ "${parent_center_count}" = "5" ] \
               && [ "${studio_status}" = "200" ] \
               && grep -q 'manuscript-studio-direct-chunks-20260730-4' "${studio}" \
+              && [ "${production_bootstrap_status}" = "200" ] \
+              && grep -q 'manuscript-production-flow-guard.js' "${production_bootstrap}" \
+              && [ "${production_guard_status}" = "200" ] \
+              && grep -q 'data-start-local-production' "${production_guard}" \
+              && grep -q 'KairosLocalInference' "${production_guard}" \
+              && grep -q 'auto-pipeline' "${production_guard}" \
+              && ! grep -q 'generation-job' "${production_guard}" \
               && [ "${readiness_status}" = "200" ] \
-              && grep -qi 'x-kairos-canonical-local: kairos-local-canonical-entry-20260730-2-direct-intake' "${canonical_headers}" \
+              && grep -qi 'x-kairos-canonical-local: kairos-local-canonical-entry-20260731-3-package-state-recovery' "${canonical_headers}" \
               && grep -qi 'x-kairos-source-shard: kairos-manuscript-source-shard-20260731-1-editorial-colocation' "${canonical_headers}" \
               && grep -qi 'x-kairos-openai-calls: disabled' "${canonical_headers}" \
               && grep -q '"ready":true' "${readiness}" \
@@ -253,14 +273,14 @@ jobs:
 
               cleanup
               trap - EXIT
-              echo "Live source, cover, setup assignment, editorial startup, and saved-status recovery verified."
+              echo "Live source, cover, setup assignment, editorial startup, saved-status recovery, and guarded local-production assets verified."
               exit 0
             fi
 
             if [ "${attempt}" = "30" ]; then
-              echo "Live Kairos editorial-shard verification failed."
-              printf 'root=%s safari=%s loader=%s command=%s studio=%s readiness=%s workflows=%s api=%s manuscript=%s shopify=%s parents=%s\n' \
-                "${root_status}" "${safari_status}" "${loader_status}" "${command_status}" "${studio_status}" "${readiness_status}" "${workflows_status}" "${api_denial_status}" "${manuscript_denial_status}" "${shopify_denial_status}" "${parent_center_count}"
+              echo "Live Kairos production-flow verification failed."
+              printf 'root=%s safari=%s loader=%s command=%s studio=%s bootstrap=%s guard=%s readiness=%s workflows=%s api=%s manuscript=%s shopify=%s parents=%s\n' \
+                "${root_status}" "${safari_status}" "${loader_status}" "${command_status}" "${studio_status}" "${production_bootstrap_status}" "${production_guard_status}" "${readiness_status}" "${workflows_status}" "${api_denial_status}" "${manuscript_denial_status}" "${shopify_denial_status}" "${parent_center_count}"
               cat "${canonical_headers}" || true
               cat "${readiness}" || true
               cat "${workflows}" || true
@@ -276,7 +296,7 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"success\",\"context\":\"kairos-browser-runtime\",\"description\":\"Manuscript editorial shard verified in production\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"success\",\"context\":\"kairos-browser-runtime\",\"description\":\"Manuscript production flow verified in production\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
       - name: Report deployment failure
         if: ${{ failure() || cancelled() }}
@@ -285,4 +305,4 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"failure\",\"context\":\"kairos-browser-runtime\",\"description\":\"Manuscript editorial shard deployment failed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}" || true
+            --data "{\"state\":\"failure\",\"context\":\"kairos-browser-runtime\",\"description\":\"Manuscript production flow deployment failed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}" || true
