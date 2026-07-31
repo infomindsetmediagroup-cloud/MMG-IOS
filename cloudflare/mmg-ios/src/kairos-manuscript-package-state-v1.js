@@ -1,4 +1,4 @@
-export const KAIROS_MANUSCRIPT_PACKAGE_STATE_BUILD = "kairos-manuscript-package-state-20260731-1";
+export const KAIROS_MANUSCRIPT_PACKAGE_STATE_BUILD = "kairos-manuscript-package-state-20260731-2-reconciliation";
 
 const REGISTRY_OBJECT = "mmg-production-project-registry";
 const PUBLIC_ROUTE = /^\/api\/production-registry\/manuscripts\/([a-z0-9-]{8,})\/auto-pipeline$/i;
@@ -14,19 +14,28 @@ export async function handleManuscriptPackageState(request, env) {
     `https://kairos.internal/registry/manuscripts/${encodeURIComponent(projectId)}/auto-pipeline`,
   );
 
-  if (dedicated.ok || dedicated.status !== 404) {
-    return stamp(dedicated, dedicated.ok ? "project-shard" : "project-shard-error");
+  if (dedicated.status !== 404 && !dedicated.ok) {
+    return stamp(dedicated, "project-shard-error");
   }
 
+  const dedicatedRecord = dedicated.ok ? await dedicated.clone().json().catch(() => null) : null;
   const legacy = await legacyRecord(env, projectId);
-  if (!legacy) return stamp(dedicated, "not-started");
 
+  if (dedicatedRecord && (!legacy || !isNewerRecord(legacy, dedicatedRecord))) {
+    return stamp(dedicated, "project-shard");
+  }
+
+  if (!legacy) {
+    return dedicatedRecord ? stamp(dedicated, "project-shard") : stamp(dedicated, "not-started");
+  }
+
+  const state = dedicatedRecord ? "legacy-newer-migrated" : "legacy-migrated";
   try {
     await storeRecord(env, projectId, legacy);
-    return stamp(json(legacy), "legacy-migrated");
+    return stamp(json(legacy), state);
   } catch (error) {
-    console.error("Kairos recovered the publishing package but could not migrate it into the manuscript project shard immediately.", error);
-    return stamp(json(legacy), "legacy-fallback");
+    console.error("Kairos recovered the publishing package but could not reconcile it into the manuscript project shard immediately.", error);
+    return stamp(json(legacy), dedicatedRecord ? "legacy-newer-fallback" : "legacy-fallback");
   }
 }
 
@@ -83,6 +92,29 @@ function projectStub(env, projectId) {
     throw Object.assign(new Error("The dedicated manuscript project runtime is not configured."), { status: 503 });
   }
   return env.KAIROS_MANUSCRIPT_SOURCES.get(env.KAIROS_MANUSCRIPT_SOURCES.idFromName(projectId));
+}
+
+function isNewerRecord(candidate, current) {
+  const candidateTime = recordTime(candidate);
+  const currentTime = recordTime(current);
+  if (candidateTime !== currentTime) return candidateTime > currentTime;
+  if (candidate?.packageApproval?.approved && !current?.packageApproval?.approved) return true;
+  if (statusRank(candidate?.status) !== statusRank(current?.status)) {
+    return statusRank(candidate?.status) > statusRank(current?.status);
+  }
+  return false;
+}
+
+function recordTime(record) {
+  const value = Date.parse(String(record?.updatedAt || record?.createdAt || ""));
+  return Number.isFinite(value) ? value : 0;
+}
+
+function statusRank(status) {
+  return ({
+    "production-ready": 1,
+    "package-approved": 2,
+  })[String(status || "")] || 0;
 }
 
 function stamp(response, state) {
