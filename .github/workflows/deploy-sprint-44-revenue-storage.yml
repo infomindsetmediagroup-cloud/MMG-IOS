@@ -205,19 +205,7 @@ jobs:
               text_status="$(curl --silent --show-error --max-time 30 -o "${work}/text.json" -w '%{http_code}' -X PUT "${source_base}/text-chunk/0" -H 'Content-Type: application/octet-stream' -H "X-Kairos-Upload-Id: ${upload_id}" --data-binary "@${work}/text.bin")"
               commit_status="$(curl --silent --show-error --max-time 30 -o "${work}/commit.json" -w '%{http_code}' -X POST "${source_base}/commit" -H 'Content-Type: application/json' -H "X-Kairos-Upload-Id: ${upload_id}" --data "{\"uploadId\":\"${upload_id}\"}")"
               cover_status="$(curl --silent --show-error --max-time 30 -o "${work}/cover.json" -w '%{http_code}' -X PUT "${setup_base}/cover" -H 'Content-Type: image/png' -H 'X-Filename: diagnostic-cover.png' -H "X-Kairos-Operation-Id: ${operation_id}" --data-binary "@${work}/cover.png")"
-
-              cat > "${work}/setup.json" <<JSON
-              {
-                "authorName": "MMG Runtime Diagnostic",
-                "publicationTitle": "Live Manuscript Setup Diagnostic",
-                "service": "complete-publishing-package",
-                "edition": "multi-format",
-                "trimSize": "6x9",
-                "isbnStatus": "not-decided",
-                "notes": "Bounded route verification only.",
-                "operationId": "${operation_id}"
-              }
-              JSON
+              printf '%s' "{\"authorName\":\"MMG Runtime Diagnostic\",\"publicationTitle\":\"Live Manuscript Setup Diagnostic\",\"service\":\"complete-publishing-package\",\"edition\":\"multi-format\",\"trimSize\":\"6x9\",\"isbnStatus\":\"not-decided\",\"notes\":\"Bounded route verification only.\",\"operationId\":\"${operation_id}\"}" > "${work}/setup.json"
 
               setup_status="$(curl --silent --show-error --max-time 30 -D "${work}/setup-headers.txt" -o "${work}/setup-response.json" -w '%{http_code}' -X POST "${setup_base}" -H 'Content-Type: application/json' -H "X-Kairos-Operation-Id: ${operation_id}" -H "X-Kairos-Idempotency-Key: ${operation_id}" --data-binary "@${work}/setup.json")"
               recovery_status="$(curl --silent --show-error --max-time 30 -o "${work}/recovery.json" -w '%{http_code}' "${setup_base}")"
