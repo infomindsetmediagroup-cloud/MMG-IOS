@@ -12,7 +12,7 @@ test("the actual manuscript controller uses only the local WebGPU production rou
 
   assert.doesNotMatch(source, /generation-job/);
   assert.doesNotMatch(source, /Start Production Job/);
-  assert.doesNotMatch(source, /close Safari/i);
+  assert.doesNotMatch(source, /you may close Safari|continues in the backend|phone-independent/i);
   assert.match(source, /KairosLocalInference/);
   assert.match(source, /data-start-local-production/);
   assert.match(source, /ready-for-manufacturing/);
@@ -21,6 +21,7 @@ test("the actual manuscript controller uses only the local WebGPU production rou
   assert.match(source, /\/auto-pipeline/);
   assert.match(source, /executionMode:\s*"browser-webgpu"/);
   assert.match(source, /Keep Safari open and in the foreground/);
+  assert.match(source, /Do not close Safari during this step/);
 });
 
 test("the route firewall rewrites any retained legacy button before document handlers run", async () => {
