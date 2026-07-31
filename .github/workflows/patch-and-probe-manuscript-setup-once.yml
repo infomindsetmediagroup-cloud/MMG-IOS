@@ -1,0 +1,137 @@
+name: Patch and Probe Manuscript Setup Once
+
+on:
+  push:
+    branches: [fix/manuscript-setup-deploy-gate]
+    paths:
+      - '.github/workflows/patch-and-probe-manuscript-setup-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+    steps:
+      - name: Check out repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/manuscript-setup-deploy-gate
+
+      - name: Patch stale deployment gate
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/deploy-sprint-44-revenue-storage.yml')
+          source = path.read_text()
+
+          stale = "x-kairos-canonical-local: kairos-local-canonical-entry-20260730-1"
+          current = "x-kairos-canonical-local: kairos-local-canonical-entry-20260730-2-direct-intake"
+          if stale not in source and current not in source:
+              raise SystemExit('Canonical deployment assertion was not found.')
+          source = source.replace(stale, current)
+
+          anchor = "          node --check cloudflare/mmg-ios/src/kairos-manuscript-source-v1.js\n"
+          additions = (
+              "          node --check cloudflare/mmg-ios/src/kairos-manuscript-source-shard-v1.js\n"
+              "          node --check cloudflare/mmg-ios/src/kairos-manuscript-project-setup-v1.js\n"
+              "          node --test cloudflare/mmg-ios/test/kairos-manuscript-setup-shard.test.js\n"
+          )
+          if additions not in source:
+              if anchor not in source:
+                  raise SystemExit('Manuscript source validation anchor was not found.')
+              source = source.replace(anchor, anchor + additions, 1)
+
+          path.write_text(source)
+          PY
+
+          grep -q 'kairos-local-canonical-entry-20260730-2-direct-intake' .github/workflows/deploy-sprint-44-revenue-storage.yml
+          grep -q 'kairos-manuscript-setup-shard.test.js' .github/workflows/deploy-sprint-44-revenue-storage.yml
+
+      - name: Validate setup shard locally
+        run: |
+          node --check cloudflare/mmg-ios/src/kairos-manuscript-source-shard-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-manuscript-project-setup-v1.js
+          node --test cloudflare/mmg-ios/test/kairos-manuscript-setup-shard.test.js
+
+      - name: Probe live source cover setup and recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="${RUNNER_TEMP}/live-manuscript-setup"
+          mkdir -p "${work}"
+          project_id="setup-live-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          upload_id="upload-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          operation_id="setup-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          source_base="${WORKER_URL}/api/production-registry/manuscripts/${project_id}/source"
+          setup_base="${WORKER_URL}/api/production-registry/manuscripts/${project_id}/setup"
+
+          cleanup() {
+            curl --silent --show-error --max-time 30 -X DELETE "${source_base}" -o "${work}/source-cleanup.json" -w 'source_cleanup=%{http_code}\n' || true
+            curl --silent --show-error --max-time 30 -X DELETE "${WORKER_URL}/api/production-registry/projects/${project_id}" -o "${work}/project-cleanup.json" -w 'project_cleanup=%{http_code}\n' || true
+          }
+          trap cleanup EXIT
+
+          printf 'PK\003\004Kairos manuscript setup diagnostic source' > "${work}/source.bin"
+          printf '%s' 'This is a bounded Kairos manuscript setup diagnostic with enough extracted text to verify source storage, cover storage, production assignment, and saved-status recovery.' > "${work}/text.bin"
+          printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nYQAAAAASUVORK5CYII=' | base64 --decode > "${work}/cover.png"
+          file_size="$(wc -c < "${work}/source.bin" | tr -d ' ')"
+          text_size="$(wc -c < "${work}/text.bin" | tr -d ' ')"
+
+          session_status="$(curl --silent --show-error --max-time 30 -o "${work}/session.json" -w '%{http_code}' -X POST "${source_base}/session" -H 'Content-Type: application/json' -H 'X-MMG-Client-Build: manuscript-studio-direct-chunks-20260730-4' --data "{\"uploadId\":\"${upload_id}\",\"title\":\"Live Manuscript Setup Diagnostic\",\"filename\":\"diagnostic.docx\",\"contentType\":\"application/vnd.openxmlformats-officedocument.wordprocessingml.document\",\"format\":\"docx\",\"size\":${file_size},\"textBytes\":${text_size},\"fileChunks\":1,\"textChunks\":1}")"
+          file_status="$(curl --silent --show-error --max-time 30 -o "${work}/file.json" -w '%{http_code}' -X PUT "${source_base}/file/0" -H 'Content-Type: application/octet-stream' -H 'X-MMG-Client-Build: manuscript-studio-direct-chunks-20260730-4' -H "X-Kairos-Upload-Id: ${upload_id}" --data-binary "@${work}/source.bin")"
+          text_status="$(curl --silent --show-error --max-time 30 -o "${work}/text.json" -w '%{http_code}' -X PUT "${source_base}/text-chunk/0" -H 'Content-Type: application/octet-stream' -H 'X-MMG-Client-Build: manuscript-studio-direct-chunks-20260730-4' -H "X-Kairos-Upload-Id: ${upload_id}" --data-binary "@${work}/text.bin")"
+          commit_status="$(curl --silent --show-error --max-time 30 -D "${work}/commit-headers.txt" -o "${work}/commit.json" -w '%{http_code}' -X POST "${source_base}/commit" -H 'Content-Type: application/json' -H 'X-MMG-Client-Build: manuscript-studio-direct-chunks-20260730-4' -H "X-Kairos-Upload-Id: ${upload_id}" --data "{\"uploadId\":\"${upload_id}\"}")"
+
+          cover_status="$(curl --silent --show-error --max-time 30 -D "${work}/cover-headers.txt" -o "${work}/cover.json" -w '%{http_code}' -X PUT "${setup_base}/cover" -H 'Content-Type: image/png' -H 'X-Filename: diagnostic-cover.png' -H "X-Kairos-Operation-Id: ${operation_id}" --data-binary "@${work}/cover.png")"
+
+          cat > "${work}/setup.json" <<JSON
+          {
+            "authorName": "MMG Runtime Diagnostic",
+            "publicationTitle": "Live Manuscript Setup Diagnostic",
+            "service": "complete-publishing-package",
+            "edition": "multi-format",
+            "trimSize": "6x9",
+            "isbnStatus": "not-decided",
+            "notes": "Bounded production setup route verification only.",
+            "operationId": "${operation_id}"
+          }
+          JSON
+
+          setup_status="$(curl --silent --show-error --max-time 30 -D "${work}/setup-headers.txt" -o "${work}/setup-response.json" -w '%{http_code}' -X POST "${setup_base}" -H 'Content-Type: application/json' -H "X-Kairos-Operation-Id: ${operation_id}" -H "X-Kairos-Idempotency-Key: ${operation_id}" --data-binary "@${work}/setup.json")"
+          recovery_status="$(curl --silent --show-error --max-time 30 -D "${work}/recovery-headers.txt" -o "${work}/recovery.json" -w '%{http_code}' "${setup_base}")"
+
+          printf 'session=%s file=%s text=%s commit=%s cover=%s setup=%s recovery=%s\n' "${session_status}" "${file_status}" "${text_status}" "${commit_status}" "${cover_status}" "${setup_status}" "${recovery_status}"
+          cat "${work}/setup-headers.txt"
+          cat "${work}/setup-response.json"
+          echo
+          cat "${work}/recovery.json"
+          echo
+
+          test "${session_status}" = "201"
+          test "${file_status}" = "201"
+          test "${text_status}" = "201"
+          test "${commit_status}" = "201"
+          test "${cover_status}" = "201"
+          test "${setup_status}" = "201"
+          test "${recovery_status}" = "200"
+          grep -qi 'x-kairos-source-shard: kairos-manuscript-source-shard-20260730-2-setup-colocation' "${work}/setup-headers.txt"
+          grep -Eqi 'x-kairos-global-project-mirror: (synced|pending)' "${work}/setup-headers.txt"
+          grep -q '"status":"assigned-to-production"' "${work}/setup-response.json"
+          grep -q '"coverStatus":"customer-supplied-cover-stored"' "${work}/setup-response.json"
+          grep -q '"status":"ready"' "${work}/recovery.json"
+          grep -q '"status":"assigned-to-production"' "${work}/recovery.json"
+          grep -q '"externalInferenceAPI":false' "${work}/setup-response.json"
+
+      - name: Commit corrected deployment gate
+        run: |
+          git config user.name "kairos-ci"
+          git config user.email "actions@users.noreply.github.com"
+          git add .github/workflows/deploy-sprint-44-revenue-storage.yml
+          git diff --cached --quiet && exit 0
+          git commit -m "ci: verify manuscript setup shard deployment"
+          git push origin HEAD:fix/manuscript-setup-deploy-gate
