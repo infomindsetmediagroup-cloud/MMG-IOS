@@ -135,3 +135,5 @@ jobs:
           git diff --cached --quiet && exit 0
           git commit -m "ci: verify manuscript setup shard deployment"
           git push origin HEAD:main
+
+# second-push trigger
