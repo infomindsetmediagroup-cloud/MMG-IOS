@@ -1,11 +1,12 @@
 import { handleManuscriptSourceObjectRequest } from "./kairos-manuscript-source-v1.js";
 import { handleManuscriptProjectSetupObjectRequest } from "./kairos-manuscript-project-setup-v1.js";
+import { handleManuscriptEditorialObjectRequest } from "./kairos-manuscript-editorial-workbench-v1.js";
 
-export const KAIROS_MANUSCRIPT_SOURCE_SHARD_BUILD = "kairos-manuscript-source-shard-20260730-2-setup-colocation";
+export const KAIROS_MANUSCRIPT_SOURCE_SHARD_BUILD = "kairos-manuscript-source-shard-20260731-1-editorial-colocation";
 
 const REGISTRY_OBJECT = "mmg-production-project-registry";
-const PUBLIC_MANUSCRIPT_ROUTE = /^\/api\/production-registry\/manuscripts\/([a-z0-9-]{8,})\/(?:source(?:\/(?:download|text|session|commit|file\/\d+|text-chunk\/\d+))?|setup(?:\/cover)?)$/i;
-const INTERNAL_SOURCE_ROUTE = /^\/registry\/manuscripts\/([a-z0-9-]{8,})\/source(?:\/(?:download|text|session|commit|file\/\d+|text-chunk\/\d+))?$/i;
+const PUBLIC_MANUSCRIPT_ROUTE = /^\/api\/production-registry\/manuscripts\/([a-z0-9-]{8,})\/(?:source(?:\/(?:download|text|session|commit|file\/\d+|text-chunk\/\d+))?|setup(?:\/cover)?|editorial(?:\/(?:versions(?:\/[a-z0-9-]{8,})?|review|decision|finalize))?)$/i;
+const INTERNAL_SOURCE_ROUTE = /^\/registry\/manuscripts\/([a-z0-9-]{8,})\/(?:source(?:\/(?:download|text|session|commit|file\/\d+|text-chunk\/\d+))?|setup(?:\/cover)?|editorial(?:\/(?:versions(?:\/[a-z0-9-]{8,})?|review|decision|finalize))?)$/i;
 const BUFFERED_METHODS = new Set(["POST", "PUT", "PATCH"]);
 
 export class KairosManuscriptSource {
@@ -15,6 +16,9 @@ export class KairosManuscriptSource {
   }
 
   async fetch(request) {
+    const editorialResponse = await handleManuscriptEditorialObjectRequest(this.state, request);
+    if (editorialResponse) return stamp(editorialResponse);
+
     const setupResponse = await handleManuscriptProjectSetupObjectRequest(this.state, request);
     if (setupResponse) return stamp(setupResponse);
 
@@ -71,6 +75,19 @@ export async function handleDedicatedManuscriptSource(request, env) {
           return stamp(response, { "X-Kairos-Global-Project-Mirror": "synced" });
         } catch (error) {
           console.error("Kairos stored manuscript setup but could not mirror the global project immediately.", error);
+          return stamp(response, { "X-Kairos-Global-Project-Mirror": "pending" });
+        }
+      }
+    }
+
+    if (isEditorialMutation(request.method, url.pathname) && response.ok) {
+      const body = await response.clone().json().catch(() => ({}));
+      if (body?.editorial) {
+        try {
+          await ensureGlobalEditorial(env, projectId, body, stub);
+          return stamp(response, { "X-Kairos-Global-Project-Mirror": "synced" });
+        } catch (error) {
+          console.error("Kairos stored manuscript editorial state but could not mirror the global project immediately.", error);
           return stamp(response, { "X-Kairos-Global-Project-Mirror": "pending" });
         }
       }
@@ -204,6 +221,98 @@ async function ensureGlobalSetup(env, projectId, body) {
       code: result?.error?.code || "manuscript_setup_registry_mirror_failed",
     });
   }
+}
+
+async function ensureGlobalEditorial(env, projectId, body, projectStub) {
+  if (!env?.KAIROS_PROJECTS?.idFromName || !env?.KAIROS_PROJECTS?.get) return;
+  const editorial = body?.editorial;
+  if (!editorial) return;
+
+  const setupResponse = await projectStub.fetch(new Request(
+    `https://kairos.internal/registry/manuscripts/${encodeURIComponent(projectId)}/setup`,
+    { method: "GET" },
+  ));
+  const setupBody = setupResponse.ok ? await setupResponse.json().catch(() => ({})) : {};
+  const setup = setupBody?.setup || {};
+  const now = new Date().toISOString();
+  const status = String(editorial.status || "editorial-in-progress");
+  const stage = String(editorial.stage || "editorial-intake");
+
+  const id = env.KAIROS_PROJECTS.idFromName(REGISTRY_OBJECT);
+  const stub = env.KAIROS_PROJECTS.get(id);
+  const response = await stub.fetch(new Request("https://kairos.internal/registry/projects", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Kairos-Source-Shard": KAIROS_MANUSCRIPT_SOURCE_SHARD_BUILD,
+    },
+    body: JSON.stringify({
+      projectId,
+      projectType: "manuscript-studio",
+      title: setup.publicationTitle || editorial.title || "Untitled Manuscript",
+      status,
+      stage,
+      progress: editorialProgress(status, stage),
+      activeWorkspace: "manuscript-studio",
+      summary: editorialSummary(status, editorial),
+      nextAction: editorialNextAction(status),
+      checkpoints: [{
+        id: `editorial-${status}`.slice(0, 120),
+        label: editorialCheckpointLabel(status),
+        status: "completed",
+        recordedAt: editorial.updatedAt || now,
+      }],
+      createdAt: setup.createdAt || editorial.createdAt || now,
+    }),
+  }));
+
+  if (!response.ok) {
+    const result = await response.json().catch(() => ({}));
+    throw Object.assign(new Error(result?.error?.message || "The global production registry could not record editorial progress."), {
+      status: response.status,
+      code: result?.error?.code || "manuscript_editorial_registry_mirror_failed",
+    });
+  }
+}
+
+function isEditorialMutation(method, pathname) {
+  return String(method || "GET").toUpperCase() === "POST"
+    && /^\/api\/production-registry\/manuscripts\/[a-z0-9-]{8,}\/editorial\/(?:versions|review|decision|finalize)$/i.test(pathname);
+}
+
+function editorialProgress(status, stage) {
+  if (status === "ready-for-manufacturing") return 90;
+  if (status === "customer-approved") return 82;
+  if (status === "awaiting-customer-review") return 70;
+  if (status === "revision-requested") return 68;
+  return ({ structural: 45, copyedit: 55, proofread: 78, "customer-revision": 68, final: 88 })[stage] || 40;
+}
+
+function editorialSummary(status, editorial) {
+  const versionCount = Array.isArray(editorial?.versions) ? editorial.versions.length : 0;
+  if (status === "ready-for-manufacturing") return "Editorial production is complete and the approved manuscript is ready for manufacturing.";
+  if (status === "customer-approved") return "Customer approval is recorded for the active editorial proof.";
+  if (status === "awaiting-customer-review") return "The active editorial proof is awaiting customer review.";
+  if (status === "revision-requested") return "A customer revision request is recorded in the editorial workbench.";
+  return `${versionCount} governed editorial version${versionCount === 1 ? " is" : "s are"} stored for this manuscript.`;
+}
+
+function editorialNextAction(status) {
+  if (status === "ready-for-manufacturing") return "Generate final publishing deliverables.";
+  if (status === "customer-approved") return "Complete final proofread and manufacturing handoff.";
+  if (status === "awaiting-customer-review") return "Record the customer approval or revision request.";
+  if (status === "revision-requested") return "Create a revised editorial version and prepare a new review.";
+  return "Continue the governed editorial pass and save the next version.";
+}
+
+function editorialCheckpointLabel(status) {
+  return ({
+    "editorial-in-progress": "Editorial version stored",
+    "awaiting-customer-review": "Customer editorial review prepared",
+    "customer-approved": "Customer editorial approval recorded",
+    "revision-requested": "Customer editorial revision requested",
+    "ready-for-manufacturing": "Editorial production completed",
+  })[status] || "Editorial workbench updated";
 }
 
 function stamp(response, extraHeaders = {}) {
