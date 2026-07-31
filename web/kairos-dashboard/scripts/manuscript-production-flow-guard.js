@@ -2,6 +2,7 @@ const BUILD = "kairos-manuscript-production-flow-guard-20260731-1";
 const ACTIVE_KEY = "kairos.production.active-workspace";
 const READY_STATUS = "ready-for-manufacturing";
 const SYNC_DELAY_MS = 80;
+const RENDER_SETTLE_MS = 250;
 
 const state = {
   projectId: "",
@@ -10,6 +11,7 @@ const state = {
   error: "",
   syncing: false,
   syncTimer: null,
+  renderedAt: 0,
 };
 
 function activeProjectId() {
@@ -22,6 +24,7 @@ function activeProjectId() {
 }
 
 function scheduleSync() {
+  if (Date.now() - state.renderedAt < RENDER_SETTLE_MS) return;
   clearTimeout(state.syncTimer);
   state.syncTimer = setTimeout(() => void sync(), SYNC_DELAY_MS);
 }
@@ -143,6 +146,7 @@ function renderLocalStart(section, readiness) {
     </button>
     <p class="manuscript-note">Do not close Safari during this step. The manuscript, setup, cover, and editorial state are already stored and remain recoverable if local inference stops.</p>
   `;
+  state.renderedAt = Date.now();
 }
 
 function renderBlocked(section, message) {
@@ -154,6 +158,7 @@ function renderBlocked(section, message) {
     <p class="manuscript-error" role="alert">${esc(message)}</p>
     <button type="button" class="secondary" data-production-flow-retry>Check Production Readiness</button>
   `;
+  state.renderedAt = Date.now();
 }
 
 async function startLocalProduction() {
@@ -217,7 +222,7 @@ async function startLocalProduction() {
     section.remove();
     window.dispatchEvent(new CustomEvent("kairos:production:state-changed"));
     window.KairosPublishingExperience?.enhance?.();
-    scheduleSync();
+    setTimeout(scheduleSync, RENDER_SETTLE_MS);
   } catch (error) {
     state.error = normalizeError(error);
     const readiness = await readReadiness(projectId).catch(() => ({
@@ -229,7 +234,6 @@ async function startLocalProduction() {
     renderLocalStart(section, readiness);
   } finally {
     state.busy = false;
-    scheduleSync();
   }
 }
 
