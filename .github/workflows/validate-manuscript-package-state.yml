@@ -52,7 +52,7 @@ jobs:
             body="${RUNNER_TEMP}/package-state-body.json"
             status="$(curl --silent --show-error --max-time 20 -D "${headers}" -o "${body}" -w '%{http_code}' "${WORKER_URL}/api/production-registry/manuscripts/${project_id}/auto-pipeline?attempt=${attempt}" || true)"
             if [ "${status}" = "404" ] \
-              && grep -qi 'x-kairos-package-state-build: kairos-manuscript-package-state-20260731-1' "${headers}" \
+              && grep -qi 'x-kairos-package-state-build: kairos-manuscript-package-state-20260731-2-reconciliation' "${headers}" \
               && grep -qi 'x-kairos-package-state: not-started' "${headers}" \
               && grep -qi 'x-kairos-canonical-local: kairos-local-canonical-entry-20260731-3-package-state-recovery' "${headers}"; then
               cat "${headers}"
