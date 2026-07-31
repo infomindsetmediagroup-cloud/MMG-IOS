@@ -42,7 +42,7 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"pending\",\"context\":\"kairos-browser-runtime\",\"description\":\"Deploying manuscript setup shard runtime\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"pending\",\"context\":\"kairos-browser-runtime\",\"description\":\"Deploying manuscript editorial shard runtime\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
       - name: Check out authorized main commit
         uses: actions/checkout@v4
@@ -61,7 +61,7 @@ jobs:
           test -s web/kairos-dashboard/vendor/webllm-bundle.js
           grep -q 'CreateMLCEngine' web/kairos-dashboard/vendor/webllm-bundle.js
 
-      - name: Validate Kairos browser manuscript and setup contracts
+      - name: Validate Kairos browser manuscript setup and editorial contracts
         run: |
           node --check cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
           node --check cloudflare/mmg-ios/src/kairos-production-entry-local-only-v1.js
@@ -70,12 +70,14 @@ jobs:
           node --check cloudflare/mmg-ios/src/kairos-manuscript-source-v1.js
           node --check cloudflare/mmg-ios/src/kairos-manuscript-source-shard-v1.js
           node --check cloudflare/mmg-ios/src/kairos-manuscript-project-setup-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-manuscript-editorial-workbench-v1.js
           node --check web/kairos-dashboard/scripts/safari-manuscript-intake-compat.js
           node --check web/kairos-dashboard/scripts/legacy-runtime-loader.js
           node --check web/kairos-dashboard/scripts/kairos-runtime-loader.js
           node --check web/kairos-dashboard/scripts/command-hub.js
           node --check web/kairos-dashboard/scripts/manuscript-studio.js
           node --check web/kairos-dashboard/scripts/manuscript-project-setup.js
+          node --check web/kairos-dashboard/scripts/manuscript-editorial-workbench.js
           node --check web/kairos-dashboard/scripts/executive-local-inference.js
           node --check web/kairos-dashboard/scripts/kairos-local-inference.js
           node --check web/kairos-dashboard/scripts/kairos-local-inference-same-origin.js
@@ -90,6 +92,7 @@ jobs:
           grep -q 'five-center-dashboard-direct-studio-chunks-20260730-4' web/kairos-dashboard/index.html
           grep -q 'legacy-runtime-loader.js' web/kairos-dashboard/index.html
           grep -q 'manuscript-studio-direct-chunks-20260730-4' web/kairos-dashboard/scripts/manuscript-studio.js
+          grep -q 'kairos-manuscript-editorial-workbench-ui-20260722-2' web/kairos-dashboard/scripts/manuscript-editorial-workbench.js
           grep -q 'chunkedSourceUpload: true' web/kairos-dashboard/scripts/manuscript-studio.js
           grep -q 'multipartSourceUpload: false' web/kairos-dashboard/scripts/manuscript-studio.js
           grep -q 'FILE_CHUNK_BYTES = 512 \* 1024' web/kairos-dashboard/scripts/manuscript-studio.js
@@ -120,7 +123,7 @@ jobs:
         working-directory: cloudflare/mmg-ios
         run: npx wrangler deploy
 
-      - name: Verify live dashboard source setup and recovery runtime
+      - name: Verify live dashboard source setup editorial and recovery runtime
         shell: bash
         run: |
           set -euo pipefail
@@ -159,13 +162,14 @@ jobs:
               && grep -q 'COMMAND_HUB_MODE' "${safari}" \
               && [ "${loader_status}" = "200" ] \
               && grep -q 'manuscript-studio.js' "${loader}" \
+              && grep -q 'manuscript-editorial-workbench.js' "${loader}" \
               && [ "${command_status}" = "200" ] \
               && [ "${parent_center_count}" = "5" ] \
               && [ "${studio_status}" = "200" ] \
               && grep -q 'manuscript-studio-direct-chunks-20260730-4' "${studio}" \
               && [ "${readiness_status}" = "200" ] \
               && grep -qi 'x-kairos-canonical-local: kairos-local-canonical-entry-20260730-2-direct-intake' "${canonical_headers}" \
-              && grep -qi 'x-kairos-source-shard: kairos-manuscript-source-shard-20260730-2-setup-colocation' "${canonical_headers}" \
+              && grep -qi 'x-kairos-source-shard: kairos-manuscript-source-shard-20260731-1-editorial-colocation' "${canonical_headers}" \
               && grep -qi 'x-kairos-openai-calls: disabled' "${canonical_headers}" \
               && grep -q '"ready":true' "${readiness}" \
               && grep -q '"provider":"browser-webgpu"' "${readiness}" \
@@ -186,6 +190,7 @@ jobs:
               operation_id="setup-${GITHUB_RUN_ID}-${attempt}"
               source_base="${WORKER_URL}/api/production-registry/manuscripts/${project_id}/source"
               setup_base="${WORKER_URL}/api/production-registry/manuscripts/${project_id}/setup"
+              editorial_base="${WORKER_URL}/api/production-registry/manuscripts/${project_id}/editorial"
 
               cleanup() {
                 curl --silent --show-error --max-time 30 -X DELETE "${setup_base}/cover" -o "${work}/cover-cleanup.json" -w 'cover_cleanup=%{http_code}\n' || true
@@ -195,7 +200,7 @@ jobs:
               trap cleanup EXIT
 
               printf 'PK\003\004Kairos manuscript setup live source' > "${work}/source.bin"
-              printf '%s' 'This bounded live manuscript contains enough extracted text to verify source storage, cover storage, production assignment, and saved-status recovery without publication.' > "${work}/text.bin"
+              printf '%s' 'This bounded live manuscript contains enough extracted text to verify source storage, cover storage, production assignment, editorial startup, and saved-status recovery without publication.' > "${work}/text.bin"
               printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nYQAAAAASUVORK5CYII=' | base64 --decode > "${work}/cover.png"
               file_size="$(wc -c < "${work}/source.bin" | tr -d ' ')"
               text_size="$(wc -c < "${work}/text.bin" | tr -d ' ')"
@@ -209,12 +214,19 @@ jobs:
 
               setup_status="$(curl --silent --show-error --max-time 30 -D "${work}/setup-headers.txt" -o "${work}/setup-response.json" -w '%{http_code}' -X POST "${setup_base}" -H 'Content-Type: application/json' -H "X-Kairos-Operation-Id: ${operation_id}" -H "X-Kairos-Idempotency-Key: ${operation_id}" --data-binary "@${work}/setup.json")"
               recovery_status="$(curl --silent --show-error --max-time 30 -o "${work}/recovery.json" -w '%{http_code}' "${setup_base}")"
+              editorial_status="$(curl --silent --show-error --max-time 30 -D "${work}/editorial-headers.txt" -o "${work}/editorial.json" -w '%{http_code}' "${editorial_base}")"
+              source_text_status="$(curl --silent --show-error --max-time 30 -o "${work}/source-text.json" -w '%{http_code}' "${source_base}/text")"
 
-              printf 'session=%s file=%s text=%s commit=%s cover=%s setup=%s recovery=%s\n' "${session_status}" "${file_status}" "${text_status}" "${commit_status}" "${cover_status}" "${setup_status}" "${recovery_status}"
+              printf 'session=%s file=%s text=%s commit=%s cover=%s setup=%s recovery=%s editorial=%s source_text=%s\n' "${session_status}" "${file_status}" "${text_status}" "${commit_status}" "${cover_status}" "${setup_status}" "${recovery_status}" "${editorial_status}" "${source_text_status}"
               cat "${work}/setup-headers.txt"
               cat "${work}/setup-response.json"
               echo
               cat "${work}/recovery.json"
+              echo
+              cat "${work}/editorial-headers.txt"
+              cat "${work}/editorial.json"
+              echo
+              cat "${work}/source-text.json"
               echo
 
               test "${session_status}" = "201"
@@ -224,22 +236,29 @@ jobs:
               test "${cover_status}" = "201"
               test "${setup_status}" = "201"
               test "${recovery_status}" = "200"
-              grep -qi 'x-kairos-source-shard: kairos-manuscript-source-shard-20260730-2-setup-colocation' "${work}/setup-headers.txt"
+              test "${editorial_status}" = "200"
+              test "${source_text_status}" = "200"
+              grep -qi 'x-kairos-source-shard: kairos-manuscript-source-shard-20260731-1-editorial-colocation' "${work}/setup-headers.txt"
+              grep -qi 'x-kairos-source-shard: kairos-manuscript-source-shard-20260731-1-editorial-colocation' "${work}/editorial-headers.txt"
               grep -Eqi 'x-kairos-global-project-mirror: (synced|pending)' "${work}/setup-headers.txt"
               grep -q '"status":"assigned-to-production"' "${work}/setup-response.json"
               grep -q '"coverStatus":"customer-supplied-cover-stored"' "${work}/setup-response.json"
               grep -q '"externalInferenceAPI":false' "${work}/setup-response.json"
               grep -q '"status":"ready"' "${work}/recovery.json"
               grep -q '"status":"assigned-to-production"' "${work}/recovery.json"
+              grep -q '"status":"ready"' "${work}/editorial.json"
+              grep -q '"status":"not-started"' "${work}/editorial.json"
+              grep -q "\"projectId\":\"${project_id}\"" "${work}/editorial.json"
+              grep -q 'editorial startup, and saved-status recovery' "${work}/source-text.json"
 
               cleanup
               trap - EXIT
-              echo "Live source, cover, setup assignment, and saved-status recovery verified."
+              echo "Live source, cover, setup assignment, editorial startup, and saved-status recovery verified."
               exit 0
             fi
 
             if [ "${attempt}" = "30" ]; then
-              echo "Live Kairos setup-shard verification failed."
+              echo "Live Kairos editorial-shard verification failed."
               printf 'root=%s safari=%s loader=%s command=%s studio=%s readiness=%s workflows=%s api=%s manuscript=%s shopify=%s parents=%s\n' \
                 "${root_status}" "${safari_status}" "${loader_status}" "${command_status}" "${studio_status}" "${readiness_status}" "${workflows_status}" "${api_denial_status}" "${manuscript_denial_status}" "${shopify_denial_status}" "${parent_center_count}"
               cat "${canonical_headers}" || true
@@ -257,7 +276,7 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"success\",\"context\":\"kairos-browser-runtime\",\"description\":\"Manuscript setup shard verified in production\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"success\",\"context\":\"kairos-browser-runtime\",\"description\":\"Manuscript editorial shard verified in production\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
       - name: Report deployment failure
         if: ${{ failure() || cancelled() }}
@@ -266,4 +285,4 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"failure\",\"context\":\"kairos-browser-runtime\",\"description\":\"Manuscript setup shard deployment failed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}" || true
+            --data "{\"state\":\"failure\",\"context\":\"kairos-browser-runtime\",\"description\":\"Manuscript editorial shard deployment failed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}" || true
