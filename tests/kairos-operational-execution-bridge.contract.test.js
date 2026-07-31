@@ -14,6 +14,8 @@ const commandHub = readFileSync("web/kairos-dashboard/scripts/command-hub.js", "
 const executive = readFileSync("web/kairos-dashboard/scripts/executive-os.js", "utf8");
 const safari = readFileSync("web/kairos-dashboard/scripts/safari-manuscript-intake-compat.js", "utf8");
 const manuscriptStudio = readFileSync("web/kairos-dashboard/scripts/manuscript-studio.js", "utf8");
+const manuscriptProduction = readFileSync("web/kairos-dashboard/scripts/manuscript-auto-pipeline.js", "utf8");
+const productionBootstrap = readFileSync("web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js", "utf8");
 const legacy = readFileSync("web/kairos-dashboard/scripts/legacy-runtime-loader.js", "utf8");
 const index = readFileSync("web/kairos-dashboard/index.html", "utf8");
 
@@ -135,17 +137,20 @@ test("Safari manuscript checksums preserve the native digest identifier first", 
   assert.doesNotMatch(safari, /const normalized = typeof algorithm === "string" \? \{ name: algorithm \} : algorithm/);
 });
 
-test("Manuscript Studio directly owns verified raw chunk storage", () => {
-  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-direct-studio-chunks-20260730-4/);
+test("Manuscript Studio directly owns verified raw chunk storage and local production", () => {
+  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-local-production-20260731-5/);
+  assert.match(index, /manuscript-production-flow-bootstrap\.js\?v=manuscript-local-production-controller-20260731-4/);
   assert.doesNotMatch(index, /executive-local-inference\.js/);
   assert.doesNotMatch(index, /kairos-runtime-loader\.js/);
   assert.match(runtimeLoader, /import "\.\/legacy-runtime-loader\.js"/);
   assert.doesNotMatch(runtimeLoader, /executive-local-inference\.js/);
-  assert.match(legacy, /kairos-five-center-runtime-loader-20260730-1/);
-  assert.match(legacy, /five-center-dashboard-restored-20260730-1/);
-  assert.match(legacy, /five-center-dashboard-direct-studio-chunks-20260730-4/);
+  assert.match(legacy, /kairos-five-center-runtime-loader-20260731-2/);
+  assert.match(legacy, /five-center-dashboard-restored-20260731-2/);
+  assert.match(legacy, /five-center-dashboard-local-production-20260731-5/);
+  assert.doesNotMatch(legacy, /const ASSET_RELEASE = "five-center-dashboard-direct-studio-chunks-20260730-4"/);
   assert.match(activeScripts, /"kairos-local-inference\.js"/);
   assert.match(activeScripts, /"manuscript-studio\.js"/);
+  assert.match(activeScripts, /"manuscript-auto-pipeline\.js"/);
   assert.doesNotMatch(activeScripts, /manuscript-docx-upload-hotfix\.js/);
   assert.match(safari, /kairos-native-docx-extractor-20260730-1/);
   assert.match(safari, /installNativeDocxExtractor/);
@@ -161,6 +166,12 @@ test("Manuscript Studio directly owns verified raw chunk storage", () => {
   assert.match(manuscriptStudio, /uploadChunkWithRetry/);
   assert.match(manuscriptStudio, /Select the original manuscript file once/);
   assert.doesNotMatch(manuscriptStudio, /new FormData/);
+  assert.match(productionBootstrap, /five-center-dashboard-local-production-20260731-5/);
+  assert.match(productionBootstrap, /manuscript-local-production-controller-20260731-4/);
+  assert.match(manuscriptProduction, /KairosLocalInference/);
+  assert.match(manuscriptProduction, /data-start-local-production/);
+  assert.match(manuscriptProduction, /auto-pipeline/);
+  assert.doesNotMatch(manuscriptProduction, /generation-job|Start Production Job/);
 });
 
 test("the Executive OS core always releases its refresh state", () => {
@@ -183,11 +194,11 @@ test("read-only startup refresh never owns the mutation loading lock", () => {
 
 test("the normal page restores the original five-parent-card command dashboard", () => {
   assert.match(index, /kairos-five-center-dashboard-restored-20260730-1/);
-  assert.match(index, /five-center-dashboard-direct-studio-chunks-20260730-4/);
+  assert.match(index, /five-center-dashboard-local-production-20260731-5/);
   assert.equal((index.match(/<script type="module"/g) || []).length, 2);
   assert.doesNotMatch(index, /executive-local-inference\.js/);
   assert.doesNotMatch(index, /kairos-runtime-loader\.js/);
-  assert.doesNotMatch(index, /manuscript-studio\.js/);
+  assert.doesNotMatch(index, /<script[^>]+manuscript-studio\.js/);
   assert.match(safari, /COMMAND_HUB_MODE/);
   assert.match(safari, /const EXECUTIVE_MODE = ROUTE_MODE === "executive"/);
   assert.match(legacy, /commandHubMode/);

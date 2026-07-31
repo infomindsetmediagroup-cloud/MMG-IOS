@@ -200,8 +200,8 @@ test("Command Center manuscript event routes through the production workspace co
 
 test("dashboard keeps production controllers behind the restored five-center command runtime", async () => {
   expect(indexSource).toMatch(/<meta name="mmg-build" content="kairos-five-center-dashboard-restored-[^"]+">/);
-  expect(indexSource).toMatch(/<meta name="mmg-command-runtime-target" content="\.\/scripts\/legacy-runtime-loader\.js\?v=five-center-dashboard-direct-studio-chunks-[^"]+">/);
-  expect(indexSource).toMatch(/manuscript-production-flow-bootstrap\.js\?v=manuscript-local-production-controller-20260731-3/);
+  expect(indexSource).toMatch(/<meta name="mmg-command-runtime-target" content="\.\/scripts\/legacy-runtime-loader\.js\?v=five-center-dashboard-local-production-[^"]+">/);
+  expect(indexSource).toMatch(/manuscript-production-flow-bootstrap\.js\?v=manuscript-local-production-controller-20260731-4/);
   expect(indexSource).toMatch(/mmg-production-controller-target/);
   expect((indexSource.match(/<script type="module"/g) || [])).toHaveLength(2);
   expect(indexSource).not.toContain("executive-local-inference.js");
@@ -211,7 +211,9 @@ test("dashboard keeps production controllers behind the restored five-center com
   expect(runtimeLoaderSource).not.toContain("executive-local-inference.js");
   expect(loaderSource).toContain("commandHubMode");
   expect(loaderSource).toContain('"command-hub.js"');
-  expect(productionBootstrapSource).toContain("manuscript-local-production-controller-20260731-3");
+  expect(loaderSource).toContain('const ASSET_RELEASE = "five-center-dashboard-local-production-20260731-5"');
+  expect(productionBootstrapSource).toContain("manuscript-local-production-controller-20260731-4");
+  expect(productionBootstrapSource).toContain("five-center-dashboard-local-production-20260731-5");
   expect(productionBootstrapSource).toContain("manuscript-auto-pipeline.js?v=${RELEASE}");
 
   const requiredScripts = [

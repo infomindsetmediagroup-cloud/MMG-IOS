@@ -1,6 +1,6 @@
-const BUILD = "kairos-five-center-runtime-loader-20260730-1";
-const RELEASE = "five-center-dashboard-restored-20260730-1";
-const ASSET_RELEASE = "five-center-dashboard-direct-studio-chunks-20260730-4";
+const BUILD = "kairos-five-center-runtime-loader-20260731-2";
+const RELEASE = "five-center-dashboard-restored-20260731-2";
+const ASSET_RELEASE = "five-center-dashboard-local-production-20260731-5";
 const params = new URLSearchParams(window.location.search);
 const requestedMode = params.get("mode");
 const executiveMode = requestedMode === "executive";
