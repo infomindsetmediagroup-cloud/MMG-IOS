@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 
 const indexSource = readFileSync(new URL("../web/kairos-dashboard/index.html", import.meta.url), "utf8");
 const safariSource = readFileSync(new URL("../web/kairos-dashboard/scripts/safari-manuscript-intake-compat.js", import.meta.url), "utf8");
+const bootstrapSource = readFileSync(new URL("../web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js", import.meta.url), "utf8");
 const legacySource = readFileSync(new URL("../web/kairos-dashboard/scripts/legacy-runtime-loader.js", import.meta.url), "utf8");
 const commandHubSource = readFileSync(new URL("../web/kairos-dashboard/scripts/command-hub.js", import.meta.url), "utf8");
 const executiveSource = readFileSync(new URL("../web/kairos-dashboard/scripts/executive-os.js", import.meta.url), "utf8");
@@ -27,6 +28,11 @@ async function installDashboardRoutes(page) {
 
     if (path === "/scripts/safari-manuscript-intake-compat.js") {
       await route.fulfill({ status: 200, contentType: "text/javascript", body: safariSource });
+      return;
+    }
+
+    if (path === "/scripts/manuscript-production-flow-bootstrap.js") {
+      await route.fulfill({ status: 200, contentType: "text/javascript", body: bootstrapSource });
       return;
     }
 
