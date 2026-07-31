@@ -9,6 +9,7 @@ import {
   KairosManuscriptSource,
   KAIROS_MANUSCRIPT_SOURCE_SHARD_BUILD,
 } from "./kairos-manuscript-source-shard-v1.js";
+import { handleManuscriptRequest } from "./manuscript-studio-v1.js";
 
 export {
   KairosProject,
@@ -18,19 +19,43 @@ export {
   KairosManuscriptSource,
 };
 
-export const KAIROS_LOCAL_CANONICAL_ENTRY_BUILD = "kairos-local-canonical-entry-20260730-1";
+export const KAIROS_LOCAL_CANONICAL_ENTRY_BUILD = "kairos-local-canonical-entry-20260730-2-direct-intake";
 
 const PROVIDER_INDEPENDENT_OPERATIONAL_PATHS = new Set([
   "/api/hub/run",
   "/api/workflows",
 ]);
 
+const DIRECT_MANUSCRIPT_PATHS = new Set([
+  "/api/manuscript/capabilities",
+  "/api/manuscript/intake/advance",
+  "/api/manuscript/review",
+]);
+
 export default {
   async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+
+    if (DIRECT_MANUSCRIPT_PATHS.has(url.pathname)) {
+      try {
+        const directManuscriptResponse = await handleManuscriptRequest(request);
+        if (directManuscriptResponse) return stamp(directManuscriptResponse);
+      } catch (error) {
+        return stamp(json({
+          status: "failed",
+          error: {
+            code: "MANUSCRIPT_INTAKE_FAILED",
+            message: error instanceof Error ? error.message : "The manuscript could not advance into production intake.",
+            retriable: true,
+          },
+          build: KAIROS_LOCAL_CANONICAL_ENTRY_BUILD,
+        }, 400));
+      }
+    }
+
     const dedicatedSource = await handleDedicatedManuscriptSource(request, env);
     if (dedicatedSource) return stamp(dedicatedSource);
 
-    const url = new URL(request.url);
     const runtimeEnv = PROVIDER_INDEPENDENT_OPERATIONAL_PATHS.has(url.pathname)
       ? operationalCompatibilityEnv(env)
       : providerBlockedEnv(env);
@@ -84,5 +109,15 @@ function stamp(response) {
     status: response.status,
     statusText: response.statusText,
     headers,
+  });
+}
+
+function json(value, status = 200) {
+  return new Response(JSON.stringify(value), {
+    status,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+    },
   });
 }
