@@ -21,6 +21,10 @@ const loaderSource = readFileSync(
   new URL("../web/kairos-dashboard/scripts/legacy-runtime-loader.js", import.meta.url),
   "utf8",
 );
+const productionBootstrapSource = readFileSync(
+  new URL("../web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js", import.meta.url),
+  "utf8",
+);
 
 const PROJECT_ID = "manuscript-studio-12345678";
 const SETUP_PATH = `/api/production-registry/manuscripts/${PROJECT_ID}/setup`;
@@ -196,7 +200,9 @@ test("Command Center manuscript event routes through the production workspace co
 
 test("dashboard keeps production controllers behind the restored five-center command runtime", async () => {
   expect(indexSource).toMatch(/<meta name="mmg-build" content="kairos-five-center-dashboard-restored-[^"]+">/);
-  expect(indexSource).toMatch(/legacy-runtime-loader\.js\?v=five-center-dashboard-restored-[^"]+/);
+  expect(indexSource).toMatch(/<meta name="mmg-command-runtime-target" content="\.\/scripts\/legacy-runtime-loader\.js\?v=five-center-dashboard-direct-studio-chunks-[^"]+">/);
+  expect(indexSource).toMatch(/manuscript-production-flow-bootstrap\.js\?v=manuscript-local-production-controller-20260731-3/);
+  expect(indexSource).toMatch(/mmg-production-controller-target/);
   expect((indexSource.match(/<script type="module"/g) || [])).toHaveLength(2);
   expect(indexSource).not.toContain("executive-local-inference.js");
   expect(indexSource).not.toContain("kairos-runtime-loader.js");
@@ -205,6 +211,8 @@ test("dashboard keeps production controllers behind the restored five-center com
   expect(runtimeLoaderSource).not.toContain("executive-local-inference.js");
   expect(loaderSource).toContain("commandHubMode");
   expect(loaderSource).toContain('"command-hub.js"');
+  expect(productionBootstrapSource).toContain("manuscript-local-production-controller-20260731-3");
+  expect(productionBootstrapSource).toContain("manuscript-auto-pipeline.js?v=${RELEASE}");
 
   const requiredScripts = [
     "command-center-governance.js",
@@ -216,8 +224,9 @@ test("dashboard keeps production controllers behind the restored five-center com
   ];
 
   for (const filename of requiredScripts) {
-    expect(indexSource, `${filename} must not execute directly from the five-center homepage HTML`).not.toContain(filename);
-    const matches = [...loaderSource.matchAll(new RegExp(`"${filename.replace(".", "\\.")}"`, "g"))];
+    const escaped = filename.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    expect(indexSource, `${filename} must not execute directly from the five-center homepage HTML`).not.toMatch(new RegExp(`<script[^>]+src="[^"]*${escaped}`));
+    const matches = [...loaderSource.matchAll(new RegExp(`"${escaped}"`, "g"))];
     expect(matches, `${filename} must be declared exactly once in the governed command runtime`).toHaveLength(1);
   }
 
