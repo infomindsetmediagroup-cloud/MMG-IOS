@@ -26,6 +26,10 @@ class_name = "KairosProject"
 name = "KAIROS_PROJECT_AGENT"
 class_name = "KairosProjectAgent"
 
+[[durable_objects.bindings]]
+name = "KAIROS_MANUSCRIPT_SOURCES"
+class_name = "KairosManuscriptSource"
+
 [[workflows]]
 name = "kairos-project-foundation-workflow"
 binding = "KAIROS_PROJECT_WORKFLOW"
@@ -44,6 +48,10 @@ new_sqlite_classes = ["KairosProject"]
 tag = "kairos-project-agent-v1"
 new_sqlite_classes = ["KairosProjectAgent"]
 
+[[migrations]]
+tag = "kairos-manuscript-source-shard-v1"
+new_sqlite_classes = ["KairosManuscriptSource"]
+
 # Existing production secrets are retained by keep_vars=true, but the canonical local entry masks them from runtime execution.
 # Browser navigation and dashboard assets bypass the Worker runtime and resolve through ASSETS.
 # Only /api/* executes Worker code before static-asset serving.
@@ -60,6 +68,7 @@ new_sqlite_classes = ["KairosProjectAgent"]
 # Digital Asset Edition V2 and customer-delivery verification remain mandatory.
 # Canonical approvals: Approve Foundation, Start Local Production, Approve Package, Approve & Publish Product.
 # Cloudflare neuron use and paid external inference remain disabled. Direct Shopify, theme, page, and navigation routes remain denied.
+# Manuscript source sessions use one dedicated Durable Object per project and do not share the global production-registry object.
 
 [vars]
 SHOPIFY_STORE_DOMAIN = "07kd8e-qw.myshopify.com"
