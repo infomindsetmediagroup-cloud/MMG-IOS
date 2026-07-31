@@ -37,11 +37,15 @@ function packageRecord(projectId, status = "production-ready") {
   };
 }
 
+function asRequest(input, init) {
+  return input instanceof Request ? input : new Request(input, init);
+}
+
 function createRuntime(projectId, legacyRecord = null) {
   const storage = new MemoryStorage();
   const sourceStub = {
-    fetch(request) {
-      return handleManuscriptPackageStateObjectRequest({ storage }, request);
+    fetch(input, init) {
+      return handleManuscriptPackageStateObjectRequest({ storage }, asRequest(input, init));
     },
   };
   let legacy = legacyRecord;
@@ -65,8 +69,9 @@ function createRuntime(projectId, legacyRecord = null) {
       },
       get() {
         return {
-          async fetch(request) {
+          async fetch(input, init) {
             legacyReads += 1;
+            const request = asRequest(input, init);
             const url = new URL(request.url);
             assert.equal(url.pathname, `/registry/manuscripts/${projectId}/auto-pipeline`);
             if (!legacy) {
