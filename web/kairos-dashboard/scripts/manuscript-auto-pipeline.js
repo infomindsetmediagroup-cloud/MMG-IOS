@@ -1,4 +1,4 @@
-const BUILD = "kairos-manuscript-local-production-controller-20260731-2";
+const BUILD = "kairos-manuscript-local-production-controller-20260731-3";
 const ACTIVE_KEY = "kairos.production.active-workspace";
 const READY_STATUS = "ready-for-manufacturing";
 const DRAFT_CONFIRMATION = "CREATE SHOPIFY PRODUCT DRAFT";
@@ -7,21 +7,25 @@ const PACKAGE_CONFIRMATION = "APPROVE PACKAGE";
 
 const state = {
   initialized: false,
-  mountScheduled: false,
+  scheduled: false,
   reloadRequested: true,
   loading: false,
   projectId: "",
   record: null,
-  readiness: {
-    setupComplete: false,
-    editorialReady: false,
-    setupStatus: "",
-    editorialStatus: "",
-  },
+  readiness: emptyReadiness(),
   busy: false,
   phase: "",
   error: "",
 };
+
+function emptyReadiness() {
+  return {
+    setupComplete: false,
+    editorialReady: false,
+    setupStatus: "",
+    editorialStatus: "",
+  };
+}
 
 function init() {
   if (state.initialized) return;
@@ -31,21 +35,12 @@ function init() {
   window.addEventListener("kairos:manuscript:restore", requestReload);
   window.addEventListener("kairos:production:state-changed", requestReload);
   window.addEventListener("kairos:legacy-runtime:ready", scheduleEnhance);
-  new MutationObserver(scheduleEnhance).observe(document.documentElement, {
-    childList: true,
-    subtree: true,
-  });
 
-  const stateReader = () => ({
-    projectId: state.projectId,
-    busy: state.busy,
-    phase: state.phase,
-    error: state.error,
-    status: state.record?.status || null,
-    shopifyStatus: state.record?.shopify?.status || null,
-    readiness: { ...state.readiness },
-    executionMode: "browser-webgpu",
-  });
+  new MutationObserver(() => {
+    const hasSetup = Boolean(document.querySelector("#manuscript-project-setup"));
+    const hasPipeline = Boolean(document.querySelector("#manuscript-auto-pipeline"));
+    if (activeProjectId() && hasSetup && !hasPipeline) scheduleEnhance();
+  }).observe(document.documentElement, { childList: true, subtree: true });
 
   const controller = Object.freeze({
     ready: true,
@@ -53,7 +48,16 @@ function init() {
     executionMode: "browser-webgpu",
     enhance: requestReload,
     startLocalProduction: () => runLocalProduction(activeProjectId()),
-    getState: stateReader,
+    getState: () => ({
+      projectId: state.projectId,
+      busy: state.busy,
+      phase: state.phase,
+      error: state.error,
+      status: state.record?.status || null,
+      shopifyStatus: state.record?.shopify?.status || null,
+      readiness: { ...state.readiness },
+      executionMode: "browser-webgpu",
+    }),
   });
 
   window.KairosPublishingExperience = controller;
@@ -67,12 +71,12 @@ function requestReload() {
 }
 
 function scheduleEnhance() {
-  if (state.mountScheduled) return;
-  state.mountScheduled = true;
-  queueMicrotask(() => {
-    state.mountScheduled = false;
+  if (state.scheduled) return;
+  state.scheduled = true;
+  setTimeout(() => {
+    state.scheduled = false;
     void enhance();
-  });
+  }, 0);
 }
 
 async function enhance() {
@@ -93,9 +97,9 @@ async function enhance() {
     section.dataset.executionMode = "browser-webgpu";
     (document.querySelector("#manuscript-editorial-workbench") || setup).insertAdjacentElement("afterend", section);
     state.reloadRequested = true;
+    render(section);
   }
 
-  render(section);
   if (state.reloadRequested && !state.loading && !state.busy) {
     state.reloadRequested = false;
     await load(projectId);
@@ -106,12 +110,7 @@ function reset(projectId) {
   Object.assign(state, {
     projectId,
     record: null,
-    readiness: {
-      setupComplete: false,
-      editorialReady: false,
-      setupStatus: "",
-      editorialStatus: "",
-    },
+    readiness: emptyReadiness(),
     busy: false,
     phase: "",
     error: "",
@@ -129,22 +128,15 @@ async function load(projectId) {
   render();
 
   try {
-    const packageResponse = await fetch(endpoint(projectId), {
-      credentials: "include",
-      cache: "no-store",
-      headers: { "X-MMG-Client-Build": BUILD },
-    });
-
+    const packageResponse = await fetch(endpoint(projectId), requestInit());
     if (packageResponse.ok) {
       state.record = await readJSON(packageResponse);
       return;
     }
-
     if (packageResponse.status !== 404) {
       const body = await readJSON(packageResponse);
       throw new Error(body?.error?.message || "The publishing package could not be loaded.");
     }
-
     state.record = null;
     state.readiness = await readReadiness(projectId);
   } catch (error) {
@@ -158,17 +150,10 @@ async function load(projectId) {
 }
 
 async function readReadiness(projectId) {
+  const base = `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}`;
   const [setupResponse, editorialResponse] = await Promise.all([
-    fetch(`/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/setup`, {
-      credentials: "include",
-      cache: "no-store",
-      headers: { "X-MMG-Client-Build": BUILD },
-    }),
-    fetch(`/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/editorial`, {
-      credentials: "include",
-      cache: "no-store",
-      headers: { "X-MMG-Client-Build": BUILD },
-    }),
+    fetch(`${base}/setup`, requestInit()),
+    fetch(`${base}/editorial`, requestInit()),
   ]);
 
   const setup = setupResponse.status === 404 ? {} : await readJSON(setupResponse);
@@ -183,9 +168,8 @@ async function readReadiness(projectId) {
 
   const setupStatus = setup?.setup?.status || setup?.status || "";
   const editorialStatus = editorial?.editorial?.status || editorial?.status || "";
-
   return {
-    setupComplete: Boolean(setup?.setup || setupStatus) && ["assigned-to-production", "awaiting-customer-cover"].includes(setupStatus),
+    setupComplete: ["assigned-to-production", "awaiting-customer-cover"].includes(setupStatus),
     editorialReady: editorialStatus === READY_STATUS,
     setupStatus,
     editorialStatus,
@@ -194,11 +178,7 @@ async function readReadiness(projectId) {
 
 async function runLocalProduction(projectId) {
   if (state.busy) return;
-  if (!projectId) {
-    state.error = "Kairos could not identify the active manuscript project.";
-    render();
-    return;
-  }
+  if (!projectId) return fail("Kairos could not identify the active manuscript project.");
 
   state.busy = true;
   state.error = "";
@@ -229,14 +209,10 @@ async function runLocalProduction(projectId) {
 
     state.phase = "Manufacturing the complete customer package…";
     render();
-
     state.record = await post(`${endpoint(projectId)}/run`, {
       localInferenceBuild: result?.build || runtime.build || "same-origin-webllm",
       localInferenceModel: result?.model || runtime.getModel?.() || "browser-webgpu",
     });
-
-    state.phase = "Production package created. Loading review…";
-    render();
     window.dispatchEvent(new CustomEvent("kairos:production:state-changed"));
   } catch (error) {
     state.error = normalizeProductionError(error);
@@ -258,17 +234,13 @@ async function approvePackage(projectId) {
 
 async function previewShopifyProduct(projectId) {
   return perform("Creating the Shopify draft, installing media, and verifying customer delivery…", async () => {
-    state.record = await post(`${endpoint(projectId)}/shopify-draft`, {
-      confirmation: DRAFT_CONFIRMATION,
-    });
+    state.record = await post(`${endpoint(projectId)}/shopify-draft`, { confirmation: DRAFT_CONFIRMATION });
   });
 }
 
 async function publishLive(projectId) {
   return perform("Publishing and verifying the approved Shopify product…", async () => {
-    state.record = await post(`${endpoint(projectId)}/shopify-publish`, {
-      confirmation: LIVE_CONFIRMATION,
-    });
+    state.record = await post(`${endpoint(projectId)}/shopify-publish`, { confirmation: LIVE_CONFIRMATION });
   });
 }
 
@@ -295,36 +267,20 @@ function render(section = document.querySelector("#manuscript-auto-pipeline")) {
   section.dataset.executionMode = "browser-webgpu";
   section.setAttribute("aria-busy", state.busy ? "true" : "false");
 
-  if (state.busy) {
-    reveal(section);
-    section.innerHTML = busyMarkup();
-    return;
-  }
+  if (state.busy) return show(section, busyMarkup());
+  if (state.record) return renderRecord(section);
+  if (state.error) return show(section, blockedMarkup());
+  if (!state.readiness.setupComplete || !state.readiness.editorialReady) return conceal(section);
+  show(section, localStartMarkup());
+}
 
-  if (state.record) {
-    reveal(section);
-    const status = state.record.status || "";
-    const shopifyStatus = state.record.shopify?.status || "not-prepared";
-    if (/product-live/.test(shopifyStatus)) section.innerHTML = liveMarkup();
-    else if (/draft-created|awaiting-live-approval/.test(shopifyStatus)) section.innerHTML = shopifyPreviewMarkup();
-    else if (status === "package-approved") section.innerHTML = vaultMarkup();
-    else section.innerHTML = packagePreviewMarkup();
-    return;
-  }
-
-  if (state.error) {
-    reveal(section);
-    section.innerHTML = blockedMarkup();
-    return;
-  }
-
-  if (!state.readiness.setupComplete || !state.readiness.editorialReady) {
-    conceal(section);
-    return;
-  }
-
-  reveal(section);
-  section.innerHTML = localStartMarkup();
+function renderRecord(section) {
+  const status = state.record.status || "";
+  const shopifyStatus = state.record.shopify?.status || "not-prepared";
+  if (/product-live/.test(shopifyStatus)) return show(section, liveMarkup());
+  if (/draft-created|awaiting-live-approval/.test(shopifyStatus)) return show(section, shopifyPreviewMarkup());
+  if (status === "package-approved") return show(section, vaultMarkup());
+  show(section, packagePreviewMarkup());
 }
 
 function conceal(section) {
@@ -333,85 +289,37 @@ function conceal(section) {
   section.style.display = "none";
 }
 
-function reveal(section) {
+function show(section, markup) {
   section.hidden = false;
   section.removeAttribute("aria-hidden");
   section.style.removeProperty("display");
+  section.innerHTML = markup;
 }
 
 function localStartMarkup() {
-  return `${stepper(4)}
-    <p class="eyebrow">Manufacturing handoff</p>
-    <h3>Start Local Production</h3>
-    <p>The approved editorial manuscript is ready. Kairos will write through the same-origin browser WebGPU runtime, store the verified result, manufacture the complete package, and stop for review.</p>
-    <div class="issue-list">
-      <article><b>Project setup</b><p>${esc(state.readiness.setupStatus || "assigned-to-production")}</p></article>
-      <article><b>Editorial gate</b><p>${esc(state.readiness.editorialStatus || READY_STATUS)}</p></article>
-      <article><b>Inference runtime</b><p>Same-origin browser WebGPU · no paid external provider</p></article>
-      <article><b>Browser requirement</b><p>Keep Safari open and in the foreground until local production finishes</p></article>
-    </div>
-    ${errorMarkup()}
-    <button type="button" class="primary" data-start-local-production>Start Local Production</button>
-    <p class="manuscript-note">Do not close Safari during this step. The manuscript, setup, cover, and editorial state are already stored and remain recoverable if local inference stops.</p>`;
+  return `${stepper(4)}<p class="eyebrow">Manufacturing handoff</p><h3>Start Local Production</h3><p>The approved editorial manuscript is ready. Kairos will write through the same-origin browser WebGPU runtime, store the verified result, manufacture the complete package, and stop for review.</p><div class="issue-list"><article><b>Project setup</b><p>${esc(state.readiness.setupStatus || "assigned-to-production")}</p></article><article><b>Editorial gate</b><p>${esc(state.readiness.editorialStatus || READY_STATUS)}</p></article><article><b>Inference runtime</b><p>Same-origin browser WebGPU · no paid external provider</p></article><article><b>Browser requirement</b><p>Keep Safari open and in the foreground until local production finishes</p></article></div>${errorMarkup()}<button type="button" class="primary" data-start-local-production>Start Local Production</button><p class="manuscript-note">Do not close Safari during this step. The manuscript, setup, cover, and editorial state are already stored and remain recoverable if local inference stops.</p>`;
 }
 
 function busyMarkup() {
-  return `${stepper(4)}
-    <p class="eyebrow">Local production in progress</p>
-    <h3>${esc(state.phase || "Kairos is producing locally on this device…")}</h3>
-    <p class="manuscript-progress">Keep Safari open and in the foreground. The approved source remains durably stored while the browser WebGPU runtime completes this production pass.</p>
-    ${errorMarkup()}`;
+  return `${stepper(4)}<p class="eyebrow">Local production in progress</p><h3>${esc(state.phase || "Kairos is producing locally on this device…")}</h3><p class="manuscript-progress">Keep Safari open and in the foreground. The approved source remains durably stored while the browser WebGPU runtime completes this production pass.</p>${errorMarkup()}`;
 }
 
 function blockedMarkup() {
-  return `<p class="eyebrow">Production sequence</p>
-    <h3>Production needs attention</h3>
-    ${errorMarkup()}
-    <button type="button" class="secondary" data-retry-production-state>Check Production State</button>`;
+  return `<p class="eyebrow">Production sequence</p><h3>Production needs attention</h3>${errorMarkup()}<button type="button" class="secondary" data-retry-production-state>Check Production State</button>`;
 }
 
 function packagePreviewMarkup() {
   const metadata = state.record.metadata || {};
   const vault = state.record.vault || {};
   const assets = Array.isArray(vault.assets) ? vault.assets : [];
-  return `${stepper(5)}
-    <p class="eyebrow">Package Preview</p>
-    <h3>${esc(metadata.title || "Production package ready")}</h3>
-    <p>${esc(metadata.subtitle || metadata.description || "Review every customer-facing asset before approval.")}</p>
-    ${summary(vault, metadata)}
-    <div class="issue-list">
-      <article><b>Inference</b><p>Same-origin browser WebGPU</p></article>
-      <article><b>Publication</b><p>Blocked pending explicit approval</p></article>
-    </div>
-    <div class="manuscript-actions">
-      <a class="manuscript-package" href="${esc(vault.packageDownloadURL || "#")}" target="_blank" rel="noopener">Preview Package</a>
-      <button type="button" class="primary" data-approve-package>Approve Package</button>
-    </div>
-    <div class="manuscript-manufacturing-grid">${assets.map(assetCard).join("")}</div>
-    <p class="manuscript-note">Approval freezes this package version and marks the job complete in the Admin Asset Vault.</p>
-    ${errorMarkup()}`;
+  return `${stepper(5)}<p class="eyebrow">Package Preview</p><h3>${esc(metadata.title || "Production package ready")}</h3><p>${esc(metadata.subtitle || metadata.description || "Review every customer-facing asset before approval.")}</p>${summary(vault, metadata)}<div class="issue-list"><article><b>Inference</b><p>Same-origin browser WebGPU</p></article><article><b>Publication</b><p>Blocked pending explicit approval</p></article></div><div class="manuscript-actions"><a class="manuscript-package" href="${esc(vault.packageDownloadURL || "#")}" target="_blank" rel="noopener">Preview Package</a><button type="button" class="primary" data-approve-package>Approve Package</button></div><div class="manuscript-manufacturing-grid">${assets.map(assetCard).join("")}</div><p class="manuscript-note">Approval freezes this package version and marks the job complete in the Admin Asset Vault.</p>${errorMarkup()}`;
 }
 
 function vaultMarkup() {
   const metadata = state.record.metadata || {};
   const vault = state.record.vault || {};
   const assets = Array.isArray(vault.assets) ? vault.assets : [];
-  return `${stepper(6)}
-    <p class="eyebrow">Admin Asset Vault</p>
-    <h3>${esc(metadata.title || "Approved production package")}</h3>
-    <p><strong>Production Complete.</strong> Package approved, checksums preserved, and the customer ZIP is ready for commerce handoff.</p>
-    ${summary(vault, metadata)}
-    <div class="issue-list">
-      <article><b>Package</b><p>Approved and immutable</p></article>
-      <article><b>Shopify publication</b><p>Not started</p></article>
-      <article><b>Customer delivery</b><p>Verified with the draft</p></article>
-    </div>
-    <div class="manuscript-actions">
-      <a class="secondary" href="${esc(vault.packageDownloadURL || "#")}" download>Download Complete Package</a>
-      <button type="button" class="primary" data-preview-shopify>Preview Shopify Product</button>
-    </div>
-    <div class="manuscript-manufacturing-grid">${assets.map(assetCard).join("")}</div>
-    ${errorMarkup()}`;
+  return `${stepper(6)}<p class="eyebrow">Admin Asset Vault</p><h3>${esc(metadata.title || "Approved production package")}</h3><p><strong>Production Complete.</strong> Package approved, checksums preserved, and the customer ZIP is ready for commerce handoff.</p>${summary(vault, metadata)}<div class="issue-list"><article><b>Package</b><p>Approved and immutable</p></article><article><b>Shopify publication</b><p>Not started</p></article><article><b>Customer delivery</b><p>Verified with the draft</p></article></div><div class="manuscript-actions"><a class="secondary" href="${esc(vault.packageDownloadURL || "#")}" download>Download Complete Package</a><button type="button" class="primary" data-preview-shopify>Preview Shopify Product</button></div><div class="manuscript-manufacturing-grid">${assets.map(assetCard).join("")}</div>${errorMarkup()}`;
 }
 
 function shopifyPreviewMarkup() {
@@ -421,39 +329,14 @@ function shopifyPreviewMarkup() {
   const previewURL = publication.previewURL || publication.result?.onlineStorePreviewUrl || "";
   const delivery = publication.customerDelivery || shopify.customerDelivery || {};
   const deliveryReady = delivery.status === "attached-and-verified" || /delivery-attached/.test(publication.status || "");
-  return `${stepper(7)}
-    <p class="eyebrow">Shopify Product Preview</p>
-    <h3>${esc(metadata.title || "Shopify draft ready")}</h3>
-    <p>The Shopify draft uses the approved custom template, installed media, generated copy, SEO metadata, approved price, and customer-delivery mapping.</p>
-    <div class="issue-list">
-      <article><b>Product status</b><p>Draft created and verified</p></article>
-      <article><b>Template</b><p>${esc(metadata.templateSuffix || "approved custom template")}</p></article>
-      <article><b>Customer delivery</b><p>${deliveryReady ? "Attached and verified" : "Verified by governed draft workflow"}</p></article>
-      <article><b>Price</b><p>${esc(metadata.currency || "USD")} ${esc(metadata.price || "9.95")}</p></article>
-    </div>
-    <div class="manuscript-actions">
-      ${previewURL ? `<a class="secondary" href="${esc(previewURL)}" target="_blank" rel="noopener">Open Shopify Preview</a>` : ""}
-      <button type="button" class="primary" data-publish-product>Approve &amp; Publish Product</button>
-    </div>
-    <p class="manuscript-note">Live publication remains blocked unless the draft, template, media, delivery attachment, and storefront verification all pass.</p>
-    ${errorMarkup()}`;
+  return `${stepper(7)}<p class="eyebrow">Shopify Product Preview</p><h3>${esc(metadata.title || "Shopify draft ready")}</h3><p>The Shopify draft uses the approved custom template, installed media, generated copy, SEO metadata, approved price, and customer-delivery mapping.</p><div class="issue-list"><article><b>Product status</b><p>Draft created and verified</p></article><article><b>Template</b><p>${esc(metadata.templateSuffix || "approved custom template")}</p></article><article><b>Customer delivery</b><p>${deliveryReady ? "Attached and verified" : "Verified by governed draft workflow"}</p></article><article><b>Price</b><p>${esc(metadata.currency || "USD")} ${esc(metadata.price || "9.95")}</p></article></div><div class="manuscript-actions">${previewURL ? `<a class="secondary" href="${esc(previewURL)}" target="_blank" rel="noopener">Open Shopify Preview</a>` : ""}<button type="button" class="primary" data-publish-product>Approve &amp; Publish Product</button></div><p class="manuscript-note">Live publication remains blocked unless the draft, template, media, delivery attachment, and storefront verification all pass.</p>${errorMarkup()}`;
 }
 
 function liveMarkup() {
   const metadata = state.record.metadata || {};
   const shopify = state.record.shopify || {};
   const liveURL = metadata.liveURL || shopify.livePublication?.publication?.liveProbe?.finalURL || "";
-  return `${stepper(7)}
-    <p class="eyebrow">Published and verified</p>
-    <h3>${esc(metadata.title || "Product published")}</h3>
-    <div class="issue-list">
-      <article><b>Production</b><p>Complete</p></article>
-      <article><b>Package</b><p>Approved</p></article>
-      <article><b>Shopify product</b><p>Published</p></article>
-      <article><b>Customer delivery</b><p>Connected</p></article>
-    </div>
-    ${liveURL ? `<a class="manuscript-package" href="${esc(liveURL)}" target="_blank" rel="noopener">View Live Product</a>` : ""}
-    ${errorMarkup()}`;
+  return `${stepper(7)}<p class="eyebrow">Published and verified</p><h3>${esc(metadata.title || "Product published")}</h3><div class="issue-list"><article><b>Production</b><p>Complete</p></article><article><b>Package</b><p>Approved</p></article><article><b>Shopify product</b><p>Published</p></article><article><b>Customer delivery</b><p>Connected</p></article></div>${liveURL ? `<a class="manuscript-package" href="${esc(liveURL)}" target="_blank" rel="noopener">View Live Product</a>` : ""}${errorMarkup()}`;
 }
 
 function stepper(active) {
@@ -463,11 +346,7 @@ function stepper(active) {
 
 function summary(vault, metadata) {
   const assets = Array.isArray(vault.assets) ? vault.assets : [];
-  return `<div class="manuscript-editorial-summary">
-    <span><strong>${Number(vault.assetCount || assets.length)}</strong><small>vault assets</small></span>
-    <span><strong>${vault.integrity?.passed ? "Passed" : "Review"}</strong><small>integrity</small></span>
-    <span><strong>${esc(metadata.price ? `${metadata.currency || "USD"} ${metadata.price}` : "Not set")}</strong><small>canonical price</small></span>
-  </div>`;
+  return `<div class="manuscript-editorial-summary"><span><strong>${Number(vault.assetCount || assets.length)}</strong><small>vault assets</small></span><span><strong>${vault.integrity?.passed ? "Passed" : "Review"}</strong><small>integrity</small></span><span><strong>${esc(metadata.price ? `${metadata.currency || "USD"} ${metadata.price}` : "Not set")}</strong><small>canonical price</small></span></div>`;
 }
 
 function assetCard(asset) {
@@ -496,15 +375,19 @@ function handleClick(event) {
   if (button.matches("[data-publish-product]")) void publishLive(projectId);
 }
 
-async function post(url, payload) {
-  const response = await fetch(url, {
-    method: "POST",
+function requestInit() {
+  return {
     credentials: "include",
     cache: "no-store",
-    headers: {
-      "Content-Type": "application/json",
-      "X-MMG-Client-Build": BUILD,
-    },
+    headers: { "X-MMG-Client-Build": BUILD },
+  };
+}
+
+async function post(url, payload) {
+  const response = await fetch(url, {
+    ...requestInit(),
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-MMG-Client-Build": BUILD },
     body: JSON.stringify(payload),
   });
   const body = await readJSON(response);
@@ -520,6 +403,11 @@ async function readJSON(response) {
   } catch {
     throw new Error(`Kairos returned an unreadable response (HTTP ${response.status}).`);
   }
+}
+
+function fail(message) {
+  state.error = message;
+  render();
 }
 
 function normalizeProductionError(error) {
