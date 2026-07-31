@@ -26,7 +26,7 @@ function packageRecord(projectId, {
   updatedAt = "2026-07-31T08:30:00.000Z",
   approved = false,
 } = {}) {
-  return {
+  const record = {
     status,
     projectId,
     metadata: { title: "AI Video Prompt Mastery" },
@@ -36,10 +36,11 @@ function packageRecord(projectId, {
       packageDownloadURL: `/api/admin-asset-vault/projects/${projectId}/package`,
       assets: [],
     },
-    packageApproval: approved ? { approved: true, approvedAt: updatedAt } : undefined,
     shopify: { status: "not-prepared" },
     updatedAt,
   };
+  if (approved) record.packageApproval = { approved: true, approvedAt: updatedAt };
+  return record;
 }
 
 function asRequest(input, init) {
