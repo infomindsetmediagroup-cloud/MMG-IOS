@@ -24,6 +24,14 @@ test("the actual manuscript controller uses only the local WebGPU production rou
   assert.match(source, /Do not close Safari during this step/);
 });
 
+test("the controller observer cannot recursively schedule renders for its own section", async () => {
+  const source = await readFile(controllerPath, "utf8");
+
+  assert.doesNotMatch(source, /new MutationObserver\(scheduleEnhance\)/);
+  assert.match(source, /hasSetup && !hasPipeline/);
+  assert.match(source, /setTimeout\(\(\) =>/);
+});
+
 test("the route firewall rewrites any retained legacy button before document handlers run", async () => {
   const source = await readFile(guardPath, "utf8");
 
@@ -46,8 +54,8 @@ test("the dashboard imports the canonical controller under a new Safari cache ke
   assert.match(bootstrap, /KairosLegacyRuntime\.load/);
   assert.match(bootstrap, /manuscript-auto-pipeline\.js\?v=\$\{RELEASE\}/);
   assert.match(bootstrap, /manuscript-production-flow-guard\.js\?v=\$\{RELEASE\}/);
-  assert.match(bootstrap, /manuscript-local-production-controller-20260731-2/);
-  assert.match(index, /manuscript-production-flow-bootstrap\.js\?v=manuscript-local-production-controller-20260731-2/);
+  assert.match(bootstrap, /manuscript-local-production-controller-20260731-3/);
+  assert.match(index, /manuscript-production-flow-bootstrap\.js\?v=manuscript-local-production-controller-20260731-3/);
   assert.match(index, /mmg-production-controller-target/);
   assert.equal((index.match(/<script type="module"/g) || []).length, 2);
 });
