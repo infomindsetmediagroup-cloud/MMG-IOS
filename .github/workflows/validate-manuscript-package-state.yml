@@ -1,0 +1,69 @@
+name: Validate Manuscript Package State
+
+on:
+  pull_request:
+    paths:
+      - 'cloudflare/mmg-ios/src/kairos-manuscript-package-state-v1.js'
+      - 'cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js'
+      - 'cloudflare/mmg-ios/test/kairos-manuscript-package-state.test.js'
+      - '.github/workflows/validate-manuscript-package-state.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'cloudflare/mmg-ios/src/kairos-manuscript-package-state-v1.js'
+      - 'cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js'
+      - 'cloudflare/mmg-ios/test/kairos-manuscript-package-state.test.js'
+      - '.github/workflows/validate-manuscript-package-state.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate package-state syntax and migration
+        run: |
+          node --check cloudflare/mmg-ios/src/kairos-manuscript-package-state-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
+          node --test cloudflare/mmg-ios/test/kairos-manuscript-package-state.test.js
+
+  verify-live-read-route:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+    steps:
+      - name: Wait for the deployed read-only package-state route
+        shell: bash
+        run: |
+          set -euo pipefail
+          project_id="package-state-probe-${GITHUB_RUN_ID}"
+          for attempt in $(seq 1 60); do
+            headers="${RUNNER_TEMP}/package-state-headers.txt"
+            body="${RUNNER_TEMP}/package-state-body.json"
+            status="$(curl --silent --show-error --max-time 20 -D "${headers}" -o "${body}" -w '%{http_code}' "${WORKER_URL}/api/production-registry/manuscripts/${project_id}/auto-pipeline?attempt=${attempt}" || true)"
+            if [ "${status}" = "404" ] \
+              && grep -qi 'x-kairos-package-state-build: kairos-manuscript-package-state-20260731-2-reconciliation' "${headers}" \
+              && grep -qi 'x-kairos-package-state: not-started' "${headers}" \
+              && grep -qi 'x-kairos-canonical-local: kairos-local-canonical-entry-20260731-3-package-state-recovery' "${headers}"; then
+              cat "${headers}"
+              cat "${body}"
+              exit 0
+            fi
+            if [ "${attempt}" = "60" ]; then
+              echo "The deployed package-state recovery route did not become ready."
+              cat "${headers}" || true
+              cat "${body}" || true
+              exit 1
+            fi
+            sleep 5
+          done
