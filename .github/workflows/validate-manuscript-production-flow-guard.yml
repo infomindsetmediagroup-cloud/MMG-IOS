@@ -1,10 +1,11 @@
-name: Validate Manuscript Production Flow Guard
+name: Validate Manuscript Local Production Controller
 
 on:
   pull_request:
     branches: [main]
     paths:
       - 'web/kairos-dashboard/index.html'
+      - 'web/kairos-dashboard/scripts/manuscript-auto-pipeline.js'
       - 'web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js'
       - 'web/kairos-dashboard/scripts/manuscript-production-flow-guard.js'
       - 'tests/manuscript-production-flow-guard.contract.test.js'
@@ -13,6 +14,7 @@ on:
     branches: [main]
     paths:
       - 'web/kairos-dashboard/index.html'
+      - 'web/kairos-dashboard/scripts/manuscript-auto-pipeline.js'
       - 'web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js'
       - 'web/kairos-dashboard/scripts/manuscript-production-flow-guard.js'
       - 'tests/manuscript-production-flow-guard.contract.test.js'
@@ -32,6 +34,7 @@ jobs:
           node-version: '22'
       - name: Validate browser modules
         run: |
+          node --check web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
           node --check web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js
           node --check web/kairos-dashboard/scripts/manuscript-production-flow-guard.js
       - name: Validate production flow contract
