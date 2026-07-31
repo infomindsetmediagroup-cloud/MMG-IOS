@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 jobs:
   diagnose:
@@ -16,7 +17,16 @@ jobs:
     timeout-minutes: 10
     env:
       WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+      GH_TOKEN: ${{ github.token }}
     steps:
+      - name: Report diagnostic pending
+        run: |
+          curl --fail --silent --show-error -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "{\"state\":\"pending\",\"context\":\"kairos-source-shard-diagnostic\",\"description\":\"Running live source shard diagnostics\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+
       - name: Probe live dedicated manuscript source shard
         shell: bash
         run: |
@@ -80,3 +90,21 @@ jobs:
           test "$(cat "${work}/commit.status")" = "201"
           test "$(cat "${work}/read_text.status")" = "200"
           test "$(cat "${work}/cleanup.status")" = "200"
+
+      - name: Report diagnostic success
+        if: ${{ success() }}
+        run: |
+          curl --fail --silent --show-error -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "{\"state\":\"success\",\"context\":\"kairos-source-shard-diagnostic\",\"description\":\"Live source shard transaction passed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+
+      - name: Report diagnostic failure
+        if: ${{ failure() || cancelled() }}
+        run: |
+          curl --silent --show-error -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "{\"state\":\"failure\",\"context\":\"kairos-source-shard-diagnostic\",\"description\":\"Live source shard transaction failed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}" || true
