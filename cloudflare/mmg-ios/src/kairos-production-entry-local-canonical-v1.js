@@ -18,7 +18,7 @@ export {
   KairosManuscriptSource,
 };
 
-export const KAIROS_LOCAL_CANONICAL_ENTRY_BUILD = "kairos-local-canonical-entry-20260730-2-source-shards";
+export const KAIROS_LOCAL_CANONICAL_ENTRY_BUILD = "kairos-local-canonical-entry-20260730-1";
 
 const PROVIDER_INDEPENDENT_OPERATIONAL_PATHS = new Set([
   "/api/hub/run",
