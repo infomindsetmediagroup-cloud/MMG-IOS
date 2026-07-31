@@ -1,0 +1,82 @@
+name: Diagnose Live Source Shard Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnose-live-source-shard-once.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+    steps:
+      - name: Probe live dedicated manuscript source shard
+        shell: bash
+        run: |
+          set -u
+          work="${RUNNER_TEMP}/source-shard-diagnostic"
+          mkdir -p "${work}"
+
+          request() {
+            local label="$1" method="$2" url="$3" data_file="${4:-}" content_type="${5:-application/json}"
+            local headers="${work}/${label}.headers"
+            local body="${work}/${label}.body"
+            local args=(--silent --show-error --max-time 45 -D "${headers}" -o "${body}" -w '%{http_code}' -X "${method}" "${url}")
+            if [ -n "${content_type}" ]; then args+=(-H "Content-Type: ${content_type}"); fi
+            if [ -n "${UPLOAD_ID:-}" ]; then args+=(-H "X-Kairos-Upload-Id: ${UPLOAD_ID}"); fi
+            args+=(-H 'X-MMG-Client-Build: manuscript-studio-direct-chunks-20260730-4')
+            if [ -n "${data_file}" ]; then args+=(--data-binary "@${data_file}"); fi
+            local status
+            status="$(curl "${args[@]}" || true)"
+            printf '\n===== %s =====\nstatus=%s\n' "${label}" "${status}"
+            cat "${headers}" 2>/dev/null || true
+            printf '\n--- body ---\n'
+            cat "${body}" 2>/dev/null || true
+            printf '\n============\n'
+            echo "${status}" > "${work}/${label}.status"
+          }
+
+          realistic_project="shard-realistic-${GITHUB_RUN_ID}"
+          realistic_upload="upload-realistic-${GITHUB_RUN_ID}"
+          cat > "${work}/realistic-session.json" <<JSON
+          {"uploadId":"${realistic_upload}","title":"Cinematic AI Video Creation, Viral Content Systems, Commercial Prompt Engineering, and Modern AI Filmmaking","filename":"AI-Video-Prompt-Mastery.docx","contentType":"application/vnd.openxmlformats-officedocument.wordprocessingml.document","format":"docx","size":15728640,"textBytes":279045,"fileChunks":30,"textChunks":3,"pages":null,"checksum":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+          JSON
+          unset UPLOAD_ID
+          request realistic_session POST "${WORKER_URL}/api/production-registry/manuscripts/${realistic_project}/source/session" "${work}/realistic-session.json"
+
+          project="shard-full-${GITHUB_RUN_ID}"
+          UPLOAD_ID="upload-full-${GITHUB_RUN_ID}"
+          base="${WORKER_URL}/api/production-registry/manuscripts/${project}/source"
+          printf 'PK\003\004dedicated-source-diagnostic' > "${work}/source.bin"
+          printf 'Kairos dedicated source shard full transaction diagnostic.' > "${work}/text.bin"
+          file_size="$(wc -c < "${work}/source.bin" | tr -d ' ')"
+          text_size="$(wc -c < "${work}/text.bin" | tr -d ' ')"
+          cat > "${work}/session.json" <<JSON
+          {"uploadId":"${UPLOAD_ID}","title":"Dedicated Source Diagnostic","filename":"diagnostic.docx","contentType":"application/vnd.openxmlformats-officedocument.wordprocessingml.document","format":"docx","size":${file_size},"textBytes":${text_size},"fileChunks":1,"textChunks":1,"pages":null,"checksum":""}
+          JSON
+          request full_session POST "${base}/session" "${work}/session.json"
+          request file_chunk PUT "${base}/file/0" "${work}/source.bin" application/octet-stream
+          request text_chunk PUT "${base}/text-chunk/0" "${work}/text.bin" application/octet-stream
+          printf '{"uploadId":"%s"}' "${UPLOAD_ID}" > "${work}/commit.json"
+          request commit POST "${base}/commit" "${work}/commit.json"
+          unset UPLOAD_ID
+          request read_text GET "${base}/text" "" ""
+          request cleanup DELETE "${base}" "" ""
+
+          echo "Diagnostic completed. Status summary:"
+          for status_file in "${work}"/*.status; do printf '%s=%s\n' "$(basename "${status_file}" .status)" "$(cat "${status_file}")"; done
+
+          test "$(cat "${work}/realistic_session.status")" = "201"
+          test "$(cat "${work}/full_session.status")" = "201"
+          test "$(cat "${work}/file_chunk.status")" = "201"
+          test "$(cat "${work}/text_chunk.status")" = "201"
+          test "$(cat "${work}/commit.status")" = "201"
+          test "$(cat "${work}/read_text.status")" = "200"
+          test "$(cat "${work}/cleanup.status")" = "200"
