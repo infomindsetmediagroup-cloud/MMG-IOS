@@ -172,6 +172,68 @@ test("cover, setup, recovery, and source metadata share the same per-project sha
   assert.equal(localSetup.status, "assigned-to-production");
 });
 
+test("editorial status, versions, and version recovery share the manuscript project shard", async () => {
+  const projectId = "manuscript-editorial-shard-12345678";
+  const operationId = "editorial-shard-operation-12345678";
+  const runtime = createRuntime(projectId);
+
+  const setupResponse = await route(runtime, projectId, "setup", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Kairos-Operation-Id": operationId,
+      "X-Kairos-Idempotency-Key": operationId,
+    },
+    body: JSON.stringify(setupPayload(operationId)),
+  });
+  assert.equal(setupResponse.status, 201);
+
+  const editorialResponse = await route(runtime, projectId, "editorial");
+  assert.equal(editorialResponse.status, 200);
+  assert.equal(editorialResponse.headers.get("x-kairos-source-shard"), KAIROS_MANUSCRIPT_SOURCE_SHARD_BUILD);
+  const initial = await editorialResponse.json();
+  assert.equal(initial.status, "ready");
+  assert.equal(initial.project.projectId, projectId);
+  assert.equal(initial.editorial.status, "not-started");
+  assert.equal(initial.editorial.stage, "editorial-intake");
+
+  const manuscript = "This governed editorial version verifies that the manuscript source, setup, editorial state, and version text remain inside one durable per-project shard.";
+  const versionResponse = await route(runtime, projectId, "editorial/versions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      manuscript,
+      passType: "copyedit",
+      label: "Editorial Version 1",
+      notes: "Shard colocation regression proof.",
+      actor: "MMG Editorial Production",
+    }),
+  });
+  assert.equal(versionResponse.status, 201);
+  assert.equal(versionResponse.headers.get("x-kairos-global-project-mirror"), "synced");
+  const version = await versionResponse.json();
+  assert.equal(version.status, "version-created");
+  assert.equal(version.editorial.status, "editorial-in-progress");
+  assert.match(version.version.versionId, /^ver-[a-z0-9-]{8,}$/i);
+
+  const versionReadResponse = await route(runtime, projectId, `editorial/versions/${version.version.versionId}`);
+  assert.equal(versionReadResponse.status, 200);
+  const versionRead = await versionReadResponse.json();
+  assert.equal(versionRead.status, "ready");
+  assert.equal(versionRead.manuscript, manuscript);
+
+  const editorialRecoveryResponse = await route(runtime, projectId, "editorial");
+  assert.equal(editorialRecoveryResponse.status, 200);
+  const editorialRecovery = await editorialRecoveryResponse.json();
+  assert.equal(editorialRecovery.editorial.currentVersionId, version.version.versionId);
+  assert.equal(editorialRecovery.editorial.versions.length, 1);
+
+  assert.equal(runtime.globalRequests.length, 2);
+  assert.equal(runtime.globalRequests[1].body.projectId, projectId);
+  assert.equal(runtime.globalRequests[1].body.status, "editorial-in-progress");
+  assert.equal(runtime.globalRequests[1].body.stage, "copyedit");
+});
+
 test("a global registry mirror failure cannot turn a saved setup into HTTP 502", async () => {
   const projectId = "manuscript-studio-setup-recovery-12345678";
   const operationId = "setup-recovery-operation-12345678";
@@ -197,4 +259,45 @@ test("a global registry mirror failure cannot turn a saved setup into HTTP 502",
   const recovery = await recoveryResponse.json();
   assert.equal(recovery.status, "ready");
   assert.equal(recovery.setup.status, "awaiting-customer-cover");
+});
+
+test("a global mirror failure cannot break a stored editorial version or its recovery", async () => {
+  const projectId = "manuscript-editorial-recovery-12345678";
+  const operationId = "editorial-recovery-operation-12345678";
+  const runtime = createRuntime(projectId, { mirrorFails: true });
+
+  const setupResponse = await route(runtime, projectId, "setup", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Kairos-Operation-Id": operationId,
+      "X-Kairos-Idempotency-Key": operationId,
+    },
+    body: JSON.stringify(setupPayload(operationId)),
+  });
+  assert.equal(setupResponse.status, 201);
+
+  const versionResponse = await route(runtime, projectId, "editorial/versions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      manuscript: "This editorial version remains durable even when the lightweight global project mirror is temporarily unavailable to Kairos.",
+      passType: "structural",
+      label: "Recovered Editorial Version",
+      actor: "MMG Editorial Production",
+    }),
+  });
+
+  assert.equal(versionResponse.status, 201);
+  assert.equal(versionResponse.headers.get("x-kairos-global-project-mirror"), "pending");
+  const version = await versionResponse.json();
+  assert.equal(version.status, "version-created");
+  assert.equal(version.editorial.status, "editorial-in-progress");
+
+  const recoveryResponse = await route(runtime, projectId, "editorial");
+  assert.equal(recoveryResponse.status, 200);
+  const recovery = await recoveryResponse.json();
+  assert.equal(recovery.status, "ready");
+  assert.equal(recovery.editorial.currentVersionId, version.version.versionId);
+  assert.equal(recovery.editorial.versions.length, 1);
 });
