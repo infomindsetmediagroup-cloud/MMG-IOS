@@ -5,7 +5,8 @@ const RELEASE =
 const COMMAND_RUNTIME_RELEASE =
   "five-center-dashboard-state-check-recovery-20260731-1";
 
-// Install the bounded GET transport before any production controller can run.
+// Install the bounded GET transport before the command runtime evaluates the
+// production controller.
 await import(`./kairos-state-fetch-install.js?v=${RELEASE}`);
 await import(`./legacy-runtime-loader.js?v=${COMMAND_RUNTIME_RELEASE}`);
 
@@ -13,9 +14,8 @@ if (window.KairosLegacyRuntime?.load) {
   await window.KairosLegacyRuntime.load();
 }
 
-// This bootstrap is the sole controller owner. The generic command runtime no
-// longer loads manuscript-auto-pipeline.js under a second module URL.
-await import(`./manuscript-auto-pipeline.js?v=${RELEASE}`);
+// manuscript-auto-pipeline.js is evaluated exactly once by the command runtime.
+// Do not import it again under a second query URL.
 await import(`./manuscript-production-flow-guard.js?v=${RELEASE}`);
 
 window.KairosManuscriptProductionFlowBootstrap = Object.freeze({
@@ -25,6 +25,6 @@ window.KairosManuscriptProductionFlowBootstrap = Object.freeze({
   controllerBuild: window.KairosManuscriptAutoPipelineController?.build || null,
   executionMode: window.KairosManuscriptAutoPipelineController?.executionMode || null,
   boundedStateTransport: true,
-  singleControllerOwner: true,
+  singleControllerOwner: "legacy-runtime-loader",
   ready: true,
 });
