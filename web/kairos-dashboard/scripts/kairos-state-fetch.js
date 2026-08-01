@@ -1,5 +1,5 @@
 export const KAIROS_STATE_FETCH_BUILD =
-  "kairos-state-fetch-20260731-1";
+  "kairos-state-fetch-20260731-2-buffered";
 
 const DEFAULT_TIMEOUT_MS = 8_000;
 const DEFAULT_ATTEMPTS = 3;
@@ -31,6 +31,7 @@ export async function requestJSONWithRetry(
     attempts = DEFAULT_ATTEMPTS,
     baseDelayMs = DEFAULT_BASE_DELAY_MS,
     onAttempt = () => {},
+    fetchImpl = globalThis.fetch.bind(globalThis),
   } = {},
 ) {
   const url = String(input);
@@ -43,13 +44,16 @@ export async function requestJSONWithRetry(
     const attemptState = createAttemptState(parentSignal, timeoutMs);
 
     try {
-      const response = await fetch(input, {
+      const sourceResponse = await fetchImpl(input, {
         ...init,
         signal: attemptState.signal,
       });
 
-      const text = await response.text();
-      const body = parseJSON(text, response.status);
+      // Keep the same deadline active through body consumption. Fetch can
+      // resolve after headers while response.text() remains pending.
+      const text = await sourceResponse.text();
+      const body = parseJSON(text, sourceResponse.status);
+      const response = cloneBufferedResponse(sourceResponse, text);
 
       if (
         RETRYABLE_STATUSES.has(response.status) &&
@@ -84,6 +88,14 @@ export async function requestJSONWithRetry(
   }
 
   throw lastError || new Error(`Kairos could not request ${url}.`);
+}
+
+function cloneBufferedResponse(response, text) {
+  return new Response(text, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: new Headers(response.headers),
+  });
 }
 
 function createAttemptState(parentSignal, timeoutMs) {
