@@ -31,7 +31,7 @@ export class KairosManuscriptSource extends BaseKairosManuscriptSource {
   }
 }
 
-export const KAIROS_LOCAL_CANONICAL_ENTRY_BUILD = "kairos-local-canonical-entry-20260731-3-package-state-recovery";
+export const KAIROS_LOCAL_CANONICAL_ENTRY_BUILD = "kairos-local-canonical-entry-20260731-4-bounded-package-state";
 
 const PROVIDER_INDEPENDENT_OPERATIONAL_PATHS = new Set([
   "/api/hub/run",
@@ -65,7 +65,7 @@ export default {
       }
     }
 
-    const packageState = await handleManuscriptPackageState(request, env);
+    const packageState = await handleManuscriptPackageState(request, env, ctx);
     if (packageState) return stamp(packageState);
 
     const dedicatedSource = await handleDedicatedManuscriptSource(request, env);
