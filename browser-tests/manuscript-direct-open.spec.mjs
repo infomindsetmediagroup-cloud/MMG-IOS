@@ -113,6 +113,9 @@ test("direct route restores an unintentionally removed Studio overlay", async ({
 
   const overlay = page.locator("#manuscript-studio-overlay");
   await expect(overlay).toBeVisible({ timeout: 8_000 });
+  await expect.poll(
+    () => page.evaluate(() => window.KairosManuscriptDirectOpen.snapshot().openedOnce),
+  ).toBe(true);
 
   await page.evaluate(() => {
     document.querySelector("#manuscript-studio-overlay")?.remove();
