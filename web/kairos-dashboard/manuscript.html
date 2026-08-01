@@ -125,6 +125,12 @@
   <script>
     (() => {
       const BUILD = "kairos-dedicated-manuscript-route-20260801-2";
+      const current = new URL(location.href);
+      if (current.searchParams.get("open") !== "manuscript") {
+        current.searchParams.set("open", "manuscript");
+        history.replaceState(null, "", current.href);
+      }
+
       document.documentElement.dataset.kairosMode = "manuscript";
       globalThis.__KAIROS_MANUSCRIPT_OPEN_TIMEOUT_MS = 20_000;
 
@@ -175,6 +181,9 @@
 
   <noscript>Manuscript Studio requires JavaScript to run.</noscript>
 
+  <script
+    src="./scripts/manuscript-registry-bridge.js?v=kairos-manuscript-registry-bridge-20260801-1"
+    onerror="KairosDedicatedManuscriptRoute.fail('The manuscript registry bridge failed to load.')"></script>
   <script
     type="module"
     src="./scripts/safari-manuscript-intake-compat.js?v=safari-native-docx-20260730-1"
