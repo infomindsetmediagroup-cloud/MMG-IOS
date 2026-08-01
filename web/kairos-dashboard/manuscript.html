@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en" data-kairos-route="manuscript-studio">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#05070a">
+  <meta name="color-scheme" content="dark">
+  <meta name="mmg-build" content="kairos-dedicated-manuscript-route-20260801-1">
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Manuscript Studio | Kairos</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      background: #05070a;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      min-height: 100%;
+      margin: 0;
+      background: #05070a;
+      color: #f7f9fc;
+    }
+
+    body {
+      min-height: 100dvh;
+      overflow-x: hidden;
+    }
+
+    #kairos-manuscript-route-boot {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      display: grid;
+      place-items: center;
+      min-height: 100dvh;
+      padding: max(24px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom));
+      background:
+        radial-gradient(circle at 50% 15%, rgba(22, 119, 255, 0.14), transparent 34rem),
+        #05070a;
+    }
+
+    .kairos-manuscript-route-card {
+      width: min(560px, 100%);
+      padding: 28px;
+      border: 1px solid #263547;
+      border-radius: 22px;
+      background: #0b1017;
+      box-shadow: 0 28px 90px rgba(0, 0, 0, 0.55);
+    }
+
+    .kairos-manuscript-route-eyebrow {
+      margin: 0 0 10px;
+      color: #7fb4ff;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .kairos-manuscript-route-card h1 {
+      margin: 0 0 12px;
+      font-size: clamp(28px, 8vw, 42px);
+      line-height: 1.05;
+    }
+
+    .kairos-manuscript-route-status {
+      margin: 0;
+      color: #b8c5d6;
+      font-size: 16px;
+      line-height: 1.55;
+    }
+
+    .kairos-manuscript-route-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    .kairos-manuscript-route-actions[hidden] {
+      display: none;
+    }
+
+    .kairos-manuscript-route-actions button,
+    .kairos-manuscript-route-actions a {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 48px;
+      padding: 12px 16px;
+      border: 1px solid #31527d;
+      border-radius: 12px;
+      background: #111923;
+      color: #fff;
+      font: 800 15px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .kairos-manuscript-route-actions button:first-child {
+      border-color: #4593ff;
+      background: #1677ff;
+    }
+
+    @media (max-width: 700px) {
+      .kairos-manuscript-route-card {
+        padding: 22px;
+        border-radius: 18px;
+      }
+
+      .kairos-manuscript-route-actions > * {
+        width: 100%;
+      }
+    }
+  </style>
+  <script>
+    (() => {
+      const BUILD = "kairos-dedicated-manuscript-route-20260801-1";
+      document.documentElement.dataset.kairosMode = "manuscript";
+      globalThis.__KAIROS_MANUSCRIPT_OPEN_TIMEOUT_MS = 20_000;
+
+      const route = {
+        build: BUILD,
+        opened: false,
+        fail(message) {
+          const boot = document.querySelector("#kairos-manuscript-route-boot");
+          if (!boot) return;
+          const title = boot.querySelector("[data-kairos-route-title]");
+          const status = boot.querySelector("[data-kairos-route-status]");
+          const actions = boot.querySelector("[data-kairos-route-actions]");
+          if (title) title.textContent = "Manuscript Studio did not open";
+          if (status) status.textContent = String(message || "The dedicated manuscript runtime could not load.");
+          if (actions) actions.hidden = false;
+          boot.setAttribute("role", "alert");
+        },
+      };
+
+      globalThis.KairosDedicatedManuscriptRoute = route;
+
+      window.addEventListener("kairos:manuscript-studio:opened", () => {
+        route.opened = true;
+        document.querySelector("#kairos-manuscript-route-boot")?.remove();
+      }, { once: true });
+
+      window.setTimeout(() => {
+        if (route.opened) return;
+        if (document.querySelector("#manuscript-studio-overlay")) return;
+        if (document.querySelector("#kairos-manuscript-direct-open-shell")) return;
+        route.fail("The dedicated manuscript runtime did not become visible. Reload this page to retry.");
+      }, 25_000);
+    })();
+  </script>
+</head>
+<body data-kairos-dedicated-manuscript="true">
+  <main id="kairos-manuscript-route-boot" role="status" aria-live="polite">
+    <section class="kairos-manuscript-route-card">
+      <p class="kairos-manuscript-route-eyebrow">Mindset Media Group · Kairos</p>
+      <h1 data-kairos-route-title>Opening Manuscript Studio</h1>
+      <p class="kairos-manuscript-route-status" data-kairos-route-status>Loading the dedicated manuscript workspace…</p>
+      <div class="kairos-manuscript-route-actions" data-kairos-route-actions hidden>
+        <button type="button" onclick="location.reload()">Retry Manuscript Studio</button>
+        <a href="./">Return to Command Center</a>
+      </div>
+    </section>
+  </main>
+
+  <noscript>Manuscript Studio requires JavaScript to run.</noscript>
+
+  <script
+    type="module"
+    src="./scripts/safari-manuscript-intake-compat.js?v=safari-native-docx-20260730-1"
+    onerror="KairosDedicatedManuscriptRoute.fail('Safari manuscript compatibility failed to load.')"></script>
+  <script
+    type="module"
+    src="./scripts/manuscript-direct-open-controller.js?v=kairos-dedicated-manuscript-route-20260801-1"
+    onerror="KairosDedicatedManuscriptRoute.fail('The dedicated Manuscript Studio controller failed to load.')"></script>
+</body>
+</html>
