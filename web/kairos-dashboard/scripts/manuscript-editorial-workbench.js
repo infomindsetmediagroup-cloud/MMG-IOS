@@ -1,4 +1,4 @@
-const BUILD = "kairos-manuscript-editorial-workbench-ui-20260722-2";
+const BUILD = "kairos-manuscript-editorial-workbench-ui-20260801-3";
 const ACTIVE_KEY = "kairos.production.active-workspace";
 
 let state = {
@@ -65,10 +65,18 @@ async function load(projectId) {
       `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/editorial`,
       { credentials: "include", cache: "no-store" },
     );
-    const body = await response.json();
+    const body = await response.json().catch(() => ({}));
+
+    if (response.status === 404) {
+      state.record = emptyEditorialRecord();
+      await loadCurrentText(projectId, state.record.editorial);
+      return;
+    }
+
     if (!response.ok) {
       throw new Error(body?.error?.message || "Editorial workbench could not be loaded.");
     }
+
     state.record = body;
     if (!state.manuscript) await loadCurrentText(projectId, body.editorial);
   } catch (error) {
@@ -79,14 +87,30 @@ async function load(projectId) {
   }
 }
 
+function emptyEditorialRecord() {
+  return {
+    status: "editorial-in-progress",
+    editorial: {
+      status: "not-started",
+      stage: "editorial-intake",
+      currentVersionId: null,
+      versions: [],
+      review: null,
+    },
+  };
+}
+
 async function loadCurrentText(projectId, editorial) {
   const current = editorial?.currentVersionId;
   const url = current
     ? `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/editorial/versions/${encodeURIComponent(current)}`
     : `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/source/text`;
   const response = await fetch(url, { credentials: "include", cache: "no-store" });
-  const body = await response.json();
-  if (response.ok) state.manuscript = String(body.manuscript || "");
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(body?.error?.message || "The saved manuscript text could not be loaded for editorial review.");
+  }
+  state.manuscript = String(body.manuscript || "");
 }
 
 function render(projectId) {
@@ -109,7 +133,7 @@ function render(projectId) {
     return;
   }
 
-  const editorial = state.record?.editorial || {};
+  const editorial = state.record?.editorial || emptyEditorialRecord().editorial;
   const versions = editorial.versions || [];
   const review = editorial.review || null;
   section.innerHTML = `
@@ -161,7 +185,7 @@ async function saveVersion(section, projectId) {
     label: section.querySelector("[data-editorial-label]")?.value || "Editorial Version",
     notes: section.querySelector("[data-editorial-notes]")?.value || "",
     actor: "MMG Editorial Production",
-  });
+  }, "editorial-version-saved");
   state.manuscript = manuscript;
 }
 
@@ -174,7 +198,7 @@ async function prepareReview(projectId) {
   await run(projectId, `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/editorial/review`, {
     versionId: currentVersionId,
     actor: "MMG Editorial Production",
-  });
+  }, "customer-review-prepared");
 }
 
 async function decision(projectId, value) {
@@ -183,7 +207,7 @@ async function decision(projectId, value) {
     decision: value,
     note,
     actor: "Executive",
-  });
+  }, value === "approved" ? "customer-review-approved" : "customer-revision-requested");
 }
 
 async function finalize(projectId) {
@@ -191,10 +215,10 @@ async function finalize(projectId) {
   await run(projectId, `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/editorial/finalize`, {
     versionId: currentVersionId,
     actor: "MMG Editorial Production",
-  });
+  }, "editorial-finalized");
 }
 
-async function run(projectId, url, payload) {
+async function run(projectId, url, payload, reason) {
   state.busy = true;
   state.error = "";
   render(projectId);
@@ -205,14 +229,26 @@ async function run(projectId, url, payload) {
       headers: { "Content-Type": "application/json", "X-MMG-Client-Build": BUILD },
       body: JSON.stringify(payload),
     });
-    const body = await response.json();
+    const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body?.error?.message || "Editorial production action failed.");
-    await window.KairosProductionWorkspace?.refresh?.();
+
     const refresh = await fetch(
       `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/editorial`,
       { credentials: "include", cache: "no-store" },
     );
-    state.record = await refresh.json();
+    const refreshed = await refresh.json().catch(() => ({}));
+    if (!refresh.ok) throw new Error(refreshed?.error?.message || "The saved editorial state could not be refreshed.");
+    state.record = refreshed;
+
+    await window.KairosProductionWorkspace?.refresh?.(reason);
+    window.dispatchEvent(new CustomEvent("kairos:production:state-changed", {
+      detail: {
+        reason,
+        projectId,
+        workspace: "manuscript-studio",
+        build: BUILD,
+      },
+    }));
   } catch (error) {
     state.error = error?.message || "Editorial production action failed.";
   } finally {
