@@ -1,0 +1,190 @@
+name: Deploy Kairos Browser and Runtime
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/deploy-sprint-44-revenue-storage.yml'
+      - 'web/kairos-dashboard/**'
+      - 'cloudflare/mmg-ios/wrangler.toml'
+      - 'cloudflare/mmg-ios/src/**'
+      - 'cloudflare/mmg-ios/scripts/**'
+      - 'cloudflare/mmg-ios/test/**'
+      - 'backend-tests/**'
+      - 'browser-tests/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: deploy-kairos-browser-runtime-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Report deployment pending
+        run: |
+          curl --fail --silent --show-error -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "{\"state\":\"pending\",\"context\":\"kairos-browser-runtime\",\"description\":\"Validating direct-open browser runtime\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+
+      - name: Check out authorized main commit
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install validation dependencies
+        run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund > /dev/null
+
+      - name: Build same-origin WebLLM runtime
+        run: |
+          npm run build:webllm
+          test -s web/kairos-dashboard/vendor/webllm-bundle.js
+          grep -q 'CreateMLCEngine' web/kairos-dashboard/vendor/webllm-bundle.js
+
+      - name: Validate browser runtime and deployment contracts
+        run: |
+          node --check web/kairos-dashboard/scripts/manuscript-direct-open-controller.js
+          node --check web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js
+          node --check web/kairos-dashboard/scripts/legacy-runtime-loader.js
+          node --check web/kairos-dashboard/scripts/manuscript-studio.js
+          node --check web/kairos-dashboard/scripts/manuscript-post-intake-guard.js
+          node --check web/kairos-dashboard/scripts/production-workspace-controller.js
+          node --check web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
+          node --check web/kairos-dashboard/scripts/kairos-state-fetch.js
+          node --check web/kairos-dashboard/scripts/kairos-state-fetch-install.js
+          node --check cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-production-entry-local-only-v1.js
+          node --test tests/kairos-operational-execution-bridge.contract.test.js
+          node --test tests/manuscript-production-flow-guard.contract.test.js
+          node cloudflare/mmg-ios/scripts/validate-manuscript-large-intake.mjs
+          npm run validate:manuscript-activation
+          grep -q 'five-center-dashboard-post-intake-stability-20260731-1' web/kairos-dashboard/index.html
+          grep -q 'manuscript-post-intake-stability-20260731-1' web/kairos-dashboard/index.html
+          grep -q 'mmg-direct-open-target' web/kairos-dashboard/index.html
+          grep -q 'kairos-manuscript-direct-open-20260801-1' web/kairos-dashboard/scripts/manuscript-direct-open-controller.js
+          grep -q 'manuscript-direct-open-controller.js' web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js
+          grep -q 'data-start-local-production' web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
+          grep -q 'KairosLocalInference' web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
+          ! grep -q 'generation-job' web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
+          grep -q 'main = "src/kairos-production-entry-local-canonical-v1.js"' cloudflare/mmg-ios/wrangler.toml
+          grep -q 'KAIROS_MODEL_PROVIDER = "browser-webgpu"' cloudflare/mmg-ios/wrangler.toml
+          grep -q 'KAIROS_LOCAL_INFERENCE_ENABLED = "true"' cloudflare/mmg-ios/wrangler.toml
+          ! grep -q 'api.openai.com' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
+
+      - name: Install WebKit
+        run: npx playwright install --with-deps webkit > /dev/null
+
+      - name: Verify direct route and post-intake stability in WebKit
+        run: |
+          npx playwright test \
+            browser-tests/manuscript-direct-open.spec.mjs \
+            browser-tests/manuscript-post-intake-stability.spec.mjs \
+            browser-tests/manuscript-studio-direct-chunk.spec.mjs \
+            --project=webkit \
+            --workers=1
+
+      - name: Install Worker dependencies
+        working-directory: cloudflare/mmg-ios
+        run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund > /dev/null
+
+      - name: Validate production Worker bundle
+        working-directory: cloudflare/mmg-ios
+        run: npx wrangler deploy --dry-run
+
+      - name: Deploy production Worker and browser assets
+        working-directory: cloudflare/mmg-ios
+        run: npx wrangler deploy
+
+      - name: Verify live direct-open runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for attempt in $(seq 1 30); do
+            root="${RUNNER_TEMP}/root.html"
+            direct_open="${RUNNER_TEMP}/manuscript-direct-open-controller.js"
+            bootstrap="${RUNNER_TEMP}/manuscript-production-flow-bootstrap.js"
+            loader="${RUNNER_TEMP}/legacy-runtime-loader.js"
+            readiness="${RUNNER_TEMP}/readiness.json"
+            denial="${RUNNER_TEMP}/generation-denial.json"
+
+            root_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/?release=${GITHUB_SHA}&attempt=${attempt}" -o "${root}" -w '%{http_code}' || true)"
+            direct_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-direct-open-controller.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${direct_open}" -w '%{http_code}' || true)"
+            bootstrap_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-production-flow-bootstrap.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${bootstrap}" -w '%{http_code}' || true)"
+            loader_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/legacy-runtime-loader.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${loader}" -w '%{http_code}' || true)"
+            readiness_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/api/operational-readiness?release=${GITHUB_SHA}&attempt=${attempt}" -o "${readiness}" -w '%{http_code}' || true)"
+            denial_status="$(curl --silent --show-error --max-time 20 -X POST "${WORKER_URL}/api/production-registry/manuscripts/test-project-12345678/generation-job" -H 'Content-Type: application/json' --data '{}' -o "${denial}" -w '%{http_code}' || true)"
+
+            if [ "${root_status}" = "200" ] \
+              && grep -q 'five-center-dashboard-post-intake-stability-20260731-1' "${root}" \
+              && grep -q 'mmg-direct-open-target' "${root}" \
+              && [ "${direct_status}" = "200" ] \
+              && grep -q 'kairos-manuscript-direct-open-20260801-1' "${direct_open}" \
+              && grep -q 'direct-route' "${direct_open}" \
+              && [ "${bootstrap_status}" = "200" ] \
+              && grep -q 'manuscript-direct-open-controller.js' "${bootstrap}" \
+              && [ "${loader_status}" = "200" ] \
+              && grep -q 'five-center-dashboard-post-intake-stability-20260731-1' "${loader}" \
+              && [ "${readiness_status}" = "200" ] \
+              && grep -q '"ready":true' "${readiness}" \
+              && grep -q '"provider":"browser-webgpu"' "${readiness}" \
+              && [ "${denial_status}" = "409" ] \
+              && grep -q '"code":"LOCAL_INFERENCE_REQUIRED"' "${denial}"; then
+              cat "${readiness}"
+              exit 0
+            fi
+
+            if [ "${attempt}" = "30" ]; then
+              printf 'root=%s direct=%s bootstrap=%s loader=%s readiness=%s denial=%s\n' \
+                "${root_status}" "${direct_status}" "${bootstrap_status}" "${loader_status}" "${readiness_status}" "${denial_status}"
+              cat "${root}" || true
+              cat "${direct_open}" || true
+              cat "${bootstrap}" || true
+              cat "${readiness}" || true
+              cat "${denial}" || true
+              exit 1
+            fi
+
+            sleep 5
+          done
+
+      - name: Report deployment success
+        if: ${{ success() }}
+        run: |
+          curl --fail --silent --show-error -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "{\"state\":\"success\",\"context\":\"kairos-browser-runtime\",\"description\":\"Direct-open browser runtime deployed and verified\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+
+      - name: Report deployment failure
+        if: ${{ failure() || cancelled() }}
+        run: |
+          curl --silent --show-error -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "{\"state\":\"failure\",\"context\":\"kairos-browser-runtime\",\"description\":\"Direct-open browser runtime deployment failed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}" || true
