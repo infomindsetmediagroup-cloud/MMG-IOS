@@ -17,17 +17,14 @@ const studioSource = readFileSync(
   new URL("../web/kairos-dashboard/scripts/manuscript-studio.js", import.meta.url),
   "utf8",
 );
+const postIntakeGuardSource = readFileSync(
+  new URL("../web/kairos-dashboard/scripts/manuscript-post-intake-guard.js", import.meta.url),
+  "utf8",
+);
 const compatSource = readFileSync(
   new URL("../web/kairos-dashboard/scripts/safari-manuscript-intake-compat.js", import.meta.url),
   "utf8",
 );
-
-const guardSource = `
-  window.KairosManuscriptPostIntakeGuard = Object.freeze({
-    build: "test-post-intake-guard",
-    ready: true,
-  });
-`;
 
 const studioCSS = `
   .manuscript-launch { position: fixed; right: 12px; bottom: 12px; }
@@ -67,7 +64,7 @@ async function installSuccessRoutes(page, { delayStudioMs = 100 } = {}) {
     }
 
     if (url.pathname === "/scripts/manuscript-post-intake-guard.js") {
-      await route.fulfill({ status: 200, contentType: "text/javascript", body: guardSource });
+      await route.fulfill({ status: 200, contentType: "text/javascript", body: postIntakeGuardSource });
       return;
     }
 
@@ -123,6 +120,11 @@ test("legacy advanced manuscript URL redirects before the command runtime and op
   expect(snapshot.openedOnce).toBe(true);
   expect(snapshot.lastReason).toBe("direct-route");
   expect(snapshot.activeProjectId).toMatch(/^manuscript-studio-/);
+
+  const guard = await page.evaluate(() => window.KairosManuscriptPostIntakeGuard.snapshot());
+  expect(guard.build).toBe("kairos-manuscript-post-intake-guard-20260731-1");
+  expect(guard.acceptedStudioModuleURL).toContain("manuscript-studio.js");
+  expect(guard.duplicateStudioModules).toEqual([]);
   await expect.poll(() => projectWrites.length).toBe(1);
 });
 
@@ -173,7 +175,7 @@ test("dedicated route displays body-owned recovery controls when Studio cannot l
     }
 
     if (url.pathname === "/scripts/manuscript-post-intake-guard.js") {
-      await route.fulfill({ status: 200, contentType: "text/javascript", body: guardSource });
+      await route.fulfill({ status: 200, contentType: "text/javascript", body: postIntakeGuardSource });
       return;
     }
 
