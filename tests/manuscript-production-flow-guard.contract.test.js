@@ -77,17 +77,23 @@ test("the post-intake guard preserves the successful overlay and suppresses dupl
   assert.match(source, /KairosManuscriptPostIntakeGuard/);
 });
 
-test("the direct route waits for Studio and renders recovery controls instead of a blank shell", async () => {
+test("the direct route independently loads Studio and owns visible recovery", async () => {
   const source = await readFile(directOpenPath, "utf8");
 
-  assert.match(source, /kairos-manuscript-direct-open-20260801-1/);
-  assert.match(source, /requestedTarget === "manuscript"/);
-  assert.match(source, /waitForElement/);
+  assert.match(source, /kairos-manuscript-direct-open-20260801-2-standalone/);
+  assert.match(source, /routeTarget === "manuscript"/);
+  assert.match(source, /ensureStyle\("manuscript-studio\.css"\)/);
+  assert.match(source, /ensureModule\("manuscript-post-intake-guard\.js"\)/);
+  assert.match(source, /ensureModule\("manuscript-studio\.js"\)/);
+  assert.match(source, /data-kairos-command-script/);
+  assert.match(source, /data-kairos-command-style/);
   assert.match(source, /\.manuscript-launch/);
   assert.match(source, /#manuscript-studio-overlay/);
   assert.match(source, /Manuscript Studio did not open/);
   assert.match(source, /data-kairos-manuscript-retry/);
   assert.match(source, /data-kairos-command-return/);
+  assert.match(source, /kairos-manuscript-direct-open-shell/);
+  assert.match(source, /overlay-watchdog/);
   assert.match(source, /KairosManuscriptDirectOpen/);
 });
 
