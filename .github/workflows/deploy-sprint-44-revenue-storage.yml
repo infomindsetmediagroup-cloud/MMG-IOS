@@ -45,7 +45,7 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"pending\",\"context\":\"kairos-browser-runtime\",\"description\":\"Validating direct-open browser runtime\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"pending\",\"context\":\"kairos-browser-runtime\",\"description\":\"Validating standalone manuscript runtime\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
       - name: Check out authorized main commit
         uses: actions/checkout@v4
@@ -84,7 +84,10 @@ jobs:
           grep -q 'five-center-dashboard-post-intake-stability-20260731-1' web/kairos-dashboard/index.html
           grep -q 'manuscript-post-intake-stability-20260731-1' web/kairos-dashboard/index.html
           grep -q 'mmg-direct-open-target' web/kairos-dashboard/index.html
-          grep -q 'kairos-manuscript-direct-open-20260801-1' web/kairos-dashboard/scripts/manuscript-direct-open-controller.js
+          grep -q 'kairos-manuscript-direct-open-20260801-2-standalone' web/kairos-dashboard/scripts/manuscript-direct-open-controller.js
+          grep -q 'ensureModule("manuscript-studio.js")' web/kairos-dashboard/scripts/manuscript-direct-open-controller.js
+          grep -q 'kairos-manuscript-direct-open-shell' web/kairos-dashboard/scripts/manuscript-direct-open-controller.js
+          grep -q 'overlay-watchdog' web/kairos-dashboard/scripts/manuscript-direct-open-controller.js
           grep -q 'manuscript-direct-open-controller.js' web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js
           grep -q 'data-start-local-production' web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
           grep -q 'KairosLocalInference' web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
@@ -118,7 +121,7 @@ jobs:
         working-directory: cloudflare/mmg-ios
         run: npx wrangler deploy
 
-      - name: Verify live direct-open runtime
+      - name: Verify live standalone manuscript runtime
         shell: bash
         run: |
           set -euo pipefail
@@ -128,6 +131,8 @@ jobs:
             direct_open="${RUNNER_TEMP}/manuscript-direct-open-controller.js"
             bootstrap="${RUNNER_TEMP}/manuscript-production-flow-bootstrap.js"
             loader="${RUNNER_TEMP}/legacy-runtime-loader.js"
+            studio="${RUNNER_TEMP}/manuscript-studio.js"
+            studio_css="${RUNNER_TEMP}/manuscript-studio.css"
             readiness="${RUNNER_TEMP}/readiness.json"
             denial="${RUNNER_TEMP}/generation-denial.json"
 
@@ -135,6 +140,8 @@ jobs:
             direct_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-direct-open-controller.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${direct_open}" -w '%{http_code}' || true)"
             bootstrap_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-production-flow-bootstrap.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${bootstrap}" -w '%{http_code}' || true)"
             loader_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/legacy-runtime-loader.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${loader}" -w '%{http_code}' || true)"
+            studio_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-studio.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${studio}" -w '%{http_code}' || true)"
+            studio_css_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/styles/manuscript-studio.css?release=${GITHUB_SHA}&attempt=${attempt}" -o "${studio_css}" -w '%{http_code}' || true)"
             readiness_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/api/operational-readiness?release=${GITHUB_SHA}&attempt=${attempt}" -o "${readiness}" -w '%{http_code}' || true)"
             denial_status="$(curl --silent --show-error --max-time 20 -X POST "${WORKER_URL}/api/production-registry/manuscripts/test-project-12345678/generation-job" -H 'Content-Type: application/json' --data '{}' -o "${denial}" -w '%{http_code}' || true)"
 
@@ -142,12 +149,18 @@ jobs:
               && grep -q 'five-center-dashboard-post-intake-stability-20260731-1' "${root}" \
               && grep -q 'mmg-direct-open-target' "${root}" \
               && [ "${direct_status}" = "200" ] \
-              && grep -q 'kairos-manuscript-direct-open-20260801-1' "${direct_open}" \
-              && grep -q 'direct-route' "${direct_open}" \
+              && grep -q 'kairos-manuscript-direct-open-20260801-2-standalone' "${direct_open}" \
+              && grep -q 'ensureModule("manuscript-studio.js")' "${direct_open}" \
+              && grep -q 'kairos-manuscript-direct-open-shell' "${direct_open}" \
+              && grep -q 'overlay-watchdog' "${direct_open}" \
               && [ "${bootstrap_status}" = "200" ] \
               && grep -q 'manuscript-direct-open-controller.js' "${bootstrap}" \
               && [ "${loader_status}" = "200" ] \
               && grep -q 'five-center-dashboard-post-intake-stability-20260731-1' "${loader}" \
+              && [ "${studio_status}" = "200" ] \
+              && grep -q 'manuscript-studio-direct-chunks-20260730-4' "${studio}" \
+              && [ "${studio_css_status}" = "200" ] \
+              && grep -q '.manuscript-overlay' "${studio_css}" \
               && [ "${readiness_status}" = "200" ] \
               && grep -q '"ready":true' "${readiness}" \
               && grep -q '"provider":"browser-webgpu"' "${readiness}" \
@@ -158,8 +171,8 @@ jobs:
             fi
 
             if [ "${attempt}" = "30" ]; then
-              printf 'root=%s direct=%s bootstrap=%s loader=%s readiness=%s denial=%s\n' \
-                "${root_status}" "${direct_status}" "${bootstrap_status}" "${loader_status}" "${readiness_status}" "${denial_status}"
+              printf 'root=%s direct=%s bootstrap=%s loader=%s studio=%s css=%s readiness=%s denial=%s\n' \
+                "${root_status}" "${direct_status}" "${bootstrap_status}" "${loader_status}" "${studio_status}" "${studio_css_status}" "${readiness_status}" "${denial_status}"
               cat "${root}" || true
               cat "${direct_open}" || true
               cat "${bootstrap}" || true
@@ -178,7 +191,7 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"success\",\"context\":\"kairos-browser-runtime\",\"description\":\"Direct-open browser runtime deployed and verified\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"success\",\"context\":\"kairos-browser-runtime\",\"description\":\"Standalone manuscript runtime deployed and verified\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
       - name: Report deployment failure
         if: ${{ failure() || cancelled() }}
@@ -187,4 +200,4 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"failure\",\"context\":\"kairos-browser-runtime\",\"description\":\"Direct-open browser runtime deployment failed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}" || true
+            --data "{\"state\":\"failure\",\"context\":\"kairos-browser-runtime\",\"description\":\"Standalone manuscript runtime deployment failed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}" || true
