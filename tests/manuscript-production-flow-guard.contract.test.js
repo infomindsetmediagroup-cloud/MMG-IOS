@@ -105,12 +105,12 @@ test("the manuscript URL is isolated from the advanced command shell", async () 
   ]);
 
   assert.match(index, /current\.searchParams\.get\("open"\) !== "manuscript"/);
-  assert.match(index, /new URL\("\.\/manuscript\.html", current\)/);
+  assert.match(index, /new URL\("\.\/manuscript", current\)/);
   assert.match(index, /target\.searchParams\.delete\("mode"\)/);
   assert.match(index, /location\.replace\(target\.href\)/);
   assert.match(index, /mmg-dedicated-manuscript-route/);
 
-  assert.match(manuscriptPage, /kairos-dedicated-manuscript-route-20260801-1/);
+  assert.match(manuscriptPage, /kairos-dedicated-manuscript-route-20260801-2/);
   assert.match(manuscriptPage, /data-kairos-dedicated-manuscript="true"/);
   assert.match(manuscriptPage, /safari-manuscript-intake-compat\.js/);
   assert.match(manuscriptPage, /manuscript-direct-open-controller\.js/);
@@ -163,7 +163,7 @@ test("the dashboard installs bounded state transport, direct-open recovery, and 
   assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-post-intake-stability-20260731-1/);
   assert.match(index, /manuscript-auto-pipeline\.js\?v=five-center-dashboard-post-intake-stability-20260731-1/);
   assert.match(index, /manuscript-post-intake-guard\.js\?v=five-center-dashboard-post-intake-stability-20260731-1/);
-  assert.match(index, /manuscript-direct-open-controller\.js\?v=kairos-dedicated-manuscript-route-20260801-1/);
+  assert.match(index, /manuscript-direct-open-controller\.js\?v=kairos-dedicated-manuscript-route-20260801-2/);
   assert.match(index, /mmg-production-controller-target/);
   assert.match(index, /mmg-post-intake-guard-target/);
   assert.match(index, /mmg-direct-open-target/);
