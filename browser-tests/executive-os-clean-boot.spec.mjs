@@ -112,7 +112,10 @@ test("default iPhone route restores the five-parent-card Kairos command dashboar
   await expect(page.getByRole("button", { name: "Open Manuscript Studio" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "Return to Command Center" })).toBeEnabled();
 
-  expect(scriptRequests[0]).toBe("command-hub.js");
+  expect(scriptRequests).toContain("kairos-state-fetch-install.js");
+  expect(scriptRequests).toContain("command-hub.js");
+  expect(scriptRequests.indexOf("command-hub.js"))
+    .toBeGreaterThan(scriptRequests.indexOf("kairos-state-fetch-install.js"));
   expect(scriptRequests).not.toContain("executive-local-inference.js");
 });
 

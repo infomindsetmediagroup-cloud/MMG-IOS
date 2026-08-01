@@ -76,8 +76,9 @@ test("the controller preserves retry state and always clears busy", () => {
 
 test("the five-center dashboard loads fresh chunked Studio and local production assets", () => {
   assert.match(index, /kairos-five-center-dashboard-restored-20260730-1/);
-  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-local-production-20260731-5/);
-  assert.match(index, /manuscript-production-flow-bootstrap\.js\?v=manuscript-local-production-controller-20260731-4/);
+  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-state-check-recovery-20260731-1/);
+  assert.match(index, /manuscript-production-flow-bootstrap\.js\?v=manuscript-local-production-controller-20260731-5-state-timeout/);
+  assert.match(index, /manuscript-auto-pipeline\.js\?v=five-center-dashboard-state-check-recovery-20260731-1/);
   assert.doesNotMatch(index, /executive-local-inference\.js/);
   assert.doesNotMatch(index, /kairos-runtime-loader\.js/);
   assert.doesNotMatch(index, /manuscript-docx-upload-hotfix\.js/);
@@ -87,7 +88,7 @@ test("the five-center dashboard loads fresh chunked Studio and local production 
   assert.doesNotMatch(runtimeLoader, /executive-local-inference\.js/);
   assert.match(loader, /const BUILD = "kairos-five-center-runtime-loader-20260731-2"/);
   assert.match(loader, /const RELEASE = "five-center-dashboard-restored-20260731-2"/);
-  assert.match(loader, /const ASSET_RELEASE = "five-center-dashboard-local-production-20260731-5"/);
+  assert.match(loader, /const ASSET_RELEASE = "five-center-dashboard-state-check-recovery-20260731-1"/);
   assert.match(loader, /commandHubMode/);
   assert.match(loader, /"command-hub\.js"/);
   assert.match(loader, /"kairos-local-inference\.js"/);
@@ -97,8 +98,8 @@ test("the five-center dashboard loads fresh chunked Studio and local production 
   assert.doesNotMatch(activeScripts(), /manuscript-docx-upload-hotfix\.js/);
   assert.match(loader, /if \(commandHubMode\) loadCommandRuntime\(\)/);
   assert.match(localInference, /kairos-local-inference-same-origin\.js/);
-  assert.match(productionBootstrap, /five-center-dashboard-local-production-20260731-5/);
-  assert.match(productionBootstrap, /manuscript-local-production-controller-20260731-4/);
+  assert.match(productionBootstrap, /five-center-dashboard-state-check-recovery-20260731-1/);
+  assert.match(productionBootstrap, /manuscript-local-production-controller-20260731-5-state-timeout/);
   assert.match(productionController, /KairosLocalInference/);
   assert.match(productionController, /data-start-local-production/);
   assert.doesNotMatch(productionController, /generation-job|Start Production Job/);

@@ -200,9 +200,11 @@ test("Command Center manuscript event routes through the production workspace co
 
 test("dashboard keeps production controllers behind the restored five-center command runtime", async () => {
   expect(indexSource).toMatch(/<meta name="mmg-build" content="kairos-five-center-dashboard-restored-[^"]+">/);
-  expect(indexSource).toMatch(/<meta name="mmg-command-runtime-target" content="\.\/scripts\/legacy-runtime-loader\.js\?v=five-center-dashboard-local-production-[^"]+">/);
-  expect(indexSource).toMatch(/manuscript-production-flow-bootstrap\.js\?v=manuscript-local-production-controller-20260731-4/);
+  expect(indexSource).toMatch(/<meta name="mmg-command-runtime-target" content="\.\/scripts\/legacy-runtime-loader\.js\?v=five-center-dashboard-state-check-recovery-[^"]+">/);
+  expect(indexSource).toMatch(/manuscript-production-flow-bootstrap\.js\?v=manuscript-local-production-controller-20260731-5-state-timeout/);
+  expect(indexSource).toMatch(/manuscript-auto-pipeline\.js\?v=five-center-dashboard-state-check-recovery-20260731-1/);
   expect(indexSource).toMatch(/mmg-production-controller-target/);
+  expect(indexSource).toMatch(/mmg-state-fetch-target/);
   expect((indexSource.match(/<script type="module"/g) || [])).toHaveLength(2);
   expect(indexSource).not.toContain("executive-local-inference.js");
   expect(indexSource).not.toContain("kairos-runtime-loader.js");
@@ -211,10 +213,12 @@ test("dashboard keeps production controllers behind the restored five-center com
   expect(runtimeLoaderSource).not.toContain("executive-local-inference.js");
   expect(loaderSource).toContain("commandHubMode");
   expect(loaderSource).toContain('"command-hub.js"');
-  expect(loaderSource).toContain('const ASSET_RELEASE = "five-center-dashboard-local-production-20260731-5"');
-  expect(productionBootstrapSource).toContain("manuscript-local-production-controller-20260731-4");
-  expect(productionBootstrapSource).toContain("five-center-dashboard-local-production-20260731-5");
-  expect(productionBootstrapSource).toContain("manuscript-auto-pipeline.js?v=${RELEASE}");
+  expect(loaderSource).toContain('const ASSET_RELEASE = "five-center-dashboard-state-check-recovery-20260731-1"');
+  expect(productionBootstrapSource).toContain("manuscript-local-production-controller-20260731-5-state-timeout");
+  expect(productionBootstrapSource).toContain("five-center-dashboard-state-check-recovery-20260731-1");
+  expect(productionBootstrapSource).toContain("kairos-state-fetch-install.js?v=${RELEASE}");
+  expect(productionBootstrapSource).not.toContain("import(`./manuscript-auto-pipeline.js");
+  expect(productionBootstrapSource).toContain('singleControllerOwner: "legacy-runtime-loader"');
 
   const requiredScripts = [
     "command-center-governance.js",

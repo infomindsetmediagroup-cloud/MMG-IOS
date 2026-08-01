@@ -138,15 +138,15 @@ test("Safari manuscript checksums preserve the native digest identifier first", 
 });
 
 test("Manuscript Studio directly owns verified raw chunk storage and local production", () => {
-  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-local-production-20260731-5/);
-  assert.match(index, /manuscript-production-flow-bootstrap\.js\?v=manuscript-local-production-controller-20260731-4/);
+  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-state-check-recovery-20260731-1/);
+  assert.match(index, /manuscript-production-flow-bootstrap\.js\?v=manuscript-local-production-controller-20260731-5-state-timeout/);
   assert.doesNotMatch(index, /executive-local-inference\.js/);
   assert.doesNotMatch(index, /kairos-runtime-loader\.js/);
   assert.match(runtimeLoader, /import "\.\/legacy-runtime-loader\.js"/);
   assert.doesNotMatch(runtimeLoader, /executive-local-inference\.js/);
   assert.match(legacy, /kairos-five-center-runtime-loader-20260731-2/);
   assert.match(legacy, /five-center-dashboard-restored-20260731-2/);
-  assert.match(legacy, /five-center-dashboard-local-production-20260731-5/);
+  assert.match(legacy, /five-center-dashboard-state-check-recovery-20260731-1/);
   assert.doesNotMatch(legacy, /const ASSET_RELEASE = "five-center-dashboard-direct-studio-chunks-20260730-4"/);
   assert.match(activeScripts, /"kairos-local-inference\.js"/);
   assert.match(activeScripts, /"manuscript-studio\.js"/);
@@ -166,8 +166,8 @@ test("Manuscript Studio directly owns verified raw chunk storage and local produ
   assert.match(manuscriptStudio, /uploadChunkWithRetry/);
   assert.match(manuscriptStudio, /Select the original manuscript file once/);
   assert.doesNotMatch(manuscriptStudio, /new FormData/);
-  assert.match(productionBootstrap, /five-center-dashboard-local-production-20260731-5/);
-  assert.match(productionBootstrap, /manuscript-local-production-controller-20260731-4/);
+  assert.match(productionBootstrap, /five-center-dashboard-state-check-recovery-20260731-1/);
+  assert.match(productionBootstrap, /manuscript-local-production-controller-20260731-5-state-timeout/);
   assert.match(manuscriptProduction, /KairosLocalInference/);
   assert.match(manuscriptProduction, /data-start-local-production/);
   assert.match(manuscriptProduction, /auto-pipeline/);
@@ -194,7 +194,7 @@ test("read-only startup refresh never owns the mutation loading lock", () => {
 
 test("the normal page restores the original five-parent-card command dashboard", () => {
   assert.match(index, /kairos-five-center-dashboard-restored-20260730-1/);
-  assert.match(index, /five-center-dashboard-local-production-20260731-5/);
+  assert.match(index, /five-center-dashboard-state-check-recovery-20260731-1/);
   assert.equal((index.match(/<script type="module"/g) || []).length, 2);
   assert.doesNotMatch(index, /executive-local-inference\.js/);
   assert.doesNotMatch(index, /kairos-runtime-loader\.js/);

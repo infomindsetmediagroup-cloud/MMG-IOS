@@ -14,6 +14,8 @@ on:
       - 'web/kairos-dashboard/index.html'
       - 'web/kairos-dashboard/scripts/legacy-runtime-loader.js'
       - 'web/kairos-dashboard/scripts/manuscript-studio.js'
+      - 'web/kairos-dashboard/scripts/kairos-state-fetch.js'
+      - 'web/kairos-dashboard/scripts/kairos-state-fetch-install.js'
       - 'web/kairos-dashboard/scripts/manuscript-auto-pipeline.js'
       - 'web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js'
       - 'browser-tests/manuscript-docx-native-extractor.spec.mjs'
@@ -45,6 +47,8 @@ jobs:
           node --check cloudflare/mmg-ios/src/kairos-production-registry-v1.js
           node --check web/kairos-dashboard/scripts/manuscript-studio.js
           node --check web/kairos-dashboard/scripts/legacy-runtime-loader.js
+          node --check web/kairos-dashboard/scripts/kairos-state-fetch.js
+          node --check web/kairos-dashboard/scripts/kairos-state-fetch-install.js
           node --check web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
           node --check web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js
           node --test cloudflare/mmg-ios/test/kairos-manuscript-source-forwarding.test.js
@@ -69,9 +73,11 @@ jobs:
           grep -q 'sourcePath(projectId, "commit")' web/kairos-dashboard/scripts/manuscript-studio.js
           ! grep -q 'new FormData' web/kairos-dashboard/scripts/manuscript-studio.js
           ! grep -q '"manuscript-docx-upload-hotfix.js"' web/kairos-dashboard/scripts/legacy-runtime-loader.js
-          grep -q 'five-center-dashboard-local-production-20260731-5' web/kairos-dashboard/index.html
-          grep -q 'manuscript-local-production-controller-20260731-4' web/kairos-dashboard/index.html
-          grep -q 'const ASSET_RELEASE = "five-center-dashboard-local-production-20260731-5"' web/kairos-dashboard/scripts/legacy-runtime-loader.js
+          grep -q 'five-center-dashboard-state-check-recovery-20260731-1' web/kairos-dashboard/index.html
+          grep -q 'manuscript-local-production-controller-20260731-5-state-timeout' web/kairos-dashboard/index.html
+          grep -q 'const ASSET_RELEASE = "five-center-dashboard-state-check-recovery-20260731-1"' web/kairos-dashboard/scripts/legacy-runtime-loader.js
+          grep -q 'requestJSONWithRetry' web/kairos-dashboard/scripts/kairos-state-fetch.js
+          grep -q 'KAIROS_STATE_TIMEOUT' web/kairos-dashboard/scripts/kairos-state-fetch.js
           grep -q 'data-start-local-production' web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
           grep -q 'KairosLocalInference' web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
           ! grep -q 'generation-job' web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
