@@ -1,12 +1,24 @@
 import { expect, test } from "@playwright/test";
 import { readFileSync } from "node:fs";
 
+const indexSource = readFileSync(
+  new URL("../web/kairos-dashboard/index.html", import.meta.url),
+  "utf8",
+);
+const manuscriptPageSource = readFileSync(
+  new URL("../web/kairos-dashboard/manuscript.html", import.meta.url),
+  "utf8",
+);
 const directOpenSource = readFileSync(
   new URL("../web/kairos-dashboard/scripts/manuscript-direct-open-controller.js", import.meta.url),
   "utf8",
 );
 const studioSource = readFileSync(
   new URL("../web/kairos-dashboard/scripts/manuscript-studio.js", import.meta.url),
+  "utf8",
+);
+const compatSource = readFileSync(
+  new URL("../web/kairos-dashboard/scripts/safari-manuscript-intake-compat.js", import.meta.url),
   "utf8",
 );
 
@@ -23,10 +35,6 @@ const studioCSS = `
   .manuscript-panel { min-height: 320px; padding: 20px; color: white; background: #07101a; }
 `;
 
-function fixtureHTML() {
-  return "<!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head><body><div id=\"kairos-hub\"></div></body></html>";
-}
-
 async function installSuccessRoutes(page, { delayStudioMs = 100 } = {}) {
   const projectWrites = [];
 
@@ -35,12 +43,26 @@ async function installSuccessRoutes(page, { delayStudioMs = 100 } = {}) {
     const url = new URL(request.url());
 
     if (request.resourceType() === "document") {
-      await route.fulfill({ status: 200, contentType: "text/html", body: fixtureHTML() });
+      await route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: url.pathname === "/manuscript.html" ? manuscriptPageSource : indexSource,
+      });
       return;
     }
 
     if (url.pathname === "/styles/manuscript-studio.css") {
       await route.fulfill({ status: 200, contentType: "text/css", body: studioCSS });
+      return;
+    }
+
+    if (url.pathname === "/scripts/safari-manuscript-intake-compat.js") {
+      await route.fulfill({ status: 200, contentType: "text/javascript", body: compatSource });
+      return;
+    }
+
+    if (url.pathname === "/scripts/manuscript-direct-open-controller.js") {
+      await route.fulfill({ status: 200, contentType: "text/javascript", body: directOpenSource });
       return;
     }
 
@@ -75,20 +97,19 @@ async function installSuccessRoutes(page, { delayStudioMs = 100 } = {}) {
   return projectWrites;
 }
 
-test("advanced manuscript route independently loads and opens Studio", async ({ page }) => {
+test("legacy advanced manuscript URL redirects before the command runtime and opens dedicated Studio", async ({ page }) => {
   const projectWrites = await installSuccessRoutes(page);
 
   await page.goto("https://kairos.test/?mode=advanced&open=manuscript");
-  await page.addScriptTag({ type: "module", content: directOpenSource });
 
-  const shell = page.locator("#kairos-manuscript-direct-open-shell");
-  await expect(shell).toBeVisible();
-  await expect(shell).toContainText("Opening Manuscript Studio");
-  await expect(shell.evaluate(element => element.parentElement?.tagName)).resolves.toBe("BODY");
-
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/manuscript.html");
+  await expect(page.locator("body")).toHaveAttribute("data-kairos-dedicated-manuscript", "true");
   await expect(page.locator("#manuscript-studio-overlay")).toBeVisible({ timeout: 8_000 });
   await expect(page.locator("#manuscript-studio-overlay h2")).toHaveText("Manuscript Studio");
-  await expect(shell).toHaveCount(0);
+  await expect(page.locator("#kairos-manuscript-route-boot")).toHaveCount(0);
+  await expect(page.locator("[data-kairos-persistent-return]")).toHaveCount(0);
+  await expect(page.locator('script[src*="legacy-runtime-loader.js"]')).toHaveCount(0);
+  await expect(page.locator('script[src*="manuscript-production-flow-bootstrap.js"]')).toHaveCount(0);
 
   await expect(page.locator('script[data-kairos-command-script="manuscript-post-intake-guard.js"]')).toHaveCount(1);
   await expect(page.locator('script[data-kairos-command-script="manuscript-studio.js"]')).toHaveCount(1);
@@ -105,11 +126,10 @@ test("advanced manuscript route independently loads and opens Studio", async ({ 
   await expect.poll(() => projectWrites.length).toBe(1);
 });
 
-test("direct route restores an unintentionally removed Studio overlay", async ({ page }) => {
+test("dedicated route restores an unintentionally removed Studio overlay", async ({ page }) => {
   await installSuccessRoutes(page, { delayStudioMs: 0 });
 
-  await page.goto("https://kairos.test/?mode=advanced&open=manuscript");
-  await page.addScriptTag({ type: "module", content: directOpenSource });
+  await page.goto("https://kairos.test/manuscript.html?open=manuscript");
 
   const overlay = page.locator("#manuscript-studio-overlay");
   await expect(overlay).toBeVisible({ timeout: 8_000 });
@@ -127,18 +147,28 @@ test("direct route restores an unintentionally removed Studio overlay", async ({
   expect(snapshot.lastReason).toBe("overlay-watchdog");
 });
 
-test("direct route displays body-owned recovery controls when Studio cannot load", async ({ page }) => {
+test("dedicated route displays body-owned recovery controls when Studio cannot load", async ({ page }) => {
   await page.route("https://kairos.test/**", async route => {
     const request = route.request();
     const url = new URL(request.url());
 
     if (request.resourceType() === "document") {
-      await route.fulfill({ status: 200, contentType: "text/html", body: fixtureHTML() });
+      await route.fulfill({ status: 200, contentType: "text/html", body: manuscriptPageSource });
       return;
     }
 
     if (url.pathname === "/styles/manuscript-studio.css") {
       await route.fulfill({ status: 200, contentType: "text/css", body: studioCSS });
+      return;
+    }
+
+    if (url.pathname === "/scripts/safari-manuscript-intake-compat.js") {
+      await route.fulfill({ status: 200, contentType: "text/javascript", body: compatSource });
+      return;
+    }
+
+    if (url.pathname === "/scripts/manuscript-direct-open-controller.js") {
+      await route.fulfill({ status: 200, contentType: "text/javascript", body: directOpenSource });
       return;
     }
 
@@ -160,8 +190,7 @@ test("direct route displays body-owned recovery controls when Studio cannot load
     await route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
   });
 
-  await page.goto("https://kairos.test/?mode=advanced&open=manuscript");
-  await page.addScriptTag({ type: "module", content: directOpenSource });
+  await page.goto("https://kairos.test/manuscript.html?open=manuscript");
 
   const shell = page.locator("#kairos-manuscript-direct-open-shell");
   await expect(shell).toBeVisible({ timeout: 4_000 });
