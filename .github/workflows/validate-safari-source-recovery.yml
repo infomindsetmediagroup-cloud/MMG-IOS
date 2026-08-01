@@ -7,6 +7,8 @@ on:
       - 'web/kairos-dashboard/index.html'
       - 'web/kairos-dashboard/scripts/legacy-runtime-loader.js'
       - 'web/kairos-dashboard/scripts/manuscript-studio.js'
+      - 'web/kairos-dashboard/scripts/kairos-state-fetch.js'
+      - 'web/kairos-dashboard/scripts/kairos-state-fetch-install.js'
       - 'web/kairos-dashboard/scripts/manuscript-auto-pipeline.js'
       - 'web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js'
       - 'browser-tests/manuscript-studio-direct-chunk.spec.mjs'
@@ -19,6 +21,8 @@ on:
       - 'web/kairos-dashboard/index.html'
       - 'web/kairos-dashboard/scripts/legacy-runtime-loader.js'
       - 'web/kairos-dashboard/scripts/manuscript-studio.js'
+      - 'web/kairos-dashboard/scripts/kairos-state-fetch.js'
+      - 'web/kairos-dashboard/scripts/kairos-state-fetch-install.js'
       - 'web/kairos-dashboard/scripts/manuscript-auto-pipeline.js'
       - 'web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js'
       - 'browser-tests/manuscript-studio-direct-chunk.spec.mjs'
@@ -47,17 +51,21 @@ jobs:
           node --check cloudflare/mmg-ios/src/kairos-production-registry-v1.js
           node --check web/kairos-dashboard/scripts/manuscript-studio.js
           node --check web/kairos-dashboard/scripts/legacy-runtime-loader.js
+          node --check web/kairos-dashboard/scripts/kairos-state-fetch.js
+          node --check web/kairos-dashboard/scripts/kairos-state-fetch-install.js
           node --check web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
           node --check web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js
-          grep -q 'five-center-dashboard-local-production-20260731-5' web/kairos-dashboard/index.html
-          grep -q 'manuscript-local-production-controller-20260731-4' web/kairos-dashboard/index.html
-          grep -q 'const ASSET_RELEASE = "five-center-dashboard-local-production-20260731-5"' web/kairos-dashboard/scripts/legacy-runtime-loader.js
+          grep -q 'five-center-dashboard-state-check-recovery-20260731-1' web/kairos-dashboard/index.html
+          grep -q 'manuscript-local-production-controller-20260731-5-state-timeout' web/kairos-dashboard/index.html
+          grep -q 'const ASSET_RELEASE = "five-center-dashboard-state-check-recovery-20260731-1"' web/kairos-dashboard/scripts/legacy-runtime-loader.js
           grep -q 'manuscript-studio-direct-chunks-20260730-4' web/kairos-dashboard/scripts/manuscript-studio.js
           grep -q 'chunkedSourceUpload: true' web/kairos-dashboard/scripts/manuscript-studio.js
           grep -q 'multipartSourceUpload: false' web/kairos-dashboard/scripts/manuscript-studio.js
           grep -q 'FILE_CHUNK_BYTES = 512 \* 1024' web/kairos-dashboard/scripts/manuscript-studio.js
           grep -q 'TEXT_CHUNK_BYTES = 128 \* 1024' web/kairos-dashboard/scripts/manuscript-studio.js
           ! grep -q 'new FormData' web/kairos-dashboard/scripts/manuscript-studio.js
+          grep -q 'requestJSONWithRetry' web/kairos-dashboard/scripts/kairos-state-fetch.js
+          grep -q 'KAIROS_STATE_TIMEOUT' web/kairos-dashboard/scripts/kairos-state-fetch.js
           grep -q 'data-start-local-production' web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
           grep -q 'KairosLocalInference' web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
           ! grep -q 'generation-job' web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
@@ -83,6 +91,7 @@ jobs:
             loader="${RUNNER_TEMP}/loader.js"
             studio="${RUNNER_TEMP}/studio.js"
             controller="${RUNNER_TEMP}/controller.js"
+            state_fetch="${RUNNER_TEMP}/state-fetch.js"
             bootstrap="${RUNNER_TEMP}/bootstrap.js"
             command="${RUNNER_TEMP}/command.js"
 
@@ -90,16 +99,17 @@ jobs:
             loader_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/legacy-runtime-loader.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${loader}" -w '%{http_code}' || true)"
             studio_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-studio.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${studio}" -w '%{http_code}' || true)"
             controller_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-auto-pipeline.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${controller}" -w '%{http_code}' || true)"
+            state_fetch_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/kairos-state-fetch.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${state_fetch}" -w '%{http_code}' || true)"
             bootstrap_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-production-flow-bootstrap.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${bootstrap}" -w '%{http_code}' || true)"
             command_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/command-hub.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${command}" -w '%{http_code}' || true)"
             parent_count="$(grep -o 'id: "\(knowledge\|content\|business\|customers\|operations\)"' "${command}" 2>/dev/null | wc -l | tr -d ' ')"
             active_scripts="$(node -e 'const fs=require("fs");const s=fs.readFileSync(process.argv[1],"utf8");process.stdout.write(s.match(/const SCRIPT_FILES = \[([\s\S]*?)\];/)?.[1]||"")' "${loader}")"
 
             if [ "${root_status}" = "200" ] \
-              && grep -q 'five-center-dashboard-local-production-20260731-5' "${root}" \
-              && grep -q 'manuscript-local-production-controller-20260731-4' "${root}" \
+              && grep -q 'five-center-dashboard-state-check-recovery-20260731-1' "${root}" \
+              && grep -q 'manuscript-local-production-controller-20260731-5-state-timeout' "${root}" \
               && [ "${loader_status}" = "200" ] \
-              && grep -q 'const ASSET_RELEASE = "five-center-dashboard-local-production-20260731-5"' "${loader}" \
+              && grep -q 'const ASSET_RELEASE = "five-center-dashboard-state-check-recovery-20260731-1"' "${loader}" \
               && grep -q 'scripts/${filename}?v=${ASSET_RELEASE}' "${loader}" \
               && printf '%s' "${active_scripts}" | grep -q 'manuscript-studio.js' \
               && printf '%s' "${active_scripts}" | grep -q 'manuscript-auto-pipeline.js' \
@@ -113,22 +123,26 @@ jobs:
               && grep -q 'data-start-local-production' "${controller}" \
               && grep -q 'KairosLocalInference' "${controller}" \
               && ! grep -q 'generation-job' "${controller}" \
+              && [ "${state_fetch_status}" = "200" ] \
+              && grep -q 'requestJSONWithRetry' "${state_fetch}" \
+              && grep -q 'KAIROS_STATE_TIMEOUT' "${state_fetch}" \
               && [ "${bootstrap_status}" = "200" ] \
-              && grep -q 'five-center-dashboard-local-production-20260731-5' "${bootstrap}" \
-              && grep -q 'manuscript-local-production-controller-20260731-4' "${bootstrap}" \
+              && grep -q 'five-center-dashboard-state-check-recovery-20260731-1' "${bootstrap}" \
+              && grep -q 'manuscript-local-production-controller-20260731-5-state-timeout' "${bootstrap}" \
               && [ "${command_status}" = "200" ] \
               && [ "${parent_count}" = "5" ]; then
-              echo "Safari direct Studio recovery, local production, and five-center dashboard verified live."
+              echo "Safari direct Studio recovery, bounded state checks, local production, and five-center dashboard verified live."
               exit 0
             fi
 
             if [ "${attempt}" = "60" ]; then
               echo "Live Safari direct-Studio and local-production verification failed."
-              printf 'root=%s loader=%s studio=%s controller=%s bootstrap=%s command=%s parents=%s\n' "${root_status}" "${loader_status}" "${studio_status}" "${controller_status}" "${bootstrap_status}" "${command_status}" "${parent_count}"
+              printf 'root=%s loader=%s studio=%s controller=%s state_fetch=%s bootstrap=%s command=%s parents=%s\n' "${root_status}" "${loader_status}" "${studio_status}" "${controller_status}" "${state_fetch_status}" "${bootstrap_status}" "${command_status}" "${parent_count}"
               cat "${root}" || true
               cat "${loader}" || true
               cat "${studio}" || true
               cat "${controller}" || true
+              cat "${state_fetch}" || true
               cat "${bootstrap}" || true
               exit 1
             fi
