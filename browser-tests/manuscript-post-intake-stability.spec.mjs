@@ -1,30 +1,17 @@
 import { expect, test } from "@playwright/test";
 import { readFileSync } from "node:fs";
 
-const guardSource = readFileSync(
-  new URL("../web/kairos-dashboard/scripts/manuscript-post-intake-guard.js", import.meta.url),
+const sources = [
+  "manuscript-post-intake-guard.js",
+  "manuscript-studio.js",
+  "manuscript-project-setup.js",
+  "manuscript-editorial-workbench.js",
+  "manuscript-auto-pipeline.js",
+  "production-workspace-controller.js",
+].map(filename => readFileSync(
+  new URL(`../web/kairos-dashboard/scripts/${filename}`, import.meta.url),
   "utf8",
-);
-const studioSource = readFileSync(
-  new URL("../web/kairos-dashboard/scripts/manuscript-studio.js", import.meta.url),
-  "utf8",
-);
-const setupSource = readFileSync(
-  new URL("../web/kairos-dashboard/scripts/manuscript-project-setup.js", import.meta.url),
-  "utf8",
-);
-const editorialSource = readFileSync(
-  new URL("../web/kairos-dashboard/scripts/manuscript-editorial-workbench.js", import.meta.url),
-  "utf8",
-);
-const pipelineSource = readFileSync(
-  new URL("../web/kairos-dashboard/scripts/manuscript-auto-pipeline.js", import.meta.url),
-  "utf8",
-);
-const workspaceSource = readFileSync(
-  new URL("../web/kairos-dashboard/scripts/production-workspace-controller.js", import.meta.url),
-  "utf8",
-);
+));
 
 const ACTIVE_KEY = "kairos.production.active-workspace";
 const INTERNAL_PROJECT_ID = "manuscript-studio-post-intake-stability";
@@ -77,7 +64,6 @@ test("successful manuscript intake remains visible under the full post-intake ru
       errors: [],
     };
     window.__kairosPostIntakeProbe = probe;
-
     window.addEventListener("kairos:production:state-changed", event => {
       probe.stateEvents.push({ at: Date.now(), detail: event.detail || null });
     });
@@ -106,7 +92,6 @@ test("successful manuscript intake remains visible under the full post-intake ru
         dataset: target ? { ...target.dataset } : {},
       });
     }, true);
-
     for (const method of ["pushState", "replaceState"]) {
       const native = history[method].bind(history);
       history[method] = (...args) => {
@@ -136,10 +121,10 @@ test("successful manuscript intake remains visible under the full post-intake ru
       return;
     }
 
-    if (method === "PUT" && (
-      url.pathname === `${sourceBase()}/file/0` ||
-      url.pathname === `${sourceBase()}/text-chunk/0`
-    )) {
+    if (
+      method === "PUT" &&
+      new RegExp(`^${sourceBase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/(?:file|text-chunk)/\\d+$`).test(url.pathname)
+    ) {
       await route.fulfill({
         status: 201,
         contentType: "application/json",
@@ -254,7 +239,7 @@ test("successful manuscript intake remains visible under the full post-intake ru
     sessionStorage.setItem(key, JSON.stringify({ workspace: "manuscript-studio", projectId }));
   }, { key: ACTIVE_KEY, projectId: INTERNAL_PROJECT_ID });
 
-  for (const source of [guardSource, studioSource, setupSource, editorialSource, pipelineSource, workspaceSource]) {
+  for (const source of sources) {
     await page.addScriptTag({ type: "module", content: source });
   }
 
