@@ -16,11 +16,15 @@ const safari = readFileSync("web/kairos-dashboard/scripts/safari-manuscript-inta
 const manuscriptStudio = readFileSync("web/kairos-dashboard/scripts/manuscript-studio.js", "utf8");
 const manuscriptProduction = readFileSync("web/kairos-dashboard/scripts/manuscript-auto-pipeline.js", "utf8");
 const productionBootstrap = readFileSync("web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js", "utf8");
+const postIntakeGuard = readFileSync("web/kairos-dashboard/scripts/manuscript-post-intake-guard.js", "utf8");
+const productionWorkspace = readFileSync("web/kairos-dashboard/scripts/production-workspace-controller.js", "utf8");
 const legacy = readFileSync("web/kairos-dashboard/scripts/legacy-runtime-loader.js", "utf8");
 const index = readFileSync("web/kairos-dashboard/index.html", "utf8");
 
 const parentCenters = commandHub.match(/id: "(?:knowledge|content|business|customers|operations)"/g) || [];
 const activeScripts = legacy.match(/const SCRIPT_FILES = \[([\s\S]*?)\];/)?.[1] || "";
+const responseCapture = productionWorkspace.match(/async function captureProductionResponse[\s\S]*?async function upsertWorkspaceRecord/)?.[0] || "";
+const workspaceObserver = productionWorkspace.match(/const observer = new MutationObserver[\s\S]*?observer\.observe/)?.[0] || "";
 
 test("the production Worker activates the canonical local provider firewall", () => {
   assert.match(wrangler, /main = "src\/kairos-production-entry-local-canonical-v1\.js"/);
@@ -137,20 +141,23 @@ test("Safari manuscript checksums preserve the native digest identifier first", 
   assert.doesNotMatch(safari, /const normalized = typeof algorithm === "string" \? \{ name: algorithm \} : algorithm/);
 });
 
-test("Manuscript Studio directly owns verified raw chunk storage and local production", () => {
-  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-state-check-recovery-20260731-1/);
-  assert.match(index, /manuscript-production-flow-bootstrap\.js\?v=manuscript-local-production-controller-20260731-5-state-timeout/);
+test("Manuscript Studio directly owns verified raw chunk storage and guarded local production", () => {
+  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-post-intake-stability-20260731-1/);
+  assert.match(index, /manuscript-production-flow-bootstrap\.js\?v=manuscript-post-intake-stability-20260731-1/);
+  assert.match(index, /manuscript-post-intake-guard\.js\?v=five-center-dashboard-post-intake-stability-20260731-1/);
   assert.doesNotMatch(index, /executive-local-inference\.js/);
   assert.doesNotMatch(index, /kairos-runtime-loader\.js/);
   assert.match(runtimeLoader, /import "\.\/legacy-runtime-loader\.js"/);
   assert.doesNotMatch(runtimeLoader, /executive-local-inference\.js/);
-  assert.match(legacy, /kairos-five-center-runtime-loader-20260731-2/);
+  assert.match(legacy, /kairos-five-center-runtime-loader-20260731-3-post-intake/);
   assert.match(legacy, /five-center-dashboard-restored-20260731-2/);
-  assert.match(legacy, /five-center-dashboard-state-check-recovery-20260731-1/);
+  assert.match(legacy, /five-center-dashboard-post-intake-stability-20260731-1/);
   assert.doesNotMatch(legacy, /const ASSET_RELEASE = "five-center-dashboard-direct-studio-chunks-20260730-4"/);
   assert.match(activeScripts, /"kairos-local-inference\.js"/);
+  assert.match(activeScripts, /"manuscript-post-intake-guard\.js"/);
   assert.match(activeScripts, /"manuscript-studio\.js"/);
   assert.match(activeScripts, /"manuscript-auto-pipeline\.js"/);
+  assert.ok(activeScripts.indexOf('"manuscript-post-intake-guard.js"') < activeScripts.indexOf('"manuscript-studio.js"'));
   assert.doesNotMatch(activeScripts, /manuscript-docx-upload-hotfix\.js/);
   assert.match(safari, /kairos-native-docx-extractor-20260730-1/);
   assert.match(safari, /installNativeDocxExtractor/);
@@ -166,8 +173,17 @@ test("Manuscript Studio directly owns verified raw chunk storage and local produ
   assert.match(manuscriptStudio, /uploadChunkWithRetry/);
   assert.match(manuscriptStudio, /Select the original manuscript file once/);
   assert.doesNotMatch(manuscriptStudio, /new FormData/);
-  assert.match(productionBootstrap, /five-center-dashboard-state-check-recovery-20260731-1/);
-  assert.match(productionBootstrap, /manuscript-local-production-controller-20260731-5-state-timeout/);
+  assert.match(productionBootstrap, /five-center-dashboard-post-intake-stability-20260731-1/);
+  assert.match(productionBootstrap, /manuscript-post-intake-stability-20260731-1/);
+  assert.match(productionBootstrap, /BOOT_TIMEOUT_MS = 20_000/);
+  assert.match(productionBootstrap, /renderBootstrapFailure/);
+  assert.match(postIntakeGuard, /duplicate Manuscript Studio module blocked/);
+  assert.match(postIntakeGuard, /success-overlay-stabilized/);
+  assert.match(postIntakeGuard, /success-overlay-restored/);
+  assert.match(productionWorkspace, /Manuscript Studio exclusively owns the intake-to-registry transition/);
+  assert.doesNotMatch(responseCapture, /url\.includes\("\/api\/manuscript\/intake\/advance"\)/);
+  assert.match(workspaceObserver, /dispatchWorkspaceVisibility/);
+  assert.doesNotMatch(workspaceObserver, /kairos:production:state-changed/);
   assert.match(manuscriptProduction, /KairosLocalInference/);
   assert.match(manuscriptProduction, /data-start-local-production/);
   assert.match(manuscriptProduction, /auto-pipeline/);
@@ -192,9 +208,10 @@ test("read-only startup refresh never owns the mutation loading lock", () => {
   assert.match(executive, /data-run-objective \$\{state\.loading/);
 });
 
-test("the normal page restores the original five-parent-card command dashboard", () => {
-  assert.match(index, /kairos-five-center-dashboard-restored-20260730-1/);
-  assert.match(index, /five-center-dashboard-state-check-recovery-20260731-1/);
+test("the normal page restores the guarded five-parent-card command dashboard", () => {
+  assert.match(index, /kairos-five-center-dashboard-post-intake-20260731-1/);
+  assert.match(index, /five-center-dashboard-post-intake-stability-20260731-1/);
+  assert.match(index, /manuscript-post-intake-stability-20260731-1/);
   assert.equal((index.match(/<script type="module"/g) || []).length, 2);
   assert.doesNotMatch(index, /executive-local-inference\.js/);
   assert.doesNotMatch(index, /kairos-runtime-loader\.js/);
@@ -218,6 +235,7 @@ test("advanced operations preserve the complete command runtime behind explicit 
   assert.match(legacy, /if \(commandHubMode\) loadCommandRuntime\(\)/);
   assert.match(activeScripts, /command-hub\.js/);
   assert.match(activeScripts, /command-center-governance\.js/);
+  assert.match(activeScripts, /manuscript-post-intake-guard\.js/);
   assert.match(activeScripts, /manuscript-studio\.js/);
   assert.match(activeScripts, /manuscript-project-setup\.js/);
   assert.match(activeScripts, /production-workspace-controller\.js/);
