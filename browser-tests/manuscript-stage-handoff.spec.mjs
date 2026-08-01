@@ -106,7 +106,6 @@ test("saved Project Setup exposes and opens the Editorial Workbench", async ({ p
 });
 
 test("ready editorial state exposes the local-production handoff", async ({ page }) => {
-  await page.goto("https://kairos.test/manuscript?open=manuscript");
   await page.setContent(`
     <div id="manuscript-studio-overlay">
       <section id="manuscript-project-setup">
