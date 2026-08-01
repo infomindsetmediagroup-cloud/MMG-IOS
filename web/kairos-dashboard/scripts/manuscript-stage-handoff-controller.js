@@ -1,13 +1,14 @@
 (() => {
   const BUILD = "kairos-manuscript-stage-handoff-20260801-1";
-  const RELEASE = "five-center-dashboard-post-intake-stability-20260731-1";
+  const RELEASE = "manuscript-stage-handoff-lazy-runtime-20260801-2";
   const GLOBAL_KEY = "__KAIROS_MANUSCRIPT_STAGE_HANDOFF__";
   const EDITORIAL_SCRIPT = "manuscript-editorial-workbench.js";
   const STATE_FETCH_SCRIPT = "kairos-state-fetch-install.js";
   const INFERENCE_SCRIPT = "kairos-local-inference.js";
   const PIPELINE_SCRIPT = "manuscript-auto-pipeline.js";
-  const LOAD_TIMEOUT_MS = 15_000;
-  const MOUNT_TIMEOUT_MS = 10_000;
+  const LOAD_TIMEOUT_MS = 20_000;
+  const MOUNT_TIMEOUT_MS = 12_000;
+  const INFERENCE_TIMEOUT_MS = 90_000;
 
   if (globalThis[GLOBAL_KEY]) {
     globalThis.KairosManuscriptStageHandoff = globalThis[GLOBAL_KEY];
@@ -18,9 +19,11 @@
     scheduled: false,
     editorialLoading: false,
     productionLoading: false,
+    localRuntimeLoading: false,
     lastError: "",
     editorialOpens: 0,
     productionOpens: 0,
+    localStarts: 0,
   };
 
   const api = Object.freeze({
@@ -28,19 +31,23 @@
     ready: true,
     openEditorial: openEditorialWorkbench,
     openProduction: openLocalProduction,
+    startLocalProduction,
     enhance: scheduleEnhance,
     snapshot() {
       return {
         build: BUILD,
         editorialLoading: state.editorialLoading,
         productionLoading: state.productionLoading,
+        localRuntimeLoading: state.localRuntimeLoading,
         lastError: state.lastError,
         editorialOpens: state.editorialOpens,
         productionOpens: state.productionOpens,
+        localStarts: state.localStarts,
         setupActionPresent: Boolean(document.querySelector("[data-kairos-next-editorial]")),
         editorialPresent: Boolean(document.querySelector("#manuscript-editorial-workbench")),
         productionActionPresent: Boolean(document.querySelector("[data-kairos-next-production]")),
         pipelinePresent: Boolean(document.querySelector("#manuscript-auto-pipeline")),
+        localRuntimeReady: Boolean(globalThis.KairosLocalInference?.ready),
       };
     },
   });
@@ -119,33 +126,39 @@
         Continue to Local Production
       </button>
       <p class="manuscript-note" data-kairos-handoff-status>
-        Editorial approval is complete. Continue to the local WebGPU production stage.
+        Editorial approval is complete. Open the local production controls to continue.
       </p>
     `;
     editorial.append(handoff);
   }
 
   function handleClick(event) {
-    const editorialButton = event.target instanceof Element
-      ? event.target.closest("[data-kairos-next-editorial]")
-      : null;
+    const target = event.target instanceof Element ? event.target : null;
+    const editorialButton = target?.closest("[data-kairos-next-editorial]");
     if (editorialButton) {
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
+      stop(event);
       void openEditorialWorkbench(editorialButton);
       return;
     }
 
-    const productionButton = event.target instanceof Element
-      ? event.target.closest("[data-kairos-next-production]")
-      : null;
-    if (!productionButton) return;
+    const productionButton = target?.closest("[data-kairos-next-production]");
+    if (productionButton) {
+      stop(event);
+      void openLocalProduction(productionButton);
+      return;
+    }
 
+    const startButton = target?.closest("[data-start-local-production]");
+    if (!startButton || globalThis.KairosLocalInference?.ready) return;
+
+    stop(event);
+    void startLocalProduction(startButton);
+  }
+
+  function stop(event) {
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
-    void openLocalProduction(productionButton);
   }
 
   async function openEditorialWorkbench(button = document.querySelector("[data-kairos-next-editorial]")) {
@@ -156,10 +169,10 @@
     setStatus(button, "Loading the saved manuscript and editorial state…");
 
     try {
-      await withDeadline(
-        ensureModule(EDITORIAL_SCRIPT, () => globalThis.KairosEditorialWorkbenchController?.ready),
+      await ensureModule(
+        EDITORIAL_SCRIPT,
+        () => globalThis.KairosEditorialWorkbenchController?.ready,
         LOAD_TIMEOUT_MS,
-        "The Editorial Workbench did not load in time.",
       );
 
       await globalThis.KairosEditorialWorkbenchController?.enhance?.();
@@ -195,39 +208,41 @@
     if (state.productionLoading) return { status: "loading", build: BUILD };
     state.productionLoading = true;
     state.lastError = "";
-    setButton(button, "Opening Local Production…", true);
-    setStatus(button, "Loading the bounded state transport and same-origin WebGPU runtime…");
+    setButton(button, "Opening Production Controls…", true);
+    setStatus(button, "Loading the bounded production-state controls…");
 
     try {
-      await withDeadline(
-        ensureModule(STATE_FETCH_SCRIPT, () => Boolean(globalThis.__KAIROS_STATE_FETCH_INSTALLED__)),
+      await ensureModule(
+        STATE_FETCH_SCRIPT,
+        () => Boolean(
+          globalThis.__KAIROS_STATE_FETCH_INSTALLED__ ||
+          globalThis.__kairosStateFetchInstalled
+        ),
         LOAD_TIMEOUT_MS,
-        "The bounded production-state transport did not load in time.",
       );
-      await withDeadline(
-        ensureModule(INFERENCE_SCRIPT, () => globalThis.KairosLocalInference?.ready),
+      await ensureModule(
+        PIPELINE_SCRIPT,
+        () => globalThis.KairosManuscriptAutoPipelineController?.ready,
         LOAD_TIMEOUT_MS,
-        "The local WebGPU runtime did not load in time.",
-      );
-      await withDeadline(
-        ensureModule(PIPELINE_SCRIPT, () => globalThis.KairosManuscriptAutoPipelineController?.ready),
-        LOAD_TIMEOUT_MS,
-        "The local production controller did not load in time.",
       );
 
       globalThis.KairosManuscriptAutoPipelineController?.enhance?.();
       const section = await waitForElement("#manuscript-auto-pipeline", MOUNT_TIMEOUT_MS);
-      if (!section) throw new Error("Local Production loaded, but its workspace did not render.");
+      if (!section) throw new Error("Local Production loaded, but its controls did not render.");
 
       state.productionOpens += 1;
       button?.closest("[data-kairos-production-handoff]")?.remove();
       section.scrollIntoView({ behavior: "smooth", block: "start" });
       section.querySelector("button")?.focus?.({ preventScroll: true });
 
+      setPipelineMessage(
+        "Production controls are ready. The local AI runtime will load only after Start Local Production is pressed.",
+      );
+
       return { status: "production-open", projectId: activeProjectId(), build: BUILD };
     } catch (error) {
-      state.lastError = error?.message || "Local Production could not open.";
-      setButton(button, "Retry Local Production", false);
+      state.lastError = error?.message || "Local Production controls could not open.";
+      setButton(button, "Retry Production Controls", false);
       setStatus(button, state.lastError, true);
       return { status: "failed", error: state.lastError, build: BUILD };
     } finally {
@@ -235,37 +250,102 @@
     }
   }
 
-  function ensureModule(filename, ready) {
+  async function startLocalProduction(button = document.querySelector("[data-start-local-production]")) {
+    if (state.localRuntimeLoading) return { status: "loading", build: BUILD };
+    if (!globalThis.KairosManuscriptAutoPipelineController?.ready) {
+      state.lastError = "The local production controller is not ready.";
+      setPipelineMessage(state.lastError, true);
+      return { status: "failed", error: state.lastError, build: BUILD };
+    }
+
+    state.localRuntimeLoading = true;
+    state.lastError = "";
+    setButton(button, "Loading Local AI Runtime…", true);
+    setPipelineMessage(
+      "Downloading and preparing the same-origin WebGPU runtime. Keep Safari open and in the foreground. This can take up to 90 seconds on the first load.",
+    );
+
+    try {
+      await ensureModule(
+        INFERENCE_SCRIPT,
+        () => globalThis.KairosLocalInference?.ready,
+        INFERENCE_TIMEOUT_MS,
+      );
+
+      if (!globalThis.KairosLocalInference?.ready) {
+        throw new Error("The local WebGPU runtime loaded without becoming ready.");
+      }
+
+      state.localStarts += 1;
+      setButton(button, "Start Local Production", false);
+      setPipelineMessage("Local AI runtime ready. Starting production on this device…");
+      await globalThis.KairosManuscriptAutoPipelineController.startLocalProduction();
+      return { status: "production-started", projectId: activeProjectId(), build: BUILD };
+    } catch (error) {
+      state.lastError = error?.message || "The local AI runtime could not load.";
+      setButton(button, "Retry Local AI Runtime", false);
+      setPipelineMessage(state.lastError, true);
+      return { status: "failed", error: state.lastError, build: BUILD };
+    } finally {
+      state.localRuntimeLoading = false;
+    }
+  }
+
+  function ensureModule(filename, ready, timeoutMs) {
     if (ready()) return Promise.resolve();
 
     let script = document.querySelector(`script[data-kairos-stage-script="${filename}"]`);
+    if (script?.dataset.kairosStageLoadState === "failed") {
+      script.remove();
+      script = null;
+    }
+
     if (!script) {
       script = document.createElement("script");
       script.type = "module";
-      script.src = new URL(`./scripts/${filename}?v=${RELEASE}`, document.baseURI).href;
+      script.src = new URL(
+        `./scripts/${filename}?v=${RELEASE}&attempt=${Date.now()}`,
+        document.baseURI,
+      ).href;
       script.dataset.kairosStageScript = filename;
       script.dataset.kairosStageOwner = BUILD;
+      script.dataset.kairosStageLoadState = "loading";
       document.body.append(script);
     }
 
     return new Promise((resolve, reject) => {
+      let settled = false;
       let poll = 0;
-      const cleanup = () => {
+      let timer = 0;
+
+      const finish = (error = null) => {
+        if (settled) return;
+        settled = true;
         clearInterval(poll);
+        clearTimeout(timer);
         script.removeEventListener("error", onError);
-      };
-      const inspect = () => {
-        if (!ready()) return;
-        cleanup();
+        if (error) {
+          script.dataset.kairosStageLoadState = "failed";
+          reject(error);
+          return;
+        }
+        script.dataset.kairosStageLoadState = "ready";
         resolve();
       };
+
+      const inspect = () => {
+        if (ready()) finish();
+      };
+
       const onError = () => {
-        cleanup();
-        reject(new Error(`${filename} could not be downloaded.`));
+        finish(new Error(`${filename} could not be downloaded.`));
       };
 
       script.addEventListener("error", onError, { once: true });
-      poll = window.setInterval(inspect, 25);
+      poll = window.setInterval(inspect, 50);
+      timer = window.setTimeout(() => {
+        finish(new Error(`${filename} did not become ready within ${Math.round(timeoutMs / 1000)} seconds.`));
+      }, timeoutMs);
       inspect();
     });
   }
@@ -300,6 +380,26 @@
     else status.removeAttribute("role");
   }
 
+  function setPipelineMessage(message, error = false) {
+    const section = document.querySelector("#manuscript-auto-pipeline");
+    if (!section) return;
+
+    let status = section.querySelector("[data-kairos-local-runtime-status]");
+    if (!status) {
+      status = document.createElement("p");
+      status.dataset.kairosLocalRuntimeStatus = BUILD;
+      status.className = "manuscript-progress";
+      const actions = section.querySelector(".manuscript-actions");
+      if (actions) actions.insertAdjacentElement("afterend", status);
+      else section.append(status);
+    }
+
+    status.textContent = String(message || "");
+    status.classList.toggle("manuscript-error", error);
+    if (error) status.setAttribute("role", "alert");
+    else status.removeAttribute("role");
+  }
+
   function waitForElement(selector, timeoutMs) {
     const existing = document.querySelector(selector);
     if (existing) return Promise.resolve(existing);
@@ -323,16 +423,6 @@
         subtree: true,
       });
     });
-  }
-
-  function withDeadline(promise, milliseconds, message) {
-    let timer = 0;
-    return Promise.race([
-      promise,
-      new Promise((_, reject) => {
-        timer = window.setTimeout(() => reject(new Error(message)), milliseconds);
-      }),
-    ]).finally(() => clearTimeout(timer));
   }
 
   function activeProjectId() {
