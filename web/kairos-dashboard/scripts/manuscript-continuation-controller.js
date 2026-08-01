@@ -1,11 +1,16 @@
 (() => {
-  const BUILD = "kairos-manuscript-continuation-20260801-1";
+  const BUILD = "kairos-manuscript-continuation-20260801-2-recovery";
   const RELEASE = "five-center-dashboard-post-intake-stability-20260731-1";
   const GLOBAL_KEY = "__KAIROS_MANUSCRIPT_CONTINUATION_CONTROLLER__";
   const SETUP_SCRIPT = "manuscript-project-setup.js";
   const SETUP_SELECTOR = "#manuscript-project-setup";
+  const ACTIVE_KEY = "kairos.production.active-workspace";
+  const PENDING_KEY = "kairos.manuscript.registry-sync.pending.v1";
+  const COLLECTION_PATH = "/api/production-registry/projects";
   const LOAD_TIMEOUT_MS = 15_000;
   const MOUNT_TIMEOUT_MS = 8_000;
+  const RECOVERY_TIMEOUT_MS = 8_000;
+  const RECOVERY_THROTTLE_MS = 2_000;
 
   if (globalThis[GLOBAL_KEY]) {
     globalThis.KairosManuscriptContinuation = globalThis[GLOBAL_KEY];
@@ -17,12 +22,17 @@
     opened: false,
     lastError: "",
     attempts: 0,
+    recoveryChecks: 0,
+    recoveredReceipt: false,
+    lastRecoveryAt: 0,
+    recoveryPromise: null,
   };
 
   const api = Object.freeze({
     build: BUILD,
     ready: true,
     continue: continueToSetup,
+    recover: recoverExistingIntake,
     snapshot() {
       return {
         build: BUILD,
@@ -31,6 +41,8 @@
         attempts: state.attempts,
         lastError: state.lastError,
         setupPresent: Boolean(document.querySelector(SETUP_SELECTOR)),
+        recoveredReceipt: state.recoveredReceipt,
+        recoveryChecks: state.recoveryChecks,
       };
     },
   });
@@ -39,13 +51,23 @@
   globalThis.KairosManuscriptContinuation = api;
 
   document.addEventListener("click", handleClick, true);
+  window.addEventListener("kairos:manuscript-studio:opened", () => scheduleRecovery("studio-opened"));
+  window.addEventListener("focus", () => scheduleRecovery("window-focus"));
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") scheduleRecovery("visibility-restored");
+  });
 
-  const observer = new MutationObserver(normalizeReceiptActions);
+  const observer = new MutationObserver(() => {
+    normalizeReceiptActions();
+    scheduleRecovery("dom-change");
+  });
   observer.observe(document.body || document.documentElement, {
     childList: true,
     subtree: true,
   });
+
   normalizeReceiptActions();
+  scheduleRecovery("controller-ready");
 
   function handleClick(event) {
     const button = event.target instanceof Element
@@ -62,9 +84,13 @@
   async function continueToSetup(button = document.querySelector("#manuscript-studio-overlay [data-finish]")) {
     if (state.loading) return { status: "loading", build: BUILD };
 
-    const result = document.querySelector("#manuscript-studio-overlay .manuscript-result");
+    let result = document.querySelector("#manuscript-studio-overlay .manuscript-result");
     if (!result) {
-      return fail(button, "The production-intake receipt is not available. Reopen Manuscript Studio and try again.");
+      await recoverExistingIntake("continue-requested");
+      result = document.querySelector("#manuscript-studio-overlay .manuscript-result");
+    }
+    if (!result) {
+      return fail(button, "The saved production-intake receipt could not be recovered. Reload Manuscript Studio and try again.");
     }
 
     state.loading = true;
@@ -112,6 +138,151 @@
     } finally {
       state.loading = false;
     }
+  }
+
+  function scheduleRecovery(reason) {
+    if (state.recoveryPromise) return;
+    if (Date.now() - state.lastRecoveryAt < RECOVERY_THROTTLE_MS) return;
+    queueMicrotask(() => void recoverExistingIntake(reason));
+  }
+
+  async function recoverExistingIntake(reason = "manual-recovery") {
+    if (state.recoveryPromise) return state.recoveryPromise;
+
+    const projectId = activeProjectId();
+    if (!projectId) return { status: "no-active-project", build: BUILD };
+    if (document.querySelector("#manuscript-studio-overlay .manuscript-result")) {
+      normalizeReceiptActions();
+      return { status: "receipt-present", projectId, build: BUILD };
+    }
+
+    state.lastRecoveryAt = Date.now();
+    state.recoveryChecks += 1;
+    state.recoveryPromise = performRecovery(projectId, reason)
+      .catch(error => {
+        console.warn("[kairos-manuscript-continuation] Intake recovery was deferred.", {
+          build: BUILD,
+          projectId,
+          reason,
+          message: error?.message || String(error),
+        });
+        return { status: "deferred", projectId, build: BUILD };
+      })
+      .finally(() => {
+        state.recoveryPromise = null;
+      });
+
+    return state.recoveryPromise;
+  }
+
+  async function performRecovery(projectId, reason) {
+    const overlay = await waitForElement("#manuscript-studio-overlay", RECOVERY_TIMEOUT_MS);
+    if (!overlay) return { status: "overlay-unavailable", projectId, build: BUILD };
+    if (overlay.querySelector(".manuscript-result")) {
+      normalizeReceiptActions();
+      return { status: "receipt-present", projectId, build: BUILD };
+    }
+
+    const project = pendingProject(projectId) || await readRegistryProject(projectId);
+    if (!isRecoverableProject(project, projectId)) {
+      return { status: "no-saved-intake", projectId, build: BUILD };
+    }
+
+    const result = renderRecoveredReceipt(overlay, project);
+    if (!result) return { status: "receipt-render-failed", projectId, build: BUILD };
+
+    state.recoveredReceipt = true;
+    normalizeReceiptActions();
+
+    console.info("[kairos-manuscript-continuation] Recovered saved production-intake receipt.", {
+      build: BUILD,
+      projectId,
+      status: project.status || null,
+      stage: project.stage || null,
+      reason,
+    });
+
+    return {
+      status: "receipt-recovered",
+      projectId,
+      build: BUILD,
+    };
+  }
+
+  async function readRegistryProject(projectId) {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), RECOVERY_TIMEOUT_MS);
+    try {
+      const response = await fetch(COLLECTION_PATH, {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store",
+        signal: controller.signal,
+        headers: {
+          "X-MMG-Client-Build": BUILD,
+          "X-Kairos-Registry-Read": "recover-intake-receipt",
+        },
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) return null;
+      return Array.isArray(body?.projects)
+        ? body.projects.find(project => project?.projectId === projectId) || null
+        : null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  function pendingProject(projectId) {
+    const pending = readJSON(PENDING_KEY);
+    return pending?.projectId === projectId ? pending.project || null : null;
+  }
+
+  function isRecoverableProject(project, projectId) {
+    if (!project || project.projectId !== projectId) return false;
+    const status = String(project.status || "").toLowerCase();
+    const stage = String(project.stage || "").toLowerCase();
+    return status === "production_intake" ||
+      status === "assigned-to-production" ||
+      status === "ready-for-editorial" ||
+      status === "ready-for-manufacturing" ||
+      stage === "project_setup" ||
+      stage === "editorial" ||
+      stage === "manufacturing";
+  }
+
+  function renderRecoveredReceipt(overlay, project) {
+    const panel = overlay.querySelector(".manuscript-panel");
+    if (!panel) return null;
+
+    const header = panel.querySelector("header");
+    for (const child of [...panel.children]) {
+      if (child !== header) child.remove();
+    }
+
+    const result = document.createElement("div");
+    result.className = "manuscript-result";
+    result.dataset.kairosRecoveredIntake = BUILD;
+    result.innerHTML = `
+      <div class="manuscript-status">
+        <span>Production intake recovered</span>
+        <strong>${esc(project.status || "production_intake")}</strong>
+      </div>
+      <h3>${esc(project.summary || "Your manuscript is stored and ready for project setup.")}</h3>
+      <p><strong>Project:</strong> ${esc(project.sourceProjectId || project.projectId)}</p>
+      <div class="issue-list">
+        <article>
+          <b>1. Complete Project Setup</b>
+          <p>${esc(project.nextAction || "Confirm publication metadata and assign the approved publishing service.")}</p>
+        </article>
+      </div>
+      <p class="manuscript-note">Kairos recovered the saved production state. No second intake was created.</p>
+      <div class="manuscript-actions">
+        <button type="button" class="primary" data-finish>Continue to Project Setup</button>
+      </div>
+    `;
+    panel.append(result);
+    return result;
   }
 
   function ensureSetupController() {
@@ -235,11 +406,22 @@
   }
 
   function activeProjectId() {
-    try {
-      const active = JSON.parse(sessionStorage.getItem("kairos.production.active-workspace") || "null");
-      return active?.workspace === "manuscript-studio" ? active.projectId || null : null;
-    } catch {
-      return null;
-    }
+    const active = readJSON(ACTIVE_KEY);
+    return active?.workspace === "manuscript-studio" ? active.projectId || null : null;
+  }
+
+  function readJSON(key) {
+    try { return JSON.parse(sessionStorage.getItem(key) || "null"); }
+    catch { return null; }
+  }
+
+  function esc(value) {
+    return String(value ?? "").replace(/[&<>'"]/g, character => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      "'": "&#39;",
+      '"': "&quot;",
+    })[character]);
   }
 })();
