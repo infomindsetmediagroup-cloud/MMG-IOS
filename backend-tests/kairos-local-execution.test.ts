@@ -11,8 +11,9 @@ const legacy = readFileSync(new URL("../web/kairos-dashboard/scripts/legacy-runt
 const commandHub = readFileSync(new URL("../web/kairos-dashboard/scripts/command-hub.js", import.meta.url), "utf8");
 const bridge = readFileSync(new URL("../web/kairos-dashboard/scripts/executive-local-inference.js", import.meta.url), "utf8");
 const compatibility = readFileSync(new URL("../web/kairos-dashboard/scripts/kairos-local-inference.js", import.meta.url), "utf8");
+const postIntakeGuard = readFileSync(new URL("../web/kairos-dashboard/scripts/manuscript-post-intake-guard.js", import.meta.url), "utf8");
 
-const combined = `${canonical}\n${guard}\n${entry}\n${wrangler}\n${index}\n${loader}\n${legacy}\n${commandHub}\n${bridge}\n${compatibility}`;
+const combined = `${canonical}\n${guard}\n${entry}\n${wrangler}\n${index}\n${loader}\n${legacy}\n${commandHub}\n${bridge}\n${compatibility}\n${postIntakeGuard}`;
 
 describe("Kairos local operational execution", () => {
   it("uses the canonical provider-firewalled entry and no-cost browser inference policy", () => {
@@ -52,7 +53,9 @@ describe("Kairos local operational execution", () => {
 
   it("restores the five-center dashboard while retaining same-origin local inference", () => {
     expect((index.match(/<script type="module"/g) || []).length).toBe(2);
-    expect(index).toContain("kairos-five-center-dashboard-restored-20260730-1");
+    expect(index).toContain("kairos-five-center-dashboard-post-intake-20260731-1");
+    expect(index).toContain("five-center-dashboard-post-intake-stability-20260731-1");
+    expect(index).toContain("manuscript-post-intake-guard.js");
     expect(index).toContain("legacy-runtime-loader.js");
     expect(index).not.toContain("kairos-runtime-loader.js");
     expect(index).not.toContain("executive-local-inference.js");
@@ -60,6 +63,7 @@ describe("Kairos local operational execution", () => {
     expect(loader).not.toContain("executive-local-inference.js");
     expect(legacy).toContain("commandHubMode");
     expect(legacy).toContain('"command-hub.js"');
+    expect(legacy).toContain('"manuscript-post-intake-guard.js"');
     expect((commandHub.match(/id: "(?:knowledge|content|business|customers|operations)"/g) || []).length).toBe(5);
     expect(commandHub).toContain("Five operating centers");
     expect(bridge).toContain('const EXECUTION_MODE = "browser-webgpu"');
@@ -67,6 +71,8 @@ describe("Kairos local operational execution", () => {
     expect(bridge).toContain("KairosLocalInference.run");
     expect(compatibility).toContain('const RELEASE = "kairos-local-inference-20260731-5-state-recovery"');
     expect(compatibility).toContain('await import(`./kairos-local-inference-same-origin.js?v=${RELEASE}`)');
+    expect(postIntakeGuard).toContain("duplicate Manuscript Studio module blocked");
+    expect(postIntakeGuard).toContain("success-overlay-restored");
     expect(combined).not.toContain("api.openai.com");
     expect(combined).not.toContain("cdn.jsdelivr.net");
     expect(combined).not.toContain("esm.run");

@@ -7,13 +7,18 @@ on:
       - 'web/kairos-dashboard/index.html'
       - 'web/kairos-dashboard/scripts/legacy-runtime-loader.js'
       - 'web/kairos-dashboard/scripts/manuscript-studio.js'
+      - 'web/kairos-dashboard/scripts/manuscript-post-intake-guard.js'
+      - 'web/kairos-dashboard/scripts/production-workspace-controller.js'
       - 'web/kairos-dashboard/scripts/kairos-state-fetch.js'
       - 'web/kairos-dashboard/scripts/kairos-state-fetch-install.js'
       - 'web/kairos-dashboard/scripts/manuscript-auto-pipeline.js'
       - 'web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js'
       - 'browser-tests/manuscript-studio-direct-chunk.spec.mjs'
+      - 'browser-tests/manuscript-post-intake-stability.spec.mjs'
       - 'cloudflare/mmg-ios/src/kairos-manuscript-source-v1.js'
       - 'cloudflare/mmg-ios/src/kairos-production-registry-v1.js'
+      - 'tests/manuscript-production-flow-guard.contract.test.js'
+      - 'package.json'
       - '.github/workflows/validate-safari-source-recovery.yml'
   push:
     branches: [main]
@@ -21,13 +26,18 @@ on:
       - 'web/kairos-dashboard/index.html'
       - 'web/kairos-dashboard/scripts/legacy-runtime-loader.js'
       - 'web/kairos-dashboard/scripts/manuscript-studio.js'
+      - 'web/kairos-dashboard/scripts/manuscript-post-intake-guard.js'
+      - 'web/kairos-dashboard/scripts/production-workspace-controller.js'
       - 'web/kairos-dashboard/scripts/kairos-state-fetch.js'
       - 'web/kairos-dashboard/scripts/kairos-state-fetch-install.js'
       - 'web/kairos-dashboard/scripts/manuscript-auto-pipeline.js'
       - 'web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js'
       - 'browser-tests/manuscript-studio-direct-chunk.spec.mjs'
+      - 'browser-tests/manuscript-post-intake-stability.spec.mjs'
       - 'cloudflare/mmg-ios/src/kairos-manuscript-source-v1.js'
       - 'cloudflare/mmg-ios/src/kairos-production-registry-v1.js'
+      - 'tests/manuscript-production-flow-guard.contract.test.js'
+      - 'package.json'
       - '.github/workflows/validate-safari-source-recovery.yml'
 
 permissions:
@@ -37,7 +47,7 @@ jobs:
   validate-webkit:
     if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -45,19 +55,23 @@ jobs:
           node-version: '22'
       - name: Install validation dependencies
         run: npm install --ignore-scripts --no-audit --no-fund > /dev/null
-      - name: Validate direct Studio recovery and local-production release wiring
+      - name: Validate direct Studio recovery and guarded local-production release wiring
         run: |
           node --check cloudflare/mmg-ios/src/kairos-manuscript-source-v1.js
           node --check cloudflare/mmg-ios/src/kairos-production-registry-v1.js
           node --check web/kairos-dashboard/scripts/manuscript-studio.js
+          node --check web/kairos-dashboard/scripts/manuscript-post-intake-guard.js
+          node --check web/kairos-dashboard/scripts/production-workspace-controller.js
           node --check web/kairos-dashboard/scripts/legacy-runtime-loader.js
           node --check web/kairos-dashboard/scripts/kairos-state-fetch.js
           node --check web/kairos-dashboard/scripts/kairos-state-fetch-install.js
           node --check web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
           node --check web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js
-          grep -q 'five-center-dashboard-state-check-recovery-20260731-1' web/kairos-dashboard/index.html
-          grep -q 'manuscript-local-production-controller-20260731-5-state-timeout' web/kairos-dashboard/index.html
-          grep -q 'const ASSET_RELEASE = "five-center-dashboard-state-check-recovery-20260731-1"' web/kairos-dashboard/scripts/legacy-runtime-loader.js
+          node --check browser-tests/manuscript-post-intake-stability.spec.mjs
+          node --test tests/manuscript-production-flow-guard.contract.test.js
+          grep -q 'five-center-dashboard-post-intake-stability-20260731-1' web/kairos-dashboard/index.html
+          grep -q 'manuscript-post-intake-stability-20260731-1' web/kairos-dashboard/index.html
+          grep -q 'const ASSET_RELEASE = "five-center-dashboard-post-intake-stability-20260731-1"' web/kairos-dashboard/scripts/legacy-runtime-loader.js
           grep -q 'manuscript-studio-direct-chunks-20260730-4' web/kairos-dashboard/scripts/manuscript-studio.js
           grep -q 'chunkedSourceUpload: true' web/kairos-dashboard/scripts/manuscript-studio.js
           grep -q 'multipartSourceUpload: false' web/kairos-dashboard/scripts/manuscript-studio.js
@@ -66,14 +80,23 @@ jobs:
           ! grep -q 'new FormData' web/kairos-dashboard/scripts/manuscript-studio.js
           grep -q 'requestJSONWithRetry' web/kairos-dashboard/scripts/kairos-state-fetch.js
           grep -q 'KAIROS_STATE_TIMEOUT' web/kairos-dashboard/scripts/kairos-state-fetch.js
+          grep -q 'duplicate Manuscript Studio module blocked' web/kairos-dashboard/scripts/manuscript-post-intake-guard.js
+          grep -q 'success-overlay-restored' web/kairos-dashboard/scripts/manuscript-post-intake-guard.js
+          grep -q 'Manuscript Studio exclusively owns the intake-to-registry transition' web/kairos-dashboard/scripts/production-workspace-controller.js
+          ! sed -n '/async function captureProductionResponse/,/async function upsertWorkspaceRecord/p' web/kairos-dashboard/scripts/production-workspace-controller.js | grep -q '/api/manuscript/intake/advance'
           grep -q 'data-start-local-production' web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
           grep -q 'KairosLocalInference' web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
           ! grep -q 'generation-job' web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
-          node -e 'const fs=require("fs");const s=fs.readFileSync("web/kairos-dashboard/scripts/legacy-runtime-loader.js","utf8");const a=s.match(/const SCRIPT_FILES = \[([\s\S]*?)\];/)?.[1]||"";if(a.includes("manuscript-docx-upload-hotfix.js"))process.exit(1);if(!a.includes("manuscript-studio.js"))process.exit(1);if(!a.includes("manuscript-auto-pipeline.js"))process.exit(1);'
+          node -e 'const fs=require("fs");const s=fs.readFileSync("web/kairos-dashboard/scripts/legacy-runtime-loader.js","utf8");const a=s.match(/const SCRIPT_FILES = \[([\s\S]*?)\];/)?.[1]||"";if(a.includes("manuscript-docx-upload-hotfix.js"))process.exit(1);if(!a.includes("manuscript-post-intake-guard.js"))process.exit(1);if(!a.includes("manuscript-studio.js"))process.exit(1);if(!a.includes("manuscript-auto-pipeline.js"))process.exit(1);if(a.indexOf("manuscript-post-intake-guard.js")>a.indexOf("manuscript-studio.js"))process.exit(1);'
       - name: Install WebKit
         run: npx playwright install --with-deps webkit > /dev/null
-      - name: Test direct Studio stale-draft migration and forced-502 recovery in iPhone WebKit
-        run: npx playwright test browser-tests/manuscript-studio-direct-chunk.spec.mjs --project=webkit
+      - name: Test direct Studio recovery and post-intake stability in iPhone WebKit
+        run: |
+          npx playwright test \
+            browser-tests/manuscript-studio-direct-chunk.spec.mjs \
+            browser-tests/manuscript-post-intake-stability.spec.mjs \
+            --project=webkit \
+            --workers=1
 
   verify-live:
     if: ${{ github.event_name == 'push' }}
@@ -82,7 +105,7 @@ jobs:
     env:
       WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
     steps:
-      - name: Verify deployed direct Studio and local-production runtime
+      - name: Verify deployed guarded Studio and local-production runtime
         shell: bash
         run: |
           set -euo pipefail
@@ -90,6 +113,8 @@ jobs:
             root="${RUNNER_TEMP}/root.html"
             loader="${RUNNER_TEMP}/loader.js"
             studio="${RUNNER_TEMP}/studio.js"
+            post_intake_guard="${RUNNER_TEMP}/post-intake-guard.js"
+            workspace="${RUNNER_TEMP}/workspace.js"
             controller="${RUNNER_TEMP}/controller.js"
             state_fetch="${RUNNER_TEMP}/state-fetch.js"
             bootstrap="${RUNNER_TEMP}/bootstrap.js"
@@ -98,6 +123,8 @@ jobs:
             root_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/?release=${GITHUB_SHA}&attempt=${attempt}" -o "${root}" -w '%{http_code}' || true)"
             loader_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/legacy-runtime-loader.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${loader}" -w '%{http_code}' || true)"
             studio_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-studio.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${studio}" -w '%{http_code}' || true)"
+            guard_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-post-intake-guard.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${post_intake_guard}" -w '%{http_code}' || true)"
+            workspace_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/production-workspace-controller.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${workspace}" -w '%{http_code}' || true)"
             controller_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-auto-pipeline.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${controller}" -w '%{http_code}' || true)"
             state_fetch_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/kairos-state-fetch.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${state_fetch}" -w '%{http_code}' || true)"
             bootstrap_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-production-flow-bootstrap.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${bootstrap}" -w '%{http_code}' || true)"
@@ -106,11 +133,12 @@ jobs:
             active_scripts="$(node -e 'const fs=require("fs");const s=fs.readFileSync(process.argv[1],"utf8");process.stdout.write(s.match(/const SCRIPT_FILES = \[([\s\S]*?)\];/)?.[1]||"")' "${loader}")"
 
             if [ "${root_status}" = "200" ] \
-              && grep -q 'five-center-dashboard-state-check-recovery-20260731-1' "${root}" \
-              && grep -q 'manuscript-local-production-controller-20260731-5-state-timeout' "${root}" \
+              && grep -q 'five-center-dashboard-post-intake-stability-20260731-1' "${root}" \
+              && grep -q 'manuscript-post-intake-stability-20260731-1' "${root}" \
               && [ "${loader_status}" = "200" ] \
-              && grep -q 'const ASSET_RELEASE = "five-center-dashboard-state-check-recovery-20260731-1"' "${loader}" \
+              && grep -q 'const ASSET_RELEASE = "five-center-dashboard-post-intake-stability-20260731-1"' "${loader}" \
               && grep -q 'scripts/${filename}?v=${ASSET_RELEASE}' "${loader}" \
+              && printf '%s' "${active_scripts}" | grep -q 'manuscript-post-intake-guard.js' \
               && printf '%s' "${active_scripts}" | grep -q 'manuscript-studio.js' \
               && printf '%s' "${active_scripts}" | grep -q 'manuscript-auto-pipeline.js' \
               && ! printf '%s' "${active_scripts}" | grep -q 'manuscript-docx-upload-hotfix.js' \
@@ -119,6 +147,11 @@ jobs:
               && grep -q 'chunkedSourceUpload: true' "${studio}" \
               && grep -q 'multipartSourceUpload: false' "${studio}" \
               && ! grep -q 'new FormData' "${studio}" \
+              && [ "${guard_status}" = "200" ] \
+              && grep -q 'duplicate Manuscript Studio module blocked' "${post_intake_guard}" \
+              && grep -q 'success-overlay-restored' "${post_intake_guard}" \
+              && [ "${workspace_status}" = "200" ] \
+              && grep -q 'Manuscript Studio exclusively owns the intake-to-registry transition' "${workspace}" \
               && [ "${controller_status}" = "200" ] \
               && grep -q 'data-start-local-production' "${controller}" \
               && grep -q 'KairosLocalInference' "${controller}" \
@@ -127,20 +160,23 @@ jobs:
               && grep -q 'requestJSONWithRetry' "${state_fetch}" \
               && grep -q 'KAIROS_STATE_TIMEOUT' "${state_fetch}" \
               && [ "${bootstrap_status}" = "200" ] \
-              && grep -q 'five-center-dashboard-state-check-recovery-20260731-1' "${bootstrap}" \
-              && grep -q 'manuscript-local-production-controller-20260731-5-state-timeout' "${bootstrap}" \
+              && grep -q 'five-center-dashboard-post-intake-stability-20260731-1' "${bootstrap}" \
+              && grep -q 'manuscript-post-intake-stability-20260731-1' "${bootstrap}" \
+              && grep -q 'renderBootstrapFailure' "${bootstrap}" \
               && [ "${command_status}" = "200" ] \
               && [ "${parent_count}" = "5" ]; then
-              echo "Safari direct Studio recovery, bounded state checks, local production, and five-center dashboard verified live."
+              echo "Safari post-intake stability, bounded state checks, local production, and five-center dashboard verified live."
               exit 0
             fi
 
             if [ "${attempt}" = "60" ]; then
-              echo "Live Safari direct-Studio and local-production verification failed."
-              printf 'root=%s loader=%s studio=%s controller=%s state_fetch=%s bootstrap=%s command=%s parents=%s\n' "${root_status}" "${loader_status}" "${studio_status}" "${controller_status}" "${state_fetch_status}" "${bootstrap_status}" "${command_status}" "${parent_count}"
+              echo "Live Safari post-intake and local-production verification failed."
+              printf 'root=%s loader=%s studio=%s guard=%s workspace=%s controller=%s state_fetch=%s bootstrap=%s command=%s parents=%s\n' "${root_status}" "${loader_status}" "${studio_status}" "${guard_status}" "${workspace_status}" "${controller_status}" "${state_fetch_status}" "${bootstrap_status}" "${command_status}" "${parent_count}"
               cat "${root}" || true
               cat "${loader}" || true
               cat "${studio}" || true
+              cat "${post_intake_guard}" || true
+              cat "${workspace}" || true
               cat "${controller}" || true
               cat "${state_fetch}" || true
               cat "${bootstrap}" || true

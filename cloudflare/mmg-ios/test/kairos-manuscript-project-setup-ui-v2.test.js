@@ -27,6 +27,10 @@ const manuscriptStudio = readFileSync(
   resolve(process.cwd(), "../../web/kairos-dashboard/scripts/manuscript-studio.js"),
   "utf8",
 );
+const postIntakeGuard = readFileSync(
+  resolve(process.cwd(), "../../web/kairos-dashboard/scripts/manuscript-post-intake-guard.js"),
+  "utf8",
+);
 const productionBootstrap = readFileSync(
   resolve(process.cwd(), "../../web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js"),
   "utf8",
@@ -74,11 +78,12 @@ test("the controller preserves retry state and always clears busy", () => {
   assert.match(source, /Kairos did not respond in time/);
 });
 
-test("the five-center dashboard loads fresh chunked Studio and local production assets", () => {
-  assert.match(index, /kairos-five-center-dashboard-restored-20260730-1/);
-  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-state-check-recovery-20260731-1/);
-  assert.match(index, /manuscript-production-flow-bootstrap\.js\?v=manuscript-local-production-controller-20260731-5-state-timeout/);
-  assert.match(index, /manuscript-auto-pipeline\.js\?v=five-center-dashboard-state-check-recovery-20260731-1/);
+test("the five-center dashboard loads guarded chunked Studio and local production assets", () => {
+  assert.match(index, /kairos-five-center-dashboard-post-intake-20260731-1/);
+  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-post-intake-stability-20260731-1/);
+  assert.match(index, /manuscript-production-flow-bootstrap\.js\?v=manuscript-post-intake-stability-20260731-1/);
+  assert.match(index, /manuscript-auto-pipeline\.js\?v=five-center-dashboard-post-intake-stability-20260731-1/);
+  assert.match(index, /manuscript-post-intake-guard\.js\?v=five-center-dashboard-post-intake-stability-20260731-1/);
   assert.doesNotMatch(index, /executive-local-inference\.js/);
   assert.doesNotMatch(index, /kairos-runtime-loader\.js/);
   assert.doesNotMatch(index, /manuscript-docx-upload-hotfix\.js/);
@@ -86,28 +91,33 @@ test("the five-center dashboard loads fresh chunked Studio and local production 
   assert.doesNotMatch(index, /<script[^>]+manuscript-project-setup\.js/);
   assert.match(runtimeLoader, /import "\.\/legacy-runtime-loader\.js"/);
   assert.doesNotMatch(runtimeLoader, /executive-local-inference\.js/);
-  assert.match(loader, /const BUILD = "kairos-five-center-runtime-loader-20260731-2"/);
+  assert.match(loader, /const BUILD = "kairos-five-center-runtime-loader-20260731-3-post-intake"/);
   assert.match(loader, /const RELEASE = "five-center-dashboard-restored-20260731-2"/);
-  assert.match(loader, /const ASSET_RELEASE = "five-center-dashboard-state-check-recovery-20260731-1"/);
+  assert.match(loader, /const ASSET_RELEASE = "five-center-dashboard-post-intake-stability-20260731-1"/);
   assert.match(loader, /commandHubMode/);
   assert.match(loader, /"command-hub\.js"/);
   assert.match(loader, /"kairos-local-inference\.js"/);
+  assert.match(loader, /"manuscript-post-intake-guard\.js"/);
   assert.match(loader, /"manuscript-studio\.js"/);
   assert.match(loader, /"manuscript-project-setup\.js"/);
   assert.match(loader, /"manuscript-auto-pipeline\.js"/);
   assert.doesNotMatch(activeScripts(), /manuscript-docx-upload-hotfix\.js/);
   assert.match(loader, /if \(commandHubMode\) loadCommandRuntime\(\)/);
   assert.match(localInference, /kairos-local-inference-same-origin\.js/);
-  assert.match(productionBootstrap, /five-center-dashboard-state-check-recovery-20260731-1/);
-  assert.match(productionBootstrap, /manuscript-local-production-controller-20260731-5-state-timeout/);
+  assert.match(postIntakeGuard, /duplicate Manuscript Studio module blocked/);
+  assert.match(postIntakeGuard, /success-overlay-restored/);
+  assert.match(productionBootstrap, /five-center-dashboard-post-intake-stability-20260731-1/);
+  assert.match(productionBootstrap, /manuscript-post-intake-stability-20260731-1/);
   assert.match(productionController, /KairosLocalInference/);
   assert.match(productionController, /data-start-local-production/);
   assert.doesNotMatch(productionController, /generation-job|Start Production Job/);
+  const guardIndex = activeScripts().indexOf('"manuscript-post-intake-guard.js"');
   const studioIndex = activeScripts().indexOf('"manuscript-studio.js"');
   const setupIndex = activeScripts().indexOf('"manuscript-project-setup.js"');
   const inferenceIndex = activeScripts().indexOf('"kairos-local-inference.js"');
   const productionIndex = activeScripts().indexOf('"manuscript-auto-pipeline.js"');
-  assert.ok(studioIndex > -1);
+  assert.ok(guardIndex > -1);
+  assert.ok(studioIndex > guardIndex);
   assert.ok(setupIndex > studioIndex);
   assert.ok(inferenceIndex > setupIndex);
   assert.ok(productionIndex > inferenceIndex);

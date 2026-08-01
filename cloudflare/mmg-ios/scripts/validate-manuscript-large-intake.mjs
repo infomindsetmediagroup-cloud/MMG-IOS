@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
-const BUILD = "kairos-manuscript-large-intake-validator-20260731-12-state-recovery";
+const BUILD = "kairos-manuscript-large-intake-validator-20260731-13-post-intake";
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
 const repoRoot = join(root, "..", "..");
@@ -17,6 +17,8 @@ const loaderPath = join(repoRoot, "web", "kairos-dashboard", "scripts", "legacy-
 const localInferencePath = join(repoRoot, "web", "kairos-dashboard", "scripts", "kairos-local-inference.js");
 const productionBootstrapPath = join(repoRoot, "web", "kairos-dashboard", "scripts", "manuscript-production-flow-bootstrap.js");
 const productionControllerPath = join(repoRoot, "web", "kairos-dashboard", "scripts", "manuscript-auto-pipeline.js");
+const postIntakeGuardPath = join(repoRoot, "web", "kairos-dashboard", "scripts", "manuscript-post-intake-guard.js");
+const productionWorkspacePath = join(repoRoot, "web", "kairos-dashboard", "scripts", "production-workspace-controller.js");
 
 const backend = readFileSync(backendPath, "utf8");
 const frontend = readFileSync(frontendPath, "utf8");
@@ -27,7 +29,11 @@ const loader = readFileSync(loaderPath, "utf8");
 const localInference = readFileSync(localInferencePath, "utf8");
 const productionBootstrap = readFileSync(productionBootstrapPath, "utf8");
 const productionController = readFileSync(productionControllerPath, "utf8");
+const postIntakeGuard = readFileSync(postIntakeGuardPath, "utf8");
+const productionWorkspace = readFileSync(productionWorkspacePath, "utf8");
 const activeScripts = loader.match(/const SCRIPT_FILES = \[([\s\S]*?)\];/)?.[1] || "";
+const responseCapture = productionWorkspace.match(/async function captureProductionResponse[\s\S]*?async function upsertWorkspaceRecord/)?.[0] || "";
+const workspaceObserver = productionWorkspace.match(/const observer = new MutationObserver[\s\S]*?observer\.observe/)?.[0] || "";
 
 assert.ok(backend.includes('const MAX_CHARS = 600000'), "Backend manuscript intake is not aligned to 600,000 characters.");
 assert.ok(backend.includes('manuscript-studio-v5-large-intake'), "Backend large-intake capability version is missing.");
@@ -45,11 +51,11 @@ assert.ok(frontend.includes('sourcePath(projectId, "session")'), "The direct Stu
 assert.ok(frontend.includes('sourcePath(projectId, "commit")'), "The direct Studio chunked source commit request is missing.");
 assert.ok(frontend.includes('uploadChunkWithRetry'), "The direct Studio chunk retry controller is missing.");
 assert.ok(!frontend.includes('new FormData'), "The active Manuscript Studio source path must not use multipart FormData.");
-assert.ok(index.includes('kairos-five-center-dashboard-restored-20260730-1'), "The restored five-center dashboard build marker is missing.");
+assert.ok(index.includes('kairos-five-center-dashboard-post-intake-20260731-1'), "The post-intake dashboard build marker is missing.");
 assert.ok(index.includes('safari-manuscript-intake-compat.js?v=safari-native-docx-20260730-1'), "The native Safari DOCX compatibility layer is missing.");
-assert.ok(index.includes('legacy-runtime-loader.js?v=five-center-dashboard-state-check-recovery-20260731-1'), "The state-recovery command runtime loader marker is missing.");
-assert.ok(index.includes('manuscript-production-flow-bootstrap.js?v=manuscript-local-production-controller-20260731-5-state-timeout'), "The state-recovery production bootstrap marker is missing.");
-assert.ok(index.includes('five-center-dashboard-direct-studio-chunks-20260730-4'), "The direct-Studio lineage marker is missing.");
+assert.ok(index.includes('legacy-runtime-loader.js?v=five-center-dashboard-post-intake-stability-20260731-1'), "The post-intake command runtime loader marker is missing.");
+assert.ok(index.includes('manuscript-production-flow-bootstrap.js?v=manuscript-post-intake-stability-20260731-1'), "The post-intake production bootstrap marker is missing.");
+assert.ok(index.includes('manuscript-post-intake-guard.js?v=five-center-dashboard-post-intake-stability-20260731-1'), "The post-intake guard marker is missing.");
 assert.ok(!index.includes('kairos-runtime-loader.js'), "The compatibility loader must not replace the five-center homepage.");
 assert.ok(!index.includes('executive-local-inference.js'), "The local-inference panel must not mount globally on the homepage.");
 assert.ok(!index.includes('manuscript-docx-upload-hotfix.js'), "The retired DOCX sidecar must not execute directly from the homepage HTML.");
@@ -64,22 +70,32 @@ assert.ok(safari.includes('word/document.xml'), "The native DOCX document-part r
 assert.ok(!safari.includes('cdn.jsdelivr.net'), "Safari DOCX extraction must not depend on jsDelivr.");
 assert.ok(!safari.includes('esm.sh'), "Safari DOCX extraction must not depend on esm.sh.");
 assert.ok(safari.includes('COMMAND_HUB_MODE'), "The five-center default route is missing.");
-assert.ok(loader.includes('const BUILD = "kairos-five-center-runtime-loader-20260731-2"'), "The fresh command runtime build is missing.");
-assert.ok(loader.includes('const RELEASE = "five-center-dashboard-restored-20260731-2"'), "The fresh command runtime release is missing.");
-assert.ok(loader.includes('const ASSET_RELEASE = "five-center-dashboard-state-check-recovery-20260731-1"'), "The state-recovery asset release is missing.");
+assert.ok(loader.includes('const BUILD = "kairos-five-center-runtime-loader-20260731-3-post-intake"'), "The post-intake command runtime build is missing.");
+assert.ok(loader.includes('const RELEASE = "five-center-dashboard-restored-20260731-2"'), "The command runtime compatibility release is missing.");
+assert.ok(loader.includes('const ASSET_RELEASE = "five-center-dashboard-post-intake-stability-20260731-1"'), "The post-intake asset release is missing.");
 assert.ok(!loader.includes('const ASSET_RELEASE = "five-center-dashboard-direct-studio-chunks-20260730-4"'), "The retired command asset cache key remains active.");
 assert.ok(loader.includes('commandHubMode'), "The command hub default-mode contract is missing.");
 assert.ok(activeScripts.includes('"command-hub.js"'), "The five-center Command Hub is missing from the runtime.");
 assert.ok(activeScripts.includes('"kairos-local-inference.js"'), "Local manuscript inference is missing from the governed runtime.");
+assert.ok(activeScripts.includes('"manuscript-post-intake-guard.js"'), "The post-intake stability guard is missing from the governed runtime.");
 assert.ok(activeScripts.includes('"manuscript-studio.js"'), "Manuscript Studio is missing from the governed runtime.");
 assert.ok(activeScripts.includes('"manuscript-project-setup.js"'), "Manuscript project setup is missing from the governed runtime.");
 assert.ok(activeScripts.includes('"manuscript-auto-pipeline.js"'), "The canonical manuscript production controller is missing from the governed runtime.");
 assert.ok(!activeScripts.includes('manuscript-docx-upload-hotfix.js'), "The retired DOCX sidecar remains active in the governed runtime.");
+assert.ok(activeScripts.indexOf('"manuscript-post-intake-guard.js"') < activeScripts.indexOf('"manuscript-studio.js"'), "The post-intake guard must load before Manuscript Studio.");
 assert.ok(activeScripts.indexOf('"manuscript-studio.js"') < activeScripts.indexOf('"manuscript-project-setup.js"'), "Manuscript Studio must load before project setup.");
 assert.ok(activeScripts.indexOf('"kairos-local-inference.js"') < activeScripts.indexOf('"manuscript-auto-pipeline.js"'), "Local inference must load before the production controller.");
 assert.ok(localInference.includes('kairos-local-inference-same-origin.js'), "The same-origin local manuscript inference module is missing.");
-assert.ok(productionBootstrap.includes('five-center-dashboard-state-check-recovery-20260731-1'), "The production bootstrap does not use the state-recovery command asset release.");
-assert.ok(productionBootstrap.includes('manuscript-local-production-controller-20260731-5-state-timeout'), "The production bootstrap does not use the state-recovery controller release.");
+assert.ok(productionBootstrap.includes('five-center-dashboard-post-intake-stability-20260731-1'), "The production bootstrap does not use the post-intake command asset release.");
+assert.ok(productionBootstrap.includes('manuscript-post-intake-stability-20260731-1'), "The production bootstrap does not use the post-intake controller release.");
+assert.ok(productionBootstrap.includes('BOOT_TIMEOUT_MS = 20_000'), "The production bootstrap deadline is missing.");
+assert.ok(productionBootstrap.includes('renderBootstrapFailure'), "The production bootstrap recovery UI is missing.");
+assert.ok(postIntakeGuard.includes('duplicate Manuscript Studio module blocked'), "Duplicate Manuscript Studio protection is missing.");
+assert.ok(postIntakeGuard.includes('success-overlay-restored'), "Post-intake success-overlay recovery is missing.");
+assert.ok(productionWorkspace.includes('Manuscript Studio exclusively owns the intake-to-registry transition'), "Single intake registry ownership is not declared.");
+assert.ok(!responseCapture.includes('url.includes("/api/manuscript/intake/advance")'), "The production fetch interceptor still owns a duplicate intake registry write.");
+assert.ok(workspaceObserver.includes('dispatchWorkspaceVisibility'), "The workspace observer is not visibility-scoped.");
+assert.ok(!workspaceObserver.includes('kairos:production:state-changed'), "The workspace observer still converts DOM mutations into durable state changes.");
 assert.ok(productionController.includes('KairosLocalInference'), "The local production controller does not invoke local inference.");
 assert.ok(productionController.includes('data-start-local-production'), "The local production action is missing.");
 assert.ok(!productionController.includes('generation-job'), "The retired backend generation route remains in the active controller.");
@@ -87,7 +103,18 @@ assert.ok(!productionController.includes('Start Production Job'), "The retired b
 assert.ok(!backend.includes('180000'), "The stale 180,000-character backend limit remains.");
 assert.ok(!frontend.includes('180000'), "The stale 180,000-character browser limit remains.");
 
-for (const file of [backendPath, frontendPath, safariPath, runtimeLoaderPath, loaderPath, localInferencePath, productionBootstrapPath, productionControllerPath]) {
+for (const file of [
+  backendPath,
+  frontendPath,
+  safariPath,
+  runtimeLoaderPath,
+  loaderPath,
+  localInferencePath,
+  productionBootstrapPath,
+  productionControllerPath,
+  postIntakeGuardPath,
+  productionWorkspacePath,
+]) {
   const checked = spawnSync(process.execPath, ["--check", file], { encoding: "utf8" });
   assert.equal(checked.status, 0, `${file} failed syntax validation:\n${checked.stderr || checked.stdout}`);
 }
@@ -152,6 +179,11 @@ console.log(JSON.stringify({
     staleLimitRemoved: true,
     browserCacheBusted: true,
     fiveCenterDashboardRestored: true,
+    postIntakeRuntimeGuarded: true,
+    duplicateIntakeRegistryWriteRemoved: true,
+    mutationStateFeedbackRemoved: true,
+    successOverlayRecoveryEnabled: true,
+    bootstrapFailureRecoveryEnabled: true,
     globalInferenceOverlayDisabled: true,
     localInferenceRetained: true,
     localProductionControllerActive: true,

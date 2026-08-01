@@ -25,6 +25,10 @@ const productionBootstrapSource = readFileSync(
   new URL("../web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js", import.meta.url),
   "utf8",
 );
+const postIntakeGuardSource = readFileSync(
+  new URL("../web/kairos-dashboard/scripts/manuscript-post-intake-guard.js", import.meta.url),
+  "utf8",
+);
 
 const PROJECT_ID = "manuscript-studio-12345678";
 const SETUP_PATH = `/api/production-registry/manuscripts/${PROJECT_ID}/setup`;
@@ -198,12 +202,14 @@ test("Command Center manuscript event routes through the production workspace co
   await expect.poll(() => page.evaluate(() => window.__openedWorkspace)).toBe("manuscript-studio");
 });
 
-test("dashboard keeps production controllers behind the restored five-center command runtime", async () => {
-  expect(indexSource).toMatch(/<meta name="mmg-build" content="kairos-five-center-dashboard-restored-[^"]+">/);
-  expect(indexSource).toMatch(/<meta name="mmg-command-runtime-target" content="\.\/scripts\/legacy-runtime-loader\.js\?v=five-center-dashboard-state-check-recovery-[^"]+">/);
-  expect(indexSource).toMatch(/manuscript-production-flow-bootstrap\.js\?v=manuscript-local-production-controller-20260731-5-state-timeout/);
-  expect(indexSource).toMatch(/manuscript-auto-pipeline\.js\?v=five-center-dashboard-state-check-recovery-20260731-1/);
+test("dashboard keeps production controllers behind the guarded five-center command runtime", async () => {
+  expect(indexSource).toMatch(/<meta name="mmg-build" content="kairos-five-center-dashboard-post-intake-[^"]+">/);
+  expect(indexSource).toMatch(/<meta name="mmg-command-runtime-target" content="\.\/scripts\/legacy-runtime-loader\.js\?v=five-center-dashboard-post-intake-stability-[^"]+">/);
+  expect(indexSource).toMatch(/manuscript-production-flow-bootstrap\.js\?v=manuscript-post-intake-stability-20260731-1/);
+  expect(indexSource).toMatch(/manuscript-auto-pipeline\.js\?v=five-center-dashboard-post-intake-stability-20260731-1/);
+  expect(indexSource).toMatch(/manuscript-post-intake-guard\.js\?v=five-center-dashboard-post-intake-stability-20260731-1/);
   expect(indexSource).toMatch(/mmg-production-controller-target/);
+  expect(indexSource).toMatch(/mmg-post-intake-guard-target/);
   expect(indexSource).toMatch(/mmg-state-fetch-target/);
   expect((indexSource.match(/<script type="module"/g) || [])).toHaveLength(2);
   expect(indexSource).not.toContain("executive-local-inference.js");
@@ -213,15 +219,21 @@ test("dashboard keeps production controllers behind the restored five-center com
   expect(runtimeLoaderSource).not.toContain("executive-local-inference.js");
   expect(loaderSource).toContain("commandHubMode");
   expect(loaderSource).toContain('"command-hub.js"');
-  expect(loaderSource).toContain('const ASSET_RELEASE = "five-center-dashboard-state-check-recovery-20260731-1"');
-  expect(productionBootstrapSource).toContain("manuscript-local-production-controller-20260731-5-state-timeout");
-  expect(productionBootstrapSource).toContain("five-center-dashboard-state-check-recovery-20260731-1");
+  expect(loaderSource).toContain('const ASSET_RELEASE = "five-center-dashboard-post-intake-stability-20260731-1"');
+  expect(loaderSource).toContain('"manuscript-post-intake-guard.js"');
+  expect(postIntakeGuardSource).toContain("duplicate Manuscript Studio module blocked");
+  expect(postIntakeGuardSource).toContain("success-overlay-restored");
+  expect(productionBootstrapSource).toContain("manuscript-post-intake-stability-20260731-1");
+  expect(productionBootstrapSource).toContain("five-center-dashboard-post-intake-stability-20260731-1");
   expect(productionBootstrapSource).toContain("kairos-state-fetch-install.js?v=${RELEASE}");
+  expect(productionBootstrapSource).toContain("BOOT_TIMEOUT_MS = 20_000");
+  expect(productionBootstrapSource).toContain("renderBootstrapFailure");
   expect(productionBootstrapSource).not.toContain("import(`./manuscript-auto-pipeline.js");
   expect(productionBootstrapSource).toContain('singleControllerOwner: "legacy-runtime-loader"');
 
   const requiredScripts = [
     "command-center-governance.js",
+    "manuscript-post-intake-guard.js",
     "manuscript-studio.js",
     "manuscript-project-setup.js",
     "manuscript-editorial-workbench.js",
@@ -236,9 +248,13 @@ test("dashboard keeps production controllers behind the restored five-center com
     expect(matches, `${filename} must be declared exactly once in the governed command runtime`).toHaveLength(1);
   }
 
+  const guardIndex = loaderSource.indexOf('"manuscript-post-intake-guard.js"');
+  const studioIndex = loaderSource.indexOf('"manuscript-studio.js"');
   const inferenceIndex = loaderSource.indexOf('"kairos-local-inference.js"');
   const pipelineIndex = loaderSource.indexOf('"manuscript-auto-pipeline.js"');
-  expect(inferenceIndex).toBeGreaterThan(-1);
+  expect(guardIndex).toBeGreaterThan(-1);
+  expect(studioIndex).toBeGreaterThan(guardIndex);
+  expect(inferenceIndex).toBeGreaterThan(studioIndex);
   expect(pipelineIndex).toBeGreaterThan(inferenceIndex);
 
   expect(loaderSource).toContain('"production-workspace-controller.js"');

@@ -1,14 +1,21 @@
-const BUILD = "kairos-production-workspace-20260713-3";
+const BUILD = "kairos-production-workspace-20260731-4-post-intake";
 const ACTIVE_KEY = "kairos.production.active-workspace";
 const REGISTRY_CACHE_KEY = "kairos.production.registry-cache";
 const PRODUCT_KEYS = ["kairos.complete-product.job", "kairos.product.publication", "kairos.product.media", "kairos.product.launch"];
 const originalFetch = window.fetch.bind(window);
 let durableProjects = [];
 let registryReady = false;
+let lastWorkspaceVisibility = "";
+let started = false;
 
 window.fetch = async (...args) => {
   const response = await originalFetch(...args);
-  captureProductionResponse(args[0], response.clone()).catch(() => {});
+  captureProductionResponse(args[0], response.clone()).catch(error => {
+    console.warn("[kairos-production-workspace] response capture failed", {
+      build: BUILD,
+      message: error?.message || String(error),
+    });
+  });
   return response;
 };
 
@@ -26,7 +33,10 @@ window.addEventListener("kairos:production:resume", event => {
   resumeProject(project).catch(error => dispatchError(project.projectType, error?.message || "Project recovery failed."));
 });
 
-window.addEventListener("kairos:production:close", () => sessionStorage.removeItem(ACTIVE_KEY));
+window.addEventListener("kairos:production:close", () => {
+  sessionStorage.removeItem(ACTIVE_KEY);
+  dispatchWorkspaceVisibility("explicit-close");
+});
 window.addEventListener("storage", event => { if (event.key === ACTIVE_KEY && event.newValue) restoreActiveWorkspace(); });
 
 function openWorkspace(workspace) {
@@ -52,7 +62,7 @@ async function resumeProject(project) {
     window.dispatchEvent(new CustomEvent("kairos:manuscript:restore", { detail: { project, source: source.source, manuscript: source.manuscript } }));
   }
   openWorkspace(project.projectType === "manuscript-studio" ? "manuscript-studio" : "complete-product");
-  window.dispatchEvent(new CustomEvent("kairos:production:state-changed", { detail: productionSummary() }));
+  dispatchStateChanged("project-restored", project.projectId);
 }
 
 function restoreActiveWorkspace() {
@@ -77,13 +87,11 @@ async function captureProductionResponse(input, response) {
     const job = await response.json();
     if (job?.projectId) await upsertProject({ projectId: `product-${job.projectId}`, projectType: "complete-product", title: job.title || "Complete Product", status: job.status || "active", stage: job.stage || "production", progress: job.overallProgress || 0, activeWorkspace: "complete-product", sourceProjectId: job.projectId, summary: job.stageLabel || "Production project updated.", nextAction: nextActionForJob(job), checkpoints: checkpointsForJob(job) });
   }
-  if (url.includes("/api/production-registry/manuscripts/") && url.includes("/source")) await refreshRegistry();
-  if (url.includes("/api/manuscript/intake/advance")) {
-    const record = await response.json();
-    const active = readJSON(ACTIVE_KEY);
-    const id = active?.projectId || `manuscript-${record.projectId || record.intakeId || crypto.randomUUID()}`;
-    await upsertProject({ projectId: id, projectType: "manuscript-studio", title: record.title || record.source?.filename || "Manuscript Project", status: record.status || "production-intake-created", stage: record.stage || "production-intake", progress: record.overallProgress || 20, activeWorkspace: "manuscript-studio", sourceProjectId: record.projectId || null, summary: "Manuscript intake was validated and advanced into production.", nextAction: record.nextAction || "Continue the manuscript production workflow.", checkpoints: [{ id: "intake", label: "Source intake validated", status: "completed", recordedAt: new Date().toISOString() }] });
-  }
+  if (url.includes("/api/production-registry/manuscripts/") && url.includes("/source")) await refreshRegistry("manuscript-source-updated");
+
+  // Manuscript Studio exclusively owns the intake-to-registry transition.
+  // The fetch interceptor must not issue a second project upsert or registry refresh.
+
   if (url.includes("/api/shopify/product-publication/") || url.includes("/api/shopify/product-media/") || url.includes("/api/shopify/product-launch/")) {
     const record = await response.json();
     const sourceId = record.projectId || record.source?.projectId || readJSON("kairos.complete-product.job")?.projectId;
@@ -103,11 +111,11 @@ async function upsertProject(project) {
   const response = await originalFetch("/api/production-registry/projects", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json", "X-MMG-Client-Build": BUILD }, body: JSON.stringify(project) });
   const body = await response.json();
   if (!response.ok) throw new Error(body?.error?.message || "Production project could not be saved.");
-  await refreshRegistry();
+  await refreshRegistry("project-upserted", project.projectId);
   return body.project;
 }
 
-async function refreshRegistry() {
+async function refreshRegistry(reason = "registry-refreshed", projectId = null) {
   try {
     const response = await originalFetch("/api/production-registry/projects", { credentials: "include", cache: "no-store" });
     const body = await response.json();
@@ -119,7 +127,36 @@ async function refreshRegistry() {
     durableProjects = readJSON(REGISTRY_CACHE_KEY) || [];
     registryReady = false;
   }
-  window.dispatchEvent(new CustomEvent("kairos:production:state-changed", { detail: productionSummary() }));
+  dispatchStateChanged(reason, projectId);
+}
+
+function dispatchStateChanged(reason, projectId = null) {
+  const summary = productionSummary();
+  window.dispatchEvent(new CustomEvent("kairos:production:state-changed", {
+    detail: {
+      ...summary,
+      reason,
+      projectId: projectId || summary.activeProjectId || null,
+    },
+  }));
+}
+
+function dispatchWorkspaceVisibility(reason = "overlay-transition") {
+  const active = readJSON(ACTIVE_KEY);
+  const workspace = active?.workspace || "";
+  const projectId = active?.projectId || "";
+  const selector = workspace === "complete-product"
+    ? "#complete-product-overlay"
+    : workspace === "manuscript-studio"
+      ? "#manuscript-studio-overlay"
+      : "";
+  const open = Boolean(selector && document.querySelector(selector));
+  const signature = `${workspace}:${projectId}:${open}`;
+  if (signature === lastWorkspaceVisibility) return;
+  lastWorkspaceVisibility = signature;
+  window.dispatchEvent(new CustomEvent("kairos:production:workspace-visibility", {
+    detail: { workspace, projectId, open, reason, build: BUILD },
+  }));
 }
 
 function productionSummary() {
@@ -133,19 +170,22 @@ function productionSummary() {
 window.KairosProductionWorkspace = Object.freeze({
   open(workspace) { window.dispatchEvent(new CustomEvent("kairos:production:open", { detail: { workspace } })); },
   resume(project) { window.dispatchEvent(new CustomEvent("kairos:production:resume", { detail: { project } })); },
-  async archive(projectId) { await originalFetch(`/api/production-registry/projects/${encodeURIComponent(projectId)}`, { method: "DELETE", credentials: "include" }); await refreshRegistry(); },
-  refresh: refreshRegistry,
-  clear() { sessionStorage.removeItem(ACTIVE_KEY); PRODUCT_KEYS.forEach(key => sessionStorage.removeItem(key)); sessionStorage.removeItem("mmg.manuscript.review"); sessionStorage.removeItem("mmg.manuscript.approved"); window.dispatchEvent(new CustomEvent("kairos:production:state-changed", { detail: productionSummary() })); },
+  async archive(projectId) { await originalFetch(`/api/production-registry/projects/${encodeURIComponent(projectId)}`, { method: "DELETE", credentials: "include" }); await refreshRegistry("project-archived", projectId); },
+  refresh(reason = "manual-refresh") { return refreshRegistry(reason); },
+  clear() { sessionStorage.removeItem(ACTIVE_KEY); PRODUCT_KEYS.forEach(key => sessionStorage.removeItem(key)); sessionStorage.removeItem("mmg.manuscript.review"); sessionStorage.removeItem("mmg.manuscript.approved"); dispatchStateChanged("workspace-cleared"); },
   summary: productionSummary,
 });
 
-const observer = new MutationObserver(() => {
-  const active = readJSON(ACTIVE_KEY);
-  if (!active?.workspace) return;
-  const isOpen = active.workspace === "complete-product" ? Boolean(document.querySelector("#complete-product-overlay")) : Boolean(document.querySelector("#manuscript-studio-overlay"));
-  if (isOpen) window.dispatchEvent(new CustomEvent("kairos:production:state-changed", { detail: productionSummary() }));
-});
+const observer = new MutationObserver(() => dispatchWorkspaceVisibility());
 observer.observe(document.documentElement, { childList: true, subtree: true });
+
+function start() {
+  if (started) return;
+  started = true;
+  restoreActiveWorkspace();
+  refreshRegistry("runtime-started");
+  dispatchWorkspaceVisibility("runtime-started");
+}
 
 function nextActionForJob(job) { if (job.status === "completed") return "Review the completed package and continue to Shopify handoff."; if (job.status === "awaiting-cover-approval") return "Review and approve the cover proof."; if (job.status === "needs-attention") return "Resolve the reported production issue."; return job.stageLabel || "Resume production."; }
 function checkpointsForJob(job) { return (job.stages || []).filter(item => item.status === "completed").map(item => ({ id: item.id || item.stage || item.label, label: item.label || item.stage || "Production stage", status: "completed", recordedAt: job.updatedAt || new Date().toISOString() })).slice(-20); }
@@ -155,5 +195,6 @@ function stageLabel(stage) { return stage === "storefront-release" ? "Storefront
 function dispatchError(workspace, message) { window.dispatchEvent(new CustomEvent("kairos:production:error", { detail: { workspace, message } })); }
 function readJSON(key) { try { return JSON.parse(sessionStorage.getItem(key) || "null"); } catch { return null; } }
 
-window.addEventListener("DOMContentLoaded", () => { restoreActiveWorkspace(); refreshRegistry(); }, { once: true });
-setTimeout(() => { restoreActiveWorkspace(); refreshRegistry(); }, 300);
+if (document.readyState === "loading") window.addEventListener("DOMContentLoaded", start, { once: true });
+else start();
+setTimeout(start, 300);
