@@ -11,8 +11,8 @@
   <meta name="mmg-command-runtime-target" content="./scripts/legacy-runtime-loader.js?v=five-center-dashboard-post-intake-stability-20260731-1">
   <meta name="mmg-production-controller-target" content="./scripts/manuscript-auto-pipeline.js?v=five-center-dashboard-post-intake-stability-20260731-1">
   <meta name="mmg-post-intake-guard-target" content="./scripts/manuscript-post-intake-guard.js?v=five-center-dashboard-post-intake-stability-20260731-1">
-  <meta name="mmg-direct-open-target" content="./scripts/manuscript-direct-open-controller.js?v=kairos-dedicated-manuscript-route-20260801-1">
-  <meta name="mmg-dedicated-manuscript-route" content="./manuscript.html">
+  <meta name="mmg-direct-open-target" content="./scripts/manuscript-direct-open-controller.js?v=kairos-dedicated-manuscript-route-20260801-2">
+  <meta name="mmg-dedicated-manuscript-route" content="./manuscript">
   <meta name="mmg-state-fetch-target" content="./scripts/kairos-state-fetch.js?v=kairos-state-fetch-20260731-2-buffered">
   <meta name="mmg-previous-dashboard-build" content="kairos-five-center-dashboard-restored-20260730-1">
   <meta name="mmg-previous-production-flow" content="manuscript-local-production-controller-20260731-5-state-timeout">
@@ -25,7 +25,7 @@
       const current = new URL(location.href);
       if (current.searchParams.get("open") !== "manuscript") return;
 
-      const target = new URL("./manuscript.html", current);
+      const target = new URL("./manuscript", current);
       target.search = current.search;
       target.searchParams.delete("mode");
       target.searchParams.set("open", "manuscript");
