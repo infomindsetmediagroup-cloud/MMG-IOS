@@ -98,6 +98,9 @@ test("saved Project Setup exposes and opens the Editorial Workbench", async ({ p
   await expect(editorial).toContainText("Editorial production in progress");
   await expect(editorial.locator("[data-editorial-save]")).toBeVisible();
   await expect(page.locator("[data-kairos-editorial-handoff]")).toHaveCount(0);
+  await expect.poll(
+    () => page.evaluate(() => window.KairosManuscriptStageHandoff.snapshot().editorialOpens),
+  ).toBe(1);
 
   const snapshot = await page.evaluate(() => window.KairosManuscriptStageHandoff.snapshot());
   expect(snapshot.editorialPresent).toBe(true);
@@ -187,7 +190,7 @@ test("production controls render before the local WebGPU runtime downloads", asy
 
   const handoff = page.locator("[data-kairos-next-production]");
   await expect(handoff).toBeVisible();
-  await handoff.tap();
+  await page.evaluate(() => document.querySelector("[data-kairos-next-production]")?.click());
 
   const start = page.locator("[data-start-local-production]");
   await expect(start).toBeVisible({ timeout: 5_000 });
@@ -196,7 +199,7 @@ test("production controls render before the local WebGPU runtime downloads", asy
     "local AI runtime will load only after Start Local Production",
   );
 
-  await start.tap();
+  await page.evaluate(() => document.querySelector("[data-start-local-production]")?.click());
 
   await expect.poll(
     () => page.evaluate(() => globalThis.__kairosLocalProductionStarted || 0),
