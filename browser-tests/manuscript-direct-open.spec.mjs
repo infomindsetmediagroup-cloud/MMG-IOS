@@ -9,6 +9,10 @@ const manuscriptPageSource = readFileSync(
   new URL("../web/kairos-dashboard/manuscript.html", import.meta.url),
   "utf8",
 );
+const registryBridgeSource = readFileSync(
+  new URL("../web/kairos-dashboard/scripts/manuscript-registry-bridge.js", import.meta.url),
+  "utf8",
+);
 const directOpenSource = readFileSync(
   new URL("../web/kairos-dashboard/scripts/manuscript-direct-open-controller.js", import.meta.url),
   "utf8",
@@ -51,6 +55,11 @@ async function installSuccessRoutes(page, { delayStudioMs = 100 } = {}) {
 
     if (url.pathname === "/styles/manuscript-studio.css") {
       await route.fulfill({ status: 200, contentType: "text/css", body: studioCSS });
+      return;
+    }
+
+    if (url.pathname === "/scripts/manuscript-registry-bridge.js") {
+      await route.fulfill({ status: 200, contentType: "text/javascript", body: registryBridgeSource });
       return;
     }
 
@@ -133,6 +142,50 @@ test("legacy advanced manuscript URL redirects before the command runtime and op
   await expect.poll(() => projectWrites.length).toBe(1);
 });
 
+test("canonical manuscript route forces direct open and converts registry PATCH to canonical upsert", async ({ page }) => {
+  const projectWrites = await installSuccessRoutes(page, { delayStudioMs: 0 });
+
+  await page.goto("https://kairos.test/manuscript");
+
+  await expect.poll(() => new URL(page.url()).searchParams.get("open")).toBe("manuscript");
+  await expect(page.locator("#manuscript-studio-overlay")).toBeVisible({ timeout: 8_000 });
+
+  const result = await page.evaluate(async () => {
+    const projectId = "manuscript-studio-registry-bridge-test";
+    const response = await fetch(`/api/production-registry/projects/${projectId}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Registry Bridge Test",
+        status: "production_intake",
+        stage: "project_setup",
+        progress: 25,
+        sourceProjectId: "PUB-registry-bridge-test",
+        summary: "Intake accepted.",
+        nextAction: "Complete project setup.",
+      }),
+    });
+    return {
+      status: response.status,
+      body: await response.json(),
+      bridge: window.KairosManuscriptRegistryBridge.snapshot(),
+    };
+  });
+
+  expect(result.status).toBe(201);
+  expect(result.bridge.pending).toBe(false);
+  await expect.poll(() => projectWrites.length).toBe(2);
+  expect(projectWrites.at(-1)).toMatchObject({
+    projectId: "manuscript-studio-registry-bridge-test",
+    projectType: "manuscript-studio",
+    title: "Registry Bridge Test",
+    status: "production_intake",
+    stage: "project_setup",
+    sourceProjectId: "PUB-registry-bridge-test",
+  });
+});
+
 test("dedicated route restores an unintentionally removed Studio overlay", async ({ page }) => {
   await installSuccessRoutes(page, { delayStudioMs: 0 });
 
@@ -166,6 +219,11 @@ test("dedicated route displays body-owned recovery controls when Studio cannot l
 
     if (url.pathname === "/styles/manuscript-studio.css") {
       await route.fulfill({ status: 200, contentType: "text/css", body: studioCSS });
+      return;
+    }
+
+    if (url.pathname === "/scripts/manuscript-registry-bridge.js") {
+      await route.fulfill({ status: 200, contentType: "text/javascript", body: registryBridgeSource });
       return;
     }
 
