@@ -1,5 +1,5 @@
 const BUILD =
-  "kairos-manuscript-production-flow-bootstrap-20260731-6-post-intake";
+  "kairos-manuscript-production-flow-bootstrap-20260801-1-direct-open";
 const RELEASE =
   "manuscript-post-intake-stability-20260731-1";
 const COMMAND_RUNTIME_RELEASE =
@@ -10,6 +10,13 @@ try {
   await importWithDeadline(
     `./kairos-state-fetch-install.js?v=${RELEASE}`,
     "bounded state transport",
+  );
+
+  // Install the direct-route owner before the large command runtime. It waits
+  // for Manuscript Studio to mount and prevents a blank advanced-mode shell.
+  await importWithDeadline(
+    `./manuscript-direct-open-controller.js?v=${RELEASE}`,
+    "Manuscript Studio direct-open recovery",
   );
 
   await importWithDeadline(
@@ -39,6 +46,7 @@ try {
     controllerBuild: window.KairosManuscriptAutoPipelineController?.build || null,
     executionMode: window.KairosManuscriptAutoPipelineController?.executionMode || null,
     boundedStateTransport: true,
+    directOpenController: window.KairosManuscriptDirectOpen?.build || null,
     postIntakeGuard: window.KairosManuscriptPostIntakeGuard?.build || null,
     singleControllerOwner: "legacy-runtime-loader",
     ready: true,

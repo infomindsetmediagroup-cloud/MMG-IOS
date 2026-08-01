@@ -5,6 +5,7 @@ import test from "node:test";
 const controllerPath = new URL("../web/kairos-dashboard/scripts/manuscript-auto-pipeline.js", import.meta.url);
 const guardPath = new URL("../web/kairos-dashboard/scripts/manuscript-production-flow-guard.js", import.meta.url);
 const postIntakeGuardPath = new URL("../web/kairos-dashboard/scripts/manuscript-post-intake-guard.js", import.meta.url);
+const directOpenPath = new URL("../web/kairos-dashboard/scripts/manuscript-direct-open-controller.js", import.meta.url);
 const workspacePath = new URL("../web/kairos-dashboard/scripts/production-workspace-controller.js", import.meta.url);
 const bootstrapPath = new URL("../web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js", import.meta.url);
 const loaderPath = new URL("../web/kairos-dashboard/scripts/legacy-runtime-loader.js", import.meta.url);
@@ -76,6 +77,20 @@ test("the post-intake guard preserves the successful overlay and suppresses dupl
   assert.match(source, /KairosManuscriptPostIntakeGuard/);
 });
 
+test("the direct route waits for Studio and renders recovery controls instead of a blank shell", async () => {
+  const source = await readFile(directOpenPath, "utf8");
+
+  assert.match(source, /kairos-manuscript-direct-open-20260801-1/);
+  assert.match(source, /requestedTarget === "manuscript"/);
+  assert.match(source, /waitForElement/);
+  assert.match(source, /\.manuscript-launch/);
+  assert.match(source, /#manuscript-studio-overlay/);
+  assert.match(source, /Manuscript Studio did not open/);
+  assert.match(source, /data-kairos-manuscript-retry/);
+  assert.match(source, /data-kairos-command-return/);
+  assert.match(source, /KairosManuscriptDirectOpen/);
+});
+
 test("the production workspace does not convert arbitrary DOM mutations into durable state changes", async () => {
   const source = await readFile(workspacePath, "utf8");
   const intakeBranch = source.match(/async function captureProductionResponse[\s\S]*?async function upsertWorkspaceRecord/)?.[0] || "";
@@ -89,7 +104,7 @@ test("the production workspace does not convert arbitrary DOM mutations into dur
   assert.match(source, /kairos:production:workspace-visibility/);
 });
 
-test("the dashboard installs bounded state transport and one guarded controller owner", async () => {
+test("the dashboard installs bounded state transport, direct-open recovery, and one guarded controller owner", async () => {
   const [bootstrap, index, loader] = await Promise.all([
     readFile(bootstrapPath, "utf8"),
     readFile(indexPath, "utf8"),
@@ -97,6 +112,12 @@ test("the dashboard installs bounded state transport and one guarded controller 
   ]);
 
   assert.match(bootstrap, /kairos-state-fetch-install\.js\?v=\$\{RELEASE\}/);
+  assert.match(bootstrap, /manuscript-direct-open-controller\.js\?v=\$\{RELEASE\}/);
+  assert.ok(
+    bootstrap.indexOf("manuscript-direct-open-controller.js") <
+      bootstrap.indexOf("legacy-runtime-loader.js"),
+    "Direct-open recovery must install before the command runtime.",
+  );
   assert.match(bootstrap, /legacy-runtime-loader\.js\?v=\$\{COMMAND_RUNTIME_RELEASE\}/);
   assert.match(bootstrap, /KairosLegacyRuntime\.load/);
   assert.doesNotMatch(bootstrap, /import\(`\.\/manuscript-auto-pipeline\.js/);
@@ -105,6 +126,7 @@ test("the dashboard installs bounded state transport and one guarded controller 
   assert.match(bootstrap, /manuscript-post-intake-stability-20260731-1/);
   assert.match(bootstrap, /BOOT_TIMEOUT_MS = 20_000/);
   assert.match(bootstrap, /renderBootstrapFailure/);
+  assert.match(bootstrap, /directOpenController:/);
   assert.match(bootstrap, /singleControllerOwner:\s*"legacy-runtime-loader"/);
   assert.match(loader, /"manuscript-auto-pipeline\.js"/);
   assert.match(loader, /"manuscript-post-intake-guard\.js"/);
@@ -112,7 +134,9 @@ test("the dashboard installs bounded state transport and one guarded controller 
   assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-post-intake-stability-20260731-1/);
   assert.match(index, /manuscript-auto-pipeline\.js\?v=five-center-dashboard-post-intake-stability-20260731-1/);
   assert.match(index, /manuscript-post-intake-guard\.js\?v=five-center-dashboard-post-intake-stability-20260731-1/);
+  assert.match(index, /manuscript-direct-open-controller\.js\?v=manuscript-post-intake-stability-20260731-1/);
   assert.match(index, /mmg-production-controller-target/);
   assert.match(index, /mmg-post-intake-guard-target/);
+  assert.match(index, /mmg-direct-open-target/);
   assert.equal((index.match(/<script type="module"/g) || []).length, 2);
 });
