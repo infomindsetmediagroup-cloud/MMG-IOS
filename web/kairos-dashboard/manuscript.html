@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#05070a">
   <meta name="color-scheme" content="dark">
-  <meta name="mmg-build" content="kairos-dedicated-manuscript-route-20260801-2">
+  <meta name="mmg-build" content="kairos-dedicated-manuscript-route-20260801-3-continuation">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -17,9 +17,7 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     html,
     body {
@@ -86,9 +84,7 @@
       margin-top: 22px;
     }
 
-    .kairos-manuscript-route-actions[hidden] {
-      display: none;
-    }
+    .kairos-manuscript-route-actions[hidden] { display: none; }
 
     .kairos-manuscript-route-actions button,
     .kairos-manuscript-route-actions a {
@@ -117,14 +113,12 @@
         border-radius: 18px;
       }
 
-      .kairos-manuscript-route-actions > * {
-        width: 100%;
-      }
+      .kairos-manuscript-route-actions > * { width: 100%; }
     }
   </style>
   <script>
     (() => {
-      const BUILD = "kairos-dedicated-manuscript-route-20260801-2";
+      const BUILD = "kairos-dedicated-manuscript-route-20260801-3-continuation";
       const current = new URL(location.href);
       if (current.searchParams.get("open") !== "manuscript") {
         current.searchParams.set("open", "manuscript");
@@ -185,12 +179,15 @@
     src="./scripts/manuscript-registry-bridge.js?v=kairos-manuscript-registry-bridge-20260801-1"
     onerror="KairosDedicatedManuscriptRoute.fail('The manuscript registry bridge failed to load.')"></script>
   <script
+    src="./scripts/manuscript-continuation-controller.js?v=kairos-manuscript-continuation-20260801-1"
+    onerror="KairosDedicatedManuscriptRoute.fail('The manuscript continuation controller failed to load.')"></script>
+  <script
     type="module"
     src="./scripts/safari-manuscript-intake-compat.js?v=safari-native-docx-20260730-1"
     onerror="KairosDedicatedManuscriptRoute.fail('Safari manuscript compatibility failed to load.')"></script>
   <script
     type="module"
-    src="./scripts/manuscript-direct-open-controller.js?v=kairos-dedicated-manuscript-route-20260801-2"
+    src="./scripts/manuscript-direct-open-controller.js?v=kairos-dedicated-manuscript-route-20260801-3-continuation"
     onerror="KairosDedicatedManuscriptRoute.fail('The dedicated Manuscript Studio controller failed to load.')"></script>
 </body>
 </html>
