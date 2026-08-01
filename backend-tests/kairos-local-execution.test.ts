@@ -65,7 +65,8 @@ describe("Kairos local operational execution", () => {
     expect(bridge).toContain('const EXECUTION_MODE = "browser-webgpu"');
     expect(bridge).toContain('import("../vendor/webllm-bundle.js")');
     expect(bridge).toContain("KairosLocalInference.run");
-    expect(compatibility).toContain('import "./kairos-local-inference-same-origin.js"');
+    expect(compatibility).toContain('const RELEASE = "kairos-local-inference-20260731-5-state-recovery"');
+    expect(compatibility).toContain('await import(`./kairos-local-inference-same-origin.js?v=${RELEASE}`)');
     expect(combined).not.toContain("api.openai.com");
     expect(combined).not.toContain("cdn.jsdelivr.net");
     expect(combined).not.toContain("esm.run");
