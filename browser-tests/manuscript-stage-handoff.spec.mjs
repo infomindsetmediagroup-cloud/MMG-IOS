@@ -95,7 +95,7 @@ test("saved Project Setup exposes and opens the Editorial Workbench", async ({ p
 
   const editorial = page.locator("#manuscript-editorial-workbench");
   await expect(editorial).toBeVisible({ timeout: 8_000 });
-  await expect(editorial).toContainText("Editorial Workbench");
+  await expect(editorial).toContainText("Editorial production in progress");
   await expect(editorial.locator("[data-editorial-save]")).toBeVisible();
   await expect(page.locator("[data-kairos-editorial-handoff]")).toHaveCount(0);
 
