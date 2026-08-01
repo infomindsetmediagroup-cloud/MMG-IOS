@@ -10,6 +10,7 @@ const workspacePath = new URL("../web/kairos-dashboard/scripts/production-worksp
 const bootstrapPath = new URL("../web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js", import.meta.url);
 const loaderPath = new URL("../web/kairos-dashboard/scripts/legacy-runtime-loader.js", import.meta.url);
 const indexPath = new URL("../web/kairos-dashboard/index.html", import.meta.url);
+const manuscriptPagePath = new URL("../web/kairos-dashboard/manuscript.html", import.meta.url);
 
 test("the actual manuscript controller uses only the local WebGPU production route", async () => {
   const source = await readFile(controllerPath, "utf8");
@@ -97,6 +98,28 @@ test("the direct route independently loads Studio and owns visible recovery", as
   assert.match(source, /KairosManuscriptDirectOpen/);
 });
 
+test("the manuscript URL is isolated from the advanced command shell", async () => {
+  const [index, manuscriptPage] = await Promise.all([
+    readFile(indexPath, "utf8"),
+    readFile(manuscriptPagePath, "utf8"),
+  ]);
+
+  assert.match(index, /current\.searchParams\.get\("open"\) !== "manuscript"/);
+  assert.match(index, /new URL\("\.\/manuscript\.html", current\)/);
+  assert.match(index, /target\.searchParams\.delete\("mode"\)/);
+  assert.match(index, /location\.replace\(target\.href\)/);
+  assert.match(index, /mmg-dedicated-manuscript-route/);
+
+  assert.match(manuscriptPage, /kairos-dedicated-manuscript-route-20260801-1/);
+  assert.match(manuscriptPage, /data-kairos-dedicated-manuscript="true"/);
+  assert.match(manuscriptPage, /safari-manuscript-intake-compat\.js/);
+  assert.match(manuscriptPage, /manuscript-direct-open-controller\.js/);
+  assert.match(manuscriptPage, /kairos-manuscript-route-boot/);
+  assert.doesNotMatch(manuscriptPage, /legacy-runtime-loader\.js/);
+  assert.doesNotMatch(manuscriptPage, /manuscript-production-flow-bootstrap\.js/);
+  assert.doesNotMatch(manuscriptPage, /data-kairos-persistent-return/);
+});
+
 test("the production workspace does not convert arbitrary DOM mutations into durable state changes", async () => {
   const source = await readFile(workspacePath, "utf8");
   const intakeBranch = source.match(/async function captureProductionResponse[\s\S]*?async function upsertWorkspaceRecord/)?.[0] || "";
@@ -140,7 +163,7 @@ test("the dashboard installs bounded state transport, direct-open recovery, and 
   assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-post-intake-stability-20260731-1/);
   assert.match(index, /manuscript-auto-pipeline\.js\?v=five-center-dashboard-post-intake-stability-20260731-1/);
   assert.match(index, /manuscript-post-intake-guard\.js\?v=five-center-dashboard-post-intake-stability-20260731-1/);
-  assert.match(index, /manuscript-direct-open-controller\.js\?v=manuscript-post-intake-stability-20260731-1/);
+  assert.match(index, /manuscript-direct-open-controller\.js\?v=kairos-dedicated-manuscript-route-20260801-1/);
   assert.match(index, /mmg-production-controller-target/);
   assert.match(index, /mmg-post-intake-guard-target/);
   assert.match(index, /mmg-direct-open-target/);
