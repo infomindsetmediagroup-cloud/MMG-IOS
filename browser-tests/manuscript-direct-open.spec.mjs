@@ -40,10 +40,11 @@ async function installSuccessRoutes(page, { delayStudioMs = 100 } = {}) {
     const url = new URL(request.url());
 
     if (request.resourceType() === "document") {
+      const isManuscriptRoute = url.pathname === "/manuscript" || url.pathname === "/manuscript.html";
       await route.fulfill({
         status: 200,
         contentType: "text/html",
-        body: url.pathname === "/manuscript.html" ? manuscriptPageSource : indexSource,
+        body: isManuscriptRoute ? manuscriptPageSource : indexSource,
       });
       return;
     }
@@ -99,7 +100,7 @@ test("legacy advanced manuscript URL redirects before the command runtime and op
 
   await page.goto("https://kairos.test/?mode=advanced&open=manuscript");
 
-  await expect.poll(() => new URL(page.url()).pathname).toBe("/manuscript.html");
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/manuscript");
   await expect(page.locator("body")).toHaveAttribute("data-kairos-dedicated-manuscript", "true");
   await expect(page.locator("#manuscript-studio-overlay")).toBeVisible({ timeout: 8_000 });
   await expect(page.locator("#manuscript-studio-overlay h2")).toHaveText("Manuscript Studio");
@@ -121,6 +122,10 @@ test("legacy advanced manuscript URL redirects before the command runtime and op
   expect(snapshot.lastReason).toBe("direct-route");
   expect(snapshot.activeProjectId).toMatch(/^manuscript-studio-/);
 
+  const route = await page.evaluate(() => window.KairosDedicatedManuscriptRoute);
+  expect(route.build).toBe("kairos-dedicated-manuscript-route-20260801-2");
+  expect(route.opened).toBe(true);
+
   const guard = await page.evaluate(() => window.KairosManuscriptPostIntakeGuard.snapshot());
   expect(guard.build).toBe("kairos-manuscript-post-intake-guard-20260731-1");
   expect(guard.acceptedStudioModuleURL).toContain("manuscript-studio.js");
@@ -131,7 +136,7 @@ test("legacy advanced manuscript URL redirects before the command runtime and op
 test("dedicated route restores an unintentionally removed Studio overlay", async ({ page }) => {
   await installSuccessRoutes(page, { delayStudioMs: 0 });
 
-  await page.goto("https://kairos.test/manuscript.html?open=manuscript");
+  await page.goto("https://kairos.test/manuscript?open=manuscript");
 
   const overlay = page.locator("#manuscript-studio-overlay");
   await expect(overlay).toBeVisible({ timeout: 8_000 });
@@ -192,7 +197,7 @@ test("dedicated route displays body-owned recovery controls when Studio cannot l
     await route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
   });
 
-  await page.goto("https://kairos.test/manuscript.html?open=manuscript");
+  await page.goto("https://kairos.test/manuscript?open=manuscript");
 
   const shell = page.locator("#kairos-manuscript-direct-open-shell");
   await expect(shell).toBeVisible({ timeout: 4_000 });
