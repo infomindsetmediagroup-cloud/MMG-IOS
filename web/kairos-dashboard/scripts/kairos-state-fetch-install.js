@@ -3,7 +3,7 @@ import {
 } from "./kairos-state-fetch.js?v=kairos-state-fetch-20260731-1";
 
 export const KAIROS_STATE_FETCH_INSTALL_BUILD =
-  "kairos-state-fetch-install-20260731-1";
+  "kairos-state-fetch-install-20260731-2";
 
 const nativeFetch = globalThis.fetch.bind(globalThis);
 const STATE_ROUTE = /^\/api\/production-registry\/manuscripts\/[^/]+\/(?:auto-pipeline|setup|editorial)$/;
@@ -12,6 +12,7 @@ const DEFAULT_ATTEMPTS = 3;
 
 if (!globalThis.__kairosStateFetchInstalled) {
   globalThis.__kairosStateFetchInstalled = true;
+  globalThis.__KAIROS_STATE_FETCH_INSTALLED__ = true;
   globalThis.fetch = async function kairosBoundedFetch(input, init = {}) {
     const request = input instanceof Request ? input : null;
     const method = String(init.method || request?.method || "GET").toUpperCase();
@@ -38,6 +39,8 @@ if (!globalThis.__kairosStateFetchInstalled) {
 
     return result.response;
   };
+} else {
+  globalThis.__KAIROS_STATE_FETCH_INSTALLED__ = true;
 }
 
 function rewriteStateCheckingCopy() {
