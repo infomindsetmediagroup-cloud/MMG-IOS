@@ -45,7 +45,7 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"pending\",\"context\":\"kairos-browser-runtime\",\"description\":\"Validating dedicated manuscript route\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"pending\",\"context\":\"kairos-browser-runtime\",\"description\":\"Validating canonical manuscript route\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
       - name: Check out authorized main commit
         uses: actions/checkout@v4
@@ -85,9 +85,9 @@ jobs:
           grep -q 'manuscript-post-intake-stability-20260731-1' web/kairos-dashboard/index.html
           grep -q 'mmg-direct-open-target' web/kairos-dashboard/index.html
           grep -q 'mmg-dedicated-manuscript-route' web/kairos-dashboard/index.html
-          grep -q 'new URL("./manuscript.html", current)' web/kairos-dashboard/index.html
+          grep -q 'new URL("./manuscript", current)' web/kairos-dashboard/index.html
           grep -q 'location.replace(target.href)' web/kairos-dashboard/index.html
-          grep -q 'kairos-dedicated-manuscript-route-20260801-1' web/kairos-dashboard/manuscript.html
+          grep -q 'kairos-dedicated-manuscript-route-20260801-2' web/kairos-dashboard/manuscript.html
           grep -q 'data-kairos-dedicated-manuscript="true"' web/kairos-dashboard/manuscript.html
           grep -q 'manuscript-direct-open-controller.js' web/kairos-dashboard/manuscript.html
           ! grep -q 'legacy-runtime-loader.js' web/kairos-dashboard/manuscript.html
@@ -108,7 +108,7 @@ jobs:
       - name: Install WebKit
         run: npx playwright install --with-deps webkit > /dev/null
 
-      - name: Verify dedicated route and post-intake stability in WebKit
+      - name: Verify canonical route and post-intake stability in WebKit
         run: |
           npx playwright test \
             browser-tests/manuscript-direct-open.spec.mjs \
@@ -129,7 +129,7 @@ jobs:
         working-directory: cloudflare/mmg-ios
         run: npx wrangler deploy
 
-      - name: Verify live dedicated manuscript runtime
+      - name: Verify live canonical manuscript runtime
         shell: bash
         run: |
           set -euo pipefail
@@ -146,7 +146,7 @@ jobs:
             denial="${RUNNER_TEMP}/generation-denial.json"
 
             root_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/?release=${GITHUB_SHA}&attempt=${attempt}" -o "${root}" -w '%{http_code}' || true)"
-            manuscript_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/manuscript.html?open=manuscript&release=${GITHUB_SHA}&attempt=${attempt}" -o "${manuscript_page}" -w '%{http_code}' || true)"
+            manuscript_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/manuscript?open=manuscript&release=${GITHUB_SHA}&attempt=${attempt}" -o "${manuscript_page}" -w '%{http_code}' || true)"
             direct_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-direct-open-controller.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${direct_open}" -w '%{http_code}' || true)"
             bootstrap_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-production-flow-bootstrap.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${bootstrap}" -w '%{http_code}' || true)"
             loader_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/legacy-runtime-loader.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${loader}" -w '%{http_code}' || true)"
@@ -157,9 +157,10 @@ jobs:
 
             if [ "${root_status}" = "200" ] \
               && grep -q 'mmg-dedicated-manuscript-route' "${root}" \
+              && grep -q 'new URL("./manuscript", current)' "${root}" \
               && grep -q 'location.replace(target.href)' "${root}" \
               && [ "${manuscript_status}" = "200" ] \
-              && grep -q 'kairos-dedicated-manuscript-route-20260801-1' "${manuscript_page}" \
+              && grep -q 'kairos-dedicated-manuscript-route-20260801-2' "${manuscript_page}" \
               && grep -q 'data-kairos-dedicated-manuscript="true"' "${manuscript_page}" \
               && grep -q 'manuscript-direct-open-controller.js' "${manuscript_page}" \
               && ! grep -q 'legacy-runtime-loader.js' "${manuscript_page}" \
@@ -208,7 +209,7 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"success\",\"context\":\"kairos-browser-runtime\",\"description\":\"Dedicated manuscript route deployed and verified\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"success\",\"context\":\"kairos-browser-runtime\",\"description\":\"Canonical manuscript route deployed and verified\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
       - name: Report deployment failure
         if: ${{ failure() || cancelled() }}
@@ -217,4 +218,4 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"failure\",\"context\":\"kairos-browser-runtime\",\"description\":\"Dedicated manuscript route deployment failed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}" || true
+            --data "{\"state\":\"failure\",\"context\":\"kairos-browser-runtime\",\"description\":\"Canonical manuscript route deployment failed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}" || true
