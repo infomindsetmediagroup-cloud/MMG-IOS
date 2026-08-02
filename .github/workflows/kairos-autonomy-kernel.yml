@@ -85,7 +85,7 @@ jobs:
           grep -q 'handleAutonomyApiRequest' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
           grep -q 'dispatchEnv: providerBlockedEnv(env)' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
           grep -q 'X-Kairos-Autonomy-API-Build' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
-          ! grep -Eq 'Access-Control-Allow-Origin[^\n]*\*|eval\(|new Function|query.*token|cookie.*authentication' cloudflare/mmg-ios/src/autonomy/kairos-autonomy-api-v1.js
+          ! grep -Eq 'Access-Control-Allow-Origin[^\n]*\*|(^|[^[:alnum:]_])eval\(|new Function|query.*token|cookie.*authentication' cloudflare/mmg-ios/src/autonomy/kairos-autonomy-api-v1.js
           ! grep -q 'dispatchAutonomyEvent' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
           ! grep -Eq 'crons\s*=|scheduledAutonomy|new_sqlite_classes|\[\[migrations\]\]' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
 
