@@ -1,0 +1,96 @@
+name: Manuscript Pipeline A-to-Z
+
+on:
+  push:
+    branches:
+      - fix/manuscript-pipeline-a-to-z
+    paths:
+      - 'web/kairos-dashboard/manuscript.html'
+      - 'web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js'
+      - 'web/kairos-dashboard/scripts/manuscript-*.js'
+      - 'cloudflare/mmg-ios/src/kairos-manuscript-*.js'
+      - 'browser-tests/manuscript-*.spec.mjs'
+      - '.github/workflows/manuscript-pipeline-a-to-z.yml'
+      - 'package.json'
+      - 'package-lock.json'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'web/kairos-dashboard/manuscript.html'
+      - 'web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js'
+      - 'web/kairos-dashboard/scripts/manuscript-*.js'
+      - 'cloudflare/mmg-ios/src/kairos-manuscript-*.js'
+      - 'browser-tests/manuscript-*.spec.mjs'
+      - '.github/workflows/manuscript-pipeline-a-to-z.yml'
+      - 'package.json'
+      - 'package-lock.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manuscript-pipeline-a-to-z-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+
+      - name: Validate pipeline syntax and contracts
+        run: |
+          node --check web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js
+          node --check web/kairos-dashboard/scripts/manuscript-project-setup.js
+          node --check web/kairos-dashboard/scripts/manuscript-editorial-workbench.js
+          node --check web/kairos-dashboard/scripts/manuscript-stage-handoff-controller.js
+          node --check web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
+          node --check cloudflare/mmg-ios/src/kairos-manuscript-project-setup-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-manuscript-editorial-workbench-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-manuscript-auto-pipeline-v1.js
+          grep -q 'kairos-manuscript-pipeline-orchestrator-20260801-1' web/kairos-dashboard/manuscript.html
+          grep -q 'multipart/form-data' browser-tests/manuscript-pipeline-orchestrator.spec.mjs
+          grep -q 'auto-pipeline/run' web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js
+          grep -q 'Preview Package' web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js
+          ! grep -q 'api.openai.com' web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js
+
+      - name: Install WebKit
+        run: npx playwright install --with-deps webkit
+
+      - name: Run manuscript pipeline WebKit suite
+        run: |
+          npx playwright test \
+            browser-tests/manuscript-pipeline-orchestrator.spec.mjs \
+            browser-tests/manuscript-project-setup.spec.mjs \
+            browser-tests/manuscript-editorial-workbench.spec.mjs \
+            browser-tests/manuscript-auto-pipeline.spec.mjs \
+            --project=webkit \
+            --workers=1 \
+            --trace=retain-on-failure
+
+      - name: Validate Worker bundle
+        working-directory: cloudflare/mmg-ios
+        run: |
+          npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+          npx wrangler deploy --dry-run
+
+      - name: Upload Playwright evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manuscript-pipeline-playwright-evidence
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+          retention-days: 14
