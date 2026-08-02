@@ -45,7 +45,7 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"pending\",\"context\":\"kairos-browser-runtime\",\"description\":\"Validating manuscript stage handoffs\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"pending\",\"context\":\"kairos-browser-runtime\",\"description\":\"Validating manuscript pipeline\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
       - name: Check out authorized main commit
         uses: actions/checkout@v4
@@ -67,6 +67,7 @@ jobs:
       - name: Validate browser runtime and deployment contracts
         run: |
           node --check web/kairos-dashboard/scripts/manuscript-direct-open-controller.js
+          node --check web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js
           node --check web/kairos-dashboard/scripts/manuscript-stage-handoff-controller.js
           node --check web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js
           node --check web/kairos-dashboard/scripts/legacy-runtime-loader.js
@@ -88,9 +89,11 @@ jobs:
           grep -q 'mmg-dedicated-manuscript-route' web/kairos-dashboard/index.html
           grep -q 'new URL("./manuscript", current)' web/kairos-dashboard/index.html
           grep -q 'location.replace(target.href)' web/kairos-dashboard/index.html
-          grep -q 'kairos-dedicated-manuscript-route-20260801-2' web/kairos-dashboard/manuscript.html
+          grep -q 'kairos-dedicated-manuscript-route-20260801-3-pipeline-orchestrator' web/kairos-dashboard/manuscript.html
+          grep -q 'kairos-manuscript-pipeline-orchestrator-20260801-1' web/kairos-dashboard/manuscript.html
           grep -q 'data-kairos-dedicated-manuscript="true"' web/kairos-dashboard/manuscript.html
           grep -q 'manuscript-direct-open-controller.js' web/kairos-dashboard/manuscript.html
+          grep -q 'manuscript-pipeline-orchestrator.js' web/kairos-dashboard/manuscript.html
           grep -q 'manuscript-stage-handoff-controller.js' web/kairos-dashboard/manuscript.html
           ! grep -q 'legacy-runtime-loader.js' web/kairos-dashboard/manuscript.html
           ! grep -q 'manuscript-production-flow-bootstrap.js' web/kairos-dashboard/manuscript.html
@@ -98,6 +101,13 @@ jobs:
           grep -q 'ensureModule("manuscript-studio.js")' web/kairos-dashboard/scripts/manuscript-direct-open-controller.js
           grep -q 'kairos-manuscript-direct-open-shell' web/kairos-dashboard/scripts/manuscript-direct-open-controller.js
           grep -q 'overlay-watchdog' web/kairos-dashboard/scripts/manuscript-direct-open-controller.js
+          grep -q 'kairos-manuscript-pipeline-orchestrator-20260801-1' web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js
+          grep -q 'new FormData()' web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js
+          grep -q 'auto-pipeline/run' web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js
+          grep -q 'Manufacture Delivery Package' web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js
+          grep -q 'Preview Package' web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js
+          ! grep -q '/setup/cover' web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js
+          ! grep -q 'api.openai.com' web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js
           grep -q 'kairos-manuscript-stage-handoff-20260801-1' web/kairos-dashboard/scripts/manuscript-stage-handoff-controller.js
           grep -q 'Continue to Editorial Review' web/kairos-dashboard/scripts/manuscript-stage-handoff-controller.js
           grep -q 'Continue to Local Production' web/kairos-dashboard/scripts/manuscript-stage-handoff-controller.js
@@ -113,10 +123,11 @@ jobs:
       - name: Install WebKit
         run: npx playwright install --with-deps webkit > /dev/null
 
-      - name: Verify canonical route and manuscript stage handoffs in WebKit
+      - name: Verify canonical route and manuscript pipeline in WebKit
         run: |
           npx playwright test \
             browser-tests/manuscript-direct-open.spec.mjs \
+            browser-tests/manuscript-pipeline-orchestrator.spec.mjs \
             browser-tests/manuscript-post-intake-stability.spec.mjs \
             browser-tests/manuscript-stage-handoff.spec.mjs \
             browser-tests/manuscript-studio-direct-chunk.spec.mjs \
@@ -144,6 +155,7 @@ jobs:
             root="${RUNNER_TEMP}/root.html"
             manuscript_page="${RUNNER_TEMP}/manuscript.html"
             direct_open="${RUNNER_TEMP}/manuscript-direct-open-controller.js"
+            orchestrator="${RUNNER_TEMP}/manuscript-pipeline-orchestrator.js"
             stage_handoff="${RUNNER_TEMP}/manuscript-stage-handoff-controller.js"
             bootstrap="${RUNNER_TEMP}/manuscript-production-flow-bootstrap.js"
             loader="${RUNNER_TEMP}/legacy-runtime-loader.js"
@@ -155,6 +167,7 @@ jobs:
             root_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/?release=${GITHUB_SHA}&attempt=${attempt}" -o "${root}" -w '%{http_code}' || true)"
             manuscript_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/manuscript?open=manuscript&release=${GITHUB_SHA}&attempt=${attempt}" -o "${manuscript_page}" -w '%{http_code}' || true)"
             direct_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-direct-open-controller.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${direct_open}" -w '%{http_code}' || true)"
+            orchestrator_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-pipeline-orchestrator.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${orchestrator}" -w '%{http_code}' || true)"
             stage_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-stage-handoff-controller.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${stage_handoff}" -w '%{http_code}' || true)"
             bootstrap_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-production-flow-bootstrap.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${bootstrap}" -w '%{http_code}' || true)"
             loader_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/legacy-runtime-loader.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${loader}" -w '%{http_code}' || true)"
@@ -168,9 +181,11 @@ jobs:
               && grep -q 'new URL("./manuscript", current)' "${root}" \
               && grep -q 'location.replace(target.href)' "${root}" \
               && [ "${manuscript_status}" = "200" ] \
-              && grep -q 'kairos-dedicated-manuscript-route-20260801-2' "${manuscript_page}" \
+              && grep -q 'kairos-dedicated-manuscript-route-20260801-3-pipeline-orchestrator' "${manuscript_page}" \
+              && grep -q 'kairos-manuscript-pipeline-orchestrator-20260801-1' "${manuscript_page}" \
               && grep -q 'data-kairos-dedicated-manuscript="true"' "${manuscript_page}" \
               && grep -q 'manuscript-direct-open-controller.js' "${manuscript_page}" \
+              && grep -q 'manuscript-pipeline-orchestrator.js' "${manuscript_page}" \
               && grep -q 'manuscript-stage-handoff-controller.js' "${manuscript_page}" \
               && ! grep -q 'legacy-runtime-loader.js' "${manuscript_page}" \
               && ! grep -q 'manuscript-production-flow-bootstrap.js' "${manuscript_page}" \
@@ -179,6 +194,11 @@ jobs:
               && grep -q 'ensureModule("manuscript-studio.js")' "${direct_open}" \
               && grep -q 'kairos-manuscript-direct-open-shell' "${direct_open}" \
               && grep -q 'overlay-watchdog' "${direct_open}" \
+              && [ "${orchestrator_status}" = "200" ] \
+              && grep -q 'kairos-manuscript-pipeline-orchestrator-20260801-1' "${orchestrator}" \
+              && grep -q 'auto-pipeline/run' "${orchestrator}" \
+              && grep -q 'Manufacture Delivery Package' "${orchestrator}" \
+              && grep -q 'Preview Package' "${orchestrator}" \
               && [ "${stage_status}" = "200" ] \
               && grep -q 'kairos-manuscript-stage-handoff-20260801-1' "${stage_handoff}" \
               && grep -q 'Continue to Editorial Review' "${stage_handoff}" \
@@ -201,11 +221,12 @@ jobs:
             fi
 
             if [ "${attempt}" = "30" ]; then
-              printf 'root=%s manuscript=%s direct=%s stage=%s bootstrap=%s loader=%s studio=%s css=%s readiness=%s denial=%s\n' \
-                "${root_status}" "${manuscript_status}" "${direct_status}" "${stage_status}" "${bootstrap_status}" "${loader_status}" "${studio_status}" "${studio_css_status}" "${readiness_status}" "${denial_status}"
+              printf 'root=%s manuscript=%s direct=%s orchestrator=%s stage=%s bootstrap=%s loader=%s studio=%s css=%s readiness=%s denial=%s\n' \
+                "${root_status}" "${manuscript_status}" "${direct_status}" "${orchestrator_status}" "${stage_status}" "${bootstrap_status}" "${loader_status}" "${studio_status}" "${studio_css_status}" "${readiness_status}" "${denial_status}"
               cat "${root}" || true
               cat "${manuscript_page}" || true
               cat "${direct_open}" || true
+              cat "${orchestrator}" || true
               cat "${stage_handoff}" || true
               cat "${bootstrap}" || true
               cat "${readiness}" || true
@@ -223,7 +244,7 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"success\",\"context\":\"kairos-browser-runtime\",\"description\":\"Manuscript stage handoffs deployed and verified\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+            --data "{\"state\":\"success\",\"context\":\"kairos-browser-runtime\",\"description\":\"Manuscript pipeline deployed and verified\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
       - name: Report deployment failure
         if: ${{ failure() || cancelled() }}
@@ -232,4 +253,4 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"failure\",\"context\":\"kairos-browser-runtime\",\"description\":\"Manuscript stage handoff deployment failed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}" || true
+            --data "{\"state\":\"failure\",\"context\":\"kairos-browser-runtime\",\"description\":\"Manuscript pipeline deployment failed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}" || true
