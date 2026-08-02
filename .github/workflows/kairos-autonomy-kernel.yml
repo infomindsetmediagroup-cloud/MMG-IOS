@@ -51,10 +51,13 @@ jobs:
           node --check cloudflare/mmg-ios/src/autonomy/kairos-autonomy-ledger-v1.js
           node --check cloudflare/mmg-ios/src/autonomy/kairos-autonomy-ledger-client-v1.js
           node --check cloudflare/mmg-ios/src/autonomy/kairos-autonomy-dispatcher-v1.js
+          node --check cloudflare/mmg-ios/src/autonomy/kairos-autonomy-api-v1.js
           node --check cloudflare/mmg-ios/test/autonomy/kairos-policy-engine.test.js
           node --check cloudflare/mmg-ios/test/autonomy/kairos-autonomy-ledger.test.js
           node --check cloudflare/mmg-ios/test/autonomy/kairos-autonomy-ledger-client.test.js
           node --check cloudflare/mmg-ios/test/autonomy/kairos-autonomy-dispatcher.test.js
+          node --check cloudflare/mmg-ios/test/autonomy/kairos-autonomy-api.test.js
+          node --check cloudflare/mmg-ios/test/autonomy/kairos-autonomy-worker-routing.test.js
           node --check cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
 
       - name: Validate ledger export and migration contract
@@ -64,7 +67,6 @@ jobs:
           grep -q 'tag = "kairos-autonomy-ledger-v1"' cloudflare/mmg-ios/wrangler.toml
           grep -q 'new_sqlite_classes = \["KairosAutonomyLedger"\]' cloudflare/mmg-ios/wrangler.toml
           grep -q 'KairosAutonomyLedger' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
-          ! grep -q '/api/autonomy/' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
 
       - name: Validate dispatcher boundary
         run: |
@@ -74,6 +76,18 @@ jobs:
           grep -q 'DISPATCH_TIMEOUT' cloudflare/mmg-ios/src/autonomy/kairos-autonomy-dispatcher-v1.js
           ! grep -Eq 'eval\(|new Function|/api/autonomy/|scheduled\(' cloudflare/mmg-ios/src/autonomy/kairos-autonomy-dispatcher-v1.js
           ! grep -Eq 'github\.merge|cloudflare\.deploy\.production|shopify\.|customer\.email\.send' cloudflare/mmg-ios/src/autonomy/kairos-autonomy-dispatcher-v1.js
+
+      - name: Validate authenticated autonomy API boundary
+        run: |
+          grep -q 'KAIROS_AUTONOMY_API_TOKEN' cloudflare/mmg-ios/src/autonomy/kairos-autonomy-api-v1.js
+          grep -q 'globalThis.crypto' cloudflare/mmg-ios/src/autonomy/kairos-autonomy-api-v1.js
+          grep -q 'subtle.digest' cloudflare/mmg-ios/src/autonomy/kairos-autonomy-api-v1.js
+          grep -q 'handleAutonomyApiRequest' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
+          grep -q 'dispatchEnv: providerBlockedEnv(env)' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
+          grep -q 'X-Kairos-Autonomy-API-Build' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
+          ! grep -Eq 'Access-Control-Allow-Origin[^\n]*\*|eval\(|new Function|query.*token|cookie.*authentication' cloudflare/mmg-ios/src/autonomy/kairos-autonomy-api-v1.js
+          ! grep -q 'dispatchAutonomyEvent' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
+          ! grep -Eq 'crons\s*=|scheduledAutonomy|new_sqlite_classes|\[\[migrations\]\]' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
 
       - name: Run autonomy regression suite
         working-directory: cloudflare/mmg-ios
@@ -85,4 +99,4 @@ jobs:
 
       - name: Validate active Worker bundle
         working-directory: cloudflare/mmg-ios
-        run: npx wrangler deploy --dry-run --outdir .wrangler-autonomy-ledger-bundle
+        run: npx wrangler deploy --dry-run --outdir .wrangler-autonomy-api-bundle
