@@ -19,7 +19,7 @@ import { KairosAutonomyLedger } from "./autonomy/kairos-autonomy-ledger-v1.js";
 import {
   handleAutonomyApiRequest,
   KAIROS_AUTONOMY_API_BUILD,
-} from "./autonomy/kairos-autonomy-api-v2.js";
+} from "./autonomy/kairos-autonomy-api-v3.js";
 import {
   handleAutonomyScheduledEvent,
   KAIROS_AUTONOMY_SCHEDULER_BUILD,
@@ -42,7 +42,7 @@ export class KairosManuscriptSource extends BaseKairosManuscriptSource {
   }
 }
 
-export const KAIROS_LOCAL_CANONICAL_ENTRY_BUILD = "kairos-local-canonical-entry-20260802-2-autonomy-scheduler";
+export const KAIROS_LOCAL_CANONICAL_ENTRY_BUILD = "kairos-local-canonical-entry-20260802-3-business-state-api";
 
 const PROVIDER_INDEPENDENT_OPERATIONAL_PATHS = new Set([
   "/api/hub/run",
