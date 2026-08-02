@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#05070a">
   <meta name="color-scheme" content="dark">
-  <meta name="mmg-build" content="kairos-dedicated-manuscript-route-20260801-2">
+  <meta name="mmg-build" content="kairos-dedicated-manuscript-route-20260801-3-pipeline-orchestrator">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -118,7 +118,7 @@
   </style>
   <script>
     (() => {
-      const BUILD = "kairos-dedicated-manuscript-route-20260801-2";
+      const BUILD = "kairos-dedicated-manuscript-route-20260801-3-pipeline-orchestrator";
       const current = new URL(location.href);
       if (current.searchParams.get("open") !== "manuscript") {
         current.searchParams.set("open", "manuscript");
@@ -182,6 +182,9 @@
     src="./scripts/manuscript-project-preservation-bridge.js?v=kairos-manuscript-project-preservation-20260801-1"
     onerror="KairosDedicatedManuscriptRoute.fail('The manuscript state-preservation bridge failed to load.')"></script>
   <script
+    src="./scripts/manuscript-pipeline-orchestrator.js?v=kairos-manuscript-pipeline-orchestrator-20260801-1"
+    onerror="KairosDedicatedManuscriptRoute.fail('The authoritative manuscript pipeline orchestrator failed to load.')"></script>
+  <script
     src="./scripts/manuscript-continuation-controller.js?v=kairos-manuscript-continuation-20260801-2-recovery"
     onerror="KairosDedicatedManuscriptRoute.fail('The manuscript continuation controller failed to load.')"></script>
   <script
@@ -193,7 +196,7 @@
     onerror="KairosDedicatedManuscriptRoute.fail('Safari manuscript compatibility failed to load.')"></script>
   <script
     type="module"
-    src="./scripts/manuscript-direct-open-controller.js?v=kairos-dedicated-manuscript-route-20260801-2"
+    src="./scripts/manuscript-direct-open-controller.js?v=kairos-dedicated-manuscript-route-20260801-3-pipeline-orchestrator"
     onerror="KairosDedicatedManuscriptRoute.fail('The dedicated Manuscript Studio controller failed to load.')"></script>
 </body>
 </html>
