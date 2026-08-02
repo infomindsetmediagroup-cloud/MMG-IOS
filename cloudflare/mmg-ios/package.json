@@ -6,7 +6,8 @@
   "scripts": {
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
-    "test": "node --test test/*.test.js",
+    "test": "node --test test/*.test.js test/autonomy/*.test.js",
+    "test:autonomy": "node --test test/autonomy/*.test.js",
     "validate:autonomous": "node scripts/validate-autonomous-prompt-controller.mjs && node scripts/validate-whole-homepage-planner.mjs",
     "validate:production": "node scripts/validate-production-quiet.mjs"
   },
