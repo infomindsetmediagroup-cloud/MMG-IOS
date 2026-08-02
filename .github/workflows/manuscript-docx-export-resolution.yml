@@ -1,0 +1,75 @@
+name: Validate DOCX Export Resolution
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'web/kairos-dashboard/scripts/manuscript-studio.js'
+      - 'web/kairos-dashboard/scripts/safari-manuscript-intake-compat.js'
+      - 'browser-tests/manuscript-docx-export-shape.spec.mjs'
+      - 'tests/manuscript-docx-export-resolution.contract.test.js'
+      - '.github/workflows/manuscript-docx-export-resolution.yml'
+      - 'package.json'
+      - 'package-lock.json'
+  push:
+    branches:
+      - main
+    paths:
+      - 'web/kairos-dashboard/scripts/manuscript-studio.js'
+      - 'web/kairos-dashboard/scripts/safari-manuscript-intake-compat.js'
+      - 'browser-tests/manuscript-docx-export-shape.spec.mjs'
+      - 'tests/manuscript-docx-export-resolution.contract.test.js'
+      - '.github/workflows/manuscript-docx-export-resolution.yml'
+      - 'package.json'
+      - 'package-lock.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manuscript-docx-export-resolution-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+
+      - name: Validate DOCX resolver contracts
+        run: |
+          node --check web/kairos-dashboard/scripts/manuscript-studio.js
+          node --check web/kairos-dashboard/scripts/safari-manuscript-intake-compat.js
+          node --test tests/manuscript-docx-export-resolution.contract.test.js
+
+      - name: Install WebKit
+        run: npx playwright install --with-deps webkit
+
+      - name: Reproduce the iPhone Safari export shape
+        run: |
+          npx playwright test \
+            browser-tests/manuscript-docx-export-shape.spec.mjs \
+            --project=webkit \
+            --workers=1 \
+            --trace=retain-on-failure
+
+      - name: Upload WebKit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manuscript-docx-export-resolution-evidence
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+          retention-days: 14

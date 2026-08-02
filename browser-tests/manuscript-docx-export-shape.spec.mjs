@@ -1,10 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { readFileSync } from "node:fs";
 
-const hotfixSource = readFileSync(
-  new URL("../web/kairos-dashboard/scripts/manuscript-docx-upload-hotfix.js", import.meta.url),
-  "utf8",
-);
 const studioSource = readFileSync(
   new URL("../web/kairos-dashboard/scripts/manuscript-studio.js", import.meta.url),
   "utf8",
@@ -15,7 +11,7 @@ const ACTIVE_KEY = "kairos.production.active-workspace";
 const MANUSCRIPT = [
   "This DOCX manuscript fixture reproduces the exact Mammoth export shape that failed on iPhone Safari.",
   "The module namespace exposes extractRawText as a named export while default is a truthy object without that function.",
-  "Kairos must resolve the named export, preserve the original DOCX source, and advance the extracted text into production intake.",
+  "Kairos must resolve the named export, preserve the original DOCX source through verified chunks, and advance the extracted text into production intake.",
 ].join("\n\n");
 
 function fixtureHTML() {
@@ -28,10 +24,12 @@ function storedSource() {
       projectId: PROJECT_ID,
       filename: "MMG-Draft.docx",
       name: "MMG-Draft.docx",
-      size: 24,
+      size: 21,
       format: "docx",
-      checksum: "docx-export-shape-checksum",
-      storedAt: "2026-07-30T10:00:00.000Z",
+      checksum: "a".repeat(64),
+      stored: true,
+      uploadMode: "chunked-v1",
+      storedAt: "2026-08-01T22:00:00.000Z",
     },
   };
 }
@@ -47,22 +45,57 @@ function intakeResult() {
   };
 }
 
-test("iPhone WebKit resolves Mammoth named extractRawText when default lacks the method", async ({ page }) => {
+test("iPhone WebKit resolves Mammoth named extractRawText and completes chunked source intake", async ({ page }) => {
   const calls = [];
+  let uploadId = "";
 
   await page.route("https://kairos.test/**", async route => {
     const request = route.request();
     const url = new URL(request.url());
+    const path = url.pathname;
 
     if (request.resourceType() === "document") {
       await route.fulfill({ status: 200, contentType: "text/html", body: fixtureHTML() });
       return;
     }
 
-    if (request.method() === "POST" && url.pathname === `/api/production-registry/manuscripts/${PROJECT_ID}/source`) {
-      calls.push({ method: request.method(), path: url.pathname });
-      expect(request.headers()["content-type"]).toContain("multipart/form-data");
-      expect(request.postDataBuffer()).toBeTruthy();
+    if (request.method() === "POST" && path === `/api/production-registry/manuscripts/${PROJECT_ID}/source/session`) {
+      calls.push(`${request.method()} ${path}`);
+      const payload = JSON.parse(request.postData() || "{}");
+      uploadId = payload.uploadId;
+      expect(uploadId).toMatch(/^upload-/);
+      expect(payload.format).toBe("docx");
+      expect(payload.fileChunks).toBe(1);
+      expect(payload.textChunks).toBe(1);
+      expect(payload.checksum).toMatch(/^[a-f0-9]{64}$/);
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({ status: "ready", upload: { uploadId } }),
+      });
+      return;
+    }
+
+    if (request.method() === "PUT" && path === `/api/production-registry/manuscripts/${PROJECT_ID}/source/file/0`) {
+      calls.push(`${request.method()} ${path}`);
+      expect(request.headers()["x-kairos-upload-id"]).toBe(uploadId);
+      expect(request.postDataBuffer()?.byteLength || 0).toBeGreaterThan(0);
+      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ status: "stored" }) });
+      return;
+    }
+
+    if (request.method() === "PUT" && path === `/api/production-registry/manuscripts/${PROJECT_ID}/source/text-chunk/0`) {
+      calls.push(`${request.method()} ${path}`);
+      expect(request.headers()["x-kairos-upload-id"]).toBe(uploadId);
+      expect(request.postDataBuffer()?.toString("utf8")).toBe(MANUSCRIPT);
+      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ status: "stored" }) });
+      return;
+    }
+
+    if (request.method() === "POST" && path === `/api/production-registry/manuscripts/${PROJECT_ID}/source/commit`) {
+      calls.push(`${request.method()} ${path}`);
+      expect(request.headers()["x-kairos-upload-id"]).toBe(uploadId);
+      expect(JSON.parse(request.postData() || "{}").uploadId).toBe(uploadId);
       await route.fulfill({
         status: 201,
         contentType: "application/json",
@@ -71,12 +104,13 @@ test("iPhone WebKit resolves Mammoth named extractRawText when default lacks the
       return;
     }
 
-    if (request.method() === "POST" && url.pathname === "/api/manuscript/intake/advance") {
-      calls.push({ method: request.method(), path: url.pathname });
+    if (request.method() === "POST" && path === "/api/manuscript/intake/advance") {
+      calls.push(`${request.method()} ${path}`);
       const payload = JSON.parse(request.postData() || "{}");
       expect(payload.manuscript).toBe(MANUSCRIPT);
       expect(payload.source?.stored).toBe(true);
       expect(payload.source?.format).toBe("docx");
+      expect(payload.source?.uploadMode).toBe("chunked-v1");
       await route.fulfill({
         status: 201,
         contentType: "application/json",
@@ -85,8 +119,8 @@ test("iPhone WebKit resolves Mammoth named extractRawText when default lacks the
       return;
     }
 
-    if (request.method() === "PATCH" && url.pathname === `/api/production-registry/projects/${PROJECT_ID}`) {
-      calls.push({ method: request.method(), path: url.pathname });
+    if (request.method() === "PATCH" && path === `/api/production-registry/projects/${PROJECT_ID}`) {
+      calls.push(`${request.method()} ${path}`);
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ status: "updated" }) });
       return;
     }
@@ -103,9 +137,8 @@ test("iPhone WebKit resolves Mammoth named extractRawText when default lacks the
     };
   }, { key: ACTIVE_KEY, projectId: PROJECT_ID, manuscript: MANUSCRIPT });
 
-  await page.addScriptTag({ type: "module", content: hotfixSource });
-  await expect.poll(() => page.evaluate(() => window.KairosManuscriptDocxHotfix?.ready)).toBe(true);
   await page.addScriptTag({ type: "module", content: studioSource });
+  await expect.poll(() => page.evaluate(() => window.KairosManuscriptStudio?.ready)).toBe(true);
   await page.locator(".manuscript-launch").tap();
   await expect(page.locator("#manuscript-studio-overlay")).toBeVisible();
 
@@ -115,7 +148,7 @@ test("iPhone WebKit resolves Mammoth named extractRawText when default lacks the
     buffer: Buffer.from("PK DOCX fixture bytes"),
   });
 
-  await expect(page.locator(".manuscript-source")).toContainText("stored and verified");
+  await expect(page.locator(".manuscript-source")).toContainText("stored and verified through chunks");
   await expect(page.locator(".manuscript-source")).toContainText("DOCX");
   await expect(page.locator("#ms-body")).toHaveValue(MANUSCRIPT);
   await expect(page.locator(".manuscript-error")).toHaveCount(0);
@@ -124,8 +157,11 @@ test("iPhone WebKit resolves Mammoth named extractRawText when default lacks the
 
   await expect(page.locator(".manuscript-result")).toContainText("Production intake created");
   await expect(page.locator(".manuscript-result")).toContainText("Your DOCX manuscript has advanced into MMG production intake.");
-  expect(calls.map(call => `${call.method} ${call.path}`)).toEqual([
-    `POST /api/production-registry/manuscripts/${PROJECT_ID}/source`,
+  expect(calls).toEqual([
+    `POST /api/production-registry/manuscripts/${PROJECT_ID}/source/session`,
+    `PUT /api/production-registry/manuscripts/${PROJECT_ID}/source/file/0`,
+    `PUT /api/production-registry/manuscripts/${PROJECT_ID}/source/text-chunk/0`,
+    `POST /api/production-registry/manuscripts/${PROJECT_ID}/source/commit`,
     "POST /api/manuscript/intake/advance",
     `PATCH /api/production-registry/projects/${PROJECT_ID}`,
   ]);
