@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const BUILD = "kairos-manuscript-production-validator-20260730-local-canonical-1";
+const BUILD = "kairos-manuscript-production-validator-20260802-autonomy-cron-2";
 const here = dirname(fileURLToPath(import.meta.url));
 const workerRoot = join(here, "..");
 const sourceRoot = join(workerRoot, "src");
@@ -51,7 +51,6 @@ for (const marker of [
   'KAIROS_CLOUDFLARE_NEURONS_ENABLED = "false"',
   'KAIROS_SHOPIFY_WRITES_ENABLED = "true"',
   'KAIROS_SHOPIFY_LIVE_PUBLISH_ENABLED = "true"',
-  'crons = ["0 15 * * *", "0 2 * * *"]',
   'binding = "ASSETS"',
   'binding = "IMAGES"',
   'name = "KAIROS_PROJECTS"',
@@ -59,6 +58,19 @@ for (const marker of [
   'binding = "KAIROS_PROJECT_WORKFLOW"',
   'binding = "KAIROS_MANUSCRIPT_WORKFLOW"',
 ]) assert.ok(wrangler.includes(marker), `Required local production configuration is missing: ${marker}`);
+
+const triggerMatch = wrangler.match(/^\[triggers\]\s*\ncrons\s*=\s*\[([^\]]*)\]/mu);
+assert.ok(triggerMatch, "Wrangler must declare the governed production cron list.");
+const configuredCrons = [...triggerMatch[1].matchAll(/"([^"]+)"/gu)].map((match) => match[1]);
+for (const requiredCron of ["0 15 * * *", "0 2 * * *", "0 * * * *"]) {
+  assert.equal(
+    configuredCrons.filter((cron) => cron === requiredCron).length,
+    1,
+    `Required production cron must appear exactly once: ${requiredCron}`,
+  );
+}
+assert.equal(configuredCrons.length, 3, "Wrangler must contain only the two manuscript crons and the governed hourly autonomy cron.");
+
 assert.ok(!wrangler.includes('binding = "AI"'), "Paid Cloudflare AI binding must remain absent.");
 assert.ok(!wrangler.includes('KAIROS_MODEL_PROVIDER = "openai"'), "OpenAI must not be configured as the production model provider.");
 assert.ok(!wrangler.includes('KAIROS_MODEL_ENDPOINT ='), "A backend model endpoint must not be configured for local-only production.");
