@@ -16,6 +16,10 @@ import {
 } from "./kairos-manuscript-package-state-v1.js";
 import { handleManuscriptRequest } from "./manuscript-studio-v1.js";
 import { KairosAutonomyLedger } from "./autonomy/kairos-autonomy-ledger-v1.js";
+import {
+  handleAutonomyApiRequest,
+  KAIROS_AUTONOMY_API_BUILD,
+} from "./autonomy/kairos-autonomy-api-v1.js";
 
 export {
   KairosProject,
@@ -33,7 +37,7 @@ export class KairosManuscriptSource extends BaseKairosManuscriptSource {
   }
 }
 
-export const KAIROS_LOCAL_CANONICAL_ENTRY_BUILD = "kairos-local-canonical-entry-20260802-1-autonomy-ledger";
+export const KAIROS_LOCAL_CANONICAL_ENTRY_BUILD = "kairos-local-canonical-entry-20260802-1-autonomy-api";
 
 const PROVIDER_INDEPENDENT_OPERATIONAL_PATHS = new Set([
   "/api/hub/run",
@@ -49,6 +53,11 @@ const DIRECT_MANUSCRIPT_PATHS = new Set([
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    const autonomyResponse = await handleAutonomyApiRequest(request, env, ctx, {
+      dispatchEnv: providerBlockedEnv(env),
+    });
+    if (autonomyResponse) return stamp(autonomyResponse);
 
     if (DIRECT_MANUSCRIPT_PATHS.has(url.pathname)) {
       try {
@@ -123,6 +132,7 @@ function stamp(response) {
   headers.set("X-Kairos-OpenAI-Calls", "disabled");
   headers.set("X-Kairos-Source-Shard", KAIROS_MANUSCRIPT_SOURCE_SHARD_BUILD);
   headers.set("X-Kairos-Package-State-Build", headers.get("X-Kairos-Package-State-Build") || KAIROS_MANUSCRIPT_PACKAGE_STATE_BUILD);
+  headers.set("X-Kairos-Autonomy-API-Build", headers.get("X-Kairos-Autonomy-API-Build") || KAIROS_AUTONOMY_API_BUILD);
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
