@@ -1,4 +1,4 @@
-export const KAIROS_AUTONOMY_LEDGER_BUILD = "kairos-autonomy-ledger-20260802-1";
+export const KAIROS_AUTONOMY_LEDGER_BUILD = "kairos-autonomy-ledger-20260802-2";
 
 export const AUTONOMY_EVENT_STATUS = Object.freeze({
   ACCEPTED: "accepted",
@@ -17,7 +17,7 @@ const EXECUTABLE_STATUSES = new Set([
   AUTONOMY_EVENT_STATUS.FAILED,
   AUTONOMY_EVENT_STATUS.RUNNING,
 ]);
-const BLOCKABLE_STATUSES = new Set([
+const DIRECTLY_BLOCKABLE_STATUSES = new Set([
   AUTONOMY_EVENT_STATUS.ACCEPTED,
   AUTONOMY_EVENT_STATUS.FAILED,
 ]);
@@ -57,12 +57,11 @@ export class KairosAutonomyLedger {
     try {
       body = await readJsonBody(request);
     } catch (error) {
-      const status = error?.code === "REQUEST_TOO_LARGE" ? 413 : 400;
       return jsonResponse({
         ok: false,
         code: error?.code || "INVALID_JSON",
         error: error instanceof Error ? error.message : "The request body is invalid.",
-      }, status);
+      }, error?.code === "REQUEST_TOO_LARGE" ? 413 : 400);
     }
 
     try {
@@ -112,9 +111,7 @@ export class AutonomyLedgerStore {
 
     return this.repository.transaction((repository) => {
       const existing = repository.get(normalized.event.tenantId, normalized.event.eventId);
-      if (existing) {
-        return success("duplicate", existing, { duplicate: true });
-      }
+      if (existing) return success("duplicate", existing, { duplicate: true });
 
       const timestamp = this.timestamp();
       const record = {
@@ -148,8 +145,9 @@ export class AutonomyLedgerStore {
     const identity = normalizeIdentity(tenantId, eventId);
     if (!identity.ok) return identity;
     const record = this.repository.get(identity.tenantId, identity.eventId);
-    if (!record) return failure("not_found", "EVENT_NOT_FOUND", "The autonomy event was not found.", 404);
-    return success("found", record);
+    return record
+      ? success("found", record)
+      : failure("not_found", "EVENT_NOT_FOUND", "The autonomy event was not found.", 404);
   }
 
   listRecentEvents(tenantId, limit = 10) {
@@ -188,14 +186,17 @@ export class AutonomyLedgerStore {
         );
       }
       if (!EXECUTABLE_STATUSES.has(record.status)) {
-        return failure("invalid_transition", "INVALID_STATE_TRANSITION", "The event cannot acquire a lease from its current state.", 409, record);
+        return failure(
+          "invalid_transition",
+          "INVALID_STATE_TRANSITION",
+          "The event cannot acquire a lease from its current state.",
+          409,
+          record,
+        );
       }
 
       const now = this.currentDate();
-      const activeLease = record.status === AUTONOMY_EVENT_STATUS.RUNNING
-        && record.leaseExpiresAt
-        && Date.parse(record.leaseExpiresAt) > now.getTime();
-      if (activeLease) {
+      if (record.status === AUTONOMY_EVENT_STATUS.RUNNING && isLeaseActive(record, now)) {
         return failure("lease_conflict", "ACTIVE_LEASE_EXISTS", "Another executor holds an active lease.", 409, record);
       }
 
@@ -215,7 +216,6 @@ export class AutonomyLedgerStore {
         error: null,
         updatedAt: timestamp,
       };
-
       repository.replace(nextRecord);
       return success(recovered ? "lease_recovered" : "lease_acquired", nextRecord, {
         recovered,
@@ -239,7 +239,36 @@ export class AutonomyLedgerStore {
     return this.repository.transaction((repository) => {
       const record = repository.get(identity.tenantId, identity.eventId);
       if (!record) return failure("not_found", "EVENT_NOT_FOUND", "The autonomy event was not found.", 404);
-      if (!BLOCKABLE_STATUSES.has(record.status)) {
+
+      if (record.status === AUTONOMY_EVENT_STATUS.BLOCKED) {
+        return success("duplicate", record, { duplicate: true });
+      }
+      if (record.status === AUTONOMY_EVENT_STATUS.COMPLETED) {
+        return failure(
+          "invalid_transition",
+          "INVALID_STATE_TRANSITION",
+          "Completed events cannot transition to blocked.",
+          409,
+          record,
+        );
+      }
+
+      if (record.status === AUTONOMY_EVENT_STATUS.RUNNING) {
+        const leaseToken = normalizeRequiredString(input.leaseToken, "leaseToken", 512);
+        if (!leaseToken.ok) return leaseToken;
+        const now = this.currentDate();
+        if (!record.leaseToken
+          || record.leaseToken !== leaseToken.value
+          || !isLeaseActive(record, now)) {
+          return failure(
+            "lease_conflict",
+            "STALE_OR_INVALID_LEASE",
+            "The execution lease is stale, expired, or invalid.",
+            409,
+            record,
+          );
+        }
+      } else if (!DIRECTLY_BLOCKABLE_STATUSES.has(record.status)) {
         return failure(
           "invalid_transition",
           "INVALID_STATE_TRANSITION",
@@ -253,8 +282,12 @@ export class AutonomyLedgerStore {
       const nextRecord = {
         ...record,
         status: AUTONOMY_EVENT_STATUS.BLOCKED,
+        completedAt: null,
+        failedAt: null,
         leaseExpiresAt: null,
         leaseToken: null,
+        result: null,
+        error: null,
         policyDecision: sanitizeJson(input.policyDecision),
         updatedAt: timestamp,
       };
@@ -371,18 +404,15 @@ export class SqlAutonomyLedgerRepository {
         new Date().toISOString(),
       );
     };
-
-    if (typeof this.storage.transactionSync === "function") {
-      return this.storage.transactionSync(initialize);
-    }
-    return initialize();
+    return typeof this.storage.transactionSync === "function"
+      ? this.storage.transactionSync(initialize)
+      : initialize();
   }
 
   transaction(callback) {
-    if (typeof this.storage.transactionSync === "function") {
-      return this.storage.transactionSync(() => callback(this));
-    }
-    return callback(this);
+    return typeof this.storage.transactionSync === "function"
+      ? this.storage.transactionSync(() => callback(this))
+      : callback(this);
   }
 
   get(tenantId, eventId) {
@@ -466,7 +496,6 @@ function normalizeEvent(event) {
   if (!event || typeof event !== "object" || Array.isArray(event)) {
     return failure("rejected", "INVALID_EVENT", "A validated event object is required.", 400);
   }
-
   const fields = [
     ["eventId", event.eventId, 256],
     ["tenantId", event.tenantId, 256],
@@ -479,7 +508,6 @@ function normalizeEvent(event) {
     if (!result.ok) return result;
     normalized[field] = result.value;
   }
-
   return {
     ok: true,
     event: {
@@ -515,6 +543,11 @@ function normalizeOptionalString(value, maxLength) {
   return value.trim().slice(0, maxLength);
 }
 
+function isLeaseActive(record, now) {
+  const expiry = Date.parse(record.leaseExpiresAt);
+  return Number.isFinite(expiry) && expiry > now.getTime();
+}
+
 function sanitizeError(value) {
   const source = value instanceof Error
     ? { name: value.name, message: value.message, code: value.code, retriable: value.retriable }
@@ -523,7 +556,6 @@ function sanitizeError(value) {
       : value && typeof value === "object"
         ? value
         : { message: "Autonomy execution failed." };
-
   const sanitized = sanitizeJson(source) || { message: "Autonomy execution failed." };
   if (typeof sanitized.message === "string") {
     sanitized.message = sanitized.message.slice(0, MAX_ERROR_MESSAGE_LENGTH);
@@ -548,14 +580,10 @@ function sanitizeJson(value) {
     }
     return nested;
   });
-
   if (!json) return null;
   const bytes = new TextEncoder().encode(json);
   if (bytes.byteLength <= MAX_JSON_BYTES) return JSON.parse(json);
-  return {
-    truncated: true,
-    message: "Stored value exceeded the ledger serialization limit.",
-  };
+  return { truncated: true, message: "Stored value exceeded the ledger serialization limit." };
 }
 
 function encodeJson(value) {
