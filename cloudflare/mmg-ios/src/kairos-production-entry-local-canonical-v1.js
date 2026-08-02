@@ -15,12 +15,14 @@ import {
   KAIROS_MANUSCRIPT_PACKAGE_STATE_BUILD,
 } from "./kairos-manuscript-package-state-v1.js";
 import { handleManuscriptRequest } from "./manuscript-studio-v1.js";
+import { KairosAutonomyLedger } from "./autonomy/kairos-autonomy-ledger-v1.js";
 
 export {
   KairosProject,
   KairosProjectAgent,
   KairosProjectFoundationWorkflow,
   KairosManuscriptGenerationWorkflow,
+  KairosAutonomyLedger,
 };
 
 export class KairosManuscriptSource extends BaseKairosManuscriptSource {
@@ -31,7 +33,7 @@ export class KairosManuscriptSource extends BaseKairosManuscriptSource {
   }
 }
 
-export const KAIROS_LOCAL_CANONICAL_ENTRY_BUILD = "kairos-local-canonical-entry-20260731-4-bounded-package-state";
+export const KAIROS_LOCAL_CANONICAL_ENTRY_BUILD = "kairos-local-canonical-entry-20260802-1-autonomy-ledger";
 
 const PROVIDER_INDEPENDENT_OPERATIONAL_PATHS = new Set([
   "/api/hub/run",
