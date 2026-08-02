@@ -62,8 +62,8 @@ test("Project Setup stores the cover and assignment in one idempotent transactio
       setupPosts += 1;
       expect(request.headers()["x-kairos-idempotency-key"]).toBeTruthy();
       expect(request.headers()["content-type"]).toContain("multipart/form-data");
-      const body = await request.body();
-      expect(body.byteLength).toBeGreaterThan(20);
+      const body = request.postDataBuffer();
+      expect(body?.byteLength || 0).toBeGreaterThan(20);
       await route.fulfill({
         status: 201,
         contentType: "application/json",
