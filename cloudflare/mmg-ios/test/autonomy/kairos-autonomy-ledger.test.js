@@ -10,28 +10,21 @@ class MemoryRepository {
   constructor() {
     this.records = new Map();
   }
-
-  transaction(callback) {
-    return callback(this);
-  }
-
+  transaction(callback) { return callback(this); }
   get(tenantId, eventId) {
     const value = this.records.get(this.key(tenantId, eventId));
     return value ? structuredClone(value) : null;
   }
-
   insert(record) {
     const key = this.key(record.tenantId, record.eventId);
     if (this.records.has(key)) throw new Error("duplicate record");
     this.records.set(key, structuredClone(record));
   }
-
   replace(record) {
     const key = this.key(record.tenantId, record.eventId);
     if (!this.records.has(key)) throw new Error("record missing");
     this.records.set(key, structuredClone(record));
   }
-
   list(tenantId, limit) {
     return [...this.records.values()]
       .filter((record) => record.tenantId === tenantId)
@@ -39,10 +32,7 @@ class MemoryRepository {
       .slice(0, limit)
       .map((record) => structuredClone(record));
   }
-
-  key(tenantId, eventId) {
-    return `${tenantId}\u0000${eventId}`;
-  }
+  key(tenantId, eventId) { return `${tenantId}\u0000${eventId}`; }
 }
 
 function harness() {
@@ -56,12 +46,8 @@ function harness() {
   return {
     repository,
     store,
-    advance(ms) {
-      nowMs += ms;
-    },
-    setTime(value) {
-      nowMs = Date.parse(value);
-    },
+    advance(ms) { nowMs += ms; },
+    setTime(value) { nowMs = Date.parse(value); },
   };
 }
 
@@ -125,12 +111,7 @@ test("execution attempts increment atomically across failure and retry", () => {
   const { store, advance } = harness();
   store.reserveEvent(event());
   const first = store.acquireLease({ tenantId: "mmg", eventId: "evt_1" });
-  const failed = store.markFailed({
-    tenantId: "mmg",
-    eventId: "evt_1",
-    leaseToken: first.leaseToken,
-    error: { message: "temporary" },
-  });
+  const failed = store.markFailed({ tenantId: "mmg", eventId: "evt_1", leaseToken: first.leaseToken, error: { message: "temporary" } });
   advance(1_000);
   const retry = store.acquireLease({ tenantId: "mmg", eventId: "evt_1" });
   assert.equal(failed.record.attempt, 1);
@@ -141,12 +122,7 @@ test("completed events cannot return to running", () => {
   const { store } = harness();
   store.reserveEvent(event());
   const lease = store.acquireLease({ tenantId: "mmg", eventId: "evt_1" });
-  store.markCompleted({
-    tenantId: "mmg",
-    eventId: "evt_1",
-    leaseToken: lease.leaseToken,
-    result: { status: "passed" },
-  });
+  store.markCompleted({ tenantId: "mmg", eventId: "evt_1", leaseToken: lease.leaseToken, result: { status: "passed" } });
   const rerun = store.acquireLease({ tenantId: "mmg", eventId: "evt_1" });
   assert.equal(rerun.ok, false);
   assert.equal(rerun.code, "EVENT_TERMINAL");
@@ -155,11 +131,7 @@ test("completed events cannot return to running", () => {
 test("blocked events cannot execute", () => {
   const { store } = harness();
   store.reserveEvent(event());
-  const blocked = store.markBlocked({
-    tenantId: "mmg",
-    eventId: "evt_1",
-    policyDecision: { decision: "DENY", reasonCode: "TEST_DENIAL" },
-  });
+  const blocked = store.markBlocked({ tenantId: "mmg", eventId: "evt_1", policyDecision: { decision: "DENY", reasonCode: "TEST_DENIAL" } });
   const run = store.acquireLease({ tenantId: "mmg", eventId: "evt_1" });
   assert.equal(blocked.record.status, AUTONOMY_EVENT_STATUS.BLOCKED);
   assert.equal(run.ok, false);
@@ -174,12 +146,7 @@ test("failure details are serialized without secrets or stack traces", () => {
     tenantId: "mmg",
     eventId: "evt_1",
     leaseToken: lease.leaseToken,
-    error: {
-      message: "network failed",
-      stack: "sensitive stack",
-      authorization: "Bearer secret-value",
-      nested: { apiKey: "provider-key" },
-    },
+    error: { message: "network failed", stack: "sensitive stack", authorization: "Bearer secret-value", nested: { apiKey: "provider-key" } },
   });
   assert.equal(failed.record.error.stack, undefined);
   assert.equal(failed.record.error.authorization, "[REDACTED]");
@@ -215,12 +182,7 @@ test("a stale lease token cannot complete an event after lease recovery", () => 
   const first = store.acquireLease({ tenantId: "mmg", eventId: "evt_1", leaseDurationMs: 1_000 });
   advance(1_001);
   const second = store.acquireLease({ tenantId: "mmg", eventId: "evt_1", leaseDurationMs: 1_000 });
-  const staleCompletion = store.markCompleted({
-    tenantId: "mmg",
-    eventId: "evt_1",
-    leaseToken: first.leaseToken,
-    result: { status: "stale" },
-  });
+  const staleCompletion = store.markCompleted({ tenantId: "mmg", eventId: "evt_1", leaseToken: first.leaseToken, result: { status: "stale" } });
   assert.equal(staleCompletion.ok, false);
   assert.equal(staleCompletion.code, "STALE_OR_INVALID_LEASE");
   assert.equal(staleCompletion.record.leaseToken, second.leaseToken);
@@ -229,12 +191,61 @@ test("a stale lease token cannot complete an event after lease recovery", () => 
 test("invalid state transitions fail closed", () => {
   const { store } = harness();
   store.reserveEvent(event());
-  const completeBeforeRun = store.markCompleted({
-    tenantId: "mmg",
-    eventId: "evt_1",
-    leaseToken: "lease_invalid",
-    result: {},
-  });
+  const completeBeforeRun = store.markCompleted({ tenantId: "mmg", eventId: "evt_1", leaseToken: "lease_invalid", result: {} });
   assert.equal(completeBeforeRun.ok, false);
   assert.equal(completeBeforeRun.code, "INVALID_STATE_TRANSITION");
+});
+
+test("the current active lease holder can block a running event", () => {
+  const { store } = harness();
+  store.reserveEvent(event());
+  const lease = store.acquireLease({ tenantId: "mmg", eventId: "evt_1", leaseDurationMs: 30_000 });
+  const blocked = store.markBlocked({ tenantId: "mmg", eventId: "evt_1", leaseToken: lease.leaseToken, policyDecision: { decision: "DENY" } });
+  assert.equal(blocked.ok, true);
+  assert.equal(blocked.record.status, AUTONOMY_EVENT_STATUS.BLOCKED);
+  assert.equal(blocked.record.leaseToken, null);
+});
+
+test("a stale lease token cannot block after lease recovery", () => {
+  const { store, advance } = harness();
+  store.reserveEvent(event());
+  const first = store.acquireLease({ tenantId: "mmg", eventId: "evt_1", leaseDurationMs: 1_000 });
+  advance(1_001);
+  const second = store.acquireLease({ tenantId: "mmg", eventId: "evt_1", leaseDurationMs: 30_000 });
+  const blocked = store.markBlocked({ tenantId: "mmg", eventId: "evt_1", leaseToken: first.leaseToken, policyDecision: { decision: "DENY" } });
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.code, "STALE_OR_INVALID_LEASE");
+  assert.equal(blocked.record.leaseToken, second.leaseToken);
+});
+
+test("an expired lease token cannot block before recovery", () => {
+  const { store, advance } = harness();
+  store.reserveEvent(event());
+  const lease = store.acquireLease({ tenantId: "mmg", eventId: "evt_1", leaseDurationMs: 1_000 });
+  advance(1_001);
+  const blocked = store.markBlocked({ tenantId: "mmg", eventId: "evt_1", leaseToken: lease.leaseToken, policyDecision: { decision: "DENY" } });
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.code, "STALE_OR_INVALID_LEASE");
+});
+
+test("blocking an already blocked event is idempotent and does not mutate it", () => {
+  const { store, advance } = harness();
+  store.reserveEvent(event());
+  const first = store.markBlocked({ tenantId: "mmg", eventId: "evt_1", policyDecision: { decision: "DENY", reasonCode: "FIRST" } });
+  advance(5_000);
+  const duplicate = store.markBlocked({ tenantId: "mmg", eventId: "evt_1", policyDecision: { decision: "DENY", reasonCode: "SECOND" } });
+  assert.equal(duplicate.ok, true);
+  assert.equal(duplicate.duplicate, true);
+  assert.equal(duplicate.record.updatedAt, first.record.updatedAt);
+  assert.equal(duplicate.record.policyDecision.reasonCode, "FIRST");
+});
+
+test("completed events cannot transition to blocked", () => {
+  const { store } = harness();
+  store.reserveEvent(event());
+  const lease = store.acquireLease({ tenantId: "mmg", eventId: "evt_1" });
+  store.markCompleted({ tenantId: "mmg", eventId: "evt_1", leaseToken: lease.leaseToken, result: { status: "passed" } });
+  const blocked = store.markBlocked({ tenantId: "mmg", eventId: "evt_1", policyDecision: { decision: "DENY" } });
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.code, "INVALID_STATE_TRANSITION");
 });
