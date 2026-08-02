@@ -6,6 +6,7 @@ const controllerPath = new URL("../web/kairos-dashboard/scripts/manuscript-auto-
 const guardPath = new URL("../web/kairos-dashboard/scripts/manuscript-production-flow-guard.js", import.meta.url);
 const postIntakeGuardPath = new URL("../web/kairos-dashboard/scripts/manuscript-post-intake-guard.js", import.meta.url);
 const directOpenPath = new URL("../web/kairos-dashboard/scripts/manuscript-direct-open-controller.js", import.meta.url);
+const orchestratorPath = new URL("../web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js", import.meta.url);
 const workspacePath = new URL("../web/kairos-dashboard/scripts/production-workspace-controller.js", import.meta.url);
 const bootstrapPath = new URL("../web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js", import.meta.url);
 const loaderPath = new URL("../web/kairos-dashboard/scripts/legacy-runtime-loader.js", import.meta.url);
@@ -98,6 +99,22 @@ test("the direct route independently loads Studio and owns visible recovery", as
   assert.match(source, /KairosManuscriptDirectOpen/);
 });
 
+test("the authoritative orchestrator owns setup persistence and deterministic manufacturing", async () => {
+  const source = await readFile(orchestratorPath, "utf8");
+
+  assert.match(source, /kairos-manuscript-pipeline-orchestrator-20260801-1/);
+  assert.match(source, /new FormData\(\)/);
+  assert.match(source, /X-Kairos-Idempotency-Key/);
+  assert.match(source, /auto-pipeline\/run/);
+  assert.match(source, /Manufacture Delivery Package/);
+  assert.match(source, /Preview Package/);
+  assert.match(source, /Approve Package/);
+  assert.match(source, /Preview Shopify Product/);
+  assert.match(source, /Publish Product Live/);
+  assert.doesNotMatch(source, /\/setup\/cover/);
+  assert.doesNotMatch(source, /api\.openai\.com/);
+});
+
 test("the manuscript URL is isolated from the advanced command shell", async () => {
   const [index, manuscriptPage] = await Promise.all([
     readFile(indexPath, "utf8"),
@@ -110,10 +127,12 @@ test("the manuscript URL is isolated from the advanced command shell", async () 
   assert.match(index, /location\.replace\(target\.href\)/);
   assert.match(index, /mmg-dedicated-manuscript-route/);
 
-  assert.match(manuscriptPage, /kairos-dedicated-manuscript-route-20260801-2/);
+  assert.match(manuscriptPage, /kairos-dedicated-manuscript-route-20260801-3-pipeline-orchestrator/);
+  assert.match(manuscriptPage, /kairos-manuscript-pipeline-orchestrator-20260801-1/);
   assert.match(manuscriptPage, /data-kairos-dedicated-manuscript="true"/);
   assert.match(manuscriptPage, /safari-manuscript-intake-compat\.js/);
   assert.match(manuscriptPage, /manuscript-direct-open-controller\.js/);
+  assert.match(manuscriptPage, /manuscript-pipeline-orchestrator\.js/);
   assert.match(manuscriptPage, /kairos-manuscript-route-boot/);
   assert.doesNotMatch(manuscriptPage, /legacy-runtime-loader\.js/);
   assert.doesNotMatch(manuscriptPage, /manuscript-production-flow-bootstrap\.js/);
