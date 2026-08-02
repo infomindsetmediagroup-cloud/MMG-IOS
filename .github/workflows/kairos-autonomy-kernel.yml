@@ -1,0 +1,51 @@
+name: Kairos Autonomy Kernel
+
+on:
+  pull_request:
+    paths:
+      - "cloudflare/mmg-ios/src/autonomy/**"
+      - "cloudflare/mmg-ios/test/autonomy/**"
+      - "cloudflare/mmg-ios/package.json"
+      - ".github/workflows/kairos-autonomy-kernel.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "cloudflare/mmg-ios/src/autonomy/**"
+      - "cloudflare/mmg-ios/test/autonomy/**"
+      - "cloudflare/mmg-ios/package.json"
+      - ".github/workflows/kairos-autonomy-kernel.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kairos-autonomy-kernel-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate autonomy kernel
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check module syntax
+        run: |
+          node --check cloudflare/mmg-ios/src/autonomy/kairos-event-v1.js
+          node --check cloudflare/mmg-ios/src/autonomy/kairos-workflow-registry-v1.js
+          node --check cloudflare/mmg-ios/src/autonomy/kairos-policy-engine-v1.js
+          node --check cloudflare/mmg-ios/src/autonomy/website-health-workflow-v1.js
+          node --check cloudflare/mmg-ios/test/autonomy/kairos-policy-engine.test.js
+
+      - name: Run autonomy regression suite
+        working-directory: cloudflare/mmg-ios
+        run: npm run test:autonomy
