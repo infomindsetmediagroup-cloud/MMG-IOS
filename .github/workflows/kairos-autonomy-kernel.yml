@@ -5,6 +5,8 @@ on:
     paths:
       - "cloudflare/mmg-ios/src/autonomy/**"
       - "cloudflare/mmg-ios/test/autonomy/**"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js"
+      - "cloudflare/mmg-ios/wrangler.toml"
       - "cloudflare/mmg-ios/package.json"
       - ".github/workflows/kairos-autonomy-kernel.yml"
   push:
@@ -13,6 +15,8 @@ on:
     paths:
       - "cloudflare/mmg-ios/src/autonomy/**"
       - "cloudflare/mmg-ios/test/autonomy/**"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js"
+      - "cloudflare/mmg-ios/wrangler.toml"
       - "cloudflare/mmg-ios/package.json"
       - ".github/workflows/kairos-autonomy-kernel.yml"
 
@@ -27,7 +31,7 @@ jobs:
   validate:
     name: Validate autonomy kernel
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Check out repository
@@ -44,8 +48,28 @@ jobs:
           node --check cloudflare/mmg-ios/src/autonomy/kairos-workflow-registry-v1.js
           node --check cloudflare/mmg-ios/src/autonomy/kairos-policy-engine-v1.js
           node --check cloudflare/mmg-ios/src/autonomy/website-health-workflow-v1.js
+          node --check cloudflare/mmg-ios/src/autonomy/kairos-autonomy-ledger-v1.js
           node --check cloudflare/mmg-ios/test/autonomy/kairos-policy-engine.test.js
+          node --check cloudflare/mmg-ios/test/autonomy/kairos-autonomy-ledger.test.js
+          node --check cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
+
+      - name: Validate ledger export and migration contract
+        run: |
+          grep -q 'name = "KAIROS_AUTONOMY_LEDGER"' cloudflare/mmg-ios/wrangler.toml
+          grep -q 'class_name = "KairosAutonomyLedger"' cloudflare/mmg-ios/wrangler.toml
+          grep -q 'tag = "kairos-autonomy-ledger-v1"' cloudflare/mmg-ios/wrangler.toml
+          grep -q 'new_sqlite_classes = \["KairosAutonomyLedger"\]' cloudflare/mmg-ios/wrangler.toml
+          grep -q 'KairosAutonomyLedger' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
+          ! grep -q '/api/autonomy/' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
 
       - name: Run autonomy regression suite
         working-directory: cloudflare/mmg-ios
         run: npm run test:autonomy
+
+      - name: Install Worker dependencies
+        working-directory: cloudflare/mmg-ios
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Validate active Worker bundle
+        working-directory: cloudflare/mmg-ios
+        run: npx wrangler deploy --dry-run --outdir .wrangler-autonomy-ledger-bundle
