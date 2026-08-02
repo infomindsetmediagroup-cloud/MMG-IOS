@@ -19,7 +19,12 @@ import { KairosAutonomyLedger } from "./autonomy/kairos-autonomy-ledger-v1.js";
 import {
   handleAutonomyApiRequest,
   KAIROS_AUTONOMY_API_BUILD,
-} from "./autonomy/kairos-autonomy-api-v1.js";
+} from "./autonomy/kairos-autonomy-api-v2.js";
+import {
+  handleAutonomyScheduledEvent,
+  KAIROS_AUTONOMY_SCHEDULER_BUILD,
+  KAIROS_AUTONOMY_HEALTH_CRON,
+} from "./autonomy/kairos-autonomy-scheduler-v1.js";
 
 export {
   KairosProject,
@@ -37,7 +42,7 @@ export class KairosManuscriptSource extends BaseKairosManuscriptSource {
   }
 }
 
-export const KAIROS_LOCAL_CANONICAL_ENTRY_BUILD = "kairos-local-canonical-entry-20260802-1-autonomy-api";
+export const KAIROS_LOCAL_CANONICAL_ENTRY_BUILD = "kairos-local-canonical-entry-20260802-2-autonomy-scheduler";
 
 const PROVIDER_INDEPENDENT_OPERATIONAL_PATHS = new Set([
   "/api/hub/run",
@@ -89,6 +94,9 @@ export default {
   },
 
   async scheduled(controller, env, ctx) {
+    if (controller?.cron === KAIROS_AUTONOMY_HEALTH_CRON) {
+      return handleAutonomyScheduledEvent(controller, providerBlockedEnv(env), ctx);
+    }
     if (typeof canonicalRuntime.scheduled === "function") {
       return canonicalRuntime.scheduled(controller, providerBlockedEnv(env), ctx);
     }
@@ -133,6 +141,7 @@ function stamp(response) {
   headers.set("X-Kairos-Source-Shard", KAIROS_MANUSCRIPT_SOURCE_SHARD_BUILD);
   headers.set("X-Kairos-Package-State-Build", headers.get("X-Kairos-Package-State-Build") || KAIROS_MANUSCRIPT_PACKAGE_STATE_BUILD);
   headers.set("X-Kairos-Autonomy-API-Build", headers.get("X-Kairos-Autonomy-API-Build") || KAIROS_AUTONOMY_API_BUILD);
+  headers.set("X-Kairos-Autonomy-Scheduler-Build", headers.get("X-Kairos-Autonomy-Scheduler-Build") || KAIROS_AUTONOMY_SCHEDULER_BUILD);
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,

@@ -16,7 +16,7 @@ not_found_handling = "single-page-application"
 binding = "IMAGES"
 
 [triggers]
-crons = ["0 15 * * *", "0 2 * * *"]
+crons = ["0 15 * * *", "0 2 * * *", "0 * * * *"]
 
 [[durable_objects.bindings]]
 name = "KAIROS_PROJECTS"
@@ -77,7 +77,8 @@ new_sqlite_classes = ["KairosAutonomyLedger"]
 # Canonical approvals: Approve Foundation, Start Local Production, Approve Package, Approve & Publish Product.
 # Cloudflare neuron use and paid external inference remain disabled. Direct Shopify, theme, page, and navigation routes remain denied.
 # Manuscript source sessions use one dedicated Durable Object per project and do not share the global production-registry object.
-# The autonomy ledger is a SQLite-backed internal Durable Object. No public autonomy route or workflow execution is enabled in this slice.
+# The authenticated autonomy API is available through the canonical Worker boundary.
+# Hourly scheduled autonomy remains fail-closed unless the triple activation gate is explicitly configured in Cloudflare.
 
 [vars]
 SHOPIFY_STORE_DOMAIN = "07kd8e-qw.myshopify.com"

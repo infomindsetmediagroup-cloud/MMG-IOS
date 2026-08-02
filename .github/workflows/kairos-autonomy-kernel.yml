@@ -52,11 +52,17 @@ jobs:
           node --check cloudflare/mmg-ios/src/autonomy/kairos-autonomy-ledger-client-v1.js
           node --check cloudflare/mmg-ios/src/autonomy/kairos-autonomy-dispatcher-v1.js
           node --check cloudflare/mmg-ios/src/autonomy/kairos-autonomy-api-v1.js
+          node --check cloudflare/mmg-ios/src/autonomy/kairos-autonomy-api-v2.js
+          node --check cloudflare/mmg-ios/src/autonomy/kairos-autonomy-observability-v1.js
+          node --check cloudflare/mmg-ios/src/autonomy/kairos-autonomy-scheduler-v1.js
           node --check cloudflare/mmg-ios/test/autonomy/kairos-policy-engine.test.js
           node --check cloudflare/mmg-ios/test/autonomy/kairos-autonomy-ledger.test.js
           node --check cloudflare/mmg-ios/test/autonomy/kairos-autonomy-ledger-client.test.js
           node --check cloudflare/mmg-ios/test/autonomy/kairos-autonomy-dispatcher.test.js
           node --check cloudflare/mmg-ios/test/autonomy/kairos-autonomy-api.test.js
+          node --check cloudflare/mmg-ios/test/autonomy/kairos-autonomy-observability.test.js
+          node --check cloudflare/mmg-ios/test/autonomy/kairos-autonomy-scheduler.test.js
+          node --check cloudflare/mmg-ios/test/autonomy/kairos-autonomy-activation.test.js
           node --check cloudflare/mmg-ios/test/autonomy/kairos-autonomy-worker-routing.test.js
           node --check cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
 
@@ -66,6 +72,7 @@ jobs:
           grep -q 'class_name = "KairosAutonomyLedger"' cloudflare/mmg-ios/wrangler.toml
           grep -q 'tag = "kairos-autonomy-ledger-v1"' cloudflare/mmg-ios/wrangler.toml
           grep -q 'new_sqlite_classes = \["KairosAutonomyLedger"\]' cloudflare/mmg-ios/wrangler.toml
+          test "$(grep -c 'new_sqlite_classes = \["KairosAutonomyLedger"\]' cloudflare/mmg-ios/wrangler.toml)" -eq 1
           grep -q 'KairosAutonomyLedger' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
 
       - name: Validate dispatcher boundary
@@ -82,12 +89,31 @@ jobs:
           grep -q 'KAIROS_AUTONOMY_API_TOKEN' cloudflare/mmg-ios/src/autonomy/kairos-autonomy-api-v1.js
           grep -q 'globalThis.crypto' cloudflare/mmg-ios/src/autonomy/kairos-autonomy-api-v1.js
           grep -q 'subtle.digest' cloudflare/mmg-ios/src/autonomy/kairos-autonomy-api-v1.js
+          grep -q 'handleAutonomyApiV1Request' cloudflare/mmg-ios/src/autonomy/kairos-autonomy-api-v2.js
+          grep -q 'summarizeAutonomyRecords' cloudflare/mmg-ios/src/autonomy/kairos-autonomy-api-v2.js
           grep -q 'handleAutonomyApiRequest' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
           grep -q 'dispatchEnv: providerBlockedEnv(env)' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
           grep -q 'X-Kairos-Autonomy-API-Build' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
           ! grep -Eq 'Access-Control-Allow-Origin[^\n]*\*|(^|[^[:alnum:]_])eval\(|new Function|query.*token|cookie.*authentication' cloudflare/mmg-ios/src/autonomy/kairos-autonomy-api-v1.js
           ! grep -q 'dispatchAutonomyEvent' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
-          ! grep -Eq 'crons\s*=|scheduledAutonomy|new_sqlite_classes|\[\[migrations\]\]' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
+          ! grep -Eq 'crons\s*=|new_sqlite_classes|\[\[migrations\]\]' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
+
+      - name: Validate scheduled autonomy activation boundary
+        run: |
+          grep -Fq 'crons = ["0 15 * * *", "0 2 * * *", "0 * * * *"]' cloudflare/mmg-ios/wrangler.toml
+          grep -Fq 'env.KAIROS_AUTONOMY_SCHEDULED_ENABLED === "enabled"' cloudflare/mmg-ios/src/autonomy/kairos-autonomy-scheduler-v1.js
+          grep -Fq 'env.KAIROS_AUTONOMY_ACTIVATION_GATE === KAIROS_AUTONOMY_ACTIVATION_ID' cloudflare/mmg-ios/src/autonomy/kairos-autonomy-scheduler-v1.js
+          grep -Fq 'env.KAIROS_KILL_SWITCH === "enabled"' cloudflare/mmg-ios/src/autonomy/kairos-autonomy-scheduler-v1.js
+          grep -q 'handleAutonomyScheduledEvent' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
+          grep -q 'KAIROS_AUTONOMY_HEALTH_CRON' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
+          grep -q 'KAIROS_AUTONOMY_SCHEDULER_BUILD' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
+          grep -Fq 'controller?.cron === KAIROS_AUTONOMY_HEALTH_CRON' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
+          grep -Fq 'handleAutonomyScheduledEvent(controller, providerBlockedEnv(env), ctx)' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
+          grep -Fq 'canonicalRuntime.scheduled(controller, providerBlockedEnv(env), ctx)' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
+          grep -q 'X-Kairos-Autonomy-Scheduler-Build' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
+          grep -q 'dispatchAutonomyEvent' cloudflare/mmg-ios/src/autonomy/kairos-autonomy-scheduler-v1.js
+          ! grep -Eq 'executeWebsiteHealthWorkflow|KAIROS_AUTONOMY_API_TOKEN|eval\(|new Function|github\.merge|cloudflare\.deploy\.production|shopify\.price\.change|shopify\.product\.publish|customer\.email\.send|OPENAI_API_KEY|api\.openai\.com' cloudflare/mmg-ios/src/autonomy/kairos-autonomy-scheduler-v1.js
+          ! grep -Eq '^KAIROS_AUTONOMY_SCHEDULED_ENABLED\s*=\s*"enabled"|^KAIROS_AUTONOMY_ACTIVATION_GATE\s*=\s*"website-health-v1"|^KAIROS_KILL_SWITCH\s*=\s*"enabled"' cloudflare/mmg-ios/wrangler.toml
 
       - name: Run autonomy regression suite
         working-directory: cloudflare/mmg-ios
