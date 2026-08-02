@@ -17,7 +17,7 @@ function position(fragment) {
 }
 
 test("imports the composed autonomy API handler and build", () => {
-  assert.match(source, /handleAutonomyApiRequest[\s\S]*KAIROS_AUTONOMY_API_BUILD[\s\S]*from "\.\/autonomy\/kairos-autonomy-api-v2\.js"/u);
+  assert.match(source, /handleAutonomyApiRequest[\s\S]*KAIROS_AUTONOMY_API_BUILD[\s\S]*from "\.\/autonomy\/kairos-autonomy-api-v3\.js"/u);
 });
 
 test("invokes the autonomy API handler with raw env and provider-blocked dispatch env", () => {
@@ -72,8 +72,11 @@ test("does not expose autonomy secrets in response stamping", () => {
   assert.equal(source.slice(stampStart).includes("KAIROS_AUTONOMY_API_TOKEN"), false);
 });
 
-test("updates the canonical build suffix for scheduled autonomy", () => {
-  assert.match(source, /KAIROS_LOCAL_CANONICAL_ENTRY_BUILD\s*=\s*"[^"]+-autonomy-scheduler"/u);
+test("updates the canonical build identifier for business-state API v3", () => {
+  assert.match(
+    source,
+    /KAIROS_LOCAL_CANONICAL_ENTRY_BUILD\s*=\s*"kairos-local-canonical-entry-20260802-3-business-state-api"/u,
+  );
 });
 
 test("does not embed Wrangler migration or cron configuration", () => {

@@ -211,9 +211,9 @@ test("Slice 4 API responses preserve security headers", async () => {
   }
 });
 
-test("canonical Worker composes API v2 and exact scheduled routing", () => {
+test("canonical Worker composes API v3 and exact scheduled routing", () => {
   const source = readFileSync(workerPath, "utf8");
-  assert.match(source, /from "\.\/autonomy\/kairos-autonomy-api-v2\.js"/u);
+  assert.match(source, /from "\.\/autonomy\/kairos-autonomy-api-v3\.js"/u);
   assert.match(source, /controller\?\.cron === KAIROS_AUTONOMY_HEALTH_CRON/u);
   assert.match(source, /handleAutonomyScheduledEvent\(controller, providerBlockedEnv\(env\), ctx\)/u);
   assert.match(source, /canonicalRuntime\.scheduled\(controller, providerBlockedEnv\(env\), ctx\)/u);
