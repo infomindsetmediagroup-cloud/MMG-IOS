@@ -31,7 +31,7 @@ test("imports complete operations scheduler v2", () => {
 test("uses the complete autonomous operations canonical build identifier", () => {
   assert.match(
     source,
-    /KAIROS_LOCAL_CANONICAL_ENTRY_BUILD =\s*"kairos-local-canonical-entry-20260802-4-complete-autonomous-operations";/u,
+    /KAIROS_LOCAL_CANONICAL_ENTRY_BUILD =\s*"kairos-local-canonical-entry-20260802-7-shopify-admin-dashboard";/u,
   );
 });
 

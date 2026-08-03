@@ -29,10 +29,10 @@ function uneditableHomepage() {
   };
 }
 
-test("text-only homepage planner explicitly promotes the canonical installer when no supported settings exist", () => {
+test("text-only homepage planner fails closed when no safe content settings exist", () => {
   assert.throws(
     () => buildDeterministicHomepagePackage(uneditableHomepage(), OBJECTIVE),
-    error => error?.code === "canonical_homepage_package_required",
+    error => error?.code === "approved_homepage_has_no_safe_content_settings",
   );
 });
 
@@ -76,7 +76,7 @@ test("Kairos inference policy rejects OpenAI endpoints and permits only the priv
   assert.equal(intelligenceConfigured({ KAIROS_INFERENCE_URL: "https://gpu.kairos.internal", KAIROS_INFERENCE_TOKEN: token }), true);
 });
 
-test("website route plans, approves, installs, and verifies the canonical package when the current template has no editable text", async () => {
+test("website route refuses structural replacement when the current template has no editable text", async () => {
   const originalFetch = globalThis.fetch;
   const originalCaches = globalThis.caches;
   const shopify = new MockShopify(uneditableHomepage());
@@ -94,62 +94,13 @@ test("website route plans, approves, installs, and verifies the canonical packag
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ objective: OBJECTIVE }),
     }), env);
-    assert.equal(planSubmission.status, 202);
-    const submittedPlan = await planSubmission.json();
-    const planJob = await shopifyWorker.fetch(new Request("https://kairos.example" + submittedPlan.pollURL), env);
-    const plan = (await planJob.json()).result;
-    assert.equal(plan.plan.installationMode, KAIROS_CANONICAL_HOMEPAGE_VERSION);
-    assert.equal(plan.plan.canonicalPackage.files.length, 3);
-    assert.equal(plan.plan.targetTheme.role, "UNPUBLISHED");
-    assert.equal(plan.plan.publishedTheme.role, "MAIN");
-
-    const approval = {
-      status: "approved",
-      approvedAt: new Date().toISOString(),
-      planID: plan.planID,
-      actionID: plan.actionID,
-      targetThemeID: plan.plan.targetTheme.gid,
-      sourceHashes: plan.plan.sourceHashes,
-    };
-    const executionSubmission = await shopifyWorker.fetch(new Request("https://kairos.example/api/shopify/staging/execute/jobs", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan, approval }),
-    }), env);
-    assert.equal(executionSubmission.status, 202);
-    const execution = (await executionSubmission.json()).result;
-    assert.equal(execution.status, "completed");
-    assert.equal(execution.execution.filesWritten.length, 3);
-    assert.equal(execution.execution.publishedThemeChanged, false);
-    assert.equal(execution.execution.externalInferenceProviderUsed, false);
-    assert.equal(execution.verification.every(item => item.matched), true);
-    assert.equal(shopify.files.has(CANONICAL_HOMEPAGE_SECTION_FILE), true);
-    assert.equal(shopify.files.has(CANONICAL_HOMEPAGE_CSS_FILE), true);
-    assert.equal(shopify.requestURLs.every(url => !/openai/i.test(url)), true);
-
-    const installed = JSON.parse(shopify.files.get("templates/index.json"));
-    assert.equal(installed.order[0], "mmg_canonical_homepage");
-    assert.equal(installed.sections.mmg_canonical_homepage.type, "mmg-canonical-homepage");
-    assert.equal(installed.sections.legacy_header.disabled, true);
-
-    const rollbackSubmission = await shopifyWorker.fetch(new Request("https://kairos.example/api/shopify/staging/rollback/jobs", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        rollback: execution.rollback,
-        approval: {
-          status: "approved",
-          targetThemeID: execution.rollback.targetThemeID,
-          currentHashes: execution.rollback.currentHashes,
-        },
-      }),
-    }), env);
-    assert.equal(rollbackSubmission.status, 202);
-    const rollbackResult = (await rollbackSubmission.json()).result;
-    assert.equal(rollbackResult.status, "completed");
-    assert.equal(rollbackResult.verification.every(item => item.matched), true);
+    assert.equal(planSubmission.status, 500);
+    const failure = await planSubmission.json();
+    assert.equal(failure.error?.code, "approved_homepage_has_no_safe_content_settings");
+    assert.equal(shopify.requestURLs.some(url => url.includes("mutation KairosThemeFiles")), false);
     assert.equal(shopify.files.has(CANONICAL_HOMEPAGE_SECTION_FILE), false);
     assert.equal(shopify.files.has(CANONICAL_HOMEPAGE_CSS_FILE), false);
+    assert.equal(shopify.requestURLs.every(url => !/openai/i.test(url)), true);
     assert.deepEqual(JSON.parse(shopify.files.get("templates/index.json")), uneditableHomepage());
   } finally {
     globalThis.fetch = originalFetch;

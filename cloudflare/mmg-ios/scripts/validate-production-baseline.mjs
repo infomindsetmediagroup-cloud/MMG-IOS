@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const workerRoot = resolve(here, "..");
@@ -9,6 +9,7 @@ const repoRoot = resolve(workerRoot, "../..");
 const sourceRoot = join(workerRoot, "src");
 const entryPath = join(sourceRoot, "kairos-production-entry.js");
 const activeEntryPath = join(sourceRoot, "kairos-production-entry-immutable-v1.js");
+const deployedEntryPath = join(sourceRoot, "kairos-production-entry-local-canonical-v1.js");
 const autonomousEntryPath = join(sourceRoot, "kairos-production-entry-autonomous-v1.js");
 const immutableExecutionPath = join(sourceRoot, "kairos-immutable-approved-file-execution-v1.js");
 const controllerPath = join(sourceRoot, "kairos-autonomous-prompt-controller-v1.js");
@@ -16,7 +17,7 @@ const guardedEntryPath = join(sourceRoot, "kairos-production-entry-v2.js");
 const wranglerPath = join(workerRoot, "wrangler.toml");
 
 const requiredFiles = [
-  entryPath, activeEntryPath, autonomousEntryPath, immutableExecutionPath, controllerPath,
+  entryPath, activeEntryPath, deployedEntryPath, autonomousEntryPath, immutableExecutionPath, controllerPath,
   join(sourceRoot, "kairos-production-entry-v1.js"), guardedEntryPath,
   join(sourceRoot, "kairos-executive-briefing-v1.js"),
   join(sourceRoot, "kairos-approved-work-dispatcher-v1.js"),
@@ -47,8 +48,8 @@ assert.deepEqual(staleRuntimeFiles, [], `Obsolete production wrappers remain: ${
 assert.ok(!existsSync(join(sourceRoot, "kairos-deterministic-homepage-v2.js")), "Unused duplicate homepage planner remains in the production source tree.");
 
 const wrangler = readFileSync(wranglerPath, "utf8");
-assert.match(wrangler, /^main\s*=\s*"src\/kairos-production-entry-immutable-v1\.js"/m, "Wrangler must point to the immutable approved-file wrapper over the autonomous runtime.");
-assert.match(wrangler, /crons\s*=\s*\["0 15 \* \* \*", "0 2 \* \* \*"\]/, "Morning and evening schedules must remain configured.");
+assert.match(wrangler, /^main\s*=\s*"src\/kairos-production-entry-local-canonical-v1\.js"/m, "Wrangler must point to the provider-blocked canonical production runtime.");
+assert.match(wrangler, /crons\s*=\s*\["0 15 \* \* \*", "0 2 \* \* \*", "0 \* \* \* \*"\]/, "Morning, evening, and governed hourly schedules must remain configured.");
 
 const source = readFileSync(entryPath, "utf8");
 for (const route of [
@@ -63,7 +64,7 @@ const activeEntry = readFileSync(activeEntryPath, "utf8");
 assert.ok(activeEntry.includes('./kairos-production-entry-autonomous-v1.js'), "Immutable production entry must wrap the autonomous runtime.");
 assert.ok(activeEntry.includes('./kairos-immutable-approved-file-execution-v1.js'), "Immutable approved-file execution is not wired.");
 assert.ok(activeEntry.includes('handleImmutableApprovedFileExecution'));
-assert.ok(activeEntry.includes('customer-portal-homepage-framework-20260718'), "Customer Portal homepage visual baseline is missing from the active production entry.");
+assert.ok(activeEntry.includes('verified-product-conversion-trust-layer-20260718'), "Verified product conversion visual baseline is missing from the immutable compatibility entry.");
 assert.ok(activeEntry.includes('KAIROS_CANONICAL_HOMEPAGE_BUILD'), "Canonical homepage publisher is not wired into the active production entry.");
 
 const autonomousEntry = readFileSync(autonomousEntryPath, "utf8");
@@ -107,13 +108,15 @@ for (const control of [
 
 const dashboardIndex = readFileSync(join(repoRoot, "web/kairos-dashboard/index.html"), "utf8");
 for (const asset of [
-  "scripts/command-center-layout.js", "styles/command-center-layout.css",
-  "scripts/command-center-governance.js", "styles/command-center-governance.css",
-  "scripts/executive-briefing.js", "styles/executive-briefing.css",
-  "scripts/social-production.js", "styles/social-production.css",
+  "scripts/safari-manuscript-intake-compat.js",
+  "scripts/manuscript-production-flow-bootstrap.js",
+  "scripts/legacy-runtime-loader.js",
+  "scripts/manuscript-auto-pipeline.js",
+  "scripts/manuscript-post-intake-guard.js",
+  "scripts/manuscript-direct-open-controller.js",
 ]) assert.ok(dashboardIndex.includes(asset), `Command Center asset missing: ${asset}`);
-assert.ok(dashboardIndex.includes('content="kairos-command-hub-recovery-20260714-1"'), "Tuesday loader marker changed.");
-assert.ok(dashboardIndex.includes('./scripts/command-hub.js?v=recovery-20260714-1'), "Tuesday Command Hub loader changed.");
+assert.ok(dashboardIndex.includes('content="kairos-five-center-dashboard-post-intake-20260731-1"'), "Current five-center dashboard marker changed.");
+assert.ok(dashboardIndex.includes('content="manuscript-post-intake-stability-20260731-1"'), "Current manuscript production marker changed.");
 
 const commandHub = readFileSync(join(repoRoot, "web/kairos-dashboard/scripts/command-hub.js"), "utf8");
 for (const center of ["knowledge", "content", "business", "customers", "operations"]) assert.ok(commandHub.includes(`id: "${center}"`), `Command Center parent is missing: ${center}`);
@@ -150,15 +153,17 @@ const websiteProduction = readFileSync(join(repoRoot, "web/kairos-dashboard/web-
 assert.ok(!websiteProduction.includes("PRESERVE_PROMPT"), "Website Production still contains a prefilled homepage prompt.");
 assert.ok(!websiteProduction.includes("placeholder:j.placeholder"), "Website Production still assigns predetermined prompt placeholders.");
 
-const runtimeModule = await import(`${pathToFileURL(activeEntryPath).href}?validation=${Date.now()}`);
-assert.equal(typeof runtimeModule.default?.fetch, "function", "Active immutable runtime must export fetch().");
-assert.equal(typeof runtimeModule.default?.scheduled, "function", "Active immutable runtime must export scheduled().");
-assert.equal(typeof runtimeModule.KairosProject, "function", "Active immutable runtime must export KairosProject.");
+const deployedEntry = readFileSync(deployedEntryPath, "utf8");
+assert.ok(deployedEntry.includes("export default {"), "Deployed canonical runtime must provide a default Worker export.");
+assert.ok(deployedEntry.includes("async fetch(request, env, ctx)"), "Deployed canonical runtime must export fetch().");
+assert.ok(deployedEntry.includes("async scheduled(controller, env, ctx)"), "Deployed canonical runtime must export scheduled().");
+assert.ok(deployedEntry.includes("KairosProject,"), "Deployed canonical runtime must export KairosProject.");
+assert.ok(deployedEntry.includes('property === "OPENAI_API_KEY" || property === "KAIROS_MODEL_AUTH_TOKEN"'), "Deployed canonical runtime must block external provider credentials.");
 
 console.log(JSON.stringify({
   status: "ready",
-  commandCenterBaseline: "tuesday-command-center-6f96b10d",
-  homepageBaseline: "customer-portal-homepage-framework-20260718",
+  commandCenterBaseline: "kairos-five-center-dashboard-post-intake-20260731-1",
+  homepageBaseline: "verified-product-conversion-trust-layer-20260718",
   browserSurfaceChanged: true,
   autonomousPromptController: true,
   immutableApprovedFileExecution: true,

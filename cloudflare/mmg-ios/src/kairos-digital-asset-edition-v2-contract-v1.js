@@ -256,6 +256,7 @@ export function assertCustomerFacingText(value, label = "customer deliverable") 
 
 function sanitizeCustomerText(value) {
   let text = String(value == null ? "" : value).replace(/Michael\s+King/gi, "Mindset Media Group™");
+  text = text.replace(/\bKairos\b/gi, "Mindset Media Group");
   text = text.replace(/^\s*Author\s*:\s*Mindset Media Group™\s*$/gim, "Published by Mindset Media Group™");
   return text.trim();
 }

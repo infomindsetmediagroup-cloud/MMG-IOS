@@ -40,7 +40,7 @@ const required = [
   ["css", ".kws-composer"],
   ["css", ".kws-asset-library"],
   ["css", ".kws-preview__section--full-bleed"],
-  ["index", "website-builder-studio.js?v=experience-20260717-2"],
+  ["index", "scripts/website-builder-studio.js"],
 ];
 for (const [file, marker] of required) {
   if (!source[file].includes(marker)) throw new Error(`${file} is missing ${marker}`);

@@ -140,7 +140,7 @@ export async function assemblePackage(state, project) {
   for (const artifact of packageArtifacts) {
     const bytes = normalizeBytes(await state.storage.get(artifact.storageKey));
     if (!bytes?.byteLength) throw new Error(`Stored bytes are unavailable for ${artifact.kind}.`);
-    packageEntries[`deliverables/${artifact.filename}`] = [bytes, { mtime: new Date("1980-01-01T00:00:00.000Z") }];
+    packageEntries[`deliverables/${artifact.filename}`] = [bytes, { mtime: zipEpoch() }];
   }
 
   const embeddedManifest = {
@@ -156,7 +156,7 @@ export async function assemblePackage(state, project) {
     shopifyTargetStatus: "DRAFT",
   };
   const embeddedManifestBytes = new TextEncoder().encode(`${stableStringify(embeddedManifest)}\n`);
-  packageEntries["package-manifest.json"] = [embeddedManifestBytes, { mtime: new Date("1980-01-01T00:00:00.000Z") }];
+  packageEntries["package-manifest.json"] = [embeddedManifestBytes, { mtime: zipEpoch() }];
 
   const zipBytes = zipSync(packageEntries, { level: 6 });
   const handle = productMetadata.handle || "digital-product";
@@ -220,6 +220,12 @@ export async function assemblePackage(state, project) {
     },
     safeguards: safeguards(),
   }, 201);
+}
+
+function zipEpoch() {
+  // ZIP timestamps are encoded in local time. Noon UTC remains within the
+  // format's supported 1980-2099 range in every production timezone.
+  return new Date("1980-01-01T12:00:00.000Z");
 }
 
 export async function approvePackage(state, project, request) {

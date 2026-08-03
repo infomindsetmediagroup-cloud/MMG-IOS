@@ -14,6 +14,7 @@ import {
 import { buildArtifact } from "../src/kairos-native-publishing-artifacts-v1.js";
 import { buildCreationArtifact, creationArtifactNames } from "../src/kairos-creation-artifacts-v1.js";
 import { buildProductPackage } from "../src/kairos-product-page-package-v1.js";
+import { customerReleaseNames } from "../src/kairos-digital-asset-edition-v2-contract-v1.js";
 import { KairosProject } from "../src/kairos-native-publishing-worker-v1.js";
 import { analyzeNativeObjective, buildNativeExecutionGraph } from "../src/kairos-native-kernel-v1.js";
 
@@ -50,10 +51,10 @@ test("native manuscript composition and triple editorial pass meet the MMG long-
   assert.equal(publication.chapters.length, 12);
   assert.equal(publication.quality.tripleEditorialPass, true);
   assert.equal(publication.quality.status, "passed");
-  assert.ok(publication.wordCount >= 12_000);
-  assert.ok(publication.wordCount <= 24_000);
-  assert.ok(publication.pageCount >= 70);
-  assert.ok(publication.pageCount <= 76);
+  assert.ok(publication.wordCount >= 25_000);
+  assert.ok(publication.wordCount <= 30_000);
+  assert.ok(publication.pageCount >= 100);
+  assert.ok(publication.pageCount <= 120);
   assert.equal(publication.chapters.every(chapter => chapter.editorialPasses === 3), true);
 });
 
@@ -68,8 +69,8 @@ test("native manufacturing produces valid canonical publication artifacts", asyn
 
   assert.ok(unzipSync(docx)["word/document.xml"]);
   const interiorPageCount = (await PDFDocument.load(interior)).getPageCount();
-  assert.ok(interiorPageCount >= 70);
-  assert.ok(interiorPageCount <= 76);
+  assert.ok(interiorPageCount >= 100);
+  assert.ok(interiorPageCount <= 120);
   assert.equal((await PDFDocument.load(wrap)).getPageCount(), 1);
   assert.ok((await PDFDocument.load(digital)).getPageCount() > 20);
   assert.deepEqual([...cover.slice(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
@@ -108,7 +109,7 @@ test("persistent native project advances to cover approval and final delivery", 
     await project.alarm();
     const completed = await (await project.fetch(new Request("https://kairos.internal/status"))).json();
     assert.equal(completed.status, "completed");
-    assert.equal(completed.artifacts.length, 19);
+    assert.equal(completed.artifacts.length, creationArtifactNames().length);
     assert.equal(completed.artifacts.some(item => item.name === "complete-production-package.zip"), true);
     assert.equal(completed.artifacts.some(item => item.name === "shopify-product-page.html"), true);
     assert.equal(completed.externalInferenceAPI, false);
@@ -180,11 +181,8 @@ test("approved-cover creation project auto-packages Shopify, EPUB, product asset
     assert.equal(new TextDecoder().decode(epub.mimetype), "application/epub+zip");
     assert.ok(epub["OEBPS/content.opf"]);
     const complete = unzipSync(new Uint8Array(await (await project.fetch(new Request("https://kairos.internal/artifacts/complete-production-package.zip"))).arrayBuffer()));
-    assert.ok(complete["gold-master.docx"]);
-    assert.ok(complete["shopify-product-page.html"]);
-    assert.ok(complete["product-hero.svg"]);
-    assert.ok(complete["approved-cover.png"]);
-    assert.ok(complete["production-manifest.json"]);
+    const releaseNames = customerReleaseNames(current.title ? { title: current.title } : productJSON);
+    assert.deepEqual(Object.keys(complete).sort(), Object.values(releaseNames).sort());
   } finally {
     globalThis.fetch = originalFetch;
   }

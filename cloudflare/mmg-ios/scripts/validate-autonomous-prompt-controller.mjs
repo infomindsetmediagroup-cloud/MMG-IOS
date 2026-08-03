@@ -22,7 +22,7 @@ const index = read(join(repoRoot, "web/kairos-dashboard/index.html"));
 const hub = read(join(repoRoot, "web/kairos-dashboard/scripts/command-hub.js"));
 const fetchBody = entry.slice(entry.indexOf('async fetch(request, env, ctx)'));
 
-assert.match(wrangler, /^main\s*=\s*"src\/kairos-production-entry-immutable-v1\.js"$/m);
+assert.match(wrangler, /^main\s*=\s*"src\/kairos-production-entry-local-canonical-v1\.js"$/m);
 assert.ok(activeEntry.includes('./kairos-production-entry-autonomous-v1.js'), "The immutable production entry must wrap the autonomous runtime.");
 
 assert.ok(entry.includes('./kairos-production-entry.js'), "The autonomous entry must wrap the Tuesday production entry.");
@@ -234,8 +234,8 @@ assert.ok(!directExecution.includes('env.AI.run'), "Approved direct execution mu
 assert.ok(!directExecution.includes('runKairosIntelligence'), "Approved direct execution must not call any inference runtime.");
 assert.ok(!fullThemeBaseline.includes('await writeThemeFile(config, auth, stagingTheme.id, filename, source)'), "Legacy one-file staging restore remains active.");
 
-assert.ok(index.includes('content="kairos-command-hub-recovery-20260714-1"'));
-assert.ok(index.includes('./scripts/command-hub.js?v=recovery-20260714-1'));
+assert.ok(index.includes('content="kairos-five-center-dashboard-post-intake-20260731-1"'));
+assert.ok(index.includes('scripts/legacy-runtime-loader.js'));
 assert.ok(!index.includes('command-hub-canonical-v3'));
 assert.ok(hub.includes('kairos-command-hub-20260714-38'));
 assert.ok(hub.includes('Active work'));
