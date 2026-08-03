@@ -1,0 +1,103 @@
+name: Apply Worker Website Health Fetch Hardening
+
+"on":
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: patch-worker-website-health-fetch-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out pull-request branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          fetch-depth: 0
+
+      - name: Apply exact Worker-compatible request patch
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              text = target.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"Expected exactly one match in {path}; found {count}")
+              target.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              "cloudflare/mmg-ios/src/autonomy/website-health-workflow-v1.js",
+              '''      const response = await options.fetchImpl(currentUrl, {
+        method: "GET",
+        redirect: "manual",
+        signal: controller.signal,
+        headers: {
+          Accept: "text/html,application/xhtml+xml",
+          "User-Agent": "Kairos-Website-Health/1.0",
+        },
+      });''',
+              '''      const request = new Request(currentUrl.href, {
+        method: "GET",
+        redirect: "manual",
+        signal: controller.signal,
+        headers: {
+          Accept: "text/html,application/xhtml+xml",
+        },
+      });
+      const response = await options.fetchImpl(request);''',
+          )
+
+          replace_once(
+              "cloudflare/mmg-ios/test/autonomy/kairos-policy-engine.test.js",
+              '''      fetchImpl: async (url, init) => {
+        fetchCalls += 1;
+        assert.equal(url.href, "https://themindsetmediagroup.com/");
+        assert.ok(init.signal);
+        assert.equal(init.redirect, "manual");
+        return new Response(html, {
+          status: 200,
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        });
+      },''',
+              '''      fetchImpl: async (request, ...extraArguments) => {
+        fetchCalls += 1;
+        assert.ok(request instanceof Request);
+        assert.equal(request.url, "https://themindsetmediagroup.com/");
+        assert.ok(request.signal);
+        assert.equal(request.redirect, "manual");
+        assert.equal(request.headers.get("Accept"), "text/html,application/xhtml+xml");
+        assert.equal(request.headers.has("User-Agent"), false);
+        assert.equal(extraArguments.length, 0);
+        return new Response(html, {
+          status: 200,
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        });
+      },''',
+          )
+          PY
+
+      - name: Commit exact patch
+        run: |
+          set -euo pipefail
+          git config user.name "kairos-autonomy-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            cloudflare/mmg-ios/src/autonomy/website-health-workflow-v1.js \
+            cloudflare/mmg-ios/test/autonomy/kairos-policy-engine.test.js
+          git diff --cached --check
+          git commit -m "Use Worker-compatible website health requests"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
