@@ -90,7 +90,7 @@ jobs:
           grep -q 'new URL("./manuscript", current)' web/kairos-dashboard/index.html
           grep -q 'location.replace(target.href)' web/kairos-dashboard/index.html
           grep -q 'kairos-dedicated-manuscript-route-20260801-3-pipeline-orchestrator' web/kairos-dashboard/manuscript.html
-          grep -q 'kairos-manuscript-pipeline-orchestrator-20260801-1' web/kairos-dashboard/manuscript.html
+          grep -q 'kairos-manuscript-pipeline-orchestrator-20260803-1-deliverable-review' web/kairos-dashboard/manuscript.html
           grep -q 'data-kairos-dedicated-manuscript="true"' web/kairos-dashboard/manuscript.html
           grep -q 'manuscript-direct-open-controller.js' web/kairos-dashboard/manuscript.html
           grep -q 'manuscript-pipeline-orchestrator.js' web/kairos-dashboard/manuscript.html
@@ -101,7 +101,7 @@ jobs:
           grep -q 'ensureModule("manuscript-studio.js")' web/kairos-dashboard/scripts/manuscript-direct-open-controller.js
           grep -q 'kairos-manuscript-direct-open-shell' web/kairos-dashboard/scripts/manuscript-direct-open-controller.js
           grep -q 'overlay-watchdog' web/kairos-dashboard/scripts/manuscript-direct-open-controller.js
-          grep -q 'kairos-manuscript-pipeline-orchestrator-20260801-1' web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js
+          grep -q 'kairos-manuscript-pipeline-orchestrator-20260803-1-deliverable-review' web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js
           grep -q 'new FormData()' web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js
           grep -q 'auto-pipeline/run' web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js
           grep -q 'Manufacture Delivery Package' web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js
@@ -182,7 +182,7 @@ jobs:
               && grep -q 'location.replace(target.href)' "${root}" \
               && [ "${manuscript_status}" = "200" ] \
               && grep -q 'kairos-dedicated-manuscript-route-20260801-3-pipeline-orchestrator' "${manuscript_page}" \
-              && grep -q 'kairos-manuscript-pipeline-orchestrator-20260801-1' "${manuscript_page}" \
+              && grep -q 'kairos-manuscript-pipeline-orchestrator-20260803-1-deliverable-review' "${manuscript_page}" \
               && grep -q 'data-kairos-dedicated-manuscript="true"' "${manuscript_page}" \
               && grep -q 'manuscript-direct-open-controller.js' "${manuscript_page}" \
               && grep -q 'manuscript-pipeline-orchestrator.js' "${manuscript_page}" \
@@ -195,7 +195,7 @@ jobs:
               && grep -q 'kairos-manuscript-direct-open-shell' "${direct_open}" \
               && grep -q 'overlay-watchdog' "${direct_open}" \
               && [ "${orchestrator_status}" = "200" ] \
-              && grep -q 'kairos-manuscript-pipeline-orchestrator-20260801-1' "${orchestrator}" \
+              && grep -q 'kairos-manuscript-pipeline-orchestrator-20260803-1-deliverable-review' "${orchestrator}" \
               && grep -q 'auto-pipeline/run' "${orchestrator}" \
               && grep -q 'Manufacture Delivery Package' "${orchestrator}" \
               && grep -q 'Preview Package' "${orchestrator}" \

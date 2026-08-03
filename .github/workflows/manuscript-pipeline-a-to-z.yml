@@ -58,7 +58,7 @@ jobs:
           node --check cloudflare/mmg-ios/src/kairos-manuscript-project-setup-v1.js
           node --check cloudflare/mmg-ios/src/kairos-manuscript-editorial-workbench-v1.js
           node --check cloudflare/mmg-ios/src/kairos-manuscript-auto-pipeline-v1.js
-          grep -q 'kairos-manuscript-pipeline-orchestrator-20260801-1' web/kairos-dashboard/manuscript.html
+          grep -q 'kairos-manuscript-pipeline-orchestrator-20260803-1-deliverable-review' web/kairos-dashboard/manuscript.html
           grep -q 'multipart/form-data' browser-tests/manuscript-pipeline-orchestrator.spec.mjs
           grep -q 'auto-pipeline/run' web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js
           grep -q 'Preview Package' web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js
