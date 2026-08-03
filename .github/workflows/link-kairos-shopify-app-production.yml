@@ -1,0 +1,76 @@
+name: Link Kairos Shopify App Production Configuration
+
+"on":
+  push:
+    branches:
+      - agent/kairos-shopify-admin-release-v1
+    paths:
+      - ".github/workflows/link-kairos-shopify-app-production.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: link-kairos-shopify-app-production
+  cancel-in-progress: false
+
+jobs:
+  link:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SHOPIFY_APP_AUTOMATION_TOKEN: ${{ secrets.SHOPIFY_APP_AUTOMATION_TOKEN || secrets.SHOPIFY_CLI_PARTNERS_TOKEN }}
+      KAIROS_SHOPIFY_CLIENT_ID: ${{ secrets.KAIROS_SHOPIFY_CLIENT_ID || secrets.SHOPIFY_API_KEY || secrets.SHOPIFY_CLIENT_ID }}
+
+    steps:
+      - name: Check out exact branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/kairos-shopify-admin-release-v1
+          fetch-depth: 0
+
+      - name: Require existing Kairos app credentials
+        run: |
+          set -euo pipefail
+          test -n "${SHOPIFY_APP_AUTOMATION_TOKEN:-}" || {
+            echo "Missing Shopify app automation token." >&2
+            exit 1
+          }
+          test -n "${KAIROS_SHOPIFY_CLIENT_ID:-}" || {
+            echo "Missing Kairos Shopify app client ID." >&2
+            exit 1
+          }
+          echo "::add-mask::${SHOPIFY_APP_AUTOMATION_TOKEN}"
+
+      - name: Install Shopify CLI
+        run: npm install --global @shopify/cli@latest
+
+      - name: Pull existing production app configuration
+        run: |
+          set -euo pipefail
+          shopify app config link \
+            --client-id "${KAIROS_SHOPIFY_CLIENT_ID}" \
+            --config production \
+            --path . \
+            --no-color
+          test -f shopify.app.production.toml
+          shopify app config validate --config production --path . --no-color
+          if grep -Eiq '(client_secret|api_secret|access_token|automation_token|password)[[:space:]]*=' shopify.app.production.toml; then
+            echo "Pulled configuration unexpectedly contains a sensitive field." >&2
+            exit 1
+          fi
+
+      - name: Commit linked production configuration
+        run: |
+          set -euo pipefail
+          git config user.name "kairos-shopify-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add shopify.app.production.toml
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo "The production app configuration is already linked."
+            exit 0
+          fi
+          git commit -m "Link existing Kairos Shopify app configuration"
+          git push origin HEAD:agent/kairos-shopify-admin-release-v1
