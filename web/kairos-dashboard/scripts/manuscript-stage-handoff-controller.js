@@ -1,6 +1,6 @@
 (() => {
-  const BUILD = "kairos-manuscript-stage-handoff-20260803-1-deliverable-review";
-  const RELEASE = "manuscript-deliverable-review-20260803-1";
+  const BUILD = "kairos-manuscript-stage-handoff-20260803-2-mobile-controls";
+  const RELEASE = "manuscript-mobile-controls-20260803-2";
   const GLOBAL_KEY = "__KAIROS_MANUSCRIPT_STAGE_HANDOFF__";
   const EDITORIAL_SCRIPT = "manuscript-editorial-workbench.js";
   const STATE_FETCH_SCRIPT = "kairos-state-fetch-install.js";

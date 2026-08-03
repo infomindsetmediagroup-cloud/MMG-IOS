@@ -5,6 +5,10 @@ const editorialSource = readFileSync(
   new URL("../web/kairos-dashboard/scripts/manuscript-editorial-workbench.js", import.meta.url),
   "utf8",
 );
+const studioCSS = readFileSync(
+  new URL("../web/kairos-dashboard/styles/manuscript-studio.css", import.meta.url),
+  "utf8",
+);
 
 const PROJECT_ID = "manuscript-studio-editorial-loop-test";
 const EDITORIAL_PATH = `/api/production-registry/manuscripts/${PROJECT_ID}/editorial`;
@@ -138,7 +142,7 @@ test("customer review shows the locked proof and one action produces the deliver
       return route.fulfill({
         status: 200,
         contentType: "text/html",
-        body: `<!doctype html><html><body><div id="manuscript-studio-overlay"><div class="manuscript-result"><section id="manuscript-project-setup"><p>Production assignment</p><h3>assigned-to-production</h3></section></div></div></body></html>`,
+        body: `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><div id="manuscript-studio-overlay" class="manuscript-overlay"><section class="manuscript-panel"><div class="manuscript-result"><section id="manuscript-project-setup"><p>Production assignment</p><h3>assigned-to-production</h3></section></div></section></div></body></html>`,
       });
     }
     if (request.method() === "GET" && url.pathname === EDITORIAL_PATH) {
@@ -200,6 +204,7 @@ test("customer review shows the locked proof and one action produces the deliver
     };
   }, { key: "kairos.production.active-workspace", projectId: PROJECT_ID });
   await page.evaluate(initial => { window.__reviewFlowCalls = initial; }, calls);
+  await page.addStyleTag({ content: studioCSS });
   await page.addScriptTag({ type: "module", content: editorialSource });
 
   const review = page.locator("[data-customer-review-package]");
@@ -211,7 +216,7 @@ test("customer review shows the locked proof and one action produces the deliver
   await expect(review.getByAltText("Approved customer cover")).toBeVisible();
   await expect(page.locator("[data-editorial-save]")).toHaveCount(0);
 
-  await review.getByRole("button", { name: "Approve Review & Produce Deliverable Asset" }).click({ force: true });
+  await review.getByRole("button", { name: "Approve Review & Produce Deliverable Asset" }).tap();
   await expect(page.locator("#manuscript-auto-pipeline")).toContainText("Package Preview");
   await expect.poll(() => page.evaluate(() => window.__reviewFlowCalls)).toEqual({
     decision: 0,

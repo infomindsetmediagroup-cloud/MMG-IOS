@@ -1,6 +1,6 @@
 (() => {
-  const BUILD = "kairos-manuscript-continuation-20260802-3-auto-setup";
-  const RELEASE = "manuscript-mobile-continuation-20260802-1";
+  const BUILD = "kairos-manuscript-continuation-20260803-4-mobile-controls";
+  const RELEASE = "manuscript-mobile-controls-20260803-2";
   const GLOBAL_KEY = "__KAIROS_MANUSCRIPT_CONTINUATION_CONTROLLER__";
   const SETUP_SCRIPT = "manuscript-project-setup.js";
   const SETUP_SELECTOR = "#manuscript-project-setup";

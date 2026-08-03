@@ -1,4 +1,4 @@
-const BUILD = "kairos-manuscript-editorial-workbench-ui-20260803-1-deliverable-review";
+const BUILD = "kairos-manuscript-editorial-workbench-ui-20260803-2-mobile-controls";
 const ACTIVE_KEY = "kairos.production.active-workspace";
 const CUSTOMER_DELIVERABLES = Object.freeze([
   ["customer-spec-sheet.pdf", "Customer specification sheet"],
@@ -137,7 +137,6 @@ function render(projectId) {
       <p class="manuscript-error">${esc(state.error)}</p>
       <button type="button" class="secondary" data-editorial-retry>Retry</button>
     `;
-    section.querySelector("[data-editorial-retry]")?.addEventListener("click", () => ensureLoaded(projectId));
     return;
   }
 
@@ -165,12 +164,38 @@ function render(projectId) {
     ${versions.length ? `<div class="issue-list manuscript-version-list">${versions.slice().reverse().map((version) => `<article><b>${esc(version.label)}</b><p>${esc(version.passType)} · ${Number(version.wordCount || 0).toLocaleString()} words</p><small>${esc(version.actor)} · ${esc(formatDate(version.createdAt))}</small></article>`).join("")}</div>` : ""}
   `;
 
-  section.querySelector("[data-editorial-save]")?.addEventListener("click", () => saveVersion(section, projectId));
-  section.querySelector("[data-editorial-review]")?.addEventListener("click", () => prepareReview(projectId));
-  section.querySelector("[data-editorial-approve]")?.addEventListener("click", () => decision(projectId, "approved"));
-  section.querySelector("[data-editorial-revise]")?.addEventListener("click", () => decision(projectId, "revision-requested"));
-  section.querySelector("[data-editorial-finalize]")?.addEventListener("click", () => finalize(projectId));
-  section.querySelector("[data-editorial-produce]")?.addEventListener("click", () => produceDeliverable(projectId));
+}
+
+function handleEditorialAction(event) {
+  const button = event.target instanceof Element
+    ? event.target.closest("#manuscript-editorial-workbench button")
+    : null;
+  if (!button) return;
+
+  const projectId = button.closest("#manuscript-editorial-workbench")?.dataset.projectId || activeProjectId();
+  if (!projectId) return;
+
+  const action = button.matches("[data-editorial-save]")
+    ? () => saveVersion(button.closest("#manuscript-editorial-workbench"), projectId)
+    : button.matches("[data-editorial-review]")
+      ? () => prepareReview(projectId)
+      : button.matches("[data-editorial-approve]")
+        ? () => decision(projectId, "approved")
+        : button.matches("[data-editorial-revise]")
+          ? () => decision(projectId, "revision-requested")
+          : button.matches("[data-editorial-finalize]")
+            ? () => finalize(projectId)
+            : button.matches("[data-editorial-produce]")
+              ? () => produceDeliverable(projectId)
+              : button.matches("[data-editorial-retry]")
+                ? () => ensureLoaded(projectId)
+                : null;
+  if (!action) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
+  void action();
 }
 
 function editorialEditorMarkup(versions) {
@@ -452,6 +477,7 @@ window.KairosEditorialWorkbenchController = Object.freeze({
   enhance,
 });
 
+document.addEventListener("click", handleEditorialAction, true);
 const observer = new MutationObserver(() => {
   void enhance();
 });

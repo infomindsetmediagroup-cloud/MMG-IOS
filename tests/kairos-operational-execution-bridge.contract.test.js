@@ -163,7 +163,7 @@ test("Manuscript Studio directly owns verified raw chunk storage and guarded loc
   assert.match(safari, /installNativeDocxExtractor/);
   assert.match(safari, /new DecompressionStream\("deflate-raw"\)/);
   assert.match(safari, /word\/document\.xml/);
-  assert.match(manuscriptStudio, /manuscript-studio-direct-chunks-20260730-4/);
+  assert.match(manuscriptStudio, /manuscript-studio-mobile-controls-20260803-2/);
   assert.match(manuscriptStudio, /chunkedSourceUpload:\s*true/);
   assert.match(manuscriptStudio, /multipartSourceUpload:\s*false/);
   assert.match(manuscriptStudio, /FILE_CHUNK_BYTES = 512 \* 1024/);

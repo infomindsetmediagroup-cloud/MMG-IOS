@@ -93,9 +93,17 @@
 }
 .manuscript-panel .primary,
 .manuscript-panel .secondary {
+  position: relative;
+  z-index: 1;
+  min-height: 48px;
   border-radius: 12px;
   padding: 13px 16px;
   font-weight: 800;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
 }
 .manuscript-panel .primary {
   background: #1677ff;
@@ -544,6 +552,43 @@
   flex: 1;
 }
 
+.manuscript-source-review {
+  margin: 18px 0;
+  padding: 18px;
+  border: 1px solid #31527d;
+  border-radius: 16px;
+  background: #08111d;
+}
+
+.manuscript-source-review > p {
+  color: #b8c5d6;
+  line-height: 1.55;
+}
+
+.manuscript-source-review textarea[data-intake-source-review] {
+  min-height: 320px;
+  height: min(52dvh, 520px);
+  max-height: 520px;
+  background: #05070b;
+  color: #edf4ff;
+  -webkit-text-fill-color: #edf4ff;
+  opacity: 1;
+}
+
+.manuscript-source-review-actions {
+  position: sticky;
+  bottom: max(8px, env(safe-area-inset-bottom));
+  z-index: 14;
+  padding: 10px;
+  border: 1px solid #31527d;
+  border-radius: 14px;
+  background: rgba(8, 17, 29, 0.98);
+}
+
+.manuscript-source-review-actions .primary {
+  width: 100%;
+}
+
 .manuscript-studio-open {
   overscroll-behavior: none;
 }
@@ -596,6 +641,16 @@
   .manuscript-intake-actions .secondary {
     width: 100%;
     min-height: 52px;
+  }
+
+  .manuscript-source-review {
+    padding: 14px;
+  }
+
+  .manuscript-source-review textarea[data-intake-source-review] {
+    min-height: 240px;
+    height: 45dvh;
+    max-height: 45dvh;
   }
 
   .manuscript-result > .manuscript-note {

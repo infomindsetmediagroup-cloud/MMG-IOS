@@ -82,7 +82,7 @@ jobs:
           grep -q 'five-center-dashboard-post-intake-stability-20260731-1' web/kairos-dashboard/index.html
           grep -q 'manuscript-post-intake-stability-20260731-1' web/kairos-dashboard/index.html
           grep -q 'const ASSET_RELEASE = "five-center-dashboard-post-intake-stability-20260731-1"' web/kairos-dashboard/scripts/legacy-runtime-loader.js
-          grep -q 'manuscript-studio-direct-chunks-20260730-4' web/kairos-dashboard/scripts/manuscript-studio.js
+          grep -q 'manuscript-studio-mobile-controls-20260803-2' web/kairos-dashboard/scripts/manuscript-studio.js
           grep -q 'chunkedSourceUpload: true' web/kairos-dashboard/scripts/manuscript-studio.js
           grep -q 'multipartSourceUpload: false' web/kairos-dashboard/scripts/manuscript-studio.js
           grep -q 'FILE_CHUNK_BYTES = 512 \* 1024' web/kairos-dashboard/scripts/manuscript-studio.js
@@ -154,7 +154,7 @@ jobs:
               && printf '%s' "${active_scripts}" | grep -q 'manuscript-auto-pipeline.js' \
               && ! printf '%s' "${active_scripts}" | grep -q 'manuscript-docx-upload-hotfix.js' \
               && [ "${studio_status}" = "200" ] \
-              && grep -q 'manuscript-studio-direct-chunks-20260730-4' "${studio}" \
+              && grep -q 'manuscript-studio-mobile-controls-20260803-2' "${studio}" \
               && grep -q 'chunkedSourceUpload: true' "${studio}" \
               && grep -q 'multipartSourceUpload: false' "${studio}" \
               && ! grep -q 'new FormData' "${studio}" \
