@@ -1,4 +1,4 @@
-const BUILD = "manuscript-studio-mobile-controls-20260803-2";
+const BUILD = "manuscript-studio-flow-recovery-20260803-3";
 const MAX_TEXT_CHARS = 600000;
 const MAX_DOCX_BYTES = 15 * 1024 * 1024;
 const MAX_PDF_BYTES = 20 * 1024 * 1024;
@@ -10,6 +10,10 @@ const CHUNK_RETRY_LIMIT = 3;
 const TRANSIENT_SOURCE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 const ACTIVE_KEY = "kairos.production.active-workspace";
 const DRAFT_KEY = "kairos.manuscript-studio.recoverable-draft.v1";
+const SETUP_SCRIPT = "manuscript-project-setup.js";
+const SETUP_RELEASE = "manuscript-flow-recovery-20260803-3";
+const SETUP_LOAD_TIMEOUT_MS = 15_000;
+let setupLoadPromise = null;
 
 const state = {
   open: false,
@@ -97,6 +101,7 @@ function render() {
     requestAnimationFrame(() => {
       overlay.scrollTop = 0;
       overlay.querySelector("[data-finish]")?.focus?.({ preventScroll: true });
+      void hydrateProjectSetup(false);
     });
   }
   overlay.querySelector("[data-close]").onclick = () => {
@@ -115,33 +120,11 @@ function render() {
     state.manuscript = event.target.value;
     persistDraft();
   });
-  overlay.querySelector("[data-edit]")?.addEventListener("click", () => {
-    state.reviewingSource = true;
-    render();
-  });
-  overlay.querySelector("[data-close-source]")?.addEventListener("click", () => {
-    state.reviewingSource = false;
-    render();
-    requestAnimationFrame(() => {
-      document.querySelector("#manuscript-project-setup")
-        ?.scrollIntoView({ behavior: "auto", block: "start" });
-    });
-  });
   overlay.querySelector("[data-finish]")?.addEventListener("click", event => {
-    const button = event.currentTarget;
-    const continuation = window.KairosManuscriptContinuation;
-    if (continuation?.ready && typeof continuation.continue === "function") {
-      void continuation.continue(button);
-      return;
-    }
-    const result = button.closest(".manuscript-result");
-    result?.querySelector("[data-kairos-continuation-fallback]")?.remove();
-    const error = document.createElement("p");
-    error.className = "manuscript-error";
-    error.dataset.kairosContinuationFallback = BUILD;
-    error.setAttribute("role", "alert");
-    error.textContent = "Project Setup is still loading. Wait a moment, then tap Continue to Project Setup again.";
-    button.closest(".manuscript-actions")?.before(error);
+    void hydrateProjectSetup(true, event.currentTarget);
+  });
+  overlay.querySelector("[data-setup-load]")?.addEventListener("click", event => {
+    void hydrateProjectSetup(true, event.currentTarget);
   });
 }
 
@@ -190,18 +173,121 @@ function resultView() {
   const actions = Array.isArray(r.workflow?.requiredNextActions) && r.workflow.requiredNextActions.length
     ? r.workflow.requiredNextActions
     : ["Complete Project Setup"];
-  const review = state.reviewingSource ? `
-    <section class="manuscript-source-review" data-kairos-source-review>
-      <p class="eyebrow">Accepted intake source</p>
-      <h3>Review the preserved manuscript</h3>
-      <p>This is the accepted source already stored for this project. Reviewing it does not restart intake or replace the production record.</p>
-      <label>Preserved manuscript text<textarea readonly data-intake-source-review>${esc(state.manuscript)}</textarea></label>
-      <div class="manuscript-actions manuscript-source-review-actions">
-        <button type="button" class="primary" data-close-source>Back to Project Setup</button>
+  const review = `
+    <details class="manuscript-source-review" data-kairos-source-review>
+      <summary class="secondary">Review Intake Source</summary>
+      <div data-kairos-source-review-content>
+        <p class="eyebrow">Accepted intake source</p>
+        <h3>Review the preserved manuscript</h3>
+        <p>This is the accepted source already stored for this project. Reviewing it does not restart intake or replace the production record.</p>
+        <label>Preserved manuscript text<textarea readonly data-intake-source-review>${esc(state.manuscript)}</textarea></label>
       </div>
+    </details>
+  `;
+  const setupShell = `
+    <section id="manuscript-project-setup" class="manuscript-project-setup" data-kairos-project-setup-shell data-project-id="${esc(state.projectId || activeProjectId() || "")}" aria-live="polite">
+      <p class="eyebrow">Next stage</p>
+      <h3>Complete Project Setup</h3>
+      <p data-kairos-setup-load-status>Loading the saved project and production-assignment form…</p>
+      <button type="button" class="secondary" data-setup-load>Load Project Setup</button>
     </section>
-  ` : "";
-  return `<div class="manuscript-result" data-kairos-intake-receipt><div class="manuscript-status"><span>Production intake created</span><strong>${esc(r.status || "production_intake")}</strong></div><h3>${esc(r.customerMessage || "Your manuscript has advanced into MMG production intake.")}</h3><p><strong>Project:</strong> ${esc(r.projectID || "—")} · <strong>Intake:</strong> ${esc(r.intakeID || "—")}</p><p><strong>Accepted source:</strong> ${Number(r.manuscript?.characterCount || state.manuscript.length).toLocaleString()} characters · ${Number(r.manuscript?.wordCount || 0).toLocaleString()} words</p><div class="manuscript-actions manuscript-intake-actions"><button type="button" class="primary" data-finish>Continue to Project Setup</button><button type="button" class="secondary" data-edit>Review Intake Source</button></div>${review}<div class="issue-list">${actions.map((item, index) => `<article><b>${index + 1}. ${esc(item)}</b><p>${index === 0 ? "This is the next required production step." : "Queued in the production setup sequence."}</p></article>`).join("")}</div><p class="manuscript-note">The original manuscript source remains stored in the durable production registry. Project Setup opens automatically so production can continue.</p></div>`;
+  `;
+  return `<div class="manuscript-result" data-kairos-intake-receipt><div class="manuscript-status"><span>Production intake created</span><strong>${esc(r.status || "production_intake")}</strong></div><h3>${esc(r.customerMessage || "Your manuscript has advanced into MMG production intake.")}</h3><p><strong>Project:</strong> ${esc(r.projectID || "—")} · <strong>Intake:</strong> ${esc(r.intakeID || "—")}</p><p><strong>Accepted source:</strong> ${Number(r.manuscript?.characterCount || state.manuscript.length).toLocaleString()} characters · ${Number(r.manuscript?.wordCount || 0).toLocaleString()} words</p><div class="manuscript-actions manuscript-intake-actions"><a class="primary" data-finish href="#manuscript-project-setup" role="button">Continue to Project Setup</a></div>${review}<div class="issue-list">${actions.map((item, index) => `<article><b>${index + 1}. ${esc(item)}</b><p>${index === 0 ? "This is the next required production step." : "Queued in the production setup sequence."}</p></article>`).join("")}</div><p class="manuscript-note">The original manuscript source remains stored in the durable production registry.</p>${setupShell}</div>`;
+}
+
+async function hydrateProjectSetup(scroll = false, trigger = null) {
+  const section = document.querySelector("#manuscript-studio-overlay #manuscript-project-setup");
+  if (!section) return null;
+
+  const status = section.querySelector("[data-kairos-setup-load-status]");
+  if (status) status.textContent = "Loading Project Setup…";
+  if (trigger instanceof HTMLButtonElement) trigger.disabled = true;
+
+  try {
+    const controller = await ensureProjectSetupController();
+    controller.enhance?.();
+    await waitForSetupHydration(section);
+    if (scroll) section.scrollIntoView({ behavior: "auto", block: "start" });
+    section.querySelector("input,select,textarea,button")?.focus?.({ preventScroll: true });
+    return section;
+  } catch (error) {
+    section.dataset.kairosProjectSetupLoadFailed = BUILD;
+    if (status) status.textContent = error?.message || "Project Setup could not load.";
+    if (trigger instanceof HTMLButtonElement) trigger.disabled = false;
+    return null;
+  }
+}
+
+function ensureProjectSetupController() {
+  if (window.KairosManuscriptSetupController?.ready) {
+    return Promise.resolve(window.KairosManuscriptSetupController);
+  }
+  if (setupLoadPromise) return setupLoadPromise;
+
+  let script = document.querySelector(`script[data-kairos-project-setup-loader="${SETUP_SCRIPT}"]`);
+  if (script?.dataset.kairosLoadState === "failed") {
+    script.remove();
+    script = null;
+  }
+  if (!script) {
+    script = document.createElement("script");
+    script.type = "module";
+    script.src = new URL(`./scripts/${SETUP_SCRIPT}?v=${SETUP_RELEASE}`, document.baseURI).href;
+    script.dataset.kairosProjectSetupLoader = SETUP_SCRIPT;
+    script.dataset.kairosLoadState = "loading";
+    document.body.append(script);
+  }
+
+  setupLoadPromise = new Promise((resolve, reject) => {
+    let settled = false;
+    let poll = 0;
+    let timer = 0;
+    const finish = (error = null) => {
+      if (settled) return;
+      settled = true;
+      clearInterval(poll);
+      clearTimeout(timer);
+      script.removeEventListener("error", onError);
+      if (error) {
+        script.dataset.kairosLoadState = "failed";
+        reject(error);
+      } else {
+        script.dataset.kairosLoadState = "ready";
+        resolve(window.KairosManuscriptSetupController);
+      }
+    };
+    const inspect = () => {
+      if (window.KairosManuscriptSetupController?.ready) finish();
+    };
+    const onError = () => finish(new Error("Project Setup could not be downloaded."));
+    script.addEventListener("error", onError, { once: true });
+    poll = window.setInterval(inspect, 50);
+    timer = window.setTimeout(() => finish(new Error("Project Setup did not become ready within 15 seconds.")), SETUP_LOAD_TIMEOUT_MS);
+    inspect();
+  }).finally(() => {
+    setupLoadPromise = null;
+  });
+
+  return setupLoadPromise;
+}
+
+function waitForSetupHydration(section) {
+  if (!section.hasAttribute("data-kairos-project-setup-shell")) return Promise.resolve(section);
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (error = null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      observer.disconnect();
+      error ? reject(error) : resolve(section);
+    };
+    const observer = new MutationObserver(() => {
+      if (!section.hasAttribute("data-kairos-project-setup-shell")) finish();
+    });
+    const timer = window.setTimeout(() => finish(new Error("Project Setup loaded but did not render its form.")), 8_000);
+    observer.observe(section, { childList: true, subtree: true, attributes: true });
+  });
 }
 
 async function loadFile(event) {

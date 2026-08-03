@@ -1,5 +1,5 @@
-const BUILD = "kairos-manuscript-direct-open-20260803-3-mobile-controls";
-const ASSET_RELEASE = "manuscript-mobile-controls-20260803-2";
+const BUILD = "kairos-manuscript-direct-open-20260803-4-flow-recovery";
+const ASSET_RELEASE = "manuscript-flow-recovery-20260803-3";
 const ACTIVE_KEY = "kairos.production.active-workspace";
 const GLOBAL_KEY = "__KAIROS_MANUSCRIPT_DIRECT_OPEN_CONTROLLER__";
 const SHELL_ID = "kairos-manuscript-direct-open-shell";

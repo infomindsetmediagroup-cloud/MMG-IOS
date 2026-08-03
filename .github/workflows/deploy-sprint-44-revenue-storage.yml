@@ -72,6 +72,7 @@ jobs:
           node --check web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js
           node --check web/kairos-dashboard/scripts/legacy-runtime-loader.js
           node --check web/kairos-dashboard/scripts/manuscript-studio.js
+          node --check web/kairos-dashboard/scripts/manuscript-project-setup.js
           node --check web/kairos-dashboard/scripts/manuscript-post-intake-guard.js
           node --check web/kairos-dashboard/scripts/production-workspace-controller.js
           node --check web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
@@ -83,21 +84,24 @@ jobs:
           node --test tests/manuscript-production-flow-guard.contract.test.js
           node cloudflare/mmg-ios/scripts/validate-manuscript-large-intake.mjs
           npm run validate:manuscript-activation
-          grep -q 'five-center-dashboard-post-intake-stability-20260731-1' web/kairos-dashboard/index.html
-          grep -q 'manuscript-post-intake-stability-20260731-1' web/kairos-dashboard/index.html
+          grep -q 'five-center-manuscript-flow-recovery-20260803-3' web/kairos-dashboard/index.html
+          grep -q 'manuscript-flow-recovery-20260803-3' web/kairos-dashboard/index.html
+          grep -q 'assets/kairos-header-brand.png' web/kairos-dashboard/index.html
+          test "$(sha256sum web/kairos-dashboard/assets/kairos-header-brand.png | awk '{print $1}')" = '2f45003cd57a397de520cc0f7b33d71ddb4141ebf6221ec86361ca1068e26777'
           grep -q 'mmg-direct-open-target' web/kairos-dashboard/index.html
           grep -q 'mmg-dedicated-manuscript-route' web/kairos-dashboard/index.html
           grep -q 'new URL("./manuscript", current)' web/kairos-dashboard/index.html
           grep -q 'location.replace(target.href)' web/kairos-dashboard/index.html
-          grep -q 'kairos-dedicated-manuscript-route-20260803-2-mobile-controls' web/kairos-dashboard/manuscript.html
+          grep -q 'kairos-dedicated-manuscript-route-20260803-3-flow-recovery' web/kairos-dashboard/manuscript.html
           grep -q 'kairos-manuscript-pipeline-orchestrator-20260803-1-deliverable-review' web/kairos-dashboard/manuscript.html
           grep -q 'data-kairos-dedicated-manuscript="true"' web/kairos-dashboard/manuscript.html
           grep -q 'manuscript-direct-open-controller.js' web/kairos-dashboard/manuscript.html
           grep -q 'manuscript-pipeline-orchestrator.js' web/kairos-dashboard/manuscript.html
           grep -q 'manuscript-stage-handoff-controller.js' web/kairos-dashboard/manuscript.html
+          grep -q 'manuscript-project-setup.js' web/kairos-dashboard/manuscript.html
           ! grep -q 'legacy-runtime-loader.js' web/kairos-dashboard/manuscript.html
           ! grep -q 'manuscript-production-flow-bootstrap.js' web/kairos-dashboard/manuscript.html
-          grep -q 'kairos-manuscript-direct-open-20260803-3-mobile-controls' web/kairos-dashboard/scripts/manuscript-direct-open-controller.js
+          grep -q 'kairos-manuscript-direct-open-20260803-4-flow-recovery' web/kairos-dashboard/scripts/manuscript-direct-open-controller.js
           grep -q 'ensureModule("manuscript-studio.js")' web/kairos-dashboard/scripts/manuscript-direct-open-controller.js
           grep -q 'kairos-manuscript-direct-open-shell' web/kairos-dashboard/scripts/manuscript-direct-open-controller.js
           grep -q 'overlay-watchdog' web/kairos-dashboard/scripts/manuscript-direct-open-controller.js
@@ -108,11 +112,18 @@ jobs:
           grep -q 'Preview Package' web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js
           ! grep -q '/setup/cover' web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js
           ! grep -q 'api.openai.com' web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js
-          grep -q 'kairos-manuscript-stage-handoff-20260803-2-mobile-controls' web/kairos-dashboard/scripts/manuscript-stage-handoff-controller.js
+          grep -q 'kairos-manuscript-stage-handoff-20260803-3-flow-recovery' web/kairos-dashboard/scripts/manuscript-stage-handoff-controller.js
           grep -q 'Continue to Editorial Review' web/kairos-dashboard/scripts/manuscript-stage-handoff-controller.js
           grep -q 'Continue to Local Production' web/kairos-dashboard/scripts/manuscript-stage-handoff-controller.js
-          grep -q 'kairos-manuscript-continuation-20260803-4-mobile-controls' web/kairos-dashboard/scripts/manuscript-continuation-controller.js
+          grep -q 'kairos-manuscript-continuation-20260803-5-flow-recovery' web/kairos-dashboard/scripts/manuscript-continuation-controller.js
+          grep -q 'href="#manuscript-project-setup"' web/kairos-dashboard/scripts/manuscript-continuation-controller.js
+          grep -q 'waitForSetupHydration' web/kairos-dashboard/scripts/manuscript-continuation-controller.js
           grep -q 'data-kairos-source-review' web/kairos-dashboard/scripts/manuscript-studio.js
+          grep -q 'href="#manuscript-project-setup"' web/kairos-dashboard/scripts/manuscript-studio.js
+          grep -q 'ensureProjectSetupController' web/kairos-dashboard/scripts/manuscript-studio.js
+          grep -q 'manuscript-pipeline-orchestrator.js' web/kairos-dashboard/scripts/legacy-runtime-loader.js
+          grep -q 'manuscript-continuation-controller.js' web/kairos-dashboard/scripts/legacy-runtime-loader.js
+          grep -q 'manuscript-stage-handoff-controller.js' web/kairos-dashboard/scripts/legacy-runtime-loader.js
           grep -q 'document.addEventListener("click", handleEditorialAction, true)' web/kairos-dashboard/scripts/manuscript-editorial-workbench.js
           grep -q 'manuscript-direct-open-controller.js' web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js
           grep -q 'data-start-local-production' web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
@@ -169,7 +180,9 @@ jobs:
             bootstrap="${RUNNER_TEMP}/manuscript-production-flow-bootstrap.js"
             loader="${RUNNER_TEMP}/legacy-runtime-loader.js"
             studio="${RUNNER_TEMP}/manuscript-studio.js"
+            setup="${RUNNER_TEMP}/manuscript-project-setup.js"
             studio_css="${RUNNER_TEMP}/manuscript-studio.css"
+            header="${RUNNER_TEMP}/kairos-header-brand.png"
             readiness="${RUNNER_TEMP}/readiness.json"
             denial="${RUNNER_TEMP}/generation-denial.json"
 
@@ -183,7 +196,9 @@ jobs:
             bootstrap_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-production-flow-bootstrap.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${bootstrap}" -w '%{http_code}' || true)"
             loader_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/legacy-runtime-loader.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${loader}" -w '%{http_code}' || true)"
             studio_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-studio.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${studio}" -w '%{http_code}' || true)"
+            setup_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/scripts/manuscript-project-setup.js?release=${GITHUB_SHA}&attempt=${attempt}" -o "${setup}" -w '%{http_code}' || true)"
             studio_css_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/styles/manuscript-studio.css?release=${GITHUB_SHA}&attempt=${attempt}" -o "${studio_css}" -w '%{http_code}' || true)"
+            header_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/assets/kairos-header-brand.png?release=${GITHUB_SHA}&attempt=${attempt}" -o "${header}" -w '%{http_code}' || true)"
             readiness_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/api/operational-readiness?release=${GITHUB_SHA}&attempt=${attempt}" -o "${readiness}" -w '%{http_code}' || true)"
             denial_status="$(curl --silent --show-error --max-time 20 -X POST "${WORKER_URL}/api/production-registry/manuscripts/test-project-12345678/generation-job" -H 'Content-Type: application/json' --data '{}' -o "${denial}" -w '%{http_code}' || true)"
 
@@ -191,17 +206,21 @@ jobs:
               && grep -q 'mmg-dedicated-manuscript-route' "${root}" \
               && grep -q 'new URL("./manuscript", current)' "${root}" \
               && grep -q 'location.replace(target.href)' "${root}" \
+              && grep -q 'assets/kairos-header-brand.png' "${root}" \
+              && [ "${header_status}" = "200" ] \
+              && [ "$(sha256sum "${header}" | awk '{print $1}')" = '2f45003cd57a397de520cc0f7b33d71ddb4141ebf6221ec86361ca1068e26777' ] \
               && [ "${manuscript_status}" = "200" ] \
-              && grep -q 'kairos-dedicated-manuscript-route-20260803-2-mobile-controls' "${manuscript_page}" \
+              && grep -q 'kairos-dedicated-manuscript-route-20260803-3-flow-recovery' "${manuscript_page}" \
               && grep -q 'kairos-manuscript-pipeline-orchestrator-20260803-1-deliverable-review' "${manuscript_page}" \
               && grep -q 'data-kairos-dedicated-manuscript="true"' "${manuscript_page}" \
               && grep -q 'manuscript-direct-open-controller.js' "${manuscript_page}" \
               && grep -q 'manuscript-pipeline-orchestrator.js' "${manuscript_page}" \
               && grep -q 'manuscript-stage-handoff-controller.js' "${manuscript_page}" \
+              && grep -q 'manuscript-project-setup.js' "${manuscript_page}" \
               && ! grep -q 'legacy-runtime-loader.js' "${manuscript_page}" \
               && ! grep -q 'manuscript-production-flow-bootstrap.js' "${manuscript_page}" \
               && [ "${direct_status}" = "200" ] \
-              && grep -q 'kairos-manuscript-direct-open-20260803-3-mobile-controls' "${direct_open}" \
+              && grep -q 'kairos-manuscript-direct-open-20260803-4-flow-recovery' "${direct_open}" \
               && grep -q 'ensureModule("manuscript-studio.js")' "${direct_open}" \
               && grep -q 'kairos-manuscript-direct-open-shell' "${direct_open}" \
               && grep -q 'overlay-watchdog' "${direct_open}" \
@@ -211,20 +230,29 @@ jobs:
               && grep -q 'Manufacture Delivery Package' "${orchestrator}" \
               && grep -q 'Preview Package' "${orchestrator}" \
               && [ "${stage_status}" = "200" ] \
-              && grep -q 'kairos-manuscript-stage-handoff-20260803-2-mobile-controls' "${stage_handoff}" \
+              && grep -q 'kairos-manuscript-stage-handoff-20260803-3-flow-recovery' "${stage_handoff}" \
               && grep -q 'Continue to Editorial Review' "${stage_handoff}" \
               && grep -q 'Continue to Local Production' "${stage_handoff}" \
               && [ "${continuation_status}" = "200" ] \
-              && grep -q 'kairos-manuscript-continuation-20260803-4-mobile-controls' "${continuation}" \
+              && grep -q 'kairos-manuscript-continuation-20260803-5-flow-recovery' "${continuation}" \
+              && grep -q 'href="#manuscript-project-setup"' "${continuation}" \
+              && grep -q 'waitForSetupHydration' "${continuation}" \
               && [ "${editorial_status}" = "200" ] \
               && grep -q 'handleEditorialAction' "${editorial}" \
               && [ "${bootstrap_status}" = "200" ] \
               && grep -q 'manuscript-direct-open-controller.js' "${bootstrap}" \
               && [ "${loader_status}" = "200" ] \
-              && grep -q 'five-center-dashboard-post-intake-stability-20260731-1' "${loader}" \
+              && grep -q 'five-center-manuscript-flow-recovery-20260803-3' "${loader}" \
+              && grep -q 'manuscript-pipeline-orchestrator.js' "${loader}" \
+              && grep -q 'manuscript-continuation-controller.js' "${loader}" \
+              && grep -q 'manuscript-stage-handoff-controller.js' "${loader}" \
               && [ "${studio_status}" = "200" ] \
-              && grep -q 'manuscript-studio-mobile-controls-20260803-2' "${studio}" \
+              && grep -q 'manuscript-studio-flow-recovery-20260803-3' "${studio}" \
               && grep -q 'data-kairos-source-review' "${studio}" \
+              && grep -q 'href="#manuscript-project-setup"' "${studio}" \
+              && grep -q 'ensureProjectSetupController' "${studio}" \
+              && [ "${setup_status}" = "200" ] \
+              && grep -q 'kairos-manuscript-project-setup-ui-20260803-4-flow-recovery' "${setup}" \
               && [ "${studio_css_status}" = "200" ] \
               && grep -q '.manuscript-overlay' "${studio_css}" \
               && [ "${readiness_status}" = "200" ] \
@@ -237,8 +265,8 @@ jobs:
             fi
 
             if [ "${attempt}" = "30" ]; then
-              printf 'root=%s manuscript=%s direct=%s orchestrator=%s stage=%s bootstrap=%s loader=%s studio=%s css=%s readiness=%s denial=%s\n' \
-                "${root_status}" "${manuscript_status}" "${direct_status}" "${orchestrator_status}" "${stage_status}" "${bootstrap_status}" "${loader_status}" "${studio_status}" "${studio_css_status}" "${readiness_status}" "${denial_status}"
+              printf 'root=%s header=%s manuscript=%s direct=%s orchestrator=%s stage=%s continuation=%s bootstrap=%s loader=%s studio=%s setup=%s css=%s readiness=%s denial=%s\n' \
+                "${root_status}" "${header_status}" "${manuscript_status}" "${direct_status}" "${orchestrator_status}" "${stage_status}" "${continuation_status}" "${bootstrap_status}" "${loader_status}" "${studio_status}" "${setup_status}" "${studio_css_status}" "${readiness_status}" "${denial_status}"
               cat "${root}" || true
               cat "${manuscript_page}" || true
               cat "${direct_open}" || true
@@ -247,6 +275,9 @@ jobs:
               cat "${continuation}" || true
               cat "${editorial}" || true
               cat "${bootstrap}" || true
+              cat "${loader}" || true
+              cat "${studio}" || true
+              cat "${setup}" || true
               cat "${readiness}" || true
               cat "${denial}" || true
               exit 1

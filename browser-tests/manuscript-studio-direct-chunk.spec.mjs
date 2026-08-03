@@ -118,7 +118,7 @@ test("real Manuscript Studio retries a forced 502 through direct verified chunks
   await expect(page.locator(".manuscript-error")).toHaveCount(0);
 
   const runtime = await page.evaluate(() => window.KairosManuscriptStudio);
-  expect(runtime.build).toBe("manuscript-studio-mobile-controls-20260803-2");
+  expect(runtime.build).toBe("manuscript-studio-flow-recovery-20260803-3");
   expect(runtime.chunkedSourceUpload).toBe(true);
   expect(runtime.multipartSourceUpload).toBe(false);
   expect(firstFileChunkAttempts).toBe(2);

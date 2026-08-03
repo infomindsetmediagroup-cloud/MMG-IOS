@@ -1,5 +1,5 @@
-.app-header{position:relative;width:100%;margin:0 0 18px;border:0;border-radius:0;overflow:visible;background:transparent;box-shadow:none}
-.app-header-image{display:block;width:100%;height:auto;aspect-ratio:1264/404;margin:0;padding:0;border:1px solid rgba(48,148,205,.35);border-radius:24px;background:#070b12;box-shadow:0 20px 60px rgba(0,0,0,.34);object-fit:cover}
+.app-header{position:relative;width:100%;margin:0 0 18px;border:0;border-radius:0;overflow:hidden;background:#020508;box-shadow:none}
+.app-header-image{display:block;width:100%;height:auto;aspect-ratio:1264/468;margin:0;padding:0;border:0;border-radius:0;background:#020508;box-shadow:none;object-fit:contain}
 .app-header-status{display:none!important}
 html[data-kairos-route="executive"] .kairos-first-paint{display:none!important}
-@media(max-width:760px){.hub-shell{padding-top:8px}.app-header{margin:0 0 14px;width:100%}.app-header-image{display:block;width:100%;height:auto;max-height:none;aspect-ratio:1264/404;object-fit:cover;border-radius:18px}.app-header-status{display:none!important}}
+@media(max-width:760px){.hub-shell{padding-top:8px}.app-header{margin:0 0 14px;width:100%}.app-header-image{display:block;width:100%;height:auto;max-height:none;aspect-ratio:1264/468;object-fit:contain;border-radius:0}.app-header-status{display:none!important}}

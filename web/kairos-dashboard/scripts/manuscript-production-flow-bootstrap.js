@@ -1,9 +1,9 @@
 const BUILD =
-  "kairos-manuscript-production-flow-bootstrap-20260801-1-direct-open";
+  "kairos-manuscript-production-flow-bootstrap-20260803-2-flow-recovery";
 const RELEASE =
-  "manuscript-post-intake-stability-20260731-1";
+  "manuscript-flow-recovery-20260803-3";
 const COMMAND_RUNTIME_RELEASE =
-  "five-center-dashboard-post-intake-stability-20260731-1";
+  "five-center-manuscript-flow-recovery-20260803-3";
 const BOOT_TIMEOUT_MS = 20_000;
 
 try {

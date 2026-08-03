@@ -1,6 +1,6 @@
-const BUILD = "kairos-five-center-runtime-loader-20260731-3-post-intake";
-const RELEASE = "five-center-dashboard-restored-20260731-2";
-const ASSET_RELEASE = "five-center-dashboard-post-intake-stability-20260731-1";
+const BUILD = "kairos-five-center-runtime-loader-20260803-4-flow-recovery";
+const RELEASE = "five-center-dashboard-restored-20260803-3";
+const ASSET_RELEASE = "five-center-manuscript-flow-recovery-20260803-3";
 const params = new URLSearchParams(window.location.search);
 const requestedMode = params.get("mode");
 const executiveMode = requestedMode === "executive";
@@ -105,6 +105,9 @@ const SCRIPT_FILES = [
   "website-production-mobile-route.js",
   "publishing-operations-center.js",
   "manuscript-post-intake-guard.js",
+  "manuscript-pipeline-orchestrator.js",
+  "manuscript-continuation-controller.js",
+  "manuscript-stage-handoff-controller.js",
   "manuscript-studio.js",
   "manuscript-project-setup.js",
   "manuscript-editorial-workbench.js",

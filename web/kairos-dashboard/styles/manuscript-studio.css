@@ -93,6 +93,9 @@
 }
 .manuscript-panel .primary,
 .manuscript-panel .secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   position: relative;
   z-index: 1;
   min-height: 48px;
@@ -104,6 +107,7 @@
   -webkit-appearance: none;
   appearance: none;
   pointer-events: auto;
+  text-decoration: none;
 }
 .manuscript-panel .primary {
   background: #1677ff;
@@ -560,6 +564,30 @@
   background: #08111d;
 }
 
+.manuscript-source-review > summary {
+  list-style: none;
+  width: 100%;
+}
+
+.manuscript-source-review > summary::-webkit-details-marker {
+  display: none;
+}
+
+.manuscript-source-review > summary::after {
+  content: "Open";
+  margin-left: auto;
+  color: #8fbaff;
+  font-size: 12px;
+}
+
+.manuscript-source-review[open] > summary::after {
+  content: "Close";
+}
+
+.manuscript-source-review [data-kairos-source-review-content] {
+  margin-top: 16px;
+}
+
 .manuscript-source-review > p {
   color: #b8c5d6;
   line-height: 1.55;
@@ -587,6 +615,10 @@
 
 .manuscript-source-review-actions .primary {
   width: 100%;
+}
+
+.manuscript-project-setup[data-kairos-project-setup-shell] {
+  min-height: 0;
 }
 
 .manuscript-studio-open {

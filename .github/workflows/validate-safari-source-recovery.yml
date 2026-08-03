@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - 'web/kairos-dashboard/index.html'
-      - 'web/kairos-dashboard/assets/kairos-header-brand.svg'
+      - 'web/kairos-dashboard/assets/kairos-header-brand.png'
       - 'web/kairos-dashboard/styles/header-override.css'
       - 'web/kairos-dashboard/scripts/command-hub.js'
       - 'web/kairos-dashboard/scripts/legacy-runtime-loader.js'
@@ -28,7 +28,7 @@ on:
     branches: [main]
     paths:
       - 'web/kairos-dashboard/index.html'
-      - 'web/kairos-dashboard/assets/kairos-header-brand.svg'
+      - 'web/kairos-dashboard/assets/kairos-header-brand.png'
       - 'web/kairos-dashboard/styles/header-override.css'
       - 'web/kairos-dashboard/scripts/command-hub.js'
       - 'web/kairos-dashboard/scripts/legacy-runtime-loader.js'
@@ -79,10 +79,10 @@ jobs:
           node --check browser-tests/manuscript-post-intake-stability.spec.mjs
           node --check browser-tests/executive-os-clean-boot.spec.mjs
           node --test tests/manuscript-production-flow-guard.contract.test.js
-          grep -q 'five-center-dashboard-post-intake-stability-20260731-1' web/kairos-dashboard/index.html
-          grep -q 'manuscript-post-intake-stability-20260731-1' web/kairos-dashboard/index.html
-          grep -q 'const ASSET_RELEASE = "five-center-dashboard-post-intake-stability-20260731-1"' web/kairos-dashboard/scripts/legacy-runtime-loader.js
-          grep -q 'manuscript-studio-mobile-controls-20260803-2' web/kairos-dashboard/scripts/manuscript-studio.js
+          grep -q 'five-center-manuscript-flow-recovery-20260803-3' web/kairos-dashboard/index.html
+          grep -q 'manuscript-flow-recovery-20260803-3' web/kairos-dashboard/index.html
+          grep -q 'const ASSET_RELEASE = "five-center-manuscript-flow-recovery-20260803-3"' web/kairos-dashboard/scripts/legacy-runtime-loader.js
+          grep -q 'manuscript-studio-flow-recovery-20260803-3' web/kairos-dashboard/scripts/manuscript-studio.js
           grep -q 'chunkedSourceUpload: true' web/kairos-dashboard/scripts/manuscript-studio.js
           grep -q 'multipartSourceUpload: false' web/kairos-dashboard/scripts/manuscript-studio.js
           grep -q 'FILE_CHUNK_BYTES = 512 \* 1024' web/kairos-dashboard/scripts/manuscript-studio.js
@@ -144,17 +144,17 @@ jobs:
             active_scripts="$(node -e 'const fs=require("fs");const s=fs.readFileSync(process.argv[1],"utf8");process.stdout.write(s.match(/const SCRIPT_FILES = \[([\s\S]*?)\];/)?.[1]||"")' "${loader}")"
 
             if [ "${root_status}" = "200" ] \
-              && grep -q 'five-center-dashboard-post-intake-stability-20260731-1' "${root}" \
-              && grep -q 'manuscript-post-intake-stability-20260731-1' "${root}" \
+              && grep -q 'five-center-manuscript-flow-recovery-20260803-3' "${root}" \
+              && grep -q 'manuscript-flow-recovery-20260803-3' "${root}" \
               && [ "${loader_status}" = "200" ] \
-              && grep -q 'const ASSET_RELEASE = "five-center-dashboard-post-intake-stability-20260731-1"' "${loader}" \
+              && grep -q 'const ASSET_RELEASE = "five-center-manuscript-flow-recovery-20260803-3"' "${loader}" \
               && grep -q 'scripts/${filename}?v=${ASSET_RELEASE}' "${loader}" \
               && printf '%s' "${active_scripts}" | grep -q 'manuscript-post-intake-guard.js' \
               && printf '%s' "${active_scripts}" | grep -q 'manuscript-studio.js' \
               && printf '%s' "${active_scripts}" | grep -q 'manuscript-auto-pipeline.js' \
               && ! printf '%s' "${active_scripts}" | grep -q 'manuscript-docx-upload-hotfix.js' \
               && [ "${studio_status}" = "200" ] \
-              && grep -q 'manuscript-studio-mobile-controls-20260803-2' "${studio}" \
+              && grep -q 'manuscript-studio-flow-recovery-20260803-3' "${studio}" \
               && grep -q 'chunkedSourceUpload: true' "${studio}" \
               && grep -q 'multipartSourceUpload: false' "${studio}" \
               && ! grep -q 'new FormData' "${studio}" \
@@ -171,8 +171,8 @@ jobs:
               && grep -q 'requestJSONWithRetry' "${state_fetch}" \
               && grep -q 'KAIROS_STATE_TIMEOUT' "${state_fetch}" \
               && [ "${bootstrap_status}" = "200" ] \
-              && grep -q 'five-center-dashboard-post-intake-stability-20260731-1' "${bootstrap}" \
-              && grep -q 'manuscript-post-intake-stability-20260731-1' "${bootstrap}" \
+              && grep -q 'five-center-manuscript-flow-recovery-20260803-3' "${bootstrap}" \
+              && grep -q 'manuscript-flow-recovery-20260803-3' "${bootstrap}" \
               && grep -q 'renderBootstrapFailure' "${bootstrap}" \
               && [ "${command_status}" = "200" ] \
               && [ "${parent_count}" = "5" ]; then

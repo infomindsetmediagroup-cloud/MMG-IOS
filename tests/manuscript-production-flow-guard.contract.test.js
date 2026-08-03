@@ -47,7 +47,7 @@ test("the governed loader uses the post-intake stability lineage and installs th
   const source = await readFile(loaderPath, "utf8");
   const activeScripts = source.match(/const SCRIPT_FILES = \[([\s\S]*?)\];/)?.[1] || "";
 
-  assert.match(source, /const ASSET_RELEASE = "five-center-dashboard-post-intake-stability-20260731-1"/);
+  assert.match(source, /const ASSET_RELEASE = "five-center-manuscript-flow-recovery-20260803-3"/);
   assert.doesNotMatch(source, /const ASSET_RELEASE = "five-center-dashboard-direct-studio-chunks-20260730-4"/);
   assert.match(source, /script\.src = `\.\/scripts\/\$\{filename\}\?v=\$\{ASSET_RELEASE\}`/);
   assert.match(activeScripts, /"manuscript-post-intake-guard\.js"/);
@@ -87,7 +87,7 @@ test("the post-intake guard preserves the successful overlay and suppresses dupl
 test("the direct route independently loads Studio and owns visible recovery", async () => {
   const source = await readFile(directOpenPath, "utf8");
 
-  assert.match(source, /kairos-manuscript-direct-open-20260803-3-mobile-controls/);
+  assert.match(source, /kairos-manuscript-direct-open-20260803-4-flow-recovery/);
   assert.match(source, /routeTarget === "manuscript"/);
   assert.match(source, /ensureStyle\("manuscript-studio\.css"\)/);
   assert.match(source, /ensureModule\("manuscript-post-intake-guard\.js"\)/);
@@ -112,14 +112,19 @@ test("the iPhone intake receipt automatically exposes Project Setup without a hi
     readFile(manuscriptPagePath, "utf8"),
   ]);
 
-  assert.match(continuation, /kairos-manuscript-continuation-20260803-4-mobile-controls/);
+  assert.match(continuation, /kairos-manuscript-continuation-20260803-5-flow-recovery/);
   assert.match(continuation, /scheduleAutomaticContinuation/);
   assert.match(continuation, /automaticContinuations/);
   assert.match(continuation, /continueToSetup\(button\)/);
+  assert.match(continuation, /href="#manuscript-project-setup"/);
+  assert.match(continuation, /data-kairos-project-setup-shell/);
+  assert.match(continuation, /waitForSetupHydration/);
   assert.match(continuation, /behavior:\s*"auto"/);
   assert.match(studio, /data-kairos-intake-receipt/);
   assert.match(studio, /manuscript-intake-actions/);
   assert.match(studio, />Continue to Project Setup</);
+  assert.match(studio, /href="#manuscript-project-setup"/);
+  assert.match(studio, /data-kairos-project-setup-shell/);
   assert.match(studio, /document\.documentElement\.classList\.toggle\("manuscript-studio-open"/);
   assert.match(styles, /\.manuscript-intake-actions\s*\{[\s\S]*position:\s*sticky/);
   assert.match(styles, /backdrop-filter:\s*none/);
@@ -127,11 +132,14 @@ test("the iPhone intake receipt automatically exposes Project Setup without a hi
   assert.match(styles, /height:\s*100dvh/);
   assert.match(styles, /-webkit-overflow-scrolling:\s*touch/);
   assert.match(manuscriptPage, /mmg-manuscript-mobile-flow-release/);
-  assert.match(manuscriptPage, /manuscript-mobile-controls-20260803-2/);
+  assert.match(manuscriptPage, /manuscript-flow-recovery-20260803-3/);
   assert.match(studio, /data-kairos-source-review/);
-  assert.match(studio, /data-close-source/);
+  assert.match(studio, /<details class="manuscript-source-review"/);
+  assert.match(studio, /href="#manuscript-project-setup"/);
+  assert.match(studio, /data-kairos-project-setup-shell/);
+  assert.match(studio, /ensureProjectSetupController/);
   assert.doesNotMatch(
-    studio.match(/overlay\.querySelector\("\[data-edit\]"\)[\s\S]*?\n\s*\}\);/)?.[0] || "",
+    studio.match(/data-kairos-source-review[\s\S]*?<\/details>/)?.[0] || "",
     /state\.result\s*=\s*null/,
   );
 });
@@ -164,7 +172,7 @@ test("the manuscript URL is isolated from the advanced command shell", async () 
   assert.match(index, /location\.replace\(target\.href\)/);
   assert.match(index, /mmg-dedicated-manuscript-route/);
 
-  assert.match(manuscriptPage, /kairos-dedicated-manuscript-route-20260803-2-mobile-controls/);
+  assert.match(manuscriptPage, /kairos-dedicated-manuscript-route-20260803-3-flow-recovery/);
   assert.match(manuscriptPage, /kairos-manuscript-pipeline-orchestrator-20260803-1-deliverable-review/);
   assert.match(manuscriptPage, /data-kairos-dedicated-manuscript="true"/);
   assert.match(manuscriptPage, /safari-manuscript-intake-compat\.js/);
@@ -241,19 +249,19 @@ test("the dashboard installs bounded state transport, direct-open recovery, and 
   assert.match(bootstrap, /KairosLegacyRuntime\.load/);
   assert.doesNotMatch(bootstrap, /import\(`\.\/manuscript-auto-pipeline\.js/);
   assert.match(bootstrap, /manuscript-production-flow-guard\.js\?v=\$\{RELEASE\}/);
-  assert.match(bootstrap, /five-center-dashboard-post-intake-stability-20260731-1/);
-  assert.match(bootstrap, /manuscript-post-intake-stability-20260731-1/);
+  assert.match(bootstrap, /five-center-manuscript-flow-recovery-20260803-3/);
+  assert.match(bootstrap, /manuscript-flow-recovery-20260803-3/);
   assert.match(bootstrap, /BOOT_TIMEOUT_MS = 20_000/);
   assert.match(bootstrap, /renderBootstrapFailure/);
   assert.match(bootstrap, /directOpenController:/);
   assert.match(bootstrap, /singleControllerOwner:\s*"legacy-runtime-loader"/);
   assert.match(loader, /"manuscript-auto-pipeline\.js"/);
   assert.match(loader, /"manuscript-post-intake-guard\.js"/);
-  assert.match(index, /manuscript-production-flow-bootstrap\.js\?v=manuscript-post-intake-stability-20260731-1/);
-  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-post-intake-stability-20260731-1/);
-  assert.match(index, /manuscript-auto-pipeline\.js\?v=five-center-dashboard-post-intake-stability-20260731-1/);
-  assert.match(index, /manuscript-post-intake-guard\.js\?v=five-center-dashboard-post-intake-stability-20260731-1/);
-  assert.match(index, /manuscript-direct-open-controller\.js\?v=kairos-dedicated-manuscript-route-20260801-2/);
+  assert.match(index, /manuscript-production-flow-bootstrap\.js\?v=manuscript-flow-recovery-20260803-3/);
+  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-manuscript-flow-recovery-20260803-3/);
+  assert.match(index, /manuscript-auto-pipeline\.js\?v=five-center-manuscript-flow-recovery-20260803-3/);
+  assert.match(index, /manuscript-post-intake-guard\.js\?v=five-center-manuscript-flow-recovery-20260803-3/);
+  assert.match(index, /manuscript-direct-open-controller\.js\?v=manuscript-flow-recovery-20260803-3/);
   assert.match(index, /mmg-production-controller-target/);
   assert.match(index, /mmg-post-intake-guard-target/);
   assert.match(index, /mmg-direct-open-target/);

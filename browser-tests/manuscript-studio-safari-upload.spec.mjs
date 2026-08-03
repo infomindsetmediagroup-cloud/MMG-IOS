@@ -13,6 +13,10 @@ const studioCSS = readFileSync(
   new URL("../web/kairos-dashboard/styles/manuscript-studio.css", import.meta.url),
   "utf8",
 );
+const setupSource = readFileSync(
+  new URL("../web/kairos-dashboard/scripts/manuscript-project-setup.js", import.meta.url),
+  "utf8",
+);
 
 const PROJECT_ID = "manuscript-studio-safari-upload";
 const ACTIVE_KEY = "kairos.production.active-workspace";
@@ -51,6 +55,7 @@ async function installSafariStudio(page, projectId = PROJECT_ID) {
   await page.addScriptTag({ type: "module", content: compatibilitySource });
   await expect.poll(() => page.evaluate(() => window.KairosSafariManuscriptIntakeCompat?.ready)).toBe(true);
   await page.addStyleTag({ content: studioCSS });
+  await page.addScriptTag({ type: "module", content: setupSource });
   await page.addScriptTag({ type: "module", content: studioSource });
   await page.locator(".manuscript-launch").tap();
   await expect(page.locator("#manuscript-studio-overlay")).toBeVisible();
@@ -168,12 +173,17 @@ test("iPhone Safari stores a manuscript through direct chunks and advances to pr
 
   await expect(page.locator(".manuscript-result")).toContainText("Production intake created");
   await expect(page.locator(".manuscript-result")).toContainText("Your manuscript has advanced into MMG production intake.");
-  await page.locator("[data-edit]").tap();
+  await expect(page.locator("#manuscript-project-setup")).toBeVisible();
+  await expect(page.locator("[data-setup-author]")).toBeVisible();
+  await expect(page.locator("[data-finish]")).toHaveAttribute("href", "#manuscript-project-setup");
+  await page.locator("[data-finish]").tap();
+  await expect(page.locator("#manuscript-project-setup")).toBeVisible();
+  await page.locator("[data-kairos-source-review] > summary").tap();
   await expect(page.locator(".manuscript-result")).toContainText("Production intake created");
   await expect(page.locator("[data-kairos-source-review]")).toBeVisible();
   await expect(page.locator("[data-intake-source-review]")).toHaveValue(MANUSCRIPT);
-  await page.locator("[data-close-source]").tap();
-  await expect(page.locator("[data-kairos-source-review]")).toHaveCount(0);
+  await page.locator("[data-kairos-source-review] > summary").tap();
+  await expect(page.locator("[data-kairos-source-review]")).not.toHaveAttribute("open", "");
   await expect(page.locator("[data-finish]")).toBeVisible();
   expect(calls.map(call => `${call.method} ${call.path}`)).toEqual([
     `POST ${sourceBase()}/session`,

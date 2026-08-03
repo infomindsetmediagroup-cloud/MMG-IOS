@@ -10,7 +10,7 @@ test.skip(!liveURL, "KAIROS_LIVE_URL is required for the deployed-app smoke test
 async function openManuscriptStudio(page) {
   await page.goto(`${liveURL}/?proof=${Date.now()}`, { waitUntil: "domcontentloaded", timeout: 30_000 });
   await expect.poll(() => page.evaluate(() => window.KairosManuscriptSetupController?.ready === true), { timeout: 15_000 }).toBe(true);
-  await expect.poll(() => page.evaluate(() => window.KairosManuscriptSetupController?.build || "")).toBe("kairos-manuscript-project-setup-ui-20260722-3");
+  await expect.poll(() => page.evaluate(() => window.KairosManuscriptSetupController?.build || "")).toBe("kairos-manuscript-project-setup-ui-20260803-4-flow-recovery");
   await expect.poll(() => page.evaluate(() => window.KairosManuscriptAutoPipelineController?.ready === true), { timeout: 15_000 }).toBe(true);
   await expect.poll(() => page.evaluate(() => window.KairosManuscriptAutoPipelineController?.build || "")).toBe("kairos-manuscript-auto-pipeline-ui-20260722-1");
   await expect.poll(() => page.evaluate(() => window.KairosPublishingExperience?.ready === true), { timeout: 15_000 }).toBe(true);
