@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   KAIROS_SHOPIFY_ADMIN_AUTH_BUILD,
+  resolveShopifyClientId,
   validateShopifyBootstrap,
   verifyShopifyAdminSession,
 } from "../../src/shopify/kairos-shopify-admin-auth-v1.js";
@@ -18,6 +19,15 @@ function environment(overrides = {}) {
     KAIROS_SHOPIFY_SHOP_DOMAIN: SHOP,
     KAIROS_SHOPIFY_CLIENT_ID: CLIENT_ID,
     KAIROS_SHOPIFY_CLIENT_SECRET: CLIENT_SECRET,
+    ...overrides,
+  };
+}
+
+function aliasEnvironment(overrides = {}) {
+  return {
+    KAIROS_SHOPIFY_SHOP_DOMAIN: SHOP,
+    SHOPIFY_CLIENT_ID: CLIENT_ID,
+    SHOPIFY_CLIENT_SECRET: CLIENT_SECRET,
     ...overrides,
   };
 }
@@ -70,7 +80,10 @@ function request(token) {
 }
 
 test("exports the exact Shopify Admin auth build", () => {
-  assert.equal(KAIROS_SHOPIFY_ADMIN_AUTH_BUILD, "kairos-shopify-admin-auth-20260802-1");
+  assert.equal(
+    KAIROS_SHOPIFY_ADMIN_AUTH_BUILD,
+    "kairos-shopify-admin-auth-20260802-4-public-client-id",
+  );
 });
 
 test("accepts an authentic short-lived Shopify Admin session", async () => {
@@ -82,6 +95,67 @@ test("accepts an authentic short-lived Shopify Admin session", async () => {
   assert.equal(result.shopDomain, SHOP);
   assert.equal(result.staffUserId, STAFF_ID);
   assert.equal(result.sessionId, "session-1");
+});
+
+test("uses the existing deployed Shopify client credential aliases", async () => {
+  const token = await signToken();
+  const env = aliasEnvironment();
+  assert.equal(resolveShopifyClientId(env), CLIENT_ID);
+  const result = await verifyShopifyAdminSession(request(token), env, {
+    now: new Date(NOW_SECONDS * 1000),
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.staffUserId, STAFF_ID);
+});
+
+test("reads Cloudflare-style runtime bindings when descriptors are not exposed", async () => {
+  const values = aliasEnvironment();
+  const env = new Proxy({}, {
+    get(_target, key) {
+      return values[key];
+    },
+    getOwnPropertyDescriptor() {
+      return undefined;
+    },
+  });
+  const token = await signToken();
+  assert.equal(resolveShopifyClientId(env), CLIENT_ID);
+  const result = await verifyShopifyAdminSession(request(token), env, {
+    now: new Date(NOW_SECONDS * 1000),
+  });
+  assert.equal(result.ok, true);
+});
+
+test("App Home can resolve the public client ID while API authentication still requires its secret", async () => {
+  const env = {
+    KAIROS_SHOPIFY_SHOP_DOMAIN: SHOP,
+    SHOPIFY_CLIENT_ID: CLIENT_ID,
+  };
+  assert.equal(resolveShopifyClientId(env), CLIENT_ID);
+  const result = await verifyShopifyAdminSession(
+    request(await signToken()),
+    env,
+    { now: new Date(NOW_SECONDS * 1000) },
+  );
+  assert.equal(result.status, 503);
+  assert.equal(result.code, "SHOPIFY_ADMIN_AUTH_NOT_CONFIGURED");
+});
+
+test("session verification uses only complete matching credential pairs", async () => {
+  const token = await signToken();
+  const env = {
+    KAIROS_SHOPIFY_SHOP_DOMAIN: SHOP,
+    KAIROS_SHOPIFY_CLIENT_ID: "incomplete_client_id_12345",
+    SHOPIFY_CLIENT_ID: CLIENT_ID,
+    SHOPIFY_CLIENT_SECRET: CLIENT_SECRET,
+  };
+  assert.equal(resolveShopifyClientId(env), "incomplete_client_id_12345");
+  const result = await verifyShopifyAdminSession(
+    request(token),
+    env,
+    { now: new Date(NOW_SECONDS * 1000) },
+  );
+  assert.equal(result.ok, true);
 });
 
 test("requires configured client credentials", async () => {

@@ -1,0 +1,128 @@
+name: Inspect Kairos Shopify Admin Readiness
+
+"on":
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/inspect-kairos-shopify-admin-readiness.yml"
+      - "cloudflare/mmg-ios/src/shopify/kairos-shopify-admin-auth-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-dashboard-v3.js"
+      - "cloudflare/mmg-ios/test/shopify/kairos-shopify-admin-auth-v1.test.js"
+      - "cloudflare/mmg-ios/test/kairos-dashboard-v3.test.js"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/inspect-kairos-shopify-admin-readiness.yml"
+      - "cloudflare/mmg-ios/src/shopify/kairos-shopify-admin-auth-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-dashboard-v3.js"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+
+    steps:
+      - name: Check out exact revision
+        uses: actions/checkout@v4
+
+      - name: Validate Shopify Admin auth and dashboard contracts
+        run: |
+          set -euo pipefail
+          node --check cloudflare/mmg-ios/src/shopify/kairos-shopify-admin-auth-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-dashboard-v3.js
+          node --test \
+            cloudflare/mmg-ios/test/shopify/kairos-shopify-admin-auth-v1.test.js \
+            cloudflare/mmg-ios/test/kairos-dashboard-v3.test.js
+
+      - name: Require Cloudflare inspection credentials
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+
+      - name: Inspect Worker binding names without values
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          settings="${RUNNER_TEMP}/worker-settings.json"
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/mmg-ios/settings" \
+            -o "${settings}"
+          jq -e '.success == true' "${settings}" >/dev/null
+          jq -r '.result.bindings[]? | [.name, .type] | @tsv' "${settings}" \
+            | sort \
+            | tee "${RUNNER_TEMP}/worker-binding-names.tsv"
+          grep -Fxq $'SHOPIFY_CLIENT_ID\tsecret_text' "${RUNNER_TEMP}/worker-binding-names.tsv"
+          grep -Fxq $'SHOPIFY_CLIENT_SECRET\tsecret_text' "${RUNNER_TEMP}/worker-binding-names.tsv"
+
+      - name: Inspect live Shopify analytics readiness
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          analytics="${RUNNER_TEMP}/shopify-analytics.json"
+          code="$(curl --silent --show-error --max-time 45 \
+            "${WORKER_URL}/api/analytics/shopify?readiness=${GITHUB_SHA}" \
+            -o "${analytics}" \
+            -w '%{http_code}')"
+          test "${code}" = "200"
+          jq -e '.status == "ready" or .status == "partial"' "${analytics}" >/dev/null
+          jq '{status, source, credentialPath, build}' "${analytics}" \
+            | tee "${RUNNER_TEMP}/shopify-credential-selection.json"
+
+      - name: Wait for embedded dashboard bootstrap
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          host="$(printf '%s' 'admin.shopify.com/store/07kd8e-qw' | base64 -w0 | tr '+/' '-_' | tr -d '=')"
+          headers="${RUNNER_TEMP}/dashboard-bootstrap.headers"
+          body="${RUNNER_TEMP}/dashboard-bootstrap.html"
+          code="000"
+          for attempt in $(seq 1 36); do
+            code="$(curl --silent --show-error --max-time 45 \
+              -D "${headers}" \
+              "${WORKER_URL}/app?shop=07kd8e-qw.myshopify.com&host=${host}&readiness=${GITHUB_SHA}-${attempt}" \
+              -o "${body}" \
+              -w '%{http_code}' || true)"
+            if [ "${code}" = "200" ] \
+              && grep -Fq 'kairos-dashboard-20260802-4-existing-app-home' "${body}" \
+              && grep -Fq 'name="shopify-api-key"' "${body}"; then
+              break
+            fi
+            sleep 5
+          done
+          printf 'HTTP %s\n' "${code}"
+          test "${code}" = "200"
+          tr -d '\r' < "${headers}" > "${RUNNER_TEMP}/dashboard-bootstrap.normalized.headers"
+          grep -Fxiq 'x-kairos-shopify-admin-only: true' "${RUNNER_TEMP}/dashboard-bootstrap.normalized.headers"
+          grep -Fxiq 'x-kairos-shopify-admin-auth-build: kairos-shopify-admin-auth-20260802-4-public-client-id' "${RUNNER_TEMP}/dashboard-bootstrap.normalized.headers"
+          client_id="$(sed -n 's/.*name="shopify-api-key" content="\([A-Za-z0-9_-]*\)".*/\1/p' "${body}" | head -n1)"
+          test -n "${client_id}"
+          printf '%s\n' "${client_id}" | tee "${RUNNER_TEMP}/shopify-app-client-id.txt"
+          printf '%s' "${code}" > "${RUNNER_TEMP}/dashboard-bootstrap-status.txt"
+
+      - name: Upload sanitized readiness evidence
+        if: always() && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: kairos-shopify-admin-readiness-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/worker-binding-names.tsv
+            ${{ runner.temp }}/shopify-credential-selection.json
+            ${{ runner.temp }}/dashboard-bootstrap.normalized.headers
+            ${{ runner.temp }}/dashboard-bootstrap-status.txt
+            ${{ runner.temp }}/shopify-app-client-id.txt
+          if-no-files-found: warn
+          retention-days: 7

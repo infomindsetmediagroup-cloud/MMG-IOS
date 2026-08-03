@@ -12,7 +12,7 @@ import {
 } from "./shopify/kairos-shopify-admin-auth-v1.js";
 
 export const KAIROS_DASHBOARD_BUILD =
-  "kairos-dashboard-20260802-3-shopify-admin-auth";
+  "kairos-dashboard-20260802-4-existing-app-home";
 
 export const KAIROS_DASHBOARD_APP_PATH = "/app";
 export { KAIROS_DASHBOARD_OVERVIEW_PATH, KAIROS_DASHBOARD_PATH };
@@ -22,6 +22,8 @@ const DOCUMENT_PATHS = new Set([
   `${KAIROS_DASHBOARD_APP_PATH}/`,
   KAIROS_DASHBOARD_PATH,
   `${KAIROS_DASHBOARD_PATH}/`,
+  "/dashboard",
+  "/dashboard/",
 ]);
 const HTML_NONCE = "kairos-dashboard-v1";
 
@@ -39,8 +41,9 @@ export async function handleKairosDashboardRequest(
   }
 
   const method = String(request?.method || "GET").toUpperCase();
+  const existingAppHome = isExistingAppHomeRequest(url);
 
-  if (DOCUMENT_PATHS.has(url.pathname)) {
+  if (existingAppHome || DOCUMENT_PATHS.has(url.pathname)) {
     if (method !== "GET" && method !== "HEAD") {
       return methodNotAllowed("GET, HEAD");
     }
@@ -54,7 +57,19 @@ export async function handleKairosDashboardRequest(
       return authError(503, "SHOPIFY_ADMIN_APP_NOT_CONFIGURED");
     }
 
-    const delegated = await handleKairosDashboardV2Request(request, env, ctx, options);
+    const delegatedRequest = existingAppHome
+      ? rewriteDocumentRequest(request, url, KAIROS_DASHBOARD_APP_PATH)
+      : request;
+    if (!delegatedRequest) {
+      return authError(502, "SHOPIFY_ADMIN_APP_SHELL_INVALID");
+    }
+
+    const delegated = await handleKairosDashboardV2Request(
+      delegatedRequest,
+      env,
+      ctx,
+      options,
+    );
     if (!delegated) return null;
     return secureDocumentResponse(delegated, method, clientId, shopDomain);
   }
@@ -73,6 +88,21 @@ export async function handleKairosDashboardRequest(
   }
 
   return null;
+}
+
+function isExistingAppHomeRequest(url) {
+  return url.pathname === "/"
+    && (url.searchParams.has("shop") || url.searchParams.has("host"));
+}
+
+function rewriteDocumentRequest(request, url, pathname) {
+  try {
+    const rewrittenUrl = new URL(url.toString());
+    rewrittenUrl.pathname = pathname;
+    return new Request(rewrittenUrl.toString(), request);
+  } catch {
+    return null;
+  }
 }
 
 async function secureDocumentResponse(response, method, clientId, shopDomain) {

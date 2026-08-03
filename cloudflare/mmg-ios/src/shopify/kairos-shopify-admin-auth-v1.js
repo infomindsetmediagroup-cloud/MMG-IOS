@@ -1,5 +1,5 @@
 export const KAIROS_SHOPIFY_ADMIN_AUTH_BUILD =
-  "kairos-shopify-admin-auth-20260802-1";
+  "kairos-shopify-admin-auth-20260802-4-public-client-id";
 
 const MAX_TOKEN_BYTES = 8192;
 const MAX_SECRET_BYTES = 1024;
@@ -12,15 +12,22 @@ const SAFE_CLIENT_ID = /^[A-Za-z0-9_-]{16,128}$/u;
 const SAFE_USER_ID = /^[A-Za-z0-9_:/.-]{1,256}$/u;
 const SAFE_JWT_PART = /^[A-Za-z0-9_-]+$/u;
 
+const CREDENTIAL_PAIRS = Object.freeze([
+  Object.freeze(["KAIROS_SHOPIFY_CLIENT_ID", "KAIROS_SHOPIFY_CLIENT_SECRET"]),
+  Object.freeze(["SHOPIFY_CLIENT_ID", "SHOPIFY_CLIENT_SECRET"]),
+  Object.freeze(["SHOPIFY_API_KEY", "SHOPIFY_API_SECRET"]),
+  Object.freeze(["SHOPIFY_APP_CLIENT_ID", "SHOPIFY_APP_CLIENT_SECRET"]),
+  Object.freeze(["SHOPIFY_CLIENT_ID", "SHOPIFY_CLIENT_SECRET_KEY"]),
+]);
+
 export async function verifyShopifyAdminSession(
   request,
   env = {},
   options = {},
 ) {
   const shopDomain = resolveShopDomain(env);
-  const clientId = cleanClientId(readOwn(env, "KAIROS_SHOPIFY_CLIENT_ID"));
-  const clientSecret = cleanSecret(readOwn(env, "KAIROS_SHOPIFY_CLIENT_SECRET"));
-  if (!shopDomain || !clientId || !clientSecret) {
+  const credentials = resolveShopifyCredentials(env);
+  if (!shopDomain || !credentials) {
     return failure("SHOPIFY_ADMIN_AUTH_NOT_CONFIGURED", 503);
   }
 
@@ -40,7 +47,7 @@ export async function verifyShopifyAdminSession(
 
   const verified = await verifySignature(
     cryptoObject,
-    clientSecret,
+    credentials.clientSecret,
     parsed.signingInput,
     parsed.signature,
   );
@@ -48,12 +55,12 @@ export async function verifyShopifyAdminSession(
 
   const nowSeconds = resolveNowSeconds(options);
   const claims = parsed.payload;
-  if (!validClaims(claims, clientId, shopDomain, nowSeconds)) {
+  if (!validClaims(claims, credentials.clientId, shopDomain, nowSeconds)) {
     return failure("SHOPIFY_ADMIN_SESSION_INVALID", 401);
   }
 
   const staffUserId = normalizeUserId(claims.sub);
-  const allowlist = parseAllowlist(readOwn(env, "KAIROS_SHOPIFY_ADMIN_USER_IDS"));
+  const allowlist = parseAllowlist(readBinding(env, "KAIROS_SHOPIFY_ADMIN_USER_IDS"));
   if (allowlist.length > 0 && !allowlist.includes(staffUserId)) {
     return failure("SHOPIFY_ADMIN_ACCESS_DENIED", 403);
   }
@@ -70,15 +77,19 @@ export async function verifyShopifyAdminSession(
 
 export function resolveShopDomain(env = {}) {
   const candidate = cleanDomain(
-    readOwn(env, "KAIROS_SHOPIFY_SHOP_DOMAIN")
-      || readOwn(env, "SHOPIFY_STORE_DOMAIN")
+    readBinding(env, "KAIROS_SHOPIFY_SHOP_DOMAIN")
+      || readBinding(env, "SHOPIFY_STORE_DOMAIN")
       || DEFAULT_SHOP_DOMAIN,
   );
   return candidate || null;
 }
 
 export function resolveShopifyClientId(env = {}) {
-  return cleanClientId(readOwn(env, "KAIROS_SHOPIFY_CLIENT_ID"));
+  for (const [clientIdKey] of CREDENTIAL_PAIRS) {
+    const clientId = cleanClientId(readBinding(env, clientIdKey));
+    if (clientId) return clientId;
+  }
+  return "";
 }
 
 export function validateShopifyBootstrap(url, env = {}) {
@@ -97,6 +108,17 @@ export function validateShopifyBootstrap(url, env = {}) {
     `${shopDomain}/admin`,
   ]);
   return allowedHosts.has(decodedHost.replace(/\/+$/u, ""));
+}
+
+function resolveShopifyCredentials(env) {
+  for (const [clientIdKey, clientSecretKey] of CREDENTIAL_PAIRS) {
+    const clientId = cleanClientId(readBinding(env, clientIdKey));
+    const clientSecret = cleanSecret(readBinding(env, clientSecretKey));
+    if (clientId && clientSecret) {
+      return Object.freeze({ clientId, clientSecret });
+    }
+  }
+  return null;
 }
 
 function validClaims(claims, clientId, shopDomain, nowSeconds) {
@@ -268,6 +290,23 @@ function readOwn(object, key) {
   try {
     const descriptor = Object.getOwnPropertyDescriptor(object, key);
     return descriptor && Object.hasOwn(descriptor, "value") ? descriptor.value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function readBinding(object, key) {
+  if (!object || typeof object !== "object") return undefined;
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(object, key);
+    if (descriptor) {
+      return Object.hasOwn(descriptor, "value") ? descriptor.value : undefined;
+    }
+  } catch {
+    return undefined;
+  }
+  try {
+    return object[key];
   } catch {
     return undefined;
   }
