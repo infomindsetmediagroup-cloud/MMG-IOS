@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   patch:
-    if: github.event.pull_request.head.ref == 'agent/harden-worker-website-health-fetch-v1' && github.actor != 'github-actions[bot]'
+    if: github.event.pull_request.head.ref == 'agent/harden-worker-website-health-fetch-v2' && github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
