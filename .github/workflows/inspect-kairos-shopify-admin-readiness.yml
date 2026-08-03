@@ -82,7 +82,7 @@ jobs:
           test "${code}" = "200"
           tr -d '\r' < "${headers}" > "${RUNNER_TEMP}/dashboard-bootstrap.normalized.headers"
           grep -Fxiq 'x-kairos-shopify-admin-only: true' "${RUNNER_TEMP}/dashboard-bootstrap.normalized.headers"
-          grep -Fxiq 'x-kairos-shopify-admin-auth-build: kairos-shopify-admin-auth-20260802-3-runtime-bindings' "${RUNNER_TEMP}/dashboard-bootstrap.normalized.headers"
+          grep -Fxiq 'x-kairos-shopify-admin-auth-build: kairos-shopify-admin-auth-20260802-4-public-client-id' "${RUNNER_TEMP}/dashboard-bootstrap.normalized.headers"
           client_id="$(sed -n 's/.*name="shopify-api-key" content="\([A-Za-z0-9_-]*\)".*/\1/p' "${body}" | head -n1)"
           test -n "${client_id}"
           printf '%s\n' "${client_id}" | tee "${RUNNER_TEMP}/shopify-app-client-id.txt"
