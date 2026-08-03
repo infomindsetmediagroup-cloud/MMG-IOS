@@ -132,7 +132,7 @@ test("legacy advanced manuscript URL redirects before the command runtime and op
   expect(snapshot.activeProjectId).toMatch(/^manuscript-studio-/);
 
   const route = await page.evaluate(() => window.KairosDedicatedManuscriptRoute);
-  expect(route.build).toBe("kairos-dedicated-manuscript-route-20260801-3-pipeline-orchestrator");
+  expect(route.build).toBe("kairos-dedicated-manuscript-route-20260803-1-deliverable-review");
   expect(route.opened).toBe(true);
 
   const guard = await page.evaluate(() => window.KairosManuscriptPostIntakeGuard.snapshot());

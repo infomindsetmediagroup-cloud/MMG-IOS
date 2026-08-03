@@ -1,5 +1,5 @@
 (() => {
-  const BUILD = "kairos-manuscript-pipeline-orchestrator-20260801-1";
+  const BUILD = "kairos-manuscript-pipeline-orchestrator-20260803-1-deliverable-review";
   const ACTIVE_KEY = "kairos.production.active-workspace";
   const SETUP_TIMEOUT_MS = 120_000;
   const READ_TIMEOUT_MS = 15_000;
@@ -193,7 +193,7 @@
   }
 
   async function manufacture(projectId) {
-    if (state.busy || !projectId) return;
+    if (state.busy || !projectId) return null;
     state.busy = true;
     state.operationId = createId();
     state.phase = "Verifying the production gates…";
@@ -236,9 +236,11 @@
       state.lastRecord = record;
       renderPackage(record);
       emit("package-updated", projectId, record);
+      return record;
     } catch (error) {
       state.lastError = message(error, "Kairos could not manufacture the delivery package.");
       renderPipelineError(state.lastError);
+      return null;
     } finally {
       state.busy = false;
       state.phase = "";
@@ -468,13 +470,20 @@
       </div>
       <div class="manuscript-actions">
         ${packageURL ? `<a class="secondary" href="${escapeHTML(packageURL)}" target="_blank" rel="noopener">${approved ? "Download Complete Package" : "Preview Package"}</a>` : ""}
-        ${!approved ? '<button type="button" class="primary" data-approve-package>Approve Package</button>' : ""}
+        ${!approved ? '<button type="button" class="primary" data-approve-package>Approve &amp; Finalize Deliverable Package</button>' : ""}
         ${approved && !draftReady && !live ? '<button type="button" class="primary" data-preview-shopify>Preview Shopify Product</button>' : ""}
         ${draftReady && !live ? '<button type="button" class="primary" data-publish-live>Publish Product Live</button>' : ""}
       </div>
-      <div class="manuscript-manufacturing-grid">${assets.map(asset => `<article><b>${escapeHTML(asset.filename || asset.name || "Deliverable")}</b><p>${escapeHTML(asset.role || asset.contentType || "Publishing asset")}</p><small>${Number(asset.byteSize || 0).toLocaleString()} bytes</small>${asset.downloadURL ? `<a href="${escapeHTML(asset.downloadURL)}" target="_blank" rel="noopener">Open asset</a>` : ""}</article>`).join("")}</div>
+      <div class="manuscript-manufacturing-grid">${assets.map(packageAssetCard).join("")}</div>
       ${live ? '<p class="manuscript-note"><strong>Pipeline complete.</strong> The deliverable package is preserved and the approved product is live.</p>' : ""}
     `;
+  }
+
+  function packageAssetCard(asset) {
+    const filename = asset.filename || asset.name || "Deliverable";
+    const downloadURL = asset.downloadURL || "";
+    const visual = /\.(?:png|jpe?g|webp|svg)$/i.test(filename);
+    return `<article>${visual && downloadURL ? `<img src="${escapeHTML(downloadURL)}" alt="${escapeHTML(filename)} preview" loading="lazy">` : ""}<b>${escapeHTML(filename)}</b><p>${escapeHTML(asset.role || asset.contentType || "Publishing asset")}</p><small>${Number(asset.byteSize || 0).toLocaleString()} bytes</small>${downloadURL ? `<a href="${escapeHTML(downloadURL)}" target="_blank" rel="noopener">Open asset</a>` : ""}</article>`;
   }
 
   function showSetupError(section, error) {

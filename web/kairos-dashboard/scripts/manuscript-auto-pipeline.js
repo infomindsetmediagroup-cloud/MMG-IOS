@@ -1,4 +1,4 @@
-const BUILD = "kairos-manuscript-local-production-controller-20260731-3";
+const BUILD = "kairos-manuscript-local-production-controller-20260803-1-deliverable-review";
 const ACTIVE_KEY = "kairos.production.active-workspace";
 const READY_STATUS = "ready-for-manufacturing";
 const DRAFT_CONFIRMATION = "CREATE SHOPIFY PRODUCT DRAFT";
@@ -312,7 +312,7 @@ function packagePreviewMarkup() {
   const metadata = state.record.metadata || {};
   const vault = state.record.vault || {};
   const assets = Array.isArray(vault.assets) ? vault.assets : [];
-  return `${stepper(5)}<p class="eyebrow">Package Preview</p><h3>${esc(metadata.title || "Production package ready")}</h3><p>${esc(metadata.subtitle || metadata.description || "Review every customer-facing asset before approval.")}</p>${summary(vault, metadata)}<div class="issue-list"><article><b>Inference</b><p>Same-origin browser WebGPU</p></article><article><b>Publication</b><p>Blocked pending explicit approval</p></article></div><div class="manuscript-actions"><a class="manuscript-package" href="${esc(vault.packageDownloadURL || "#")}" target="_blank" rel="noopener">Preview Package</a><button type="button" class="primary" data-approve-package>Approve Package</button></div><div class="manuscript-manufacturing-grid">${assets.map(assetCard).join("")}</div><p class="manuscript-note">Approval freezes this package version and marks the job complete in the Admin Asset Vault.</p>${errorMarkup()}`;
+  return `${stepper(5)}<p class="eyebrow">Package Preview</p><h3>${esc(metadata.title || "Production package ready")}</h3><p>${esc(metadata.subtitle || metadata.description || "Review every customer-facing asset before approval.")}</p>${summary(vault, metadata)}<div class="issue-list"><article><b>Inference</b><p>Same-origin browser WebGPU</p></article><article><b>Publication</b><p>Blocked pending explicit approval</p></article></div><div class="manuscript-actions"><a class="manuscript-package" href="${esc(vault.packageDownloadURL || "#")}" target="_blank" rel="noopener">Preview Package</a><button type="button" class="primary" data-approve-package>Approve &amp; Finalize Deliverable Package</button></div><div class="manuscript-manufacturing-grid">${assets.map(assetCard).join("")}</div><p class="manuscript-note">Approval freezes this package version and marks the job complete in the Admin Asset Vault.</p>${errorMarkup()}`;
 }
 
 function vaultMarkup() {
@@ -350,7 +350,11 @@ function summary(vault, metadata) {
 }
 
 function assetCard(asset) {
-  return `<a href="${esc(asset.downloadURL || "#")}" target="_blank" rel="noopener"><strong>${esc(asset.filename || "Asset")}</strong><small>${esc(asset.role || "CUSTOMER_ASSET")} · ${formatBytes(asset.byteSize)}</small></a>`;
+  const filename = asset.filename || "Asset";
+  const preview = /\.(?:png|jpe?g|webp|svg)$/i.test(filename) && asset.downloadURL
+    ? `<img src="${esc(asset.downloadURL)}" alt="${esc(filename)} preview" loading="lazy">`
+    : "";
+  return `<a href="${esc(asset.downloadURL || "#")}" target="_blank" rel="noopener">${preview}<strong>${esc(filename)}</strong><small>${esc(asset.role || "CUSTOMER_ASSET")} · ${formatBytes(asset.byteSize)}</small></a>`;
 }
 
 function errorMarkup() {

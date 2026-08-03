@@ -15,6 +15,8 @@ const bootstrapPath = new URL("../web/kairos-dashboard/scripts/manuscript-produc
 const loaderPath = new URL("../web/kairos-dashboard/scripts/legacy-runtime-loader.js", import.meta.url);
 const indexPath = new URL("../web/kairos-dashboard/index.html", import.meta.url);
 const manuscriptPagePath = new URL("../web/kairos-dashboard/manuscript.html", import.meta.url);
+const editorialPath = new URL("../web/kairos-dashboard/scripts/manuscript-editorial-workbench.js", import.meta.url);
+const autoPipelineBackendPath = new URL("../cloudflare/mmg-ios/src/kairos-manuscript-auto-pipeline-v1.js", import.meta.url);
 
 test("the actual manuscript controller uses only the local WebGPU production route", async () => {
   const source = await readFile(controllerPath, "utf8");
@@ -125,19 +127,19 @@ test("the iPhone intake receipt automatically exposes Project Setup without a hi
   assert.match(styles, /height:\s*100dvh/);
   assert.match(styles, /-webkit-overflow-scrolling:\s*touch/);
   assert.match(manuscriptPage, /mmg-manuscript-mobile-flow-release/);
-  assert.match(manuscriptPage, /manuscript-mobile-continuation-20260802-1/);
+  assert.match(manuscriptPage, /manuscript-deliverable-review-20260803-1/);
 });
 
 test("the authoritative orchestrator owns setup persistence and deterministic manufacturing", async () => {
   const source = await readFile(orchestratorPath, "utf8");
 
-  assert.match(source, /kairos-manuscript-pipeline-orchestrator-20260801-1/);
+  assert.match(source, /kairos-manuscript-pipeline-orchestrator-20260803-1-deliverable-review/);
   assert.match(source, /new FormData\(\)/);
   assert.match(source, /X-Kairos-Idempotency-Key/);
   assert.match(source, /auto-pipeline\/run/);
   assert.match(source, /Manufacture Delivery Package/);
   assert.match(source, /Preview Package/);
-  assert.match(source, /Approve Package/);
+  assert.match(source, /Approve &amp; Finalize Deliverable Package/);
   assert.match(source, /Preview Shopify Product/);
   assert.match(source, /Publish Product Live/);
   assert.doesNotMatch(source, /\/setup\/cover/);
@@ -156,8 +158,8 @@ test("the manuscript URL is isolated from the advanced command shell", async () 
   assert.match(index, /location\.replace\(target\.href\)/);
   assert.match(index, /mmg-dedicated-manuscript-route/);
 
-  assert.match(manuscriptPage, /kairos-dedicated-manuscript-route-20260801-3-pipeline-orchestrator/);
-  assert.match(manuscriptPage, /kairos-manuscript-pipeline-orchestrator-20260801-1/);
+  assert.match(manuscriptPage, /kairos-dedicated-manuscript-route-20260803-1-deliverable-review/);
+  assert.match(manuscriptPage, /kairos-manuscript-pipeline-orchestrator-20260803-1-deliverable-review/);
   assert.match(manuscriptPage, /data-kairos-dedicated-manuscript="true"/);
   assert.match(manuscriptPage, /safari-manuscript-intake-compat\.js/);
   assert.match(manuscriptPage, /manuscript-direct-open-controller\.js/);
@@ -166,6 +168,39 @@ test("the manuscript URL is isolated from the advanced command shell", async () 
   assert.doesNotMatch(manuscriptPage, /legacy-runtime-loader\.js/);
   assert.doesNotMatch(manuscriptPage, /manuscript-production-flow-bootstrap\.js/);
   assert.doesNotMatch(manuscriptPage, /data-kairos-persistent-return/);
+});
+
+test("customer review exposes the exact deliverable contract and an executable production action", async () => {
+  const [editorial, backend] = await Promise.all([
+    readFile(editorialPath, "utf8"),
+    readFile(autoPipelineBackendPath, "utf8"),
+  ]);
+
+  for (const filename of [
+    "customer-spec-sheet.pdf",
+    "kdp-interior-6x9.pdf",
+    "digital-asset-edition-v2.pdf",
+    "cover-portrait-2048x3072.png",
+    "cover-thumbnail-2048x2048.png",
+    "README.txt",
+  ]) {
+    assert.match(editorial, new RegExp(filename.replaceAll(".", "\\.")));
+  }
+  assert.match(editorial, /complete-production-package\.zip/);
+  assert.match(editorial, /Approve Review & Produce Deliverable Asset/);
+  assert.match(editorial, /data-customer-review-manuscript readonly/);
+  assert.match(editorial, /setup\/cover/);
+  assert.match(editorial, /orchestrator\.manufacture\(\)/);
+
+  assert.match(backend, /resolveApprovedEditorialInput/);
+  assert.match(backend, /ready-for-manufacturing/);
+  assert.match(backend, /approvedEditorialVersionId/);
+  assert.match(backend, /approvedEditorialChecksum/);
+  assert.match(backend, /KAIROS_MANUSCRIPT_SOURCES/);
+  assert.doesNotMatch(
+    backend.match(/async function runPipeline[\s\S]*?async function prepareShopifyDraft/)?.[0] || "",
+    /\/source\/text/,
+  );
 });
 
 test("the production workspace does not convert arbitrary DOM mutations into durable state changes", async () => {

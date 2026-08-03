@@ -209,6 +209,94 @@
   border-color: #34345e;
   background: #090a16;
 }
+.manuscript-customer-review {
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid #6e5fd0;
+  border-radius: 16px;
+  background: #090b18;
+}
+.manuscript-customer-review h4 {
+  margin: 0.35rem 0 0.75rem;
+  font-size: 1.2rem;
+}
+.manuscript-customer-review > p {
+  color: #c8cdea;
+  line-height: 1.55;
+}
+.manuscript-review-layout {
+  display: grid;
+  grid-template-columns: minmax(160px, 240px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  margin: 16px 0;
+}
+.manuscript-review-cover {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid #51479a;
+  border-radius: 14px;
+  background: #050711;
+}
+.manuscript-review-cover img {
+  display: block;
+  width: 100%;
+  max-height: 360px;
+  object-fit: contain;
+  background: #030409;
+}
+.manuscript-review-cover figcaption {
+  padding: 10px 12px;
+  color: #b9bce0;
+  font-size: 0.85rem;
+}
+.manuscript-review-proof {
+  display: grid;
+  gap: 10px;
+}
+.manuscript-review-proof span {
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid #39396c;
+  border-radius: 13px;
+  background: #060713;
+}
+.manuscript-review-proof strong,
+.manuscript-review-proof small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.manuscript-review-proof small {
+  margin-top: 4px;
+  color: #9aa3c5;
+}
+.manuscript-customer-review textarea[data-customer-review-manuscript] {
+  min-height: 430px;
+  background: #050711;
+  color: #e7eafb;
+}
+.manuscript-customer-deliverables {
+  max-height: none;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 14px 0 18px;
+}
+.manuscript-customer-deliverables article {
+  border-color: #3d3974;
+  background: #070813;
+}
+.manuscript-review-actions {
+  position: sticky;
+  bottom: max(8px, env(safe-area-inset-bottom));
+  z-index: 10;
+  padding: 12px;
+  border: 1px solid #51479a;
+  border-radius: 14px;
+  background: rgba(9, 11, 24, 0.96);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
+}
+.manuscript-review-actions .primary {
+  flex: 1 1 320px;
+}
 .manuscript-manufacturing {
   border-color: #2c806f;
   background: #071b18;
@@ -241,6 +329,15 @@
 .manuscript-manufacturing-grid small {
   margin-top: 4px;
   color: #8eb5aa;
+}
+.manuscript-manufacturing-grid img {
+  display: block;
+  width: 100%;
+  max-height: 280px;
+  margin-bottom: 10px;
+  border-radius: 10px;
+  object-fit: contain;
+  background: #030907;
 }
 .manuscript-package {
   display: inline-block;
@@ -380,6 +477,8 @@
   .manuscript-grid,
   .manuscript-project-setup .issue-list,
   .manuscript-editorial-summary,
+  .manuscript-review-layout,
+  .manuscript-customer-deliverables,
   .manuscript-manufacturing-grid,
   .manuscript-delivery-proof,
   .manuscript-platform-submission .issue-list,
@@ -394,6 +493,21 @@
   }
   .manuscript-editorial-workbench textarea[data-editorial-text] {
     min-height: 360px;
+  }
+  .manuscript-customer-review {
+    padding: 14px;
+  }
+  .manuscript-customer-review textarea[data-customer-review-manuscript] {
+    min-height: 420px;
+  }
+  .manuscript-review-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .manuscript-review-actions .primary,
+  .manuscript-review-actions .secondary {
+    width: 100%;
+    min-height: 52px;
   }
   .manuscript-delivery-package {
     align-items: flex-start;

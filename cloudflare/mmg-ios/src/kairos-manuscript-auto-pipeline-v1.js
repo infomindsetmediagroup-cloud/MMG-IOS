@@ -3,7 +3,7 @@ import { handleProductPublication } from "./kairos-product-publication-v1.js";
 import { handleProductMedia } from "./kairos-product-media-v1.js";
 import { handleProductLaunchControl } from "./kairos-product-launch-control-v1.js";
 
-export const KAIROS_MANUSCRIPT_AUTO_PIPELINE_BUILD = "kairos-manuscript-auto-pipeline-20260722-1";
+export const KAIROS_MANUSCRIPT_AUTO_PIPELINE_BUILD = "kairos-manuscript-auto-pipeline-20260803-1-approved-editorial";
 
 const REGISTRY_OBJECT = "mmg-production-project-registry";
 const VAULT_PREFIX = "mmg-admin-asset-vault";
@@ -141,21 +141,22 @@ export function derivePublicationMetadata({ source = {}, setup = null, manuscrip
 
 async function runPipeline(request, env, projectId) {
   requireProjects(env);
-  const sourceTextResponse = await registryStub(env).fetch(`https://kairos.internal/registry/manuscripts/${projectId}/source/text`);
-  const sourceTextBody = await responseJSON(sourceTextResponse, "manuscript_source_unavailable");
-  const source = sourceTextBody.source || {};
-  const manuscript = String(sourceTextBody.manuscript || "");
-  if (manuscript.trim().length < 500) throw fail(409, "manuscript_source_incomplete", "The stored manuscript must contain at least 500 characters before automatic production.");
+  const project = manuscriptProjectStub(env, projectId);
+  const sourceResponse = await project.fetch(`https://kairos.internal/registry/manuscripts/${projectId}/source`);
+  const sourceBody = await responseJSON(sourceResponse, "manuscript_source_unavailable");
+  const source = sourceBody.source || {};
+  const approvedEditorial = await resolveApprovedEditorialInput(project, projectId);
+  const manuscript = approvedEditorial.manuscript;
 
-  const setupResponse = await registryStub(env).fetch(`https://kairos.internal/registry/manuscripts/${projectId}/setup`);
+  const setupResponse = await project.fetch(`https://kairos.internal/registry/manuscripts/${projectId}/setup`);
   const setupBody = setupResponse.ok ? await setupResponse.json() : null;
   const setup = setupBody?.setup || null;
 
-  const sourceFileResponse = await registryStub(env).fetch(`https://kairos.internal/registry/manuscripts/${projectId}/source/download`);
+  const sourceFileResponse = await project.fetch(`https://kairos.internal/registry/manuscripts/${projectId}/source/download`);
   if (!sourceFileResponse.ok) throw fail(sourceFileResponse.status, "manuscript_file_unavailable", "The authoritative manuscript file could not be loaded.");
   const sourceBytes = new Uint8Array(await sourceFileResponse.arrayBuffer());
 
-  const coverResponse = await registryStub(env).fetch(`https://kairos.internal/registry/manuscripts/${projectId}/setup/cover`);
+  const coverResponse = await project.fetch(`https://kairos.internal/registry/manuscripts/${projectId}/setup/cover`);
   if (!coverResponse.ok) throw fail(409, "approved_cover_required", "An approved PNG or JPEG cover is required before Kairos can manufacture the production package.");
   const coverBytes = new Uint8Array(await coverResponse.arrayBuffer());
   const coverType = String(coverResponse.headers.get("Content-Type") || setup?.cover?.contentType || "image/png").split(";", 1)[0].toLowerCase();
@@ -163,9 +164,9 @@ async function runPipeline(request, env, projectId) {
   const metadata = derivePublicationMetadata({ source, setup, manuscript });
   const sourceSha = source.checksum && /^[a-f0-9]{64}$/i.test(source.checksum) ? source.checksum.toLowerCase() : await digestHex(sourceBytes);
   const coverSha = setup?.cover?.sha256 || await digestHex(coverBytes);
-  const signature = await digestHex(new TextEncoder().encode(`${sourceSha}:${coverSha}:${metadata.title}:${metadata.author}`));
+  const signature = await digestHex(new TextEncoder().encode(`${sourceSha}:${approvedEditorial.version.checksum}:${coverSha}:${metadata.title}:${metadata.author}`));
   const existing = await optionalPipelineRecord(env, projectId);
-  if (existing?.status === "production-ready" && existing.signature === signature) return json(existing);
+  if (["production-ready", "package-approved"].includes(existing?.status) && existing.signature === signature) return json(existing);
 
   const payload = {
     mode: "manuscript",
@@ -182,6 +183,8 @@ async function runPipeline(request, env, projectId) {
       format: source.format || extensionOf(source.filename),
       pages: source.pages || null,
       checksum: sourceSha,
+      approvedEditorialVersionId: approvedEditorial.version.versionId,
+      approvedEditorialChecksum: approvedEditorial.version.checksum,
     },
     cover: {
       type: coverType,
@@ -225,6 +228,7 @@ async function runPipeline(request, env, projectId) {
     manufacturingProjectId: job.projectId,
     title: metadata.title,
     author: metadata.author,
+    approvedEditorial: approvedEditorial.publicRecord,
     createdAt: completedAt,
     finalPackageAssetId: finalPackage.assetId,
     assets,
@@ -246,6 +250,7 @@ async function runPipeline(request, env, projectId) {
     signature,
     manufacturingProjectId: job.projectId,
     metadata,
+    approvedEditorial: approvedEditorial.publicRecord,
     vault: publicManifest(projectId, manifest),
     shopify: existing?.shopify || { status: "not-prepared" },
     createdAt: existing?.createdAt || completedAt,
@@ -255,6 +260,50 @@ async function runPipeline(request, env, projectId) {
   };
   await putPipelineRecord(env, projectId, record);
   return json(record, 201);
+}
+
+export async function resolveApprovedEditorialInput(project, projectId) {
+  const editorialResponse = await project.fetch(`https://kairos.internal/registry/manuscripts/${projectId}/editorial`);
+  const editorialBody = await responseJSON(editorialResponse, "approved_editorial_unavailable");
+  const editorial = editorialBody.editorial || {};
+  if (editorial.status !== "ready-for-manufacturing" || !editorial.finalVersionId) {
+    throw fail(409, "approved_editorial_required", "Customer approval and final editorial handoff are required before manufacturing.");
+  }
+
+  const version = (editorial.versions || []).find((item) => item.versionId === editorial.finalVersionId);
+  if (!version?.checksum) {
+    throw fail(409, "approved_editorial_version_missing", "The approved final editorial version could not be identified.");
+  }
+
+  const versionResponse = await project.fetch(
+    `https://kairos.internal/registry/manuscripts/${projectId}/editorial/versions/${encodeURIComponent(editorial.finalVersionId)}`,
+  );
+  const versionBody = await responseJSON(versionResponse, "approved_editorial_text_unavailable");
+  const manuscript = String(versionBody.manuscript || "");
+  if (manuscript.trim().length < 500) {
+    throw fail(409, "approved_editorial_incomplete", "The approved editorial manuscript must contain at least 500 characters before manufacturing.");
+  }
+
+  const checksum = await digestHex(new TextEncoder().encode(manuscript));
+  if (checksum !== String(version.checksum).toLowerCase()) {
+    throw fail(502, "approved_editorial_integrity_failed", "The approved editorial manuscript failed checksum verification.");
+  }
+
+  return {
+    manuscript,
+    version,
+    publicRecord: {
+      versionId: version.versionId,
+      label: version.label,
+      passType: version.passType,
+      wordCount: version.wordCount,
+      characterCount: version.characterCount,
+      checksum,
+      reviewId: editorial.review?.reviewId || null,
+      approvedAt: editorial.review?.decidedAt || null,
+      finalizedAt: editorial.updatedAt || null,
+    },
+  };
 }
 
 async function prepareShopifyDraft(request, env, projectId) {
@@ -488,17 +537,36 @@ function publicManifest(projectId, manifest) {
 }
 
 async function putPipelineRecord(env, projectId, record) {
-  const response = await registryStub(env).fetch(`https://kairos.internal/registry/manuscripts/${projectId}/auto-pipeline`, {
+  const request = () => ({
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(record),
   });
-  await responseJSON(response, "auto_pipeline_record_store_failed");
+  const [dedicated, legacy] = await Promise.all([
+    manuscriptProjectStub(env, projectId).fetch(
+      `https://kairos.internal/registry/manuscripts/${projectId}/auto-pipeline`,
+      request(),
+    ),
+    registryStub(env).fetch(
+      `https://kairos.internal/registry/manuscripts/${projectId}/auto-pipeline`,
+      request(),
+    ),
+  ]);
+  await Promise.all([
+    responseJSON(dedicated, "dedicated_auto_pipeline_record_store_failed"),
+    responseJSON(legacy, "auto_pipeline_record_store_failed"),
+  ]);
 }
 
 async function optionalPipelineRecord(env, projectId) {
-  const response = await registryStub(env).fetch(`https://kairos.internal/registry/manuscripts/${projectId}/auto-pipeline`);
-  return response.ok ? response.json() : null;
+  if (env?.KAIROS_MANUSCRIPT_SOURCES?.idFromName && env?.KAIROS_MANUSCRIPT_SOURCES?.get) {
+    const dedicated = await manuscriptProjectStub(env, projectId).fetch(
+      `https://kairos.internal/registry/manuscripts/${projectId}/auto-pipeline`,
+    );
+    if (dedicated.ok) return dedicated.json();
+  }
+  const legacy = await registryStub(env).fetch(`https://kairos.internal/registry/manuscripts/${projectId}/auto-pipeline`);
+  return legacy.ok ? legacy.json() : null;
 }
 
 async function requirePipelineRecord(env, projectId) {
@@ -510,6 +578,13 @@ async function requirePipelineRecord(env, projectId) {
 function registryStub(env) {
   requireProjects(env);
   return env.KAIROS_PROJECTS.get(env.KAIROS_PROJECTS.idFromName(REGISTRY_OBJECT));
+}
+
+function manuscriptProjectStub(env, projectId) {
+  if (!env?.KAIROS_MANUSCRIPT_SOURCES?.idFromName || !env?.KAIROS_MANUSCRIPT_SOURCES?.get) {
+    throw fail(503, "manuscript_project_storage_unavailable", "The dedicated manuscript project runtime is unavailable.");
+  }
+  return env.KAIROS_MANUSCRIPT_SOURCES.get(env.KAIROS_MANUSCRIPT_SOURCES.idFromName(projectId));
 }
 
 function vaultStub(env, projectId) {

@@ -1,4 +1,4 @@
-export const KAIROS_PUBLISHING_EXPERIENCE_BUILD = "kairos-publishing-experience-20260723-1";
+export const KAIROS_PUBLISHING_EXPERIENCE_BUILD = "kairos-publishing-experience-20260803-1-dedicated-package-state";
 
 const REGISTRY_OBJECT = "mmg-production-project-registry";
 const APPROVAL = "APPROVE PACKAGE";
@@ -17,8 +17,14 @@ export async function handlePublishingExperience(request, env) {
     }
 
     const projectId = match[1];
-    const stub = env.KAIROS_PROJECTS.get(env.KAIROS_PROJECTS.idFromName(REGISTRY_OBJECT));
-    const currentResponse = await stub.fetch(`https://kairos.internal/registry/manuscripts/${projectId}/auto-pipeline`);
+    const legacy = env.KAIROS_PROJECTS.get(env.KAIROS_PROJECTS.idFromName(REGISTRY_OBJECT));
+    const dedicated = manuscriptProjectStub(env, projectId);
+    let currentResponse = dedicated
+      ? await dedicated.fetch(`https://kairos.internal/registry/manuscripts/${projectId}/auto-pipeline`)
+      : null;
+    if (!currentResponse?.ok) {
+      currentResponse = await legacy.fetch(`https://kairos.internal/registry/manuscripts/${projectId}/auto-pipeline`);
+    }
     const current = await currentResponse.json().catch(() => null);
     if (!currentResponse.ok || !current) return json({ status: "failed", error: { code: "package_not_ready", message: "Build and preview the production package before approval." } }, 409);
     if (current.status !== "production-ready" && current.status !== "package-approved") {
@@ -44,16 +50,25 @@ export async function handlePublishingExperience(request, env) {
       updatedAt: approvedAt,
       nextAction: "The approved job is complete in the Admin Asset Vault. Preview the Shopify product when ready.",
     };
-    const saved = await stub.fetch(`https://kairos.internal/registry/manuscripts/${projectId}/auto-pipeline`, {
+    const save = () => ({
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(next),
     });
-    if (!saved.ok) return json({ status: "failed", error: { code: "package_approval_save_failed", message: "Kairos could not preserve the package approval." } }, 502);
+    const saved = await Promise.all([
+      legacy.fetch(`https://kairos.internal/registry/manuscripts/${projectId}/auto-pipeline`, save()),
+      ...(dedicated ? [dedicated.fetch(`https://kairos.internal/registry/manuscripts/${projectId}/auto-pipeline`, save())] : []),
+    ]);
+    if (saved.some((response) => !response.ok)) return json({ status: "failed", error: { code: "package_approval_save_failed", message: "Kairos could not preserve the package approval in every project store." } }, 502);
     return json(next);
   } catch (error) {
     return json({ status: "failed", error: { code: "package_approval_failed", message: error instanceof Error ? error.message : "Package approval failed." } }, 500);
   }
+}
+
+function manuscriptProjectStub(env, projectId) {
+  if (!env?.KAIROS_MANUSCRIPT_SOURCES?.idFromName || !env?.KAIROS_MANUSCRIPT_SOURCES?.get) return null;
+  return env.KAIROS_MANUSCRIPT_SOURCES.get(env.KAIROS_MANUSCRIPT_SOURCES.idFromName(projectId));
 }
 
 function json(value, status = 200) {

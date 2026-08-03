@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { derivePublicationMetadata } from "../cloudflare/mmg-ios/src/kairos-manuscript-auto-pipeline-v1.js";
+import { createHash } from "node:crypto";
+import {
+  derivePublicationMetadata,
+  resolveApprovedEditorialInput,
+} from "../cloudflare/mmg-ios/src/kairos-manuscript-auto-pipeline-v1.js";
 
 const AI_IMAGE_MANUSCRIPT = `# AI Image Mastery
 A Practical Guide to Creating Better AI Images
@@ -67,5 +71,78 @@ describe("Kairos automatic manuscript production metadata", () => {
     expect(metadata.templateSuffix).toBe("mmg-book-product");
     expect(metadata.categories).toContain("Business & Economics / Entrepreneurship");
     expect(metadata.extraction.manualCatalogEntryRequired).toBe(false);
+  });
+});
+
+describe("Kairos approved editorial manufacturing input", () => {
+  it("loads and verifies the exact finalized customer-approved version", async () => {
+    const projectId = "manuscript-approved-editorial-12345678";
+    const versionId = "ver-approved-editorial-12345678";
+    const manuscript = `${"Approved editorial manuscript content for deterministic manufacturing. ".repeat(12)}Final paragraph.`;
+    const checksum = createHash("sha256").update(manuscript).digest("hex");
+    const requests = [];
+    const project = {
+      async fetch(input) {
+        const url = new URL(String(input));
+        requests.push(url.pathname);
+        if (url.pathname.endsWith("/editorial")) {
+          return Response.json({
+            status: "ready",
+            editorial: {
+              status: "ready-for-manufacturing",
+              finalVersionId: versionId,
+              updatedAt: "2026-08-03T15:12:00.000Z",
+              review: {
+                reviewId: "review-approved-12345678",
+                decision: "approved",
+                decidedAt: "2026-08-03T15:10:00.000Z",
+              },
+              versions: [{
+                versionId,
+                label: "Editorial Version 2",
+                passType: "structural",
+                wordCount: 85,
+                characterCount: manuscript.length,
+                checksum,
+              }],
+            },
+          });
+        }
+        if (url.pathname.endsWith(`/editorial/versions/${versionId}`)) {
+          return Response.json({ status: "ready", manuscript });
+        }
+        return Response.json({ error: { code: "not_found", message: "not found" } }, { status: 404 });
+      },
+    };
+
+    const approved = await resolveApprovedEditorialInput(project, projectId);
+
+    expect(approved.manuscript).toBe(manuscript);
+    expect(approved.publicRecord).toMatchObject({
+      versionId,
+      checksum,
+      reviewId: "review-approved-12345678",
+      approvedAt: "2026-08-03T15:10:00.000Z",
+    });
+    expect(requests).toEqual([
+      `/registry/manuscripts/${projectId}/editorial`,
+      `/registry/manuscripts/${projectId}/editorial/versions/${versionId}`,
+    ]);
+  });
+
+  it("blocks manufacturing before the editorial approval and finalization gate", async () => {
+    const project = {
+      fetch: async () => Response.json({
+        status: "ready",
+        editorial: {
+          status: "awaiting-customer-review",
+          finalVersionId: null,
+          versions: [],
+        },
+      }),
+    };
+
+    await expect(resolveApprovedEditorialInput(project, "manuscript-awaiting-review-12345678"))
+      .rejects.toMatchObject({ status: 409, code: "approved_editorial_required" });
   });
 });
