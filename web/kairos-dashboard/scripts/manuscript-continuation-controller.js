@@ -1,6 +1,6 @@
 (() => {
-  const BUILD = "kairos-manuscript-continuation-20260801-2-recovery";
-  const RELEASE = "five-center-dashboard-post-intake-stability-20260731-1";
+  const BUILD = "kairos-manuscript-continuation-20260802-3-auto-setup";
+  const RELEASE = "manuscript-mobile-continuation-20260802-1";
   const GLOBAL_KEY = "__KAIROS_MANUSCRIPT_CONTINUATION_CONTROLLER__";
   const SETUP_SCRIPT = "manuscript-project-setup.js";
   const SETUP_SELECTOR = "#manuscript-project-setup";
@@ -26,6 +26,8 @@
     recoveredReceipt: false,
     lastRecoveryAt: 0,
     recoveryPromise: null,
+    autoOpenScheduled: false,
+    automaticContinuations: 0,
   };
 
   const api = Object.freeze({
@@ -43,6 +45,7 @@
         setupPresent: Boolean(document.querySelector(SETUP_SELECTOR)),
         recoveredReceipt: state.recoveredReceipt,
         recoveryChecks: state.recoveryChecks,
+        automaticContinuations: state.automaticContinuations,
       };
     },
   });
@@ -59,6 +62,7 @@
 
   const observer = new MutationObserver(() => {
     normalizeReceiptActions();
+    scheduleAutomaticContinuation();
     scheduleRecovery("dom-change");
   });
   observer.observe(document.body || document.documentElement, {
@@ -67,6 +71,7 @@
   });
 
   normalizeReceiptActions();
+  scheduleAutomaticContinuation();
   scheduleRecovery("controller-ready");
 
   function handleClick(event) {
@@ -116,7 +121,7 @@
       state.opened = true;
       state.lastError = "";
       button?.remove();
-      section.scrollIntoView({ behavior: "smooth", block: "start" });
+      section.scrollIntoView({ behavior: "auto", block: "start" });
       section.querySelector("input,select,textarea,button")?.focus?.({ preventScroll: true });
 
       window.dispatchEvent(new CustomEvent("kairos:production:state-changed", {
@@ -326,6 +331,23 @@
     button.dataset.kairosContinuationReady = BUILD;
     button.textContent = "Continue to Project Setup";
     button.setAttribute("aria-label", "Continue to manuscript project setup");
+  }
+
+  function scheduleAutomaticContinuation() {
+    if (state.loading || state.opened || state.autoOpenScheduled) return;
+    if (document.querySelector(SETUP_SELECTOR)) return;
+
+    const button = document.querySelector("#manuscript-studio-overlay .manuscript-result [data-finish]");
+    if (!button || button.dataset.kairosAutomaticContinuation === BUILD) return;
+
+    button.dataset.kairosAutomaticContinuation = BUILD;
+    state.autoOpenScheduled = true;
+    queueMicrotask(() => {
+      state.autoOpenScheduled = false;
+      if (!button.isConnected || document.querySelector(SETUP_SELECTOR)) return;
+      state.automaticContinuations += 1;
+      void continueToSetup(button);
+    });
   }
 
   function fail(button, message, result = document.querySelector("#manuscript-studio-overlay .manuscript-result")) {

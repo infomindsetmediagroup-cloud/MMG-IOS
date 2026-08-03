@@ -82,12 +82,21 @@ function mount() {
 
 function render() {
   document.querySelector("#manuscript-studio-overlay")?.remove();
+  document.documentElement.classList.toggle("manuscript-studio-open", state.open);
+  document.body.classList.toggle("manuscript-studio-open", state.open);
   if (!state.open) return;
   const overlay = document.createElement("div");
   overlay.id = "manuscript-studio-overlay";
   overlay.className = "manuscript-overlay";
+  overlay.dataset.kairosManuscriptView = state.result ? "intake-receipt" : "intake-form";
   overlay.innerHTML = `<section class="manuscript-panel"><header><div><p class="eyebrow">Customer Portal · Publishing</p><h2>Manuscript Studio</h2><p>Upload a manuscript, preserve the original source, and advance it directly into MMG production intake.</p></div><button data-close aria-label="Close">×</button></header>${state.result ? resultView() : inputView()}</section>`;
   document.body.appendChild(overlay);
+  if (state.result) {
+    requestAnimationFrame(() => {
+      overlay.scrollTop = 0;
+      overlay.querySelector("[data-finish]")?.focus?.({ preventScroll: true });
+    });
+  }
   overlay.querySelector("[data-close]").onclick = () => {
     state.open = false;
     window.dispatchEvent(new CustomEvent("kairos:production:close"));
@@ -158,8 +167,10 @@ function sourceView() {
 
 function resultView() {
   const r = state.result || {};
-  const actions = r.workflow?.requiredNextActions || [];
-  return `<div class="manuscript-result"><div class="manuscript-status"><span>Production intake created</span><strong>${esc(r.status || "production_intake")}</strong></div><h3>${esc(r.customerMessage || "Your manuscript has advanced into MMG production intake.")}</h3><p><strong>Project:</strong> ${esc(r.projectID || "—")} · <strong>Intake:</strong> ${esc(r.intakeID || "—")}</p><p><strong>Accepted source:</strong> ${Number(r.manuscript?.characterCount || state.manuscript.length).toLocaleString()} characters · ${Number(r.manuscript?.wordCount || 0).toLocaleString()} words</p><div class="issue-list">${actions.map((item, index) => `<article><b>${index + 1}. ${esc(item)}</b><p>${index === 0 ? "This is the next required production step." : "Queued in the production setup sequence."}</p></article>`).join("")}</div><p class="manuscript-note">The original manuscript source remains stored in the durable production registry. This workflow does not stop at a file download.</p><div class="manuscript-actions"><button class="primary" data-finish>Return to Production Center</button><button class="secondary" data-edit>Review Intake Source</button></div></div>`;
+  const actions = Array.isArray(r.workflow?.requiredNextActions) && r.workflow.requiredNextActions.length
+    ? r.workflow.requiredNextActions
+    : ["Complete Project Setup"];
+  return `<div class="manuscript-result" data-kairos-intake-receipt><div class="manuscript-status"><span>Production intake created</span><strong>${esc(r.status || "production_intake")}</strong></div><h3>${esc(r.customerMessage || "Your manuscript has advanced into MMG production intake.")}</h3><p><strong>Project:</strong> ${esc(r.projectID || "—")} · <strong>Intake:</strong> ${esc(r.intakeID || "—")}</p><p><strong>Accepted source:</strong> ${Number(r.manuscript?.characterCount || state.manuscript.length).toLocaleString()} characters · ${Number(r.manuscript?.wordCount || 0).toLocaleString()} words</p><div class="manuscript-actions manuscript-intake-actions"><button type="button" class="primary" data-finish>Continue to Project Setup</button><button type="button" class="secondary" data-edit>Review Intake Source</button></div><div class="issue-list">${actions.map((item, index) => `<article><b>${index + 1}. ${esc(item)}</b><p>${index === 0 ? "This is the next required production step." : "Queued in the production setup sequence."}</p></article>`).join("")}</div><p class="manuscript-note">The original manuscript source remains stored in the durable production registry. Project Setup opens automatically so production can continue.</p></div>`;
 }
 
 async function loadFile(event) {
