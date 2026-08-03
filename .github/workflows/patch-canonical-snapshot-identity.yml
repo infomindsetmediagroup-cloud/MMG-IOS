@@ -1,15 +1,15 @@
 name: Apply Canonical Snapshot Identity Fix
 
 "on":
-  push:
+  pull_request:
     branches:
-      - agent/fix-canonical-business-snapshot-identity-v1
+      - main
 
 permissions:
   contents: write
 
 concurrency:
-  group: patch-canonical-snapshot-identity
+  group: patch-canonical-snapshot-identity-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 
 jobs:
@@ -19,10 +19,11 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - name: Check out exact branch
+      - name: Check out pull-request branch
         uses: actions/checkout@v4
         with:
-          ref: agent/fix-canonical-business-snapshot-identity-v1
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
           fetch-depth: 0
 
       - name: Apply exact cross-layer compatibility patch
@@ -68,4 +69,4 @@ jobs:
             .github/workflows/verify-kairos-autonomous-operations-live.yml
           git diff --cached --check
           git commit -m "Fix canonical business snapshot identity"
-          git push origin HEAD:agent/fix-canonical-business-snapshot-identity-v1
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
