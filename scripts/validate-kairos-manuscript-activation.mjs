@@ -62,7 +62,14 @@ assert(commandLoader.includes('"command-hub.js"'), "The Command Hub is missing f
 assert(commandLoader.includes('"kairos-local-inference.js"'), "Local manuscript inference must remain available inside governed operations.");
 assert((commandHub.match(/id: "(?:knowledge|content|business|customers|operations)"/g) || []).length === 5, "The Command Hub must contain exactly five canonical parent centers.");
 assert(commandHub.includes("Five operating centers"), "The five-center dashboard contract is missing.");
-assert((index.match(/<script type="module"/g) || []).length === 2, "The dashboard must preserve a two-module boot.");
+const dashboardModuleSources = [...index.matchAll(/<script type="module" src="([^"]+)"/g)]
+  .map((match) => match[1].replace(/\?v=.*$/, ""));
+assert(JSON.stringify(dashboardModuleSources) === JSON.stringify([
+  "./scripts/safari-manuscript-intake-compat.js",
+  "./scripts/command-hub.js",
+  "./scripts/command-center-layout.js",
+  "./scripts/manuscript-production-flow-bootstrap.js",
+]), "The dashboard must preserve the visible-first-paint module order.");
 assert(index.includes("kairos-five-center-dashboard-restored-20260730-1"), "The restored five-center dashboard marker is missing.");
 assert(index.includes("legacy-runtime-loader.js"), "The five-center dashboard must load the command runtime.");
 assert(!index.includes("kairos-runtime-loader.js"), "The compatibility loader must not replace the five-center homepage.");

@@ -52,7 +52,14 @@ describe("Kairos local operational execution", () => {
   });
 
   it("restores the five-center dashboard while retaining same-origin local inference", () => {
-    expect((index.match(/<script type="module"/g) || []).length).toBe(2);
+    const moduleSources = [...index.matchAll(/<script type="module" src="([^"]+)"/g)]
+      .map((match) => match[1].replace(/\?v=.*$/, ""));
+    expect(moduleSources).toEqual([
+      "./scripts/safari-manuscript-intake-compat.js",
+      "./scripts/command-hub.js",
+      "./scripts/command-center-layout.js",
+      "./scripts/manuscript-production-flow-bootstrap.js",
+    ]);
     expect(index).toContain("kairos-five-center-dashboard-post-intake-20260731-1");
     expect(index).toContain("five-center-dashboard-post-intake-stability-20260731-1");
     expect(index).toContain("manuscript-post-intake-guard.js");

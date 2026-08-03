@@ -212,7 +212,14 @@ test("the normal page restores the guarded five-parent-card command dashboard", 
   assert.match(index, /kairos-five-center-dashboard-post-intake-20260731-1/);
   assert.match(index, /five-center-dashboard-post-intake-stability-20260731-1/);
   assert.match(index, /manuscript-post-intake-stability-20260731-1/);
-  assert.equal((index.match(/<script type="module"/g) || []).length, 2);
+  const moduleSources = [...index.matchAll(/<script type="module" src="([^"]+)"/g)]
+    .map((match) => match[1].replace(/\?v=.*$/, ""));
+  assert.deepEqual(moduleSources, [
+    "./scripts/safari-manuscript-intake-compat.js",
+    "./scripts/command-hub.js",
+    "./scripts/command-center-layout.js",
+    "./scripts/manuscript-production-flow-bootstrap.js",
+  ]);
   assert.doesNotMatch(index, /executive-local-inference\.js/);
   assert.doesNotMatch(index, /kairos-runtime-loader\.js/);
   assert.doesNotMatch(index, /<script[^>]+manuscript-studio\.js/);
