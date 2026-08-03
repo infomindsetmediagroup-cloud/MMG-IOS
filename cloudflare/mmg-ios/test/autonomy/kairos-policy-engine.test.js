@@ -174,11 +174,15 @@ test("website health workflow passes a bounded healthy HTML response", async () 
     { KAIROS_KILL_SWITCH: "enabled", KAIROS_ENVIRONMENT: "production" },
     {
       now: new Date("2026-08-02T05:00:00.000Z"),
-      fetchImpl: async (url, init) => {
+      fetchImpl: async (request, ...extraArguments) => {
         fetchCalls += 1;
-        assert.equal(url.href, "https://themindsetmediagroup.com/");
-        assert.ok(init.signal);
-        assert.equal(init.redirect, "manual");
+        assert.ok(request instanceof Request);
+        assert.equal(request.url, "https://themindsetmediagroup.com/");
+        assert.ok(request.signal);
+        assert.equal(request.redirect, "manual");
+        assert.equal(request.headers.get("Accept"), "text/html,application/xhtml+xml");
+        assert.equal(request.headers.has("User-Agent"), false);
+        assert.equal(extraArguments.length, 0);
         return new Response(html, {
           status: 200,
           headers: { "Content-Type": "text/html; charset=utf-8" },

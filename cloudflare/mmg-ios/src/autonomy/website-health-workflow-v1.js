@@ -138,15 +138,15 @@ async function performHealthChecks(initialUrl, options) {
     }
 
     for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount += 1) {
-      const response = await options.fetchImpl(currentUrl, {
+      const request = new Request(currentUrl.href, {
         method: "GET",
         redirect: "manual",
         signal: controller.signal,
         headers: {
           Accept: "text/html,application/xhtml+xml",
-          "User-Agent": "Kairos-Website-Health/1.0",
         },
       });
+      const response = await options.fetchImpl(request);
 
       if (isRedirect(response.status)) {
         if (redirectCount === MAX_REDIRECTS) {
