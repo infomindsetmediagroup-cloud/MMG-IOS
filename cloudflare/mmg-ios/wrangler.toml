@@ -9,7 +9,7 @@ keep_vars = true
 [assets]
 directory = "../../web/kairos-dashboard"
 binding = "ASSETS"
-run_worker_first = ["/api/*"]
+run_worker_first = ["/api/*", "/app", "/app/*", "/kairos", "/kairos/*"]
 not_found_handling = "single-page-application"
 
 [images]
@@ -60,9 +60,10 @@ new_sqlite_classes = ["KairosManuscriptSource"]
 tag = "kairos-autonomy-ledger-v1"
 new_sqlite_classes = ["KairosAutonomyLedger"]
 
-# Existing production secrets are retained by keep_vars=true, but the canonical local entry masks them from runtime execution.
-# Browser navigation and dashboard assets bypass the Worker runtime and resolve through ASSETS.
-# Only /api/* executes Worker code before static-asset serving.
+# Existing production secrets are retained by keep_vars=true, but the canonical local entry masks external inference credentials from runtime execution.
+# Dashboard document and API routes execute Worker authentication before any UI or operations data is returned.
+# Kairos dashboard APIs require a Shopify Admin ID token signed by the Kairos app secret and scoped to the exact MMG shop.
+# The unauthenticated App Home response is a data-free bootstrap shell; durable operations data is returned only after server-side token verification.
 # Revenue asset storage remains disabled until its account binding is separately provisioned.
 # Browser, approval, manuscript, Shopify analytics, and governed runtime deployment must not depend on R2.
 # New objectives enter through the operational browser execution bridge, persistent project Agent, and Cloudflare Workflows.
@@ -84,6 +85,8 @@ new_sqlite_classes = ["KairosAutonomyLedger"]
 
 [vars]
 SHOPIFY_STORE_DOMAIN = "07kd8e-qw.myshopify.com"
+KAIROS_SHOPIFY_SHOP_DOMAIN = "07kd8e-qw.myshopify.com"
+KAIROS_SHOPIFY_ADMIN_AUTH_REQUIRED = "enabled"
 SHOPIFY_API_VERSION = "2026-07"
 MMG_STOREFRONT_ORIGIN = "https://themindsetmediagroup.com"
 KAIROS_MODEL_PROVIDER = "browser-webgpu"
