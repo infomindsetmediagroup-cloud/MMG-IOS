@@ -6,6 +6,8 @@ name: Inspect Kairos Shopify Admin Readiness
       - main
     paths:
       - ".github/workflows/inspect-kairos-shopify-admin-readiness.yml"
+      - "cloudflare/mmg-ios/src/shopify/kairos-shopify-admin-auth-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-dashboard-v3.js"
   workflow_dispatch: {}
 
 permissions:
@@ -14,7 +16,7 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -40,8 +42,10 @@ jobs:
           jq -r '.result.bindings[]? | [.name, .type] | @tsv' "${settings}" \
             | sort \
             | tee "${RUNNER_TEMP}/worker-binding-names.tsv"
+          grep -Fxq $'SHOPIFY_CLIENT_ID\tsecret_text' "${RUNNER_TEMP}/worker-binding-names.tsv"
+          grep -Fxq $'SHOPIFY_CLIENT_SECRET\tsecret_text' "${RUNNER_TEMP}/worker-binding-names.tsv"
 
-      - name: Inspect live Shopify analytics credential selection
+      - name: Inspect live Shopify analytics readiness
         run: |
           set -euo pipefail
           analytics="${RUNNER_TEMP}/shopify-analytics.json"
@@ -50,26 +54,38 @@ jobs:
             -o "${analytics}" \
             -w '%{http_code}')"
           test "${code}" = "200"
-          jq '{status, source, credentialPath, build, requirements, authorization: {scopeInspectionStatus: .authorization.scopeInspectionStatus, readReportsGranted: .authorization.readReportsGranted, shopifyQLVerified: .authorization.shopifyQLVerified}}' \
-            "${analytics}" | tee "${RUNNER_TEMP}/shopify-credential-selection.json"
+          jq -e '.status == "ready" or .status == "partial"' "${analytics}" >/dev/null
+          jq '{status, source, credentialPath, build}' "${analytics}" \
+            | tee "${RUNNER_TEMP}/shopify-credential-selection.json"
 
-      - name: Inspect embedded dashboard bootstrap boundary
+      - name: Wait for embedded dashboard bootstrap
         run: |
           set -euo pipefail
           host="$(printf '%s' 'admin.shopify.com/store/07kd8e-qw' | base64 -w0 | tr '+/' '-_' | tr -d '=')"
           headers="${RUNNER_TEMP}/dashboard-bootstrap.headers"
-          body="${RUNNER_TEMP}/dashboard-bootstrap.body"
-          code="$(curl --silent --show-error --max-time 45 \
-            -D "${headers}" \
-            "${WORKER_URL}/app?shop=07kd8e-qw.myshopify.com&host=${host}" \
-            -o "${body}" \
-            -w '%{http_code}')"
+          body="${RUNNER_TEMP}/dashboard-bootstrap.html"
+          code="000"
+          for attempt in $(seq 1 36); do
+            code="$(curl --silent --show-error --max-time 45 \
+              -D "${headers}" \
+              "${WORKER_URL}/app?shop=07kd8e-qw.myshopify.com&host=${host}&readiness=${GITHUB_SHA}-${attempt}" \
+              -o "${body}" \
+              -w '%{http_code}' || true)"
+            if [ "${code}" = "200" ] \
+              && grep -Fq 'kairos-dashboard-20260802-3-shopify-admin-auth' "${body}" \
+              && grep -Fq 'name="shopify-api-key"' "${body}"; then
+              break
+            fi
+            sleep 5
+          done
           printf 'HTTP %s\n' "${code}"
-          tr -d '\r' < "${headers}" | grep -Ei '^(content-type|x-kairos|cache-control|content-security-policy):' || true
-          case "${code}" in
-            200|401|403|503) ;;
-            *) cat "${body}"; exit 1 ;;
-          esac
+          test "${code}" = "200"
+          tr -d '\r' < "${headers}" > "${RUNNER_TEMP}/dashboard-bootstrap.normalized.headers"
+          grep -Fxiq 'x-kairos-shopify-admin-only: true' "${RUNNER_TEMP}/dashboard-bootstrap.normalized.headers"
+          grep -Fxiq 'x-kairos-shopify-admin-auth-build: kairos-shopify-admin-auth-20260802-2-credential-aliases' "${RUNNER_TEMP}/dashboard-bootstrap.normalized.headers"
+          client_id="$(sed -n 's/.*name="shopify-api-key" content="\([A-Za-z0-9_-]*\)".*/\1/p' "${body}" | head -n1)"
+          test -n "${client_id}"
+          printf '%s\n' "${client_id}" | tee "${RUNNER_TEMP}/shopify-app-client-id.txt"
           printf '%s' "${code}" > "${RUNNER_TEMP}/dashboard-bootstrap-status.txt"
 
       - name: Upload sanitized readiness evidence
@@ -80,7 +96,8 @@ jobs:
           path: |
             ${{ runner.temp }}/worker-binding-names.tsv
             ${{ runner.temp }}/shopify-credential-selection.json
-            ${{ runner.temp }}/dashboard-bootstrap.headers
+            ${{ runner.temp }}/dashboard-bootstrap.normalized.headers
             ${{ runner.temp }}/dashboard-bootstrap-status.txt
+            ${{ runner.temp }}/shopify-app-client-id.txt
           if-no-files-found: warn
           retention-days: 7
