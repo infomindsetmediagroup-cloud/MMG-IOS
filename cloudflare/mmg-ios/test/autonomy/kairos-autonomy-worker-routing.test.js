@@ -16,12 +16,13 @@ function position(fragment) {
   return index;
 }
 
-test("imports the composed autonomy API handler and build", () => {
-  assert.match(source, /handleAutonomyApiRequest[\s\S]*KAIROS_AUTONOMY_API_BUILD[\s\S]*from "\.\/autonomy\/kairos-autonomy-api-v3\.js"/u);
+test("imports complete autonomy API v5 handler and build", () => {
+  assert.match(source, /handleAutonomyApiRequest[\s\S]*KAIROS_AUTONOMY_API_BUILD[\s\S]*from "\.\/autonomy\/kairos-autonomy-api-v5\.js"/u);
 });
 
-test("invokes the autonomy API handler with raw env and provider-blocked dispatch env", () => {
-  assert.match(fetchSource, /handleAutonomyApiRequest\(request, env, ctx, \{[\s\S]*dispatchEnv:\s*providerBlockedEnv\(env\)/u);
+test("invokes API with raw auth env and provider-blocked dispatch and operations env", () => {
+  assert.match(fetchSource, /const autonomousEnv = providerBlockedEnv\(env\);/u);
+  assert.match(fetchSource, /handleAutonomyApiRequest\(request, env, ctx, \{[\s\S]*dispatchEnv:\s*autonomousEnv,[\s\S]*operationsEnv:\s*autonomousEnv/u);
 });
 
 test("returns stamped autonomy responses before all other route families", () => {
@@ -32,8 +33,8 @@ test("returns stamped autonomy responses before all other route families", () =>
   assert.ok(position("handleAutonomyApiRequest") < position("canonicalRuntime.fetch"));
 });
 
-test("imports the scheduler boundary without direct dispatcher execution", () => {
-  assert.match(source, /handleAutonomyScheduledEvent[\s\S]*KAIROS_AUTONOMY_SCHEDULER_BUILD[\s\S]*KAIROS_AUTONOMY_HEALTH_CRON[\s\S]*from "\.\/autonomy\/kairos-autonomy-scheduler-v1\.js"/u);
+test("imports scheduler v2 without direct dispatcher execution", () => {
+  assert.match(source, /handleAutonomyScheduledEvent[\s\S]*KAIROS_AUTONOMY_SCHEDULER_BUILD[\s\S]*KAIROS_AUTONOMY_HEALTH_CRON[\s\S]*from "\.\/autonomy\/kairos-autonomy-scheduler-v2\.js"/u);
   assert.equal(source.includes("dispatchAutonomyEvent"), false);
 });
 
@@ -47,7 +48,7 @@ test("preserves non-autonomy scheduled routing through providerBlockedEnv", () =
   assert.match(scheduledSource, /canonicalRuntime\.scheduled\(controller, providerBlockedEnv\(env\), ctx\)/u);
 });
 
-test("does not invoke the autonomy API handler from scheduled", () => {
+test("does not invoke the HTTP autonomy API handler from scheduled", () => {
   assert.equal(scheduledSource.includes("handleAutonomyApiRequest"), false);
 });
 
@@ -72,10 +73,10 @@ test("does not expose autonomy secrets in response stamping", () => {
   assert.equal(source.slice(stampStart).includes("KAIROS_AUTONOMY_API_TOKEN"), false);
 });
 
-test("updates the canonical build identifier for business-state API v3", () => {
+test("uses the complete autonomous operations canonical build", () => {
   assert.match(
     source,
-    /KAIROS_LOCAL_CANONICAL_ENTRY_BUILD\s*=\s*"kairos-local-canonical-entry-20260802-3-business-state-api"/u,
+    /KAIROS_LOCAL_CANONICAL_ENTRY_BUILD\s*=\s*"kairos-local-canonical-entry-20260802-4-complete-autonomous-operations"/u,
   );
 });
 
