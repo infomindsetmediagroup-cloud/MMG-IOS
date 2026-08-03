@@ -83,8 +83,8 @@ for (const marker of [
   'approvalTimeRebindingUsed: false',
 ]) assert.ok(executor.includes(marker), `Executor cannot verify homepage operation type: ${marker}`);
 
-assert.ok(index.includes('content="kairos-command-hub-recovery-20260714-1"'));
-assert.ok(index.includes('./scripts/command-hub.js?v=recovery-20260714-1'));
+assert.ok(index.includes('content="kairos-five-center-dashboard-post-intake-20260731-1"'));
+assert.ok(index.includes('scripts/legacy-runtime-loader.js'));
 assert.ok(!index.includes('command-hub-canonical-v3'));
 
 console.log(JSON.stringify({

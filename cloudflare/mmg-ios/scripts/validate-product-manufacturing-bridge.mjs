@@ -49,12 +49,12 @@ const required = [
   ["entry", "handleProductManufacturingBridge"],
   ["entry", "handleProductManufacturingBridgeObjectRequest"],
   ["immutable", "X-Kairos-Product-Manufacturing"],
-  ["immutable", "kairos-production-entry-immutable-20260717-11"],
+  ["immutable", "kairos-production-entry-immutable-20260718-35"],
   ["ui", "Authoritative manuscript"],
   ["ui", "sourceDataBase64"],
   ["ui", "The manuscript path does not replace"],
   ["ui", "Prepare Shopify Draft"],
-  ["index", "product-bridge-20260717-1"],
+  ["index", "scripts/complete-product-engine.js"],
 ];
 for (const [file, marker] of required) {
   assert.ok(source[file].includes(marker), `${file} is missing ${marker}`);
@@ -103,15 +103,16 @@ const env = {
   },
 };
 
-const manuscriptText = [
-  "# Chapter One",
+const manuscriptText = Array.from({ length: 10 }, (_, chapterIndex) => [
+  `# Chapter ${chapterIndex + 1}: Authoritative Practice`,
   "",
-  "This is the authoritative manuscript source. It contains the exact approved customer language and must remain the source of truth during product manufacturing. ".repeat(8),
-  "",
-  "# Chapter Two",
-  "",
-  "The second chapter explains the practical system, expected reader outcome, and final product promise without replacing the supplied manuscript. ".repeat(8),
-].join("\n");
+  ...Array.from({ length: 50 }, (_, paragraphIndex) => [
+    `## Implementation Lab ${chapterIndex + 1}.${paragraphIndex + 1}`,
+    "",
+    `Chapter ${chapterIndex + 1}, practice ${paragraphIndex + 1} connects a defined customer outcome to a practical framework, workflow, checklist, worksheet, template, prompt, implementation lab, action step, and decision rule. The reader records current evidence, identifies the principal constraint, chooses one complete action, verifies the result against clear acceptance criteria, and preserves the lesson for the next cycle. This chapter-specific exercise keeps the authoritative customer language useful, substantial, reviewable, and distinct throughout the finished guide.`,
+    "",
+  ].join("\n")),
+].join("\n")).join("\n");
 const sourceBytes = Buffer.from(manuscriptText, "utf8");
 const checksum = createHash("sha256").update(sourceBytes).digest("hex");
 const coverBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Wl4sAAAAASUVORK5CYII=";

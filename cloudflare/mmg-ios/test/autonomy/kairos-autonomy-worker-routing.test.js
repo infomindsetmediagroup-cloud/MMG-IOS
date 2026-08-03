@@ -76,7 +76,7 @@ test("does not expose autonomy secrets in response stamping", () => {
 test("uses the complete autonomous operations canonical build", () => {
   assert.match(
     source,
-    /KAIROS_LOCAL_CANONICAL_ENTRY_BUILD\s*=\s*"kairos-local-canonical-entry-20260802-4-complete-autonomous-operations"/u,
+    /KAIROS_LOCAL_CANONICAL_ENTRY_BUILD\s*=\s*"kairos-local-canonical-entry-20260802-7-shopify-admin-dashboard"/u,
   );
 });
 

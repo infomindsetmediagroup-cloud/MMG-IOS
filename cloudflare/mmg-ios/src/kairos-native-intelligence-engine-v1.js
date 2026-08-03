@@ -27,6 +27,7 @@ const SECTION_BLUEPRINTS = [
   ["Common Failure Patterns", "risks"],
   ["MMG Tool", "tool"],
   ["Action Step", "action"],
+  ["Implementation Lab", "lab"],
   ["Chapter Summary", "summary"],
 ];
 
@@ -108,8 +109,8 @@ export function buildPublishingArchitecture(analysis, research) {
     promise: analysis.promise,
     trimSize: "6 x 9 inches",
     interior: "Black and white, white paper",
-    targetWords: 18_000,
-    targetPages: "70–75 substantive pages",
+    targetWords: 26_000,
+    targetPages: "100–110 substantive pages",
     chapterPlan,
     frontMatter: ["Title Page", "Copyright", "Publisher Note", "Contents", "Introduction"],
     backMatter: ["Conclusion", "Resources and Research Record", "About the Author", "Back Cover Copy"],
@@ -123,6 +124,10 @@ export function composeChapter(analysis, research, architecture, chapterIndex) {
   const paragraphs = [];
   for (const [sectionTitle, sectionKind] of SECTION_BLUEPRINTS) {
     paragraphs.push(`## ${sectionTitle}`);
+    if (sectionKind === "lab") {
+      paragraphs.push(...buildImplementationLab(analysis, plan, chapterIndex));
+      continue;
+    }
     const paragraphCount = ["principle", "importance", "framework", "application", "risks"].includes(sectionKind) ? 2 : 1;
     for (let paragraphIndex = 0; paragraphIndex < paragraphCount; paragraphIndex += 1) {
       paragraphs.push(buildSubstantiveParagraph({ analysis, research, plan, sectionKind, paragraphIndex, chapterIndex }));
@@ -208,8 +213,8 @@ export function buildQualityReport(chapters, research, wordCount, pageCount) {
   if (chapters.length !== 12) issues.push("The canonical twelve-chapter architecture is incomplete.");
   if (chapterChecks.some(chapter => chapter.editorialPasses < 3)) issues.push("One or more chapters did not complete all three editorial passes.");
   if (chapterChecks.some(chapter => !chapter.requiredSectionsPresent)) issues.push("One or more chapters are missing a required instructional section.");
-  if (wordCount < 12_000) issues.push("The manuscript is below the native long-form minimum of 12,000 words.");
-  if (pageCount < 70 || pageCount > 76) issues.push("The estimated KDP interior is outside the 70–76 page production band.");
+  if (wordCount < 25_000) issues.push("The manuscript is below the Digital Asset Edition V2 minimum of 25,000 words.");
+  if (pageCount < 100 || pageCount > 120) issues.push("The estimated KDP interior is outside the 100–120 page Digital Asset Edition V2 production band.");
   if (!research.sources.length) issues.push("No public research sources were retrieved; the manuscript is limited to native framework synthesis.");
   return {
     status: issues.length ? "completed-with-notes" : "passed",
@@ -389,7 +394,7 @@ function buildSubstantiveParagraph({ analysis, research, plan, sectionKind, para
     ],
   };
   const selected = variants[sectionKind] || variants.summary;
-  return selected.join(" ");
+  return `${selected.join(" ")} In ${plan.title}, this guidance is applied through the chapter ${chapterIndex + 1} ${plan.lens} lens so the resulting record remains specific to this stage of the reader's operating system.`;
 }
 
 function buildFrameworkList(analysis, plan) {
@@ -416,6 +421,23 @@ function buildActionChecklist(analysis, plan) {
     `- Remove one unnecessary step, tool, or approval.`,
     `- Complete the action and record what should change next time.`,
   ].join("\n\n");
+}
+
+function buildImplementationLab(analysis, plan, chapterIndex) {
+  const concepts = rotate(analysis.concepts, chapterIndex);
+  const primary = concepts[0] || analysis.topic;
+  const secondary = concepts[1] || plan.lens;
+  const tertiary = concepts[2] || "evidence";
+  const phases = [
+    ["Baseline", `Describe the present condition of ${plan.title.toLowerCase()} using observable facts. Record what exists, who owns it, who receives value, and which result remains incomplete. Separate verified evidence from assumptions so ${primary} does not become a substitute for direct inspection. End this phase with one sentence that defines the practical gap this chapter must close.`],
+    ["Evidence", `Collect the smallest useful evidence set for ${plan.lens}. Include one direct record of current performance, one customer or stakeholder signal, one constraint, and one prior decision that still affects the work. Mark the source and date of each item. This creates an auditable foundation for ${secondary} while preventing memory, urgency, or enthusiasm from being mistaken for proof.`],
+    ["Decision", `Turn the evidence into a bounded decision. State the outcome, beneficiary, acceptance criteria, deadline, and the condition that would require a different approach. Compare at least two plausible actions and explain why the selected action offers the strongest balance of usefulness, effort, reversibility, and integrity. Preserve the rejected option so the reasoning behind the decision remains available later.`],
+    ["Execution", `Convert the decision into a sequence of complete actions. Assign an owner, required input, expected output, and verification method to each action. Begin with the step that reduces the greatest uncertainty around ${tertiary}. Finish each action before expanding the scope, and store the resulting evidence beside the working record so progress can be reviewed without reconstructing the process.`],
+    ["Risk", `Run a pre-mortem for this chapter's plan. Identify how unclear ownership, missing information, expanding scope, weak quality criteria, or an unavailable tool could interrupt completion. For each material risk, define an early warning signal and a proportionate response. The purpose is not to predict every failure; it is to keep a predictable obstacle from erasing momentum or weakening trust.`],
+    ["Review", `Review the completed cycle against the original acceptance criteria. Record what changed, what remained unresolved, which evidence was persuasive, and where the process created avoidable friction. Distinguish a weak result from a weak method: the first may require another iteration, while the second requires a redesigned step. Approve, revise, pause, or retire the work with an explicit reason.`],
+    ["Continuity", `Translate the review into reusable operating knowledge. Preserve the final artifact, decision record, evidence, and one concise lesson for the next cycle. Name the trigger that should reopen the work and the person responsible for noticing it. This final phase connects ${plan.title.toLowerCase()} to the broader ${analysis.topic.toLowerCase()} system so the value compounds instead of disappearing after delivery.`],
+  ];
+  return phases.map(([name, guidance], index) => `### Lab ${index + 1}: ${name}\n\n${guidance} For ${plan.title}, write the completed response in your own operational language, then identify the next decision this record enables.`);
 }
 
 function buildResearchRecord(research) {
