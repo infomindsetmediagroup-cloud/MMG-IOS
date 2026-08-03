@@ -1,0 +1,255 @@
+name: Verify Kairos Autonomous Cycle Live V2
+
+"on":
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/verify-kairos-autonomous-cycle-live-v2.yml"
+      - "cloudflare/mmg-ios/src/autonomy/**"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js"
+      - "cloudflare/mmg-ios/wrangler.toml"
+  pull_request:
+    paths:
+      - ".github/workflows/verify-kairos-autonomous-cycle-live-v2.yml"
+      - "cloudflare/mmg-ios/src/autonomy/**"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js"
+      - "cloudflare/mmg-ios/wrangler.toml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: verify-kairos-autonomous-cycle-live-v2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify authenticated production cycle
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+      API_BUILD: kairos-autonomy-api-20260802-5-complete-operations
+      CYCLE_BUILD: kairos-autonomous-operations-cycle-20260802-1
+      PRIORITIZER_BUILD: kairos-business-prioritizer-20260802-1
+      ORCHESTRATOR_BUILD: kairos-business-orchestrator-20260802-1
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      STATUS_CONTEXT: kairos-autonomous-cycle-live
+
+    steps:
+      - name: Mark pending
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          payload="$(node -e 'process.stdout.write(JSON.stringify({state:"pending",context:process.env.STATUS_CONTEXT,description:"Waiting for authenticated Worker version and verifying cycle",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          curl --fail --silent --show-error -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "${payload}"
+
+      - name: Check out exact release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Validate canonical runtime contracts
+        run: |
+          set -euo pipefail
+          node --check cloudflare/mmg-ios/src/autonomy/kairos-business-observation-v1.js
+          node --check cloudflare/mmg-ios/src/autonomy/kairos-autonomy-api-v5.js
+          node --check cloudflare/mmg-ios/src/autonomy/kairos-autonomous-operations-cycle-v1.js
+          node --check cloudflare/mmg-ios/src/autonomy/kairos-business-prioritizer-v1.js
+          node --check cloudflare/mmg-ios/src/autonomy/kairos-business-orchestrator-v1.js
+          grep -Fq '}t${generatedAt.slice(11, 19).replace(/:/gu, "")}z`' cloudflare/mmg-ios/src/autonomy/kairos-business-observation-v1.js
+          grep -Fq "${API_BUILD}" cloudflare/mmg-ios/src/autonomy/kairos-autonomy-api-v5.js
+          grep -Fq "${CYCLE_BUILD}" cloudflare/mmg-ios/src/autonomy/kairos-autonomous-operations-cycle-v1.js
+          grep -Fq "${PRIORITIZER_BUILD}" cloudflare/mmg-ios/src/autonomy/kairos-business-prioritizer-v1.js
+          grep -Fq "${ORCHESTRATOR_BUILD}" cloudflare/mmg-ios/src/autonomy/kairos-business-orchestrator-v1.js
+
+      - name: Verify deployed public safety boundary
+        run: |
+          set -euo pipefail
+          headers_raw="${RUNNER_TEMP}/public.headers.raw"
+          headers="${RUNNER_TEMP}/public.headers"
+          body="${RUNNER_TEMP}/public.json"
+          code="$(curl --silent --show-error --max-time 45 \
+            -D "${headers_raw}" \
+            "${WORKER_URL}/api/autonomy/status?preflight=${GITHUB_SHA}" \
+            -o "${body}" \
+            -w '%{http_code}')"
+          tr -d '\r' < "${headers_raw}" > "${headers}"
+          test "${code}" = "401" -o "${code}" = "503"
+          grep -Fxiq "x-kairos-autonomy-api-build: ${API_BUILD}" "${headers}"
+          grep -Fxiq 'x-kairos-inference-provider: browser-webgpu' "${headers}"
+          grep -Fxiq 'x-kairos-external-provider: disabled' "${headers}"
+          grep -Fxiq 'x-kairos-openai-calls: disabled' "${headers}"
+
+      - name: Rotate and deploy production authentication secret
+        if: github.event_name == 'push'
+        working-directory: cloudflare/mmg-ios
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          token="$(openssl rand -hex 32)"
+          echo "::add-mask::${token}"
+          token_file="${RUNNER_TEMP}/kairos-cycle-token"
+          umask 077
+          printf '%s' "${token}" > "${token_file}"
+          echo "KAIROS_CYCLE_TOKEN_FILE=${token_file}" >> "${GITHUB_ENV}"
+
+          npm install --ignore-scripts --no-audit --no-fund
+          version_tag="kairos-cycle-v2-${GITHUB_RUN_ID}"
+          printf '%s' "${token}" | npx wrangler versions secret put KAIROS_AUTONOMY_API_TOKEN \
+            --tag "${version_tag}" \
+            --message "Rotate Kairos authenticated-cycle token"
+          npx wrangler versions deploy \
+            --version-tag "${version_tag}" \
+            --percentage 100 \
+            --message "Activate propagation-safe autonomous-cycle release" \
+            -y
+
+      - name: Wait for the newly deployed token to authenticate
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          token="$(cat "${KAIROS_CYCLE_TOKEN_FILE}")"
+          echo "::add-mask::${token}"
+          status_body="${RUNNER_TEMP}/authenticated-status.json"
+
+          for attempt in $(seq 1 48); do
+            code="$(curl --silent --show-error --max-time 30 \
+              -H "Authorization: Bearer ${token}" \
+              "${WORKER_URL}/api/autonomy/status?propagation=${GITHUB_SHA}-${attempt}" \
+              -o "${status_body}" \
+              -w '%{http_code}' || true)"
+            if [ "${code}" = "200" ] && STATUS_BODY="${status_body}" API_BUILD="${API_BUILD}" node <<'NODE'
+          const fs = require("node:fs");
+          const value = JSON.parse(fs.readFileSync(process.env.STATUS_BODY, "utf8"));
+          if (value?.ok !== true || value?.build !== process.env.API_BUILD) process.exit(1);
+          if (value?.autonomousOperations?.ready !== true) process.exit(1);
+          NODE
+            then
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "The newly deployed authentication token did not become active within the propagation window." >&2
+          cat "${status_body}" || true
+          exit 1
+
+      - name: Verify authenticated readiness and complete cycle
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          token="$(cat "${KAIROS_CYCLE_TOKEN_FILE}")"
+          echo "::add-mask::${token}"
+          status_body="${RUNNER_TEMP}/authenticated-status.json"
+
+          STATUS_BODY="${status_body}" API_BUILD="${API_BUILD}" CYCLE_BUILD="${CYCLE_BUILD}" PRIORITIZER_BUILD="${PRIORITIZER_BUILD}" ORCHESTRATOR_BUILD="${ORCHESTRATOR_BUILD}" node <<'NODE'
+          const fs = require("node:fs");
+          const value = JSON.parse(fs.readFileSync(process.env.STATUS_BODY, "utf8"));
+          if (value?.ok !== true || value?.build !== process.env.API_BUILD) throw new Error("Authenticated API status mismatch.");
+          if (value?.autonomousOperations?.ready !== true) throw new Error("Autonomous operations are not ready.");
+          if (value.autonomousOperations.cycleBuild !== process.env.CYCLE_BUILD) throw new Error("Cycle build mismatch.");
+          if (value.autonomousOperations.prioritizerBuild !== process.env.PRIORITIZER_BUILD) throw new Error("Prioritizer build mismatch.");
+          if (value.autonomousOperations.orchestratorBuild !== process.env.ORCHESTRATOR_BUILD) throw new Error("Orchestrator build mismatch.");
+          if (value.businessObservation?.externalMutationEnabled !== false) throw new Error("External mutation must remain disabled.");
+          if (value.businessObservation?.approvalBoundaryEnabled !== true) throw new Error("Approval boundary must remain enabled.");
+          NODE
+
+          cycle_body="${RUNNER_TEMP}/cycle.json"
+          cycle_code="000"
+          for attempt in $(seq 1 12); do
+            cycle_code="$(curl --silent --show-error --max-time 120 \
+              -X POST \
+              -H "Authorization: Bearer ${token}" \
+              -H 'Content-Type: application/json' \
+              --data '{"tenantId":"mmg"}' \
+              "${WORKER_URL}/api/autonomy/business-state/collect?verification=${GITHUB_SHA}-${attempt}" \
+              -o "${cycle_body}" \
+              -w '%{http_code}' || true)"
+            if [ "${cycle_code}" = "200" ]; then
+              break
+            fi
+            if [ "${cycle_code}" = "401" ]; then
+              sleep 5
+              continue
+            fi
+            break
+          done
+          cat "${cycle_body}" || true
+          test "${cycle_code}" = "200"
+
+          CYCLE_BODY="${cycle_body}" API_BUILD="${API_BUILD}" CYCLE_BUILD="${CYCLE_BUILD}" SUMMARY="${RUNNER_TEMP}/cycle-summary.json" node <<'NODE'
+          const fs = require("node:fs");
+          const value = JSON.parse(fs.readFileSync(process.env.CYCLE_BODY, "utf8"));
+          if (value?.ok !== true || value?.build !== process.env.API_BUILD) throw new Error("Complete cycle API response failed.");
+          const operations = value.operations;
+          if (operations?.ok !== true || operations?.build !== process.env.CYCLE_BUILD) throw new Error("Complete operations cycle failed.");
+          if (!operations?.persistence?.ok) throw new Error("Snapshot persistence failed.");
+          if (!/^[a-z0-9][a-z0-9._:-]*$/u.test(operations.snapshotId)) throw new Error("Snapshot identity is not canonical.");
+          if (/[A-Z]/u.test(operations.snapshotId)) throw new Error("Snapshot identity contains uppercase characters.");
+          if (!operations?.plan?.planId) throw new Error("Priority plan is missing.");
+          if (!operations?.orchestration || operations.orchestration.ok !== true) throw new Error("Orchestration failed.");
+          fs.writeFileSync(process.env.SUMMARY, JSON.stringify({
+            authenticated: true,
+            ready: true,
+            snapshotId: operations.snapshotId,
+            planId: operations.plan.planId,
+            cycleStatus: operations.status,
+            persistence: operations.persistence.disposition,
+            taskCount: operations.plan.taskCount,
+            completedCount: operations.orchestration.counts.completed,
+            blockedCount: operations.orchestration.counts.blocked,
+            failedCount: operations.orchestration.counts.failed,
+          }, null, 2));
+          NODE
+          cat "${RUNNER_TEMP}/cycle-summary.json"
+
+      - name: Upload sanitized verification evidence
+        if: always() && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: kairos-autonomous-cycle-live-v2-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/public.headers
+            ${{ runner.temp }}/public.json
+            ${{ runner.temp }}/authenticated-status.json
+            ${{ runner.temp }}/cycle.json
+            ${{ runner.temp }}/cycle-summary.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Report result
+        if: always() && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          if [ "${JOB_STATUS}" = "success" ]; then
+            state="success"
+            description="Authenticated autonomous cycle verified end to end"
+          else
+            state="failure"
+            description="Authenticated autonomous cycle verification failed"
+          fi
+          payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,context:process.env.STATUS_CONTEXT,description:process.env.DESCRIPTION,target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          curl --fail --silent --show-error -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "${payload}"
