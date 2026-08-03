@@ -33,7 +33,20 @@ jobs:
           ref: agent/kairos-shopify-admin-release-v1
           fetch-depth: 0
 
+      - name: Inspect Partner automation credential
+        id: automation
+        run: |
+          set -euo pipefail
+          if [ -z "${SHOPIFY_APP_AUTOMATION_TOKEN:-}" ]; then
+            echo 'available=false' >> "${GITHUB_OUTPUT}"
+            echo 'Shopify app linking is prepared; no Partner automation token is stored in GitHub Actions.'
+            exit 0
+          fi
+          echo "::add-mask::${SHOPIFY_APP_AUTOMATION_TOKEN}"
+          echo 'available=true' >> "${GITHUB_OUTPUT}"
+
       - name: Resolve public Kairos app client ID
+        if: steps.automation.outputs.available == 'true'
         run: |
           set -euo pipefail
           client_id="${KAIROS_SHOPIFY_CLIENT_ID:-}"
@@ -55,18 +68,6 @@ jobs:
           test -n "${client_id}"
           printf 'KAIROS_RESOLVED_CLIENT_ID=%s\n' "${client_id}" >> "${GITHUB_ENV}"
           printf 'Resolved Kairos Shopify client ID: %s\n' "${client_id}"
-
-      - name: Record absent Partner automation credential
-        id: automation
-        run: |
-          set -euo pipefail
-          if [ -z "${SHOPIFY_APP_AUTOMATION_TOKEN:-}" ]; then
-            echo 'available=false' >> "${GITHUB_OUTPUT}"
-            echo 'Shopify app configuration is ready, but SHOPIFY_APP_AUTOMATION_TOKEN is not present in GitHub Actions.'
-            exit 0
-          fi
-          echo "::add-mask::${SHOPIFY_APP_AUTOMATION_TOKEN}"
-          echo 'available=true' >> "${GITHUB_OUTPUT}"
 
       - name: Install Shopify CLI
         if: steps.automation.outputs.available == 'true'
