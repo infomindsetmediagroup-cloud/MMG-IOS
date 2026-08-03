@@ -1,5 +1,13 @@
-const BUILD = "kairos-manuscript-editorial-workbench-ui-20260801-3";
+const BUILD = "kairos-manuscript-editorial-workbench-ui-20260803-1-deliverable-review";
 const ACTIVE_KEY = "kairos.production.active-workspace";
+const CUSTOMER_DELIVERABLES = Object.freeze([
+  ["customer-spec-sheet.pdf", "Customer specification sheet"],
+  ["kdp-interior-6x9.pdf", "Print-ready 6 × 9 KDP interior"],
+  ["digital-asset-edition-v2.pdf", "Customer digital edition"],
+  ["cover-portrait-2048x3072.png", "Portrait cover image"],
+  ["cover-thumbnail-2048x2048.png", "Square cover thumbnail"],
+  ["README.txt", "Delivery and use instructions"],
+]);
 
 let state = {
   projectId: "",
@@ -101,7 +109,7 @@ function emptyEditorialRecord() {
 }
 
 async function loadCurrentText(projectId, editorial) {
-  const current = editorial?.currentVersionId;
+  const current = editorial?.finalVersionId || editorial?.review?.versionId || editorial?.currentVersionId;
   const url = current
     ? `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/editorial/versions/${encodeURIComponent(current)}`
     : `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/source/text`;
@@ -136,6 +144,13 @@ function render(projectId) {
   const editorial = state.record?.editorial || emptyEditorialRecord().editorial;
   const versions = editorial.versions || [];
   const review = editorial.review || null;
+  const reviewVersionId = editorial.finalVersionId || review?.versionId || editorial.currentVersionId;
+  const reviewVersion = versions.find((version) => version.versionId === reviewVersionId) || null;
+  const reviewLocked = Boolean(review) && [
+    "awaiting-customer-review",
+    "customer-approved",
+    "ready-for-manufacturing",
+  ].includes(editorial.status);
   section.innerHTML = `
     <p class="eyebrow">Editorial production</p>
     <h3>${esc(statusLabel(editorial.status))}</h3>
@@ -145,6 +160,21 @@ function render(projectId) {
       <span><strong>${esc(editorial.stage || "editorial-intake")}</strong><small>current stage</small></span>
       <span><strong>${esc(review?.status || "not prepared")}</strong><small>customer review</small></span>
     </div>
+    ${reviewLocked ? "" : editorialEditorMarkup(versions)}
+    ${review ? customerReviewMarkup(projectId, editorial, reviewVersion) : ""}
+    ${versions.length ? `<div class="issue-list manuscript-version-list">${versions.slice().reverse().map((version) => `<article><b>${esc(version.label)}</b><p>${esc(version.passType)} · ${Number(version.wordCount || 0).toLocaleString()} words</p><small>${esc(version.actor)} · ${esc(formatDate(version.createdAt))}</small></article>`).join("")}</div>` : ""}
+  `;
+
+  section.querySelector("[data-editorial-save]")?.addEventListener("click", () => saveVersion(section, projectId));
+  section.querySelector("[data-editorial-review]")?.addEventListener("click", () => prepareReview(projectId));
+  section.querySelector("[data-editorial-approve]")?.addEventListener("click", () => decision(projectId, "approved"));
+  section.querySelector("[data-editorial-revise]")?.addEventListener("click", () => decision(projectId, "revision-requested"));
+  section.querySelector("[data-editorial-finalize]")?.addEventListener("click", () => finalize(projectId));
+  section.querySelector("[data-editorial-produce]")?.addEventListener("click", () => produceDeliverable(projectId));
+}
+
+function editorialEditorMarkup(versions) {
+  return `
     <div class="manuscript-grid">
       <label>Editorial pass<select data-editorial-pass>
         <option value="structural">Structural edit</option>
@@ -160,17 +190,46 @@ function render(projectId) {
     <div class="manuscript-actions">
       <button type="button" class="primary" data-editorial-save>Save Version</button>
       ${versions.length ? '<button type="button" class="secondary" data-editorial-review>Prepare Customer Review</button>' : ""}
-      ${review?.status === "awaiting-customer-review" ? '<button type="button" class="secondary" data-editorial-approve>Record Approval</button><button type="button" class="secondary" data-editorial-revise>Request Revision</button>' : ""}
-      ${review?.decision === "approved" ? '<button type="button" class="primary" data-editorial-finalize>Send to Manufacturing</button>' : ""}
     </div>
-    ${versions.length ? `<div class="issue-list manuscript-version-list">${versions.slice().reverse().map((version) => `<article><b>${esc(version.label)}</b><p>${esc(version.passType)} · ${Number(version.wordCount || 0).toLocaleString()} words</p><small>${esc(version.actor)} · ${esc(formatDate(version.createdAt))}</small></article>`).join("")}</div>` : ""}
   `;
+}
 
-  section.querySelector("[data-editorial-save]")?.addEventListener("click", () => saveVersion(section, projectId));
-  section.querySelector("[data-editorial-review]")?.addEventListener("click", () => prepareReview(projectId));
-  section.querySelector("[data-editorial-approve]")?.addEventListener("click", () => decision(projectId, "approved"));
-  section.querySelector("[data-editorial-revise]")?.addEventListener("click", () => decision(projectId, "revision-requested"));
-  section.querySelector("[data-editorial-finalize]")?.addEventListener("click", () => finalize(projectId));
+function customerReviewMarkup(projectId, editorial, version) {
+  const awaiting = editorial.status === "awaiting-customer-review";
+  const approved = editorial.review?.decision === "approved" || editorial.status === "ready-for-manufacturing";
+  const canProduce = awaiting || approved;
+  const action = awaiting ? "Approve Review & Produce Deliverable Asset" : "Produce Deliverable Asset";
+  const versionLabel = version?.label || "Approved editorial manuscript";
+  const checksum = version?.checksum || "Checksum will be preserved at manufacturing";
+
+  return `
+    <section class="manuscript-customer-review" data-customer-review-package>
+      <p class="eyebrow">Customer Review Package</p>
+      <h4>Review the manuscript and approved cover</h4>
+      <p>This proof is locked to <strong>${esc(versionLabel)}</strong>. Approval produces the governed customer ZIP; it does not publish anything externally.</p>
+      <div class="manuscript-review-layout">
+        <figure class="manuscript-review-cover">
+          <img src="/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/setup/cover" alt="Approved customer cover" loading="eager">
+          <figcaption>Approved customer cover</figcaption>
+        </figure>
+        <div class="manuscript-review-proof">
+          <span><strong>${Number(version?.wordCount || 0).toLocaleString()}</strong><small>review words</small></span>
+          <span><strong>${esc(editorial.review?.status || editorial.status)}</strong><small>review status</small></span>
+          <span><strong>${esc(checksum)}</strong><small>version checksum</small></span>
+        </div>
+      </div>
+      <label>Locked manuscript proof<textarea data-customer-review-manuscript readonly>${esc(state.manuscript)}</textarea></label>
+      <h4>Customer deliverable: complete-production-package.zip</h4>
+      <div class="issue-list manuscript-customer-deliverables">
+        ${CUSTOMER_DELIVERABLES.map(([filename, label]) => `<article><b>${esc(filename)}</b><p>${esc(label)}</p></article>`).join("")}
+      </div>
+      <div class="manuscript-actions manuscript-review-actions">
+        ${canProduce ? `<button type="button" class="primary" data-editorial-produce>${esc(action)}</button>` : ""}
+        ${awaiting ? '<button type="button" class="secondary" data-editorial-revise>Request Revision</button>' : ""}
+      </div>
+      <p class="manuscript-note">The production action records approval when required, freezes this exact editorial version, manufactures the six customer files, and opens the package preview for final package approval.</p>
+    </section>
+  `;
 }
 
 async function saveVersion(section, projectId) {
@@ -216,6 +275,93 @@ async function finalize(projectId) {
     versionId: currentVersionId,
     actor: "MMG Editorial Production",
   }, "editorial-finalized");
+}
+
+async function produceDeliverable(projectId) {
+  if (state.busy) return;
+  state.busy = true;
+  state.error = "";
+  render(projectId);
+
+  try {
+    let editorial = state.record?.editorial || {};
+    const reviewVersionId = editorial.review?.versionId || editorial.currentVersionId;
+    if (!reviewVersionId) throw new Error("Prepare a customer review before producing the deliverable asset.");
+
+    if (editorial.review?.decision !== "approved") {
+      await postEditorial(projectId, "decision", {
+        decision: "approved",
+        note: "Customer review approved from the locked manuscript and cover proof.",
+        actor: "Customer Review",
+      });
+      editorial = await refreshEditorial(projectId);
+    }
+
+    if (editorial.status !== "ready-for-manufacturing") {
+      await postEditorial(projectId, "finalize", {
+        versionId: editorial.review?.versionId || reviewVersionId,
+        actor: "MMG Editorial Production",
+      });
+      editorial = await refreshEditorial(projectId);
+    }
+
+    await window.KairosProductionWorkspace?.refresh?.("editorial-finalized-for-deliverable");
+    window.dispatchEvent(new CustomEvent("kairos:production:state-changed", {
+      detail: {
+        reason: "editorial-finalized-for-deliverable",
+        projectId,
+        workspace: "manuscript-studio",
+        build: BUILD,
+      },
+    }));
+
+    if (!document.querySelector("#manuscript-auto-pipeline")) {
+      const opened = await window.KairosManuscriptStageHandoff?.openProduction?.(null);
+      if (opened?.status === "failed") throw new Error(opened.error || "Production controls could not open.");
+    }
+
+    const orchestrator = window.KairosManuscriptPipelineOrchestrator;
+    if (!orchestrator?.ready || typeof orchestrator.manufacture !== "function") {
+      throw new Error("The deliverable production engine is not ready. Reload Manuscript Studio and retry this action.");
+    }
+    const packageRecord = await orchestrator.manufacture();
+    if (!packageRecord) {
+      const snapshot = orchestrator.snapshot?.();
+      throw new Error(snapshot?.lastError || "Kairos could not produce the deliverable package.");
+    }
+    document.querySelector("#manuscript-auto-pipeline")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    state.error = error?.message || "Kairos could not produce the deliverable package.";
+  } finally {
+    state.busy = false;
+    render(projectId);
+  }
+}
+
+async function postEditorial(projectId, action, payload) {
+  const response = await fetch(
+    `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/editorial/${action}`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", "X-MMG-Client-Build": BUILD },
+      body: JSON.stringify(payload),
+    },
+  );
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body?.error?.message || "Editorial production action failed.");
+  return body;
+}
+
+async function refreshEditorial(projectId) {
+  const response = await fetch(
+    `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/editorial`,
+    { credentials: "include", cache: "no-store" },
+  );
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body?.error?.message || "The saved editorial state could not be refreshed.");
+  state.record = body;
+  return body.editorial || {};
 }
 
 async function run(projectId, url, payload, reason) {

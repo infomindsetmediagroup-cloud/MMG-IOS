@@ -144,6 +144,11 @@ test("mobile Manuscript Studio uses local WebGPU production and the canonical ap
   calls.unshift("local-inference");
   await expect(page.locator("#manuscript-auto-pipeline")).toContainText("Package Preview", { timeout: 10_000 });
   await expect(page.getByRole("link", { name: "Preview Package" })).toBeVisible();
+  await expect(page.locator('img[alt="cover-portrait-2048x3072.png preview"]')).toHaveAttribute(
+    "src",
+    `/api/admin-asset-vault/projects/${PROJECT_ID}/assets/approved-cover`,
+  );
+  await expect(page.getByRole("button", { name: "Approve & Finalize Deliverable Package" })).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.__localProductionCalls)).toEqual([PROJECT_ID]);
 
   await page.locator("[data-approve-package]").tap();
