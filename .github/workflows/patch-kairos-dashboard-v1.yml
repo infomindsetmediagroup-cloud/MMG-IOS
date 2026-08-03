@@ -1,15 +1,15 @@
 name: Patch Kairos Dashboard Compatibility
 
 "on":
-  pull_request:
+  push:
     branches:
-      - main
+      - agent/kairos-production-dashboard-v1
 
 permissions:
   contents: write
 
 concurrency:
-  group: patch-kairos-dashboard-${{ github.event.pull_request.number }}
+  group: patch-kairos-dashboard
   cancel-in-progress: false
 
 jobs:
@@ -19,11 +19,10 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - name: Check out pull-request branch
+      - name: Check out dashboard branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: agent/kairos-production-dashboard-v1
           fetch-depth: 0
 
       - name: Apply exact dashboard compatibility patch
@@ -60,4 +59,4 @@ jobs:
           git add cloudflare/mmg-ios/src/kairos-dashboard-v1.js
           git diff --cached --check
           git commit -m "Allow governed Shopify dashboard embedding"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          git push origin HEAD:agent/kairos-production-dashboard-v1
