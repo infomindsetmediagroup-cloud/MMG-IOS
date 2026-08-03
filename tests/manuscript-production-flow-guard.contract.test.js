@@ -121,6 +121,7 @@ test("the iPhone intake receipt automatically exposes Project Setup without a hi
   assert.match(studio, /document\.documentElement\.classList\.toggle\("manuscript-studio-open"/);
   assert.match(styles, /\.manuscript-intake-actions\s*\{[\s\S]*position:\s*sticky/);
   assert.match(styles, /backdrop-filter:\s*none/);
+  assert.match(styles, /box-sizing:\s*border-box/);
   assert.match(styles, /height:\s*100dvh/);
   assert.match(styles, /-webkit-overflow-scrolling:\s*touch/);
   assert.match(manuscriptPage, /mmg-manuscript-mobile-flow-release/);
