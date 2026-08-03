@@ -1,6 +1,6 @@
 (() => {
-  const BUILD = "kairos-manuscript-continuation-20260803-4-mobile-controls";
-  const RELEASE = "manuscript-mobile-controls-20260803-2";
+  const BUILD = "kairos-manuscript-continuation-20260803-5-flow-recovery";
+  const RELEASE = "manuscript-flow-recovery-20260803-3";
   const GLOBAL_KEY = "__KAIROS_MANUSCRIPT_CONTINUATION_CONTROLLER__";
   const SETUP_SCRIPT = "manuscript-project-setup.js";
   const SETUP_SELECTOR = "#manuscript-project-setup";
@@ -80,9 +80,6 @@
       : null;
     if (!button) return;
 
-    event.preventDefault();
-    event.stopPropagation();
-    event.stopImmediatePropagation();
     void continueToSetup(button);
   }
 
@@ -117,6 +114,7 @@
       if (!section) {
         throw new Error("Project Setup loaded, but its form did not render.");
       }
+      await waitForSetupHydration(section, MOUNT_TIMEOUT_MS);
 
       state.opened = true;
       state.lastError = "";
@@ -283,8 +281,13 @@
       </div>
       <p class="manuscript-note">Kairos recovered the saved production state. No second intake was created.</p>
       <div class="manuscript-actions">
-        <button type="button" class="primary" data-finish>Continue to Project Setup</button>
+        <a class="primary" data-finish href="#manuscript-project-setup" role="button">Continue to Project Setup</a>
       </div>
+      <section id="manuscript-project-setup" class="manuscript-project-setup" data-kairos-project-setup-shell data-project-id="${esc(project.projectId)}" aria-live="polite">
+        <p class="eyebrow">Next stage</p>
+        <h3>Complete Project Setup</h3>
+        <p>Loading the saved project and production-assignment form…</p>
+      </section>
     `;
     panel.append(result);
     return result;
@@ -388,7 +391,8 @@
   function setButton(button, label, disabled) {
     if (!button) return;
     button.textContent = label;
-    button.disabled = Boolean(disabled);
+    if (button instanceof HTMLButtonElement) button.disabled = Boolean(disabled);
+    button.setAttribute("aria-disabled", disabled ? "true" : "false");
     button.setAttribute("aria-busy", disabled ? "true" : "false");
   }
 
@@ -414,6 +418,29 @@
         childList: true,
         subtree: true,
       });
+    });
+  }
+
+  function waitForSetupHydration(section, timeoutMs) {
+    if (!section.hasAttribute("data-kairos-project-setup-shell")) return Promise.resolve(section);
+
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = error => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        observer.disconnect();
+        error ? reject(error) : resolve(section);
+      };
+      const observer = new MutationObserver(() => {
+        if (!section.hasAttribute("data-kairos-project-setup-shell")) finish();
+      });
+      const timer = window.setTimeout(
+        () => finish(new Error("Project Setup loaded, but its form did not finish rendering.")),
+        timeoutMs,
+      );
+      observer.observe(section, { childList: true, subtree: true, attributes: true });
     });
   }
 

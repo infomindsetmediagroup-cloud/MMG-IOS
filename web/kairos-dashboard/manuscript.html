@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#05070a">
   <meta name="color-scheme" content="dark">
-  <meta name="mmg-build" content="kairos-dedicated-manuscript-route-20260803-2-mobile-controls">
-  <meta name="mmg-manuscript-mobile-flow-release" content="manuscript-mobile-controls-20260803-2">
+  <meta name="mmg-build" content="kairos-dedicated-manuscript-route-20260803-3-flow-recovery">
+  <meta name="mmg-manuscript-mobile-flow-release" content="manuscript-flow-recovery-20260803-3">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -119,7 +119,7 @@
   </style>
   <script>
     (() => {
-      const BUILD = "kairos-dedicated-manuscript-route-20260803-2-mobile-controls";
+      const BUILD = "kairos-dedicated-manuscript-route-20260803-3-flow-recovery";
       const current = new URL(location.href);
       if (current.searchParams.get("open") !== "manuscript") {
         current.searchParams.set("open", "manuscript");
@@ -186,10 +186,14 @@
     src="./scripts/manuscript-pipeline-orchestrator.js?v=kairos-manuscript-pipeline-orchestrator-20260803-1-deliverable-review"
     onerror="KairosDedicatedManuscriptRoute.fail('The authoritative manuscript pipeline orchestrator failed to load.')"></script>
   <script
-    src="./scripts/manuscript-continuation-controller.js?v=manuscript-mobile-controls-20260803-2"
+    type="module"
+    src="./scripts/manuscript-project-setup.js?v=manuscript-flow-recovery-20260803-3"
+    onerror="KairosDedicatedManuscriptRoute.fail('The Project Setup controller failed to load.')"></script>
+  <script
+    src="./scripts/manuscript-continuation-controller.js?v=manuscript-flow-recovery-20260803-3"
     onerror="KairosDedicatedManuscriptRoute.fail('The manuscript continuation controller failed to load.')"></script>
   <script
-    src="./scripts/manuscript-stage-handoff-controller.js?v=manuscript-mobile-controls-20260803-2"
+    src="./scripts/manuscript-stage-handoff-controller.js?v=manuscript-flow-recovery-20260803-3"
     onerror="KairosDedicatedManuscriptRoute.fail('The manuscript stage-handoff controller failed to load.')"></script>
   <script
     type="module"
@@ -197,7 +201,7 @@
     onerror="KairosDedicatedManuscriptRoute.fail('Safari manuscript compatibility failed to load.')"></script>
   <script
     type="module"
-    src="./scripts/manuscript-direct-open-controller.js?v=manuscript-mobile-controls-20260803-2"
+    src="./scripts/manuscript-direct-open-controller.js?v=manuscript-flow-recovery-20260803-3"
     onerror="KairosDedicatedManuscriptRoute.fail('The dedicated Manuscript Studio controller failed to load.')"></script>
 </body>
 </html>

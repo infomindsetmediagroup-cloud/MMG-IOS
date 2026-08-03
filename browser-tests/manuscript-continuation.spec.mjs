@@ -119,7 +119,7 @@ test("iPhone intake receipt automatically opens visible Project Setup", async ({
   expect(mobileLayout.setupTop).toBeLessThan(mobileLayout.viewportHeight);
 
   const snapshot = await page.evaluate(() => window.KairosManuscriptContinuation.snapshot());
-  expect(snapshot.build).toBe("kairos-manuscript-continuation-20260803-4-mobile-controls");
+  expect(snapshot.build).toBe("kairos-manuscript-continuation-20260803-5-flow-recovery");
   expect(snapshot.opened).toBe(true);
   expect(snapshot.setupPresent).toBe(true);
   expect(snapshot.lastError).toBe("");

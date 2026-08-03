@@ -204,10 +204,10 @@ test("Command Center manuscript event routes through the production workspace co
 
 test("dashboard keeps production controllers behind the guarded five-center command runtime", async () => {
   expect(indexSource).toMatch(/<meta name="mmg-build" content="kairos-five-center-dashboard-post-intake-[^"]+">/);
-  expect(indexSource).toMatch(/<meta name="mmg-command-runtime-target" content="\.\/scripts\/legacy-runtime-loader\.js\?v=five-center-dashboard-post-intake-stability-[^"]+">/);
-  expect(indexSource).toMatch(/manuscript-production-flow-bootstrap\.js\?v=manuscript-post-intake-stability-20260731-1/);
-  expect(indexSource).toMatch(/manuscript-auto-pipeline\.js\?v=five-center-dashboard-post-intake-stability-20260731-1/);
-  expect(indexSource).toMatch(/manuscript-post-intake-guard\.js\?v=five-center-dashboard-post-intake-stability-20260731-1/);
+  expect(indexSource).toMatch(/<meta name="mmg-command-runtime-target" content="\.\/scripts\/legacy-runtime-loader\.js\?v=five-center-manuscript-flow-recovery-[^"]+">/);
+  expect(indexSource).toMatch(/manuscript-production-flow-bootstrap\.js\?v=manuscript-flow-recovery-20260803-3/);
+  expect(indexSource).toMatch(/manuscript-auto-pipeline\.js\?v=five-center-manuscript-flow-recovery-20260803-3/);
+  expect(indexSource).toMatch(/manuscript-post-intake-guard\.js\?v=five-center-manuscript-flow-recovery-20260803-3/);
   expect(indexSource).toMatch(/mmg-production-controller-target/);
   expect(indexSource).toMatch(/mmg-post-intake-guard-target/);
   expect(indexSource).toMatch(/mmg-state-fetch-target/);
@@ -224,12 +224,12 @@ test("dashboard keeps production controllers behind the guarded five-center comm
   expect(runtimeLoaderSource).not.toContain("executive-local-inference.js");
   expect(loaderSource).toContain("commandHubMode");
   expect(loaderSource).toContain('"command-hub.js"');
-  expect(loaderSource).toContain('const ASSET_RELEASE = "five-center-dashboard-post-intake-stability-20260731-1"');
+  expect(loaderSource).toContain('const ASSET_RELEASE = "five-center-manuscript-flow-recovery-20260803-3"');
   expect(loaderSource).toContain('"manuscript-post-intake-guard.js"');
   expect(postIntakeGuardSource).toContain("duplicate Manuscript Studio module blocked");
   expect(postIntakeGuardSource).toContain("success-overlay-restored");
-  expect(productionBootstrapSource).toContain("manuscript-post-intake-stability-20260731-1");
-  expect(productionBootstrapSource).toContain("five-center-dashboard-post-intake-stability-20260731-1");
+  expect(productionBootstrapSource).toContain("manuscript-flow-recovery-20260803-3");
+  expect(productionBootstrapSource).toContain("five-center-manuscript-flow-recovery-20260803-3");
   expect(productionBootstrapSource).toContain("kairos-state-fetch-install.js?v=${RELEASE}");
   expect(productionBootstrapSource).toContain("BOOT_TIMEOUT_MS = 20_000");
   expect(productionBootstrapSource).toContain("renderBootstrapFailure");

@@ -80,16 +80,16 @@ jobs:
 
       - name: Enforce one authoritative non-multipart source and guarded local-production path
         run: |
-          grep -q 'manuscript-studio-mobile-controls-20260803-2' web/kairos-dashboard/scripts/manuscript-studio.js
+          grep -q 'manuscript-studio-flow-recovery-20260803-3' web/kairos-dashboard/scripts/manuscript-studio.js
           grep -q 'chunkedSourceUpload: true' web/kairos-dashboard/scripts/manuscript-studio.js
           grep -q 'multipartSourceUpload: false' web/kairos-dashboard/scripts/manuscript-studio.js
           grep -q 'sourcePath(projectId, "session")' web/kairos-dashboard/scripts/manuscript-studio.js
           grep -q 'sourcePath(projectId, "commit")' web/kairos-dashboard/scripts/manuscript-studio.js
           ! grep -q 'new FormData' web/kairos-dashboard/scripts/manuscript-studio.js
           ! grep -q '"manuscript-docx-upload-hotfix.js"' web/kairos-dashboard/scripts/legacy-runtime-loader.js
-          grep -q 'five-center-dashboard-post-intake-stability-20260731-1' web/kairos-dashboard/index.html
-          grep -q 'manuscript-post-intake-stability-20260731-1' web/kairos-dashboard/index.html
-          grep -q 'const ASSET_RELEASE = "five-center-dashboard-post-intake-stability-20260731-1"' web/kairos-dashboard/scripts/legacy-runtime-loader.js
+          grep -q 'five-center-manuscript-flow-recovery-20260803-3' web/kairos-dashboard/index.html
+          grep -q 'manuscript-flow-recovery-20260803-3' web/kairos-dashboard/index.html
+          grep -q 'const ASSET_RELEASE = "five-center-manuscript-flow-recovery-20260803-3"' web/kairos-dashboard/scripts/legacy-runtime-loader.js
           grep -q '"manuscript-post-intake-guard.js"' web/kairos-dashboard/scripts/legacy-runtime-loader.js
           grep -q 'duplicate Manuscript Studio module blocked' web/kairos-dashboard/scripts/manuscript-post-intake-guard.js
           grep -q 'success-overlay-restored' web/kairos-dashboard/scripts/manuscript-post-intake-guard.js

@@ -142,16 +142,16 @@ test("Safari manuscript checksums preserve the native digest identifier first", 
 });
 
 test("Manuscript Studio directly owns verified raw chunk storage and guarded local production", () => {
-  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-post-intake-stability-20260731-1/);
-  assert.match(index, /manuscript-production-flow-bootstrap\.js\?v=manuscript-post-intake-stability-20260731-1/);
-  assert.match(index, /manuscript-post-intake-guard\.js\?v=five-center-dashboard-post-intake-stability-20260731-1/);
+  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-manuscript-flow-recovery-20260803-3/);
+  assert.match(index, /manuscript-production-flow-bootstrap\.js\?v=manuscript-flow-recovery-20260803-3/);
+  assert.match(index, /manuscript-post-intake-guard\.js\?v=five-center-manuscript-flow-recovery-20260803-3/);
   assert.doesNotMatch(index, /executive-local-inference\.js/);
   assert.doesNotMatch(index, /kairos-runtime-loader\.js/);
   assert.match(runtimeLoader, /import "\.\/legacy-runtime-loader\.js"/);
   assert.doesNotMatch(runtimeLoader, /executive-local-inference\.js/);
-  assert.match(legacy, /kairos-five-center-runtime-loader-20260731-3-post-intake/);
-  assert.match(legacy, /five-center-dashboard-restored-20260731-2/);
-  assert.match(legacy, /five-center-dashboard-post-intake-stability-20260731-1/);
+  assert.match(legacy, /kairos-five-center-runtime-loader-20260803-4-flow-recovery/);
+  assert.match(legacy, /five-center-dashboard-restored-20260803-3/);
+  assert.match(legacy, /five-center-manuscript-flow-recovery-20260803-3/);
   assert.doesNotMatch(legacy, /const ASSET_RELEASE = "five-center-dashboard-direct-studio-chunks-20260730-4"/);
   assert.match(activeScripts, /"kairos-local-inference\.js"/);
   assert.match(activeScripts, /"manuscript-post-intake-guard\.js"/);
@@ -163,7 +163,7 @@ test("Manuscript Studio directly owns verified raw chunk storage and guarded loc
   assert.match(safari, /installNativeDocxExtractor/);
   assert.match(safari, /new DecompressionStream\("deflate-raw"\)/);
   assert.match(safari, /word\/document\.xml/);
-  assert.match(manuscriptStudio, /manuscript-studio-mobile-controls-20260803-2/);
+  assert.match(manuscriptStudio, /manuscript-studio-flow-recovery-20260803-3/);
   assert.match(manuscriptStudio, /chunkedSourceUpload:\s*true/);
   assert.match(manuscriptStudio, /multipartSourceUpload:\s*false/);
   assert.match(manuscriptStudio, /FILE_CHUNK_BYTES = 512 \* 1024/);
@@ -173,8 +173,8 @@ test("Manuscript Studio directly owns verified raw chunk storage and guarded loc
   assert.match(manuscriptStudio, /uploadChunkWithRetry/);
   assert.match(manuscriptStudio, /Select the original manuscript file once/);
   assert.doesNotMatch(manuscriptStudio, /new FormData/);
-  assert.match(productionBootstrap, /five-center-dashboard-post-intake-stability-20260731-1/);
-  assert.match(productionBootstrap, /manuscript-post-intake-stability-20260731-1/);
+  assert.match(productionBootstrap, /five-center-manuscript-flow-recovery-20260803-3/);
+  assert.match(productionBootstrap, /manuscript-flow-recovery-20260803-3/);
   assert.match(productionBootstrap, /BOOT_TIMEOUT_MS = 20_000/);
   assert.match(productionBootstrap, /renderBootstrapFailure/);
   assert.match(postIntakeGuard, /duplicate Manuscript Studio module blocked/);
@@ -210,8 +210,8 @@ test("read-only startup refresh never owns the mutation loading lock", () => {
 
 test("the normal page restores the guarded five-parent-card command dashboard", () => {
   assert.match(index, /kairos-five-center-dashboard-post-intake-20260731-1/);
-  assert.match(index, /five-center-dashboard-post-intake-stability-20260731-1/);
-  assert.match(index, /manuscript-post-intake-stability-20260731-1/);
+  assert.match(index, /five-center-manuscript-flow-recovery-20260803-3/);
+  assert.match(index, /manuscript-flow-recovery-20260803-3/);
   const moduleTags = [...index.matchAll(/<script type="module"([^>]*)>/g)].map((match) => match[1]);
   assert.equal(moduleTags.length, 3);
   assert.match(moduleTags[0], /src="\.\/scripts\/safari-manuscript-intake-compat\.js/);

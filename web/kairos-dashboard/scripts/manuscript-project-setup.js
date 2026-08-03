@@ -1,4 +1,4 @@
-const BUILD = "kairos-manuscript-project-setup-ui-20260722-3";
+const BUILD = "kairos-manuscript-project-setup-ui-20260803-4-flow-recovery";
 const ACTIVE_KEY = "kairos.production.active-workspace";
 const COVER_LIMIT = 8 * 1024 * 1024;
 const COVER_TIMEOUT_MS = 90_000;
@@ -60,6 +60,7 @@ function enhance() {
   if (!result || !projectId) return;
 
   let section = result.querySelector("#manuscript-project-setup");
+  const needsHydration = Boolean(section?.hasAttribute("data-kairos-project-setup-shell"));
   const isNew = !section;
   const projectChanged = section?.dataset.projectId && section.dataset.projectId !== projectId;
 
@@ -76,8 +77,13 @@ function enhance() {
     section.dataset.projectId = projectId;
     section.dataset.controllerBuild = BUILD;
     result.appendChild(section);
-    render(section);
   }
+
+  section.dataset.projectId = projectId;
+  section.dataset.controllerBuild = BUILD;
+  section.removeAttribute("data-kairos-project-setup-shell");
+  section.removeAttribute("data-kairos-project-setup-load-failed");
+  if (isNew || projectChanged || needsHydration) render(section);
 
   if ((isNew || projectChanged) && !state.busy && !state.record && !state.checkedProjects.has(projectId)) {
     state.checkedProjects.add(projectId);
