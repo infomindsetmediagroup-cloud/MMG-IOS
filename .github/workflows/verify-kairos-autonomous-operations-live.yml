@@ -133,7 +133,15 @@ jobs:
           echo "VERIFICATION_TOKEN_FILE=${token_file}" >> "${GITHUB_ENV}"
 
           npm install --ignore-scripts --no-audit --no-fund
-          printf '%s' "${token}" | npx wrangler secret put KAIROS_AUTONOMY_API_TOKEN
+          version_tag="kairos-auth-${GITHUB_RUN_ID}"
+          printf '%s' "${token}" | npx wrangler versions secret put KAIROS_AUTONOMY_API_TOKEN \
+            --tag "${version_tag}" \
+            --message "Provision Kairos autonomy authentication boundary"
+          npx wrangler versions deploy \
+            --version-tag "${version_tag}" \
+            --percentage 100 \
+            --message "Activate Kairos autonomy authentication boundary" \
+            -y
 
           for attempt in $(seq 1 36); do
             status="$(curl --silent --show-error --max-time 30 \
