@@ -228,8 +228,8 @@ export function evaluateAutonomousOperationsActivation(env = {}, options = {}) {
     environmentAuthorized: AUTHORIZED_ENVIRONMENTS.has(environment),
     ledgerConfigured: Boolean(
       ledger
-      && typeof safeMethod(ledger, "idFromName") === "function"
-      && typeof safeMethod(ledger, "get") === "function"
+      && readCallableProperty(ledger, "idFromName").ok
+      && readCallableProperty(ledger, "get").ok
     ),
     workflowAuthorized: Boolean(
       workflow
@@ -282,6 +282,7 @@ function buildCollectionInput(tenantId, env) {
 function buildCollectorOptions(options) {
   const output = {};
   const mappings = [
+    ["now", "now"],
     ["fetchImpl", "fetchImpl"],
     ["websiteHealthExecutor", "websiteHealthExecutor"],
     ["websiteHealthTimeoutMs", "websiteHealthTimeoutMs"],
@@ -422,9 +423,33 @@ function safeData(object, key) {
   }
 }
 
-function safeMethod(object, key) {
-  const value = safeData(object, key);
-  return typeof value === "function" ? value : undefined;
+function readCallableProperty(object, key) {
+  if (object === null || (typeof object !== "object" && typeof object !== "function")) {
+    return { ok: false };
+  }
+  let current = object;
+  const visited = new Set();
+  while (current !== null) {
+    if (visited.has(current)) return { ok: false };
+    visited.add(current);
+    let descriptor;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(current, key);
+    } catch {
+      return { ok: false };
+    }
+    if (descriptor !== undefined) {
+      return Object.hasOwn(descriptor, "value") && typeof descriptor.value === "function"
+        ? { ok: true, value: descriptor.value }
+        : { ok: false };
+    }
+    try {
+      current = Object.getPrototypeOf(current);
+    } catch {
+      return { ok: false };
+    }
+  }
+  return { ok: false };
 }
 
 function isPlainDataObject(value) {
