@@ -87,7 +87,7 @@ test("the post-intake guard preserves the successful overlay and suppresses dupl
 test("the direct route independently loads Studio and owns visible recovery", async () => {
   const source = await readFile(directOpenPath, "utf8");
 
-  assert.match(source, /kairos-manuscript-direct-open-20260801-2-standalone/);
+  assert.match(source, /kairos-manuscript-direct-open-20260803-3-mobile-controls/);
   assert.match(source, /routeTarget === "manuscript"/);
   assert.match(source, /ensureStyle\("manuscript-studio\.css"\)/);
   assert.match(source, /ensureModule\("manuscript-post-intake-guard\.js"\)/);
@@ -112,7 +112,7 @@ test("the iPhone intake receipt automatically exposes Project Setup without a hi
     readFile(manuscriptPagePath, "utf8"),
   ]);
 
-  assert.match(continuation, /kairos-manuscript-continuation-20260802-3-auto-setup/);
+  assert.match(continuation, /kairos-manuscript-continuation-20260803-4-mobile-controls/);
   assert.match(continuation, /scheduleAutomaticContinuation/);
   assert.match(continuation, /automaticContinuations/);
   assert.match(continuation, /continueToSetup\(button\)/);
@@ -127,7 +127,13 @@ test("the iPhone intake receipt automatically exposes Project Setup without a hi
   assert.match(styles, /height:\s*100dvh/);
   assert.match(styles, /-webkit-overflow-scrolling:\s*touch/);
   assert.match(manuscriptPage, /mmg-manuscript-mobile-flow-release/);
-  assert.match(manuscriptPage, /manuscript-deliverable-review-20260803-1/);
+  assert.match(manuscriptPage, /manuscript-mobile-controls-20260803-2/);
+  assert.match(studio, /data-kairos-source-review/);
+  assert.match(studio, /data-close-source/);
+  assert.doesNotMatch(
+    studio.match(/overlay\.querySelector\("\[data-edit\]"\)[\s\S]*?\n\s*\}\);/)?.[0] || "",
+    /state\.result\s*=\s*null/,
+  );
 });
 
 test("the authoritative orchestrator owns setup persistence and deterministic manufacturing", async () => {
@@ -158,7 +164,7 @@ test("the manuscript URL is isolated from the advanced command shell", async () 
   assert.match(index, /location\.replace\(target\.href\)/);
   assert.match(index, /mmg-dedicated-manuscript-route/);
 
-  assert.match(manuscriptPage, /kairos-dedicated-manuscript-route-20260803-1-deliverable-review/);
+  assert.match(manuscriptPage, /kairos-dedicated-manuscript-route-20260803-2-mobile-controls/);
   assert.match(manuscriptPage, /kairos-manuscript-pipeline-orchestrator-20260803-1-deliverable-review/);
   assert.match(manuscriptPage, /data-kairos-dedicated-manuscript="true"/);
   assert.match(manuscriptPage, /safari-manuscript-intake-compat\.js/);
@@ -191,6 +197,7 @@ test("customer review exposes the exact deliverable contract and an executable p
   assert.match(editorial, /data-customer-review-manuscript readonly/);
   assert.match(editorial, /setup\/cover/);
   assert.match(editorial, /orchestrator\.manufacture\(\)/);
+  assert.match(editorial, /document\.addEventListener\("click", handleEditorialAction, true\)/);
 
   assert.match(backend, /resolveApprovedEditorialInput/);
   assert.match(backend, /ready-for-manufacturing/);

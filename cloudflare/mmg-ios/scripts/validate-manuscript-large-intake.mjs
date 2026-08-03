@@ -38,7 +38,7 @@ const workspaceObserver = productionWorkspace.match(/const observer = new Mutati
 assert.ok(backend.includes('const MAX_CHARS = 600000'), "Backend manuscript intake is not aligned to 600,000 characters.");
 assert.ok(backend.includes('manuscript-studio-v5-large-intake'), "Backend large-intake capability version is missing.");
 assert.ok(frontend.includes('const MAX_TEXT_CHARS = 600000'), "Browser Manuscript Studio is not aligned to 600,000 characters.");
-assert.ok(frontend.includes('manuscript-studio-direct-chunks-20260730-4'), "Direct chunked Manuscript Studio build is missing.");
+assert.ok(frontend.includes('manuscript-studio-mobile-controls-20260803-2'), "Mobile-safe chunked Manuscript Studio build is missing.");
 assert.ok(frontend.includes('kairos.manuscript-studio.recoverable-draft.v1'), "Recoverable manuscript draft state is missing.");
 assert.ok(frontend.includes('Retry verified chunk save'), "Recoverable verified source-storage retry is missing.");
 assert.ok(frontend.includes('Select the original manuscript file once'), "Legacy failed-draft migration guidance is missing.");

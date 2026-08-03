@@ -1,5 +1,5 @@
-const BUILD = "kairos-manuscript-direct-open-20260801-2-standalone";
-const ASSET_RELEASE = "manuscript-deliverable-review-20260803-1";
+const BUILD = "kairos-manuscript-direct-open-20260803-3-mobile-controls";
+const ASSET_RELEASE = "manuscript-mobile-controls-20260803-2";
 const ACTIVE_KEY = "kairos.production.active-workspace";
 const GLOBAL_KEY = "__KAIROS_MANUSCRIPT_DIRECT_OPEN_CONTROLLER__";
 const SHELL_ID = "kairos-manuscript-direct-open-shell";

@@ -1,4 +1,4 @@
-const BUILD = "manuscript-studio-direct-chunks-20260730-4";
+const BUILD = "manuscript-studio-mobile-controls-20260803-2";
 const MAX_TEXT_CHARS = 600000;
 const MAX_DOCX_BYTES = 15 * 1024 * 1024;
 const MAX_PDF_BYTES = 20 * 1024 * 1024;
@@ -28,6 +28,7 @@ const state = {
   storageProgress: "",
   projectId: null,
   recoveryCount: 0,
+  reviewingSource: false,
 };
 
 const LIBRARIES = {
@@ -56,6 +57,7 @@ window.addEventListener("kairos:manuscript:restore", event => {
   state.sourceSaveError = "";
   state.storageProgress = "";
   state.result = null;
+  state.reviewingSource = false;
   state.error = state.manuscript.length > MAX_TEXT_CHARS
     ? `This manuscript contains ${state.manuscript.length.toLocaleString()} characters. Manuscript Studio supports up to ${MAX_TEXT_CHARS.toLocaleString()} characters.`
     : state.manuscript && !state.source?.stored
@@ -114,14 +116,32 @@ function render() {
     persistDraft();
   });
   overlay.querySelector("[data-edit]")?.addEventListener("click", () => {
-    state.result = null;
+    state.reviewingSource = true;
     render();
   });
-  overlay.querySelector("[data-finish]")?.addEventListener("click", () => {
-    clearDraft();
-    state.open = false;
-    window.dispatchEvent(new CustomEvent("kairos:production:state-changed"));
+  overlay.querySelector("[data-close-source]")?.addEventListener("click", () => {
+    state.reviewingSource = false;
     render();
+    requestAnimationFrame(() => {
+      document.querySelector("#manuscript-project-setup")
+        ?.scrollIntoView({ behavior: "auto", block: "start" });
+    });
+  });
+  overlay.querySelector("[data-finish]")?.addEventListener("click", event => {
+    const button = event.currentTarget;
+    const continuation = window.KairosManuscriptContinuation;
+    if (continuation?.ready && typeof continuation.continue === "function") {
+      void continuation.continue(button);
+      return;
+    }
+    const result = button.closest(".manuscript-result");
+    result?.querySelector("[data-kairos-continuation-fallback]")?.remove();
+    const error = document.createElement("p");
+    error.className = "manuscript-error";
+    error.dataset.kairosContinuationFallback = BUILD;
+    error.setAttribute("role", "alert");
+    error.textContent = "Project Setup is still loading. Wait a moment, then tap Continue to Project Setup again.";
+    button.closest(".manuscript-actions")?.before(error);
   });
 }
 
@@ -170,7 +190,18 @@ function resultView() {
   const actions = Array.isArray(r.workflow?.requiredNextActions) && r.workflow.requiredNextActions.length
     ? r.workflow.requiredNextActions
     : ["Complete Project Setup"];
-  return `<div class="manuscript-result" data-kairos-intake-receipt><div class="manuscript-status"><span>Production intake created</span><strong>${esc(r.status || "production_intake")}</strong></div><h3>${esc(r.customerMessage || "Your manuscript has advanced into MMG production intake.")}</h3><p><strong>Project:</strong> ${esc(r.projectID || "—")} · <strong>Intake:</strong> ${esc(r.intakeID || "—")}</p><p><strong>Accepted source:</strong> ${Number(r.manuscript?.characterCount || state.manuscript.length).toLocaleString()} characters · ${Number(r.manuscript?.wordCount || 0).toLocaleString()} words</p><div class="manuscript-actions manuscript-intake-actions"><button type="button" class="primary" data-finish>Continue to Project Setup</button><button type="button" class="secondary" data-edit>Review Intake Source</button></div><div class="issue-list">${actions.map((item, index) => `<article><b>${index + 1}. ${esc(item)}</b><p>${index === 0 ? "This is the next required production step." : "Queued in the production setup sequence."}</p></article>`).join("")}</div><p class="manuscript-note">The original manuscript source remains stored in the durable production registry. Project Setup opens automatically so production can continue.</p></div>`;
+  const review = state.reviewingSource ? `
+    <section class="manuscript-source-review" data-kairos-source-review>
+      <p class="eyebrow">Accepted intake source</p>
+      <h3>Review the preserved manuscript</h3>
+      <p>This is the accepted source already stored for this project. Reviewing it does not restart intake or replace the production record.</p>
+      <label>Preserved manuscript text<textarea readonly data-intake-source-review>${esc(state.manuscript)}</textarea></label>
+      <div class="manuscript-actions manuscript-source-review-actions">
+        <button type="button" class="primary" data-close-source>Back to Project Setup</button>
+      </div>
+    </section>
+  ` : "";
+  return `<div class="manuscript-result" data-kairos-intake-receipt><div class="manuscript-status"><span>Production intake created</span><strong>${esc(r.status || "production_intake")}</strong></div><h3>${esc(r.customerMessage || "Your manuscript has advanced into MMG production intake.")}</h3><p><strong>Project:</strong> ${esc(r.projectID || "—")} · <strong>Intake:</strong> ${esc(r.intakeID || "—")}</p><p><strong>Accepted source:</strong> ${Number(r.manuscript?.characterCount || state.manuscript.length).toLocaleString()} characters · ${Number(r.manuscript?.wordCount || 0).toLocaleString()} words</p><div class="manuscript-actions manuscript-intake-actions"><button type="button" class="primary" data-finish>Continue to Project Setup</button><button type="button" class="secondary" data-edit>Review Intake Source</button></div>${review}<div class="issue-list">${actions.map((item, index) => `<article><b>${index + 1}. ${esc(item)}</b><p>${index === 0 ? "This is the next required production step." : "Queued in the production setup sequence."}</p></article>`).join("")}</div><p class="manuscript-note">The original manuscript source remains stored in the durable production registry. Project Setup opens automatically so production can continue.</p></div>`;
 }
 
 async function loadFile(event) {
@@ -181,6 +212,7 @@ async function loadFile(event) {
   state.sourceSaveError = "";
   state.extracting = true;
   state.result = null;
+  state.reviewingSource = false;
   state.storageProgress = "";
   render();
   try {
@@ -563,6 +595,7 @@ async function runIntake() {
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body?.error?.message || "The manuscript could not advance into production intake.");
     state.result = body;
+    state.reviewingSource = false;
     stage = "registry update";
     await updateRegistry(body);
     persistDraft();

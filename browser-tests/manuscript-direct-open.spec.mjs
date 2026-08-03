@@ -123,7 +123,7 @@ test("legacy advanced manuscript URL redirects before the command runtime and op
   await expect(page.locator('link[data-kairos-command-style="manuscript-studio.css"]')).toHaveCount(1);
 
   const snapshot = await page.evaluate(() => window.KairosManuscriptDirectOpen.snapshot());
-  expect(snapshot.build).toBe("kairos-manuscript-direct-open-20260801-2-standalone");
+  expect(snapshot.build).toBe("kairos-manuscript-direct-open-20260803-3-mobile-controls");
   expect(snapshot.overlayPresent).toBe(true);
   expect(snapshot.launcherPresent).toBe(true);
   expect(snapshot.shellPresent).toBe(false);
@@ -132,7 +132,7 @@ test("legacy advanced manuscript URL redirects before the command runtime and op
   expect(snapshot.activeProjectId).toMatch(/^manuscript-studio-/);
 
   const route = await page.evaluate(() => window.KairosDedicatedManuscriptRoute);
-  expect(route.build).toBe("kairos-dedicated-manuscript-route-20260803-1-deliverable-review");
+  expect(route.build).toBe("kairos-dedicated-manuscript-route-20260803-2-mobile-controls");
   expect(route.opened).toBe(true);
 
   const guard = await page.evaluate(() => window.KairosManuscriptPostIntakeGuard.snapshot());

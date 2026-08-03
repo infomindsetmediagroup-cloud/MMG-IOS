@@ -80,7 +80,7 @@ jobs:
 
       - name: Enforce one authoritative non-multipart source and guarded local-production path
         run: |
-          grep -q 'manuscript-studio-direct-chunks-20260730-4' web/kairos-dashboard/scripts/manuscript-studio.js
+          grep -q 'manuscript-studio-mobile-controls-20260803-2' web/kairos-dashboard/scripts/manuscript-studio.js
           grep -q 'chunkedSourceUpload: true' web/kairos-dashboard/scripts/manuscript-studio.js
           grep -q 'multipartSourceUpload: false' web/kairos-dashboard/scripts/manuscript-studio.js
           grep -q 'sourcePath(projectId, "session")' web/kairos-dashboard/scripts/manuscript-studio.js
