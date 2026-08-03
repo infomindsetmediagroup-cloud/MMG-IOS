@@ -32,6 +32,7 @@ http://localhost:4100
 - Priority updates
 - Local event feed
 - State export
+- **Manuscript Builder (A-to-Z pipeline)** — generates all 12 required deliverable artifacts and packages them into a downloadable ZIP file
 
 ## Repository Rule
 
