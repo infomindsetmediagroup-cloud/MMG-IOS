@@ -1,0 +1,63 @@
+name: Patch Kairos Dashboard Compatibility
+
+"on":
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: patch-kairos-dashboard-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out pull-request branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          fetch-depth: 0
+
+      - name: Apply exact dashboard compatibility patch
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          path = Path("cloudflare/mmg-ios/src/kairos-dashboard-v1.js")
+          text = path.read_text()
+
+          old_gate = '      activationGate: cleanText(activation.projection?.activationGate, 120),'
+          new_gate = '''      activationGate: "business-operations-v1",
+      activationGateMatched: Boolean(activation.projection?.activationGateMatched),
+      ledgerConfigured: Boolean(activation.projection?.ledgerConfigured),
+      certificationComplete: Boolean(activation.projection?.certificationComplete),'''
+          if text.count(old_gate) != 1:
+              raise SystemExit(f"Expected one activation-gate match; found {text.count(old_gate)}")
+          text = text.replace(old_gate, new_gate, 1)
+
+          old_xfo = '    "X-Frame-Options": "SAMEORIGIN",\n'
+          if text.count(old_xfo) != 1:
+              raise SystemExit(f"Expected one X-Frame-Options match; found {text.count(old_xfo)}")
+          text = text.replace(old_xfo, "", 1)
+
+          path.write_text(text)
+          PY
+
+      - name: Validate and commit exact patch
+        run: |
+          set -euo pipefail
+          node --check cloudflare/mmg-ios/src/kairos-dashboard-v1.js
+          git config user.name "kairos-dashboard-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add cloudflare/mmg-ios/src/kairos-dashboard-v1.js
+          git diff --cached --check
+          git commit -m "Allow governed Shopify dashboard embedding"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
