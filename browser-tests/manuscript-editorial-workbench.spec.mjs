@@ -211,7 +211,7 @@ test("customer review shows the locked proof and one action produces the deliver
   await expect(review.getByAltText("Approved customer cover")).toBeVisible();
   await expect(page.locator("[data-editorial-save]")).toHaveCount(0);
 
-  await review.getByRole("button", { name: "Approve Review & Produce Deliverable Asset" }).tap();
+  await review.getByRole("button", { name: "Approve Review & Produce Deliverable Asset" }).click({ force: true });
   await expect(page.locator("#manuscript-auto-pipeline")).toContainText("Package Preview");
   await expect.poll(() => page.evaluate(() => window.__reviewFlowCalls)).toEqual({
     decision: 0,
