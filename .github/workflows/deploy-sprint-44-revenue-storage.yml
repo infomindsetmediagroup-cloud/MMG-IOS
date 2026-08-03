@@ -108,7 +108,7 @@ jobs:
           grep -q 'Preview Package' web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js
           ! grep -q '/setup/cover' web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js
           ! grep -q 'api.openai.com' web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js
-          grep -q 'kairos-manuscript-stage-handoff-20260801-1' web/kairos-dashboard/scripts/manuscript-stage-handoff-controller.js
+          grep -q 'kairos-manuscript-stage-handoff-20260803-1-deliverable-review' web/kairos-dashboard/scripts/manuscript-stage-handoff-controller.js
           grep -q 'Continue to Editorial Review' web/kairos-dashboard/scripts/manuscript-stage-handoff-controller.js
           grep -q 'Continue to Local Production' web/kairos-dashboard/scripts/manuscript-stage-handoff-controller.js
           grep -q 'manuscript-direct-open-controller.js' web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js
@@ -200,7 +200,7 @@ jobs:
               && grep -q 'Manufacture Delivery Package' "${orchestrator}" \
               && grep -q 'Preview Package' "${orchestrator}" \
               && [ "${stage_status}" = "200" ] \
-              && grep -q 'kairos-manuscript-stage-handoff-20260801-1' "${stage_handoff}" \
+              && grep -q 'kairos-manuscript-stage-handoff-20260803-1-deliverable-review' "${stage_handoff}" \
               && grep -q 'Continue to Editorial Review' "${stage_handoff}" \
               && grep -q 'Continue to Local Production' "${stage_handoff}" \
               && [ "${bootstrap_status}" = "200" ] \
