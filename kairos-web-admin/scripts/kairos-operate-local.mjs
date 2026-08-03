@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 import http from 'node:http';
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { runManuscriptBuild, validateBuildArtifacts, PIPELINE_STAGES, REQUIRED_ARTIFACT_KINDS } from '../src/manuscript-builder.mjs';
 
 const PORT = Number(process.env.KAIROS_LOCAL_PORT || process.env.PORT || 4100);
 const DATA_FILE = resolve(process.env.KAIROS_LOCAL_DATA_FILE || '.kairos/local-operator-state.json');
+const DELIVERABLES_DIR = resolve(process.env.KAIROS_DELIVERABLES_DIR || '.kairos/deliverables');
 const startedAt = new Date();
 
 const customerValueDoctrine = {
@@ -17,13 +19,14 @@ const customerValueDoctrine = {
 };
 
 const state = loadState({
-  version: '1.9.0-alpha',
+  version: '2.0.0-alpha',
   mode: 'customer-value-local-operator',
   doctrine: customerValueDoctrine,
   projects: [],
   productionJobs: [],
   commandQueue: [],
   notes: [],
+  manuscriptBuilds: [],
   events: [
     {
       id: randomUUID(),
@@ -63,6 +66,7 @@ function loadState(defaultState) {
       productionJobs: Array.isArray(persisted.productionJobs) ? persisted.productionJobs : [],
       commandQueue: Array.isArray(persisted.commandQueue) ? persisted.commandQueue : [],
       notes: Array.isArray(persisted.notes) ? persisted.notes : [],
+      manuscriptBuilds: Array.isArray(persisted.manuscriptBuilds) ? persisted.manuscriptBuilds : [],
       events: Array.isArray(persisted.events) && persisted.events.length ? persisted.events : defaultState.events
     };
   } catch {
@@ -80,6 +84,7 @@ function saveState() {
     productionJobs: state.productionJobs,
     commandQueue: state.commandQueue,
     notes: state.notes,
+    manuscriptBuilds: state.manuscriptBuilds,
     events: state.events.slice(0, 250),
     savedAt: new Date().toISOString()
   }, null, 2));
@@ -312,7 +317,7 @@ function html(res) {
       <table><thead><tr><th>Command</th><th>Priority</th><th>Category</th><th>Status</th><th>Created</th><th>Update</th></tr></thead><tbody id="commandRows">${commandRows() || '<tr><td colspan="6">No commands queued yet.</td></tr>'}</tbody></table>
     </section>
 
-    <section class="grid"><div class="metric"><span>Mode</span><strong>Value</strong></div><div class="metric"><span>Commands</span><strong>${queuedCommands}</strong></div><div class="metric"><span>Projects</span><strong>${state.projects.length}</strong></div><div class="metric"><span>Production Jobs</span><strong>${activeJobs}</strong></div><div class="metric"><span>Revenue Signal</span><strong>$${revenueToday.toFixed(2)}</strong></div></section>
+    <section class="grid"><div class="metric"><span>Mode</span><strong>Value</strong></div><div class="metric"><span>Commands</span><strong>${queuedCommands}</strong></div><div class="metric"><span>Projects</span><strong>${state.projects.length}</strong></div><div class="metric"><span>Manuscript Builds</span><strong>${state.manuscriptBuilds.filter(b => b.status === 'COMPLETED').length}/${state.manuscriptBuilds.length}</strong></div><div class="metric"><span>Revenue Signal</span><strong>$${revenueToday.toFixed(2)}</strong></div></section>
 
     <section class="card"><div class="kicker">Value Discovery Intake</div><h2>Create a real operating project</h2><p>Capture what the customer knows, what they want to build, and how Kairos should organize it into assets, content, products, or service work.</p><div class="form-grid"><input id="manualCustomerName" placeholder="Customer name" /><input id="manualCustomerEmail" placeholder="Customer email" /><input id="manualValueStatement" placeholder="What knowledge, skill, or experience has value?" /><input id="manualCustomerGoal" placeholder="Goal: extra income, audience, product, service..." /><select id="manualServiceType"><option>Value Discovery</option><option>Publishing Service</option><option>Book Production</option><option>Product Page Build</option><option>Knowledge Library Article</option><option>Marketing Campaign</option><option>Custom Kairos Project</option></select><input id="manualOrderTotal" placeholder="Order total, e.g. 49.00" /></div><div class="actions"><button onclick="createManualProject()">Create Kairos project</button></div></section>
 
@@ -333,12 +338,43 @@ function html(res) {
   res.end(body);
 }
 
+function manuscriptBuilderSection(project) {
+  const builds = state.manuscriptBuilds.filter(b => b.projectId === project.id);
+  const latestBuild = builds[0];
+  let buildStatusHtml = '<p>No manuscript build has been run yet. Click below to generate all deliverables from A to Z.</p>';
+  let buildActions = `<button onclick="runManuscriptBuilder('${project.id}')">Build manuscript assets A-Z</button>`;
+
+  if (latestBuild) {
+    const stageRows = (latestBuild.stages || []).map(s =>
+      `<tr><td>${escapeHtml(s.name)}</td><td><span class="badge">${escapeHtml(s.status)}</span></td><td>${s.completedAt ? escapeHtml(new Date(s.completedAt).toLocaleString()) : '—'}</td><td>${s.errorMessage ? escapeHtml(s.errorMessage) : '—'}</td></tr>`
+    ).join('');
+    const artifactRows = (latestBuild.artifacts || []).map(a =>
+      `<tr><td>${escapeHtml(a.kind)}</td><td>${escapeHtml(a.filename)}</td><td>${escapeHtml(a.mimeType)}</td><td>${a.byteSize.toLocaleString()}</td></tr>`
+    ).join('');
+    const validation = validateBuildArtifacts(latestBuild);
+    const zipArtifact = (latestBuild.artifacts || []).find(a => a.kind === 'ZIP_ARCHIVE');
+    buildStatusHtml = `
+      <p>Status: <span class="badge">${escapeHtml(latestBuild.status)}</span>${latestBuild.status === 'COMPLETED' ? ' — All artifacts generated.' : ' — ' + escapeHtml(latestBuild.errorMessage || 'In progress...')}</p>
+      ${latestBuild.status === 'COMPLETED' && zipArtifact ? `<div class="actions"><a class="button" href="/api/projects/${encodeURIComponent(project.id)}/manuscript-builder/download">Download deliverables ZIP</a></div>` : ''}
+      ${latestBuild.status === 'COMPLETED' && !validation.ok ? `<p style="color:#fbbf24">Warning: Missing artifact kinds: ${validation.missing.join(', ')}</p>` : ''}
+      <h3>Pipeline Stages (${PIPELINE_STAGES.length} total)</h3>
+      <table><thead><tr><th>Stage</th><th>Status</th><th>Completed</th><th>Notes</th></tr></thead><tbody>${stageRows}</tbody></table>
+      <h3>Generated Artifacts (${(latestBuild.artifacts || []).length} / ${REQUIRED_ARTIFACT_KINDS.length} required)</h3>
+      <table><thead><tr><th>Kind</th><th>Filename</th><th>Type</th><th>Size (bytes)</th></tr></thead><tbody>${artifactRows}</tbody></table>
+    `;
+    buildActions = `<button onclick="runManuscriptBuilder('${project.id}')">Rebuild manuscript assets A-Z</button>`;
+  }
+
+  return `<section class="card" style="margin-top:18px;border-color:rgba(56,189,248,.42)"><div class="kicker">Manuscript Builder · A to Z Asset Pipeline</div><h2>Manuscript asset generation</h2><p>Runs the full ${PIPELINE_STAGES.length}-stage pipeline: ${PIPELINE_STAGES.join(' → ')}. Generates all ${REQUIRED_ARTIFACT_KINDS.length} required deliverable artifacts and packages them into a ZIP file.</p><div class="actions">${buildActions}</div>${buildStatusHtml}</section>`;
+}
+
 function projectDetailHtml(res, projectId) {
   const project = state.projects.find(item => item.id === projectId);
   if (!project) return json(res, 404, { error: 'Project not found.' });
   const jobs = state.productionJobs.filter(job => job.projectId === projectId).sort((a, b) => a.sequence - b.sequence);
   const jobRows = jobs.map(job => `<tr><td>${job.sequence}</td><td>${escapeHtml(job.stage)}</td><td><span class="badge">${escapeHtml(job.status)}</span></td><td>${job.completedAt ? escapeHtml(new Date(job.completedAt).toLocaleString()) : '—'}</td><td>${job.status === 'Ready' ? `<button onclick="advanceJob('${job.id}')">Complete stage</button>` : ''}</td></tr>`).join('');
-  const body = pageShell(`<section class="hero"><div class="kicker">Project Detail · Value Stewardship</div><h1>${escapeHtml(project.orderName)} · ${escapeHtml(project.customerName)}</h1><p>${escapeHtml(project.valueStatement || customerValueDoctrine.promise)}</p><p>Goal: <strong>${escapeHtml(project.customerGoal || customerValueDoctrine.support)}</strong></p><p>Service: <strong>${escapeHtml(project.serviceType)}</strong> · Status: <strong>${escapeHtml(project.status)}</strong> · Progress: <strong>${projectProgress(project.id)}%</strong></p><div class="actions"><a class="button" href="/">Back to console</a><a class="button" href="/api/projects/${encodeURIComponent(project.id)}">Project JSON</a></div></section><section class="card"><div class="kicker">Production Workflow</div><h2>Stage controls</h2><table><thead><tr><th>#</th><th>Stage</th><th>Status</th><th>Completed</th><th>Action</th></tr></thead><tbody>${jobRows}</tbody></table></section><section class="card" style="margin-top:18px"><div class="kicker">Operator Notes</div><h2>Project notes</h2><div class="actions"><input id="noteText" placeholder="Add customer value, production, or delivery note..." /><button onclick="addNote()">Add note</button></div><ul class="feed">${state.notes.filter(note => note.projectId === project.id).slice(0,12).map(note => `<li><span class="badge">${escapeHtml(note.type || 'NOTE')}</span><br><strong>${escapeHtml(new Date(note.createdAt).toLocaleString())}</strong><br>${escapeHtml(note.text)}</li>`).join('') || '<li>No notes yet.</li>'}</ul></section><script>async function advanceJob(id){await fetch('/api/production/jobs/'+id+'/advance',{method:'POST'});location.reload();} async function addNote(){const input=document.getElementById('noteText');const text=input.value.trim();if(!text)return;await fetch('/api/projects/${encodeURIComponent(project.id)}/notes',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text,type:'VALUE_STEWARDSHIP_NOTE'})});location.reload();}</script>`);
+  const mbSection = manuscriptBuilderSection(project);
+  const body = pageShell(`<section class="hero"><div class="kicker">Project Detail · Value Stewardship</div><h1>${escapeHtml(project.orderName)} · ${escapeHtml(project.customerName)}</h1><p>${escapeHtml(project.valueStatement || customerValueDoctrine.promise)}</p><p>Goal: <strong>${escapeHtml(project.customerGoal || customerValueDoctrine.support)}</strong></p><p>Service: <strong>${escapeHtml(project.serviceType)}</strong> · Status: <strong>${escapeHtml(project.status)}</strong> · Progress: <strong>${projectProgress(project.id)}%</strong></p><div class="actions"><a class="button" href="/">Back to console</a><a class="button" href="/api/projects/${encodeURIComponent(project.id)}">Project JSON</a></div></section>${mbSection}<section class="card"><div class="kicker">Production Workflow</div><h2>Stage controls</h2><table><thead><tr><th>#</th><th>Stage</th><th>Status</th><th>Completed</th><th>Action</th></tr></thead><tbody>${jobRows}</tbody></table></section><section class="card" style="margin-top:18px"><div class="kicker">Operator Notes</div><h2>Project notes</h2><div class="actions"><input id="noteText" placeholder="Add customer value, production, or delivery note..." /><button onclick="addNote()">Add note</button></div><ul class="feed">${state.notes.filter(note => note.projectId === project.id).slice(0,12).map(note => `<li><span class="badge">${escapeHtml(note.type || 'NOTE')}</span><br><strong>${escapeHtml(new Date(note.createdAt).toLocaleString())}</strong><br>${escapeHtml(note.text)}</li>`).join('') || '<li>No notes yet.</li>'}</ul></section><script>async function advanceJob(id){await fetch('/api/production/jobs/'+id+'/advance',{method:'POST'});location.reload();} async function addNote(){const input=document.getElementById('noteText');const text=input.value.trim();if(!text)return;await fetch('/api/projects/${encodeURIComponent(project.id)}/notes',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text,type:'VALUE_STEWARDSHIP_NOTE'})});location.reload();} async function runManuscriptBuilder(id){const btn=event.target;btn.disabled=true;btn.textContent='Building...';try{const result=await(await fetch('/api/projects/'+id+'/manuscript-builder/run',{method:'POST'})).json();if(result.status==='COMPLETED'){alert('Manuscript build complete! '+result.artifacts.length+' artifacts generated. ZIP is ready for download.');}else{alert('Build '+result.status+': '+(result.errorMessage||''));}}catch(e){alert('Error: '+e.message);}location.reload();}</script>`);
   res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
   res.end(body);
 }
@@ -359,6 +395,8 @@ function dashboard() {
     marketingCampaigns: 0,
     criticalProjects: state.projects.filter(project => project.priority === 'Critical').length,
     operatorNotes: state.notes.length,
+    manuscriptBuilds: state.manuscriptBuilds.length,
+    completedBuilds: state.manuscriptBuilds.filter(b => b.status === 'COMPLETED').length,
     automationRunning: 0,
     shopifySyncHealthy: false,
     systemStatus: 'Healthy',
@@ -419,8 +457,8 @@ async function manualProject(req, res) {
   return intake({ ...req, on(event, handler) { if (event === 'data') handler(Buffer.from(JSON.stringify({ id: body.shopifyOrderId || `manual-${id}`, name: body.orderName || `MANUAL-${String(id).slice(-6)}`, email: body.customerEmail || 'manual@example.com', totalPrice: body.orderTotal || '0', valueStatement: body.valueStatement || customerValueDoctrine.promise, customerGoal: body.customerGoal || customerValueDoctrine.support, customer: { displayName: body.customerName || 'Manual Customer', email: body.customerEmail || 'manual@example.com' }, lineItems: [{ title: body.serviceType || 'Value Discovery', productType: body.serviceType || 'Value Discovery', valueStatement: body.valueStatement || customerValueDoctrine.promise, requiresProduction: true }] }))); if (event === 'end') handler(); } }, res);
 }
 
-function exportState() { return { exportedAt: new Date().toISOString(), version: state.version, mode: state.mode, doctrine: customerValueDoctrine, dashboard: dashboard(), commandQueue: state.commandQueue, projects: state.projects, productionJobs: state.productionJobs, notes: state.notes, events: state.events }; }
-function resetLocalState() { state.projects = []; state.productionJobs = []; state.commandQueue = []; state.notes = []; state.events = []; recordEvent('STATE_RESET', 'Kairos local operator state was reset.'); }
+function exportState() { return { exportedAt: new Date().toISOString(), version: state.version, mode: state.mode, doctrine: customerValueDoctrine, dashboard: dashboard(), commandQueue: state.commandQueue, projects: state.projects, productionJobs: state.productionJobs, notes: state.notes, manuscriptBuilds: state.manuscriptBuilds, events: state.events }; }
+function resetLocalState() { state.projects = []; state.productionJobs = []; state.commandQueue = []; state.notes = []; state.manuscriptBuilds = []; state.events = []; recordEvent('STATE_RESET', 'Kairos local operator state was reset.'); }
 
 const server = http.createServer(async (req, res) => {
   try {
@@ -446,6 +484,41 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/api/events') return json(res, 200, state.events);
     if (req.method === 'POST' && url.pathname === '/api/intake/shopify-order') return intake(req, res);
     if (req.method === 'POST' && url.pathname === '/api/intake/manual-project') return manualProject(req, res);
+    // Manuscript Builder routes
+    const mbRunMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/manuscript-builder\/run$/);
+    if (req.method === 'POST' && mbRunMatch) {
+      const projectId = decodeURIComponent(mbRunMatch[1]);
+      const project = state.projects.find(item => item.id === projectId);
+      if (!project) return json(res, 404, { error: 'Project not found.' });
+      mkdirSync(DELIVERABLES_DIR, { recursive: true });
+      const build = runManuscriptBuild(project, DELIVERABLES_DIR);
+      state.manuscriptBuilds.unshift(build);
+      recordEvent('MANUSCRIPT_BUILD', `Manuscript build ${build.status} for ${project.orderName}. ${build.artifacts?.length || 0} artifacts generated.`, { projectId, buildId: build.id });
+      return json(res, 201, build);
+    }
+    const mbGetMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/manuscript-builder$/);
+    if (req.method === 'GET' && mbGetMatch) {
+      const projectId = decodeURIComponent(mbGetMatch[1]);
+      const build = state.manuscriptBuilds.find(b => b.projectId === projectId);
+      if (!build) return json(res, 404, { error: 'No manuscript build found for this project.' });
+      return json(res, 200, build);
+    }
+    const mbDownloadMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/manuscript-builder\/download$/);
+    if (req.method === 'GET' && mbDownloadMatch) {
+      const projectId = decodeURIComponent(mbDownloadMatch[1]);
+      const build = state.manuscriptBuilds.find(b => b.projectId === projectId);
+      if (!build || !build.zipPath || !existsSync(build.zipPath)) return json(res, 404, { error: 'No ZIP file available. Run the manuscript builder first.' });
+      const zipData = readFileSync(build.zipPath);
+      const zipArtifact = (build.artifacts || []).find(a => a.kind === 'ZIP_ARCHIVE');
+      const filename = zipArtifact?.filename || 'deliverables.zip';
+      res.writeHead(200, {
+        'content-type': 'application/zip',
+        'content-disposition': `attachment; filename="${filename}"`,
+        'content-length': zipData.length,
+        'cache-control': 'no-store'
+      });
+      return res.end(zipData);
+    }
     const advanceMatch = url.pathname.match(/^\/api\/production\/jobs\/([^/]+)\/advance$/);
     if (req.method === 'POST' && advanceMatch) { const result = advanceJob(advanceMatch[1]); return json(res, result.status, result.payload); }
     if (req.method === 'POST' && url.pathname === '/api/reset') { resetLocalState(); return json(res, 200, { ok: true }); }
