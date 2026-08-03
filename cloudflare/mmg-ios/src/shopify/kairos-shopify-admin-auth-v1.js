@@ -1,5 +1,5 @@
 export const KAIROS_SHOPIFY_ADMIN_AUTH_BUILD =
-  "kairos-shopify-admin-auth-20260802-3-runtime-bindings";
+  "kairos-shopify-admin-auth-20260802-4-public-client-id";
 
 const MAX_TOKEN_BYTES = 8192;
 const MAX_SECRET_BYTES = 1024;
@@ -85,7 +85,11 @@ export function resolveShopDomain(env = {}) {
 }
 
 export function resolveShopifyClientId(env = {}) {
-  return resolveShopifyCredentials(env)?.clientId || "";
+  for (const [clientIdKey] of CREDENTIAL_PAIRS) {
+    const clientId = cleanClientId(readBinding(env, clientIdKey));
+    if (clientId) return clientId;
+  }
+  return "";
 }
 
 export function validateShopifyBootstrap(url, env = {}) {
