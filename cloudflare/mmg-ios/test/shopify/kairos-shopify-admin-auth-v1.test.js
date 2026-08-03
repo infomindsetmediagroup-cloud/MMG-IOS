@@ -82,7 +82,7 @@ function request(token) {
 test("exports the exact Shopify Admin auth build", () => {
   assert.equal(
     KAIROS_SHOPIFY_ADMIN_AUTH_BUILD,
-    "kairos-shopify-admin-auth-20260802-2-credential-aliases",
+    "kairos-shopify-admin-auth-20260802-3-runtime-bindings",
   );
 });
 
@@ -106,6 +106,24 @@ test("uses the existing deployed Shopify client credential aliases", async () =>
   });
   assert.equal(result.ok, true);
   assert.equal(result.staffUserId, STAFF_ID);
+});
+
+test("reads Cloudflare-style runtime bindings when descriptors are not exposed", async () => {
+  const values = aliasEnvironment();
+  const env = new Proxy({}, {
+    get(_target, key) {
+      return values[key];
+    },
+    getOwnPropertyDescriptor() {
+      return undefined;
+    },
+  });
+  const token = await signToken();
+  assert.equal(resolveShopifyClientId(env), CLIENT_ID);
+  const result = await verifyShopifyAdminSession(request(token), env, {
+    now: new Date(NOW_SECONDS * 1000),
+  });
+  assert.equal(result.ok, true);
 });
 
 test("uses only complete matching credential pairs", async () => {
