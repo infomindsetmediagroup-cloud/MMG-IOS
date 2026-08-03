@@ -33,7 +33,7 @@ async function json(response) {
 }
 
 const workerPath = fileURLToPath(new URL("../../src/kairos-production-entry-local-canonical-v1.js", import.meta.url));
-const schedulerPath = fileURLToPath(new URL("../../src/autonomy/kairos-autonomy-scheduler-v1.js", import.meta.url));
+const schedulerPath = fileURLToPath(new URL("../../src/autonomy/kairos-autonomy-scheduler-v2.js", import.meta.url));
 const wranglerPath = fileURLToPath(new URL("../../wrangler.toml", import.meta.url));
 const ciPath = fileURLToPath(new URL("../../../../.github/workflows/kairos-autonomy-kernel.yml", import.meta.url));
 
@@ -150,7 +150,7 @@ test("observability returns only the safe projection", async () => {
   assert.equal(parsed.observability.recent[0].policyDecision.policyVersion, 1);
 });
 
-test("status remains fail-closed until every exact activation condition is met", async () => {
+test("legacy Slice 4 status remains fail-closed until its exact conditions are met", async () => {
   const inactive = await json(await handleAutonomyApiRequest(request("/api/autonomy/status"), env()));
   assert.equal(inactive.scheduledAutonomy.ready, false);
   assert.equal(inactive.scheduledAutonomy.cron, "0 * * * *");
@@ -164,7 +164,7 @@ test("status remains fail-closed until every exact activation condition is met",
   assert.equal(active.scheduledAutonomy.ready, true);
 });
 
-test("status rejects case and whitespace activation variants", async () => {
+test("legacy Slice 4 status rejects case and whitespace activation variants", async () => {
   for (const overrides of [
     { KAIROS_AUTONOMY_SCHEDULED_ENABLED: "Enabled" },
     { KAIROS_AUTONOMY_ACTIVATION_GATE: " website-health-v1" },
@@ -182,7 +182,7 @@ test("status rejects case and whitespace activation variants", async () => {
   }
 });
 
-test("status exposes only normalized state and build identifiers", async () => {
+test("legacy Slice 4 status exposes only normalized state and build identifiers", async () => {
   const response = await handleAutonomyApiRequest(request("/api/autonomy/status"), env({
     KAIROS_AUTONOMY_SCHEDULED_ENABLED: "enabled",
     KAIROS_AUTONOMY_ACTIVATION_GATE: "website-health-v1",
@@ -211,9 +211,11 @@ test("Slice 4 API responses preserve security headers", async () => {
   }
 });
 
-test("canonical Worker composes API v3 and exact scheduled routing", () => {
+test("canonical Worker composes API v5 and complete scheduled routing", () => {
   const source = readFileSync(workerPath, "utf8");
-  assert.match(source, /from "\.\/autonomy\/kairos-autonomy-api-v3\.js"/u);
+  assert.match(source, /from "\.\/autonomy\/kairos-autonomy-api-v5\.js"/u);
+  assert.match(source, /from "\.\/autonomy\/kairos-autonomy-scheduler-v2\.js"/u);
+  assert.match(source, /operationsEnv: autonomousEnv/u);
   assert.match(source, /controller\?\.cron === KAIROS_AUTONOMY_HEALTH_CRON/u);
   assert.match(source, /handleAutonomyScheduledEvent\(controller, providerBlockedEnv\(env\), ctx\)/u);
   assert.match(source, /canonicalRuntime\.scheduled\(controller, providerBlockedEnv\(env\), ctx\)/u);
@@ -221,31 +223,53 @@ test("canonical Worker composes API v3 and exact scheduled routing", () => {
   assert.equal(source.includes("dispatchAutonomyEvent"), false);
 });
 
-test("Wrangler preserves migrations and adds the hourly cron without activation defaults", () => {
+test("Wrangler preserves migrations and explicitly activates complete governed operations", () => {
   const source = readFileSync(wranglerPath, "utf8");
   assert.match(source, /crons = \["0 15 \* \* \*", "0 2 \* \* \*", "0 \* \* \* \*"\]/u);
   assert.match(source, /name = "KAIROS_AUTONOMY_LEDGER"\s+class_name = "KairosAutonomyLedger"/u);
   assert.match(source, /tag = "kairos-autonomy-ledger-v1"\s+new_sqlite_classes = \["KairosAutonomyLedger"\]/u);
   assert.equal((source.match(/new_sqlite_classes = \["KairosAutonomyLedger"\]/gu) || []).length, 1);
-  assert.doesNotMatch(source, /^KAIROS_AUTONOMY_SCHEDULED_ENABLED\s*=\s*"enabled"/mu);
-  assert.doesNotMatch(source, /^KAIROS_AUTONOMY_ACTIVATION_GATE\s*=\s*"website-health-v1"/mu);
-  assert.doesNotMatch(source, /^KAIROS_KILL_SWITCH\s*=\s*"enabled"/mu);
+  assert.match(source, /^KAIROS_ENVIRONMENT = "production"$/mu);
+  assert.match(source, /^KAIROS_AUTONOMY_SCHEDULED_ENABLED = "enabled"$/mu);
+  assert.match(source, /^KAIROS_AUTONOMOUS_OPERATIONS_ENABLED = "enabled"$/mu);
+  assert.match(source, /^KAIROS_AUTONOMY_ACTIVATION_GATE = "business-operations-v1"$/mu);
+  assert.match(source, /^KAIROS_KILL_SWITCH = "enabled"$/mu);
+  assert.match(source, /^KAIROS_WEBSITE_HEALTH_TARGET_URL = "https:\/\/themindsetmediagroup\.com"$/mu);
 });
 
-test("scheduler source has no direct execution or external-provider bypass", () => {
+test("complete scheduler invokes the governed cycle without external-provider bypass", () => {
   const source = readFileSync(schedulerPath, "utf8");
-  assert.match(source, /dispatchAutonomyEvent/u);
-  for (const forbidden of ["executeWebsiteHealthWorkflow", "KAIROS_AUTONOMY_API_TOKEN", "eval(", "new Function", "github.merge", "cloudflare.deploy.production", "shopify.price.change", "customer.email.send", "OPENAI_API_KEY", "api.openai.com"]) {
+  assert.match(source, /runAutonomousOperationsCycle/u);
+  assert.match(source, /KAIROS_AUTONOMOUS_OPERATIONS_CYCLE_BUILD/u);
+  for (const forbidden of [
+    "dispatchAutonomyEvent",
+    "KAIROS_AUTONOMY_API_TOKEN",
+    "eval(",
+    "new Function",
+    "github.merge",
+    "cloudflare.deploy.production",
+    "shopify.price.change",
+    "customer.email.send",
+    "OPENAI_API_KEY",
+    "api.openai.com",
+  ]) {
     assert.equal(source.includes(forbidden), false);
   }
 });
 
-test("CI validates Slice 4 and retains regression and dry-run commands", () => {
+test("CI validates complete operations and retains regression and dry-run commands", () => {
   const source = readFileSync(ciPath, "utf8");
-  for (const file of ["kairos-autonomy-api-v2.js", "kairos-autonomy-observability-v1.js", "kairos-autonomy-scheduler-v1.js", "kairos-autonomy-observability.test.js", "kairos-autonomy-scheduler.test.js", "kairos-autonomy-activation.test.js"]) {
+  for (const file of [
+    "kairos-autonomy-api-v5.js",
+    "kairos-business-prioritizer-v1.js",
+    "kairos-business-orchestrator-v1.js",
+    "kairos-autonomous-operations-cycle-v1.js",
+    "kairos-autonomy-scheduler-v2.js",
+    "kairos-complete-autonomous-operations.test.js",
+  ]) {
     assert.match(source, new RegExp(`node --check [^\\n]*${file.replaceAll(".", "\\.")}`, "u"));
   }
-  assert.match(source, /Validate scheduled autonomy activation boundary/u);
+  assert.match(source, /Validate complete autonomous operations boundary/u);
   assert.match(source, /X-Kairos-Autonomy-Scheduler-Build/u);
   assert.match(source, /npm run test:autonomy/u);
   assert.match(source, /npm install --ignore-scripts --no-audit --no-fund/u);
