@@ -82,44 +82,38 @@ jobs:
         id: public
         run: |
           set -euo pipefail
+          headers_raw="${RUNNER_TEMP}/autonomy-unauthenticated.headers.raw"
           headers="${RUNNER_TEMP}/autonomy-unauthenticated.headers"
           body="${RUNNER_TEMP}/autonomy-unauthenticated.json"
           status="$(curl --silent --show-error --max-time 45 \
-            -D "${headers}" \
+            -D "${headers_raw}" \
             "${WORKER_URL}/api/autonomy/status?verification=${GITHUB_SHA}" \
             -o "${body}" \
             -w '%{http_code}')"
+          tr -d '\r' < "${headers_raw}" > "${headers}"
 
           cat "${headers}"
           cat "${body}"
-          grep -Eiq "^x-kairos-autonomy-api-build: ${API_BUILD}\r?$" "${headers}"
-          grep -Eiq "^x-kairos-autonomy-api-v4-build: ${API_V4_BUILD}\r?$" "${headers}"
-          grep -Eiq "^x-kairos-autonomous-operations-cycle-build: ${CYCLE_BUILD}\r?$" "${headers}"
-          grep -Eiq "^x-kairos-business-prioritizer-build: ${PRIORITIZER_BUILD}\r?$" "${headers}"
-          grep -Eiq "^x-kairos-business-orchestrator-build: ${ORCHESTRATOR_BUILD}\r?$" "${headers}"
-          grep -Eiq "^x-kairos-autonomy-scheduler-build: ${SCHEDULER_BUILD}\r?$" "${headers}"
-          grep -Eiq '^x-kairos-inference-provider: browser-webgpu\r?$' "${headers}"
-          grep -Eiq '^x-kairos-external-provider: disabled\r?$' "${headers}"
-          grep -Eiq '^x-kairos-openai-calls: disabled\r?$' "${headers}"
+          grep -Fxiq "x-kairos-autonomy-api-build: ${API_BUILD}" "${headers}"
+          grep -Fxiq "x-kairos-autonomy-api-v4-build: ${API_V4_BUILD}" "${headers}"
+          grep -Fxiq "x-kairos-autonomous-operations-cycle-build: ${CYCLE_BUILD}" "${headers}"
+          grep -Fxiq "x-kairos-business-prioritizer-build: ${PRIORITIZER_BUILD}" "${headers}"
+          grep -Fxiq "x-kairos-business-orchestrator-build: ${ORCHESTRATOR_BUILD}" "${headers}"
+          grep -Fxiq "x-kairos-autonomy-scheduler-build: ${SCHEDULER_BUILD}" "${headers}"
+          grep -Fxiq 'x-kairos-inference-provider: browser-webgpu' "${headers}"
+          grep -Fxiq 'x-kairos-external-provider: disabled' "${headers}"
+          grep -Fxiq 'x-kairos-openai-calls: disabled' "${headers}"
+          grep -Fq '"ok":false' "${body}"
+          grep -Fq "\"build\":\"${API_BUILD}\"" "${body}"
 
-          auth_state="$(STATUS_CODE="${status}" BODY_PATH="${body}" API_BUILD="${API_BUILD}" node <<'NODE'
-          const fs = require("node:fs");
-          const value = JSON.parse(fs.readFileSync(process.env.BODY_PATH, "utf8"));
-          if (value?.ok !== false || value?.build !== process.env.API_BUILD) {
-            throw new Error("Unexpected public autonomy response envelope.");
-          }
-          if (process.env.STATUS_CODE === "401" && value?.error?.code) {
-            process.stdout.write("configured");
-          } else if (
-            process.env.STATUS_CODE === "503"
-            && value?.error?.code === "AUTONOMY_API_NOT_CONFIGURED"
-          ) {
-            process.stdout.write("unconfigured");
-          } else {
-            throw new Error(`Unexpected public autonomy status ${process.env.STATUS_CODE}.`);
-          }
-          NODE
-          )"
+          if [ "${status}" = "401" ] && grep -Fq '"error":{"code":"AUTHENTICATION_REQUIRED"' "${body}"; then
+            auth_state="configured"
+          elif [ "${status}" = "503" ] && grep -Fq '"error":{"code":"AUTONOMY_API_NOT_CONFIGURED"' "${body}"; then
+            auth_state="unconfigured"
+          else
+            echo "Unexpected public autonomy response: HTTP ${status}" >&2
+            exit 1
+          fi
           echo "auth_state=${auth_state}" >> "${GITHUB_OUTPUT}"
 
       - name: Provision missing Worker authentication boundary
@@ -172,17 +166,19 @@ jobs:
           fi
           echo "::add-mask::${token}"
 
-          statusHeaders="${RUNNER_TEMP}/autonomy-authenticated-status.headers"
-          statusBody="${RUNNER_TEMP}/autonomy-authenticated-status.json"
-          statusCode="$(curl --silent --show-error --max-time 45 \
-            -D "${statusHeaders}" \
+          status_headers_raw="${RUNNER_TEMP}/autonomy-authenticated-status.headers.raw"
+          status_headers="${RUNNER_TEMP}/autonomy-authenticated-status.headers"
+          status_body="${RUNNER_TEMP}/autonomy-authenticated-status.json"
+          status_code="$(curl --silent --show-error --max-time 45 \
+            -D "${status_headers_raw}" \
             -H "Authorization: Bearer ${token}" \
             "${WORKER_URL}/api/autonomy/status?verification=${GITHUB_SHA}" \
-            -o "${statusBody}" \
+            -o "${status_body}" \
             -w '%{http_code}')"
-          test "${statusCode}" = "200"
+          tr -d '\r' < "${status_headers_raw}" > "${status_headers}"
+          test "${status_code}" = "200"
 
-          STATUS_BODY="${statusBody}" API_BUILD="${API_BUILD}" CYCLE_BUILD="${CYCLE_BUILD}" PRIORITIZER_BUILD="${PRIORITIZER_BUILD}" ORCHESTRATOR_BUILD="${ORCHESTRATOR_BUILD}" node <<'NODE'
+          STATUS_BODY="${status_body}" API_BUILD="${API_BUILD}" CYCLE_BUILD="${CYCLE_BUILD}" PRIORITIZER_BUILD="${PRIORITIZER_BUILD}" ORCHESTRATOR_BUILD="${ORCHESTRATOR_BUILD}" node <<'NODE'
           const fs = require("node:fs");
           const value = JSON.parse(fs.readFileSync(process.env.STATUS_BODY, "utf8"));
           if (value?.ok !== true || value?.build !== process.env.API_BUILD) throw new Error("Authenticated status build mismatch.");
@@ -197,20 +193,22 @@ jobs:
           if (observation.externalMutationEnabled !== false) throw new Error("External mutation must remain disabled.");
           NODE
 
-          cycleHeaders="${RUNNER_TEMP}/autonomy-manual-cycle.headers"
-          cycleBody="${RUNNER_TEMP}/autonomy-manual-cycle.json"
-          cycleCode="$(curl --silent --show-error --max-time 120 \
-            -D "${cycleHeaders}" \
+          cycle_headers_raw="${RUNNER_TEMP}/autonomy-manual-cycle.headers.raw"
+          cycle_headers="${RUNNER_TEMP}/autonomy-manual-cycle.headers"
+          cycle_body="${RUNNER_TEMP}/autonomy-manual-cycle.json"
+          cycle_code="$(curl --silent --show-error --max-time 120 \
+            -D "${cycle_headers_raw}" \
             -X POST \
             -H "Authorization: Bearer ${token}" \
             -H 'Content-Type: application/json' \
             --data '{"tenantId":"mmg"}' \
             "${WORKER_URL}/api/autonomy/business-state/collect?verification=${GITHUB_SHA}" \
-            -o "${cycleBody}" \
+            -o "${cycle_body}" \
             -w '%{http_code}')"
-          test "${cycleCode}" = "200" -o "${cycleCode}" = "503"
+          tr -d '\r' < "${cycle_headers_raw}" > "${cycle_headers}"
+          test "${cycle_code}" = "200" -o "${cycle_code}" = "503"
 
-          CYCLE_BODY="${cycleBody}" API_BUILD="${API_BUILD}" CYCLE_BUILD="${CYCLE_BUILD}" node <<'NODE'
+          CYCLE_BODY="${cycle_body}" API_BUILD="${API_BUILD}" CYCLE_BUILD="${CYCLE_BUILD}" node <<'NODE'
           const fs = require("node:fs");
           const value = JSON.parse(fs.readFileSync(process.env.CYCLE_BODY, "utf8"));
           if (value?.build !== process.env.API_BUILD) throw new Error("Manual cycle API build mismatch.");
@@ -223,7 +221,7 @@ jobs:
           if (!value?.operations?.orchestration || typeof value.operations.orchestration.ok !== "boolean") throw new Error("Manual cycle did not produce an orchestration result.");
           NODE
 
-          STATUS_BODY="${statusBody}" CYCLE_BODY="${cycleBody}" SUMMARY="${summary}" node <<'NODE'
+          STATUS_BODY="${status_body}" CYCLE_BODY="${cycle_body}" SUMMARY="${summary}" node <<'NODE'
           const fs = require("node:fs");
           const status = JSON.parse(fs.readFileSync(process.env.STATUS_BODY, "utf8"));
           const cycle = JSON.parse(fs.readFileSync(process.env.CYCLE_BODY, "utf8"));
