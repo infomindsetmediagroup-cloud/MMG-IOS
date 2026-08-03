@@ -18,7 +18,7 @@ import { handleManuscriptRequest } from "./manuscript-studio-v1.js";
 import {
   handleKairosDashboardRequest,
   KAIROS_DASHBOARD_BUILD,
-} from "./kairos-dashboard-v1.js";
+} from "./kairos-dashboard-v2.js";
 import { KairosAutonomyLedger } from "./autonomy/kairos-autonomy-ledger-v1.js";
 import {
   handleAutonomyApiRequest,
@@ -47,7 +47,7 @@ export class KairosManuscriptSource extends BaseKairosManuscriptSource {
 }
 
 export const KAIROS_LOCAL_CANONICAL_ENTRY_BUILD =
-  "kairos-local-canonical-entry-20260802-5-production-dashboard";
+  "kairos-local-canonical-entry-20260802-6-shopify-dashboard";
 
 const PROVIDER_INDEPENDENT_OPERATIONAL_PATHS = new Set([
   "/api/hub/run",
