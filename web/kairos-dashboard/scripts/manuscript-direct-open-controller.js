@@ -1,5 +1,5 @@
 const BUILD = "kairos-manuscript-direct-open-20260801-2-standalone";
-const ASSET_RELEASE = "five-center-dashboard-post-intake-stability-20260731-1";
+const ASSET_RELEASE = "manuscript-mobile-continuation-20260802-1";
 const ACTIVE_KEY = "kairos.production.active-workspace";
 const GLOBAL_KEY = "__KAIROS_MANUSCRIPT_DIRECT_OPEN_CONTROLLER__";
 const SHELL_ID = "kairos-manuscript-direct-open-shell";

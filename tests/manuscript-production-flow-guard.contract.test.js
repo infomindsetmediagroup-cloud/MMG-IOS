@@ -6,6 +6,9 @@ const controllerPath = new URL("../web/kairos-dashboard/scripts/manuscript-auto-
 const guardPath = new URL("../web/kairos-dashboard/scripts/manuscript-production-flow-guard.js", import.meta.url);
 const postIntakeGuardPath = new URL("../web/kairos-dashboard/scripts/manuscript-post-intake-guard.js", import.meta.url);
 const directOpenPath = new URL("../web/kairos-dashboard/scripts/manuscript-direct-open-controller.js", import.meta.url);
+const continuationPath = new URL("../web/kairos-dashboard/scripts/manuscript-continuation-controller.js", import.meta.url);
+const studioPath = new URL("../web/kairos-dashboard/scripts/manuscript-studio.js", import.meta.url);
+const studioStylePath = new URL("../web/kairos-dashboard/styles/manuscript-studio.css", import.meta.url);
 const orchestratorPath = new URL("../web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js", import.meta.url);
 const workspacePath = new URL("../web/kairos-dashboard/scripts/production-workspace-controller.js", import.meta.url);
 const bootstrapPath = new URL("../web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js", import.meta.url);
@@ -97,6 +100,31 @@ test("the direct route independently loads Studio and owns visible recovery", as
   assert.match(source, /kairos-manuscript-direct-open-shell/);
   assert.match(source, /overlay-watchdog/);
   assert.match(source, /KairosManuscriptDirectOpen/);
+});
+
+test("the iPhone intake receipt automatically exposes Project Setup without a hidden handoff", async () => {
+  const [continuation, studio, styles, manuscriptPage] = await Promise.all([
+    readFile(continuationPath, "utf8"),
+    readFile(studioPath, "utf8"),
+    readFile(studioStylePath, "utf8"),
+    readFile(manuscriptPagePath, "utf8"),
+  ]);
+
+  assert.match(continuation, /kairos-manuscript-continuation-20260802-3-auto-setup/);
+  assert.match(continuation, /scheduleAutomaticContinuation/);
+  assert.match(continuation, /automaticContinuations/);
+  assert.match(continuation, /continueToSetup\(button\)/);
+  assert.match(continuation, /behavior:\s*"auto"/);
+  assert.match(studio, /data-kairos-intake-receipt/);
+  assert.match(studio, /manuscript-intake-actions/);
+  assert.match(studio, />Continue to Project Setup</);
+  assert.match(studio, /document\.documentElement\.classList\.toggle\("manuscript-studio-open"/);
+  assert.match(styles, /\.manuscript-intake-actions\s*\{[\s\S]*position:\s*sticky/);
+  assert.match(styles, /backdrop-filter:\s*none/);
+  assert.match(styles, /height:\s*100dvh/);
+  assert.match(styles, /-webkit-overflow-scrolling:\s*touch/);
+  assert.match(manuscriptPage, /mmg-manuscript-mobile-flow-release/);
+  assert.match(manuscriptPage, /manuscript-mobile-continuation-20260802-1/);
 });
 
 test("the authoritative orchestrator owns setup persistence and deterministic manufacturing", async () => {
