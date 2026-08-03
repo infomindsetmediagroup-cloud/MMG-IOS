@@ -1,1 +1,1 @@
-trigger=worker-health-fetch-hardening-v1
+trigger=worker-health-fetch-hardening-v2
