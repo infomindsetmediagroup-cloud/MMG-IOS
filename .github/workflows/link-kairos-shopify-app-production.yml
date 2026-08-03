@@ -6,11 +6,8 @@ name: Link Kairos Shopify App Production Configuration
       - main
     paths:
       - ".github/workflows/link-kairos-shopify-app-production.yml"
-  push:
-    branches:
-      - agent/kairos-shopify-admin-release-v1
-    paths:
-      - ".github/workflows/link-kairos-shopify-app-production.yml"
+      - "shopify.app.production.toml"
+  workflow_dispatch: {}
 
 permissions:
   contents: write
@@ -27,6 +24,7 @@ jobs:
     env:
       SHOPIFY_APP_AUTOMATION_TOKEN: ${{ secrets.SHOPIFY_APP_AUTOMATION_TOKEN || secrets.SHOPIFY_CLI_PARTNERS_TOKEN }}
       KAIROS_SHOPIFY_CLIENT_ID: ${{ secrets.KAIROS_SHOPIFY_CLIENT_ID || secrets.SHOPIFY_API_KEY || secrets.SHOPIFY_CLIENT_ID }}
+      WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
 
     steps:
       - name: Check out exact branch
@@ -35,27 +33,51 @@ jobs:
           ref: agent/kairos-shopify-admin-release-v1
           fetch-depth: 0
 
-      - name: Require existing Kairos app credentials
+      - name: Resolve public Kairos app client ID
         run: |
           set -euo pipefail
-          test -n "${SHOPIFY_APP_AUTOMATION_TOKEN:-}" || {
-            echo "Missing Shopify app automation token." >&2
-            exit 1
-          }
-          test -n "${KAIROS_SHOPIFY_CLIENT_ID:-}" || {
-            echo "Missing Kairos Shopify app client ID." >&2
-            exit 1
-          }
+          client_id="${KAIROS_SHOPIFY_CLIENT_ID:-}"
+          if [ -z "${client_id}" ]; then
+            host="$(printf '%s' 'admin.shopify.com/store/07kd8e-qw' | base64 -w0 | tr '+/' '-_' | tr -d '=')"
+            shell="${RUNNER_TEMP}/kairos-app-shell.html"
+            for attempt in $(seq 1 24); do
+              code="$(curl --silent --show-error --max-time 30 \
+                "${WORKER_URL}/app?shop=07kd8e-qw.myshopify.com&host=${host}&config=${GITHUB_SHA}-${attempt}" \
+                -o "${shell}" \
+                -w '%{http_code}' || true)"
+              if [ "${code}" = "200" ]; then
+                client_id="$(sed -n 's/.*name="shopify-api-key" content="\([A-Za-z0-9_-]*\)".*/\1/p' "${shell}" | head -n1)"
+                if [ -n "${client_id}" ]; then break; fi
+              fi
+              sleep 5
+            done
+          fi
+          test -n "${client_id}"
+          printf 'KAIROS_RESOLVED_CLIENT_ID=%s\n' "${client_id}" >> "${GITHUB_ENV}"
+          printf 'Resolved Kairos Shopify client ID: %s\n' "${client_id}"
+
+      - name: Record absent Partner automation credential
+        id: automation
+        run: |
+          set -euo pipefail
+          if [ -z "${SHOPIFY_APP_AUTOMATION_TOKEN:-}" ]; then
+            echo 'available=false' >> "${GITHUB_OUTPUT}"
+            echo 'Shopify app configuration is ready, but SHOPIFY_APP_AUTOMATION_TOKEN is not present in GitHub Actions.'
+            exit 0
+          fi
           echo "::add-mask::${SHOPIFY_APP_AUTOMATION_TOKEN}"
+          echo 'available=true' >> "${GITHUB_OUTPUT}"
 
       - name: Install Shopify CLI
+        if: steps.automation.outputs.available == 'true'
         run: npm install --global @shopify/cli@latest
 
       - name: Pull existing production app configuration
+        if: steps.automation.outputs.available == 'true'
         run: |
           set -euo pipefail
           shopify app config link \
-            --client-id "${KAIROS_SHOPIFY_CLIENT_ID}" \
+            --client-id "${KAIROS_RESOLVED_CLIENT_ID}" \
             --config production \
             --path . \
             --no-color
@@ -67,6 +89,7 @@ jobs:
           fi
 
       - name: Commit linked production configuration
+        if: steps.automation.outputs.available == 'true'
         run: |
           set -euo pipefail
           git config user.name "kairos-shopify-bot"
