@@ -1,12 +1,13 @@
 import { handleManuscriptSourceObjectRequest } from "./kairos-manuscript-source-v1.js";
 import { handleManuscriptProjectSetupObjectRequest } from "./kairos-manuscript-project-setup-v1.js";
 import { handleManuscriptEditorialObjectRequest } from "./kairos-manuscript-editorial-workbench-v1.js";
+import { handleManuscriptDeliverablesObjectRequest } from "./kairos-manuscript-deliverables-http-v1.js";
 
-export const KAIROS_MANUSCRIPT_SOURCE_SHARD_BUILD = "kairos-manuscript-source-shard-20260731-1-editorial-colocation";
+export const KAIROS_MANUSCRIPT_SOURCE_SHARD_BUILD = "kairos-manuscript-source-shard-20260803-2-deliverables-builder";
 
 const REGISTRY_OBJECT = "mmg-production-project-registry";
-const PUBLIC_MANUSCRIPT_ROUTE = /^\/api\/production-registry\/manuscripts\/([a-z0-9-]{8,})\/(?:source(?:\/(?:download|text|session|commit|file\/\d+|text-chunk\/\d+))?|setup(?:\/cover)?|editorial(?:\/(?:versions(?:\/[a-z0-9-]{8,})?|review|decision|finalize))?)$/i;
-const INTERNAL_SOURCE_ROUTE = /^\/registry\/manuscripts\/([a-z0-9-]{8,})\/(?:source(?:\/(?:download|text|session|commit|file\/\d+|text-chunk\/\d+))?|setup(?:\/cover)?|editorial(?:\/(?:versions(?:\/[a-z0-9-]{8,})?|review|decision|finalize))?)$/i;
+const PUBLIC_MANUSCRIPT_ROUTE = /^\/api\/production-registry\/manuscripts\/([a-z0-9-]{8,})\/(?:source(?:\/(?:download|text|session|commit|file\/\d+|text-chunk\/\d+))?|setup(?:\/cover)?|editorial(?:\/(?:versions(?:\/[a-z0-9-]{8,})?|review|decision|finalize))?|deliverables(?:\/(?:build|zip))?)$/i;
+const INTERNAL_SOURCE_ROUTE = /^\/registry\/manuscripts\/([a-z0-9-]{8,})\/(?:source(?:\/(?:download|text|session|commit|file\/\d+|text-chunk\/\d+))?|setup(?:\/cover)?|editorial(?:\/(?:versions(?:\/[a-z0-9-]{8,})?|review|decision|finalize))?|deliverables(?:\/(?:build|zip))?)$/i;
 const BUFFERED_METHODS = new Set(["POST", "PUT", "PATCH"]);
 
 export class KairosManuscriptSource {
@@ -16,6 +17,13 @@ export class KairosManuscriptSource {
   }
 
   async fetch(request) {
+    const deliverablesResponse = await handleManuscriptDeliverablesObjectRequest(this.state, request, {
+      handleManuscriptSourceObjectRequest,
+      handleManuscriptProjectSetupObjectRequest,
+      handleManuscriptEditorialObjectRequest,
+    });
+    if (deliverablesResponse) return stamp(deliverablesResponse);
+
     const editorialResponse = await handleManuscriptEditorialObjectRequest(this.state, request);
     if (editorialResponse) return stamp(editorialResponse);
 
