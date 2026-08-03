@@ -1,0 +1,71 @@
+name: Apply Canonical Snapshot Identity Fix
+
+"on":
+  push:
+    branches:
+      - agent/fix-canonical-business-snapshot-identity-v1
+
+permissions:
+  contents: write
+
+concurrency:
+  group: patch-canonical-snapshot-identity
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out exact branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/fix-canonical-business-snapshot-identity-v1
+          fetch-depth: 0
+
+      - name: Apply exact cross-layer compatibility patch
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              text = target.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"Expected exactly one match in {path}; found {count}")
+              target.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              "cloudflare/mmg-ios/src/autonomy/kairos-business-observation-v1.js",
+              'const compactTimestamp = `${generatedAt.slice(0, 10).replace(/-/gu, "")}T${generatedAt.slice(11, 19).replace(/:/gu, "")}Z`;',
+              'const compactTimestamp = `${generatedAt.slice(0, 10).replace(/-/gu, "")}t${generatedAt.slice(11, 19).replace(/:/gu, "")}z`;',
+          )
+
+          replace_once(
+              "cloudflare/mmg-ios/test/autonomy/kairos-business-observation-snapshot.test.js",
+              '  assert.match(multiple.snapshotId, /^bss_\\d{8}T\\d{6}Z_[0-9a-f]{8}$/u);',
+              '  assert.match(multiple.snapshotId, /^bss_\\d{8}t\\d{6}z_[0-9a-f]{8}$/u);\n  assert.match(multiple.snapshotId, /^[a-z0-9][a-z0-9._:-]*$/u);\n  assert.equal(/[A-Z]/u.test(multiple.snapshotId), false);',
+          )
+
+          replace_once(
+              ".github/workflows/verify-kairos-autonomous-operations-live.yml",
+              "        if: github.event_name == 'push' && steps.public.outputs.auth_state == 'unconfigured'",
+              "        if: github.event_name == 'push' && env.AUTONOMY_TOKEN == ''",
+          )
+          PY
+
+      - name: Commit exact patch
+        run: |
+          set -euo pipefail
+          git config user.name "kairos-autonomy-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            cloudflare/mmg-ios/src/autonomy/kairos-business-observation-v1.js \
+            cloudflare/mmg-ios/test/autonomy/kairos-business-observation-snapshot.test.js \
+            .github/workflows/verify-kairos-autonomous-operations-live.yml
+          git diff --cached --check
+          git commit -m "Fix canonical business snapshot identity"
+          git push origin HEAD:agent/fix-canonical-business-snapshot-identity-v1
