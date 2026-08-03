@@ -7,7 +7,7 @@ const bootstrapSource = readFileSync(new URL("../web/kairos-dashboard/scripts/ma
 const legacySource = readFileSync(new URL("../web/kairos-dashboard/scripts/legacy-runtime-loader.js", import.meta.url), "utf8");
 const commandHubSource = readFileSync(new URL("../web/kairos-dashboard/scripts/command-hub.js", import.meta.url), "utf8");
 const executiveSource = readFileSync(new URL("../web/kairos-dashboard/scripts/executive-os.js", import.meta.url), "utf8");
-const headerBanner = readFileSync(new URL("../web/kairos-dashboard/assets/kairos-header-banner.png", import.meta.url));
+const headerBanner = readFileSync(new URL("../web/kairos-dashboard/assets/kairos-header-brand.svg", import.meta.url));
 
 async function installDashboardRoutes(page, { delayCommandHubMs = 0 } = {}) {
   const scriptRequests = [];
@@ -27,8 +27,8 @@ async function installDashboardRoutes(page, { delayCommandHubMs = 0 } = {}) {
       return;
     }
 
-    if (path === "/assets/kairos-header-banner.png") {
-      await route.fulfill({ status: 200, contentType: "image/png", body: headerBanner });
+    if (path === "/assets/kairos-header-brand.svg") {
+      await route.fulfill({ status: 200, contentType: "image/svg+xml", body: headerBanner });
       return;
     }
 
@@ -112,9 +112,14 @@ test("default iPhone route restores the five-parent-card Kairos command dashboar
   await expect(page.getByRole("button", { name: /Business/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Customers/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Operations/ })).toBeVisible();
-  await expect(page.locator(".app-header-image")).toHaveAttribute("src", /assets\/kairos-header-banner\.png/);
+  await expect(page.locator(".app-header-image")).toHaveAttribute("src", /assets\/kairos-header-brand\.svg/);
   await expect(page.locator(".app-header-image")).toHaveAttribute("width", "1264");
-  await expect(page.locator(".app-header-image")).toHaveAttribute("height", "468");
+  await expect(page.locator(".app-header-image")).toHaveAttribute("height", "404");
+  await expect.poll(() => page.locator(".app-header-image").evaluate(image => ({
+    complete: image.complete,
+    naturalWidth: image.naturalWidth,
+    naturalHeight: image.naturalHeight,
+  }))).toEqual({ complete: true, naturalWidth: 1264, naturalHeight: 404 });
   await expect(page.locator("body")).toContainText("Choose where Kairos should work");
 
   await page.getByRole("button", { name: /Content/ }).tap();

@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - 'web/kairos-dashboard/index.html'
-      - 'web/kairos-dashboard/assets/kairos-header-banner.png'
+      - 'web/kairos-dashboard/assets/kairos-header-brand.svg'
       - 'web/kairos-dashboard/styles/header-override.css'
       - 'web/kairos-dashboard/scripts/command-hub.js'
       - 'web/kairos-dashboard/scripts/legacy-runtime-loader.js'
@@ -28,7 +28,7 @@ on:
     branches: [main]
     paths:
       - 'web/kairos-dashboard/index.html'
-      - 'web/kairos-dashboard/assets/kairos-header-banner.png'
+      - 'web/kairos-dashboard/assets/kairos-header-brand.svg'
       - 'web/kairos-dashboard/styles/header-override.css'
       - 'web/kairos-dashboard/scripts/command-hub.js'
       - 'web/kairos-dashboard/scripts/legacy-runtime-loader.js'
