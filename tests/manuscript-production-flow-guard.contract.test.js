@@ -186,5 +186,14 @@ test("the dashboard installs bounded state transport, direct-open recovery, and 
   assert.match(index, /mmg-production-controller-target/);
   assert.match(index, /mmg-post-intake-guard-target/);
   assert.match(index, /mmg-direct-open-target/);
-  assert.equal((index.match(/<script type="module"/g) || []).length, 2);
+  assert.match(index, /mmg-visible-first-paint/);
+  assert.match(index, /<h1>Opening Kairos<\/h1>/);
+  const moduleSources = [...index.matchAll(/<script type="module" src="([^"]+)"/g)]
+    .map((match) => match[1].replace(/\?v=.*$/, ""));
+  assert.deepEqual(moduleSources, [
+    "./scripts/safari-manuscript-intake-compat.js",
+    "./scripts/command-hub.js",
+    "./scripts/command-center-layout.js",
+    "./scripts/manuscript-production-flow-bootstrap.js",
+  ]);
 });

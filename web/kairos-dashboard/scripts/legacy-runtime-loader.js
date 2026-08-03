@@ -207,10 +207,19 @@ function installBootUI() {
   if (existing) return bootUI(existing);
 
   const panel = document.createElement("section");
+  const visibleCommandShell = Boolean(document.querySelector("#kairos-hub .parent-grid"));
   panel.id = "kairos-command-boot";
   panel.setAttribute("role", "status");
   panel.innerHTML = `<div><strong>${advancedMode ? "Kairos Advanced Operations" : "Kairos Command Center"}</strong><p data-kairos-command-status>${advancedMode ? "Preparing advanced operations…" : "Restoring the five operating centers…"}</p></div>`;
-  Object.assign(panel.style, {
+  Object.assign(panel.style, visibleCommandShell ? {
+    position: "fixed",
+    right: "max(12px, env(safe-area-inset-right))",
+    bottom: "max(12px, env(safe-area-inset-bottom))",
+    zIndex: "2147483647",
+    width: "min(360px, calc(100% - 24px))",
+    color: "#f7f9fc",
+    fontFamily: "-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif",
+  } : {
     position: "fixed",
     inset: "0",
     zIndex: "2147483647",
@@ -223,11 +232,12 @@ function installBootUI() {
   });
   const card = panel.firstElementChild;
   Object.assign(card.style, {
-    width: "min(520px,100%)",
-    padding: "28px",
+    width: visibleCommandShell ? "100%" : "min(520px,100%)",
+    padding: visibleCommandShell ? "14px 16px" : "28px",
     border: "1px solid #202a36",
     borderRadius: "22px",
     background: "#0b1017",
+    boxShadow: "0 18px 50px rgba(0,0,0,.42)",
   });
   document.body.append(panel);
   return bootUI(panel);

@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - 'web/kairos-dashboard/index.html'
+      - 'web/kairos-dashboard/assets/kairos-header-banner.png'
+      - 'web/kairos-dashboard/styles/header-override.css'
+      - 'web/kairos-dashboard/scripts/command-hub.js'
       - 'web/kairos-dashboard/scripts/legacy-runtime-loader.js'
       - 'web/kairos-dashboard/scripts/manuscript-studio.js'
       - 'web/kairos-dashboard/scripts/manuscript-post-intake-guard.js'
@@ -15,6 +18,7 @@ on:
       - 'web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js'
       - 'browser-tests/manuscript-studio-direct-chunk.spec.mjs'
       - 'browser-tests/manuscript-post-intake-stability.spec.mjs'
+      - 'browser-tests/executive-os-clean-boot.spec.mjs'
       - 'cloudflare/mmg-ios/src/kairos-manuscript-source-v1.js'
       - 'cloudflare/mmg-ios/src/kairos-production-registry-v1.js'
       - 'tests/manuscript-production-flow-guard.contract.test.js'
@@ -24,6 +28,9 @@ on:
     branches: [main]
     paths:
       - 'web/kairos-dashboard/index.html'
+      - 'web/kairos-dashboard/assets/kairos-header-banner.png'
+      - 'web/kairos-dashboard/styles/header-override.css'
+      - 'web/kairos-dashboard/scripts/command-hub.js'
       - 'web/kairos-dashboard/scripts/legacy-runtime-loader.js'
       - 'web/kairos-dashboard/scripts/manuscript-studio.js'
       - 'web/kairos-dashboard/scripts/manuscript-post-intake-guard.js'
@@ -34,6 +41,7 @@ on:
       - 'web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js'
       - 'browser-tests/manuscript-studio-direct-chunk.spec.mjs'
       - 'browser-tests/manuscript-post-intake-stability.spec.mjs'
+      - 'browser-tests/executive-os-clean-boot.spec.mjs'
       - 'cloudflare/mmg-ios/src/kairos-manuscript-source-v1.js'
       - 'cloudflare/mmg-ios/src/kairos-production-registry-v1.js'
       - 'tests/manuscript-production-flow-guard.contract.test.js'
@@ -67,7 +75,9 @@ jobs:
           node --check web/kairos-dashboard/scripts/kairos-state-fetch-install.js
           node --check web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
           node --check web/kairos-dashboard/scripts/manuscript-production-flow-bootstrap.js
+          node --check web/kairos-dashboard/scripts/command-hub.js
           node --check browser-tests/manuscript-post-intake-stability.spec.mjs
+          node --check browser-tests/executive-os-clean-boot.spec.mjs
           node --test tests/manuscript-production-flow-guard.contract.test.js
           grep -q 'five-center-dashboard-post-intake-stability-20260731-1' web/kairos-dashboard/index.html
           grep -q 'manuscript-post-intake-stability-20260731-1' web/kairos-dashboard/index.html
@@ -93,6 +103,7 @@ jobs:
       - name: Test direct Studio recovery and post-intake stability in iPhone WebKit
         run: |
           npx playwright test \
+            browser-tests/executive-os-clean-boot.spec.mjs \
             browser-tests/manuscript-studio-direct-chunk.spec.mjs \
             browser-tests/manuscript-post-intake-stability.spec.mjs \
             --project=webkit \
