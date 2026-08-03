@@ -1,3 +1,4 @@
+# Triggered after workflow registration so GitHub executes the patch.
 name: Temporary Patch Worker Health Fetch
 
 "on":
