@@ -1,0 +1,235 @@
+name: Verify Kairos Autonomous Operations Live
+
+"on":
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/verify-kairos-autonomous-operations-live.yml"
+      - "cloudflare/mmg-ios/src/autonomy/**"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js"
+      - "cloudflare/mmg-ios/wrangler.toml"
+  pull_request:
+    paths:
+      - ".github/workflows/verify-kairos-autonomous-operations-live.yml"
+      - "cloudflare/mmg-ios/src/autonomy/**"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js"
+      - "cloudflare/mmg-ios/wrangler.toml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: verify-kairos-autonomous-operations-live-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify production autonomy boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+      API_BUILD: kairos-autonomy-api-20260802-5-complete-operations
+      API_V4_BUILD: kairos-autonomy-api-20260802-4-business-state-persistence
+      CYCLE_BUILD: kairos-autonomous-operations-cycle-20260802-1
+      PRIORITIZER_BUILD: kairos-business-prioritizer-20260802-1
+      ORCHESTRATOR_BUILD: kairos-business-orchestrator-20260802-1
+      SCHEDULER_BUILD: kairos-autonomy-scheduler-20260802-2-complete-operations
+      AUTONOMY_TOKEN: ${{ secrets.KAIROS_AUTONOMY_API_TOKEN }}
+      STATUS_CONTEXT: kairos-autonomous-operations-live
+
+    steps:
+      - name: Mark pending
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          payload="$(node -e 'process.stdout.write(JSON.stringify({state:"pending",context:process.env.STATUS_CONTEXT,description:"Verifying live autonomous operations",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          curl --fail --silent --show-error -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "${payload}"
+
+      - name: Check out exact release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Validate verification contract
+        run: |
+          set -euo pipefail
+          node --check cloudflare/mmg-ios/src/autonomy/kairos-autonomy-api-v5.js
+          node --check cloudflare/mmg-ios/src/autonomy/kairos-autonomous-operations-cycle-v1.js
+          node --check cloudflare/mmg-ios/src/autonomy/kairos-business-prioritizer-v1.js
+          node --check cloudflare/mmg-ios/src/autonomy/kairos-business-orchestrator-v1.js
+          node --check cloudflare/mmg-ios/src/autonomy/kairos-autonomy-scheduler-v2.js
+          grep -Fq "${API_BUILD}" cloudflare/mmg-ios/src/autonomy/kairos-autonomy-api-v5.js
+          grep -Fq "${CYCLE_BUILD}" cloudflare/mmg-ios/src/autonomy/kairos-autonomous-operations-cycle-v1.js
+          grep -Fq "${PRIORITIZER_BUILD}" cloudflare/mmg-ios/src/autonomy/kairos-business-prioritizer-v1.js
+          grep -Fq "${ORCHESTRATOR_BUILD}" cloudflare/mmg-ios/src/autonomy/kairos-business-orchestrator-v1.js
+          grep -Fq "${SCHEDULER_BUILD}" cloudflare/mmg-ios/src/autonomy/kairos-autonomy-scheduler-v2.js
+
+      - name: Verify unauthenticated production boundary and active builds
+        run: |
+          set -euo pipefail
+          headers="${RUNNER_TEMP}/autonomy-unauthenticated.headers"
+          body="${RUNNER_TEMP}/autonomy-unauthenticated.json"
+          status="$(curl --silent --show-error --max-time 45 \
+            -D "${headers}" \
+            "${WORKER_URL}/api/autonomy/status?verification=${GITHUB_SHA}" \
+            -o "${body}" \
+            -w '%{http_code}')"
+
+          cat "${headers}"
+          cat "${body}"
+          test "${status}" = "401"
+          grep -Eiq "^x-kairos-autonomy-api-build: ${API_BUILD}\r?$" "${headers}"
+          grep -Eiq "^x-kairos-autonomy-api-v4-build: ${API_V4_BUILD}\r?$" "${headers}"
+          grep -Eiq "^x-kairos-autonomous-operations-cycle-build: ${CYCLE_BUILD}\r?$" "${headers}"
+          grep -Eiq "^x-kairos-business-prioritizer-build: ${PRIORITIZER_BUILD}\r?$" "${headers}"
+          grep -Eiq "^x-kairos-business-orchestrator-build: ${ORCHESTRATOR_BUILD}\r?$" "${headers}"
+          grep -Eiq "^x-kairos-autonomy-scheduler-build: ${SCHEDULER_BUILD}\r?$" "${headers}"
+          grep -Eiq '^x-kairos-inference-provider: browser-webgpu\r?$' "${headers}"
+          grep -Eiq '^x-kairos-external-provider: disabled\r?$' "${headers}"
+          grep -Eiq '^x-kairos-openai-calls: disabled\r?$' "${headers}"
+
+          BODY_PATH="${body}" API_BUILD="${API_BUILD}" node <<'NODE'
+          const fs = require("node:fs");
+          const value = JSON.parse(fs.readFileSync(process.env.BODY_PATH, "utf8"));
+          if (value?.ok !== false) throw new Error("Expected an unauthenticated failure envelope.");
+          if (value?.build !== process.env.API_BUILD) throw new Error("Unexpected live API build.");
+          if (!value?.error?.code) throw new Error("Missing authentication error code.");
+          NODE
+
+      - name: Verify authenticated readiness and execute one governed manual cycle
+        id: authenticated
+        run: |
+          set -euo pipefail
+          summary="${RUNNER_TEMP}/autonomy-live-summary.json"
+          if [ -z "${AUTONOMY_TOKEN:-}" ]; then
+            node -e 'require("node:fs").writeFileSync(process.argv[1], JSON.stringify({authenticated:false,reason:"KAIROS_AUTONOMY_API_TOKEN is not configured as a repository Actions secret."}, null, 2))' "${summary}"
+            echo "authenticated=false" >> "${GITHUB_OUTPUT}"
+            cat "${summary}"
+            exit 0
+          fi
+
+          statusHeaders="${RUNNER_TEMP}/autonomy-authenticated-status.headers"
+          statusBody="${RUNNER_TEMP}/autonomy-authenticated-status.json"
+          statusCode="$(curl --silent --show-error --max-time 45 \
+            -D "${statusHeaders}" \
+            -H "Authorization: Bearer ${AUTONOMY_TOKEN}" \
+            "${WORKER_URL}/api/autonomy/status?verification=${GITHUB_SHA}" \
+            -o "${statusBody}" \
+            -w '%{http_code}')"
+          test "${statusCode}" = "200"
+
+          STATUS_BODY="${statusBody}" API_BUILD="${API_BUILD}" CYCLE_BUILD="${CYCLE_BUILD}" PRIORITIZER_BUILD="${PRIORITIZER_BUILD}" ORCHESTRATOR_BUILD="${ORCHESTRATOR_BUILD}" node <<'NODE'
+          const fs = require("node:fs");
+          const value = JSON.parse(fs.readFileSync(process.env.STATUS_BODY, "utf8"));
+          if (value?.ok !== true || value?.build !== process.env.API_BUILD) throw new Error("Authenticated status build mismatch.");
+          if (value?.autonomousOperations?.ready !== true) throw new Error("Autonomous operations are not ready.");
+          if (value?.autonomousOperations?.cycleBuild !== process.env.CYCLE_BUILD) throw new Error("Cycle build mismatch.");
+          if (value?.autonomousOperations?.prioritizerBuild !== process.env.PRIORITIZER_BUILD) throw new Error("Prioritizer build mismatch.");
+          if (value?.autonomousOperations?.orchestratorBuild !== process.env.ORCHESTRATOR_BUILD) throw new Error("Orchestrator build mismatch.");
+          const observation = value?.businessObservation || {};
+          for (const key of ["manualPersistenceEnabled", "scheduledCollectionEnabled", "scheduledPersistenceEnabled", "prioritizationEnabled", "orchestrationEnabled", "certifiedExecutionEnabled", "approvalBoundaryEnabled"]) {
+            if (observation[key] !== true) throw new Error(`${key} is not enabled.`);
+          }
+          if (observation.externalMutationEnabled !== false) throw new Error("External mutation must remain disabled.");
+          NODE
+
+          cycleHeaders="${RUNNER_TEMP}/autonomy-manual-cycle.headers"
+          cycleBody="${RUNNER_TEMP}/autonomy-manual-cycle.json"
+          cycleCode="$(curl --silent --show-error --max-time 120 \
+            -D "${cycleHeaders}" \
+            -X POST \
+            -H "Authorization: Bearer ${AUTONOMY_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            --data '{"tenantId":"mmg"}' \
+            "${WORKER_URL}/api/autonomy/business-state/collect?verification=${GITHUB_SHA}" \
+            -o "${cycleBody}" \
+            -w '%{http_code}')"
+          test "${cycleCode}" = "200" -o "${cycleCode}" = "503"
+
+          CYCLE_BODY="${cycleBody}" API_BUILD="${API_BUILD}" CYCLE_BUILD="${CYCLE_BUILD}" node <<'NODE'
+          const fs = require("node:fs");
+          const value = JSON.parse(fs.readFileSync(process.env.CYCLE_BODY, "utf8"));
+          if (value?.build !== process.env.API_BUILD) throw new Error("Manual cycle API build mismatch.");
+          if (value?.operations?.build !== process.env.CYCLE_BUILD) throw new Error("Manual cycle did not execute the complete operations engine.");
+          if (value?.operations?.activation?.operationsEnabled !== true) throw new Error("Operations activation is not enabled.");
+          if (value?.operations?.activation?.activationGateMatched !== true) throw new Error("Operations activation gate is not matched.");
+          if (value?.operations?.activation?.killSwitchEnabled !== true) throw new Error("Kill-switch authorization is not enabled.");
+          if (value?.operations?.persistence?.ok !== true) throw new Error("Manual cycle did not persist its business-state snapshot.");
+          if (!value?.operations?.plan?.planId) throw new Error("Manual cycle did not produce a priority plan.");
+          if (!value?.operations?.orchestration || typeof value.operations.orchestration.ok !== "boolean") throw new Error("Manual cycle did not produce an orchestration result.");
+          NODE
+
+          STATUS_BODY="${statusBody}" CYCLE_BODY="${cycleBody}" SUMMARY="${summary}" node <<'NODE'
+          const fs = require("node:fs");
+          const status = JSON.parse(fs.readFileSync(process.env.STATUS_BODY, "utf8"));
+          const cycle = JSON.parse(fs.readFileSync(process.env.CYCLE_BODY, "utf8"));
+          fs.writeFileSync(process.env.SUMMARY, JSON.stringify({
+            authenticated: true,
+            ready: status.autonomousOperations.ready,
+            snapshotId: cycle.operations.snapshotId,
+            planId: cycle.operations.plan.planId,
+            cycleStatus: cycle.operations.status,
+            persistence: cycle.operations.persistence.disposition,
+            taskCount: cycle.operations.plan.taskCount,
+            completedCount: cycle.operations.orchestration.counts.completed,
+            blockedCount: cycle.operations.orchestration.counts.blocked,
+            failedCount: cycle.operations.orchestration.counts.failed,
+          }, null, 2));
+          NODE
+          echo "authenticated=true" >> "${GITHUB_OUTPUT}"
+          cat "${summary}"
+
+      - name: Upload production verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kairos-autonomous-operations-live-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/autonomy-unauthenticated.headers
+            ${{ runner.temp }}/autonomy-unauthenticated.json
+            ${{ runner.temp }}/autonomy-authenticated-status.headers
+            ${{ runner.temp }}/autonomy-authenticated-status.json
+            ${{ runner.temp }}/autonomy-manual-cycle.headers
+            ${{ runner.temp }}/autonomy-manual-cycle.json
+            ${{ runner.temp }}/autonomy-live-summary.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Report result
+        if: always() && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+          AUTHENTICATED: ${{ steps.authenticated.outputs.authenticated }}
+        run: |
+          set -euo pipefail
+          if [ "${JOB_STATUS}" = "success" ] && [ "${AUTHENTICATED:-false}" = "true" ]; then
+            state="success"
+            description="Autonomous operations live and cycle verified"
+          elif [ "${JOB_STATUS}" = "success" ]; then
+            state="success"
+            description="Autonomy builds live; authenticated cycle unavailable"
+          else
+            state="failure"
+            description="Live autonomous operations verification failed"
+          fi
+          payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,context:process.env.STATUS_CONTEXT,description:process.env.DESCRIPTION,target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          curl --fail --silent --show-error -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "${payload}"
