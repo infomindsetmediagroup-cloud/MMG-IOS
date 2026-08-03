@@ -97,7 +97,7 @@ jobs:
               -o "${body}" \
               -w '%{http_code}' || true)"
             if [ "${code}" = "200" ] \
-              && grep -Fq 'kairos-dashboard-20260802-3-shopify-admin-auth' "${body}" \
+              && grep -Fq 'kairos-dashboard-20260802-4-existing-app-home' "${body}" \
               && grep -Fq 'name="shopify-api-key"' "${body}"; then
               break
             fi
