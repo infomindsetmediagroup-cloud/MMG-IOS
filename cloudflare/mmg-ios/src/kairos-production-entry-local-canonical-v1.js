@@ -15,6 +15,10 @@ import {
   KAIROS_MANUSCRIPT_PACKAGE_STATE_BUILD,
 } from "./kairos-manuscript-package-state-v1.js";
 import { handleManuscriptRequest } from "./manuscript-studio-v1.js";
+import {
+  handleKairosDashboardRequest,
+  KAIROS_DASHBOARD_BUILD,
+} from "./kairos-dashboard-v3.js";
 import { KairosAutonomyLedger } from "./autonomy/kairos-autonomy-ledger-v1.js";
 import {
   handleAutonomyApiRequest,
@@ -43,7 +47,7 @@ export class KairosManuscriptSource extends BaseKairosManuscriptSource {
 }
 
 export const KAIROS_LOCAL_CANONICAL_ENTRY_BUILD =
-  "kairos-local-canonical-entry-20260802-4-complete-autonomous-operations";
+  "kairos-local-canonical-entry-20260802-7-shopify-admin-dashboard";
 
 const PROVIDER_INDEPENDENT_OPERATIONAL_PATHS = new Set([
   "/api/hub/run",
@@ -60,6 +64,11 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const autonomousEnv = providerBlockedEnv(env);
+
+    const dashboardResponse = await handleKairosDashboardRequest(request, env, ctx, {
+      operationsEnv: autonomousEnv,
+    });
+    if (dashboardResponse) return stamp(dashboardResponse);
 
     const autonomyResponse = await handleAutonomyApiRequest(request, env, ctx, {
       dispatchEnv: autonomousEnv,
@@ -145,6 +154,7 @@ function stamp(response) {
   headers.set("X-Kairos-Package-State-Build", headers.get("X-Kairos-Package-State-Build") || KAIROS_MANUSCRIPT_PACKAGE_STATE_BUILD);
   headers.set("X-Kairos-Autonomy-API-Build", headers.get("X-Kairos-Autonomy-API-Build") || KAIROS_AUTONOMY_API_BUILD);
   headers.set("X-Kairos-Autonomy-Scheduler-Build", headers.get("X-Kairos-Autonomy-Scheduler-Build") || KAIROS_AUTONOMY_SCHEDULER_BUILD);
+  headers.set("X-Kairos-Dashboard-Build", headers.get("X-Kairos-Dashboard-Build") || KAIROS_DASHBOARD_BUILD);
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
