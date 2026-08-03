@@ -15,10 +15,23 @@ const SNAPSHOT_ID = "bss_20260803t013621z_fc956e44";
 
 function environment() {
   return {
+    KAIROS_AUTONOMOUS_OPERATIONS_ENABLED: "enabled",
     KAIROS_AUTONOMY_SCHEDULED_ENABLED: "enabled",
     KAIROS_AUTONOMY_ACTIVATION_GATE: "business-operations-v1",
     KAIROS_KILL_SWITCH: "enabled",
     KAIROS_ENVIRONMENT: "production",
+    KAIROS_AUTONOMY_LEDGER: {
+      idFromName() {
+        return "ledger-id";
+      },
+      get() {
+        return {
+          fetch() {
+            throw new Error("not used");
+          },
+        };
+      },
+    },
   };
 }
 
@@ -105,6 +118,7 @@ test("GET /kairos serves the production command center", async () => {
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type"), /^text\/html/u);
   assert.equal(response.headers.get("x-kairos-dashboard-build"), KAIROS_DASHBOARD_BUILD);
+  assert.equal(response.headers.get("x-frame-options"), null);
   assert.match(response.headers.get("content-security-policy"), /frame-ancestors 'self' https:\/\/themindsetmediagroup\.com/u);
   assert.match(body, /Kairos Command Center/u);
   assert.match(body, /Executive Command Center/u);
@@ -132,6 +146,7 @@ test("overview projects durable business state without exposing mutation control
   assert.equal(body.ok, true);
   assert.equal(body.build, KAIROS_DASHBOARD_BUILD);
   assert.equal(body.status, "degraded");
+  assert.equal(body.summary.ready, true);
   assert.equal(body.summary.latestAvailable, true);
   assert.equal(body.summary.signalCount, 1);
   assert.equal(body.summary.attentionDomainCount, 1);
@@ -139,6 +154,9 @@ test("overview projects durable business state without exposing mutation control
   assert.equal(body.domains[0].domain, "website");
   assert.equal(body.signals[0].summary, "Website health requires review.");
   assert.equal(body.history.length, 1);
+  assert.equal(body.autonomy.activationGate, "business-operations-v1");
+  assert.equal(body.autonomy.activationGateMatched, true);
+  assert.equal(body.autonomy.ledgerConfigured, true);
   assert.equal(body.governance.automaticExternalMutation, false);
   assert.equal(body.governance.approvalBoundary, true);
   assert.equal(body.governance.openAiCalls, "disabled");
