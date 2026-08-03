@@ -19,12 +19,12 @@ import { KairosAutonomyLedger } from "./autonomy/kairos-autonomy-ledger-v1.js";
 import {
   handleAutonomyApiRequest,
   KAIROS_AUTONOMY_API_BUILD,
-} from "./autonomy/kairos-autonomy-api-v3.js";
+} from "./autonomy/kairos-autonomy-api-v5.js";
 import {
   handleAutonomyScheduledEvent,
   KAIROS_AUTONOMY_SCHEDULER_BUILD,
   KAIROS_AUTONOMY_HEALTH_CRON,
-} from "./autonomy/kairos-autonomy-scheduler-v1.js";
+} from "./autonomy/kairos-autonomy-scheduler-v2.js";
 
 export {
   KairosProject,
@@ -42,7 +42,8 @@ export class KairosManuscriptSource extends BaseKairosManuscriptSource {
   }
 }
 
-export const KAIROS_LOCAL_CANONICAL_ENTRY_BUILD = "kairos-local-canonical-entry-20260802-3-business-state-api";
+export const KAIROS_LOCAL_CANONICAL_ENTRY_BUILD =
+  "kairos-local-canonical-entry-20260802-4-complete-autonomous-operations";
 
 const PROVIDER_INDEPENDENT_OPERATIONAL_PATHS = new Set([
   "/api/hub/run",
@@ -58,9 +59,11 @@ const DIRECT_MANUSCRIPT_PATHS = new Set([
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    const autonomousEnv = providerBlockedEnv(env);
 
     const autonomyResponse = await handleAutonomyApiRequest(request, env, ctx, {
-      dispatchEnv: providerBlockedEnv(env),
+      dispatchEnv: autonomousEnv,
+      operationsEnv: autonomousEnv,
     });
     if (autonomyResponse) return stamp(autonomyResponse);
 
@@ -89,7 +92,7 @@ export default {
 
     const runtimeEnv = PROVIDER_INDEPENDENT_OPERATIONAL_PATHS.has(url.pathname)
       ? operationalCompatibilityEnv(env)
-      : providerBlockedEnv(env);
+      : autonomousEnv;
     return stamp(await canonicalRuntime.fetch(request, runtimeEnv, ctx));
   },
 

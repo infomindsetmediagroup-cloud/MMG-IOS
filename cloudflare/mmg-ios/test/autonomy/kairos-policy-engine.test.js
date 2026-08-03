@@ -20,6 +20,14 @@ const POLICY_CONTEXT = Object.freeze({
   globalKillSwitch: "enabled",
 });
 
+const BUSINESS_POLICY_CONTEXT = Object.freeze({
+  agent: "business-operations-agent.v1",
+  workflowId: "business.operations.v1",
+  riskClass: "low",
+  environment: "production",
+  globalKillSwitch: "enabled",
+});
+
 test("event envelopes are normalized without allowing schema-version override", () => {
   const result = validateEventEnvelope(
     {
@@ -62,12 +70,19 @@ test("event validation rejects arrays and non-object payload bodies", () => {
   assert.equal(result.code, "INVALID_EVENT_PAYLOAD_BODY");
 });
 
-test("workflow registry returns only active immutable definitions", () => {
-  const workflow = getWorkflowDefinition("website.health.v1");
-  assert.ok(workflow);
-  assert.equal(Object.isFrozen(workflow), true);
-  assert.equal(Object.isFrozen(workflow.autonomousActions), true);
-  assert.deepEqual(listActiveWorkflows().map((entry) => entry.workflowId), ["website.health.v1"]);
+test("workflow registry returns active immutable definitions", () => {
+  const websiteWorkflow = getWorkflowDefinition("website.health.v1");
+  const businessWorkflow = getWorkflowDefinition("business.operations.v1");
+  assert.ok(websiteWorkflow);
+  assert.ok(businessWorkflow);
+  assert.equal(Object.isFrozen(websiteWorkflow), true);
+  assert.equal(Object.isFrozen(websiteWorkflow.autonomousActions), true);
+  assert.equal(Object.isFrozen(businessWorkflow), true);
+  assert.equal(Object.isFrozen(businessWorkflow.autonomousActions), true);
+  assert.deepEqual(
+    listActiveWorkflows().map((entry) => entry.workflowId),
+    ["website.health.v1", "business.operations.v1"],
+  );
   assert.equal(getWorkflowDefinition("unknown.workflow"), null);
 });
 
@@ -75,6 +90,17 @@ test("policy engine allows certified low-risk autonomous actions", () => {
   const decision = evaluatePolicy({ ...POLICY_CONTEXT, action: "website.inspect" });
   assert.equal(decision.decision, "ALLOW_AUTONOMOUS");
   assert.equal(decision.reasonCode, "ACTION_CERTIFIED_AUTONOMOUS");
+
+  for (const action of [
+    "collector.refresh",
+    "website.reinspect",
+    "incident.record",
+    "repair.propose",
+  ]) {
+    const businessDecision = evaluatePolicy({ ...BUSINESS_POLICY_CONTEXT, action });
+    assert.equal(businessDecision.decision, "ALLOW_AUTONOMOUS");
+    assert.equal(businessDecision.reasonCode, "ACTION_CERTIFIED_AUTONOMOUS");
+  }
 });
 
 test("policy engine blocks explicitly restricted actions", () => {
@@ -85,6 +111,10 @@ test("policy engine blocks explicitly restricted actions", () => {
   });
   assert.equal(decision.decision, "DENY");
   assert.equal(decision.reasonCode, "ACTION_EXPLICITLY_BLOCKED");
+
+  const fundsDecision = evaluatePolicy({ ...BUSINESS_POLICY_CONTEXT, action: "funds.spend" });
+  assert.equal(fundsDecision.decision, "DENY");
+  assert.equal(fundsDecision.reasonCode, "ACTION_EXPLICITLY_BLOCKED");
 });
 
 test("policy engine fails closed when the kill-switch state is missing or disabled", () => {
@@ -111,6 +141,14 @@ test("policy engine requires approval for protected or elevated-risk actions", (
   });
   assert.equal(elevatedDecision.decision, "REQUIRE_APPROVAL");
   assert.equal(elevatedDecision.reasonCode, "RISK_BOUND_EXCEEDED");
+
+  const executiveDecision = evaluatePolicy({
+    ...BUSINESS_POLICY_CONTEXT,
+    action: "executive.review.request",
+    riskClass: "medium",
+  });
+  assert.equal(executiveDecision.decision, "REQUIRE_APPROVAL");
+  assert.equal(executiveDecision.reasonCode, "ACTION_REQUIRES_EXECUTIVE_APPROVAL");
 });
 
 test("policy engine denies unauthorized agents and unknown actions", () => {

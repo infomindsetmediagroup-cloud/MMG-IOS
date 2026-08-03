@@ -78,7 +78,9 @@ new_sqlite_classes = ["KairosAutonomyLedger"]
 # Cloudflare neuron use and paid external inference remain disabled. Direct Shopify, theme, page, and navigation routes remain denied.
 # Manuscript source sessions use one dedicated Durable Object per project and do not share the global production-registry object.
 # The authenticated autonomy API is available through the canonical Worker boundary.
-# Hourly scheduled autonomy remains fail-closed unless the triple activation gate is explicitly configured in Cloudflare.
+# Hourly autonomous operations use the governed collect, persist, prioritize, orchestrate, execute-safe, and record cycle.
+# Certified execution is limited to website reinspection, collector refresh, internal incident recording, and inert repair proposals.
+# GitHub, Cloudflare production deployment, Shopify, publication, and customer communication actions remain approval-required.
 
 [vars]
 SHOPIFY_STORE_DOMAIN = "07kd8e-qw.myshopify.com"
@@ -100,3 +102,12 @@ KAIROS_API_AUTH_MODE = "access-or-token"
 KAIROS_API_RATE_LIMIT = "30"
 KAIROS_API_RATE_WINDOW_SECONDS = "60"
 KAIROS_API_AUDIT_RETENTION = "500"
+KAIROS_ENVIRONMENT = "production"
+KAIROS_AUTONOMY_SCHEDULED_ENABLED = "enabled"
+KAIROS_AUTONOMOUS_OPERATIONS_ENABLED = "enabled"
+KAIROS_AUTONOMY_ACTIVATION_GATE = "business-operations-v1"
+KAIROS_KILL_SWITCH = "enabled"
+KAIROS_WEBSITE_HEALTH_TARGET_URL = "https://themindsetmediagroup.com"
+KAIROS_WEBSITE_HEALTH_ALLOWED_ORIGINS = "https://themindsetmediagroup.com"
+KAIROS_WEBSITE_HEALTH_TIMEOUT_MS = "10000"
+KAIROS_WEBSITE_HEALTH_MAX_BODY_BYTES = "262144"
