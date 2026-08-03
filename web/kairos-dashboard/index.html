@@ -16,6 +16,7 @@
   <meta name="mmg-state-fetch-target" content="./scripts/kairos-state-fetch.js?v=kairos-state-fetch-20260731-2-buffered">
   <meta name="mmg-previous-dashboard-build" content="kairos-five-center-dashboard-restored-20260730-1">
   <meta name="mmg-previous-production-flow" content="manuscript-local-production-controller-20260731-5-state-timeout">
+  <meta name="mmg-visible-first-paint" content="kairos-mobile-first-paint-20260802-1">
   <!-- Dynamic command-runtime assets loaded by scripts/legacy-runtime-loader.js:
        scripts/objective-router.js styles/objective-router.css
        scripts/objective-controller-v2.js
@@ -38,9 +39,26 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>Kairos Executive Command Center</title>
+  <link rel="preload" href="./assets/kairos-header-banner.png?v=kairos-mobile-first-paint-20260802-1" as="image" type="image/png">
+  <link rel="stylesheet" href="./styles/command-hub.css?v=kairos-mobile-first-paint-20260802-1" data-kairos-command-style="command-hub.css">
+  <link rel="stylesheet" href="./styles/header-override.css?v=kairos-mobile-first-paint-20260802-1" data-kairos-command-style="header-override.css">
+  <link rel="stylesheet" href="./styles/command-center-layout.css?v=kairos-mobile-first-paint-20260802-1" data-kairos-command-style="command-center-layout.css">
+  <style id="kairos-critical-first-paint">
+    :root { color-scheme: dark; background: #05070a; }
+    html, body { min-width: 320px; min-height: 100%; margin: 0; background: #05070a; color: #f5f8fb; }
+    .kairos-first-paint { width: min(720px, 100%); margin: 0 auto; padding: max(16px, env(safe-area-inset-top)) 16px 40px; font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .kairos-first-paint img { display: block; width: 100%; height: auto; aspect-ratio: 1264 / 468; border: 1px solid rgba(48,148,205,.35); border-radius: 18px; background: #070b12; object-fit: cover; }
+    .kairos-first-paint div { margin-top: 18px; padding: 22px; border: 1px solid #1b2b3a; border-radius: 20px; background: #0b1017; }
+    .kairos-first-paint p { margin: 0; color: #9eb0bf; }
+    .kairos-first-paint .eyebrow { margin-bottom: 8px; color: #72dcff; font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+    .kairos-first-paint h1 { margin: 0 0 8px; color: #f5f8fb; font-size: clamp(28px, 9vw, 44px); line-height: 1.05; letter-spacing: -.04em; }
+  </style>
   <script>
     (() => {
       const current = new URL(location.href);
+      const executiveRoute = current.searchParams.get("mode") === "executive";
+      window.__KAIROS_COMMAND_FIRST_PAINT__ = !executiveRoute;
+      if (executiveRoute) document.documentElement.dataset.kairosRoute = "executive";
       if (current.searchParams.get("open") !== "manuscript") return;
 
       const target = new URL("./manuscript", current);
@@ -52,9 +70,24 @@
   </script>
 </head>
 <body>
-  <div id="kairos-hub" class="hub-shell" aria-live="polite"></div>
+  <div id="kairos-hub" class="hub-shell" aria-live="polite">
+    <section class="kairos-first-paint" role="status" aria-label="Kairos is opening">
+      <img src="./assets/kairos-header-banner.png?v=kairos-mobile-first-paint-20260802-1" width="1264" height="468" alt="Kairos Operating System — Mindset Media Group">
+      <div>
+        <p class="eyebrow">Executive Command Center</p>
+        <h1>Opening Kairos</h1>
+        <p>Restoring the five operating centers and production tools…</p>
+      </div>
+    </section>
+  </div>
   <noscript>Kairos requires JavaScript to run.</noscript>
   <script type="module" src="./scripts/safari-manuscript-intake-compat.js?v=safari-native-docx-20260730-1"></script>
+  <script type="module" data-kairos-command-script="command-hub.js command-center-layout.js">
+    if (window.__KAIROS_COMMAND_FIRST_PAINT__) {
+      await import("./scripts/command-hub.js?v=kairos-mobile-first-paint-20260802-1");
+      await import("./scripts/command-center-layout.js?v=kairos-mobile-first-paint-20260802-1");
+    }
+  </script>
   <script type="module" src="./scripts/manuscript-production-flow-bootstrap.js?v=manuscript-post-intake-stability-20260731-1"></script>
 </body>
 </html>

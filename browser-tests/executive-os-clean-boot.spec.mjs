@@ -7,8 +7,9 @@ const bootstrapSource = readFileSync(new URL("../web/kairos-dashboard/scripts/ma
 const legacySource = readFileSync(new URL("../web/kairos-dashboard/scripts/legacy-runtime-loader.js", import.meta.url), "utf8");
 const commandHubSource = readFileSync(new URL("../web/kairos-dashboard/scripts/command-hub.js", import.meta.url), "utf8");
 const executiveSource = readFileSync(new URL("../web/kairos-dashboard/scripts/executive-os.js", import.meta.url), "utf8");
+const headerBanner = readFileSync(new URL("../web/kairos-dashboard/assets/kairos-header-banner.png", import.meta.url));
 
-async function installDashboardRoutes(page) {
+async function installDashboardRoutes(page, { delayCommandHubMs = 0 } = {}) {
   const scriptRequests = [];
 
   await page.route("https://kairos.test/**", async route => {
@@ -23,6 +24,11 @@ async function installDashboardRoutes(page) {
 
     if (path.endsWith(".css")) {
       await route.fulfill({ status: 200, contentType: "text/css", body: "" });
+      return;
+    }
+
+    if (path === "/assets/kairos-header-banner.png") {
+      await route.fulfill({ status: 200, contentType: "image/png", body: headerBanner });
       return;
     }
 
@@ -42,6 +48,7 @@ async function installDashboardRoutes(page) {
     }
 
     if (path === "/scripts/command-hub.js") {
+      if (delayCommandHubMs) await new Promise(resolve => setTimeout(resolve, delayCommandHubMs));
       scriptRequests.push("command-hub.js");
       await route.fulfill({ status: 200, contentType: "text/javascript", body: commandHubSource });
       return;
@@ -105,6 +112,10 @@ test("default iPhone route restores the five-parent-card Kairos command dashboar
   await expect(page.getByRole("button", { name: /Business/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Customers/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Operations/ })).toBeVisible();
+  await expect(page.locator(".app-header-image")).toHaveAttribute("src", /assets\/kairos-header-banner\.png/);
+  await expect(page.locator(".app-header-image")).toHaveAttribute("width", "1264");
+  await expect(page.locator(".app-header-image")).toHaveAttribute("height", "468");
+  await expect(page.locator("body")).toContainText("Choose where Kairos should work");
 
   await page.getByRole("button", { name: /Content/ }).tap();
   await expect(page.getByRole("heading", { name: "Choose an action" })).toBeVisible();
@@ -115,8 +126,20 @@ test("default iPhone route restores the five-parent-card Kairos command dashboar
   expect(scriptRequests).toContain("kairos-state-fetch-install.js");
   expect(scriptRequests).toContain("command-hub.js");
   expect(scriptRequests.indexOf("command-hub.js"))
-    .toBeGreaterThan(scriptRequests.indexOf("kairos-state-fetch-install.js"));
+    .toBeLessThan(scriptRequests.indexOf("kairos-state-fetch-install.js"));
   expect(scriptRequests).not.toContain("executive-local-inference.js");
+});
+
+test("default iPhone route never presents a blank screen while the command module is loading", async ({ page }) => {
+  await installDashboardRoutes(page, { delayCommandHubMs: 3_000 });
+
+  const navigation = page.goto("https://kairos.test/?test=visible-first-paint", { waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("heading", { name: "Opening Kairos" })).toBeVisible({ timeout: 2_000 });
+  await expect(page.locator(".kairos-first-paint img")).toBeVisible();
+  await navigation;
+
+  await expect(page.locator(".parent-card")).toHaveCount(5);
+  await expect(page.getByRole("heading", { name: /One objective/ })).toBeVisible();
 });
 
 test("Executive OS remains an explicit opt-in route and does not replace the command dashboard", async ({ page }) => {

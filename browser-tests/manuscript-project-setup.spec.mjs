@@ -211,7 +211,12 @@ test("dashboard keeps production controllers behind the guarded five-center comm
   expect(indexSource).toMatch(/mmg-production-controller-target/);
   expect(indexSource).toMatch(/mmg-post-intake-guard-target/);
   expect(indexSource).toMatch(/mmg-state-fetch-target/);
-  expect((indexSource.match(/<script type="module"/g) || [])).toHaveLength(2);
+  const moduleTags = [...indexSource.matchAll(/<script type="module"([^>]*)>/g)].map((match) => match[1]);
+  expect(moduleTags).toHaveLength(3);
+  expect(moduleTags[0]).toContain('src="./scripts/safari-manuscript-intake-compat.js');
+  expect(moduleTags[1]).toContain('data-kairos-command-script="command-hub.js command-center-layout.js"');
+  expect(moduleTags[2]).toContain('src="./scripts/manuscript-production-flow-bootstrap.js');
+  expect(indexSource).toContain("__KAIROS_COMMAND_FIRST_PAINT__");
   expect(indexSource).not.toContain("executive-local-inference.js");
   expect(indexSource).not.toContain("kairos-runtime-loader.js");
   expect(indexSource).not.toContain("manuscript-runtime-cache-guard.js");
