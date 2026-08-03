@@ -522,13 +522,15 @@ test("hostile injected storage accessor is not invoked", async () => {
   assert.equal(getterCalls, 0);
 });
 
-test("hostile options proxy fails closed", async () => {
+test("hostile options proxy fails closed without leaking proxy errors", async () => {
   const options = new Proxy({}, {
-    getOwnPropertyDescriptor() { throw new Error("secret"); },
-    getPrototypeOf() { throw new Error("secret"); },
+    getOwnPropertyDescriptor() { throw new Error("secret proxy error"); },
+    getPrototypeOf() { throw new Error("secret proxy error"); },
   });
   const response = await handleAutonomyApiRequest(collectionRequest(), environment(), {}, options);
-  assert.equal(response.status, 500);
+  const text = await response.text();
+  assert.ok(response.status >= 500 && response.status <= 599);
+  assert.equal(text.includes("secret proxy error"), false);
 });
 
 test("ctx.waitUntil is never used for persistence", async () => {
