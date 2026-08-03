@@ -263,7 +263,9 @@ test("creates exact deterministic FNV-1a snapshot hashes", () => {
   ];
   const multiple = buildBusinessStateSnapshot(multipleSignals, snapshotOptions());
   assert.equal(multiple.snapshotId.split("_").at(-1), expectedSnapshotHash("mmg", multiple.generatedAt, 86_400_000, multipleSignals));
-  assert.match(multiple.snapshotId, /^bss_\d{8}T\d{6}Z_[0-9a-f]{8}$/u);
+  assert.match(multiple.snapshotId, /^bss_\d{8}t\d{6}z_[0-9a-f]{8}$/u);
+  assert.match(multiple.snapshotId, /^[a-z0-9][a-z0-9._:-]*$/u);
+  assert.equal(/[A-Z]/u.test(multiple.snapshotId), false);
 });
 
 test("snapshot hash is independent of input order, recent limit, required coverage, and excluded data", () => {

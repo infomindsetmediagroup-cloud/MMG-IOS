@@ -810,7 +810,7 @@ function createSnapshotId(tenantId, generatedAt, windowMs, signals) {
     signal.expiresAt || "",
   ].join("\u001f"));
   const canonical = `${tenantId}|${generatedAt}|${String(windowMs)}|${tuples.join("\u001e")}`;
-  const compactTimestamp = `${generatedAt.slice(0, 10).replace(/-/gu, "")}T${generatedAt.slice(11, 19).replace(/:/gu, "")}Z`;
+  const compactTimestamp = `${generatedAt.slice(0, 10).replace(/-/gu, "")}t${generatedAt.slice(11, 19).replace(/:/gu, "")}z`;
   return `bss_${compactTimestamp}_${fnv1a32(canonical)}`;
 }
 
