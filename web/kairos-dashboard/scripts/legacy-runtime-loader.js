@@ -190,7 +190,7 @@ function loadStyle(filename) {
 
 function loadModule(filename) {
   return new Promise((resolve, reject) => {
-    const selector = `script[data-kairos-command-script="${cssEscape(filename)}"]`;
+    const selector = `script[data-kairos-command-script~="${cssEscape(filename)}"]`;
     if (document.querySelector(selector)) return resolve();
     const script = document.createElement("script");
     script.type = "module";

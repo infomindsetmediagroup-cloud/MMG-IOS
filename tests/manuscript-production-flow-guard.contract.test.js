@@ -188,12 +188,10 @@ test("the dashboard installs bounded state transport, direct-open recovery, and 
   assert.match(index, /mmg-direct-open-target/);
   assert.match(index, /mmg-visible-first-paint/);
   assert.match(index, /<h1>Opening Kairos<\/h1>/);
-  const moduleSources = [...index.matchAll(/<script type="module" src="([^"]+)"/g)]
-    .map((match) => match[1].replace(/\?v=.*$/, ""));
-  assert.deepEqual(moduleSources, [
-    "./scripts/safari-manuscript-intake-compat.js",
-    "./scripts/command-hub.js",
-    "./scripts/command-center-layout.js",
-    "./scripts/manuscript-production-flow-bootstrap.js",
-  ]);
+  const moduleTags = [...index.matchAll(/<script type="module"([^>]*)>/g)].map((match) => match[1]);
+  assert.equal(moduleTags.length, 3);
+  assert.match(moduleTags[0], /src="\.\/scripts\/safari-manuscript-intake-compat\.js/);
+  assert.match(moduleTags[1], /data-kairos-command-script="command-hub\.js command-center-layout\.js"/);
+  assert.match(moduleTags[2], /src="\.\/scripts\/manuscript-production-flow-bootstrap\.js/);
+  assert.ok(index.indexOf('import("./scripts/command-hub.js') < index.indexOf('import("./scripts/command-center-layout.js'));
 });

@@ -56,6 +56,9 @@
   <script>
     (() => {
       const current = new URL(location.href);
+      const executiveRoute = current.searchParams.get("mode") === "executive";
+      window.__KAIROS_COMMAND_FIRST_PAINT__ = !executiveRoute;
+      if (executiveRoute) document.documentElement.dataset.kairosRoute = "executive";
       if (current.searchParams.get("open") !== "manuscript") return;
 
       const target = new URL("./manuscript", current);
@@ -79,8 +82,12 @@
   </div>
   <noscript>Kairos requires JavaScript to run.</noscript>
   <script type="module" src="./scripts/safari-manuscript-intake-compat.js?v=safari-native-docx-20260730-1"></script>
-  <script type="module" src="./scripts/command-hub.js?v=kairos-mobile-first-paint-20260802-1" data-kairos-command-script="command-hub.js"></script>
-  <script type="module" src="./scripts/command-center-layout.js?v=kairos-mobile-first-paint-20260802-1" data-kairos-command-script="command-center-layout.js"></script>
+  <script type="module" data-kairos-command-script="command-hub.js command-center-layout.js">
+    if (window.__KAIROS_COMMAND_FIRST_PAINT__) {
+      await import("./scripts/command-hub.js?v=kairos-mobile-first-paint-20260802-1");
+      await import("./scripts/command-center-layout.js?v=kairos-mobile-first-paint-20260802-1");
+    }
+  </script>
   <script type="module" src="./scripts/manuscript-production-flow-bootstrap.js?v=manuscript-post-intake-stability-20260731-1"></script>
 </body>
 </html>

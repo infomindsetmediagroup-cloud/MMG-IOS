@@ -212,14 +212,12 @@ test("the normal page restores the guarded five-parent-card command dashboard", 
   assert.match(index, /kairos-five-center-dashboard-post-intake-20260731-1/);
   assert.match(index, /five-center-dashboard-post-intake-stability-20260731-1/);
   assert.match(index, /manuscript-post-intake-stability-20260731-1/);
-  const moduleSources = [...index.matchAll(/<script type="module" src="([^"]+)"/g)]
-    .map((match) => match[1].replace(/\?v=.*$/, ""));
-  assert.deepEqual(moduleSources, [
-    "./scripts/safari-manuscript-intake-compat.js",
-    "./scripts/command-hub.js",
-    "./scripts/command-center-layout.js",
-    "./scripts/manuscript-production-flow-bootstrap.js",
-  ]);
+  const moduleTags = [...index.matchAll(/<script type="module"([^>]*)>/g)].map((match) => match[1]);
+  assert.equal(moduleTags.length, 3);
+  assert.match(moduleTags[0], /src="\.\/scripts\/safari-manuscript-intake-compat\.js/);
+  assert.match(moduleTags[1], /data-kairos-command-script="command-hub\.js command-center-layout\.js"/);
+  assert.match(moduleTags[2], /src="\.\/scripts\/manuscript-production-flow-bootstrap\.js/);
+  assert.match(index, /__KAIROS_COMMAND_FIRST_PAINT__/);
   assert.doesNotMatch(index, /executive-local-inference\.js/);
   assert.doesNotMatch(index, /kairos-runtime-loader\.js/);
   assert.doesNotMatch(index, /<script[^>]+manuscript-studio\.js/);
