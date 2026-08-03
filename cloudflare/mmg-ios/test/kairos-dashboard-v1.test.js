@@ -13,6 +13,18 @@ const GENERATED_AT = "2026-08-03T01:36:21.000Z";
 const STORED_AT = "2026-08-03T01:36:22.000Z";
 const SNAPSHOT_ID = "bss_20260803t013621z_fc956e44";
 
+function workflowResolver(workflowId) {
+  if (workflowId !== "business.operations.v1") return null;
+  return {
+    workflowId,
+    status: "active",
+    triggers: [
+      "business.operations.schedule",
+      "business.operations.manual",
+    ],
+  };
+}
+
 function environment() {
   return {
     KAIROS_AUTONOMOUS_OPERATIONS_ENABLED: "enabled",
@@ -138,7 +150,11 @@ test("overview projects durable business state without exposing mutation control
     new Request(`https://kairos.example${KAIROS_DASHBOARD_OVERVIEW_PATH}`),
     environment(),
     {},
-    { now: NOW, ledgerClient: ledgerClient() },
+    {
+      now: NOW,
+      ledgerClient: ledgerClient(),
+      workflowResolver,
+    },
   );
   const body = await response.json();
 
@@ -174,12 +190,17 @@ test("overview remains available before the first durable snapshot", async () =>
     new Request(`https://kairos.example${KAIROS_DASHBOARD_OVERVIEW_PATH}`),
     environment(),
     {},
-    { now: NOW, ledgerClient: emptyClient },
+    {
+      now: NOW,
+      ledgerClient: emptyClient,
+      workflowResolver,
+    },
   );
   const body = await response.json();
 
   assert.equal(response.status, 200);
   assert.equal(body.ok, true);
+  assert.equal(body.summary.ready, true);
   assert.equal(body.summary.latestAvailable, false);
   assert.equal(body.latestSnapshot, null);
   assert.deepEqual(body.domains, []);
