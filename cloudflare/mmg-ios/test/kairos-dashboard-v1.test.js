@@ -6,7 +6,7 @@ import {
   KAIROS_DASHBOARD_BUILD,
   KAIROS_DASHBOARD_OVERVIEW_PATH,
   KAIROS_DASHBOARD_PATH,
-} from "../src/kairos-dashboard-v1.js";
+} from "../src/kairos-dashboard-v2.js";
 
 const NOW = new Date("2026-08-03T02:00:00.000Z");
 const GENERATED_AT = "2026-08-03T01:36:21.000Z";
