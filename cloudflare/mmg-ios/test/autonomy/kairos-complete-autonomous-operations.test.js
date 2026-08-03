@@ -64,7 +64,14 @@ function state({
     collectedCount: 1,
     blockedCount: 0,
     failedCount: 0,
-    collectors: [],
+    collectors: [{
+      collectorId: "website.health.v1",
+      source: "website.health.workflow",
+      status: "collected",
+      code: null,
+      observedAt: NOW,
+      signalId: `sig_website_health_20260802t200000z_${status}_${severity}`.replace(/[^a-z0-9._:-]/gu, "_"),
+    }],
     snapshot: {
       ok: true,
       build: "kairos-business-observation-20260802-1",
@@ -360,8 +367,9 @@ test("API v5 manual collection runs the complete operations cycle", async () => 
       websiteHealthExecutor: async () => ({ build: "website-health-test", status: "passed" }),
     },
   );
-  const body = JSON.parse(await response.text());
-  assert.equal(response.status, 200);
+  const text = await response.text();
+  const body = JSON.parse(text);
+  assert.equal(response.status, 200, text);
   assert.equal(body.build, KAIROS_AUTONOMY_API_BUILD);
   assert.equal(body.operations.ok, true);
   assert.equal(body.operations.plan.taskCount, 0);
