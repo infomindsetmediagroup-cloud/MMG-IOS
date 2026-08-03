@@ -1,5 +1,5 @@
 export const KAIROS_SHOPIFY_ADMIN_AUTH_BUILD =
-  "kairos-shopify-admin-auth-20260802-2-credential-aliases";
+  "kairos-shopify-admin-auth-20260802-3-runtime-bindings";
 
 const MAX_TOKEN_BYTES = 8192;
 const MAX_SECRET_BYTES = 1024;
@@ -60,7 +60,7 @@ export async function verifyShopifyAdminSession(
   }
 
   const staffUserId = normalizeUserId(claims.sub);
-  const allowlist = parseAllowlist(readOwn(env, "KAIROS_SHOPIFY_ADMIN_USER_IDS"));
+  const allowlist = parseAllowlist(readBinding(env, "KAIROS_SHOPIFY_ADMIN_USER_IDS"));
   if (allowlist.length > 0 && !allowlist.includes(staffUserId)) {
     return failure("SHOPIFY_ADMIN_ACCESS_DENIED", 403);
   }
@@ -77,8 +77,8 @@ export async function verifyShopifyAdminSession(
 
 export function resolveShopDomain(env = {}) {
   const candidate = cleanDomain(
-    readOwn(env, "KAIROS_SHOPIFY_SHOP_DOMAIN")
-      || readOwn(env, "SHOPIFY_STORE_DOMAIN")
+    readBinding(env, "KAIROS_SHOPIFY_SHOP_DOMAIN")
+      || readBinding(env, "SHOPIFY_STORE_DOMAIN")
       || DEFAULT_SHOP_DOMAIN,
   );
   return candidate || null;
@@ -108,8 +108,8 @@ export function validateShopifyBootstrap(url, env = {}) {
 
 function resolveShopifyCredentials(env) {
   for (const [clientIdKey, clientSecretKey] of CREDENTIAL_PAIRS) {
-    const clientId = cleanClientId(readOwn(env, clientIdKey));
-    const clientSecret = cleanSecret(readOwn(env, clientSecretKey));
+    const clientId = cleanClientId(readBinding(env, clientIdKey));
+    const clientSecret = cleanSecret(readBinding(env, clientSecretKey));
     if (clientId && clientSecret) {
       return Object.freeze({ clientId, clientSecret });
     }
@@ -286,6 +286,23 @@ function readOwn(object, key) {
   try {
     const descriptor = Object.getOwnPropertyDescriptor(object, key);
     return descriptor && Object.hasOwn(descriptor, "value") ? descriptor.value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function readBinding(object, key) {
+  if (!object || typeof object !== "object") return undefined;
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(object, key);
+    if (descriptor) {
+      return Object.hasOwn(descriptor, "value") ? descriptor.value : undefined;
+    }
+  } catch {
+    return undefined;
+  }
+  try {
+    return object[key];
   } catch {
     return undefined;
   }
