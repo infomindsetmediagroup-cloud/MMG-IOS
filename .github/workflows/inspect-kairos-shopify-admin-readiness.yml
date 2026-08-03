@@ -8,6 +8,15 @@ name: Inspect Kairos Shopify Admin Readiness
       - ".github/workflows/inspect-kairos-shopify-admin-readiness.yml"
       - "cloudflare/mmg-ios/src/shopify/kairos-shopify-admin-auth-v1.js"
       - "cloudflare/mmg-ios/src/kairos-dashboard-v3.js"
+      - "cloudflare/mmg-ios/test/shopify/kairos-shopify-admin-auth-v1.test.js"
+      - "cloudflare/mmg-ios/test/kairos-dashboard-v3.test.js"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/inspect-kairos-shopify-admin-readiness.yml"
+      - "cloudflare/mmg-ios/src/shopify/kairos-shopify-admin-auth-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-dashboard-v3.js"
   workflow_dispatch: {}
 
 permissions:
@@ -23,13 +32,27 @@ jobs:
       WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
 
     steps:
+      - name: Check out exact revision
+        uses: actions/checkout@v4
+
+      - name: Validate Shopify Admin auth and dashboard contracts
+        run: |
+          set -euo pipefail
+          node --check cloudflare/mmg-ios/src/shopify/kairos-shopify-admin-auth-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-dashboard-v3.js
+          node --test \
+            cloudflare/mmg-ios/test/shopify/kairos-shopify-admin-auth-v1.test.js \
+            cloudflare/mmg-ios/test/kairos-dashboard-v3.test.js
+
       - name: Require Cloudflare inspection credentials
+        if: github.event_name == 'push'
         run: |
           set -euo pipefail
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
 
       - name: Inspect Worker binding names without values
+        if: github.event_name == 'push'
         run: |
           set -euo pipefail
           settings="${RUNNER_TEMP}/worker-settings.json"
@@ -46,6 +69,7 @@ jobs:
           grep -Fxq $'SHOPIFY_CLIENT_SECRET\tsecret_text' "${RUNNER_TEMP}/worker-binding-names.tsv"
 
       - name: Inspect live Shopify analytics readiness
+        if: github.event_name == 'push'
         run: |
           set -euo pipefail
           analytics="${RUNNER_TEMP}/shopify-analytics.json"
@@ -59,6 +83,7 @@ jobs:
             | tee "${RUNNER_TEMP}/shopify-credential-selection.json"
 
       - name: Wait for embedded dashboard bootstrap
+        if: github.event_name == 'push'
         run: |
           set -euo pipefail
           host="$(printf '%s' 'admin.shopify.com/store/07kd8e-qw' | base64 -w0 | tr '+/' '-_' | tr -d '=')"
@@ -89,7 +114,7 @@ jobs:
           printf '%s' "${code}" > "${RUNNER_TEMP}/dashboard-bootstrap-status.txt"
 
       - name: Upload sanitized readiness evidence
-        if: always()
+        if: always() && github.event_name == 'push'
         uses: actions/upload-artifact@v4
         with:
           name: kairos-shopify-admin-readiness-${{ github.run_id }}
