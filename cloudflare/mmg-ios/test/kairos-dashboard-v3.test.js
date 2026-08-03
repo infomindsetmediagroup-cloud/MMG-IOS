@@ -130,17 +130,27 @@ function base64Url(value) {
   return btoa(binary).replace(/\+/gu, "-").replace(/\//gu, "_").replace(/=+$/gu, "");
 }
 
-test("exports the exact admin-authenticated dashboard build", () => {
-  assert.equal(KAIROS_DASHBOARD_BUILD, "kairos-dashboard-20260802-3-shopify-admin-auth");
+test("exports the exact existing-App-Home dashboard build", () => {
+  assert.equal(KAIROS_DASHBOARD_BUILD, "kairos-dashboard-20260802-4-existing-app-home");
 });
 
-test("direct public navigation cannot load the dashboard shell", async () => {
+test("direct public navigation cannot load a dashboard document route", async () => {
+  for (const path of ["/app", "/kairos", "/dashboard"]) {
+    const response = await handleKairosDashboardRequest(
+      new Request(`https://kairos.example${path}`),
+      environment(),
+    );
+    assert.equal(response.status, 401);
+    assert.equal((await response.json()).error.code, "SHOPIFY_ADMIN_APP_CONTEXT_REQUIRED");
+  }
+});
+
+test("ordinary root traffic remains outside the dashboard router", async () => {
   const response = await handleKairosDashboardRequest(
-    new Request("https://kairos.example/app"),
+    new Request("https://kairos.example/"),
     environment(),
   );
-  assert.equal(response.status, 401);
-  assert.equal((await response.json()).error.code, "SHOPIFY_ADMIN_APP_CONTEXT_REQUIRED");
+  assert.equal(response, null);
 });
 
 test("valid Shopify Admin bootstrap serves only the authenticated App Bridge shell", async () => {
@@ -158,6 +168,38 @@ test("valid Shopify Admin bootstrap serves only the authenticated App Bridge she
   assert.match(body, /window\.shopify\.idToken/u);
   assert.match(body, /Authorization: "Bearer " \+ token/u);
   assert.doesNotMatch(body, /kairos-test-secret/u);
+});
+
+test("the existing root App Home URL is upgraded without changing Shopify configuration", async () => {
+  const response = await handleKairosDashboardRequest(
+    new Request(appUrl("/")),
+    environment(),
+  );
+  const body = await response.text();
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("x-kairos-shopify-admin-only"), "true");
+  assert.match(body, /meta name="shopify-api-key"/u);
+  assert.match(body, /window\.shopify\.idToken/u);
+});
+
+test("admin-only dashboard aliases require the same valid Shopify bootstrap", async () => {
+  for (const path of ["/kairos", "/dashboard"]) {
+    const response = await handleKairosDashboardRequest(
+      new Request(appUrl(path)),
+      environment(),
+    );
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("x-kairos-shopify-admin-only"), "true");
+  }
+});
+
+test("the document shell needs the public client ID but not the signing secret", async () => {
+  const response = await handleKairosDashboardRequest(
+    new Request(appUrl()),
+    environment({ KAIROS_SHOPIFY_CLIENT_SECRET: "" }),
+  );
+  assert.equal(response.status, 200);
+  assert.match(await response.text(), /meta name="shopify-api-key"/u);
 });
 
 test("missing public client configuration fails closed", async () => {
@@ -180,6 +222,20 @@ test("overview never returns operations data without a verified Shopify session"
   assert.equal(response.status, 401);
   assert.equal(body.error.code, "SHOPIFY_ADMIN_AUTH_REQUIRED");
   assert.equal(Object.hasOwn(body, "latestSnapshot"), false);
+});
+
+test("overview remains unavailable when the signing secret is absent", async () => {
+  const token = await signedToken();
+  const response = await handleKairosDashboardRequest(
+    new Request(`https://kairos.example${KAIROS_DASHBOARD_OVERVIEW_PATH}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+    environment({ KAIROS_SHOPIFY_CLIENT_SECRET: "" }),
+    {},
+    { now: NOW, ledgerClient: ledgerClient(), workflowResolver },
+  );
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error.code, "SHOPIFY_ADMIN_AUTH_NOT_CONFIGURED");
 });
 
 test("verified Shopify staff session can read the governed overview", async () => {
@@ -222,12 +278,4 @@ test("wrong-shop and expired Shopify sessions are rejected", async () => {
     assert.equal(response.status, 401);
     assert.equal((await response.json()).error.code, "SHOPIFY_ADMIN_SESSION_INVALID");
   }
-});
-
-test("storefront-style dashboard aliases are not claimed", async () => {
-  const response = await handleKairosDashboardRequest(
-    new Request("https://kairos.example/dashboard"),
-    environment(),
-  );
-  assert.equal(response, null);
 });
