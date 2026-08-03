@@ -1,4 +1,4 @@
-name: Repair Audited MMG Pages
+name: Guard Retired Audited Page Repair
 
 "on":
   push:
@@ -7,10 +7,12 @@ name: Repair Audited MMG Pages
     paths:
       - ".github/workflows/publish-free-creator-toolkit-shell.yml"
       - "cloudflare/mmg-ios/src/kairos-native-page-content-repair-v1.js"
-      - "cloudflare/mmg-ios/src/kairos-page-shell-publisher-v1.js"
       - "cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js"
-      - "cloudflare/mmg-ios/wrangler.toml"
-      - "cloudflare/mmg-ios/package.json"
+  pull_request:
+    paths:
+      - ".github/workflows/publish-free-creator-toolkit-shell.yml"
+      - "cloudflare/mmg-ios/src/kairos-native-page-content-repair-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js"
   workflow_dispatch: {}
 
 permissions:
@@ -18,28 +20,26 @@ permissions:
   statuses: write
 
 concurrency:
-  group: repair-audited-mmg-pages
-  cancel-in-progress: false
+  group: guard-retired-audited-page-repair-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  repair:
+  guard:
+    name: Verify legacy audited-page repair remains disabled
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 10
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      WORKER_BASE_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
-      STOREFRONT_URL: https://themindsetmediagroup.com
-      PAGE_SHELL_BUILD: kairos-page-shell-publisher-20260719-1
-      NATIVE_PAGE_REPAIR_BUILD: kairos-native-page-content-repair-20260719-1
+      DISABLED_BUILD: kairos-native-page-content-repair-disabled-20260722-1
       STATUS_CONTEXT: mmg-audited-pages-live
+
     steps:
       - name: Mark pending
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          payload="$(node -e 'process.stdout.write(JSON.stringify({state:"pending",context:process.env.STATUS_CONTEXT,description:"Repairing Toolkit and Publishing Services",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
+          payload="$(node -e 'process.stdout.write(JSON.stringify({state:"pending",context:process.env.STATUS_CONTEXT,description:"Verifying retired audited-page repair boundary",target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
           curl --fail --silent --show-error -X POST \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
@@ -48,173 +48,28 @@ jobs:
             "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             --data "${payload}"
 
-      - name: Checkout exact release
+      - name: Check out exact release
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
 
-      - name: Validate release source
+      - name: Verify retired mutation boundary
         run: |
           set -euo pipefail
-          node --check cloudflare/mmg-ios/src/kairos-native-page-content-repair-v1.js
-          node --check cloudflare/mmg-ios/src/kairos-page-shell-publisher-v1.js
-          node --check cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
-          grep -q "${NATIVE_PAGE_REPAIR_BUILD}" cloudflare/mmg-ios/src/kairos-native-page-content-repair-v1.js
-          grep -q 'kairos-native-page-content-repair-v1.js' cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js
+          repair="cloudflare/mmg-ios/src/kairos-native-page-content-repair-v1.js"
+          entry="cloudflare/mmg-ios/src/kairos-production-entry-theme-menu-hotfix-v1.js"
 
-      - name: Deploy Worker
-        working-directory: cloudflare/mmg-ios
-        run: |
-          set -euo pipefail
-          npm install --no-audit --no-fund
-          npx wrangler deploy \
-            --var "DEPLOYMENT_SHA:${GITHUB_SHA}" \
-            --var "DEPLOYED_AT:$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-
-      - name: Wait for exact Worker
-        run: |
-          set -euo pipefail
-          for attempt in $(seq 1 36); do
-            body="${RUNNER_TEMP}/identity.json"
-            headers="${RUNNER_TEMP}/identity.headers"
-            status="$(curl --silent --show-error --max-time 30 -D "${headers}" \
-              "${WORKER_BASE_URL}/api/deployment/identity?sha=${GITHUB_SHA}&attempt=${attempt}" \
-              -o "${body}" -w '%{http_code}' || true)"
-            if [ "${status}" = "200" ] \
-              && grep -q "\"deploymentSha\":\"${GITHUB_SHA}\"" "${body}" \
-              && grep -qi "x-mmg-native-page-repair: ${NATIVE_PAGE_REPAIR_BUILD}" "${headers}"; then
-              exit 0
-            fi
-            sleep 5
-          done
-          cat "${RUNNER_TEMP}/identity.json" || true
-          cat "${RUNNER_TEMP}/identity.headers" || true
-          exit 1
-
-      - name: Publish shared page shell
-        run: |
-          set -euo pipefail
-          result="${RUNNER_TEMP}/page-shell.json"
-          status="$(curl --silent --show-error --retry 3 --retry-delay 3 --max-time 180 \
-            -X POST "${WORKER_BASE_URL}/api/shopify/page-shell/publish?sha=${GITHUB_SHA}" \
-            -H 'Content-Type: application/json' \
-            --data '{"confirmation":"PUBLISH_MMG_PAGE_SHELL_RECONCILIATION"}' \
-            -o "${result}" -w '%{http_code}' || true)"
-          cat "${result}"
-          test "${status}" = "200"
-          grep -q '"status":"completed"' "${result}"
-          grep -q '"exactThemeFileReadBack":true' "${result}"
-
-      - name: Repair Shopify page bodies
-        run: |
-          set -euo pipefail
-          result="${RUNNER_TEMP}/native-page-repair.json"
-          status="$(curl --silent --show-error --retry 3 --retry-delay 3 --max-time 180 \
-            -X POST "${WORKER_BASE_URL}/api/shopify/pages/repair?sha=${GITHUB_SHA}" \
-            -H 'Content-Type: application/json' \
-            --data '{"confirmation":"REPAIR_MMG_AUDITED_PAGES_NOW"}' \
-            -o "${result}" -w '%{http_code}' || true)"
-          cat "${result}"
-          test "${status}" = "200"
-          grep -q '"status":"completed"' "${result}"
-          grep -q "\"build\":\"${NATIVE_PAGE_REPAIR_BUILD}\"" "${result}"
-          grep -q '"exactPageReadBack":true' "${result}"
-          grep -q '"toolkitMiniNavigationRemoved":true' "${result}"
-          grep -q '"publishingDirectoryRemoved":true' "${result}"
-          grep -q '"projectGuideLinksRepaired":true' "${result}"
-          grep -q '"nativeTitleSuppressionInstalled":true' "${result}"
-
-      - name: Install browser verifier
-        run: |
-          set -euo pipefail
-          npm install --no-save --no-audit --no-fund playwright
-          npx playwright install --with-deps chromium
-
-      - name: Verify live pages
-        run: |
-          cat > /tmp/verify-pages.mjs <<'JS'
-          import fs from "node:fs";
-          import { chromium } from "playwright";
-
-          const origin = process.env.STOREFRONT_URL;
-          const definitions = [
-            {
-              key: "free-creator-toolkit",
-              path: "/pages/free-creator-toolkit",
-              hero: "The Free Creator Toolkit.",
-              forbiddenTexts: ["MMG Home", "Knowledge Library", "Creator’s Bible", "AI Guide"],
-            },
-            {
-              key: "publishing-services",
-              path: "/pages/publishing-services",
-              hero: "Turn your knowledge into a published book.",
-              forbiddenTexts: ["Explore Mindset Media Group™", "View the Project Guide", "Read the Project Guide"],
-              publishing: true,
-            },
-          ];
-          const results = [];
-          const browser = await chromium.launch({ headless: true });
-          try {
-            for (const definition of definitions) {
-              for (const viewport of [
-                { name: "desktop", width: 1440, height: 1000 },
-                { name: "mobile", width: 390, height: 844 },
-              ]) {
-                const context = await browser.newContext({ viewport });
-                const page = await context.newPage();
-                const response = await page.goto(`${origin}${definition.path}?verified=${Date.now()}-${viewport.name}`, {
-                  waitUntil: "networkidle",
-                  timeout: 60000,
-                });
-                await page.waitForTimeout(750);
-                const visibleH1 = (await page.locator("main h1:visible").allTextContents()).map((value) => value.replace(/\s+/g, " ").trim());
-                const bodyText = (await page.locator("main").innerText()).replace(/\s+/g, " ");
-                const marker = await page.locator(`main [data-mmg-native-page="${definition.key}"]`).count();
-                const forbidden = definition.forbiddenTexts.filter((text) => bodyText.includes(text));
-                const projectGuideLinks = definition.publishing ? await page.locator('main a[href*="/pages/project-guide"]').count() : 0;
-                const processTarget = definition.publishing ? await page.locator("#publishing-process").count() : 1;
-                const overflow = await page.evaluate(() => ({
-                  viewport: document.documentElement.clientWidth,
-                  document: document.documentElement.scrollWidth,
-                  body: document.body.scrollWidth,
-                }));
-                const passed = Boolean(response?.ok()) &&
-                  marker === 1 &&
-                  visibleH1.length === 1 &&
-                  visibleH1[0] === definition.hero &&
-                  forbidden.length === 0 &&
-                  projectGuideLinks === 0 &&
-                  processTarget === 1 &&
-                  Math.max(overflow.document, overflow.body) <= overflow.viewport + 2;
-                results.push({ page: definition.key, viewport: viewport.name, http: response?.status() || 0, marker, visibleH1, forbidden, projectGuideLinks, processTarget, overflow, passed });
-                await page.screenshot({ path: `/tmp/${definition.key}-${viewport.name}.png`, fullPage: true });
-                await context.close();
-              }
-            }
-          } finally {
-            await browser.close();
-          }
-          const passed = results.every((item) => item.passed);
-          fs.writeFileSync("/tmp/audited-pages-result.json", JSON.stringify({ passed, results }, null, 2));
-          console.log(JSON.stringify({ passed, results }, null, 2));
-          if (!passed) process.exit(1);
-          JS
-          node /tmp/verify-pages.mjs
-
-      - name: Upload proof
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: audited-pages-${{ github.run_id }}
-          path: |
-            /tmp/audited-pages-result.json
-            /tmp/free-creator-toolkit-*.png
-            /tmp/publishing-services-*.png
-          if-no-files-found: warn
-          retention-days: 14
+          node --check "${repair}"
+          node --check "${entry}"
+          grep -Fq "${DISABLED_BUILD}" "${repair}"
+          grep -Fq 'export async function handleNativePageRepair()' "${repair}"
+          grep -Fq 'return null;' "${repair}"
+          ! grep -Fq 'kairos-native-page-content-repair-v1.js' "${entry}"
+          ! grep -Fq '/api/shopify/pages/repair' "${entry}"
+          ! grep -Eq 'REPAIR_MMG_AUDITED_PAGES_NOW|handleNativePageRepair\(' "${entry}"
 
       - name: Report result
-        if: always()
+        if: always() && github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
           JOB_STATUS: ${{ job.status }}
@@ -222,10 +77,10 @@ jobs:
           set -euo pipefail
           if [ "${JOB_STATUS}" = "success" ]; then
             state="success"
-            description="Toolkit and Publishing Services repaired"
+            description="Legacy audited-page repair is safely retired"
           else
             state="failure"
-            description="Audited page repair failed verification"
+            description="Retired audited-page repair boundary changed"
           fi
           payload="$(STATE="${state}" DESCRIPTION="${description}" node -e 'process.stdout.write(JSON.stringify({state:process.env.STATE,context:process.env.STATUS_CONTEXT,description:process.env.DESCRIPTION,target_url:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`}))')"
           curl --fail --silent --show-error -X POST \
