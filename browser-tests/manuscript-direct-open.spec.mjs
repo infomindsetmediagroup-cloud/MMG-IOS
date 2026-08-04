@@ -21,6 +21,18 @@ const editorialWatchdogSource = readFileSync(
   new URL("../web/kairos-dashboard/scripts/manuscript-editorial-watchdog.js", import.meta.url),
   "utf8",
 );
+const pipelineSource = readFileSync(
+  new URL("../web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js", import.meta.url),
+  "utf8",
+);
+const finalDeliverableSource = readFileSync(
+  new URL("../web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js", import.meta.url),
+  "utf8",
+);
+const dedicatedRestoreSource = readFileSync(
+  new URL("../web/kairos-dashboard/scripts/manuscript-dedicated-project-restore.js", import.meta.url),
+  "utf8",
+);
 const directOpenSource = readFileSync(
   new URL("../web/kairos-dashboard/scripts/manuscript-direct-open-controller.js", import.meta.url),
   "utf8",
@@ -78,6 +90,21 @@ async function installSuccessRoutes(page, { delayStudioMs = 100 } = {}) {
 
     if (url.pathname === "/scripts/manuscript-editorial-watchdog.js") {
       await route.fulfill({ status: 200, contentType: "text/javascript", body: editorialWatchdogSource });
+      return;
+    }
+
+    if (url.pathname === "/scripts/manuscript-pipeline-orchestrator.js") {
+      await route.fulfill({ status: 200, contentType: "text/javascript", body: pipelineSource });
+      return;
+    }
+
+    if (url.pathname === "/scripts/manuscript-final-deliverable-engine.js") {
+      await route.fulfill({ status: 200, contentType: "text/javascript", body: finalDeliverableSource });
+      return;
+    }
+
+    if (url.pathname === "/scripts/manuscript-dedicated-project-restore.js") {
+      await route.fulfill({ status: 200, contentType: "text/javascript", body: dedicatedRestoreSource });
       return;
     }
 
@@ -150,12 +177,15 @@ test("legacy advanced manuscript URL redirects before the command runtime and op
   expect(snapshot.activeProjectId).toMatch(/^manuscript-studio-/);
 
   const route = await page.evaluate(() => window.KairosDedicatedManuscriptRoute);
-  expect(route.build).toBe("kairos-dedicated-manuscript-route-20260804-4-editorial-watchdog");
+  expect(route.build).toBe("kairos-dedicated-manuscript-route-20260804-5-final-deliverable");
   expect(route.opened).toBe(true);
 
   const watchdog = await page.evaluate(() => window.KairosManuscriptEditorialWatchdog.snapshot());
   expect(watchdog.build).toBe("kairos-manuscript-editorial-watchdog-20260804-1");
   expect(watchdog.requestTimeoutMs).toBe(6_000);
+
+  const engine = await page.evaluate(() => window.KairosManuscriptFinalDeliverableEngine.snapshot());
+  expect(engine.build).toBe("kairos-manuscript-final-deliverable-engine-20260804-1");
 
   const guard = await page.evaluate(() => window.KairosManuscriptPostIntakeGuard.snapshot());
   expect(guard.build).toBe("kairos-manuscript-post-intake-guard-20260731-1");
@@ -256,6 +286,21 @@ test("dedicated route displays body-owned recovery controls when Studio cannot l
 
     if (url.pathname === "/scripts/manuscript-editorial-watchdog.js") {
       await route.fulfill({ status: 200, contentType: "text/javascript", body: editorialWatchdogSource });
+      return;
+    }
+
+    if (url.pathname === "/scripts/manuscript-pipeline-orchestrator.js") {
+      await route.fulfill({ status: 200, contentType: "text/javascript", body: pipelineSource });
+      return;
+    }
+
+    if (url.pathname === "/scripts/manuscript-final-deliverable-engine.js") {
+      await route.fulfill({ status: 200, contentType: "text/javascript", body: finalDeliverableSource });
+      return;
+    }
+
+    if (url.pathname === "/scripts/manuscript-dedicated-project-restore.js") {
+      await route.fulfill({ status: 200, contentType: "text/javascript", body: dedicatedRestoreSource });
       return;
     }
 
