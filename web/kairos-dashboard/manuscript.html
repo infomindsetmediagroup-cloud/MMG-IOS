@@ -9,6 +9,7 @@
   <meta name="mmg-manuscript-mobile-flow-release" content="manuscript-flow-recovery-20260803-3">
   <meta name="mmg-receipt-continuation-release" content="manuscript-receipt-continuation-20260804-1">
   <meta name="mmg-state-bootstrap-release" content="kairos-state-fetch-install-20260804-3-editorial-body-deadline">
+  <meta name="mmg-runtime-bootstrap-release" content="kairos-manuscript-runtime-bootstrap-20260804-1-registry-ready-gate">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -179,44 +180,90 @@
   <noscript>Manuscript Studio requires JavaScript to run.</noscript>
 
   <script type="module">
-    try {
+    const RUNTIME_BOOTSTRAP = "kairos-manuscript-runtime-bootstrap-20260804-1-registry-ready-gate";
+    const runtimeScripts = [
+      {
+        src: "./scripts/manuscript-project-preservation-bridge.js?v=kairos-manuscript-project-preservation-20260801-1",
+        label: "The manuscript state-preservation bridge",
+      },
+      {
+        src: "./scripts/manuscript-pipeline-orchestrator.js?v=kairos-manuscript-pipeline-orchestrator-20260803-1-deliverable-review",
+        label: "The authoritative manuscript pipeline orchestrator",
+      },
+      {
+        src: "./scripts/manuscript-project-setup.js?v=manuscript-flow-recovery-20260803-3",
+        type: "module",
+        label: "The Project Setup controller",
+      },
+      {
+        src: "./scripts/manuscript-continuation-controller.js?v=manuscript-flow-recovery-20260803-3",
+        label: "The manuscript continuation controller",
+      },
+      {
+        src: "./scripts/manuscript-receipt-continuation-recovery.js?v=manuscript-receipt-continuation-20260804-1",
+        label: "The live receipt continuation recovery",
+      },
+      {
+        src: "./scripts/manuscript-stage-handoff-controller.js?v=manuscript-flow-recovery-20260803-3",
+        label: "The manuscript stage-handoff controller",
+      },
+      {
+        src: "./scripts/safari-manuscript-intake-compat.js?v=safari-native-docx-20260730-1",
+        type: "module",
+        label: "Safari manuscript compatibility",
+      },
+      {
+        src: "./scripts/manuscript-dedicated-project-restore.js?v=kairos-manuscript-dedicated-restore-20260804-1",
+        label: "The saved manuscript handoff",
+      },
+      {
+        src: "./scripts/manuscript-direct-open-controller.js?v=manuscript-flow-recovery-20260803-3",
+        type: "module",
+        label: "The dedicated Manuscript Studio controller",
+      },
+    ];
+
+    function loadRuntimeScript({ src, type = "classic", label }) {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        if (type === "module") script.type = "module";
+        script.async = false;
+        script.src = new URL(src, document.baseURI).href;
+        script.dataset.kairosRuntimeBootstrap = RUNTIME_BOOTSTRAP;
+        script.addEventListener("load", () => resolve(script), { once: true });
+        script.addEventListener("error", () => {
+          reject(new Error(`${label} failed to load.`));
+        }, { once: true });
+        document.body.append(script);
+      });
+    }
+
+    globalThis.__KAIROS_MANUSCRIPT_RUNTIME_READY__ = (async () => {
       await import("./scripts/kairos-state-fetch-install.js?v=kairos-state-fetch-install-20260804-3-editorial-body-deadline");
       await import("./scripts/manuscript-registry-bridge.js?v=kairos-manuscript-registry-bridge-20260804-2-editorial-restore");
+
+      if (!globalThis.KairosManuscriptRegistryBridge?.ready) {
+        throw new Error("The manuscript registry bridge did not become ready.");
+      }
+
+      for (const runtime of runtimeScripts) {
+        await loadRuntimeScript(runtime);
+      }
+
+      return {
+        status: "ready",
+        build: RUNTIME_BOOTSTRAP,
+        registryBuild: globalThis.KairosManuscriptRegistryBridge.build,
+      };
+    })();
+
+    try {
+      await globalThis.__KAIROS_MANUSCRIPT_RUNTIME_READY__;
     } catch (error) {
       KairosDedicatedManuscriptRoute.fail(
-        error?.message || "The manuscript state transport failed to load.",
+        error?.message || "The manuscript runtime failed to load.",
       );
     }
   </script>
-  <script
-    src="./scripts/manuscript-project-preservation-bridge.js?v=kairos-manuscript-project-preservation-20260801-1"
-    onerror="KairosDedicatedManuscriptRoute.fail('The manuscript state-preservation bridge failed to load.')"></script>
-  <script
-    src="./scripts/manuscript-pipeline-orchestrator.js?v=kairos-manuscript-pipeline-orchestrator-20260803-1-deliverable-review"
-    onerror="KairosDedicatedManuscriptRoute.fail('The authoritative manuscript pipeline orchestrator failed to load.')"></script>
-  <script
-    type="module"
-    src="./scripts/manuscript-project-setup.js?v=manuscript-flow-recovery-20260803-3"
-    onerror="KairosDedicatedManuscriptRoute.fail('The Project Setup controller failed to load.')"></script>
-  <script
-    src="./scripts/manuscript-continuation-controller.js?v=manuscript-flow-recovery-20260803-3"
-    onerror="KairosDedicatedManuscriptRoute.fail('The manuscript continuation controller failed to load.')"></script>
-  <script
-    src="./scripts/manuscript-receipt-continuation-recovery.js?v=manuscript-receipt-continuation-20260804-1"
-    onerror="KairosDedicatedManuscriptRoute.fail('The live receipt continuation recovery failed to load.')"></script>
-  <script
-    src="./scripts/manuscript-stage-handoff-controller.js?v=manuscript-flow-recovery-20260803-3"
-    onerror="KairosDedicatedManuscriptRoute.fail('The manuscript stage-handoff controller failed to load.')"></script>
-  <script
-    type="module"
-    src="./scripts/safari-manuscript-intake-compat.js?v=safari-native-docx-20260730-1"
-    onerror="KairosDedicatedManuscriptRoute.fail('Safari manuscript compatibility failed to load.')"></script>
-  <script
-    src="./scripts/manuscript-dedicated-project-restore.js?v=kairos-manuscript-dedicated-restore-20260804-1"
-    onerror="KairosDedicatedManuscriptRoute.fail('The saved manuscript handoff failed to load.')"></script>
-  <script
-    type="module"
-    src="./scripts/manuscript-direct-open-controller.js?v=manuscript-flow-recovery-20260803-3"
-    onerror="KairosDedicatedManuscriptRoute.fail('The dedicated Manuscript Studio controller failed to load.')"></script>
 </body>
 </html>
