@@ -49,6 +49,8 @@
     if (!button) return;
 
     event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
     void continueReceipt(button, true);
   }, true);
 
@@ -92,6 +94,10 @@
     const button = receipt.querySelector("[data-finish]");
 
     if (setup && !placeholder) {
+      if (button) {
+        button.remove();
+        state.successfulContinuations += 1;
+      }
       state.attempts = 0;
       state.lastError = "";
       return;
