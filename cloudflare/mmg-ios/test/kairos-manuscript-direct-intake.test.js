@@ -47,16 +47,18 @@ test("the intake handler accepts the real 279045-character production payload", 
   assert.equal(body.workflow.automatedIntelligenceUsed, false);
 });
 
-test("the canonical Worker intercepts intake before source and downstream runtime routing", async () => {
+test("the canonical Worker intercepts intake before identity, source, and downstream runtime routing", async () => {
   const source = await readFile(new URL("../src/kairos-production-entry-local-canonical-v1.js", import.meta.url), "utf8");
   assert.match(source, /import \{ handleManuscriptRequest \} from "\.\/manuscript-studio-v1\.js"/);
   assert.match(source, /"\/api\/manuscript\/intake\/advance"/);
   assert.match(source, /code: "MANUSCRIPT_INTAKE_FAILED"/);
 
   const directIndex = source.indexOf("DIRECT_MANUSCRIPT_PATHS.has(url.pathname)");
-  const sourceShardIndex = source.indexOf("handleDedicatedManuscriptSource(request, env)");
+  const identityIndex = source.indexOf("resolveCanonicalManuscriptRequest(request, env)");
+  const sourceShardIndex = source.indexOf("handleDedicatedManuscriptSource(canonicalRequest, env)");
   const downstreamIndex = source.indexOf("canonicalRuntime.fetch(request, runtimeEnv, ctx)");
   assert.ok(directIndex > 0, "direct manuscript route must exist");
-  assert.ok(sourceShardIndex > directIndex, "direct intake must run before source-shard routing");
+  assert.ok(identityIndex > directIndex, "canonical identity resolution must run after direct intake");
+  assert.ok(sourceShardIndex > identityIndex, "source-shard routing must use the canonical request");
   assert.ok(downstreamIndex > sourceShardIndex, "direct intake must run before the downstream runtime chain");
 });

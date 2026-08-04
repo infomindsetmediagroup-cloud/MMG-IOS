@@ -28,10 +28,10 @@ test("imports complete operations scheduler v2", () => {
   assert.doesNotMatch(source, /from "\.\/autonomy\/kairos-autonomy-scheduler-v1\.js";/u);
 });
 
-test("uses the complete autonomous operations canonical build identifier", () => {
+test("uses the canonical manuscript shard identity build identifier", () => {
   assert.match(
     source,
-    /KAIROS_LOCAL_CANONICAL_ENTRY_BUILD =\s*"kairos-local-canonical-entry-20260802-7-shopify-admin-dashboard";/u,
+    /KAIROS_LOCAL_CANONICAL_ENTRY_BUILD =\s*"kairos-local-canonical-entry-20260804-1-manuscript-canonical-shard-identity";/u,
   );
 });
 
@@ -47,15 +47,17 @@ test("passes raw env for authentication and provider-blocked env for operations"
   );
 });
 
-test("returns stamped autonomy responses before all other routing", () => {
+test("returns stamped autonomy responses before canonical manuscript routing", () => {
   const autonomy = indexOfRequired("if (autonomyResponse) return stamp(autonomyResponse);");
   const manuscript = indexOfRequired("if (DIRECT_MANUSCRIPT_PATHS.has(url.pathname))");
-  const packageState = indexOfRequired("const packageState = await handleManuscriptPackageState(request, env, ctx);");
-  const sourceRoute = indexOfRequired("const dedicatedSource = await handleDedicatedManuscriptSource(request, env);");
+  const identity = indexOfRequired("const manuscriptIdentity = await resolveCanonicalManuscriptRequest(request, env);");
+  const packageState = indexOfRequired("const packageState = await handleManuscriptPackageState(canonicalRequest, env, ctx);");
+  const sourceRoute = indexOfRequired("const dedicatedSource = await handleDedicatedManuscriptSource(canonicalRequest, env);");
   const runtime = indexOfRequired("return stamp(await canonicalRuntime.fetch(request, runtimeEnv, ctx));");
   assert.ok(autonomy < manuscript);
-  assert.ok(autonomy < packageState);
-  assert.ok(autonomy < sourceRoute);
+  assert.ok(autonomy < identity);
+  assert.ok(identity < packageState);
+  assert.ok(identity < sourceRoute);
   assert.ok(autonomy < runtime);
 });
 
@@ -139,7 +141,7 @@ test("scheduled handler does not route through the HTTP API", () => {
   assert.doesNotMatch(scheduledSource, /handleAutonomyApiRequest/u);
 });
 
-test("stamp preserves API and scheduler build headers", () => {
+test("stamp preserves API, scheduler, and manuscript identity build headers", () => {
   assert.match(
     source,
     /headers\.get\("X-Kairos-Autonomy-API-Build"\) \|\| KAIROS_AUTONOMY_API_BUILD/u,
@@ -147,6 +149,10 @@ test("stamp preserves API and scheduler build headers", () => {
   assert.match(
     source,
     /headers\.get\("X-Kairos-Autonomy-Scheduler-Build"\) \|\| KAIROS_AUTONOMY_SCHEDULER_BUILD/u,
+  );
+  assert.match(
+    source,
+    /headers\.set\("X-Kairos-Manuscript-Identity-Build", KAIROS_MANUSCRIPT_CANONICAL_IDENTITY_BUILD\)/u,
   );
 });
 
