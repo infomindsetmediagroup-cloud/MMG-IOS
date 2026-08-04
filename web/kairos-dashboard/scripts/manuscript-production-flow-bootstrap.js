@@ -1,7 +1,7 @@
 const BUILD =
-  "kairos-manuscript-production-flow-bootstrap-20260803-2-flow-recovery";
+  "kairos-manuscript-production-flow-bootstrap-20260804-1-receipt-continuation";
 const RELEASE =
-  "manuscript-flow-recovery-20260803-3";
+  "manuscript-receipt-continuation-20260804-1";
 const COMMAND_RUNTIME_RELEASE =
   "five-center-manuscript-flow-recovery-20260803-3";
 const BOOT_TIMEOUT_MS = 20_000;
@@ -32,6 +32,11 @@ try {
     );
   }
 
+  await importWithDeadline(
+    `./manuscript-receipt-continuation-recovery.js?v=${RELEASE}`,
+    "live manuscript receipt continuation recovery",
+  );
+
   // manuscript-auto-pipeline.js is evaluated exactly once by the command runtime.
   // Do not import it again under a second query URL.
   await importWithDeadline(
@@ -48,6 +53,7 @@ try {
     boundedStateTransport: true,
     directOpenController: window.KairosManuscriptDirectOpen?.build || null,
     postIntakeGuard: window.KairosManuscriptPostIntakeGuard?.build || null,
+    receiptContinuationRecovery: window.KairosManuscriptReceiptContinuationRecovery?.build || null,
     singleControllerOwner: "legacy-runtime-loader",
     ready: true,
   });
