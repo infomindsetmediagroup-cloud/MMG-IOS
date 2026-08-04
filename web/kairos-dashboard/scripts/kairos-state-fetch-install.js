@@ -1,9 +1,9 @@
 import {
   requestJSONWithRetry,
-} from "./kairos-state-fetch.js?v=kairos-state-fetch-20260731-1";
+} from "./kairos-state-fetch.js?v=kairos-state-fetch-20260731-2-buffered";
 
 export const KAIROS_STATE_FETCH_INSTALL_BUILD =
-  "kairos-state-fetch-install-20260731-2";
+  "kairos-state-fetch-install-20260804-3-editorial-body-deadline";
 
 const nativeFetch = globalThis.fetch.bind(globalThis);
 const STATE_ROUTE = /^\/api\/production-registry\/manuscripts\/[^/]+\/(?:auto-pipeline|setup|editorial)$/;
