@@ -14,6 +14,10 @@ import {
   handleManuscriptPackageStateObjectRequest,
   KAIROS_MANUSCRIPT_PACKAGE_STATE_BUILD,
 } from "./kairos-manuscript-package-state-v1.js";
+import {
+  resolveCanonicalManuscriptRequest,
+  KAIROS_MANUSCRIPT_CANONICAL_IDENTITY_BUILD,
+} from "./kairos-manuscript-canonical-identity-router-v1.js";
 import { handleManuscriptRequest } from "./manuscript-studio-v1.js";
 import {
   handleKairosDashboardRequest,
@@ -47,7 +51,7 @@ export class KairosManuscriptSource extends BaseKairosManuscriptSource {
 }
 
 export const KAIROS_LOCAL_CANONICAL_ENTRY_BUILD =
-  "kairos-local-canonical-entry-20260802-7-shopify-admin-dashboard";
+  "kairos-local-canonical-entry-20260804-1-manuscript-canonical-shard-identity";
 
 const PROVIDER_INDEPENDENT_OPERATIONAL_PATHS = new Set([
   "/api/hub/run",
@@ -93,11 +97,14 @@ export default {
       }
     }
 
-    const packageState = await handleManuscriptPackageState(request, env, ctx);
-    if (packageState) return stamp(packageState);
+    const manuscriptIdentity = await resolveCanonicalManuscriptRequest(request, env);
+    const canonicalRequest = manuscriptIdentity.request;
 
-    const dedicatedSource = await handleDedicatedManuscriptSource(request, env);
-    if (dedicatedSource) return stamp(dedicatedSource);
+    const packageState = await handleManuscriptPackageState(canonicalRequest, env, ctx);
+    if (packageState) return stamp(packageState, manuscriptIdentity);
+
+    const dedicatedSource = await handleDedicatedManuscriptSource(canonicalRequest, env);
+    if (dedicatedSource) return stamp(dedicatedSource, manuscriptIdentity);
 
     const runtimeEnv = PROVIDER_INDEPENDENT_OPERATIONAL_PATHS.has(url.pathname)
       ? operationalCompatibilityEnv(env)
@@ -143,7 +150,7 @@ function operationalCompatibilityEnv(env) {
   });
 }
 
-function stamp(response) {
+function stamp(response, manuscriptIdentity = null) {
   const headers = new Headers(response.headers);
   headers.set("Cache-Control", "no-store");
   headers.set("X-Kairos-Canonical-Local", KAIROS_LOCAL_CANONICAL_ENTRY_BUILD);
@@ -152,9 +159,17 @@ function stamp(response) {
   headers.set("X-Kairos-OpenAI-Calls", "disabled");
   headers.set("X-Kairos-Source-Shard", KAIROS_MANUSCRIPT_SOURCE_SHARD_BUILD);
   headers.set("X-Kairos-Package-State-Build", headers.get("X-Kairos-Package-State-Build") || KAIROS_MANUSCRIPT_PACKAGE_STATE_BUILD);
+  headers.set("X-Kairos-Manuscript-Identity-Build", KAIROS_MANUSCRIPT_CANONICAL_IDENTITY_BUILD);
   headers.set("X-Kairos-Autonomy-API-Build", headers.get("X-Kairos-Autonomy-API-Build") || KAIROS_AUTONOMY_API_BUILD);
   headers.set("X-Kairos-Autonomy-Scheduler-Build", headers.get("X-Kairos-Autonomy-Scheduler-Build") || KAIROS_AUTONOMY_SCHEDULER_BUILD);
   headers.set("X-Kairos-Dashboard-Build", headers.get("X-Kairos-Dashboard-Build") || KAIROS_DASHBOARD_BUILD);
+  if (manuscriptIdentity?.requestedProjectId) {
+    headers.set("X-Kairos-Requested-Manuscript-Project", manuscriptIdentity.requestedProjectId);
+  }
+  if (manuscriptIdentity?.canonicalProjectId) {
+    headers.set("X-Kairos-Canonical-Manuscript-Project", manuscriptIdentity.canonicalProjectId);
+  }
+  headers.set("X-Kairos-Manuscript-Identity-Resolved", manuscriptIdentity?.resolved ? "true" : "false");
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
