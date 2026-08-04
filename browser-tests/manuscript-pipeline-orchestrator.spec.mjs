@@ -9,6 +9,10 @@ const finalEngineSource = readFileSync(
   new URL("../web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js", import.meta.url),
   "utf8",
 );
+const finalControlOwnerSource = readFileSync(
+  new URL("../web/kairos-dashboard/scripts/manuscript-final-deliverable-control-owner.js", import.meta.url),
+  "utf8",
+);
 
 const PROJECT_ID = "manuscript-studio-a2z-project";
 
@@ -29,8 +33,12 @@ async function activate(page) {
 async function activateFinalEngine(page) {
   await activate(page);
   await page.addScriptTag({ content: finalEngineSource });
+  await page.addScriptTag({ content: finalControlOwnerSource });
   await expect.poll(
-    () => page.evaluate(() => window.KairosManuscriptFinalDeliverableEngine?.ready === true),
+    () => page.evaluate(() => (
+      window.KairosManuscriptFinalDeliverableEngine?.ready === true
+      && window.KairosManuscriptFinalDeliverableControlOwner?.ready === true
+    )),
   ).toBe(true);
 }
 
@@ -269,7 +277,15 @@ test("final deliverable engine recovers a failed canonical build through the det
 
   await page.goto("https://kairos.test/manuscript");
   await activateFinalEngine(page);
-  await page.locator("[data-start-local-production]").click();
+
+  const ownedControl = page.locator("[data-final-deliverable-retry]");
+  await expect(ownedControl).toBeVisible();
+  await expect(ownedControl).toHaveAttribute(
+    "data-kairos-final-deliverable-owner",
+    "kairos-manuscript-final-deliverable-control-owner-20260804-1",
+  );
+  await expect(page.locator("[data-start-local-production]")).toHaveCount(0);
+  await ownedControl.click();
 
   const pipeline = page.locator("#manuscript-auto-pipeline");
   await expect(pipeline).toContainText("Recovered Final Package", { timeout: 5_000 });
@@ -282,8 +298,10 @@ test("final deliverable engine recovers a failed canonical build through the det
   );
 
   const snapshot = await page.evaluate(() => window.KairosManuscriptFinalDeliverableEngine.snapshot());
+  const owner = await page.evaluate(() => window.KairosManuscriptFinalDeliverableControlOwner.snapshot());
   expect(snapshot.engine).toBe("deterministic-deliverables-fallback");
   expect(snapshot.status).toBe("production-ready");
   expect(snapshot.primaryError).toContain("Canonical package engine unavailable");
+  expect(owner.claimedManufacture).toBeGreaterThanOrEqual(1);
   expect(calls).toEqual({ primary: 1, fallback: 1 });
 });
