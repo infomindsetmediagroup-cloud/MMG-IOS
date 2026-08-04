@@ -127,6 +127,16 @@ test("deterministic deliverables use the checksum-verified final editorial manus
     buildBody.deliverablesBuild.metadata.manuscriptAuthority,
     "checksum-verified-final-editorial-version",
   );
+  assert.equal(buildBody.deliverablesBuild.metadata.originalSourceIncluded, true);
+
+  const originalArtifact = buildBody.deliverablesBuild.artifacts.find(
+    artifact => artifact.kind === "ORIGINAL_SOURCE",
+  );
+  const finalArtifact = buildBody.deliverablesBuild.artifacts.find(
+    artifact => artifact.kind === "FINAL_MANUSCRIPT",
+  );
+  assert.equal(originalArtifact.filename, "original-intake.txt");
+  assert.equal(finalArtifact.filename, "final-manuscript.md");
 
   const zipResponse = await handleManuscriptDeliverablesObjectRequest(
     state,
@@ -142,6 +152,8 @@ test("deterministic deliverables use the checksum-verified final editorial manus
   const zipBytes = new Uint8Array(await zipResponse.arrayBuffer());
   assert.ok(zipBytes.byteLength > 1_000);
   const zipText = new TextDecoder().decode(zipBytes);
+  assert.match(zipText, /final-manuscript\.md/);
   assert.match(zipText, /APPROVED FINAL EDITORIAL TEXT/);
-  assert.doesNotMatch(zipText, /ORIGINAL INTAKE TEXT/);
+  assert.match(zipText, /original-intake\.txt/);
+  assert.match(zipText, /ORIGINAL INTAKE TEXT/);
 });

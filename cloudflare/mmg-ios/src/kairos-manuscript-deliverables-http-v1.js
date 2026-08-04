@@ -4,7 +4,7 @@
  * The deterministic builder is the recovery path for the canonical manuscript
  * manufacturing engine. When a final approved editorial version exists, this
  * adapter substitutes that checksum-verified text for the original intake text
- * while preserving the original source file and metadata in the package.
+ * while preserving the original uploaded source and cover bytes in the package.
  */
 
 import {
@@ -12,10 +12,10 @@ import {
   getStoredManuscriptDeliverablesBuild,
   getStoredManuscriptDeliverablesZip,
   KAIROS_MANUSCRIPT_DELIVERABLES_BUILDER_BUILD,
-} from "./kairos-manuscript-deliverables-builder-v1.js";
+} from "./kairos-manuscript-deliverables-builder-v2.js";
 
 export const KAIROS_MANUSCRIPT_DELIVERABLES_HTTP_BUILD =
-  "kairos-manuscript-deliverables-http-20260804-2-approved-editorial-fallback";
+  "kairos-manuscript-deliverables-http-20260804-3-canonical-binary-package";
 
 const ROUTE = /^\/registry\/manuscripts\/([a-z0-9-]{8,})\/deliverables\/(build|zip)$/i;
 
@@ -30,11 +30,7 @@ export async function handleManuscriptDeliverablesObjectRequest(state, request, 
   try {
     if (action === "build" && request.method === "POST") {
       const resolved = await resolveApprovedEditorialHandlers(state, projectId, handlers);
-      const { build } = await runManuscriptDeliverablesBuild(
-        state,
-        projectId,
-        resolved.handlers,
-      );
+      const { build } = await runManuscriptDeliverablesBuild(state, projectId, resolved.handlers);
 
       if (resolved.approvedEditorial) {
         build.metadata = {
@@ -52,6 +48,7 @@ export async function handleManuscriptDeliverablesObjectRequest(state, request, 
           ? "checksum-verified-final-editorial-version"
           : "stored-intake-source",
         approvedEditorial: resolved.approvedEditorial,
+        packageContract: build.metadata?.packageContract || null,
         deliverablesBuild: build,
       }, build.status === "COMPLETED" ? 201 : 422);
     }
@@ -71,6 +68,7 @@ export async function handleManuscriptDeliverablesObjectRequest(state, request, 
       return json({
         status: "ready",
         build: KAIROS_MANUSCRIPT_DELIVERABLES_HTTP_BUILD,
+        packageContract: stored.metadata?.packageContract || null,
         deliverablesBuild: stored,
       });
     }
@@ -97,6 +95,7 @@ export async function handleManuscriptDeliverablesObjectRequest(state, request, 
           "Content-Disposition": `attachment; filename="${filename}"`,
           "Content-Length": String(zipBytes.byteLength),
           "Cache-Control": "no-store",
+          "X-Kairos-Manuscript-Package-Contract": stored?.metadata?.packageContract || "unknown",
           "X-Kairos-Manuscript-Deliverables-Http": KAIROS_MANUSCRIPT_DELIVERABLES_HTTP_BUILD,
           "X-Kairos-Manuscript-Deliverables-Builder": KAIROS_MANUSCRIPT_DELIVERABLES_BUILDER_BUILD,
         },
@@ -117,9 +116,7 @@ export async function handleManuscriptDeliverablesObjectRequest(state, request, 
       build: KAIROS_MANUSCRIPT_DELIVERABLES_HTTP_BUILD,
       error: {
         code: error?.code || "manuscript_deliverables_build_failed",
-        message: error instanceof Error
-          ? error.message
-          : "The manuscript deliverables build failed.",
+        message: error instanceof Error ? error.message : "The manuscript deliverables build failed.",
       },
       deliverablesBuild: error?.build || null,
     }, Number(error?.status || 500));
@@ -135,64 +132,36 @@ async function resolveApprovedEditorialHandlers(state, projectId, handlers) {
 
   const editorialResponse = await editorialHandler(
     state,
-    new Request(
-      `https://kairos.internal/registry/manuscripts/${projectId}/editorial`,
-      { method: "GET" },
-    ),
+    new Request(`https://kairos.internal/registry/manuscripts/${projectId}/editorial`, { method: "GET" }),
   );
   const editorialBody = await readJSON(editorialResponse);
   const editorial = editorialBody?.editorial || null;
-  if (
-    !editorialResponse?.ok ||
-    editorial?.status !== "ready-for-manufacturing" ||
-    !editorial?.finalVersionId
-  ) {
+  if (!editorialResponse?.ok || editorial?.status !== "ready-for-manufacturing" || !editorial?.finalVersionId) {
     return { handlers, approvedEditorial: null };
   }
 
-  const version = (editorial.versions || []).find(
-    (item) => item?.versionId === editorial.finalVersionId,
-  );
+  const version = (editorial.versions || []).find((item) => item?.versionId === editorial.finalVersionId);
   if (!version?.checksum) {
-    throw fail(
-      409,
-      "approved_editorial_version_missing",
-      "The approved final editorial version could not be identified for deterministic manufacturing.",
-    );
+    throw fail(409, "approved_editorial_version_missing", "The approved final editorial version could not be identified for deterministic manufacturing.");
   }
 
   const versionResponse = await editorialHandler(
     state,
-    new Request(
-      `https://kairos.internal/registry/manuscripts/${projectId}/editorial/versions/${encodeURIComponent(editorial.finalVersionId)}`,
-      { method: "GET" },
-    ),
+    new Request(`https://kairos.internal/registry/manuscripts/${projectId}/editorial/versions/${encodeURIComponent(editorial.finalVersionId)}`, { method: "GET" }),
   );
   const versionBody = await readJSON(versionResponse);
   if (!versionResponse?.ok) {
-    throw fail(
-      versionResponse?.status || 502,
-      "approved_editorial_text_unavailable",
-      versionBody?.error?.message || "The approved final editorial manuscript could not be loaded.",
-    );
+    throw fail(versionResponse?.status || 502, "approved_editorial_text_unavailable", versionBody?.error?.message || "The approved final editorial manuscript could not be loaded.");
   }
 
   const manuscript = String(versionBody?.manuscript || "");
   if (manuscript.trim().length < 50) {
-    throw fail(
-      409,
-      "approved_editorial_incomplete",
-      "The approved final editorial manuscript is incomplete.",
-    );
+    throw fail(409, "approved_editorial_incomplete", "The approved final editorial manuscript is incomplete.");
   }
 
   const checksum = await sha256(manuscript);
   if (checksum !== String(version.checksum).toLowerCase()) {
-    throw fail(
-      502,
-      "approved_editorial_integrity_failed",
-      "The approved final editorial manuscript failed checksum verification.",
-    );
+    throw fail(502, "approved_editorial_integrity_failed", "The approved final editorial manuscript failed checksum verification.");
   }
 
   const approvedEditorial = {
@@ -213,10 +182,7 @@ async function resolveApprovedEditorialHandlers(state, projectId, handlers) {
 
     const metadataResponse = await sourceHandler(
       objectState,
-      new Request(
-        `https://kairos.internal/registry/manuscripts/${projectId}/source`,
-        { method: "GET" },
-      ),
+      new Request(`https://kairos.internal/registry/manuscripts/${projectId}/source`, { method: "GET" }),
     );
     const metadataBody = await readJSON(metadataResponse);
     return json({
@@ -245,13 +211,8 @@ async function readJSON(response) {
 }
 
 async function sha256(value) {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(value),
-  );
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function countWords(value) {
