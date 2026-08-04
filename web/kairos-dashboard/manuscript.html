@@ -5,14 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#05070a">
   <meta name="color-scheme" content="dark">
-  <meta name="mmg-build" content="kairos-dedicated-manuscript-route-20260804-5-final-deliverable">
+  <meta name="mmg-build" content="kairos-dedicated-manuscript-route-20260804-6-editorial-cache-bust">
   <meta name="mmg-deployment-gate-compatibility" content="kairos-dedicated-manuscript-route-20260803-3-flow-recovery">
   <meta name="mmg-manuscript-mobile-flow-release" content="manuscript-flow-recovery-20260803-3">
   <meta name="mmg-receipt-continuation-release" content="manuscript-receipt-continuation-20260804-1">
   <meta name="mmg-state-bootstrap-release" content="kairos-state-fetch-install-20260804-3-editorial-body-deadline">
-  <meta name="mmg-runtime-bootstrap-release" content="kairos-manuscript-runtime-bootstrap-20260804-6-control-ownership">
+  <meta name="mmg-runtime-bootstrap-release" content="kairos-manuscript-runtime-bootstrap-20260804-7-editorial-hard-stop">
   <meta name="mmg-deadlock-recovery-release" content="kairos-manuscript-deadlock-recovery-20260804-2">
-  <meta name="mmg-editorial-watchdog-release" content="manuscript-editorial-recovery-20260804-1">
+  <meta name="mmg-editorial-watchdog-release" content="manuscript-editorial-recovery-20260804-2-stall-escape">
+  <meta name="mmg-editorial-inline-escape-release" content="kairos-inline-editorial-hard-stop-20260804-1">
   <meta name="mmg-restored-source-cache-release" content="kairos-manuscript-registry-bridge-20260804-4-restored-source-cache">
   <meta name="mmg-final-deliverable-engine-release" content="kairos-manuscript-final-deliverable-engine-20260804-1">
   <meta name="mmg-final-deliverable-control-release" content="kairos-manuscript-final-deliverable-control-owner-20260804-1">
@@ -128,7 +129,7 @@
   </style>
   <script>
     (() => {
-      const BUILD = "kairos-dedicated-manuscript-route-20260804-5-final-deliverable";
+      const BUILD = "kairos-dedicated-manuscript-route-20260804-6-editorial-cache-bust";
       const current = new URL(location.href);
       if (current.searchParams.get("open") !== "manuscript") {
         current.searchParams.set("open", "manuscript");
@@ -187,8 +188,146 @@
   <noscript>Manuscript Studio requires JavaScript to run.</noscript>
 
   <script
-    src="./scripts/manuscript-editorial-watchdog.js?v=manuscript-editorial-recovery-20260804-1"
+    src="./scripts/manuscript-editorial-watchdog.js?v=manuscript-editorial-recovery-20260804-2-stall-escape"
     onerror="KairosDedicatedManuscriptRoute.fail('The Editorial Workbench recovery boundary failed to load.')"></script>
+  <script>
+    (() => {
+      const BUILD = "kairos-inline-editorial-hard-stop-20260804-1";
+      const WATCHDOG_PATCH = "kairos-manuscript-editorial-stall-escape-20260804-2";
+      const DEADLINE_MS = 10_000;
+      let armedAt = 0;
+      let timer = 0;
+
+      globalThis.KairosInlineEditorialHardStop = Object.freeze({
+        build: BUILD,
+        ready: true,
+        inspect,
+        snapshot: () => ({
+          build: BUILD,
+          armedAt: armedAt || null,
+          watchdogPatch: globalThis.KairosManuscriptEditorialWatchdog?.patchBuild || null,
+          recoveryVisible: Boolean(document.querySelector("[data-kairos-inline-editorial-escape]")),
+        }),
+      });
+
+      document.addEventListener("click", event => {
+        const target = event.target instanceof Element ? event.target : null;
+        const resume = target?.closest?.("[data-kairos-inline-resume-final]");
+        const retry = target?.closest?.("[data-kairos-inline-reload]");
+        if (!resume && !retry) return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+
+        if (retry) {
+          const next = new URL(location.href);
+          next.searchParams.set("open", "manuscript");
+          next.searchParams.set("editorialHardStop", BUILD);
+          next.searchParams.set("cacheBust", String(Date.now()));
+          location.replace(next.href);
+          return;
+        }
+
+        const projectId = activeProjectId();
+        const engine = globalThis.KairosManuscriptFinalDeliverableEngine
+          || globalThis.KairosManuscriptPipelineOrchestrator;
+        if (engine?.manufacture) {
+          void engine.manufacture(projectId);
+          return;
+        }
+
+        const section = document.querySelector("#manuscript-editorial-workbench");
+        if (section) {
+          section.innerHTML = `
+            <p class="eyebrow">Final deliverable recovery</p>
+            <h3>The final-deliverable engine is still loading</h3>
+            <p>Kairos will reload the current saved project with a fresh runtime.</p>
+            <div class="manuscript-actions">
+              <button type="button" class="primary" data-kairos-inline-reload>Reload Saved Project</button>
+            </div>
+          `;
+        }
+      }, true);
+
+      window.addEventListener("kairos:manuscript-studio:opened", arm, { once: true });
+      window.addEventListener("pageshow", arm);
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") arm();
+      });
+      if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", arm, { once: true });
+      else queueMicrotask(arm);
+
+      function arm() {
+        if (!armedAt) armedAt = Date.now();
+        clearTimeout(timer);
+        timer = setTimeout(inspect, 250);
+      }
+
+      function inspect() {
+        const section = document.querySelector("#manuscript-editorial-workbench");
+        if (!section) {
+          timer = setTimeout(inspect, 250);
+          return;
+        }
+
+        if (section.hasAttribute("data-kairos-editorial-stall-escape")
+          || section.hasAttribute("data-kairos-inline-editorial-escape")) return;
+
+        if (!/loading editorial workbench/i.test(section.textContent || "")) {
+          armedAt = 0;
+          return;
+        }
+
+        if (!armedAt) armedAt = Date.now();
+        const elapsed = Date.now() - armedAt;
+        if (elapsed < DEADLINE_MS) {
+          timer = setTimeout(inspect, Math.max(100, DEADLINE_MS - elapsed));
+          return;
+        }
+
+        const watchdog = globalThis.KairosManuscriptEditorialWatchdog;
+        if (watchdog?.patchBuild === WATCHDOG_PATCH) {
+          watchdog.inspect("inline-hard-stop-deadline");
+          if (section.hasAttribute("data-kairos-editorial-stall-escape")) return;
+        }
+
+        section.setAttribute("data-kairos-inline-editorial-escape", BUILD);
+        section.removeAttribute("aria-busy");
+        section.setAttribute("role", "alert");
+        section.innerHTML = `
+          <p class="eyebrow">Editorial recovery</p>
+          <h3>Editorial loading was stopped</h3>
+          <p>Kairos will not leave this project on a permanent loading screen. The saved manuscript, cover, metadata, editorial state, and assignment remain intact.</p>
+          <p class="manuscript-note">Project: ${escapeHTML(activeProjectId() || "active manuscript")}</p>
+          <div class="manuscript-actions">
+            <button type="button" class="primary" data-kairos-inline-resume-final>Resume Final Deliverable</button>
+            <button type="button" class="secondary" data-kairos-inline-reload>Reload Saved Project</button>
+          </div>
+        `;
+        section.scrollIntoView({ block: "center" });
+      }
+
+      function activeProjectId() {
+        const direct = new URL(location.href).searchParams.get("project") || "";
+        if (direct) return direct;
+        try {
+          const record = JSON.parse(sessionStorage.getItem("kairos.production.active-workspace") || "null");
+          return String(record?.projectId || record?.id || "").trim();
+        } catch {
+          return "";
+        }
+      }
+
+      function escapeHTML(value) {
+        return String(value || "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+    })();
+  </script>
   <script
     src="./scripts/manuscript-project-preservation-bridge.js?v=kairos-manuscript-project-preservation-20260801-1"
     onerror="KairosDedicatedManuscriptRoute.fail('The manuscript state-preservation bridge failed to load.')"></script>
@@ -220,7 +359,7 @@
     onerror="KairosDedicatedManuscriptRoute.fail('Safari manuscript compatibility failed to load.')"></script>
 
   <script type="module">
-    const RUNTIME_BOOTSTRAP = "kairos-manuscript-runtime-bootstrap-20260804-6-control-ownership";
+    const RUNTIME_BOOTSTRAP = "kairos-manuscript-runtime-bootstrap-20260804-7-editorial-hard-stop";
 
     globalThis.__KAIROS_MANUSCRIPT_RUNTIME_READY__ = (async () => {
       await import("./scripts/manuscript-registry-bridge.js?v=kairos-manuscript-registry-bridge-20260804-4-restored-source-cache");
@@ -240,6 +379,12 @@
       if (!globalThis.KairosManuscriptFinalDeliverableControlOwner?.ready) {
         throw new Error("The final deliverable controls did not become ready.");
       }
+      if (globalThis.KairosManuscriptEditorialWatchdog?.patchBuild !== "kairos-manuscript-editorial-stall-escape-20260804-2") {
+        throw new Error("The current Editorial Workbench recovery build did not load.");
+      }
+      if (!globalThis.KairosInlineEditorialHardStop?.ready) {
+        throw new Error("The inline Editorial Workbench hard stop did not load.");
+      }
 
       return {
         status: "ready",
@@ -248,7 +393,9 @@
         restoreBuild: globalThis.KairosManuscriptDedicatedRestore?.build || null,
         finalDeliverableBuild: globalThis.KairosManuscriptFinalDeliverableEngine.build,
         finalDeliverableControlBuild: globalThis.KairosManuscriptFinalDeliverableControlOwner.build,
-        editorialWatchdogBuild: globalThis.KairosManuscriptEditorialWatchdog?.build || null,
+        editorialWatchdogBuild: globalThis.KairosManuscriptEditorialWatchdog.build,
+        editorialWatchdogPatch: globalThis.KairosManuscriptEditorialWatchdog.patchBuild,
+        inlineEditorialHardStopBuild: globalThis.KairosInlineEditorialHardStop.build,
       };
     })();
 
