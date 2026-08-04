@@ -9,12 +9,44 @@ const workspaceSource = readFileSync(
   new URL("../web/kairos-dashboard/scripts/production-workspace-controller.js", import.meta.url),
   "utf8",
 );
+const registryBridgeSource = readFileSync(
+  new URL("../web/kairos-dashboard/scripts/manuscript-registry-bridge.js", import.meta.url),
+  "utf8",
+);
+const stateFetchInstallSource = readFileSync(
+  new URL("../web/kairos-dashboard/scripts/kairos-state-fetch-install.js", import.meta.url),
+  "utf8",
+);
+const stateFetchSource = readFileSync(
+  new URL("../web/kairos-dashboard/scripts/kairos-state-fetch.js", import.meta.url),
+  "utf8",
+);
 
 const PROJECT_ID = "manuscript-studio-connected-project-12345678";
 const EDITORIAL_PATH = `/api/production-registry/manuscripts/${PROJECT_ID}/editorial`;
 const SOURCE_TEXT_PATH = `/api/production-registry/manuscripts/${PROJECT_ID}/source/text`;
 
-test("a stalled Safari editorial request becomes a visible retry and then recovers", async ({ page }) => {
+async function fulfillStateTransport(route, url) {
+  if (url.pathname === "/scripts/kairos-state-fetch-install.js") {
+    await route.fulfill({
+      status: 200,
+      contentType: "text/javascript",
+      body: stateFetchInstallSource,
+    });
+    return true;
+  }
+  if (url.pathname === "/scripts/kairos-state-fetch.js") {
+    await route.fulfill({
+      status: 200,
+      contentType: "text/javascript",
+      body: stateFetchSource,
+    });
+    return true;
+  }
+  return false;
+}
+
+test("a stalled Safari editorial request uses the bounded state transport, becomes a visible retry, and recovers", async ({ page }) => {
   let editorialReads = 0;
   let allowEditorial = false;
 
@@ -39,6 +71,8 @@ test("a stalled Safari editorial request becomes a visible retry and then recove
       });
       return;
     }
+
+    if (await fulfillStateTransport(route, url)) return;
 
     if (request.method() === "GET" && url.pathname === EDITORIAL_PATH) {
       editorialReads += 1;
@@ -82,21 +116,28 @@ test("a stalled Safari editorial request becomes a visible retry and then recove
 
   await page.goto("https://kairos.test/manuscript?open=manuscript");
   await page.evaluate(projectId => {
-    globalThis.__KAIROS_EDITORIAL_REQUEST_TIMEOUT_MS__ = 250;
+    globalThis.__KAIROS_STATE_TIMEOUT_MS__ = 250;
+    globalThis.__KAIROS_STATE_ATTEMPTS__ = 1;
+    globalThis.__KAIROS_EDITORIAL_REQUEST_TIMEOUT_MS__ = 5_000;
     sessionStorage.setItem("kairos.production.active-workspace", JSON.stringify({
       workspace: "manuscript-studio",
       projectId,
     }));
   }, PROJECT_ID);
+  await page.addScriptTag({ content: registryBridgeSource });
+  await page.evaluate(() => window.__KAIROS_MANUSCRIPT_STATE_FETCH_READY__);
   await page.addScriptTag({ type: "module", content: editorialSource });
 
   const workbench = page.locator("#manuscript-editorial-workbench");
-  await expect(workbench).toContainText("Editorial Workbench needs attention", { timeout: 4_000 });
+  await expect(workbench).toContainText("Editorial Workbench needs attention", { timeout: 3_000 });
   await expect(workbench.getByRole("button", { name: "Retry" })).toBeVisible();
   await expect.poll(() => editorialReads).toBe(2);
   await expect.poll(
     () => page.evaluate(() => window.KairosEditorialWorkbenchController.snapshot()),
-  ).toMatchObject({ busy: false, loaded: false, requestTimeoutMs: 250 });
+  ).toMatchObject({ busy: false, loaded: false, requestTimeoutMs: 5_000 });
+  await expect.poll(
+    () => page.evaluate(() => window.KairosManuscriptRegistryBridge.snapshot()),
+  ).toMatchObject({ stateFetchInstalled: true, stateFetchError: null });
 
   allowEditorial = true;
   await workbench.getByRole("button", { name: "Retry" }).click({ force: true });
@@ -107,6 +148,105 @@ test("a stalled Safari editorial request becomes a visible retry and then recove
   await expect.poll(
     () => page.evaluate(() => window.KairosEditorialWorkbenchController.snapshot()),
   ).toMatchObject({ busy: false, loaded: true, error: null });
+});
+
+test("the restored 279045-character manuscript is reused without a second source download", async ({ page }) => {
+  let sourceNetworkReads = 0;
+  const manuscript = "A".repeat(279_045);
+
+  await page.route("https://kairos.test/**", async route => {
+    const request = route.request();
+    const url = new URL(request.url());
+
+    if (request.resourceType() === "document") {
+      await route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: `<!doctype html><html><body>
+          <div id="manuscript-studio-overlay">
+            <div class="manuscript-result">
+              <section id="manuscript-project-setup">
+                <p>Production assignment</p>
+                <h3>assigned-to-production</h3>
+              </section>
+            </div>
+          </div>
+        </body></html>`,
+      });
+      return;
+    }
+
+    if (await fulfillStateTransport(route, url)) return;
+
+    if (request.method() === "GET" && url.pathname === EDITORIAL_PATH) {
+      await route.fulfill({
+        status: 404,
+        contentType: "application/json",
+        body: JSON.stringify({ error: { code: "editorial_not_started" } }),
+      });
+      return;
+    }
+
+    if (request.method() === "GET" && url.pathname === SOURCE_TEXT_PATH) {
+      sourceNetworkReads += 1;
+      await route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: { message: "The source should have come from the restore cache." } }),
+      });
+      return;
+    }
+
+    await route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
+  });
+
+  await page.goto("https://kairos.test/manuscript?open=manuscript");
+  await page.evaluate(projectId => {
+    globalThis.__KAIROS_STATE_TIMEOUT_MS__ = 500;
+    globalThis.__KAIROS_STATE_ATTEMPTS__ = 1;
+    sessionStorage.setItem("kairos.production.active-workspace", JSON.stringify({
+      workspace: "manuscript-studio",
+      projectId,
+    }));
+  }, PROJECT_ID);
+  await page.addScriptTag({ content: registryBridgeSource });
+  await page.evaluate(({ projectId, manuscript }) => {
+    window.dispatchEvent(new CustomEvent("kairos:manuscript:restore", {
+      detail: {
+        project: {
+          projectId,
+          projectType: "manuscript-studio",
+          status: "assigned-to-production",
+          stage: "editorial",
+        },
+        source: {
+          projectId,
+          filename: "AI Video Prompt Mastery.docx",
+          format: "docx",
+          stored: true,
+        },
+        manuscript,
+      },
+    }));
+  }, { projectId: PROJECT_ID, manuscript });
+  await page.evaluate(() => window.__KAIROS_MANUSCRIPT_STATE_FETCH_READY__);
+  await page.addScriptTag({ type: "module", content: editorialSource });
+
+  const workbench = page.locator("#manuscript-editorial-workbench");
+  await expect(workbench).toContainText("Editorial Workbench", { timeout: 3_000 });
+  await expect(workbench.locator("[data-editorial-save]")).toBeVisible();
+  await expect.poll(
+    () => workbench.locator("[data-editorial-text]").inputValue().then(value => value.length),
+  ).toBe(279_045);
+  expect(sourceNetworkReads).toBe(0);
+  await expect.poll(
+    () => page.evaluate(() => window.KairosManuscriptRegistryBridge.snapshot()),
+  ).toMatchObject({
+    stateFetchInstalled: true,
+    restoredProjectId: PROJECT_ID,
+    restoredCharacters: 279_045,
+    sourceCacheHits: 1,
+  });
 });
 
 test("Content Manuscript Studio resumes the durable project instead of opening a disconnected intake", async ({ page }) => {
