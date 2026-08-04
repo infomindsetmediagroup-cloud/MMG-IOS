@@ -9,6 +9,7 @@
   <meta name="mmg-manuscript-mobile-flow-release" content="manuscript-flow-recovery-20260803-3">
   <meta name="mmg-receipt-continuation-release" content="manuscript-receipt-continuation-20260804-1">
   <meta name="mmg-state-bootstrap-release" content="kairos-state-fetch-install-20260804-3-editorial-body-deadline">
+  <meta name="mmg-runtime-bootstrap-release" content="kairos-manuscript-runtime-bootstrap-20260804-2-direct-open-gate">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -178,16 +179,6 @@
 
   <noscript>Manuscript Studio requires JavaScript to run.</noscript>
 
-  <script type="module">
-    try {
-      await import("./scripts/kairos-state-fetch-install.js?v=kairos-state-fetch-install-20260804-3-editorial-body-deadline");
-      await import("./scripts/manuscript-registry-bridge.js?v=kairos-manuscript-registry-bridge-20260804-2-editorial-restore");
-    } catch (error) {
-      KairosDedicatedManuscriptRoute.fail(
-        error?.message || "The manuscript state transport failed to load.",
-      );
-    }
-  </script>
   <script
     src="./scripts/manuscript-project-preservation-bridge.js?v=kairos-manuscript-project-preservation-20260801-1"
     onerror="KairosDedicatedManuscriptRoute.fail('The manuscript state-preservation bridge failed to load.')"></script>
@@ -214,9 +205,34 @@
   <script
     src="./scripts/manuscript-dedicated-project-restore.js?v=kairos-manuscript-dedicated-restore-20260804-1"
     onerror="KairosDedicatedManuscriptRoute.fail('The saved manuscript handoff failed to load.')"></script>
-  <script
-    type="module"
-    src="./scripts/manuscript-direct-open-controller.js?v=manuscript-flow-recovery-20260803-3"
-    onerror="KairosDedicatedManuscriptRoute.fail('The dedicated Manuscript Studio controller failed to load.')"></script>
+
+  <script type="module">
+    const RUNTIME_BOOTSTRAP = "kairos-manuscript-runtime-bootstrap-20260804-2-direct-open-gate";
+
+    globalThis.__KAIROS_MANUSCRIPT_RUNTIME_READY__ = (async () => {
+      await import("./scripts/manuscript-registry-bridge.js?v=kairos-manuscript-registry-bridge-20260804-3-state-transport");
+
+      if (!globalThis.KairosManuscriptRegistryBridge?.ready) {
+        throw new Error("The manuscript registry bridge did not become ready.");
+      }
+
+      await globalThis.KairosManuscriptRegistryBridge.stateFetchReady();
+      await import("./scripts/manuscript-direct-open-controller.js?v=manuscript-flow-recovery-20260803-3");
+
+      return {
+        status: "ready",
+        build: RUNTIME_BOOTSTRAP,
+        registryBuild: globalThis.KairosManuscriptRegistryBridge.build,
+      };
+    })();
+
+    try {
+      await globalThis.__KAIROS_MANUSCRIPT_RUNTIME_READY__;
+    } catch (error) {
+      KairosDedicatedManuscriptRoute.fail(
+        error?.message || "The manuscript runtime failed to load.",
+      );
+    }
+  </script>
 </body>
 </html>

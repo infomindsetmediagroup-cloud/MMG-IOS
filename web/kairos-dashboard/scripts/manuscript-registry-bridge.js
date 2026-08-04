@@ -1,5 +1,5 @@
 (() => {
-  const BUILD = "kairos-manuscript-registry-bridge-20260804-2-editorial-restore";
+  const BUILD = "kairos-manuscript-registry-bridge-20260804-3-state-transport";
   const GLOBAL_KEY = "__KAIROS_MANUSCRIPT_REGISTRY_BRIDGE__";
   const PENDING_KEY = "kairos.manuscript.registry-sync.pending.v1";
   const PROJECT_ROUTE = /^\/api\/production-registry\/projects\/([^/]+)$/;
@@ -11,7 +11,7 @@
     document.baseURI,
   ).href;
   const stateFetchURL = new URL(
-    "./kairos-state-fetch-install.js?v=kairos-state-fetch-20260731-2-buffered",
+    "./kairos-state-fetch-install.js?v=kairos-state-fetch-install-20260804-3-editorial-body-deadline",
     scriptBase,
   ).href;
 
