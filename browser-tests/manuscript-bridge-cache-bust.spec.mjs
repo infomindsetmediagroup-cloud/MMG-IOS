@@ -122,7 +122,14 @@ test("root dashboard cannot retain a legacy embedded manuscript runtime", async 
 test("editorial watchdog replaces an indefinite loading card with recovery controls", async ({ page }) => {
   const projectId = "editorial-watchdog-project-12345678";
 
-  await page.setContent("<!doctype html><html data-kairos-route=\"manuscript-studio\"><body data-kairos-dedicated-manuscript=\"true\"></body></html>");
+  await page.route("https://kairos.test/editorial-watchdog", async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: "<!doctype html><html data-kairos-route=\"manuscript-studio\"><body data-kairos-dedicated-manuscript=\"true\"></body></html>",
+    });
+  });
+  await page.goto("https://kairos.test/editorial-watchdog");
   await page.evaluate(id => {
     globalThis.__KAIROS_EDITORIAL_WATCHDOG_DEADLINE_MS__ = 500;
     globalThis.__KAIROS_EDITORIAL_WATCHDOG_AUTO_RELOAD__ = false;
