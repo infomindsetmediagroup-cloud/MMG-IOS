@@ -3,10 +3,10 @@ import {
 } from "./kairos-state-fetch.js?v=kairos-state-fetch-20260731-2-buffered";
 
 export const KAIROS_STATE_FETCH_INSTALL_BUILD =
-  "kairos-state-fetch-install-20260804-3-editorial-body-deadline";
+  "kairos-state-fetch-install-20260804-4-deadlock-recovery";
 
 const nativeFetch = globalThis.fetch.bind(globalThis);
-const STATE_ROUTE = /^\/api\/production-registry\/manuscripts\/[^/]+\/(?:auto-pipeline|setup|editorial)$/;
+const STATE_ROUTE = /^\/api\/production-registry\/manuscripts\/[^/]+\/(?:auto-pipeline(?:\/(?:run|shopify-draft|shopify-publish))?|setup(?:\/cover)?|editorial(?:\/(?:versions(?:\/[a-z0-9-]{8,})?|review|decision|finalize))?|source\/text|deliverables\/(?:build|zip))$/i;
 const DEFAULT_TIMEOUT_MS = 8_000;
 const DEFAULT_ATTEMPTS = 3;
 
@@ -55,7 +55,7 @@ function rewriteStateCheckingCopy() {
   const progress = section.querySelector(".manuscript-progress");
   if (progress) {
     progress.textContent =
-      "Kairos is checking the saved package, project setup, and editorial approval. Local WebGPU production has not started yet.";
+      "Kairos is checking the saved package, project setup, editorial approval, and preserved source. This request is bounded and will expose a retry if the registry does not answer.";
   }
 }
 
