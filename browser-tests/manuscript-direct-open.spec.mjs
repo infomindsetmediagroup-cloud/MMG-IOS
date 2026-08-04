@@ -13,6 +13,10 @@ const registryBridgeSource = readFileSync(
   new URL("../web/kairos-dashboard/scripts/manuscript-registry-bridge.js", import.meta.url),
   "utf8",
 );
+const deadlockRecoverySource = readFileSync(
+  new URL("../web/kairos-dashboard/scripts/manuscript-deadlock-recovery.js", import.meta.url),
+  "utf8",
+);
 const directOpenSource = readFileSync(
   new URL("../web/kairos-dashboard/scripts/manuscript-direct-open-controller.js", import.meta.url),
   "utf8",
@@ -60,6 +64,11 @@ async function installSuccessRoutes(page, { delayStudioMs = 100 } = {}) {
 
     if (url.pathname === "/scripts/manuscript-registry-bridge.js") {
       await route.fulfill({ status: 200, contentType: "text/javascript", body: registryBridgeSource });
+      return;
+    }
+
+    if (url.pathname === "/scripts/manuscript-deadlock-recovery.js") {
+      await route.fulfill({ status: 200, contentType: "text/javascript", body: deadlockRecoverySource });
       return;
     }
 
@@ -224,6 +233,11 @@ test("dedicated route displays body-owned recovery controls when Studio cannot l
 
     if (url.pathname === "/scripts/manuscript-registry-bridge.js") {
       await route.fulfill({ status: 200, contentType: "text/javascript", body: registryBridgeSource });
+      return;
+    }
+
+    if (url.pathname === "/scripts/manuscript-deadlock-recovery.js") {
+      await route.fulfill({ status: 200, contentType: "text/javascript", body: deadlockRecoverySource });
       return;
     }
 
