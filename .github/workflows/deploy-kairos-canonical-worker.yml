@@ -1,0 +1,128 @@
+name: Deploy Canonical Kairos Worker
+
+"on":
+  pull_request:
+    branches: [main]
+    paths:
+      - "cloudflare/mmg-ios/**"
+      - "web/kairos-dashboard/**"
+      - ".github/workflows/deploy-kairos-canonical-worker.yml"
+  push:
+    branches: [main]
+    paths:
+      - "cloudflare/mmg-ios/**"
+      - "web/kairos-dashboard/**"
+      - ".github/workflows/deploy-kairos-canonical-worker.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kairos-canonical-worker-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  WORKER_DIRECTORY: cloudflare/mmg-ios
+  WORKER_BASE_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+  CANONICAL_ENTRY_BUILD: kairos-local-canonical-entry-20260804-1-manuscript-canonical-shard-identity
+  MANUSCRIPT_IDENTITY_BUILD: kairos-manuscript-canonical-identity-20260804-1-server-shard-resolution
+
+jobs:
+  validate:
+    name: Validate canonical Worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate active source chain
+        working-directory: ${{ env.WORKER_DIRECTORY }}
+        run: |
+          set -euo pipefail
+          test -f package.json
+          test -f wrangler.toml
+          test -f src/kairos-production-entry-local-canonical-v1.js
+          test -f src/kairos-manuscript-canonical-identity-router-v1.js
+          test -f src/kairos-manuscript-source-shard-v1.js
+          test -f src/kairos-manuscript-package-state-v1.js
+          grep -Fq 'main = "src/kairos-production-entry-local-canonical-v1.js"' wrangler.toml
+          grep -Fq 'resolveCanonicalManuscriptRequest(request, env)' src/kairos-production-entry-local-canonical-v1.js
+          grep -Fq 'handleManuscriptPackageState(canonicalRequest, env, ctx)' src/kairos-production-entry-local-canonical-v1.js
+          grep -Fq 'handleDedicatedManuscriptSource(canonicalRequest, env)' src/kairos-production-entry-local-canonical-v1.js
+          grep -Fq "${CANONICAL_ENTRY_BUILD}" src/kairos-production-entry-local-canonical-v1.js
+          grep -Fq "${MANUSCRIPT_IDENTITY_BUILD}" src/kairos-manuscript-canonical-identity-router-v1.js
+          node --check src/kairos-production-entry-local-canonical-v1.js
+          node --check src/kairos-manuscript-canonical-identity-router-v1.js
+          node --check src/kairos-manuscript-source-shard-v1.js
+          node --check src/kairos-manuscript-package-state-v1.js
+
+      - name: Install Worker dependencies
+        working-directory: ${{ env.WORKER_DIRECTORY }}
+        run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+
+      - name: Validate deployable Worker bundle
+        working-directory: ${{ env.WORKER_DIRECTORY }}
+        run: npx wrangler deploy --dry-run
+
+  deploy:
+    name: Deploy canonical Worker
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Worker dependencies
+        working-directory: ${{ env.WORKER_DIRECTORY }}
+        run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+
+      - name: Deploy canonical Kairos Worker
+        working-directory: ${{ env.WORKER_DIRECTORY }}
+        run: |
+          set -euo pipefail
+          npx wrangler deploy \
+            --var "DEPLOYMENT_SHA:${GITHUB_SHA}" \
+            --var "DEPLOYED_AT:$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+      - name: Verify exact production deployment
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 24); do
+            body="${RUNNER_TEMP}/deployment-identity-${attempt}.json"
+            headers="${RUNNER_TEMP}/deployment-identity-${attempt}.headers"
+            status="$(curl --silent --show-error --max-time 30 \
+              -D "${headers}" \
+              -H 'Cache-Control: no-cache, no-store, must-revalidate' \
+              "${WORKER_BASE_URL}/api/deployment/identity?sha=${GITHUB_SHA}&attempt=${attempt}" \
+              -o "${body}" -w '%{http_code}' || true)"
+            echo "Canonical deployment verification ${attempt}/24 HTTP ${status}"
+            cat "${body}" || true
+            if [ "${status}" = "200" ] \
+              && grep -Fq "\"deploymentSha\":\"${GITHUB_SHA}\"" "${body}" \
+              && grep -qi "x-kairos-canonical-local: ${CANONICAL_ENTRY_BUILD}" "${headers}" \
+              && grep -qi "x-kairos-manuscript-identity-build: ${MANUSCRIPT_IDENTITY_BUILD}" "${headers}"; then
+              echo "Exact canonical Worker deployment is live."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "The exact canonical Worker deployment could not be verified." >&2
+          exit 1
