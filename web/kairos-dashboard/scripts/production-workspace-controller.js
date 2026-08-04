@@ -82,10 +82,23 @@ async function openOrResumeWorkspace(workspace) {
 
   workspaceOpenPromise = (async () => {
     if (workspace === "manuscript-studio") {
-      if (!registryReady) await refreshRegistry("manuscript-open-preflight");
       const active = readJSON(ACTIVE_KEY);
+      if (!registryReady) await refreshRegistry("manuscript-open-preflight");
       const project = selectResumableManuscript(active?.projectId || null);
       if (project) return resumeProject(project);
+
+      // A startup refresh can briefly return no projects while an intake or
+      // source transaction is already active in this Safari session. Preserve
+      // that project ID; never replace it with a disconnected blank project.
+      if (active?.workspace === "manuscript-studio" && active.projectId) {
+        openWorkspace(workspace);
+        return {
+          status: "active-workspace-opened",
+          workspace,
+          projectId: active.projectId,
+          build: BUILD,
+        };
+      }
     }
 
     sessionStorage.setItem(ACTIVE_KEY, JSON.stringify({
