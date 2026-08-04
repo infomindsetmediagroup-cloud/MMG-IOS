@@ -10,11 +10,12 @@
   <meta name="mmg-manuscript-mobile-flow-release" content="manuscript-flow-recovery-20260803-3">
   <meta name="mmg-receipt-continuation-release" content="manuscript-receipt-continuation-20260804-1">
   <meta name="mmg-state-bootstrap-release" content="kairos-state-fetch-install-20260804-3-editorial-body-deadline">
-  <meta name="mmg-runtime-bootstrap-release" content="kairos-manuscript-runtime-bootstrap-20260804-5-final-deliverable">
+  <meta name="mmg-runtime-bootstrap-release" content="kairos-manuscript-runtime-bootstrap-20260804-6-control-ownership">
   <meta name="mmg-deadlock-recovery-release" content="kairos-manuscript-deadlock-recovery-20260804-2">
   <meta name="mmg-editorial-watchdog-release" content="manuscript-editorial-recovery-20260804-1">
   <meta name="mmg-restored-source-cache-release" content="kairos-manuscript-registry-bridge-20260804-4-restored-source-cache">
   <meta name="mmg-final-deliverable-engine-release" content="kairos-manuscript-final-deliverable-engine-20260804-1">
+  <meta name="mmg-final-deliverable-control-release" content="kairos-manuscript-final-deliverable-control-owner-20260804-1">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -198,6 +199,9 @@
     src="./scripts/manuscript-final-deliverable-engine.js?v=kairos-manuscript-final-deliverable-engine-20260804-1"
     onerror="KairosDedicatedManuscriptRoute.fail('The final deliverable recovery engine failed to load.')"></script>
   <script
+    src="./scripts/manuscript-final-deliverable-control-owner.js?v=kairos-manuscript-final-deliverable-control-owner-20260804-1"
+    onerror="KairosDedicatedManuscriptRoute.fail('The final deliverable control owner failed to load.')"></script>
+  <script
     type="module"
     src="./scripts/manuscript-project-setup.js?v=manuscript-flow-recovery-20260803-3"
     onerror="KairosDedicatedManuscriptRoute.fail('The Project Setup controller failed to load.')"></script>
@@ -216,7 +220,7 @@
     onerror="KairosDedicatedManuscriptRoute.fail('Safari manuscript compatibility failed to load.')"></script>
 
   <script type="module">
-    const RUNTIME_BOOTSTRAP = "kairos-manuscript-runtime-bootstrap-20260804-5-final-deliverable";
+    const RUNTIME_BOOTSTRAP = "kairos-manuscript-runtime-bootstrap-20260804-6-control-ownership";
 
     globalThis.__KAIROS_MANUSCRIPT_RUNTIME_READY__ = (async () => {
       await import("./scripts/manuscript-registry-bridge.js?v=kairos-manuscript-registry-bridge-20260804-4-restored-source-cache");
@@ -233,6 +237,9 @@
       if (!globalThis.KairosManuscriptFinalDeliverableEngine?.ready) {
         throw new Error("The final deliverable engine did not become ready.");
       }
+      if (!globalThis.KairosManuscriptFinalDeliverableControlOwner?.ready) {
+        throw new Error("The final deliverable controls did not become ready.");
+      }
 
       return {
         status: "ready",
@@ -240,6 +247,7 @@
         registryBuild: globalThis.KairosManuscriptRegistryBridge.build,
         restoreBuild: globalThis.KairosManuscriptDedicatedRestore?.build || null,
         finalDeliverableBuild: globalThis.KairosManuscriptFinalDeliverableEngine.build,
+        finalDeliverableControlBuild: globalThis.KairosManuscriptFinalDeliverableControlOwner.build,
         editorialWatchdogBuild: globalThis.KairosManuscriptEditorialWatchdog?.build || null,
       };
     })();
