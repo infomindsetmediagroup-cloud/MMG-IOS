@@ -159,7 +159,6 @@ test("dedicated Studio restores the exact dashboard project and accepted product
   }, PROJECT_ID);
 
   await page.addScriptTag({ content: dedicatedRestoreSource });
-  window;
   await page.evaluate(() => {
     window.dispatchEvent(new CustomEvent("kairos:manuscript-studio:opened"));
   });
