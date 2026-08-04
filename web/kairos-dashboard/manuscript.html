@@ -10,6 +10,7 @@
   <meta name="mmg-receipt-continuation-release" content="manuscript-receipt-continuation-20260804-1">
   <meta name="mmg-state-bootstrap-release" content="kairos-state-fetch-install-20260804-3-editorial-body-deadline">
   <meta name="mmg-runtime-bootstrap-release" content="kairos-manuscript-runtime-bootstrap-20260804-2-direct-open-gate">
+  <meta name="mmg-deadlock-recovery-release" content="kairos-manuscript-deadlock-recovery-20260804-2">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -217,6 +218,7 @@
       }
 
       await globalThis.KairosManuscriptRegistryBridge.stateFetchReady();
+      await import("./scripts/manuscript-deadlock-recovery.js?v=kairos-manuscript-deadlock-recovery-20260804-2");
       await import("./scripts/manuscript-direct-open-controller.js?v=manuscript-flow-recovery-20260803-3");
 
       return {
