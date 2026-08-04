@@ -1,0 +1,47 @@
+name: Manuscript Canonical Package Assets
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v2.js"
+      - "cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js"
+      - "cloudflare/mmg-ios/test/kairos-manuscript-canonical-package-assets.test.js"
+      - "web/kairos-dashboard/scripts/manuscript-final-deliverable-control-owner.js"
+      - "browser-tests/manuscript-final-delivery-navigation.spec.mjs"
+      - ".github/workflows/manuscript-canonical-package-assets.yml"
+  push:
+    branches:
+      - main
+      - fix/manuscript-canonical-package-assets-navigation-20260804
+
+permissions:
+  contents: read
+
+jobs:
+  verify-canonical-package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+      - name: Validate syntax
+        run: |
+          node --check cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v2.js
+          node --check cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js
+          node --check web/kairos-dashboard/scripts/manuscript-final-deliverable-control-owner.js
+      - name: Verify canonical package binary assets
+        run: node --test cloudflare/mmg-ios/test/kairos-manuscript-canonical-package-assets.test.js
+      - name: Install WebKit
+        run: npx playwright install --with-deps webkit > /dev/null
+      - name: Verify final-state navigation
+        run: npx playwright test browser-tests/manuscript-final-delivery-navigation.spec.mjs --project=webkit --workers=1
+      - name: Validate Worker bundle
+        working-directory: cloudflare/mmg-ios
+        run: |
+          npm install --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+          npx wrangler deploy --dry-run
