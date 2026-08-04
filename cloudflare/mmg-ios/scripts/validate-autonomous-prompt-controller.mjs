@@ -237,7 +237,7 @@ assert.ok(!fullThemeBaseline.includes('await writeThemeFile(config, auth, stagin
 assert.ok(index.includes('content="kairos-five-center-dashboard-post-intake-20260731-1"'));
 assert.ok(index.includes('scripts/legacy-runtime-loader.js'));
 assert.ok(!index.includes('command-hub-canonical-v3'));
-assert.ok(hub.includes('kairos-command-hub-20260714-38'));
+assert.ok(hub.includes('kairos-command-hub-20260803-39-canonical-header'));
 assert.ok(hub.includes('Active work'));
 assert.ok(hub.includes('Finished work'));
 assert.ok(hub.includes('Work to be done'));
