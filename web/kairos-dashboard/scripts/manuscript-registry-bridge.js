@@ -1,9 +1,16 @@
 (() => {
-  const BUILD = "kairos-manuscript-registry-bridge-20260801-1";
+  const BUILD = "kairos-manuscript-registry-bridge-20260804-2-editorial-restore";
   const GLOBAL_KEY = "__KAIROS_MANUSCRIPT_REGISTRY_BRIDGE__";
   const PENDING_KEY = "kairos.manuscript.registry-sync.pending.v1";
   const PROJECT_ROUTE = /^\/api\/production-registry\/projects\/([^/]+)$/;
+  const SOURCE_TEXT_ROUTE = /^\/api\/production-registry\/manuscripts\/([^/]+)\/source\/text$/;
+  const EDITORIAL_STATE_ROUTE = /^\/api\/production-registry\/manuscripts\/[^/]+\/editorial$/;
   const RETRY_DELAYS_MS = [1500, 5000, 15000, 30000];
+  const scriptBase = document.currentScript?.src || document.baseURI;
+  const stateFetchURL = new URL(
+    "./kairos-state-fetch-install.js?v=kairos-state-fetch-20260731-2-buffered",
+    scriptBase,
+  ).href;
 
   if (globalThis[GLOBAL_KEY]) {
     globalThis.KairosManuscriptRegistryBridge = globalThis[GLOBAL_KEY];
@@ -11,6 +18,8 @@
   }
 
   const nativeFetch = globalThis.fetch.bind(globalThis);
+  let bridgeFetch = null;
+  let restoredSource = null;
   const state = {
     pending: readPending(),
     retryTimer: 0,
@@ -18,12 +27,34 @@
     lastStatus: 0,
     lastError: "",
     syncedAt: "",
+    sourceCacheHits: 0,
+    restoredProjectId: "",
+    restoredCharacters: 0,
+    stateFetchError: "",
   };
+
+  const stateFetchReady = Promise.resolve()
+    .then(() => import(stateFetchURL))
+    .then(() => {
+      state.stateFetchError = "";
+      return { status: "ready", build: BUILD };
+    })
+    .catch(error => {
+      state.stateFetchError = error?.message || String(error);
+      console.warn("[kairos-manuscript-registry-bridge] bounded state transport could not install", {
+        build: BUILD,
+        message: state.stateFetchError,
+      });
+      return { status: "deferred", error: state.stateFetchError, build: BUILD };
+    });
+
+  globalThis.__KAIROS_MANUSCRIPT_STATE_FETCH_READY__ = stateFetchReady;
 
   const api = Object.freeze({
     build: BUILD,
     ready: true,
     flush: flushPending,
+    stateFetchReady: () => stateFetchReady,
     snapshot() {
       return {
         build: BUILD,
@@ -33,6 +64,14 @@
         lastStatus: state.lastStatus,
         lastError: state.lastError,
         syncedAt: state.syncedAt || null,
+        sourceCacheHits: state.sourceCacheHits,
+        restoredProjectId: state.restoredProjectId || null,
+        restoredCharacters: state.restoredCharacters,
+        stateFetchInstalled: Boolean(
+          globalThis.__KAIROS_STATE_FETCH_INSTALLED__ ||
+          globalThis.__kairosStateFetchInstalled
+        ),
+        stateFetchError: state.stateFetchError || null,
       };
     },
   });
@@ -40,12 +79,48 @@
   globalThis[GLOBAL_KEY] = api;
   globalThis.KairosManuscriptRegistryBridge = api;
 
-  globalThis.fetch = async function kairosRegistryFetch(input, init = {}) {
+  bridgeFetch = async function kairosRegistryFetch(input, init = {}) {
     const request = input instanceof Request ? input : null;
     const method = String(init.method || request?.method || "GET").toUpperCase();
     const url = new URL(request?.url || String(input), location.href);
-    const match = method === "PATCH" ? url.pathname.match(PROJECT_ROUTE) : null;
 
+    if (
+      method === "GET" &&
+      EDITORIAL_STATE_ROUTE.test(url.pathname) &&
+      globalThis.fetch === bridgeFetch
+    ) {
+      await stateFetchReady;
+      if (globalThis.fetch !== bridgeFetch) {
+        return globalThis.fetch(input, init);
+      }
+    }
+
+    const sourceMatch = method === "GET" ? url.pathname.match(SOURCE_TEXT_ROUTE) : null;
+    if (
+      sourceMatch &&
+      restoredSource?.projectId === decodeURIComponent(sourceMatch[1]) &&
+      restoredSource.manuscript
+    ) {
+      state.sourceCacheHits += 1;
+      return new Response(JSON.stringify({
+        status: "ready",
+        manuscript: restoredSource.manuscript,
+        source: restoredSource.source || null,
+        project: restoredSource.project || null,
+        cache: "dedicated-restore",
+        build: BUILD,
+      }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store",
+          "X-Kairos-Manuscript-Source-Cache": BUILD,
+          "X-Kairos-Manuscript-Project": restoredSource.projectId,
+        },
+      });
+    }
+
+    const match = method === "PATCH" ? url.pathname.match(PROJECT_ROUTE) : null;
     if (!match) return nativeFetch(input, init);
 
     const projectId = decodeURIComponent(match[1]);
@@ -78,6 +153,31 @@
       },
     });
   };
+
+  globalThis.fetch = bridgeFetch;
+
+  window.addEventListener("kairos:manuscript:restore", event => {
+    const detail = event.detail || {};
+    const projectId = String(
+      detail.project?.projectId ||
+      detail.source?.projectId ||
+      activeProjectId() ||
+      "",
+    );
+    const manuscript = String(detail.manuscript || "");
+    if (!projectId || !manuscript) return;
+
+    restoredSource = {
+      projectId,
+      manuscript,
+      source: detail.source || null,
+      project: detail.project || null,
+      capturedAt: new Date().toISOString(),
+    };
+    state.restoredProjectId = projectId;
+    state.restoredCharacters = manuscript.length;
+    globalThis.__KAIROS_MANUSCRIPT_RESTORED_SOURCE__ = restoredSource;
+  });
 
   window.addEventListener("online", () => void flushPending());
   window.addEventListener("focus", () => void flushPending());
@@ -146,7 +246,7 @@
   }
 
   async function rememberPending(project, status) {
-    let message = `Registry synchronization returned HTTP ${status}.`;
+    const message = `Registry synchronization returned HTTP ${status}.`;
     state.lastStatus = status;
     state.lastError = message;
     persistPending({
@@ -214,6 +314,15 @@
     try {
       const value = JSON.parse(sessionStorage.getItem(PENDING_KEY) || "null");
       return value && value.projectId && value.project ? value : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function activeProjectId() {
+    try {
+      const active = JSON.parse(sessionStorage.getItem("kairos.production.active-workspace") || "null");
+      return active?.workspace === "manuscript-studio" ? active.projectId || null : null;
     } catch {
       return null;
     }
