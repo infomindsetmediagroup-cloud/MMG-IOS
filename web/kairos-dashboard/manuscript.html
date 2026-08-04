@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#05070a">
   <meta name="color-scheme" content="dark">
-  <meta name="mmg-build" content="kairos-dedicated-manuscript-route-20260803-3-flow-recovery">
-  <meta name="mmg-manuscript-mobile-flow-release" content="manuscript-flow-recovery-20260803-3">
+  <meta name="mmg-build" content="kairos-dedicated-manuscript-route-20260804-1-receipt-continuation">
+  <meta name="mmg-manuscript-mobile-flow-release" content="manuscript-receipt-continuation-20260804-1">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -119,7 +119,7 @@
   </style>
   <script>
     (() => {
-      const BUILD = "kairos-dedicated-manuscript-route-20260803-3-flow-recovery";
+      const BUILD = "kairos-dedicated-manuscript-route-20260804-1-receipt-continuation";
       const current = new URL(location.href);
       if (current.searchParams.get("open") !== "manuscript") {
         current.searchParams.set("open", "manuscript");
@@ -192,6 +192,9 @@
   <script
     src="./scripts/manuscript-continuation-controller.js?v=manuscript-flow-recovery-20260803-3"
     onerror="KairosDedicatedManuscriptRoute.fail('The manuscript continuation controller failed to load.')"></script>
+  <script
+    src="./scripts/manuscript-receipt-continuation-recovery.js?v=manuscript-receipt-continuation-20260804-1"
+    onerror="KairosDedicatedManuscriptRoute.fail('The live receipt continuation recovery failed to load.')"></script>
   <script
     src="./scripts/manuscript-stage-handoff-controller.js?v=manuscript-flow-recovery-20260803-3"
     onerror="KairosDedicatedManuscriptRoute.fail('The manuscript stage-handoff controller failed to load.')"></script>
