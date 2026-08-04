@@ -18,7 +18,7 @@ const stateFetch = readFileSync(
   "utf8",
 );
 
-test("dedicated Manuscript Studio serializes current state transport before the registry bridge", async () => {
+test("dedicated Manuscript Studio waits for current registry state transport before direct open", async () => {
   const registryBuild = registryBridge.match(/const BUILD = "([^"]+)";/)?.[1];
   const stateInstallBuild = stateFetchInstall.match(
     /KAIROS_STATE_FETCH_INSTALL_BUILD\s*=\s*\n?\s*"([^"]+)"/,
@@ -34,21 +34,22 @@ test("dedicated Manuscript Studio serializes current state transport before the 
   const installImport = `kairos-state-fetch-install.js?v=${stateInstallBuild}`;
   const registryImport = `manuscript-registry-bridge.js?v=${registryBuild}`;
   const stateClientImport = `kairos-state-fetch.js?v=${stateFetchBuild}`;
-  const registryReadyGuard = "KairosManuscriptRegistryBridge?.ready";
-  const directOpenRuntime = "manuscript-direct-open-controller.js?v=manuscript-flow-recovery-20260803-3";
+  const stateReadyAwait = "await globalThis.KairosManuscriptRegistryBridge.stateFetchReady()";
+  const directOpenImport = 'await import("./scripts/manuscript-direct-open-controller.js?v=manuscript-flow-recovery-20260803-3")';
 
-  expect(manuscriptRoute).toContain(installImport);
-  expect(manuscriptRoute).toContain(registryImport);
-  expect(manuscriptRoute.indexOf(installImport)).toBeLessThan(
-    manuscriptRoute.indexOf(registryImport),
-  );
+  expect(registryBridge).toContain(installImport);
   expect(stateFetchInstall).toContain(stateClientImport);
-
+  expect(manuscriptRoute).toContain(registryImport);
   expect(manuscriptRoute).toContain("__KAIROS_MANUSCRIPT_RUNTIME_READY__");
-  expect(manuscriptRoute).toContain(registryReadyGuard);
-  expect(manuscriptRoute).toContain(directOpenRuntime);
-  expect(manuscriptRoute.indexOf(registryReadyGuard)).toBeLessThan(
-    manuscriptRoute.indexOf(directOpenRuntime),
+  expect(manuscriptRoute).toContain("KairosManuscriptRegistryBridge?.ready");
+  expect(manuscriptRoute).toContain(stateReadyAwait);
+  expect(manuscriptRoute).toContain(directOpenImport);
+
+  expect(manuscriptRoute.indexOf(registryImport)).toBeLessThan(
+    manuscriptRoute.indexOf(stateReadyAwait),
+  );
+  expect(manuscriptRoute.indexOf(stateReadyAwait)).toBeLessThan(
+    manuscriptRoute.indexOf(directOpenImport),
   );
 
   expect(manuscriptRoute).not.toContain(
