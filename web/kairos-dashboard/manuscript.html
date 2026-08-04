@@ -5,14 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#05070a">
   <meta name="color-scheme" content="dark">
-  <meta name="mmg-build" content="kairos-dedicated-manuscript-route-20260804-4-editorial-watchdog">
+  <meta name="mmg-build" content="kairos-dedicated-manuscript-route-20260804-5-final-deliverable">
   <meta name="mmg-deployment-gate-compatibility" content="kairos-dedicated-manuscript-route-20260803-3-flow-recovery">
   <meta name="mmg-manuscript-mobile-flow-release" content="manuscript-flow-recovery-20260803-3">
   <meta name="mmg-receipt-continuation-release" content="manuscript-receipt-continuation-20260804-1">
   <meta name="mmg-state-bootstrap-release" content="kairos-state-fetch-install-20260804-3-editorial-body-deadline">
-  <meta name="mmg-runtime-bootstrap-release" content="kairos-manuscript-runtime-bootstrap-20260804-3-editorial-watchdog">
+  <meta name="mmg-runtime-bootstrap-release" content="kairos-manuscript-runtime-bootstrap-20260804-4-source-cache">
   <meta name="mmg-deadlock-recovery-release" content="kairos-manuscript-deadlock-recovery-20260804-2">
   <meta name="mmg-editorial-watchdog-release" content="manuscript-editorial-recovery-20260804-1">
+  <meta name="mmg-restored-source-cache-release" content="kairos-manuscript-registry-bridge-20260804-4-restored-source-cache">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -125,7 +126,7 @@
   </style>
   <script>
     (() => {
-      const BUILD = "kairos-dedicated-manuscript-route-20260804-4-editorial-watchdog";
+      const BUILD = "kairos-dedicated-manuscript-route-20260804-5-final-deliverable";
       const current = new URL(location.href);
       if (current.searchParams.get("open") !== "manuscript") {
         current.searchParams.set("open", "manuscript");
@@ -209,15 +210,12 @@
     type="module"
     src="./scripts/safari-manuscript-intake-compat.js?v=safari-native-docx-20260730-1"
     onerror="KairosDedicatedManuscriptRoute.fail('Safari manuscript compatibility failed to load.')"></script>
-  <script
-    src="./scripts/manuscript-dedicated-project-restore.js?v=kairos-manuscript-dedicated-restore-20260804-1"
-    onerror="KairosDedicatedManuscriptRoute.fail('The saved manuscript handoff failed to load.')"></script>
 
   <script type="module">
-    const RUNTIME_BOOTSTRAP = "kairos-manuscript-runtime-bootstrap-20260804-3-editorial-watchdog";
+    const RUNTIME_BOOTSTRAP = "kairos-manuscript-runtime-bootstrap-20260804-4-source-cache";
 
     globalThis.__KAIROS_MANUSCRIPT_RUNTIME_READY__ = (async () => {
-      await import("./scripts/manuscript-registry-bridge.js?v=kairos-manuscript-registry-bridge-20260804-3-state-transport");
+      await import("./scripts/manuscript-registry-bridge.js?v=kairos-manuscript-registry-bridge-20260804-4-restored-source-cache");
 
       if (!globalThis.KairosManuscriptRegistryBridge?.ready) {
         throw new Error("The manuscript registry bridge did not become ready.");
@@ -225,12 +223,14 @@
 
       await globalThis.KairosManuscriptRegistryBridge.stateFetchReady();
       await import("./scripts/manuscript-deadlock-recovery.js?v=kairos-manuscript-deadlock-recovery-20260804-2");
+      await import("./scripts/manuscript-dedicated-project-restore.js?v=kairos-manuscript-dedicated-restore-20260804-2-source-cache");
       await import("./scripts/manuscript-direct-open-controller.js?v=manuscript-flow-recovery-20260803-3");
 
       return {
         status: "ready",
         build: RUNTIME_BOOTSTRAP,
         registryBuild: globalThis.KairosManuscriptRegistryBridge.build,
+        restoreBuild: globalThis.KairosManuscriptDedicatedRestore?.build || null,
         editorialWatchdogBuild: globalThis.KairosManuscriptEditorialWatchdog?.build || null,
       };
     })();
