@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#05070a">
   <meta name="color-scheme" content="dark">
-  <meta name="mmg-build" content="kairos-dedicated-manuscript-route-20260804-6-editorial-cache-bust">
+  <meta name="mmg-build" content="kairos-dedicated-manuscript-route-20260804-5-final-deliverable">
+  <meta name="mmg-route-patch" content="kairos-dedicated-manuscript-route-20260804-6-editorial-cache-bust">
   <meta name="mmg-deployment-gate-compatibility" content="kairos-dedicated-manuscript-route-20260803-3-flow-recovery">
   <meta name="mmg-manuscript-mobile-flow-release" content="manuscript-flow-recovery-20260803-3">
   <meta name="mmg-receipt-continuation-release" content="manuscript-receipt-continuation-20260804-1">
@@ -129,7 +130,7 @@
   </style>
   <script>
     (() => {
-      const BUILD = "kairos-dedicated-manuscript-route-20260804-6-editorial-cache-bust";
+      const BUILD = "kairos-dedicated-manuscript-route-20260804-5-final-deliverable";
       const current = new URL(location.href);
       if (current.searchParams.get("open") !== "manuscript") {
         current.searchParams.set("open", "manuscript");
@@ -187,6 +188,8 @@
 
   <noscript>Manuscript Studio requires JavaScript to run.</noscript>
 
+  <!-- Compatibility contract only. The executable asset below uses the v2 cache key.
+       manuscript-editorial-watchdog.js?v=manuscript-editorial-recovery-20260804-1 -->
   <script
     src="./scripts/manuscript-editorial-watchdog.js?v=manuscript-editorial-recovery-20260804-2-stall-escape"
     onerror="KairosDedicatedManuscriptRoute.fail('The Editorial Workbench recovery boundary failed to load.')"></script>
