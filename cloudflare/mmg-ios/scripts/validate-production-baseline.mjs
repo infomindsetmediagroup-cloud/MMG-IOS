@@ -116,7 +116,7 @@ for (const asset of [
   "scripts/manuscript-direct-open-controller.js",
 ]) assert.ok(dashboardIndex.includes(asset), `Command Center asset missing: ${asset}`);
 assert.ok(dashboardIndex.includes('content="kairos-five-center-dashboard-post-intake-20260731-1"'), "Current five-center dashboard marker changed.");
-assert.ok(dashboardIndex.includes('content="manuscript-post-intake-stability-20260731-1"'), "Current manuscript production marker changed.");
+assert.ok(dashboardIndex.includes('content="five-center-manuscript-flow-recovery-20260803-3"'), "Current manuscript production marker changed.");
 
 const commandHub = readFileSync(join(repoRoot, "web/kairos-dashboard/scripts/command-hub.js"), "utf8");
 for (const center of ["knowledge", "content", "business", "customers", "operations"]) assert.ok(commandHub.includes(`id: "${center}"`), `Command Center parent is missing: ${center}`);
