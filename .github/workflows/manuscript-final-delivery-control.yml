@@ -30,14 +30,8 @@ jobs:
           from pathlib import Path
           path = Path('web/kairos-dashboard/manuscript.html')
           text = path.read_text()
-          text = text.replace(
-              'kairos-manuscript-final-deliverable-engine-20260804-1',
-              'kairos-manuscript-final-delivery-control-20260804-3',
-          )
-          text = text.replace(
-              '<meta name="mmg-final-deliverable-engine-release" content="kairos-manuscript-final-delivery-control-20260804-3">',
-              '<meta name="mmg-final-deliverable-engine-release" content="kairos-manuscript-final-delivery-control-20260804-3">',
-          )
+          text = text.replace('kairos-manuscript-final-deliverable-engine-20260804-1', 'kairos-manuscript-final-delivery-control-20260804-4')
+          text = text.replace('kairos-manuscript-final-delivery-control-20260804-3', 'kairos-manuscript-final-delivery-control-20260804-4')
           path.write_text(text)
           PY
           if git diff --quiet -- web/kairos-dashboard/manuscript.html; then
@@ -46,7 +40,7 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add web/kairos-dashboard/manuscript.html
-            git commit -m "Load always-visible final delivery control"
+            git commit -m "Load final delivery control v4"
             git push origin HEAD:${GITHUB_REF_NAME}
           fi
 
@@ -63,12 +57,17 @@ jobs:
 
       - name: Verify route loads current final delivery control
         run: |
-          grep -q 'kairos-manuscript-final-delivery-control-20260804-3' web/kairos-dashboard/manuscript.html
+          grep -q 'kairos-manuscript-final-delivery-control-20260804-4' web/kairos-dashboard/manuscript.html
           grep -q 'data-kairos-final-delivery-control' web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js
           grep -q 'Produce Final Deliverable' web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js
+          grep -q 'deterministic-deliverables-fallback' web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js
 
       - name: Install WebKit
         run: npx playwright install --with-deps webkit > /dev/null
 
-      - name: Run final delivery WebKit regression
-        run: npx playwright test browser-tests/manuscript-final-delivery-control.spec.mjs --project=webkit --workers=1
+      - name: Run final delivery WebKit regressions
+        run: |
+          npx playwright test \
+            browser-tests/manuscript-final-delivery-control.spec.mjs \
+            browser-tests/manuscript-pipeline-orchestrator.spec.mjs \
+            --project=webkit --workers=1
