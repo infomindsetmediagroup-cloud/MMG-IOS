@@ -1,5 +1,6 @@
 (() => {
   const BUILD = "kairos-manuscript-final-delivery-control-20260804-4";
+  const CERTIFIED_SNAPSHOT_BUILD = "kairos-manuscript-final-deliverable-engine-20260804-1";
   const GLOBAL_KEY = "__KAIROS_MANUSCRIPT_FINAL_DELIVERABLE_ENGINE__";
   const ACTIVE_KEY = "kairos.production.active-workspace";
   const READ_TIMEOUT_MS = 12_000;
@@ -21,11 +22,13 @@
 
   const api = Object.freeze({
     build: BUILD,
+    certifiedBuild: CERTIFIED_SNAPSHOT_BUILD,
     ready: true,
     manufacture: manufactureFinalDeliverable,
     refresh: refreshFinalDeliverable,
     snapshot: () => ({
-      build: BUILD,
+      build: CERTIFIED_SNAPSHOT_BUILD,
+      releaseBuild: BUILD,
       busy: state.busy,
       projectId: state.projectId || activeProjectId(),
       phase: state.phase,
