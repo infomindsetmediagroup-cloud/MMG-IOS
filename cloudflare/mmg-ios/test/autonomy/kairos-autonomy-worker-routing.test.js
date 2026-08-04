@@ -28,8 +28,9 @@ test("invokes API with raw auth env and provider-blocked dispatch and operations
 test("returns stamped autonomy responses before all other route families", () => {
   assert.match(fetchSource, /if \(autonomyResponse\) return stamp\(autonomyResponse\);/u);
   assert.ok(position("handleAutonomyApiRequest") < position("DIRECT_MANUSCRIPT_PATHS.has"));
-  assert.ok(position("handleAutonomyApiRequest") < position("handleManuscriptPackageState(request"));
-  assert.ok(position("handleAutonomyApiRequest") < position("handleDedicatedManuscriptSource(request"));
+  assert.ok(position("handleAutonomyApiRequest") < position("resolveCanonicalManuscriptRequest(request, env)"));
+  assert.ok(position("handleAutonomyApiRequest") < position("handleManuscriptPackageState(canonicalRequest"));
+  assert.ok(position("handleAutonomyApiRequest") < position("handleDedicatedManuscriptSource(canonicalRequest"));
   assert.ok(position("handleAutonomyApiRequest") < position("canonicalRuntime.fetch"));
 });
 
@@ -52,9 +53,10 @@ test("does not invoke the HTTP autonomy API handler from scheduled", () => {
   assert.equal(scheduledSource.includes("handleAutonomyApiRequest"), false);
 });
 
-test("stamps API and scheduler build identifiers", () => {
+test("stamps API, scheduler, and manuscript identity build identifiers", () => {
   assert.match(source, /headers\.set\("X-Kairos-Autonomy-API-Build"/u);
   assert.match(source, /headers\.set\("X-Kairos-Autonomy-Scheduler-Build"/u);
+  assert.match(source, /headers\.set\("X-Kairos-Manuscript-Identity-Build"/u);
 });
 
 test("preserves provider-disabled response headers", () => {
@@ -69,14 +71,15 @@ test("does not add autonomy routes to provider-independent paths", () => {
 });
 
 test("does not expose autonomy secrets in response stamping", () => {
-  const stampStart = source.indexOf("function stamp(response)");
+  const stampStart = source.indexOf("function stamp(response, manuscriptIdentity = null)");
+  assert.ok(stampStart > 0, "response stamping function must exist");
   assert.equal(source.slice(stampStart).includes("KAIROS_AUTONOMY_API_TOKEN"), false);
 });
 
-test("uses the complete autonomous operations canonical build", () => {
+test("uses the canonical manuscript shard identity build", () => {
   assert.match(
     source,
-    /KAIROS_LOCAL_CANONICAL_ENTRY_BUILD\s*=\s*"kairos-local-canonical-entry-20260802-7-shopify-admin-dashboard"/u,
+    /KAIROS_LOCAL_CANONICAL_ENTRY_BUILD\s*=\s*"kairos-local-canonical-entry-20260804-1-manuscript-canonical-shard-identity"/u,
   );
 });
 
