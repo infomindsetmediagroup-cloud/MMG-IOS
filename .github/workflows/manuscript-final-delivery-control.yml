@@ -1,5 +1,6 @@
 name: Manuscript Final Delivery Control
 
+# Validates the integrated production route; Floot is used only as a development harness.
 on:
   push:
     branches:
