@@ -45,7 +45,7 @@ function activeScripts() {
 }
 
 test("mobile manuscript setup is a complete initialized controller", () => {
-  assert.match(source, /kairos-manuscript-project-setup-ui-20260722-3/);
+  assert.match(source, /kairos-manuscript-project-setup-ui-20260803-4-flow-recovery/);
   assert.match(source, /function init\(\)/);
   assert.match(source, /function activeProjectId\(\)/);
   assert.match(source, /function currentTitle\(\)/);
@@ -80,10 +80,10 @@ test("the controller preserves retry state and always clears busy", () => {
 
 test("the five-center dashboard loads guarded chunked Studio and local production assets", () => {
   assert.match(index, /kairos-five-center-dashboard-post-intake-20260731-1/);
-  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-dashboard-post-intake-stability-20260731-1/);
-  assert.match(index, /manuscript-production-flow-bootstrap\.js\?v=manuscript-post-intake-stability-20260731-1/);
-  assert.match(index, /manuscript-auto-pipeline\.js\?v=five-center-dashboard-post-intake-stability-20260731-1/);
-  assert.match(index, /manuscript-post-intake-guard\.js\?v=five-center-dashboard-post-intake-stability-20260731-1/);
+  assert.match(index, /legacy-runtime-loader\.js\?v=five-center-manuscript-flow-recovery-20260803-3/);
+  assert.match(index, /manuscript-production-flow-bootstrap\.js\?v=manuscript-flow-recovery-20260803-3/);
+  assert.match(index, /manuscript-auto-pipeline\.js\?v=five-center-manuscript-flow-recovery-20260803-3/);
+  assert.match(index, /manuscript-post-intake-guard\.js\?v=five-center-manuscript-flow-recovery-20260803-3/);
   assert.doesNotMatch(index, /executive-local-inference\.js/);
   assert.doesNotMatch(index, /kairos-runtime-loader\.js/);
   assert.doesNotMatch(index, /manuscript-docx-upload-hotfix\.js/);
@@ -91,9 +91,9 @@ test("the five-center dashboard loads guarded chunked Studio and local productio
   assert.doesNotMatch(index, /<script[^>]+manuscript-project-setup\.js/);
   assert.match(runtimeLoader, /import "\.\/legacy-runtime-loader\.js"/);
   assert.doesNotMatch(runtimeLoader, /executive-local-inference\.js/);
-  assert.match(loader, /const BUILD = "kairos-five-center-runtime-loader-20260731-3-post-intake"/);
-  assert.match(loader, /const RELEASE = "five-center-dashboard-restored-20260731-2"/);
-  assert.match(loader, /const ASSET_RELEASE = "five-center-dashboard-post-intake-stability-20260731-1"/);
+  assert.match(loader, /const BUILD = "kairos-five-center-runtime-loader-20260803-4-flow-recovery"/);
+  assert.match(loader, /const RELEASE = "five-center-dashboard-restored-20260803-3"/);
+  assert.match(loader, /const ASSET_RELEASE = "five-center-manuscript-flow-recovery-20260803-3"/);
   assert.match(loader, /commandHubMode/);
   assert.match(loader, /"command-hub\.js"/);
   assert.match(loader, /"kairos-local-inference\.js"/);
@@ -106,8 +106,8 @@ test("the five-center dashboard loads guarded chunked Studio and local productio
   assert.match(localInference, /kairos-local-inference-same-origin\.js/);
   assert.match(postIntakeGuard, /duplicate Manuscript Studio module blocked/);
   assert.match(postIntakeGuard, /success-overlay-restored/);
-  assert.match(productionBootstrap, /five-center-dashboard-post-intake-stability-20260731-1/);
-  assert.match(productionBootstrap, /manuscript-post-intake-stability-20260731-1/);
+  assert.match(productionBootstrap, /five-center-manuscript-flow-recovery-20260803-3/);
+  assert.match(productionBootstrap, /manuscript-flow-recovery-20260803-3/);
   assert.match(productionController, /KairosLocalInference/);
   assert.match(productionController, /data-start-local-production/);
   assert.doesNotMatch(productionController, /generation-job|Start Production Job/);
@@ -121,7 +121,7 @@ test("the five-center dashboard loads guarded chunked Studio and local productio
   assert.ok(setupIndex > studioIndex);
   assert.ok(inferenceIndex > setupIndex);
   assert.ok(productionIndex > inferenceIndex);
-  assert.match(manuscriptStudio, /manuscript-studio-direct-chunks-20260730-4/);
+  assert.match(manuscriptStudio, /manuscript-studio-flow-recovery-20260803-3/);
   assert.match(manuscriptStudio, /chunkedSourceUpload:\s*true/);
   assert.match(manuscriptStudio, /multipartSourceUpload:\s*false/);
   assert.match(manuscriptStudio, /FILE_CHUNK_BYTES = 512 \* 1024/);
