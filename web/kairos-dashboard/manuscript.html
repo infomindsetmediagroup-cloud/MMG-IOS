@@ -12,7 +12,7 @@
   <meta name="mmg-receipt-continuation-release" content="manuscript-receipt-continuation-20260804-1">
   <meta name="mmg-state-bootstrap-release" content="kairos-state-fetch-install-20260804-3-editorial-body-deadline">
   <meta name="mmg-runtime-bootstrap-release" content="kairos-manuscript-runtime-bootstrap-20260804-7-editorial-hard-stop">
-  <meta name="mmg-deadlock-recovery-release" content="kairos-manuscript-deadlock-recovery-20260804-2">
+  <meta name="mmg-deadlock-recovery-release" content="kairos-manuscript-deadlock-recovery-20260804-3-editorial-source-recovery">
   <meta name="mmg-editorial-watchdog-release" content="manuscript-editorial-recovery-20260804-2-stall-escape">
   <meta name="mmg-editorial-inline-escape-release" content="kairos-inline-editorial-hard-stop-20260804-1">
   <meta name="mmg-restored-source-cache-release" content="kairos-manuscript-registry-bridge-20260804-4-restored-source-cache">
@@ -372,7 +372,7 @@
       }
 
       await globalThis.KairosManuscriptRegistryBridge.stateFetchReady();
-      await import("./scripts/manuscript-deadlock-recovery.js?v=kairos-manuscript-deadlock-recovery-20260804-2");
+      await import("./scripts/manuscript-deadlock-recovery.js?v=kairos-manuscript-deadlock-recovery-20260804-3-editorial-source-recovery");
       await import("./scripts/manuscript-dedicated-project-restore.js?v=kairos-manuscript-dedicated-restore-20260804-2-source-cache");
       await import("./scripts/manuscript-direct-open-controller.js?v=manuscript-flow-recovery-20260803-3");
 
