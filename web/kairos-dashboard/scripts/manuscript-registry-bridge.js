@@ -6,7 +6,10 @@
   const SOURCE_TEXT_ROUTE = /^\/api\/production-registry\/manuscripts\/([^/]+)\/source\/text$/;
   const EDITORIAL_STATE_ROUTE = /^\/api\/production-registry\/manuscripts\/[^/]+\/editorial$/;
   const RETRY_DELAYS_MS = [1500, 5000, 15000, 30000];
-  const scriptBase = document.currentScript?.src || document.baseURI;
+  const scriptBase = document.currentScript?.src || new URL(
+    "./scripts/manuscript-registry-bridge.js",
+    document.baseURI,
+  ).href;
   const stateFetchURL = new URL(
     "./kairos-state-fetch-install.js?v=kairos-state-fetch-20260731-2-buffered",
     scriptBase,
