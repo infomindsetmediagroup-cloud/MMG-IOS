@@ -9,6 +9,10 @@ const editorialSource = readFileSync(
   new URL("../web/kairos-dashboard/scripts/manuscript-editorial-workbench.js", import.meta.url),
   "utf8",
 );
+const manuscriptRouteSource = readFileSync(
+  new URL("../web/kairos-dashboard/manuscript.html", import.meta.url),
+  "utf8",
+);
 
 const PROJECT_ID = "manuscript-editorial-stall-escape-test";
 
@@ -123,4 +127,64 @@ test("a permanently stalled editorial read exposes and completes the final deliv
   expect(calls.packageRead).toBe(1);
   expect(calls.primary).toBe(1);
   expect(calls.fallback).toBe(1);
+});
+
+test("the dedicated route cache-busts the watchdog and independently stops a stale loading card", async ({ page }) => {
+  expect(manuscriptRouteSource).toContain(
+    "manuscript-editorial-watchdog.js?v=manuscript-editorial-recovery-20260804-2-stall-escape",
+  );
+  expect(manuscriptRouteSource).toContain(
+    'meta name="mmg-editorial-inline-escape-release" content="kairos-inline-editorial-hard-stop-20260804-1"',
+  );
+
+  const marker = 'const BUILD = "kairos-inline-editorial-hard-stop-20260804-1";';
+  const markerIndex = manuscriptRouteSource.indexOf(marker);
+  expect(markerIndex).toBeGreaterThan(0);
+  const scriptStart = manuscriptRouteSource.lastIndexOf("<script>", markerIndex);
+  const scriptEnd = manuscriptRouteSource.indexOf("</script>", markerIndex);
+  expect(scriptStart).toBeGreaterThanOrEqual(0);
+  expect(scriptEnd).toBeGreaterThan(scriptStart);
+  const inlineSource = manuscriptRouteSource.slice(scriptStart + "<script>".length, scriptEnd);
+
+  await page.goto("https://kairos.test/inline-hard-stop", { waitUntil: "domcontentloaded" });
+  await page.evaluate(projectId => {
+    document.body.innerHTML = `
+      <section id="manuscript-editorial-workbench" aria-busy="true">
+        <p>Editorial production</p>
+        <h3>Loading Editorial Workbench…</h3>
+        <p>Kairos is loading the saved editorial state once.</p>
+      </section>
+      <section id="manuscript-auto-pipeline"></section>
+    `;
+    sessionStorage.setItem("kairos.production.active-workspace", JSON.stringify({
+      workspace: "manuscript-studio",
+      projectId,
+    }));
+    globalThis.__KAIROS_TEST_CLOCK__ = 1_000;
+    Date.now = () => globalThis.__KAIROS_TEST_CLOCK__;
+    globalThis.KairosManuscriptFinalDeliverableEngine = {
+      ready: true,
+      manufacture(id) {
+        globalThis.__KAIROS_INLINE_MANUFACTURED_PROJECT__ = id;
+        document.querySelector("#manuscript-auto-pipeline").textContent = `manufactured:${id}`;
+        return Promise.resolve({ status: "production-ready" });
+      },
+    };
+  }, PROJECT_ID);
+
+  await page.addScriptTag({ content: inlineSource });
+  await page.evaluate(() => {
+    globalThis.__KAIROS_TEST_CLOCK__ = 12_500;
+    globalThis.KairosInlineEditorialHardStop.inspect();
+  });
+
+  const recovery = page.locator("[data-kairos-inline-editorial-escape]");
+  await expect(recovery).toBeVisible();
+  await expect(recovery).toContainText("Editorial loading was stopped");
+  await recovery.getByRole("button", { name: "Resume Final Deliverable" }).tap();
+
+  await expect(page.locator("#manuscript-auto-pipeline")).toHaveText(`manufactured:${PROJECT_ID}`);
+  await expect.poll(
+    () => page.evaluate(() => globalThis.__KAIROS_INLINE_MANUFACTURED_PROJECT__),
+  ).toBe(PROJECT_ID);
 });
