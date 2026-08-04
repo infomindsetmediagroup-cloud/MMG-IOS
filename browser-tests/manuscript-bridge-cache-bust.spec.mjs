@@ -34,6 +34,8 @@ test("dedicated Manuscript Studio serializes current state transport before the 
   const installImport = `kairos-state-fetch-install.js?v=${stateInstallBuild}`;
   const registryImport = `manuscript-registry-bridge.js?v=${registryBuild}`;
   const stateClientImport = `kairos-state-fetch.js?v=${stateFetchBuild}`;
+  const registryReadyGuard = "KairosManuscriptRegistryBridge?.ready";
+  const directOpenRuntime = "manuscript-direct-open-controller.js?v=manuscript-flow-recovery-20260803-3";
 
   expect(manuscriptRoute).toContain(installImport);
   expect(manuscriptRoute).toContain(registryImport);
@@ -41,6 +43,13 @@ test("dedicated Manuscript Studio serializes current state transport before the 
     manuscriptRoute.indexOf(registryImport),
   );
   expect(stateFetchInstall).toContain(stateClientImport);
+
+  expect(manuscriptRoute).toContain("__KAIROS_MANUSCRIPT_RUNTIME_READY__");
+  expect(manuscriptRoute).toContain(registryReadyGuard);
+  expect(manuscriptRoute).toContain(directOpenRuntime);
+  expect(manuscriptRoute.indexOf(registryReadyGuard)).toBeLessThan(
+    manuscriptRoute.indexOf(directOpenRuntime),
+  );
 
   expect(manuscriptRoute).not.toContain(
     "manuscript-registry-bridge.js?v=kairos-manuscript-registry-bridge-20260801-1",
