@@ -13,6 +13,14 @@ const registryBridgeSource = readFileSync(
   new URL("../web/kairos-dashboard/scripts/manuscript-registry-bridge.js", import.meta.url),
   "utf8",
 );
+const deadlockRecoverySource = readFileSync(
+  new URL("../web/kairos-dashboard/scripts/manuscript-deadlock-recovery.js", import.meta.url),
+  "utf8",
+);
+const editorialWatchdogSource = readFileSync(
+  new URL("../web/kairos-dashboard/scripts/manuscript-editorial-watchdog.js", import.meta.url),
+  "utf8",
+);
 const directOpenSource = readFileSync(
   new URL("../web/kairos-dashboard/scripts/manuscript-direct-open-controller.js", import.meta.url),
   "utf8",
@@ -60,6 +68,16 @@ async function installSuccessRoutes(page, { delayStudioMs = 100 } = {}) {
 
     if (url.pathname === "/scripts/manuscript-registry-bridge.js") {
       await route.fulfill({ status: 200, contentType: "text/javascript", body: registryBridgeSource });
+      return;
+    }
+
+    if (url.pathname === "/scripts/manuscript-deadlock-recovery.js") {
+      await route.fulfill({ status: 200, contentType: "text/javascript", body: deadlockRecoverySource });
+      return;
+    }
+
+    if (url.pathname === "/scripts/manuscript-editorial-watchdog.js") {
+      await route.fulfill({ status: 200, contentType: "text/javascript", body: editorialWatchdogSource });
       return;
     }
 
@@ -132,8 +150,12 @@ test("legacy advanced manuscript URL redirects before the command runtime and op
   expect(snapshot.activeProjectId).toMatch(/^manuscript-studio-/);
 
   const route = await page.evaluate(() => window.KairosDedicatedManuscriptRoute);
-  expect(route.build).toBe("kairos-dedicated-manuscript-route-20260803-3-flow-recovery");
+  expect(route.build).toBe("kairos-dedicated-manuscript-route-20260804-4-editorial-watchdog");
   expect(route.opened).toBe(true);
+
+  const watchdog = await page.evaluate(() => window.KairosManuscriptEditorialWatchdog.snapshot());
+  expect(watchdog.build).toBe("kairos-manuscript-editorial-watchdog-20260804-1");
+  expect(watchdog.requestTimeoutMs).toBe(6_000);
 
   const guard = await page.evaluate(() => window.KairosManuscriptPostIntakeGuard.snapshot());
   expect(guard.build).toBe("kairos-manuscript-post-intake-guard-20260731-1");
@@ -224,6 +246,16 @@ test("dedicated route displays body-owned recovery controls when Studio cannot l
 
     if (url.pathname === "/scripts/manuscript-registry-bridge.js") {
       await route.fulfill({ status: 200, contentType: "text/javascript", body: registryBridgeSource });
+      return;
+    }
+
+    if (url.pathname === "/scripts/manuscript-deadlock-recovery.js") {
+      await route.fulfill({ status: 200, contentType: "text/javascript", body: deadlockRecoverySource });
+      return;
+    }
+
+    if (url.pathname === "/scripts/manuscript-editorial-watchdog.js") {
+      await route.fulfill({ status: 200, contentType: "text/javascript", body: editorialWatchdogSource });
       return;
     }
 
