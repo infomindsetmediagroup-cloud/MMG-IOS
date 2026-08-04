@@ -16,6 +16,7 @@ on:
       - 'governance/kairos-builder-plugin-registry-v1.json'
       - 'scripts/validate-kairos-shopify-policy.mjs'
       - 'scripts/validate-kairos-manuscript-activation.mjs'
+      - 'scripts/validate-kairos-entrypoint-graph.mjs'
       - 'docs/runbooks/kairos-cloudflare-native-shopify-runtime.md'
       - 'docs/runbooks/kairos-builder-plugin-operating-model.md'
       - 'package.json'
@@ -49,6 +50,9 @@ jobs:
 
       - name: Install root dependencies
         run: npm install --ignore-scripts --no-audit --no-fund > /dev/null
+
+      - name: Validate active Kairos entrypoint graph
+        run: npm run validate:kairos-entrypoints
 
       - name: Validate Cloudflare runtime syntax
         run: |
@@ -85,6 +89,7 @@ jobs:
           node --check web/kairos-dashboard/scripts/publication-performance.js
           node --check scripts/validate-kairos-shopify-policy.mjs
           node --check scripts/validate-kairos-manuscript-activation.mjs
+          node --check scripts/validate-kairos-entrypoint-graph.mjs
 
       - name: Test buffered manuscript source forwarding
         run: node --test cloudflare/mmg-ios/test/kairos-manuscript-source-forwarding.test.js
