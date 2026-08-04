@@ -146,6 +146,11 @@ test("the dedicated route cache-busts the watchdog and independently stops a sta
   expect(scriptEnd).toBeGreaterThan(scriptStart);
   const inlineSource = manuscriptRouteSource.slice(scriptStart + "<script>".length, scriptEnd);
 
+  await page.route("https://kairos.test/**", route => route.fulfill({
+    status: 200,
+    contentType: "text/html",
+    body: "<!doctype html><html><head><meta name=viewport content='width=device-width,initial-scale=1'></head><body></body></html>",
+  }));
   await page.goto("https://kairos.test/inline-hard-stop", { waitUntil: "domcontentloaded" });
   await page.evaluate(projectId => {
     document.body.innerHTML = `
