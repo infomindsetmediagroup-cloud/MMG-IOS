@@ -1,0 +1,39 @@
+name: Validate Manuscript Final Recovery
+
+on:
+  pull_request:
+    paths:
+      - "web/kairos-dashboard/manuscript-final.html"
+      - "browser-tests/manuscript-final-recovery.spec.mjs"
+      - ".github/workflows/validate-manuscript-final-recovery.yml"
+  push:
+    branches: [main]
+    paths:
+      - "web/kairos-dashboard/manuscript-final.html"
+      - "browser-tests/manuscript-final-recovery.spec.mjs"
+      - ".github/workflows/validate-manuscript-final-recovery.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  webkit-final-recovery:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+      - name: Validate HTML contract
+        run: |
+          grep -q 'kairos-manuscript-final-recovery-console-20260804-1' web/kairos-dashboard/manuscript-final.html
+          grep -q 'Resume Final Deliverable' web/kairos-dashboard/manuscript-final.html
+          grep -q 'Download Complete Package' web/kairos-dashboard/manuscript-final.html
+          grep -q 'Promise.race' web/kairos-dashboard/manuscript-final.html
+      - name: Install WebKit
+        run: npx playwright install --with-deps webkit
+      - name: Run recovery console tests
+        run: npx playwright test browser-tests/manuscript-final-recovery.spec.mjs --project=webkit --workers=1
