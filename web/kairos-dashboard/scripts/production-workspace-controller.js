@@ -211,15 +211,15 @@ function waitForElement(selector, timeoutMs) {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      observer.disconnect();
+      elementObserver.disconnect();
       resolve(value);
     };
-    const observer = new MutationObserver(() => {
+    const elementObserver = new MutationObserver(() => {
       const element = document.querySelector(selector);
       if (element) finish(element);
     });
     const timer = window.setTimeout(() => finish(null), timeoutMs);
-    observer.observe(document.body || document.documentElement, { childList: true, subtree: true });
+    elementObserver.observe(document.body || document.documentElement, { childList: true, subtree: true });
   });
 }
 
