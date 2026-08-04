@@ -1,5 +1,5 @@
 (() => {
-  const BUILD = "kairos-manuscript-registry-bridge-20260804-3-state-transport";
+  const BUILD = "kairos-manuscript-registry-bridge-20260804-4-restored-source-cache";
   const GLOBAL_KEY = "__KAIROS_MANUSCRIPT_REGISTRY_BRIDGE__";
   const PENDING_KEY = "kairos.manuscript.registry-sync.pending.v1";
   const PROJECT_ROUTE = /^\/api\/production-registry\/projects\/([^/]+)$/;
@@ -58,6 +58,12 @@
     ready: true,
     flush: flushPending,
     stateFetchReady: () => stateFetchReady,
+    captureRestoredSource,
+    getRestoredSource(projectId = activeProjectId()) {
+      if (!restoredSource?.manuscript) return null;
+      if (projectId && restoredSource.projectId !== projectId) return null;
+      return restoredSource;
+    },
     snapshot() {
       return {
         build: BUILD,
@@ -81,6 +87,8 @@
 
   globalThis[GLOBAL_KEY] = api;
   globalThis.KairosManuscriptRegistryBridge = api;
+
+  captureRestoredSource(globalThis.__KAIROS_MANUSCRIPT_RESTORED_SOURCE__);
 
   bridgeFetch = async function kairosRegistryFetch(input, init = {}) {
     const request = input instanceof Request ? input : null;
@@ -160,26 +168,7 @@
   globalThis.fetch = bridgeFetch;
 
   window.addEventListener("kairos:manuscript:restore", event => {
-    const detail = event.detail || {};
-    const projectId = String(
-      detail.project?.projectId ||
-      detail.source?.projectId ||
-      activeProjectId() ||
-      "",
-    );
-    const manuscript = String(detail.manuscript || "");
-    if (!projectId || !manuscript) return;
-
-    restoredSource = {
-      projectId,
-      manuscript,
-      source: detail.source || null,
-      project: detail.project || null,
-      capturedAt: new Date().toISOString(),
-    };
-    state.restoredProjectId = projectId;
-    state.restoredCharacters = manuscript.length;
-    globalThis.__KAIROS_MANUSCRIPT_RESTORED_SOURCE__ = restoredSource;
+    captureRestoredSource(event.detail || {});
   });
 
   window.addEventListener("online", () => void flushPending());
@@ -189,6 +178,32 @@
   });
 
   if (state.pending) scheduleRetry(250);
+
+  function captureRestoredSource(detail) {
+    if (!detail || typeof detail !== "object") return null;
+    const projectId = String(
+      detail.projectId ||
+      detail.project?.projectId ||
+      detail.source?.projectId ||
+      activeProjectId() ||
+      "",
+    );
+    const manuscript = String(detail.manuscript || "");
+    if (!projectId || !manuscript) return null;
+
+    restoredSource = {
+      projectId,
+      manuscript,
+      source: detail.source || null,
+      project: detail.project || null,
+      capturedAt: detail.capturedAt || new Date().toISOString(),
+      build: BUILD,
+    };
+    state.restoredProjectId = projectId;
+    state.restoredCharacters = manuscript.length;
+    globalThis.__KAIROS_MANUSCRIPT_RESTORED_SOURCE__ = restoredSource;
+    return restoredSource;
+  }
 
   async function upsert(project, inheritedHeaders) {
     const headers = new Headers(inheritedHeaders || {});

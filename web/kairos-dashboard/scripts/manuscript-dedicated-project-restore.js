@@ -1,5 +1,5 @@
 (() => {
-  const BUILD = "kairos-manuscript-dedicated-restore-20260804-1";
+  const BUILD = "kairos-manuscript-dedicated-restore-20260804-2-source-cache";
   const GLOBAL_KEY = "__KAIROS_MANUSCRIPT_DEDICATED_RESTORE__";
   const ACTIVE_KEY = "kairos.production.active-workspace";
   const DRAFT_KEY = "kairos.manuscript-studio.recoverable-draft.v1";
@@ -66,14 +66,19 @@
       const payload = await (preparedState || loadProjectState(state.projectId));
       await waitForElement("#manuscript-studio-overlay", ELEMENT_TIMEOUT_MS);
 
+      const restoreDetail = {
+        projectId: state.projectId,
+        project: payload.project,
+        source: payload.source,
+        manuscript: payload.manuscript,
+        handoff: "dashboard-content",
+        capturedAt: new Date().toISOString(),
+        build: BUILD,
+      };
+      globalThis.__KAIROS_MANUSCRIPT_RESTORED_SOURCE__ = restoreDetail;
+      globalThis.KairosManuscriptRegistryBridge?.captureRestoredSource?.(restoreDetail);
       window.dispatchEvent(new CustomEvent("kairos:manuscript:restore", {
-        detail: {
-          project: payload.project,
-          source: payload.source,
-          manuscript: payload.manuscript,
-          handoff: "dashboard-content",
-          build: BUILD,
-        },
+        detail: restoreDetail,
       }));
 
       const overlay = await waitForElement("#manuscript-studio-overlay", ELEMENT_TIMEOUT_MS);
@@ -107,27 +112,33 @@
 
   async function loadProjectState(projectId) {
     const draft = readJSON(DRAFT_KEY);
-    let project = null;
-    let sourcePayload = null;
+    const cached = globalThis.KairosManuscriptRegistryBridge?.getRestoredSource?.(projectId)
+      || cachedRestoredSource(projectId);
+    let project = cached?.project || null;
+    let sourcePayload = cached?.manuscript ? cached : null;
 
-    try {
-      const response = await requestWithDeadline("/api/production-registry/projects");
-      const body = await response.json().catch(() => ({}));
-      if (response.ok && Array.isArray(body.projects)) {
-        project = body.projects.find(item => item?.projectId === projectId) || null;
+    if (!project) {
+      try {
+        const response = await requestWithDeadline("/api/production-registry/projects");
+        const body = await response.json().catch(() => ({}));
+        if (response.ok && Array.isArray(body.projects)) {
+          project = body.projects.find(item => item?.projectId === projectId) || null;
+        }
+      } catch {
+        // The active project and retained draft remain valid fallbacks.
       }
-    } catch {
-      // The active project and retained draft remain valid fallbacks.
     }
 
-    try {
-      const response = await requestWithDeadline(
-        `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/source/text`,
-      );
-      const body = await response.json().catch(() => ({}));
-      if (response.ok) sourcePayload = body;
-    } catch {
-      // The browser-retained draft is used below when the registry read is unavailable.
+    if (!sourcePayload?.manuscript) {
+      try {
+        const response = await requestWithDeadline(
+          `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/source/text`,
+        );
+        const body = await response.json().catch(() => ({}));
+        if (response.ok) sourcePayload = body;
+      } catch {
+        // The browser-retained draft is used below when the registry read is unavailable.
+      }
     }
 
     const manuscript = String(sourcePayload?.manuscript || draft?.manuscript || "");
@@ -220,15 +231,31 @@
     const controller = typeof AbortController === "function" ? new AbortController() : null;
     const timer = window.setTimeout(() => controller?.abort(), REQUEST_TIMEOUT_MS);
     try {
-      return await fetch(path, {
+      const response = await fetch(path, {
         credentials: "include",
         cache: "no-store",
         signal: controller?.signal,
         headers: { "X-MMG-Client-Build": BUILD },
       });
+      const text = await response.text();
+      return new Response(text, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: new Headers(response.headers),
+      });
+    } catch (error) {
+      if (controller?.signal.aborted) {
+        throw new Error("Kairos did not finish restoring the saved manuscript response body in time.");
+      }
+      throw error;
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  function cachedRestoredSource(projectId) {
+    const value = globalThis.__KAIROS_MANUSCRIPT_RESTORED_SOURCE__;
+    return value?.projectId === projectId && value?.manuscript ? value : null;
   }
 
   function resolveProjectId() {

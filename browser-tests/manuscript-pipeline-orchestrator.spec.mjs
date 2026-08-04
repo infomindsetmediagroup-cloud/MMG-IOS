@@ -5,6 +5,14 @@ const source = readFileSync(
   new URL("../web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js", import.meta.url),
   "utf8",
 );
+const finalEngineSource = readFileSync(
+  new URL("../web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js", import.meta.url),
+  "utf8",
+);
+const finalControlOwnerSource = readFileSync(
+  new URL("../web/kairos-dashboard/scripts/manuscript-final-deliverable-control-owner.js", import.meta.url),
+  "utf8",
+);
 
 const PROJECT_ID = "manuscript-studio-a2z-project";
 
@@ -20,6 +28,18 @@ async function activate(page) {
     }));
   }, PROJECT_ID);
   await page.addScriptTag({ content: source });
+}
+
+async function activateFinalEngine(page) {
+  await activate(page);
+  await page.addScriptTag({ content: finalEngineSource });
+  await page.addScriptTag({ content: finalControlOwnerSource });
+  await expect.poll(
+    () => page.evaluate(() => (
+      window.KairosManuscriptFinalDeliverableEngine?.ready === true
+      && window.KairosManuscriptFinalDeliverableControlOwner?.ready === true
+    )),
+  ).toBe(true);
 }
 
 test("Project Setup stores the cover and assignment in one idempotent transaction", async ({ page }) => {
@@ -176,4 +196,112 @@ test("approved editorial state manufactures a downloadable delivery package", as
   await expect(page.locator("a", { hasText: "Preview Package" })).toBeVisible();
   await expect(page.locator("[data-approve-package]")).toBeVisible();
   expect(runRequests).toBe(1);
+});
+
+test("final deliverable engine recovers a failed canonical build through the deterministic builder", async ({ page }) => {
+  const calls = { primary: 0, fallback: 0 };
+
+  await page.route("https://kairos.test/**", async route => {
+    const request = route.request();
+    const url = new URL(request.url());
+
+    if (request.resourceType() === "document") {
+      await route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: baseHTML(`
+          <div id="manuscript-studio-overlay">
+            <div class="manuscript-result">
+              <section id="manuscript-project-setup"><h3>assigned-to-production</h3></section>
+              <section id="manuscript-editorial-workbench"><h3>ready-for-manufacturing</h3></section>
+              <section id="manuscript-auto-pipeline"><button data-start-local-production>Manufacture Delivery Package</button></section>
+            </div>
+          </div>
+        `),
+      });
+      return;
+    }
+
+    if (request.method() === "GET" && url.pathname.endsWith("/setup")) {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ setup: { status: "assigned-to-production" } }),
+      });
+    }
+
+    if (request.method() === "GET" && url.pathname.endsWith("/editorial")) {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ editorial: { status: "ready-for-manufacturing" } }),
+      });
+    }
+
+    if (request.method() === "POST" && url.pathname.endsWith("/auto-pipeline/run")) {
+      calls.primary += 1;
+      return route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: { message: "Canonical package engine unavailable in the recovery fixture." } }),
+      });
+    }
+
+    if (request.method() === "POST" && url.pathname.endsWith("/deliverables/build")) {
+      calls.fallback += 1;
+      return route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          status: "completed",
+          manuscriptAuthority: "checksum-verified-final-editorial-version",
+          deliverablesBuild: {
+            id: "fallback-build-123",
+            status: "COMPLETED",
+            metadata: {
+              workingTitle: "Recovered Final Package",
+              author: "MMG Test Author",
+              manuscriptAuthority: "checksum-verified-final-editorial-version",
+            },
+            artifacts: [
+              { kind: "FINAL_MANUSCRIPT", filename: "final-manuscript.md", byteSize: 5000, sha256: "a".repeat(64) },
+              { kind: "ZIP_ARCHIVE", filename: "deliverables-recovered-final-package.zip", byteSize: 9000, sha256: "b".repeat(64) },
+            ],
+          },
+        }),
+      });
+    }
+
+    await route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
+  });
+
+  await page.goto("https://kairos.test/manuscript");
+  await activateFinalEngine(page);
+
+  const ownedControl = page.locator("[data-final-deliverable-retry]");
+  await expect(ownedControl).toBeVisible();
+  await expect(ownedControl).toHaveAttribute(
+    "data-kairos-final-deliverable-owner",
+    "kairos-manuscript-final-deliverable-control-owner-20260804-1",
+  );
+  await expect(page.locator("[data-start-local-production]")).toHaveCount(0);
+  await ownedControl.click();
+
+  const pipeline = page.locator("#manuscript-auto-pipeline");
+  await expect(pipeline).toContainText("Recovered Final Package", { timeout: 5_000 });
+  await expect(pipeline).toContainText("deterministic-deliverables-fallback");
+  const download = pipeline.getByRole("link", { name: "Download Complete Package" });
+  await expect(download).toBeVisible();
+  await expect(download).toHaveAttribute(
+    "href",
+    `/api/production-registry/manuscripts/${PROJECT_ID}/deliverables/zip`,
+  );
+
+  const snapshot = await page.evaluate(() => window.KairosManuscriptFinalDeliverableEngine.snapshot());
+  const owner = await page.evaluate(() => window.KairosManuscriptFinalDeliverableControlOwner.snapshot());
+  expect(snapshot.engine).toBe("deterministic-deliverables-fallback");
+  expect(snapshot.status).toBe("production-ready");
+  expect(snapshot.primaryError).toContain("Canonical package engine unavailable");
+  expect(owner.claimedManufacture).toBeGreaterThanOrEqual(1);
+  expect(calls).toEqual({ primary: 1, fallback: 1 });
 });
