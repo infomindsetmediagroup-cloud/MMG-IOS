@@ -53,6 +53,7 @@ jobs:
           node --check web/kairos-dashboard/scripts/manuscript-pipeline-orchestrator.js
           node --check web/kairos-dashboard/scripts/manuscript-project-setup.js
           node --check web/kairos-dashboard/scripts/manuscript-editorial-workbench.js
+          node --check web/kairos-dashboard/scripts/manuscript-editorial-watchdog.js
           node --check web/kairos-dashboard/scripts/manuscript-stage-handoff-controller.js
           node --check web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
           node --check cloudflare/mmg-ios/src/kairos-manuscript-project-setup-v1.js
@@ -73,6 +74,7 @@ jobs:
             browser-tests/manuscript-pipeline-orchestrator.spec.mjs \
             browser-tests/manuscript-project-setup.spec.mjs \
             browser-tests/manuscript-editorial-workbench.spec.mjs \
+            browser-tests/manuscript-editorial-stall-escape.spec.mjs \
             browser-tests/manuscript-auto-pipeline.spec.mjs \
             --project=webkit \
             --workers=1 \
