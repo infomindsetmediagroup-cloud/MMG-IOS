@@ -13,11 +13,12 @@
     "test:manuscript-ui": "playwright test browser-tests/executive-os-clean-boot.spec.mjs browser-tests/manuscript-direct-open.spec.mjs browser-tests/manuscript-studio-safari-upload.spec.mjs browser-tests/manuscript-docx-native-extractor.spec.mjs browser-tests/manuscript-continuation.spec.mjs browser-tests/manuscript-project-setup.spec.mjs browser-tests/manuscript-editorial-workbench.spec.mjs browser-tests/manuscript-auto-pipeline.spec.mjs browser-tests/manuscript-post-intake-stability.spec.mjs --project=webkit",
     "validate:shopify": "node scripts/validate-shopify-governance.mjs",
     "validate:kairos-shopify": "node scripts/validate-kairos-shopify-policy.mjs",
+    "validate:kairos-entrypoints": "node scripts/validate-kairos-entrypoint-graph.mjs",
     "validate:manuscript-activation": "node scripts/validate-kairos-manuscript-activation.mjs",
     "validate:manuscript-production": "node cloudflare/mmg-ios/scripts/validate-manuscript-production-mode.mjs && node cloudflare/mmg-ios/scripts/validate-manuscript-large-intake.mjs",
     "validate:service-product": "node shopify/products/professional-cover-design-service/validate.mjs",
     "validate:commerce-staging-host": "vitest run backend-tests/mmg-cloudflare-staging-host.test.ts",
-    "check": "npm run typecheck && npm test && npm run validate:shopify && npm run validate:kairos-shopify && npm run validate:manuscript-activation && npm run validate:service-product",
+    "check": "npm run typecheck && npm run validate:kairos-entrypoints && npm test && npm run validate:shopify && npm run validate:kairos-shopify && npm run validate:manuscript-activation && npm run validate:service-product",
     "cf:dev": "wrangler dev",
     "cf:deploy": "wrangler deploy"
   },
