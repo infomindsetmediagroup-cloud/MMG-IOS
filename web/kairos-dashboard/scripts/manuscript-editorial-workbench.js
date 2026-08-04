@@ -1,5 +1,11 @@
 const BUILD = "kairos-manuscript-editorial-workbench-ui-20260803-2-mobile-controls";
 const ACTIVE_KEY = "kairos.production.active-workspace";
+const REQUEST_TIMEOUT_MS = Math.max(
+  250,
+  Number(globalThis.__KAIROS_EDITORIAL_REQUEST_TIMEOUT_MS__ || 10_000),
+);
+const LOAD_RETRY_LIMIT = 2;
+const TRANSIENT_LOAD_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 const CUSTOMER_DELIVERABLES = Object.freeze([
   ["customer-spec-sheet.pdf", "Customer specification sheet"],
   ["kdp-interior-6x9.pdf", "Print-ready 6 × 9 KDP interior"],
@@ -31,7 +37,10 @@ async function enhance() {
   if (!setupComplete) return;
 
   const existing = document.querySelector("#manuscript-editorial-workbench");
-  if (existing?.dataset.projectId === projectId) return;
+  if (existing?.dataset.projectId === projectId) {
+    if (loadPromise && state.projectId === projectId) await loadPromise;
+    return existing;
+  }
   existing?.remove();
 
   if (state.projectId !== projectId) {
@@ -53,6 +62,7 @@ async function enhance() {
   setup.insertAdjacentElement("afterend", section);
 
   await ensureLoaded(projectId);
+  return section;
 }
 
 function ensureLoaded(projectId) {
@@ -69,11 +79,10 @@ async function load(projectId) {
   render(projectId);
 
   try {
-    const response = await fetch(
+    const { response, body } = await fetchJSONWithRetry(
       `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/editorial`,
-      { credentials: "include", cache: "no-store" },
+      "The saved editorial state",
     );
-    const body = await response.json().catch(() => ({}));
 
     if (response.status === 404) {
       state.record = emptyEditorialRecord();
@@ -113,12 +122,63 @@ async function loadCurrentText(projectId, editorial) {
   const url = current
     ? `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/editorial/versions/${encodeURIComponent(current)}`
     : `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/source/text`;
-  const response = await fetch(url, { credentials: "include", cache: "no-store" });
-  const body = await response.json().catch(() => ({}));
+  const { response, body } = await fetchJSONWithRetry(url, "The saved manuscript text");
   if (!response.ok) {
     throw new Error(body?.error?.message || "The saved manuscript text could not be loaded for editorial review.");
   }
   state.manuscript = String(body.manuscript || "");
+}
+
+async function fetchJSONWithRetry(url, label) {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= LOAD_RETRY_LIMIT; attempt += 1) {
+    const controller = typeof AbortController === "function" ? new AbortController() : null;
+    const timer = window.setTimeout(() => controller?.abort(), REQUEST_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(url, {
+        credentials: "include",
+        cache: "no-store",
+        signal: controller?.signal,
+        headers: {
+          "X-MMG-Client-Build": BUILD,
+          "X-Kairos-Editorial-Load-Attempt": String(attempt),
+        },
+      });
+      const body = await response.json().catch(() => ({}));
+
+      if (
+        attempt < LOAD_RETRY_LIMIT
+        && TRANSIENT_LOAD_STATUSES.has(response.status)
+      ) {
+        lastError = new Error(
+          body?.error?.message || `${label} returned HTTP ${response.status}.`,
+        );
+        await delay(300 * attempt);
+        continue;
+      }
+
+      return { response, body };
+    } catch (error) {
+      lastError = error?.name === "AbortError"
+        ? new Error(`${label} did not respond within ${Math.round(REQUEST_TIMEOUT_MS / 1000)} seconds.`)
+        : error;
+
+      if (attempt < LOAD_RETRY_LIMIT) {
+        await delay(300 * attempt);
+        continue;
+      }
+    } finally {
+      window.clearTimeout(timer);
+    }
+  }
+
+  throw lastError || new Error(`${label} could not be loaded.`);
+}
+
+function delay(milliseconds) {
+  return new Promise(resolve => window.setTimeout(resolve, milliseconds));
 }
 
 function render(projectId) {
@@ -475,6 +535,16 @@ window.KairosEditorialWorkbenchController = Object.freeze({
   build: BUILD,
   ready: true,
   enhance,
+  snapshot() {
+    return {
+      projectId: state.projectId || null,
+      busy: state.busy,
+      loaded: Boolean(state.record),
+      manuscriptCharacters: state.manuscript.length,
+      error: state.error || null,
+      requestTimeoutMs: REQUEST_TIMEOUT_MS,
+    };
+  },
 });
 
 document.addEventListener("click", handleEditorialAction, true);
