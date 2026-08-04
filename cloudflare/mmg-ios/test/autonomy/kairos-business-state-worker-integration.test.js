@@ -152,7 +152,7 @@ test("stamp preserves API, scheduler, and manuscript identity build headers", ()
   );
   assert.match(
     source,
-    /headers\.get\("X-Kairos-Manuscript-Identity-Build"\) \|\| KAIROS_MANUSCRIPT_CANONICAL_IDENTITY_BUILD/u,
+    /headers\.set\("X-Kairos-Manuscript-Identity-Build", KAIROS_MANUSCRIPT_CANONICAL_IDENTITY_BUILD\)/u,
   );
 });
 
