@@ -1,5 +1,6 @@
 (() => {
-  const BUILD = "kairos-manuscript-final-deliverable-control-owner-20260804-2-navigation";
+  const BUILD = "kairos-manuscript-final-deliverable-control-owner-20260804-1";
+  const RELEASE = "kairos-manuscript-final-deliverable-navigation-20260804-1";
   const GLOBAL_KEY = "__KAIROS_MANUSCRIPT_FINAL_DELIVERABLE_CONTROL_OWNER__";
 
   if (globalThis[GLOBAL_KEY]) {
@@ -16,11 +17,13 @@
 
   const api = Object.freeze({
     build: BUILD,
+    release: RELEASE,
     ready: true,
     claim: claimControls,
     snapshot() {
       return {
         build: BUILD,
+        release: RELEASE,
         ...state,
         activeManufactureControls: document.querySelectorAll(
           "#manuscript-auto-pipeline [data-final-deliverable-retry]",
@@ -85,6 +88,7 @@
 
     const nav = document.createElement("nav");
     nav.id = "kairos-final-delivery-navigation";
+    nav.dataset.kairosNavigationRelease = RELEASE;
     nav.setAttribute("aria-label", "Final delivery navigation");
     nav.innerHTML = `
       <button type="button" data-kairos-return-command-center>Return to Command Center</button>
