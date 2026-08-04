@@ -71,6 +71,7 @@
   }
 
   async function manufactureFinalDeliverable(projectId = activeProjectId()) {
+    if (state.lastRecord && packageURL(state.lastRecord)) return state.lastRecord;
     if (state.busy) return null;
     if (!projectId) {
       renderFailure("Kairos could not identify the saved manuscript project. Open this route from the active manuscript tab or add ?project=PROJECT_ID.");
@@ -329,7 +330,7 @@
 
   function watchForFinalQueue() {
     const inspect = () => {
-      if (state.busy || state.autoTriggered) return;
+      if (state.busy || state.autoTriggered || (state.lastRecord && packageURL(state.lastRecord))) return;
       const text = document.body?.innerText || "";
       if (!/final files and delivery package/i.test(text) || !/queued/i.test(text)) return;
       const projectId = activeProjectId();
@@ -338,7 +339,10 @@
       if (sessionStorage.getItem(key) === BUILD) return;
       sessionStorage.setItem(key, BUILD);
       state.autoTriggered = true;
-      window.setTimeout(() => void manufactureFinalDeliverable(projectId), 250);
+      window.setTimeout(() => {
+        if (state.busy || (state.lastRecord && packageURL(state.lastRecord))) return;
+        void manufactureFinalDeliverable(projectId);
+      }, 250);
     };
     const observer = new MutationObserver(inspect);
     observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
