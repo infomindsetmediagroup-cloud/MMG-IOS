@@ -95,7 +95,16 @@
     if (section.hasAttribute("data-kairos-editorial-stall-escape")) {
       return { status: "recovery-visible", build: PATCH };
     }
-    if (!/loading editorial workbench/i.test(section.textContent || "")) {
+    const sectionText = section.textContent || "";
+    if (!/loading editorial workbench/i.test(sectionText)) {
+      const priorStart = readStart(projectId);
+      if (
+        priorStart > 0
+        && Date.now() - priorStart >= deadlineMs()
+        && /needs attention|did not respond|timed out|could not be loaded/i.test(sectionText)
+      ) {
+        return showRecovery(projectId, "editorial-load-failed-after-stall");
+      }
       clearStart(projectId);
       clearTimer();
       return { status: "settled", build: PATCH };
@@ -468,10 +477,15 @@
     return new Response(result.text, { status: result.status, statusText: result.statusText, headers: result.headers });
   }
 
+  function readStart(projectId) {
+    const stored = Number(readSession(startKey(projectId)) || 0);
+    return Number.isFinite(stored) && stored > 0 ? stored : 0;
+  }
+
   function loadStarted(projectId) {
     const key = startKey(projectId);
-    const stored = Number(readSession(key) || 0);
-    if (Number.isFinite(stored) && stored > 0) return stored;
+    const stored = readStart(projectId);
+    if (stored > 0) return stored;
     const value = Date.now();
     writeSession(key, String(value));
     return value;
