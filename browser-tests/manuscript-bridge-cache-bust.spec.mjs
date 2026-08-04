@@ -9,6 +9,14 @@ const registryBridge = readFileSync(
   new URL("../web/kairos-dashboard/scripts/manuscript-registry-bridge.js", import.meta.url),
   "utf8",
 );
+const dedicatedRestore = readFileSync(
+  new URL("../web/kairos-dashboard/scripts/manuscript-dedicated-project-restore.js", import.meta.url),
+  "utf8",
+);
+const finalDeliverableEngine = readFileSync(
+  new URL("../web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js", import.meta.url),
+  "utf8",
+);
 const stateFetchInstall = readFileSync(
   new URL("../web/kairos-dashboard/scripts/kairos-state-fetch-install.js", import.meta.url),
   "utf8",
@@ -26,8 +34,10 @@ const editorialWatchdog = readFileSync(
   "utf8",
 );
 
-test("dedicated Manuscript Studio waits for current registry state transport before direct open", async () => {
+test("dedicated Manuscript Studio caches restored source before direct open and final production", async () => {
   const registryBuild = registryBridge.match(/const BUILD = "([^"]+)";/)?.[1];
+  const restoreBuild = dedicatedRestore.match(/const BUILD = "([^"]+)";/)?.[1];
+  const finalEngineBuild = finalDeliverableEngine.match(/const BUILD = "([^"]+)";/)?.[1];
   const stateInstallBuild = stateFetchInstall.match(
     /KAIROS_STATE_FETCH_INSTALL_BUILD\s*=\s*\n?\s*"([^"]+)"/,
   )?.[1];
@@ -36,19 +46,29 @@ test("dedicated Manuscript Studio waits for current registry state transport bef
   )?.[1];
 
   expect(registryBuild).toBeTruthy();
+  expect(restoreBuild).toBeTruthy();
+  expect(finalEngineBuild).toBeTruthy();
   expect(stateInstallBuild).toBeTruthy();
   expect(stateFetchBuild).toBeTruthy();
 
   const installImport = `kairos-state-fetch-install.js?v=${stateInstallBuild}`;
   const registryImport = `manuscript-registry-bridge.js?v=${registryBuild}`;
+  const restoreImport = `manuscript-dedicated-project-restore.js?v=${restoreBuild}`;
+  const finalEngineScript = `manuscript-final-deliverable-engine.js?v=${finalEngineBuild}`;
   const stateClientImport = `kairos-state-fetch.js?v=${stateFetchBuild}`;
   const stateReadyAwait = "await globalThis.KairosManuscriptRegistryBridge.stateFetchReady()";
   const directOpenImport = 'await import("./scripts/manuscript-direct-open-controller.js?v=manuscript-flow-recovery-20260803-3")';
   const watchdogImport = "manuscript-editorial-watchdog.js?v=manuscript-editorial-recovery-20260804-1";
 
   expect(registryBridge).toContain(installImport);
+  expect(registryBridge).toContain("captureRestoredSource");
+  expect(registryBridge).toContain("__KAIROS_MANUSCRIPT_RESTORED_SOURCE__");
+  expect(dedicatedRestore).toContain("KairosManuscriptRegistryBridge?.captureRestoredSource");
+  expect(dedicatedRestore).toContain("const text = await response.text()");
   expect(stateFetchInstall).toContain(stateClientImport);
   expect(manuscriptRoute).toContain(registryImport);
+  expect(manuscriptRoute).toContain(restoreImport);
+  expect(manuscriptRoute).toContain(finalEngineScript);
   expect(manuscriptRoute).toContain(watchdogImport);
   expect(manuscriptRoute).toContain("__KAIROS_MANUSCRIPT_RUNTIME_READY__");
   expect(manuscriptRoute).toContain("KairosManuscriptRegistryBridge?.ready");
@@ -58,19 +78,98 @@ test("dedicated Manuscript Studio waits for current registry state transport bef
   expect(manuscriptRoute.indexOf(watchdogImport)).toBeLessThan(
     manuscriptRoute.indexOf(registryImport),
   );
+  expect(manuscriptRoute.indexOf(finalEngineScript)).toBeLessThan(
+    manuscriptRoute.indexOf(registryImport),
+  );
   expect(manuscriptRoute.indexOf(registryImport)).toBeLessThan(
     manuscriptRoute.indexOf(stateReadyAwait),
   );
   expect(manuscriptRoute.indexOf(stateReadyAwait)).toBeLessThan(
+    manuscriptRoute.indexOf(restoreImport),
+  );
+  expect(manuscriptRoute.indexOf(restoreImport)).toBeLessThan(
     manuscriptRoute.indexOf(directOpenImport),
   );
 
+  expect(manuscriptRoute).not.toContain(
+    '<script\n    src="./scripts/manuscript-dedicated-project-restore.js',
+  );
   expect(manuscriptRoute).not.toContain(
     "manuscript-registry-bridge.js?v=kairos-manuscript-registry-bridge-20260801-1",
   );
   expect(stateFetchInstall).not.toContain(
     "kairos-state-fetch.js?v=kairos-state-fetch-20260731-1",
   );
+});
+
+test("registry bridge recovers a 279045-character restored manuscript without a second source read", async ({ page }) => {
+  const projectId = "restored-source-cache-project-12345678";
+  const manuscript = "A".repeat(279_045);
+  let sourceReads = 0;
+
+  await page.route("https://kairos.test/**", async route => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.resourceType() === "document") {
+      return route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: "<!doctype html><html><body></body></html>",
+      });
+    }
+    if (url.pathname === "/scripts/kairos-state-fetch-install.js") {
+      return route.fulfill({
+        status: 200,
+        contentType: "text/javascript",
+        body: "globalThis.__KAIROS_STATE_FETCH_INSTALLED__=true;globalThis.__kairosStateFetchInstalled=true;export {};",
+      });
+    }
+    if (url.pathname.endsWith("/source/text")) {
+      sourceReads += 1;
+      return route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: { message: "network source read should not occur" } }),
+      });
+    }
+    return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
+  });
+
+  await page.goto("https://kairos.test/");
+  await page.evaluate(({ projectId, manuscript }) => {
+    sessionStorage.setItem("kairos.production.active-workspace", JSON.stringify({
+      workspace: "manuscript-studio",
+      projectId,
+    }));
+    globalThis.__KAIROS_MANUSCRIPT_RESTORED_SOURCE__ = {
+      projectId,
+      manuscript,
+      source: { projectId, filename: "restored.docx" },
+      project: { projectId, title: "Restored manuscript" },
+    };
+  }, { projectId, manuscript });
+  await page.addScriptTag({ content: registryBridge });
+
+  await expect.poll(
+    () => page.evaluate(() => window.KairosManuscriptRegistryBridge?.ready === true),
+  ).toBe(true);
+  const result = await page.evaluate(async projectId => {
+    await window.KairosManuscriptRegistryBridge.stateFetchReady();
+    const response = await fetch(`/api/production-registry/manuscripts/${projectId}/source/text`);
+    return {
+      status: response.status,
+      body: await response.json(),
+      snapshot: window.KairosManuscriptRegistryBridge.snapshot(),
+    };
+  }, projectId);
+
+  expect(result.status).toBe(200);
+  expect(result.body.cache).toBe("dedicated-restore");
+  expect(result.body.manuscript.length).toBe(279_045);
+  expect(result.snapshot.restoredProjectId).toBe(projectId);
+  expect(result.snapshot.restoredCharacters).toBe(279_045);
+  expect(result.snapshot.sourceCacheHits).toBe(1);
+  expect(sourceReads).toBe(0);
 });
 
 test("root dashboard cannot retain a legacy embedded manuscript runtime", async ({ page }) => {
