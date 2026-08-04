@@ -59,7 +59,7 @@ describe("Kairos local operational execution", () => {
     expect(moduleTags[2]).toContain('src="./scripts/manuscript-production-flow-bootstrap.js');
     expect(index).toContain("__KAIROS_COMMAND_FIRST_PAINT__");
     expect(index).toContain("kairos-five-center-dashboard-post-intake-20260731-1");
-    expect(index).toContain("five-center-dashboard-post-intake-stability-20260731-1");
+    expect(index).toContain("five-center-manuscript-flow-recovery-20260803-3");
     expect(index).toContain("manuscript-post-intake-guard.js");
     expect(index).toContain("legacy-runtime-loader.js");
     expect(index).not.toContain("kairos-runtime-loader.js");
