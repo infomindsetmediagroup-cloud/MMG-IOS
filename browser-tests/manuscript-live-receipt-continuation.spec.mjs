@@ -82,6 +82,16 @@ test("real intake receipt placeholder hydrates automatically in iPhone WebKit", 
   });
 
   await page.goto("https://kairos.test/manuscript?open=manuscript");
+  await page.addStyleTag({ content: studioCSS });
+
+  // Reproduce the production failure: the setup module initializes before the
+  // active project is available, so the real receipt placeholder remains.
+  await page.addScriptTag({ type: "module", content: setupSource });
+  await expect(page.locator("#manuscript-project-setup")).toHaveAttribute(
+    "data-kairos-project-setup-shell",
+    "",
+  );
+
   await page.evaluate(projectId => {
     sessionStorage.setItem("kairos.production.active-workspace", JSON.stringify({
       workspace: "manuscript-studio",
@@ -89,8 +99,6 @@ test("real intake receipt placeholder hydrates automatically in iPhone WebKit", 
     }));
   }, PROJECT_ID);
 
-  await page.addStyleTag({ content: studioCSS });
-  await page.addScriptTag({ type: "module", content: setupSource });
   await page.addScriptTag({ content: continuationSource });
   await page.addScriptTag({ content: recoverySource });
 
