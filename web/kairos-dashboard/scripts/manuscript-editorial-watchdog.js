@@ -57,6 +57,7 @@
         engine: state.engine || null,
         status: state.record?.status || null,
         lastError: state.lastError || null,
+        requestTimeoutMs: Number(globalThis.__KAIROS_EDITORIAL_REQUEST_TIMEOUT_MS__ || HARD_FETCH_MS),
         deadlineMs: deadlineMs(),
         hardDeadlineMs: hardDeadlineMs(),
       };
@@ -135,7 +136,7 @@
       <div class="manuscript-actions">
         <button type="button" class="primary" data-stall-resume-package>Resume Final Deliverable</button>
         <button type="button" class="secondary" data-stall-refresh-package>Check Saved Package</button>
-        <button type="button" class="secondary" data-stall-reload-editorial>Reload Editorial State</button>
+        <button type="button" class="secondary" data-stall-reload-editorial>Retry Editorial State</button>
         <button type="button" class="secondary" data-stall-return>Return to Command Center</button>
       </div>
       <p class="manuscript-note">Resume Final Deliverable asks the authoritative production endpoints to continue from the saved approved state without waiting on this stalled screen.</p>
@@ -337,7 +338,7 @@
       <div class="manuscript-actions">
         <button type="button" class="primary" data-stall-package-retry>Retry Final Deliverable</button>
         <button type="button" class="secondary" data-stall-package-refresh>Check Saved Package</button>
-        <button type="button" class="secondary" data-stall-reload-editorial>Reload Editorial State</button>
+        <button type="button" class="secondary" data-stall-reload-editorial>Retry Editorial State</button>
       </div>
     `;
   }
