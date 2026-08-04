@@ -1,5 +1,5 @@
 (() => {
-  const BUILD = "kairos-manuscript-final-delivery-control-20260804-3";
+  const BUILD = "kairos-manuscript-final-delivery-control-20260804-4";
   const GLOBAL_KEY = "__KAIROS_MANUSCRIPT_FINAL_DELIVERABLE_ENGINE__";
   const ACTIVE_KEY = "kairos.production.active-workspace";
   const READ_TIMEOUT_MS = 12_000;
@@ -12,8 +12,10 @@
     projectId: "",
     phase: "waiting",
     operationId: "",
+    primaryError: "",
     lastError: "",
     lastRecord: null,
+    engine: "",
     autoTriggered: false,
   };
 
@@ -22,7 +24,18 @@
     ready: true,
     manufacture: manufactureFinalDeliverable,
     refresh: refreshFinalDeliverable,
-    snapshot: () => ({ ...state, projectId: state.projectId || activeProjectId() }),
+    snapshot: () => ({
+      build: BUILD,
+      busy: state.busy,
+      projectId: state.projectId || activeProjectId(),
+      phase: state.phase,
+      operationId: state.operationId || null,
+      primaryError: state.primaryError || null,
+      lastError: state.lastError || null,
+      status: state.lastRecord?.status || null,
+      engine: state.engine || null,
+      autoTriggered: state.autoTriggered,
+    }),
   });
 
   globalThis[GLOBAL_KEY] = api;
@@ -59,8 +72,12 @@
   function bindActions() {
     document.addEventListener("click", event => {
       const target = event.target instanceof Element ? event.target : null;
-      const run = target?.closest?.("[data-kairos-final-delivery-run]");
-      const check = target?.closest?.("[data-kairos-final-delivery-check]");
+      const run = target?.closest?.(
+        "[data-kairos-final-delivery-run], [data-final-deliverable-retry], [data-start-local-production]",
+      );
+      const check = target?.closest?.(
+        "[data-kairos-final-delivery-check], [data-final-deliverable-refresh], [data-retry-production-state]",
+      );
       if (!run && !check) return;
       event.preventDefault();
       event.stopPropagation();
@@ -82,49 +99,55 @@
     state.projectId = projectId;
     state.operationId = createId();
     state.phase = "checking-existing-package";
+    state.primaryError = "";
     state.lastError = "";
+    state.engine = "";
     disableButtons(true);
 
     try {
       updateControl("working", "Checking saved package", `Project ${projectId}`);
       const existing = await readExistingPackage(projectId);
-      if (existing) return renderPackage(existing);
+      if (existing) {
+        state.engine ||= existing?.recovery?.engine || "saved-package";
+        return renderPackage(existing);
+      }
+
+      state.phase = "building-canonical-package";
+      updateControl("working", "Producing final deliverable", "Running the canonical customer-package engine.");
+      try {
+        const canonical = await buildCanonical(projectId);
+        state.engine = "canonical-customer-package";
+        state.lastRecord = canonical;
+        state.phase = "ready";
+        renderPackage(canonical);
+        announce("final-deliverable-ready", projectId, canonical);
+        return canonical;
+      } catch (canonicalError) {
+        state.primaryError = message(canonicalError);
+      }
 
       state.phase = "building-deterministic-package";
-      updateControl("working", "Producing final deliverable", "Building directly from the saved approved manuscript state.");
-
-      let record;
+      updateControl("working", "Recovering final deliverable", state.primaryError);
+      let fallback;
       try {
-        record = await buildDeterministic(projectId);
-      } catch (firstError) {
-        state.lastError = message(firstError);
-        updateControl("working", "Preparing editorial state", state.lastError);
+        fallback = await buildDeterministic(projectId);
+      } catch (firstFallbackError) {
+        updateControl("working", "Preparing editorial state", message(firstFallbackError));
         await prepareEditorial(projectId);
-        record = await buildDeterministic(projectId);
+        fallback = await buildDeterministic(projectId);
       }
 
-      state.lastRecord = record;
+      state.engine = "deterministic-deliverables-fallback";
+      state.lastRecord = fallback;
       state.phase = "ready";
-      renderPackage(record);
-      announce("final-deliverable-ready", projectId, record);
-      return record;
-    } catch (deterministicError) {
-      try {
-        state.phase = "building-canonical-package";
-        updateControl("working", "Running canonical package engine", message(deterministicError));
-        const record = await buildCanonical(projectId);
-        state.lastRecord = record;
-        state.phase = "ready";
-        renderPackage(record);
-        announce("final-deliverable-ready", projectId, record);
-        return record;
-      } catch (canonicalError) {
-        const finalError = message(canonicalError) || message(deterministicError) || "Final delivery package generation failed.";
-        state.lastError = finalError;
-        state.phase = "error";
-        renderFailure(finalError);
-        return null;
-      }
+      renderPackage(fallback);
+      announce("final-deliverable-ready", projectId, fallback);
+      return fallback;
+    } catch (error) {
+      state.lastError = message(error) || state.primaryError || "Final delivery package generation failed.";
+      state.phase = "error";
+      renderFailure(state.lastError);
+      return null;
     } finally {
       state.busy = false;
       disableButtons(false);
@@ -145,11 +168,13 @@
       const record = await readExistingPackage(projectId);
       if (!record) throw new Error("No completed final package is stored yet. Use Produce Final Deliverable.");
       state.lastRecord = record;
+      state.engine ||= record?.recovery?.engine || "saved-package";
       state.phase = "ready";
       renderPackage(record);
       return record;
     } catch (error) {
-      renderFailure(message(error));
+      state.lastError = message(error);
+      renderFailure(state.lastError);
       return null;
     } finally {
       state.busy = false;
@@ -164,8 +189,8 @@
       if (packageURL(primary)) return normalizeRecord(projectId, primary);
     } catch {}
     try {
-      const fallback = await requestJSON(`${base}/deliverables/build`, { method: "GET" }, READ_TIMEOUT_MS);
-      const record = adaptDeterministic(projectId, fallback);
+      const body = await requestJSON(`${base}/deliverables/build`, { method: "GET" }, READ_TIMEOUT_MS);
+      const record = adaptDeterministic(projectId, body);
       if (packageURL(record)) return record;
     } catch {}
     return null;
@@ -196,15 +221,6 @@
     }
   }
 
-  async function buildDeterministic(projectId) {
-    const body = await requestJSON(`${manuscriptRoute(projectId)}/deliverables/build`, post({
-      confirmation: "MANUFACTURE DELIVERY PACKAGE",
-      actor: "MMG Executive",
-      sourceMode: "approved-editorial-version",
-    }), BUILD_TIMEOUT_MS);
-    return adaptDeterministic(projectId, body);
-  }
-
   async function buildCanonical(projectId) {
     const body = await requestJSON(`${manuscriptRoute(projectId)}/auto-pipeline/run`, post({
       mode: "source-preserving-production",
@@ -212,6 +228,15 @@
       actor: "MMG Executive",
     }), BUILD_TIMEOUT_MS);
     return normalizeRecord(projectId, body);
+  }
+
+  async function buildDeterministic(projectId) {
+    const body = await requestJSON(`${manuscriptRoute(projectId)}/deliverables/build`, post({
+      confirmation: "MANUFACTURE DELIVERY PACKAGE",
+      actor: "MMG Executive",
+      sourceMode: "approved-editorial-version",
+    }), BUILD_TIMEOUT_MS);
+    return adaptDeterministic(projectId, body);
   }
 
   function adaptDeterministic(projectId, body) {
@@ -225,6 +250,7 @@
       projectId,
       metadata: {
         title: build?.metadata?.workingTitle || build?.metadata?.inferred?.title || "Complete publishing package",
+        author: build?.metadata?.author || "Mindset Media Group",
       },
       vault: {
         assets,
@@ -233,6 +259,11 @@
           passed: assets.length > 0 && assets.every(asset => Number(asset?.byteSize || 0) > 0),
           assetCount: assets.length,
         },
+      },
+      recovery: {
+        engine: "deterministic-deliverables-fallback",
+        primaryError: state.primaryError || null,
+        deliverablesBuildId: build.id || null,
       },
     };
   }
@@ -251,19 +282,19 @@
     const url = packageURL(record) || `${manuscriptRoute(state.projectId)}/deliverables/zip`;
     const assets = Array.isArray(record?.vault?.assets) ? record.vault.assets : [];
     const title = record?.metadata?.title || record?.vault?.title || "Final delivery package ready";
+    const engineLabel = state.engine || record?.recovery?.engine || "saved-package";
     const panel = mountAndGetControl();
     panel.dataset.state = "ready";
     panel.querySelector("[data-kairos-final-delivery-title]").textContent = title;
-    panel.querySelector("[data-kairos-final-delivery-status]").textContent = `${assets.length} deliverable assets are ready.`;
+    panel.querySelector("[data-kairos-final-delivery-status]").textContent = `${assets.length} deliverable assets are ready · ${engineLabel}`;
     const download = panel.querySelector("[data-kairos-final-delivery-download]");
     download.hidden = false;
     download.href = url;
     download.target = "_blank";
     download.rel = "noopener";
     download.textContent = "Download Complete Package";
-    const run = panel.querySelector("[data-kairos-final-delivery-run]");
-    run.textContent = "Rebuild Final Deliverable";
-    revealPipelineResult(record, url, assets);
+    panel.querySelector("[data-kairos-final-delivery-run]").textContent = "Rebuild Final Deliverable";
+    revealPipelineResult(record, url, assets, engineLabel);
     panel.scrollIntoView({ behavior: "smooth", block: "end" });
     return record;
   }
@@ -275,14 +306,12 @@
     panel.querySelector("[data-kairos-final-delivery-title]").textContent = "Final package needs attention";
     panel.querySelector("[data-kairos-final-delivery-status]").textContent = state.lastError;
     panel.querySelector("[data-kairos-final-delivery-run]").textContent = "Retry Final Deliverable";
-    const download = panel.querySelector("[data-kairos-final-delivery-download]");
-    download.hidden = true;
+    panel.querySelector("[data-kairos-final-delivery-download]").hidden = true;
     revealPipelineError(state.lastError);
   }
 
-  function revealPipelineResult(record, url, assets) {
+  function revealPipelineResult(record, url, assets, engineLabel) {
     const section = ensurePipelineSection();
-    if (!section) return;
     section.hidden = false;
     section.style.removeProperty("display");
     section.removeAttribute("aria-busy");
@@ -290,17 +319,21 @@
       <p class="eyebrow">Final delivery package</p>
       <h3>${escapeHTML(record?.metadata?.title || "Complete publishing package ready")}</h3>
       <p>The deliverable cycle is complete. Download the verified customer package below.</p>
+      <div class="issue-list">
+        <article><b>Assets</b><p>${assets.length} verified deliverables</p></article>
+        <article><b>Engine</b><p>${escapeHTML(engineLabel)}</p></article>
+      </div>
       <div class="manuscript-actions">
         <a class="primary" href="${escapeHTML(url)}" target="_blank" rel="noopener">Download Complete Package</a>
         <button type="button" class="secondary" data-kairos-final-delivery-run>Rebuild Final Deliverable</button>
       </div>
-      <p class="manuscript-note">${assets.length} packaged assets · Project ${escapeHTML(state.projectId)}</p>
+      <p class="manuscript-note">Project ${escapeHTML(state.projectId)}</p>
+      ${state.primaryError ? `<p class="manuscript-note">Canonical recovery detail: ${escapeHTML(state.primaryError)}</p>` : ""}
     `;
   }
 
   function revealPipelineError(error) {
     const section = ensurePipelineSection();
-    if (!section) return;
     section.hidden = false;
     section.style.removeProperty("display");
     section.removeAttribute("aria-busy");
@@ -359,9 +392,9 @@
   }
 
   function disableButtons(disabled) {
-    document.querySelectorAll("[data-kairos-final-delivery-run], [data-kairos-final-delivery-check]").forEach(button => {
-      button.disabled = disabled;
-    });
+    document.querySelectorAll(
+      "[data-kairos-final-delivery-run], [data-kairos-final-delivery-check], [data-final-deliverable-retry], [data-final-deliverable-refresh]",
+    ).forEach(button => { button.disabled = disabled; });
   }
 
   function mountAndGetControl() {
@@ -386,7 +419,10 @@
   async function requestJSON(url, init = {}, timeoutMs = READ_TIMEOUT_MS) {
     const controller = typeof AbortController === "function" ? new AbortController() : null;
     const timer = window.setTimeout(() => controller?.abort(), timeoutMs);
-    const requestPromise = (async () => {
+    const timeout = new Promise((_, reject) => {
+      window.setTimeout(() => reject(new Error(`Kairos did not finish ${url} within ${Math.round(timeoutMs / 1000)} seconds.`)), timeoutMs + 50);
+    });
+    const request = (async () => {
       const response = await fetch(url, {
         credentials: "include",
         cache: "no-store",
@@ -405,14 +441,8 @@
       if (!response.ok) throw new Error(body?.error?.message || `Kairos returned HTTP ${response.status} from ${url}.`);
       return body;
     })();
-    const timeoutPromise = new Promise((_, reject) => {
-      window.setTimeout(() => reject(new Error(`Kairos did not finish ${url} within ${Math.round(timeoutMs / 1000)} seconds.`)), timeoutMs + 50);
-    });
-    try {
-      return await Promise.race([requestPromise, timeoutPromise]);
-    } finally {
-      clearTimeout(timer);
-    }
+    try { return await Promise.race([request, timeout]); }
+    finally { clearTimeout(timer); }
   }
 
   function post(body) {
@@ -440,14 +470,12 @@
     try {
       const active = JSON.parse(sessionStorage.getItem(ACTIVE_KEY) || "null");
       return String(active?.projectId || active?.id || "").trim();
-    } catch {
-      return "";
-    }
+    } catch { return ""; }
   }
 
   function announce(reason, projectId, record) {
     window.dispatchEvent(new CustomEvent("kairos:production:state-changed", {
-      detail: { reason, projectId, workspace: "manuscript-studio", status: record?.status || null, build: BUILD },
+      detail: { reason, projectId, workspace: "manuscript-studio", status: record?.status || null, engine: state.engine, build: BUILD },
     }));
   }
 
