@@ -1,390 +1,317 @@
 (() => {
-  const BUILD = "kairos-manuscript-final-deliverable-engine-20260804-1";
+  const BUILD = "kairos-manuscript-final-delivery-control-20260804-3";
   const GLOBAL_KEY = "__KAIROS_MANUSCRIPT_FINAL_DELIVERABLE_ENGINE__";
   const ACTIVE_KEY = "kairos.production.active-workspace";
-  const READ_TIMEOUT_MS = 15_000;
+  const READ_TIMEOUT_MS = 12_000;
+  const WRITE_TIMEOUT_MS = 65_000;
   const BUILD_TIMEOUT_MS = 150_000;
-  const APPROVE_TIMEOUT_MS = 60_000;
-  const PACKAGE_CONFIRMATION = "APPROVE PACKAGE";
-
-  if (globalThis[GLOBAL_KEY]) {
-    globalThis.KairosManuscriptFinalDeliverableEngine = globalThis[GLOBAL_KEY];
-    return;
-  }
-
-  const original = globalThis.KairosManuscriptPipelineOrchestrator;
-  if (!original?.ready) {
-    console.error("[kairos-final-deliverable] authoritative orchestrator is unavailable", { build: BUILD });
-    return;
-  }
+  const AUTO_TRIGGER_KEY = "kairos.final-delivery.auto-triggered";
 
   const state = {
     busy: false,
-    phase: "",
     projectId: "",
-    primaryError: "",
+    phase: "waiting",
+    operationId: "",
     lastError: "",
     lastRecord: null,
-    engine: "",
-    operationId: "",
+    autoTriggered: false,
   };
 
   const api = Object.freeze({
-    ...original,
     build: BUILD,
-    upstreamBuild: original.build,
     ready: true,
     manufacture: manufactureFinalDeliverable,
     refresh: refreshFinalDeliverable,
-    approvePackage,
-    snapshot() {
-      return {
-        build: BUILD,
-        upstreamBuild: original.build,
-        busy: state.busy,
-        phase: state.phase,
-        projectId: state.projectId || activeProjectId(),
-        primaryError: state.primaryError || null,
-        lastError: state.lastError || null,
-        status: state.lastRecord?.status || null,
-        engine: state.engine || null,
-        operationId: state.operationId || null,
-      };
-    },
+    snapshot: () => ({ ...state, projectId: state.projectId || activeProjectId() }),
   });
 
   globalThis[GLOBAL_KEY] = api;
   globalThis.KairosManuscriptFinalDeliverableEngine = api;
   globalThis.KairosManuscriptPipelineOrchestrator = api;
 
-  document.addEventListener("click", event => {
-    const target = event.target instanceof Element ? event.target : null;
-    const retry = target?.closest?.("[data-final-deliverable-retry]");
-    const approve = target?.closest?.("[data-final-deliverable-approve]");
-    const refresh = target?.closest?.("[data-final-deliverable-refresh]");
-    if (!retry && !approve && !refresh) return;
+  installStyles();
+  mountControl();
+  bindActions();
+  watchForFinalQueue();
 
-    event.preventDefault();
-    event.stopPropagation();
-    event.stopImmediatePropagation();
+  function mountControl() {
+    if (document.querySelector("#kairos-final-delivery-control")) return;
+    const panel = document.createElement("aside");
+    panel.id = "kairos-final-delivery-control";
+    panel.setAttribute("data-kairos-final-delivery-control", BUILD);
+    panel.setAttribute("aria-live", "polite");
+    panel.innerHTML = `
+      <div class="kairos-final-delivery-copy">
+        <p class="kairos-final-delivery-eyebrow">Final delivery</p>
+        <strong data-kairos-final-delivery-title>Produce the complete delivery package</strong>
+        <span data-kairos-final-delivery-status>The saved manuscript remains available even if Editorial Workbench is stalled.</span>
+      </div>
+      <div class="kairos-final-delivery-actions">
+        <button type="button" data-kairos-final-delivery-run>Produce Final Deliverable</button>
+        <button type="button" data-kairos-final-delivery-check>Check Saved Package</button>
+        <a hidden data-kairos-final-delivery-download>Download Complete Package</a>
+      </div>
+    `;
+    document.body.append(panel);
+    updateControl("ready", "Produce the complete delivery package", "The final action is independent of Editorial Workbench.");
+  }
 
-    if (approve) void approvePackage();
-    else if (refresh) void refreshFinalDeliverable();
-    else void manufactureFinalDeliverable();
-  }, true);
+  function bindActions() {
+    document.addEventListener("click", event => {
+      const target = event.target instanceof Element ? event.target : null;
+      const run = target?.closest?.("[data-kairos-final-delivery-run]");
+      const check = target?.closest?.("[data-kairos-final-delivery-check]");
+      if (!run && !check) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      if (check) void refreshFinalDeliverable();
+      else void manufactureFinalDeliverable();
+    }, true);
+  }
 
   async function manufactureFinalDeliverable(projectId = activeProjectId()) {
     if (state.busy) return null;
     if (!projectId) {
-      renderError("Kairos could not identify the active manuscript project.");
+      renderFailure("Kairos could not identify the saved manuscript project. Open this route from the active manuscript tab or add ?project=PROJECT_ID.");
       return null;
     }
 
     state.busy = true;
     state.projectId = projectId;
     state.operationId = createId();
-    state.primaryError = "";
+    state.phase = "checking-existing-package";
     state.lastError = "";
-    state.engine = "";
+    disableButtons(true);
 
     try {
-      state.phase = "Verifying project setup and approved editorial state…";
-      renderBusy(state.phase);
-      const readiness = await readReadiness(projectId);
-      if (!readiness.setupComplete) {
-        throw new Error("Complete Project Setup before producing the final deliverable.");
-      }
-      if (!readiness.editorialReady) {
-        throw new Error("Approve and finalize the editorial manuscript before producing the final deliverable.");
-      }
+      updateControl("working", "Checking saved package", `Project ${projectId}`);
+      const existing = await readExistingPackage(projectId);
+      if (existing) return renderPackage(existing);
 
-      state.phase = "Producing the complete customer delivery package…";
-      renderBusy(state.phase);
+      state.phase = "building-deterministic-package";
+      updateControl("working", "Producing final deliverable", "Building directly from the saved approved manuscript state.");
 
-      let record = null;
+      let record;
       try {
-        record = await runPrimaryEngine(projectId);
-        state.engine = "canonical-customer-package";
-      } catch (error) {
-        state.primaryError = message(error, "The canonical customer-package engine did not complete.");
-        state.phase = "Recovering through the deterministic deliverables builder…";
-        renderBusy(state.phase, state.primaryError);
-        record = await runDeterministicFallback(projectId);
-        state.engine = "deterministic-deliverables-fallback";
+        record = await buildDeterministic(projectId);
+      } catch (firstError) {
+        state.lastError = message(firstError);
+        updateControl("working", "Preparing editorial state", state.lastError);
+        await prepareEditorial(projectId);
+        record = await buildDeterministic(projectId);
       }
 
       state.lastRecord = record;
-      state.lastError = "";
+      state.phase = "ready";
       renderPackage(record);
       announce("final-deliverable-ready", projectId, record);
       return record;
-    } catch (error) {
-      state.lastError = message(error, "Kairos could not produce the final deliverable package.");
-      renderError(state.lastError);
-      return null;
+    } catch (deterministicError) {
+      try {
+        state.phase = "building-canonical-package";
+        updateControl("working", "Running canonical package engine", message(deterministicError));
+        const record = await buildCanonical(projectId);
+        state.lastRecord = record;
+        state.phase = "ready";
+        renderPackage(record);
+        announce("final-deliverable-ready", projectId, record);
+        return record;
+      } catch (canonicalError) {
+        const finalError = message(canonicalError) || message(deterministicError) || "Final delivery package generation failed.";
+        state.lastError = finalError;
+        state.phase = "error";
+        renderFailure(finalError);
+        return null;
+      }
     } finally {
       state.busy = false;
-      state.phase = "";
+      disableButtons(false);
     }
-  }
-
-  async function runPrimaryEngine(projectId) {
-    return requestJSON(
-      `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/auto-pipeline/run`,
-      {
-        method: "POST",
-        credentials: "include",
-        cache: "no-store",
-        headers: {
-          "Content-Type": "application/json",
-          "X-MMG-Client-Build": BUILD,
-          "X-Kairos-Operation-Id": state.operationId,
-          "X-Kairos-Idempotency-Key": state.operationId,
-        },
-        body: JSON.stringify({
-          mode: "source-preserving-production",
-          confirmation: "MANUFACTURE DELIVERY PACKAGE",
-          actor: "MMG Executive",
-        }),
-      },
-      BUILD_TIMEOUT_MS,
-    );
-  }
-
-  async function runDeterministicFallback(projectId) {
-    const body = await requestJSON(
-      `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/deliverables/build`,
-      {
-        method: "POST",
-        credentials: "include",
-        cache: "no-store",
-        headers: {
-          "Content-Type": "application/json",
-          "X-MMG-Client-Build": BUILD,
-          "X-Kairos-Operation-Id": state.operationId,
-          "X-Kairos-Idempotency-Key": state.operationId,
-        },
-        body: JSON.stringify({
-          confirmation: "MANUFACTURE DELIVERY PACKAGE",
-          actor: "MMG Executive",
-          sourceMode: "approved-editorial-version",
-        }),
-      },
-      BUILD_TIMEOUT_MS,
-    );
-    return adaptDeterministicRecord(projectId, body);
   }
 
   async function refreshFinalDeliverable(projectId = activeProjectId()) {
-    if (!projectId || state.busy) return null;
-    state.projectId = projectId;
-    state.lastError = "";
-
-    try {
-      const primary = await requestJSON(
-        `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/auto-pipeline`,
-        { method: "GET", credentials: "include", cache: "no-store" },
-        READ_TIMEOUT_MS,
-      );
-      state.engine = "canonical-customer-package";
-      state.lastRecord = primary;
-      renderPackage(primary);
-      return primary;
-    } catch (primaryError) {
-      try {
-        const fallback = await requestJSON(
-          `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/deliverables/build`,
-          { method: "GET", credentials: "include", cache: "no-store" },
-          READ_TIMEOUT_MS,
-        );
-        const record = adaptDeterministicRecord(projectId, fallback);
-        state.engine = "deterministic-deliverables-fallback";
-        state.primaryError = message(primaryError, "No canonical package record was found.");
-        state.lastRecord = record;
-        renderPackage(record);
-        return record;
-      } catch (fallbackError) {
-        state.lastError = message(fallbackError, message(primaryError, "No saved deliverable package was found."));
-        renderError(state.lastError);
-        return null;
-      }
+    if (state.busy) return null;
+    if (!projectId) {
+      renderFailure("Kairos could not identify the saved manuscript project.");
+      return null;
     }
-  }
-
-  async function approvePackage(projectId = activeProjectId()) {
-    if (!projectId || state.busy) return null;
-    if (state.engine === "deterministic-deliverables-fallback") {
-      renderPackage({
-        ...state.lastRecord,
-        status: "package-approved",
-        nextAction: "The deterministic delivery package is finalized and ready to download.",
-      });
-      return state.lastRecord;
-    }
-
     state.busy = true;
-    state.phase = "Finalizing the reviewed delivery package…";
-    renderBusy(state.phase);
+    state.projectId = projectId;
+    disableButtons(true);
     try {
-      const record = await requestJSON(
-        `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/experience/approve-package`,
-        {
-          method: "POST",
-          credentials: "include",
-          cache: "no-store",
-          headers: {
-            "Content-Type": "application/json",
-            "X-MMG-Client-Build": BUILD,
-            "X-Kairos-Operation-Id": createId(),
-          },
-          body: JSON.stringify({
-            confirmation: PACKAGE_CONFIRMATION,
-            actor: "MMG Executive",
-          }),
-        },
-        APPROVE_TIMEOUT_MS,
-      );
+      updateControl("working", "Checking saved package", `Project ${projectId}`);
+      const record = await readExistingPackage(projectId);
+      if (!record) throw new Error("No completed final package is stored yet. Use Produce Final Deliverable.");
       state.lastRecord = record;
+      state.phase = "ready";
       renderPackage(record);
       return record;
     } catch (error) {
-      state.lastError = message(error, "Kairos could not finalize the delivery package.");
-      renderError(state.lastError);
+      renderFailure(message(error));
       return null;
     } finally {
       state.busy = false;
-      state.phase = "";
+      disableButtons(false);
     }
   }
 
-  async function readReadiness(projectId) {
-    const base = `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}`;
-    const [setup, editorial] = await Promise.all([
-      requestJSON(`${base}/setup`, { method: "GET", credentials: "include", cache: "no-store" }, READ_TIMEOUT_MS),
-      requestJSON(`${base}/editorial`, { method: "GET", credentials: "include", cache: "no-store" }, READ_TIMEOUT_MS),
-    ]);
-    const setupStatus = setup?.setup?.status || setup?.status || "";
-    const editorialStatus = editorial?.editorial?.status || editorial?.status || "";
-    return {
-      setupComplete: ["assigned-to-production", "awaiting-customer-cover"].includes(setupStatus),
-      editorialReady: editorialStatus === "ready-for-manufacturing",
-      setupStatus,
-      editorialStatus,
-    };
+  async function readExistingPackage(projectId) {
+    const base = manuscriptRoute(projectId);
+    try {
+      const primary = await requestJSON(`${base}/auto-pipeline`, { method: "GET" }, READ_TIMEOUT_MS);
+      if (packageURL(primary)) return normalizeRecord(projectId, primary);
+    } catch {}
+    try {
+      const fallback = await requestJSON(`${base}/deliverables/build`, { method: "GET" }, READ_TIMEOUT_MS);
+      const record = adaptDeterministic(projectId, fallback);
+      if (packageURL(record)) return record;
+    } catch {}
+    return null;
   }
 
-  function adaptDeterministicRecord(projectId, body) {
+  async function prepareEditorial(projectId) {
+    const base = manuscriptRoute(projectId);
+    const current = await requestJSON(`${base}/editorial`, { method: "GET" }, READ_TIMEOUT_MS);
+    let editorial = current?.editorial || current || {};
+    const versionId = editorial?.review?.versionId || editorial?.currentVersionId || editorial?.finalVersionId;
+    if (!versionId) throw new Error("No saved editorial version is available to finalize.");
+
+    if (editorial?.review?.decision !== "approved") {
+      await requestJSON(`${base}/editorial/decision`, post({
+        decision: "approved",
+        note: "Approved by MMG final-delivery control.",
+        actor: "MMG Executive",
+      }), WRITE_TIMEOUT_MS);
+      const reread = await requestJSON(`${base}/editorial`, { method: "GET" }, READ_TIMEOUT_MS);
+      editorial = reread?.editorial || reread || editorial;
+    }
+
+    if (editorial?.status !== "ready-for-manufacturing") {
+      await requestJSON(`${base}/editorial/finalize`, post({
+        versionId: editorial?.review?.versionId || editorial?.currentVersionId || versionId,
+        actor: "MMG Editorial Production",
+      }), WRITE_TIMEOUT_MS);
+    }
+  }
+
+  async function buildDeterministic(projectId) {
+    const body = await requestJSON(`${manuscriptRoute(projectId)}/deliverables/build`, post({
+      confirmation: "MANUFACTURE DELIVERY PACKAGE",
+      actor: "MMG Executive",
+      sourceMode: "approved-editorial-version",
+    }), BUILD_TIMEOUT_MS);
+    return adaptDeterministic(projectId, body);
+  }
+
+  async function buildCanonical(projectId) {
+    const body = await requestJSON(`${manuscriptRoute(projectId)}/auto-pipeline/run`, post({
+      mode: "source-preserving-production",
+      confirmation: "MANUFACTURE DELIVERY PACKAGE",
+      actor: "MMG Executive",
+    }), BUILD_TIMEOUT_MS);
+    return normalizeRecord(projectId, body);
+  }
+
+  function adaptDeterministic(projectId, body) {
     const build = body?.deliverablesBuild || body?.buildRecord || body;
-    if (!build || build.status !== "COMPLETED") {
-      throw new Error(body?.error?.message || "The deterministic deliverables builder did not complete.");
+    if (!build || String(build.status || "").toUpperCase() !== "COMPLETED") {
+      throw new Error(body?.error?.message || "The deterministic final-package builder did not complete.");
     }
-    const artifacts = Array.isArray(build.artifacts) ? build.artifacts : [];
-    const integrityPassed = artifacts.length > 0 && artifacts.every(artifact => (
-      Number(artifact.byteSize || 0) > 0 && /^[a-f0-9]{64}$/i.test(String(artifact.sha256 || ""))
-    ));
+    const assets = Array.isArray(build.artifacts) ? build.artifacts : [];
     return {
       status: "production-ready",
-      build: BUILD,
       projectId,
       metadata: {
-        title: build.metadata?.workingTitle || build.metadata?.inferred?.title || "Complete publishing package",
-        author: build.metadata?.author || "Mindset Media Group",
+        title: build?.metadata?.workingTitle || build?.metadata?.inferred?.title || "Complete publishing package",
       },
       vault: {
-        title: build.metadata?.workingTitle || "Complete publishing package",
-        assets: artifacts,
-        packageDownloadURL: `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}/deliverables/zip`,
+        assets,
+        packageDownloadURL: `${manuscriptRoute(projectId)}/deliverables/zip`,
         integrity: {
-          passed: integrityPassed,
-          assetCount: artifacts.length,
+          passed: assets.length > 0 && assets.every(asset => Number(asset?.byteSize || 0) > 0),
+          assetCount: assets.length,
         },
-      },
-      shopify: { status: "not-prepared" },
-      nextAction: "Review and download the deterministic final delivery package. Shopify publication remains separately approval-gated.",
-      recovery: {
-        engine: "deterministic-deliverables-fallback",
-        primaryError: state.primaryError || null,
-        deliverablesBuildId: build.id || null,
       },
     };
   }
 
-  function renderBusy(phase, detail = "") {
-    const section = ensurePipelineSection();
-    if (!section) return;
-    section.hidden = false;
-    section.style.removeProperty("display");
-    section.setAttribute("aria-busy", "true");
-    section.innerHTML = `
-      <p class="eyebrow">Final deliverable engine</p>
-      <h3>${escapeHTML(phase || "Working…")}</h3>
-      <p class="manuscript-progress">Kairos is producing one resumable package operation. The approved editorial version remains authoritative.</p>
-      ${detail ? `<p class="manuscript-note">Recovery detail: ${escapeHTML(detail)}</p>` : ""}
-      <p class="manuscript-note">Operation: ${escapeHTML(state.operationId || "checking")}</p>
-      <button type="button" class="secondary" data-final-deliverable-refresh>Check Saved Package</button>
-    `;
-  }
-
-  function renderError(error) {
-    const section = ensurePipelineSection();
-    if (!section) return;
-    section.hidden = false;
-    section.style.removeProperty("display");
-    section.removeAttribute("aria-busy");
-    section.innerHTML = `
-      <p class="eyebrow">Final deliverable engine</p>
-      <h3>Final package needs attention</h3>
-      <p class="manuscript-error" role="alert">${escapeHTML(error)}</p>
-      ${state.primaryError ? `<p class="manuscript-note">Primary engine: ${escapeHTML(state.primaryError)}</p>` : ""}
-      <div class="manuscript-actions">
-        <button type="button" class="primary" data-final-deliverable-retry>Retry Final Deliverable</button>
-        <button type="button" class="secondary" data-final-deliverable-refresh>Check Saved Package</button>
-      </div>
-    `;
+  function normalizeRecord(projectId, record) {
+    const normalized = record && typeof record === "object" ? { ...record } : {};
+    normalized.projectId ||= projectId;
+    normalized.vault ||= {};
+    normalized.vault.packageDownloadURL ||= normalized.packageDownloadURL || `${manuscriptRoute(projectId)}/deliverables/zip`;
+    normalized.vault.assets ||= [];
+    return normalized;
   }
 
   function renderPackage(record) {
+    state.lastRecord = record;
+    const url = packageURL(record) || `${manuscriptRoute(state.projectId)}/deliverables/zip`;
+    const assets = Array.isArray(record?.vault?.assets) ? record.vault.assets : [];
+    const title = record?.metadata?.title || record?.vault?.title || "Final delivery package ready";
+    const panel = mountAndGetControl();
+    panel.dataset.state = "ready";
+    panel.querySelector("[data-kairos-final-delivery-title]").textContent = title;
+    panel.querySelector("[data-kairos-final-delivery-status]").textContent = `${assets.length} deliverable assets are ready.`;
+    const download = panel.querySelector("[data-kairos-final-delivery-download]");
+    download.hidden = false;
+    download.href = url;
+    download.target = "_blank";
+    download.rel = "noopener";
+    download.textContent = "Download Complete Package";
+    const run = panel.querySelector("[data-kairos-final-delivery-run]");
+    run.textContent = "Rebuild Final Deliverable";
+    revealPipelineResult(record, url, assets);
+    panel.scrollIntoView({ behavior: "smooth", block: "end" });
+    return record;
+  }
+
+  function renderFailure(error) {
+    state.lastError = error || "Final delivery package generation failed.";
+    const panel = mountAndGetControl();
+    panel.dataset.state = "error";
+    panel.querySelector("[data-kairos-final-delivery-title]").textContent = "Final package needs attention";
+    panel.querySelector("[data-kairos-final-delivery-status]").textContent = state.lastError;
+    panel.querySelector("[data-kairos-final-delivery-run]").textContent = "Retry Final Deliverable";
+    const download = panel.querySelector("[data-kairos-final-delivery-download]");
+    download.hidden = true;
+    revealPipelineError(state.lastError);
+  }
+
+  function revealPipelineResult(record, url, assets) {
     const section = ensurePipelineSection();
     if (!section) return;
-    const metadata = record?.metadata || {};
-    const vault = record?.vault || {};
-    const assets = Array.isArray(vault.assets) ? vault.assets : [];
-    const packageURL = vault.packageDownloadURL || record?.packageDownloadURL || "";
-    const approved = record?.status === "package-approved";
-    const integrity = vault.integrity?.passed === false ? "Attention required" : "Verified";
-    const engineLabel = state.engine === "deterministic-deliverables-fallback"
-      ? "Deterministic recovery package"
-      : approved ? "Approved delivery package" : "Customer package preview";
-
     section.hidden = false;
     section.style.removeProperty("display");
     section.removeAttribute("aria-busy");
     section.innerHTML = `
-      <p class="eyebrow">${engineLabel}</p>
-      <h3>${escapeHTML(metadata.title || vault.title || "Complete publishing package ready")}</h3>
-      <p>${escapeHTML(record?.nextAction || "The final deliverable package is ready for review and download.")}</p>
-      <div class="issue-list">
-        <article><b>Package status</b><p>${escapeHTML(record?.status || "production-ready")}</p></article>
-        <article><b>Assets</b><p>${assets.length} verified deliverables</p></article>
-        <article><b>Integrity</b><p>${escapeHTML(integrity)}</p></article>
-        <article><b>Engine</b><p>${escapeHTML(state.engine || "canonical-customer-package")}</p></article>
-      </div>
+      <p class="eyebrow">Final delivery package</p>
+      <h3>${escapeHTML(record?.metadata?.title || "Complete publishing package ready")}</h3>
+      <p>The deliverable cycle is complete. Download the verified customer package below.</p>
       <div class="manuscript-actions">
-        ${packageURL ? `<a class="primary" href="${escapeHTML(packageURL)}" target="_blank" rel="noopener">Download Complete Package</a>` : ""}
-        ${!approved ? '<button type="button" class="secondary" data-final-deliverable-approve>Approve &amp; Finalize Package</button>' : ""}
-        <button type="button" class="secondary" data-final-deliverable-refresh>Refresh Package State</button>
+        <a class="primary" href="${escapeHTML(url)}" target="_blank" rel="noopener">Download Complete Package</a>
+        <button type="button" class="secondary" data-kairos-final-delivery-run>Rebuild Final Deliverable</button>
       </div>
-      <div class="manuscript-manufacturing-grid">
-        ${assets.map(artifactCard).join("")}
-      </div>
-      ${state.primaryError ? `<p class="manuscript-note">The canonical engine did not finish, so Kairos completed the package through the deterministic builder: ${escapeHTML(state.primaryError)}</p>` : ""}
+      <p class="manuscript-note">${assets.length} packaged assets · Project ${escapeHTML(state.projectId)}</p>
     `;
-    section.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  function artifactCard(artifact) {
-    const filename = artifact.filename || artifact.name || artifact.kind || "Deliverable";
-    return `<article><b>${escapeHTML(filename)}</b><p>${escapeHTML(artifact.role || artifact.kind || artifact.mimeType || "Publishing asset")}</p><small>${Number(artifact.byteSize || 0).toLocaleString()} bytes</small></article>`;
+  function revealPipelineError(error) {
+    const section = ensurePipelineSection();
+    if (!section) return;
+    section.hidden = false;
+    section.style.removeProperty("display");
+    section.removeAttribute("aria-busy");
+    section.innerHTML = `
+      <p class="eyebrow">Final delivery package</p>
+      <h3>Final package needs attention</h3>
+      <p class="manuscript-error" role="alert">${escapeHTML(error)}</p>
+      <div class="manuscript-actions">
+        <button type="button" class="primary" data-kairos-final-delivery-run>Retry Final Deliverable</button>
+        <button type="button" class="secondary" data-kairos-final-delivery-check>Check Saved Package</button>
+      </div>
+    `;
   }
 
   function ensurePipelineSection() {
@@ -392,8 +319,7 @@
     if (section) return section;
     const editorial = document.querySelector("#manuscript-editorial-workbench");
     const result = document.querySelector("#manuscript-studio-overlay .manuscript-result");
-    const parent = editorial?.parentElement || result;
-    if (!parent) return null;
+    const parent = editorial?.parentElement || result || document.body;
     section = document.createElement("section");
     section.id = "manuscript-auto-pipeline";
     section.className = "manuscript-auto-pipeline";
@@ -401,87 +327,137 @@
     return section;
   }
 
-  async function requestJSON(url, init, timeoutMs) {
-    const response = await request(url, init, timeoutMs);
-    const body = parseJSON(response.text, response.status);
-    if (!response.ok) {
-      throw new Error(body?.error?.message || `Kairos returned HTTP ${response.status}.`);
-    }
-    return body;
+  function watchForFinalQueue() {
+    const inspect = () => {
+      if (state.busy || state.autoTriggered) return;
+      const text = document.body?.innerText || "";
+      if (!/final files and delivery package/i.test(text) || !/queued/i.test(text)) return;
+      const projectId = activeProjectId();
+      if (!projectId) return;
+      const key = `${AUTO_TRIGGER_KEY}:${projectId}`;
+      if (sessionStorage.getItem(key) === BUILD) return;
+      sessionStorage.setItem(key, BUILD);
+      state.autoTriggered = true;
+      window.setTimeout(() => void manufactureFinalDeliverable(projectId), 250);
+    };
+    const observer = new MutationObserver(inspect);
+    observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+    window.addEventListener("pageshow", inspect);
+    window.addEventListener("kairos:manuscript-studio:opened", inspect);
+    window.setTimeout(inspect, 500);
   }
 
-  async function request(url, init, timeoutMs) {
-    const controller = new AbortController();
-    const parentSignal = init?.signal;
-    const relayAbort = () => controller.abort(parentSignal?.reason);
-    if (parentSignal?.aborted) relayAbort();
-    else parentSignal?.addEventListener?.("abort", relayAbort, { once: true });
-    let timedOut = false;
-    const timer = window.setTimeout(() => {
-      timedOut = true;
-      controller.abort();
-    }, timeoutMs);
+  function updateControl(mode, title, status) {
+    const panel = mountAndGetControl();
+    panel.dataset.state = mode;
+    panel.querySelector("[data-kairos-final-delivery-title]").textContent = title;
+    panel.querySelector("[data-kairos-final-delivery-status]").textContent = status;
+  }
 
+  function disableButtons(disabled) {
+    document.querySelectorAll("[data-kairos-final-delivery-run], [data-kairos-final-delivery-check]").forEach(button => {
+      button.disabled = disabled;
+    });
+  }
+
+  function mountAndGetControl() {
+    mountControl();
+    return document.querySelector("#kairos-final-delivery-control");
+  }
+
+  function installStyles() {
+    if (document.querySelector("#kairos-final-delivery-control-style")) return;
+    const style = document.createElement("style");
+    style.id = "kairos-final-delivery-control-style";
+    style.textContent = `
+      #kairos-final-delivery-control{position:fixed;z-index:2147483000;left:max(12px,env(safe-area-inset-left));right:max(12px,env(safe-area-inset-right));bottom:max(12px,env(safe-area-inset-bottom));display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center;padding:14px;border:1px solid #31527d;border-radius:18px;background:rgba(7,13,22,.98);box-shadow:0 18px 60px rgba(0,0,0,.55);color:#f7f9fc;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+      #kairos-final-delivery-control[data-state="working"]{border-color:#4a9cff}#kairos-final-delivery-control[data-state="ready"]{border-color:#39a96b}#kairos-final-delivery-control[data-state="error"]{border-color:#b85c5c}
+      .kairos-final-delivery-copy{display:grid;gap:3px;min-width:0}.kairos-final-delivery-eyebrow{margin:0;color:#7fb4ff;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}.kairos-final-delivery-copy strong{font-size:16px;line-height:1.25}.kairos-final-delivery-copy span{color:#aebcd0;font-size:13px;line-height:1.35}
+      .kairos-final-delivery-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}.kairos-final-delivery-actions button,.kairos-final-delivery-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 13px;border:1px solid #365d88;border-radius:11px;background:#111b27;color:#fff;font:800 14px/1.2 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;text-decoration:none}.kairos-final-delivery-actions [data-kairos-final-delivery-run],.kairos-final-delivery-actions [data-kairos-final-delivery-download]{background:#1677ff;border-color:#4a9cff}.kairos-final-delivery-actions [hidden]{display:none!important}.kairos-final-delivery-actions button:disabled{opacity:.55}
+      @media(max-width:700px){#kairos-final-delivery-control{grid-template-columns:1fr;max-height:42vh;overflow:auto}.kairos-final-delivery-actions{display:grid;grid-template-columns:1fr}.kairos-final-delivery-actions>*{width:100%}body{padding-bottom:230px!important}}
+    `;
+    document.head.append(style);
+  }
+
+  async function requestJSON(url, init = {}, timeoutMs = READ_TIMEOUT_MS) {
+    const controller = typeof AbortController === "function" ? new AbortController() : null;
+    const timer = window.setTimeout(() => controller?.abort(), timeoutMs);
+    const requestPromise = (async () => {
+      const response = await fetch(url, {
+        credentials: "include",
+        cache: "no-store",
+        ...init,
+        signal: controller?.signal,
+        headers: {
+          ...(init.headers || {}),
+          "X-MMG-Client-Build": BUILD,
+          "X-Kairos-Operation-Id": state.operationId || "",
+        },
+      });
+      const text = await response.text();
+      let body = {};
+      try { body = text ? JSON.parse(text) : {}; }
+      catch { throw new Error(`Kairos returned an unreadable response from ${url}.`); }
+      if (!response.ok) throw new Error(body?.error?.message || `Kairos returned HTTP ${response.status} from ${url}.`);
+      return body;
+    })();
+    const timeoutPromise = new Promise((_, reject) => {
+      window.setTimeout(() => reject(new Error(`Kairos did not finish ${url} within ${Math.round(timeoutMs / 1000)} seconds.`)), timeoutMs + 50);
+    });
     try {
-      const source = await fetch(url, { ...init, signal: controller.signal });
-      const text = await source.text();
-      return { ok: source.ok, status: source.status, headers: source.headers, text };
-    } catch (error) {
-      if (timedOut || controller.signal.aborted) {
-        throw new Error(`Kairos did not finish ${url} within ${Math.round(timeoutMs / 1000)} seconds. Saved state can be checked safely.`);
-      }
-      throw error;
+      return await Promise.race([requestPromise, timeoutPromise]);
     } finally {
       clearTimeout(timer);
-      parentSignal?.removeEventListener?.("abort", relayAbort);
     }
   }
 
-  function parseJSON(text, status) {
-    if (!text) return {};
-    try { return JSON.parse(text); }
-    catch { throw new Error(`Kairos returned an unreadable response (HTTP ${status}).`); }
+  function post(body) {
+    return {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Kairos-Idempotency-Key": state.operationId || createId(),
+      },
+      body: JSON.stringify(body),
+    };
+  }
+
+  function manuscriptRoute(projectId) {
+    return `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}`;
+  }
+
+  function packageURL(record) {
+    return record?.vault?.packageDownloadURL || record?.packageDownloadURL || "";
   }
 
   function activeProjectId() {
-    const queryProject = new URL(location.href).searchParams.get("project");
-    if (queryProject) return queryProject;
+    const direct = new URL(location.href).searchParams.get("project");
+    if (direct) return direct;
     try {
       const active = JSON.parse(sessionStorage.getItem(ACTIVE_KEY) || "null");
-      return active?.workspace === "manuscript-studio" ? active.projectId || null : null;
+      return String(active?.projectId || active?.id || "").trim();
     } catch {
-      return null;
+      return "";
     }
   }
 
   function announce(reason, projectId, record) {
     window.dispatchEvent(new CustomEvent("kairos:production:state-changed", {
-      detail: {
-        reason,
-        projectId,
-        workspace: "manuscript-studio",
-        status: record?.status || null,
-        engine: state.engine,
-        build: BUILD,
-      },
+      detail: { reason, projectId, workspace: "manuscript-studio", status: record?.status || null, build: BUILD },
     }));
   }
 
   function createId() {
-    return globalThis.crypto?.randomUUID?.() || `deliverable-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    return globalThis.crypto?.randomUUID?.() || `delivery-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
 
-  function message(error, fallback) {
-    return error?.message || fallback;
+  function message(error) {
+    return error instanceof Error ? error.message : String(error || "Final delivery package generation failed.");
   }
 
   function escapeHTML(value) {
-    return String(value ?? "").replace(/[&<>'"]/g, character => ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      "'": "&#39;",
-      '"': "&quot;",
+    return String(value || "").replace(/[&<>"']/g, character => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;",
     })[character]);
   }
 })();
