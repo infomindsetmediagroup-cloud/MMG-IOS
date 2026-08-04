@@ -7,6 +7,7 @@
   const ACTIVE_KEY = "kairos.production.active-workspace";
   const START_KEY = "kairos.manuscript.editorial-stall-start.";
   const DEADLINE_MS = 8_000;
+  const REQUEST_TIMEOUT_MS = 6_000;
   const HARD_FETCH_MS = 5_500;
   const READ_MS = 9_000;
   const PRIMARY_MS = 45_000;
@@ -16,7 +17,7 @@
   if (globalThis[GLOBAL_KEY]) return;
 
   globalThis.__KAIROS_EDITORIAL_REQUEST_TIMEOUT_MS__ = Number(
-    globalThis.__KAIROS_EDITORIAL_REQUEST_TIMEOUT_MS__ || HARD_FETCH_MS,
+    globalThis.__KAIROS_EDITORIAL_REQUEST_TIMEOUT_MS__ || REQUEST_TIMEOUT_MS,
   );
   globalThis.__KAIROS_EDITORIAL_WATCHDOG_AUTO_RELOAD__ = false;
 
@@ -50,6 +51,8 @@
       return {
         build: BUILD,
         patchBuild: PATCH,
+        projectId: activeProjectId() || null,
+        recoveryVisible: Boolean(document.querySelector("[data-kairos-editorial-stall-escape]")),
         recoveries: state.recoveries,
         lastReason: state.lastReason || null,
         hardTimeouts: state.hardTimeouts,
@@ -57,7 +60,7 @@
         engine: state.engine || null,
         status: state.record?.status || null,
         lastError: state.lastError || null,
-        requestTimeoutMs: Number(globalThis.__KAIROS_EDITORIAL_REQUEST_TIMEOUT_MS__ || HARD_FETCH_MS),
+        requestTimeoutMs: Number(globalThis.__KAIROS_EDITORIAL_REQUEST_TIMEOUT_MS__ || REQUEST_TIMEOUT_MS),
         deadlineMs: deadlineMs(),
         hardDeadlineMs: hardDeadlineMs(),
       };
