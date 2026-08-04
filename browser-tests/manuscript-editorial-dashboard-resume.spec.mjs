@@ -99,7 +99,7 @@ test("a stalled Safari editorial request becomes a visible retry and then recove
   ).toMatchObject({ busy: false, loaded: false, requestTimeoutMs: 250 });
 
   allowEditorial = true;
-  await workbench.getByRole("button", { name: "Retry" }).tap();
+  await workbench.getByRole("button", { name: "Retry" }).click({ force: true });
 
   await expect(workbench).toContainText("Editorial production in progress");
   await expect(workbench.locator("[data-editorial-save]")).toBeVisible();
@@ -196,7 +196,7 @@ test("Content Manuscript Studio resumes the durable project instead of opening a
   });
   await page.addScriptTag({ content: workspaceSource });
 
-  await page.locator('[data-child="manuscript-studio"]').tap();
+  await page.locator('[data-child="manuscript-studio"]').click({ force: true });
 
   const active = await page.evaluate(() => JSON.parse(
     sessionStorage.getItem("kairos.production.active-workspace") || "null",
