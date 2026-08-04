@@ -1,9 +1,13 @@
-const BUILD = "kairos-manuscript-deadlock-recovery-20260804-2";
+const BUILD = "kairos-manuscript-deadlock-recovery-20260804-3-editorial-source-recovery";
 const GLOBAL_KEY = "__KAIROS_MANUSCRIPT_DEADLOCK_RECOVERY__";
 const DEFAULT_TIMEOUT_MS = 8_000;
 const DEFAULT_ATTEMPTS = 2;
 const WATCHDOG_MS = 12_000;
+const SOURCE_RECOVERY_TIMEOUT_MS = 8_000;
+const DRAFT_KEY = "kairos.manuscript-studio.recoverable-draft.v1";
+const ACTIVE_KEY = "kairos.production.active-workspace";
 const CRITICAL_GET_ROUTE = /^\/api\/production-registry\/manuscripts\/[^/]+\/(?:auto-pipeline(?:\/(?:run|shopify-draft|shopify-publish))?|setup(?:\/cover)?|editorial(?:\/(?:versions(?:\/[a-z0-9-]{8,})?|review|decision|finalize))?|source\/text|deliverables\/(?:build|zip))$/i;
+const SOURCE_TEXT_ROUTE = /^\/api\/production-registry\/manuscripts\/([^/]+)\/source\/text$/i;
 
 if (!globalThis[GLOBAL_KEY]) {
   const nativeFetch = globalThis.fetch.bind(globalThis);
@@ -14,6 +18,9 @@ if (!globalThis[GLOBAL_KEY]) {
     timedOut: 0,
     recoveredEditorial: 0,
     recoveredPipeline: 0,
+    recoveredSourceFromBrowser: 0,
+    recoveredSourceFromEditorial: 0,
+    lastSourceRecovery: "",
     lastError: "",
   };
 
@@ -112,11 +119,20 @@ if (!globalThis[GLOBAL_KEY]) {
         });
         clearTimeout(timer);
         parentSignal?.removeEventListener?.("abort", relayAbort);
+
+        if (SOURCE_TEXT_ROUTE.test(pathname)) {
+          const recovered = await recoverMissingSource(response, pathname);
+          if (recovered) return recovered;
+        }
         return response;
       } catch (error) {
         clearTimeout(timer);
         parentSignal?.removeEventListener?.("abort", relayAbort);
         lastError = error;
+        if (SOURCE_TEXT_ROUTE.test(pathname)) {
+          const recovered = await recoverMissingSource(null, pathname);
+          if (recovered) return recovered;
+        }
         if (attempt < attempts) await wait(250 * attempt);
       }
     }
@@ -141,6 +157,220 @@ if (!globalThis[GLOBAL_KEY]) {
         "X-Kairos-Manuscript-Deadlock-Recovery": BUILD,
       },
     });
+  }
+
+  async function recoverMissingSource(response, pathname) {
+    const match = pathname.match(SOURCE_TEXT_ROUTE);
+    if (!match) return null;
+
+    if (response?.ok) {
+      const body = await response.clone().json().catch(() => ({}));
+      if (usableManuscript(body?.manuscript)) return null;
+    }
+
+    const requestedId = decodeURIComponent(match[1]);
+    const browser = browserRetainedSource(requestedId);
+    if (browser) {
+      state.recoveredSourceFromBrowser += 1;
+      state.lastSourceRecovery = "browser-retained-source";
+      return sourceResponse(requestedId, browser.manuscript, browser.source, {
+        authority: "browser-retained-source",
+        recoveredFrom: browser.recoveredFrom,
+      });
+    }
+
+    const editorial = await editorialRetainedSource(requestedId);
+    if (editorial) {
+      state.recoveredSourceFromEditorial += 1;
+      state.lastSourceRecovery = "checksum-verified-editorial-version";
+      return sourceResponse(editorial.projectId || requestedId, editorial.manuscript, editorial.source, {
+        authority: "checksum-verified-editorial-version",
+        recoveredFrom: "durable-editorial-version",
+        versionId: editorial.versionId,
+        checksum: editorial.checksum || null,
+      });
+    }
+
+    return null;
+  }
+
+  function browserRetainedSource(requestedId) {
+    const identity = identitySnapshot();
+    const aliases = new Set(candidateProjectIds(requestedId));
+    const globalSource = globalThis.__KAIROS_MANUSCRIPT_RESTORED_SOURCE__;
+    const candidates = [
+      { value: globalSource, recoveredFrom: "global-restored-source" },
+      { value: readJSON(sessionStorage, DRAFT_KEY), recoveredFrom: "session-draft" },
+      { value: readJSON(localStorage, DRAFT_KEY), recoveredFrom: "local-draft" },
+    ];
+
+    for (const candidate of candidates) {
+      const value = candidate.value;
+      if (!usableManuscript(value?.manuscript)) continue;
+      const ids = unique([
+        value?.projectId,
+        value?.sourceProjectId,
+        value?.manuscriptProjectId,
+        value?.identity?.canonicalProjectId,
+        ...(Array.isArray(value?.identity?.aliases) ? value.identity.aliases : []),
+      ]);
+      if (ids.length && !ids.some(id => aliases.has(id))) continue;
+      if (!ids.length && identity?.canonicalProjectId && !aliases.has(identity.canonicalProjectId)) continue;
+      return {
+        manuscript: String(value.manuscript),
+        source: value.source || null,
+        recoveredFrom: candidate.recoveredFrom,
+      };
+    }
+    return null;
+  }
+
+  async function editorialRetainedSource(requestedId) {
+    for (const projectId of candidateProjectIds(requestedId)) {
+      const base = `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}`;
+      const editorialBody = await nativeJSON(`${base}/editorial`).catch(() => null);
+      const editorial = editorialBody?.editorial || editorialBody;
+      if (!editorial || typeof editorial !== "object") continue;
+
+      const versionId = firstId(
+        editorial.finalVersionId,
+        editorial.review?.versionId,
+        editorial.currentVersionId,
+        latestVersionId(editorial.versions),
+      );
+      if (!versionId) continue;
+
+      const versionBody = await nativeJSON(
+        `${base}/editorial/versions/${encodeURIComponent(versionId)}`,
+      ).catch(() => null);
+      const manuscript = String(versionBody?.manuscript || versionBody?.version?.manuscript || "");
+      if (!usableManuscript(manuscript)) continue;
+
+      const sourceBody = await nativeJSON(`${base}/source`).catch(() => null);
+      return {
+        projectId,
+        versionId,
+        checksum: versionBody?.checksum
+          || versionBody?.version?.checksum
+          || (Array.isArray(editorial.versions)
+            ? editorial.versions.find(item => item?.versionId === versionId)?.checksum
+            : null),
+        manuscript,
+        source: sourceBody?.source || {
+          filename: `restored-editorial-${versionId}.txt`,
+          name: `restored-editorial-${versionId}.txt`,
+          authority: "checksum-verified-editorial-version",
+        },
+      };
+    }
+    return null;
+  }
+
+  async function nativeJSON(path) {
+    const response = await withDeadline(nativeFetch(path, {
+      method: "GET",
+      credentials: "include",
+      cache: "no-store",
+      headers: {
+        "X-MMG-Client-Build": BUILD,
+        "X-Kairos-Source-Recovery": "editorial-version-fallback",
+      },
+    }), SOURCE_RECOVERY_TIMEOUT_MS);
+    if (!response?.ok) return null;
+    return withDeadline(response.clone().json().catch(() => ({})), SOURCE_RECOVERY_TIMEOUT_MS);
+  }
+
+  function sourceResponse(projectId, manuscript, source, recovery) {
+    return new Response(JSON.stringify({
+      status: "ready",
+      build: BUILD,
+      projectId,
+      manuscript: String(manuscript),
+      source: source || null,
+      manuscriptAuthority: recovery.authority,
+      recovery: {
+        ...recovery,
+        build: BUILD,
+        recoveredAt: new Date().toISOString(),
+      },
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-store",
+        "X-Kairos-Manuscript-Source-Recovery": BUILD,
+        "X-Kairos-Manuscript-Authority": recovery.authority,
+      },
+    });
+  }
+
+  function candidateProjectIds(requestedId) {
+    const identity = identitySnapshot();
+    const active = readJSON(sessionStorage, ACTIVE_KEY);
+    return unique([
+      requestedId,
+      identity?.canonicalProjectId,
+      identity?.sourceProjectId,
+      identity?.manuscriptProjectId,
+      identity?.registryProjectId,
+      identity?.publicProjectId,
+      identity?.intakeId,
+      ...(Array.isArray(identity?.aliases) ? identity.aliases : []),
+      active?.projectId,
+      active?.sourceProjectId,
+      active?.manuscriptProjectId,
+      active?.registryProjectId,
+      active?.publicProjectId,
+      active?.intakeId,
+    ]);
+  }
+
+  function identitySnapshot() {
+    return globalThis.KairosManuscriptProjectIdentity?.snapshot?.().identity
+      || globalThis.KairosManuscriptProjectIdentity?.snapshot?.()
+      || null;
+  }
+
+  function latestVersionId(versions) {
+    if (!Array.isArray(versions) || !versions.length) return "";
+    return [...versions]
+      .sort((left, right) => {
+        const rightTime = Date.parse(right?.createdAt || right?.updatedAt || 0) || 0;
+        const leftTime = Date.parse(left?.createdAt || left?.updatedAt || 0) || 0;
+        return rightTime - leftTime;
+      })
+      .map(item => firstId(item?.versionId, item?.id))
+      .find(Boolean) || "";
+  }
+
+  function usableManuscript(value) {
+    return typeof value === "string" && value.trim().length >= 50;
+  }
+
+  function withDeadline(promise, milliseconds) {
+    let timer = 0;
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`Source recovery exceeded ${milliseconds} ms.`)),
+          milliseconds,
+        );
+      }),
+    ]).finally(() => clearTimeout(timer));
+  }
+
+  function readJSON(storage, key) {
+    try { return JSON.parse(storage?.getItem?.(key) || "null"); }
+    catch { return null; }
+  }
+
+  function firstId(...values) {
+    return values.map(value => String(value || "").trim()).find(Boolean) || "";
+  }
+
+  function unique(values) {
+    return [...new Set(values.map(value => String(value || "").trim()).filter(Boolean))];
   }
 
   function withHeader(headers, key, value) {

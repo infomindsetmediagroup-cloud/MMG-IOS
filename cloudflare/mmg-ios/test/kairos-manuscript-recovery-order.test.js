@@ -7,7 +7,7 @@ const recovery = readFileSync(new URL("../../../web/kairos-dashboard/scripts/man
 
 test("manuscript recovery loads before direct open", () => {
   const stateReady = route.indexOf("KairosManuscriptRegistryBridge.stateFetchReady");
-  const recoveryImport = route.indexOf("manuscript-deadlock-recovery.js?v=kairos-manuscript-deadlock-recovery-20260804-2");
+  const recoveryImport = route.indexOf("manuscript-deadlock-recovery.js?v=kairos-manuscript-deadlock-recovery-20260804-3-editorial-source-recovery");
   const directOpenImport = route.indexOf("manuscript-direct-open-controller.js?v=manuscript-flow-recovery-20260803-3");
   assert.ok(stateReady > -1);
   assert.ok(recoveryImport > stateReady);
@@ -21,4 +21,5 @@ test("manuscript recovery exposes retry controls", () => {
   assert.ok(recovery.includes("data-kairos-recover-editorial"));
   assert.ok(recovery.includes("data-kairos-recover-pipeline"));
   assert.ok(recovery.includes("AbortController"));
+  assert.ok(recovery.includes("checksum-verified-editorial-version"));
 });
