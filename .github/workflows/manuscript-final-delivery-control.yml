@@ -1,0 +1,74 @@
+name: Manuscript Final Delivery Control
+
+# Validates the integrated production route; Floot is used only as a development harness.
+on:
+  push:
+    branches:
+      - main
+      - fix/manuscript-always-visible-final-delivery-20260804
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  validate-final-delivery:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Update manuscript cache key on repair branch
+        if: github.event_name == 'push' && github.ref == 'refs/heads/fix/manuscript-always-visible-final-delivery-20260804'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('web/kairos-dashboard/manuscript.html')
+          text = path.read_text()
+          text = text.replace('kairos-manuscript-final-deliverable-engine-20260804-1', 'kairos-manuscript-final-delivery-control-20260804-4')
+          text = text.replace('kairos-manuscript-final-delivery-control-20260804-3', 'kairos-manuscript-final-delivery-control-20260804-4')
+          path.write_text(text)
+          PY
+          if git diff --quiet -- web/kairos-dashboard/manuscript.html; then
+            echo "Cache key already current."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add web/kairos-dashboard/manuscript.html
+            git commit -m "Load final delivery control v4"
+            git push origin HEAD:${GITHUB_REF_NAME}
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+
+      - name: Validate final delivery engine syntax
+        run: node --check web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js
+
+      - name: Verify route loads current final delivery control
+        run: |
+          grep -q 'kairos-manuscript-final-delivery-control-20260804-4' web/kairos-dashboard/manuscript.html
+          grep -q 'data-kairos-final-delivery-control' web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js
+          grep -q 'Produce Final Deliverable' web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js
+          grep -q 'deterministic-deliverables-fallback' web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js
+
+      - name: Install WebKit
+        run: npx playwright install --with-deps webkit > /dev/null
+
+      - name: Run final delivery WebKit regressions
+        run: |
+          npx playwright test \
+            browser-tests/manuscript-final-delivery-control.spec.mjs \
+            browser-tests/manuscript-pipeline-orchestrator.spec.mjs \
+            --project=webkit --workers=1
