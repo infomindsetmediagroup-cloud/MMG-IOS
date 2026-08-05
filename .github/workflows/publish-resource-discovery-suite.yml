@@ -88,7 +88,7 @@ jobs:
           done
 
       - name: Upload publication evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mmg-resource-discovery-suite-publication
           path: |
