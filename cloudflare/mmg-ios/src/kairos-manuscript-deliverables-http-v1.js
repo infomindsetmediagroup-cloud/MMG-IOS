@@ -1,10 +1,10 @@
 /**
  * Kairos Manuscript Deliverables — HTTP routing adapter.
  *
- * The deterministic builder is the recovery path for the canonical manuscript
- * manufacturing engine. When a final approved editorial version exists, this
- * adapter substitutes that checksum-verified text for the original intake text
- * while preserving the original uploaded source and cover bytes in the package.
+ * The deterministic builder manufactures the locked five-file MMG/KDP delivery
+ * package. When a final approved editorial version exists, this adapter
+ * substitutes that checksum-verified text for the original intake text while
+ * preserving and using the saved customer cover.
  */
 
 import {
@@ -12,10 +12,11 @@ import {
   getStoredManuscriptDeliverablesBuild,
   getStoredManuscriptDeliverablesZip,
   KAIROS_MANUSCRIPT_DELIVERABLES_BUILDER_BUILD,
-} from "./kairos-manuscript-deliverables-builder-v2.js";
+  PACKAGE_CONTRACT,
+} from "./kairos-manuscript-deliverables-builder-v3.js";
 
 export const KAIROS_MANUSCRIPT_DELIVERABLES_HTTP_BUILD =
-  "kairos-manuscript-deliverables-http-20260804-3-canonical-binary-package";
+  "kairos-manuscript-deliverables-http-20260805-4-locked-five-asset-package";
 
 const ROUTE = /^\/registry\/manuscripts\/([a-z0-9-]{8,})\/deliverables\/(build|zip)$/i;
 
@@ -48,7 +49,7 @@ export async function handleManuscriptDeliverablesObjectRequest(state, request, 
           ? "checksum-verified-final-editorial-version"
           : "stored-intake-source",
         approvedEditorial: resolved.approvedEditorial,
-        packageContract: build.metadata?.packageContract || null,
+        packageContract: build.metadata?.packageContract || PACKAGE_CONTRACT,
         deliverablesBuild: build,
       }, build.status === "COMPLETED" ? 201 : 422);
     }
@@ -68,7 +69,7 @@ export async function handleManuscriptDeliverablesObjectRequest(state, request, 
       return json({
         status: "ready",
         build: KAIROS_MANUSCRIPT_DELIVERABLES_HTTP_BUILD,
-        packageContract: stored.metadata?.packageContract || null,
+        packageContract: stored.metadata?.packageContract || PACKAGE_CONTRACT,
         deliverablesBuild: stored,
       });
     }
@@ -95,7 +96,7 @@ export async function handleManuscriptDeliverablesObjectRequest(state, request, 
           "Content-Disposition": `attachment; filename="${filename}"`,
           "Content-Length": String(zipBytes.byteLength),
           "Cache-Control": "no-store",
-          "X-Kairos-Manuscript-Package-Contract": stored?.metadata?.packageContract || "unknown",
+          "X-Kairos-Manuscript-Package-Contract": stored?.metadata?.packageContract || PACKAGE_CONTRACT,
           "X-Kairos-Manuscript-Deliverables-Http": KAIROS_MANUSCRIPT_DELIVERABLES_HTTP_BUILD,
           "X-Kairos-Manuscript-Deliverables-Builder": KAIROS_MANUSCRIPT_DELIVERABLES_BUILDER_BUILD,
         },

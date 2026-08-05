@@ -4,16 +4,17 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - "cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v2.js"
+      - "cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v3.js"
       - "cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js"
       - "cloudflare/mmg-ios/test/kairos-manuscript-canonical-package-assets.test.js"
+      - "cloudflare/mmg-ios/test/kairos-manuscript-approved-editorial-deliverables.test.js"
       - "web/kairos-dashboard/scripts/manuscript-final-deliverable-control-owner.js"
       - "browser-tests/manuscript-final-delivery-navigation.spec.mjs"
       - ".github/workflows/manuscript-canonical-package-assets.yml"
   push:
     branches:
       - main
-      - fix/manuscript-canonical-package-assets-navigation-20260804
+      - fix/locked-five-asset-delivery-package-20260805
 
 permissions:
   contents: read
@@ -31,11 +32,14 @@ jobs:
         run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
       - name: Validate syntax
         run: |
-          node --check cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v2.js
+          node --check cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v3.js
           node --check cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js
           node --check web/kairos-dashboard/scripts/manuscript-final-deliverable-control-owner.js
-      - name: Verify canonical package binary assets
-        run: node --test cloudflare/mmg-ios/test/kairos-manuscript-canonical-package-assets.test.js
+      - name: Verify locked five-file package
+        run: |
+          node --test \
+            cloudflare/mmg-ios/test/kairos-manuscript-canonical-package-assets.test.js \
+            cloudflare/mmg-ios/test/kairos-manuscript-approved-editorial-deliverables.test.js
       - name: Install WebKit
         run: npx playwright install --with-deps webkit > /dev/null
       - name: Verify final-state navigation
