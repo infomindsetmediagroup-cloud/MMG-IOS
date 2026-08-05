@@ -1,9 +1,8 @@
 (() => {
-  const BUILD = "kairos-manuscript-dashboard-route-20260804-2-root-canonical-guard";
-  const RELEASE = "manuscript-root-canonical-20260804-1";
+  const BUILD = "kairos-manuscript-dashboard-route-20260805-3-command-center-root";
+  const RELEASE = "manuscript-command-center-root-20260805-1";
   const GLOBAL_KEY = "__KAIROS_MANUSCRIPT_DASHBOARD_ROUTE__";
   const ACTIVE_KEY = "kairos.production.active-workspace";
-  const REGISTRY_CACHE_KEY = "kairos.production.registry-cache";
   const MANUSCRIPT_TRIGGER_SELECTOR = [
     '[data-child="manuscript-studio"]',
     '[data-workspace="manuscript-studio"]',
@@ -15,8 +14,10 @@
     "#manuscript-studio-overlay",
     "#manuscript-editorial-workbench",
     ".manuscript-overlay",
+    "#kairos-final-delivery-control",
+    "#kairos-manuscript-direct-open-shell",
     "[data-kairos-source-review]",
-    '[data-kairos-intake-receipt]:not([data-kairos-intake-receipt="dedicated-project-restore"])',
+    "[data-kairos-intake-receipt]",
   ].join(",");
 
   if (globalThis[GLOBAL_KEY]) {
@@ -31,21 +32,20 @@
     build: BUILD,
     release: RELEASE,
     ready: true,
-    open(project = null, reason = "api-open") {
+    open(project = null, reason = "explicit-api-open") {
       return routeToDedicatedStudio(project, reason);
     },
     inspect(reason = "manual-inspection") {
-      return inspectForEmbeddedRuntime(reason);
+      return enforceCommandCenterRoot(reason);
     },
     snapshot() {
-      const active = readJSON(ACTIVE_KEY);
       return {
         build: BUILD,
         release: RELEASE,
         navigating,
         rootRoute: isRootDashboardRoute(),
         embeddedRuntimePresent: Boolean(document.querySelector(EMBEDDED_RUNTIME_SELECTOR)),
-        activeProjectId: active?.workspace === "manuscript-studio" ? active.projectId || null : null,
+        activeWorkspacePresent: Boolean(readJSON(ACTIVE_KEY)),
       };
     },
   });
@@ -54,6 +54,8 @@
   globalThis.KairosManuscriptDashboardRoute = api;
 
   if (!isRootDashboardRoute()) return;
+
+  resetTransientRootState();
 
   document.addEventListener("click", event => {
     const trigger = event.target instanceof Element
@@ -64,61 +66,61 @@
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
-    routeToDedicatedStudio(projectFromElement(trigger), "content-card");
+    routeToDedicatedStudio(projectFromElement(trigger), "content-card-user-action");
   }, true);
 
-  window.addEventListener("kairos:manuscript-studio:open", event => {
-    event.stopImmediatePropagation();
-    routeToDedicatedStudio(event.detail?.project || null, "manuscript-open-event");
-  }, true);
+  for (const eventName of [
+    "kairos:manuscript-studio:open",
+    "kairos:production:open",
+    "kairos:production:resume",
+    "kairos:manuscript:restore",
+  ]) {
+    window.addEventListener(eventName, event => {
+      if (!isRootDashboardRoute()) return;
+      event.stopImmediatePropagation();
+      enforceCommandCenterRoot(`${eventName}-suppressed`);
+    }, true);
+  }
 
-  window.addEventListener("kairos:production:open", event => {
-    if (event.detail?.workspace !== "manuscript-studio") return;
-    event.stopImmediatePropagation();
-    routeToDedicatedStudio(event.detail?.project || null, "production-open-event");
-  }, true);
+  window.addEventListener("pageshow", () => enforceCommandCenterRoot("pageshow"));
 
-  window.addEventListener("kairos:production:resume", event => {
-    const project = event.detail?.project;
-    if (project?.projectType !== "manuscript-studio") return;
-    event.stopImmediatePropagation();
-    routeToDedicatedStudio(project, "production-resume-event");
-  }, true);
-
-  window.addEventListener("kairos:manuscript:restore", event => {
-    const project = event.detail?.project || event.detail?.source || null;
-    routeToDedicatedStudio(project, "root-restore-event");
-  }, true);
-
-  window.addEventListener("pageshow", event => {
-    inspectForEmbeddedRuntime(event.persisted ? "bfcache-restore" : "pageshow");
-  });
-
-  observer = new MutationObserver(() => {
-    inspectForEmbeddedRuntime("embedded-runtime-mutation");
-  });
+  observer = new MutationObserver(() => enforceCommandCenterRoot("runtime-mutation"));
   observer.observe(document.documentElement, { childList: true, subtree: true });
+  queueMicrotask(() => enforceCommandCenterRoot("root-bootstrap"));
 
-  queueMicrotask(() => inspectForEmbeddedRuntime("root-bootstrap"));
-
-  function inspectForEmbeddedRuntime(reason) {
-    if (navigating || !isRootDashboardRoute()) {
-      return { status: navigating ? "already-routing" : "not-root", build: BUILD };
+  function resetTransientRootState() {
+    try { sessionStorage.removeItem(ACTIVE_KEY); } catch {}
+    const current = new URL(location.href);
+    let changed = false;
+    for (const key of ["open", "project", "handoff", "reason", "release", "editorialHardStop", "cacheBust"]) {
+      if (!current.searchParams.has(key)) continue;
+      current.searchParams.delete(key);
+      changed = true;
     }
+    if (changed) history.replaceState(null, "", `${current.pathname}${current.search}${current.hash}`);
+    document.documentElement.dataset.kairosRoute = "command-center";
+    document.body?.removeAttribute("data-kairos-dedicated-manuscript");
+  }
 
-    const embedded = document.querySelector(EMBEDDED_RUNTIME_SELECTOR);
-    if (!embedded) return { status: "clear", build: BUILD };
-
-    return routeToDedicatedStudio(projectFromElement(embedded), reason);
+  function enforceCommandCenterRoot(reason) {
+    if (navigating || !isRootDashboardRoute()) {
+      return { status: navigating ? "routing" : "not-root", build: BUILD, reason };
+    }
+    resetTransientRootState();
+    const removed = [];
+    document.querySelectorAll(EMBEDDED_RUNTIME_SELECTOR).forEach(element => {
+      removed.push(element.id || element.getAttribute("data-kairos-final-delivery-control") || element.className || element.tagName);
+      element.remove();
+    });
+    return { status: "command-center", build: BUILD, reason, removed };
   }
 
   function routeToDedicatedStudio(project = null, reason = "dashboard-route") {
     if (navigating) return { status: "already-routing", build: BUILD };
     if (!isRootDashboardRoute()) return { status: "already-dedicated", build: BUILD };
 
-    const selected = normalizeProject(project) || selectExistingProject() || projectFromEmbeddedRuntime();
+    const selected = normalizeProject(project);
     const projectId = selected?.projectId || null;
-
     if (projectId) {
       sessionStorage.setItem(ACTIVE_KEY, JSON.stringify({
         workspace: "manuscript-studio",
@@ -132,25 +134,15 @@
 
     navigating = true;
     observer?.disconnect();
-
     const target = new URL("./manuscript", location.href);
     target.search = "";
     target.hash = "";
     target.searchParams.set("open", "manuscript");
     target.searchParams.set("handoff", "dashboard-content");
     target.searchParams.set("release", RELEASE);
-    target.searchParams.set("reason", String(reason || "dashboard-route").slice(0, 120));
     if (projectId) target.searchParams.set("project", projectId);
-
-    location.replace(target.href);
-
-    return {
-      status: "routing",
-      projectId,
-      target: target.href,
-      build: BUILD,
-      release: RELEASE,
-    };
+    location.assign(target.href);
+    return { status: "routing", projectId, target: target.href, build: BUILD, release: RELEASE };
   }
 
   function isRootDashboardRoute() {
@@ -159,39 +151,16 @@
     return !/\/manuscript\/?$/i.test(location.pathname);
   }
 
-  function selectExistingProject() {
-    const queryProject = new URL(location.href).searchParams.get("project");
-    if (queryProject) return { projectId: queryProject };
-
-    const active = readJSON(ACTIVE_KEY);
-    if (active?.workspace === "manuscript-studio" && active.projectId) {
-      return { projectId: active.projectId };
-    }
-
-    const cached = readJSON(REGISTRY_CACHE_KEY);
-    if (!Array.isArray(cached)) return null;
-
-    return cached
-      .filter(item => item?.projectType === "manuscript-studio" && item.status !== "archived" && item.projectId)
-      .sort((left, right) => Date.parse(right.updatedAt || 0) - Date.parse(left.updatedAt || 0))[0] || null;
-  }
-
-  function projectFromEmbeddedRuntime() {
-    const embedded = document.querySelector(EMBEDDED_RUNTIME_SELECTOR);
-    return projectFromElement(embedded);
-  }
-
   function projectFromElement(element) {
     if (!(element instanceof Element)) return null;
     const owner = element.closest("[data-project-id],[data-manuscript-project-id],[data-restored-project-id]") || element;
-    const projectId =
-      owner.getAttribute("data-project-id") ||
-      owner.getAttribute("data-manuscript-project-id") ||
-      owner.getAttribute("data-restored-project-id") ||
-      owner.dataset?.projectId ||
-      owner.dataset?.manuscriptProjectId ||
-      owner.dataset?.restoredProjectId ||
-      null;
+    const projectId = owner.getAttribute("data-project-id")
+      || owner.getAttribute("data-manuscript-project-id")
+      || owner.getAttribute("data-restored-project-id")
+      || owner.dataset?.projectId
+      || owner.dataset?.manuscriptProjectId
+      || owner.dataset?.restoredProjectId
+      || null;
     return projectId ? { projectId: String(projectId) } : null;
   }
 
