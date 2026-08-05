@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const routeURL = new URL("../../web/kairos-dashboard/scripts/manuscript-dashboard-route-bridge.js", import.meta.url);
-const indexURL = new URL("../../web/kairos-dashboard/index.html", import.meta.url);
+const routeURL = new URL("../web/kairos-dashboard/scripts/manuscript-dashboard-route-bridge.js", import.meta.url);
+const indexURL = new URL("../web/kairos-dashboard/index.html", import.meta.url);
 
 test("dashboard root owns a clean Command Center boot", async () => {
   const source = await readFile(routeURL, "utf8");
