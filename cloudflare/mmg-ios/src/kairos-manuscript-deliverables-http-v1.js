@@ -2,9 +2,8 @@
  * Kairos Manuscript Deliverables — HTTP routing adapter.
  *
  * The deterministic builder manufactures the locked five-file MMG/KDP delivery
- * package. When a final approved editorial version exists, this adapter
- * substitutes that checksum-verified text for the original intake text while
- * preserving and using the saved customer cover.
+ * package. Retired package contracts are never returned as completed customer
+ * delivery packages.
  */
 
 import {
@@ -16,9 +15,16 @@ import {
 } from "./kairos-manuscript-deliverables-builder-v3.js";
 
 export const KAIROS_MANUSCRIPT_DELIVERABLES_HTTP_BUILD =
-  "kairos-manuscript-deliverables-http-20260805-4-locked-five-asset-package";
+  "kairos-manuscript-deliverables-http-20260805-5-reject-retired-packages";
 
 const ROUTE = /^\/registry\/manuscripts\/([a-z0-9-]{8,})\/deliverables\/(build|zip)$/i;
+const REQUIRED_KINDS = new Set([
+  "GOLD_MASTER_DOCX",
+  "DIGITAL_ASSET_PDF",
+  "KDP_INTERIOR_PDF",
+  "KDP_FULL_WRAP_COVER_PDF",
+  "STANDALONE_COVER_IMAGE",
+]);
 
 export async function handleManuscriptDeliverablesObjectRequest(state, request, handlers) {
   const url = new URL(request.url);
@@ -32,6 +38,7 @@ export async function handleManuscriptDeliverablesObjectRequest(state, request, 
     if (action === "build" && request.method === "POST") {
       const resolved = await resolveApprovedEditorialHandlers(state, projectId, handlers);
       const { build } = await runManuscriptDeliverablesBuild(state, projectId, resolved.handlers);
+      requireLockedPackage(build);
 
       if (resolved.approvedEditorial) {
         build.metadata = {
@@ -43,15 +50,15 @@ export async function handleManuscriptDeliverablesObjectRequest(state, request, 
       }
 
       return json({
-        status: build.status === "COMPLETED" ? "completed" : "failed",
+        status: "completed",
         build: KAIROS_MANUSCRIPT_DELIVERABLES_HTTP_BUILD,
         manuscriptAuthority: resolved.approvedEditorial
           ? "checksum-verified-final-editorial-version"
           : "stored-intake-source",
         approvedEditorial: resolved.approvedEditorial,
-        packageContract: build.metadata?.packageContract || PACKAGE_CONTRACT,
+        packageContract: PACKAGE_CONTRACT,
         deliverablesBuild: build,
-      }, build.status === "COMPLETED" ? 201 : 422);
+      }, 201);
     }
 
     if (action === "build" && request.method === "GET") {
@@ -66,15 +73,37 @@ export async function handleManuscriptDeliverablesObjectRequest(state, request, 
           },
         }, 404);
       }
+      try {
+        requireLockedPackage(stored);
+      } catch (error) {
+        return stalePackage(error, stored);
+      }
       return json({
         status: "ready",
         build: KAIROS_MANUSCRIPT_DELIVERABLES_HTTP_BUILD,
-        packageContract: stored.metadata?.packageContract || PACKAGE_CONTRACT,
+        packageContract: PACKAGE_CONTRACT,
         deliverablesBuild: stored,
       });
     }
 
     if (action === "zip" && request.method === "GET") {
+      const stored = await getStoredManuscriptDeliverablesBuild(state, projectId);
+      if (!stored) {
+        return json({
+          status: "not-found",
+          build: KAIROS_MANUSCRIPT_DELIVERABLES_HTTP_BUILD,
+          error: {
+            code: "manuscript_deliverables_zip_not_found",
+            message: "No locked five-file deliverables ZIP has been generated for this project yet.",
+          },
+        }, 404);
+      }
+      try {
+        requireLockedPackage(stored);
+      } catch (error) {
+        return stalePackage(error, stored);
+      }
+
       const zipBytes = await getStoredManuscriptDeliverablesZip(state, projectId);
       if (!zipBytes) {
         return json({
@@ -82,12 +111,11 @@ export async function handleManuscriptDeliverablesObjectRequest(state, request, 
           build: KAIROS_MANUSCRIPT_DELIVERABLES_HTTP_BUILD,
           error: {
             code: "manuscript_deliverables_zip_not_found",
-            message: "No deliverables ZIP has been generated for this project yet.",
+            message: "The locked five-file package record exists, but its ZIP bytes are unavailable. Rebuild the final deliverable.",
           },
         }, 404);
       }
-      const stored = await getStoredManuscriptDeliverablesBuild(state, projectId);
-      const zipArtifact = stored?.artifacts?.find((artifact) => artifact.kind === "ZIP_ARCHIVE");
+      const zipArtifact = stored.artifacts.find((artifact) => artifact.kind === "ZIP_ARCHIVE");
       const filename = zipArtifact?.filename || `deliverables-${projectId}.zip`;
       return new Response(zipBytes, {
         status: 200,
@@ -95,8 +123,9 @@ export async function handleManuscriptDeliverablesObjectRequest(state, request, 
           "Content-Type": "application/zip",
           "Content-Disposition": `attachment; filename="${filename}"`,
           "Content-Length": String(zipBytes.byteLength),
-          "Cache-Control": "no-store",
-          "X-Kairos-Manuscript-Package-Contract": stored?.metadata?.packageContract || PACKAGE_CONTRACT,
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+          "X-Kairos-Manuscript-Package-Contract": PACKAGE_CONTRACT,
+          "X-Kairos-Manuscript-Package-File-Count": "5",
           "X-Kairos-Manuscript-Deliverables-Http": KAIROS_MANUSCRIPT_DELIVERABLES_HTTP_BUILD,
           "X-Kairos-Manuscript-Deliverables-Builder": KAIROS_MANUSCRIPT_DELIVERABLES_BUILDER_BUILD,
         },
@@ -122,6 +151,37 @@ export async function handleManuscriptDeliverablesObjectRequest(state, request, 
       deliverablesBuild: error?.build || null,
     }, Number(error?.status || 500));
   }
+}
+
+function requireLockedPackage(build) {
+  const contract = String(build?.metadata?.packageContract || "");
+  if (contract !== PACKAGE_CONTRACT) {
+    throw fail(409, "retired_manuscript_package_contract", `The stored package uses the retired ${contract || "unknown"} contract and must be rebuilt.`);
+  }
+  const artifacts = Array.isArray(build?.artifacts) ? build.artifacts : [];
+  const packageFiles = artifacts.filter((artifact) => artifact?.kind !== "ZIP_ARCHIVE");
+  const kinds = new Set(packageFiles.map((artifact) => artifact?.kind));
+  const missing = [...REQUIRED_KINDS].filter((kind) => !kinds.has(kind));
+  if (packageFiles.length !== 5 || missing.length) {
+    throw fail(409, "locked_manuscript_package_incomplete", `The stored package is not the locked five-file package${missing.length ? `; missing ${missing.join(", ")}` : ""}.`);
+  }
+  if (!artifacts.some((artifact) => artifact?.kind === "ZIP_ARCHIVE")) {
+    throw fail(409, "locked_manuscript_package_zip_missing", "The locked package ZIP record is missing.");
+  }
+  return build;
+}
+
+function stalePackage(error, stored) {
+  return json({
+    status: "stale-package",
+    build: KAIROS_MANUSCRIPT_DELIVERABLES_HTTP_BUILD,
+    packageContract: stored?.metadata?.packageContract || "unknown",
+    requiredPackageContract: PACKAGE_CONTRACT,
+    error: {
+      code: error?.code || "retired_manuscript_package_contract",
+      message: error?.message || "The saved package must be rebuilt using the locked five-file contract.",
+    },
+  }, 409);
 }
 
 async function resolveApprovedEditorialHandlers(state, projectId, handlers) {
@@ -229,7 +289,8 @@ function json(value, status = 200) {
     status,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "no-store",
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+      "X-Kairos-Manuscript-Package-Contract": PACKAGE_CONTRACT,
       "X-Kairos-Manuscript-Deliverables-Http": KAIROS_MANUSCRIPT_DELIVERABLES_HTTP_BUILD,
     },
   });

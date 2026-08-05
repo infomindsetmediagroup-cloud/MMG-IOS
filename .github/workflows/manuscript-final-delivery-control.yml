@@ -1,11 +1,10 @@
 name: Manuscript Final Delivery Control
 
-# Validates the integrated production route; Floot is used only as a development harness.
 on:
   push:
     branches:
       - main
-      - fix/manuscript-always-visible-final-delivery-20260804
+      - fix/live-five-file-route-20260805
   pull_request:
     branches:
       - main
@@ -16,14 +15,15 @@ permissions:
 jobs:
   validate-final-delivery:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Update manuscript cache key on repair branch
-        if: github.event_name == 'push' && github.ref == 'refs/heads/fix/manuscript-always-visible-final-delivery-20260804'
+      - name: Load the five-file route with a fresh cache key
+        if: github.event_name == 'push' && github.ref == 'refs/heads/fix/live-five-file-route-20260805'
         shell: bash
         run: |
           set -euo pipefail
@@ -31,17 +31,18 @@ jobs:
           from pathlib import Path
           path = Path('web/kairos-dashboard/manuscript.html')
           text = path.read_text()
-          text = text.replace('kairos-manuscript-final-deliverable-engine-20260804-1', 'kairos-manuscript-final-delivery-control-20260804-4')
-          text = text.replace('kairos-manuscript-final-delivery-control-20260804-3', 'kairos-manuscript-final-delivery-control-20260804-4')
+          old = 'kairos-manuscript-final-delivery-control-20260804-4'
+          new = 'kairos-manuscript-final-delivery-control-20260805-5-five-file-route'
+          text = text.replace(old, new)
           path.write_text(text)
           PY
           if git diff --quiet -- web/kairos-dashboard/manuscript.html; then
-            echo "Cache key already current."
+            echo "Five-file route cache key already current."
           else
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add web/kairos-dashboard/manuscript.html
-            git commit -m "Load final delivery control v4"
+            git commit -m "Load the live five-file Final Delivery route"
             git push origin HEAD:${GITHUB_REF_NAME}
           fi
 
@@ -53,22 +54,34 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
 
-      - name: Validate final delivery engine syntax
-        run: node --check web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js
-
-      - name: Verify route loads current final delivery control
+      - name: Validate five-file route contracts
         run: |
-          grep -q 'kairos-manuscript-final-delivery-control-20260804-4' web/kairos-dashboard/manuscript.html
-          grep -q 'data-kairos-final-delivery-control' web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js
-          grep -q 'Produce Final Deliverable' web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js
-          grep -q 'deterministic-deliverables-fallback' web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js
+          node --check web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js
+          node --check cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js
+          grep -q 'kairos-manuscript-final-delivery-control-20260805-5-five-file-route' web/kairos-dashboard/manuscript.html
+          grep -q 'mmg-locked-five-asset-kdp-delivery-package-v1' web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js
+          grep -q 'replaceRetiredPackage' web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js
+          grep -q 'retired_manuscript_package_contract' cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js
+          ! grep -q 'buildCanonical' web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js
+          ! grep -q '/auto-pipeline/run' web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js
+
+      - name: Verify backend five-file package
+        run: |
+          node --test \
+            cloudflare/mmg-ios/test/kairos-manuscript-canonical-package-assets.test.js \
+            cloudflare/mmg-ios/test/kairos-manuscript-approved-editorial-deliverables.test.js
 
       - name: Install WebKit
         run: npx playwright install --with-deps webkit > /dev/null
 
-      - name: Run final delivery WebKit regressions
+      - name: Verify the actual Final Delivery control path
         run: |
           npx playwright test \
             browser-tests/manuscript-final-delivery-control.spec.mjs \
-            browser-tests/manuscript-pipeline-orchestrator.spec.mjs \
             --project=webkit --workers=1
+
+      - name: Validate Worker bundle
+        working-directory: cloudflare/mmg-ios
+        run: |
+          npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+          npx wrangler deploy --dry-run
