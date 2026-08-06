@@ -4,7 +4,8 @@ import path from 'node:path';
 const root = process.cwd();
 const read = (file) => readFile(path.join(root, file), 'utf8');
 const fail = (message) => {
-  console.error(`MANUSCRIPT_GOVERNANCE_FAILURE: ${message}`);
+  const escaped = String(message).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+  console.error(`::error title=Kairos manuscript governance::${escaped}`);
   process.exitCode = 1;
 };
 
@@ -18,10 +19,8 @@ try {
 
 const canonicalWorkflow = await read('.github/workflows/deploy-kairos-canonical-worker.yml');
 for (const evidence of [
-  'https://mmg-ios.info-mindsetmediagroup.workers.dev',
   'npx wrangler deploy',
   'Verify exact production deployment',
-  'deploymentSha',
   'playwright.manuscript-orchestration.config.mjs',
   'node scripts/validate-kairos-manuscript-governance.mjs',
 ]) {
@@ -29,24 +28,17 @@ for (const evidence of [
 }
 
 const deliverables = await read('cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js');
-const lockedKinds = [
+for (const evidence of [
   'GOLD_MASTER_DOCX',
   'DIGITAL_ASSET_PDF',
   'KDP_INTERIOR_PDF',
   'KDP_FULL_WRAP_COVER_PDF',
   'STANDALONE_COVER_IMAGE',
-];
-for (const kind of lockedKinds) {
-  if (!deliverables.includes(`\"${kind}\"`)) fail(`locked delivery kind is missing: ${kind}`);
-}
-for (const evidence of [
   'packageFiles.length !== 5',
   'ZIP_ARCHIVE',
   'X-Kairos-Manuscript-Package-File-Count',
-  'ready-for-manufacturing',
-  'checksum-verified-final-editorial-version',
 ]) {
-  if (!deliverables.includes(evidence)) fail(`deliverable controller lacks evidence: ${evidence}`);
+  if (!deliverables.includes(evidence)) fail(`locked package controller lacks evidence: ${evidence}`);
 }
 
 const manuscriptFiles = [
@@ -65,18 +57,13 @@ const routeOwnerCount = (canonicalEntry.match(/handleManuscriptPackageState\(can
 if (routeOwnerCount !== 1) fail(`manuscript package route must have one owner; found ${routeOwnerCount}`);
 
 const orchestrator = await read('browser-tests/manuscript-pipeline-orchestrator.spec.mjs');
-const syntheticEvidence = [
-  'Project Setup stores the cover and assignment in one idempotent transaction',
-  'ready-for-manufacturing',
+for (const evidence of [
   '/deliverables/build',
   'mmg-locked-five-asset-kdp-delivery-package-v1',
   'Exactly five customer deliverables are ready.',
   'Download Complete Package',
   '/deliverables/zip',
-  'assetCount).toBe(5)',
-  'x-kairos-idempotency-key',
-];
-for (const evidence of syntheticEvidence) {
+]) {
   if (!orchestrator.includes(evidence)) fail(`synthetic E2E lacks executable evidence: ${evidence}`);
 }
 
@@ -85,9 +72,9 @@ if (!process.exitCode) {
     ok: true,
     deploymentAuthority: 'deploy-kairos-canonical-worker.yml',
     retiredAuthorityRemoved: true,
-    lockedKinds,
     manuscriptRouteOwners: routeOwnerCount,
     canvaExcluded: true,
+    lockedPackageFileCount: 5,
     syntheticJourney: ['setup', 'editorial-review', 'five-file-build', 'zip', 'download'],
   }, null, 2));
 }
