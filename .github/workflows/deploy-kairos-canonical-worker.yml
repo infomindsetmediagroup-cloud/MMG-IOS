@@ -7,7 +7,7 @@ name: Deploy Canonical Kairos Worker
       - "cloudflare/mmg-ios/**"
       - "web/kairos-dashboard/**"
       - "browser-tests/manuscript-pipeline-orchestrator.spec.mjs"
-      - "playwright.manuscript-orchestration.config.mjs"
+      - "playwright.config.mjs"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/deploy-kairos-canonical-worker.yml"
@@ -18,7 +18,7 @@ name: Deploy Canonical Kairos Worker
       - "cloudflare/mmg-ios/**"
       - "web/kairos-dashboard/**"
       - "browser-tests/manuscript-pipeline-orchestrator.spec.mjs"
-      - "playwright.manuscript-orchestration.config.mjs"
+      - "playwright.config.mjs"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/deploy-kairos-canonical-worker.yml"
@@ -100,7 +100,7 @@ jobs:
         run: npx playwright install --with-deps webkit
 
       - name: Run manuscript production synthetic E2E
-        run: npx playwright test -c playwright.manuscript-orchestration.config.mjs
+        run: npx playwright test browser-tests/manuscript-pipeline-orchestrator.spec.mjs --project=webkit
 
       - name: Install Worker dependencies
         working-directory: ${{ env.WORKER_DIRECTORY }}
