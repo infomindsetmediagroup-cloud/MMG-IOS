@@ -3,6 +3,7 @@ import canonicalRuntime, {
   KairosProjectAgent,
   KairosProjectFoundationWorkflow,
   KairosManuscriptGenerationWorkflow,
+  KairosManuscriptSource,
   KairosAutonomyLedger,
 } from "./kairos-production-entry-local-canonical-v1.js";
 import {
@@ -20,11 +21,12 @@ export {
   KairosProjectAgent,
   KairosProjectFoundationWorkflow,
   KairosManuscriptGenerationWorkflow,
+  KairosManuscriptSource,
   KairosAutonomyLedger,
 };
 
 export const KAIROS_CANONICAL_PUBLISHING_ENTRY_BUILD =
-  "kairos-canonical-publishing-entry-20260806-2";
+  "kairos-canonical-publishing-entry-20260806-3";
 
 export class KairosProject extends BaseKairosProject {
   async fetch(request) {
