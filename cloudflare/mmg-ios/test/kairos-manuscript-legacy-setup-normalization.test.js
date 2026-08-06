@@ -6,6 +6,7 @@ import { handleManuscriptProjectSetupObjectRequest } from "../src/kairos-manuscr
 import { handleManuscriptDeliverablesObjectRequest } from "../src/kairos-manuscript-deliverables-http-v1.js";
 
 const COVER_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAoAAAAPCAIAAABSnclZAAAAFElEQVR4nGP8z4APMOGVHZUefNIA608BHQlcdJEAAAAASUVORK5CYII=";
+const PACKAGE_CONTRACT = "mmg-digital-asset-edition-v2-customer-package-v1";
 
 function createState() {
   const map = new Map();
@@ -30,6 +31,20 @@ function createState() {
   };
 }
 
+function substantiveLegacyManuscript() {
+  const chapters = [];
+  for (let chapter = 1; chapter <= 10; chapter += 1) {
+    const paragraphs = [];
+    for (let section = 1; section <= 50; section += 1) {
+      paragraphs.push(
+        `Legacy production framework ${chapter}-${section} provides a distinct workflow, checklist, worksheet, template, prompt lab, action step, decision rule, implementation sequence, camera strategy, movement constraint, lighting specification, audience objective, commercial use case, diagnostic method, and revision standard. The lesson documents measurable inputs, controlled execution, validation criteria, corrective actions, and a customer-ready outcome unique to framework ${chapter}-${section}.`,
+      );
+    }
+    chapters.push(`Chapter ${chapter} — Legacy Production System ${chapter}\n\n${paragraphs.join("\n\n")}`);
+  }
+  return `Introduction\n\nThis legacy manuscript is a substantive field guide prepared for canonical Digital Asset Edition V2 manufacturing.\n\n${chapters.join("\n\n")}\n\nFinal Conclusion\n\nThe complete system is ready for validated customer delivery.`;
+}
+
 async function body(response) {
   return response.clone().json();
 }
@@ -39,10 +54,10 @@ async function sha256(bytes) {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-test("legacy source and saved cover manufacture without a pre-existing setup record", async () => {
+test("legacy source and saved cover manufacture the canonical six-file package without a pre-existing setup record", async () => {
   const state = createState();
   const projectId = "legacy-manufacturing-12345678";
-  const manuscript = `${"Canonical legacy manuscript text for complete publishing production. ".repeat(100)}End.`;
+  const manuscript = substantiveLegacyManuscript();
   const coverBytes = Uint8Array.from(Buffer.from(COVER_BASE64, "base64"));
 
   const sourceForm = new FormData();
@@ -87,7 +102,7 @@ test("legacy source and saved cover manufacture without a pre-existing setup rec
     new Request(`https://kairos.internal/registry/manuscripts/${projectId}/deliverables/build`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ confirmation: "MANUFACTURE DELIVERY PACKAGE" }),
+      body: JSON.stringify({ confirmation: "MANUFACTURE DIGITAL ASSET EDITION V2" }),
     }),
     {
       handleManuscriptSourceObjectRequest,
@@ -100,15 +115,17 @@ test("legacy source and saved cover manufacture without a pre-existing setup rec
   assert.equal(result.setupMigration.status, "normalized");
   assert.equal(result.setupMigration.setupCreated, true);
   assert.equal(result.setupMigration.coverPreserved, true);
-  assert.equal(result.packageContract, "mmg-locked-five-asset-kdp-delivery-package-v1");
-  assert.equal(result.deliverablesBuild.metadata.packageFileCount, 5);
-  assert.equal(result.deliverablesBuild.metadata.uploadedCoverIncluded, true);
+  assert.equal(result.packageContract, PACKAGE_CONTRACT);
+  assert.equal(result.deliverablesBuild.metadata.packageFileCount, 6);
+  assert.equal(result.deliverablesBuild.metadata.approvedCoverIncluded, true);
+  assert.ok(result.deliverablesBuild.metadata.pageCount >= 100);
   assert.deepEqual(result.deliverablesBuild.artifacts.map((artifact) => artifact.kind), [
-    "GOLD_MASTER_DOCX",
-    "DIGITAL_ASSET_PDF",
+    "CUSTOMER_SPEC_SHEET_PDF",
     "KDP_INTERIOR_PDF",
-    "KDP_FULL_WRAP_COVER_PDF",
-    "STANDALONE_COVER_IMAGE",
+    "DIGITAL_EDITION_V2_PDF",
+    "COVER_PORTRAIT_PNG",
+    "COVER_THUMBNAIL_PNG",
+    "README_TXT",
     "ZIP_ARCHIVE",
   ]);
 
