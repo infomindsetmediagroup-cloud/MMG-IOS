@@ -11,7 +11,6 @@ name: Deploy Canonical Kairos Worker
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/deploy-kairos-canonical-worker.yml"
-      - ".github/workflows/deploy-kairos-manuscript-runtime.yml"
   push:
     branches: [main]
     paths:
@@ -22,7 +21,6 @@ name: Deploy Canonical Kairos Worker
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/deploy-kairos-canonical-worker.yml"
-      - ".github/workflows/deploy-kairos-manuscript-runtime.yml"
   workflow_dispatch:
 
 permissions:
@@ -56,24 +54,24 @@ jobs:
       - name: Install repository dependencies
         run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
 
-      - name: Enforce manuscript governance invariants
+      - name: Enforce Digital Asset Edition V2 governance
+        shell: bash
         run: |
-          set -euo pipefail
+          set -euxo pipefail
           test ! -e .github/workflows/deploy-kairos-manuscript-runtime.yml
           test ! -e cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v3.js
           test -e cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v4.js
           grep -Fq 'npx wrangler deploy' .github/workflows/deploy-kairos-canonical-worker.yml
           grep -Fq 'handleManuscriptPackageState(canonicalRequest, env, ctx)' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
           test "$(grep -Fc 'handleManuscriptPackageState(canonicalRequest, env, ctx)' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js)" -eq 1
-          for token in CUSTOMER_SPEC_SHEET_PDF KDP_INTERIOR_PDF DIGITAL_EDITION_V2_PDF COVER_PORTRAIT_PNG COVER_THUMBNAIL_PNG README_TXT ZIP_ARCHIVE; do
-            grep -Fq "${token}" cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v4.js
-          done
-          grep -Fq "${DIGITAL_ASSET_PACKAGE_CONTRACT}" cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js
+          grep -Fq 'from "./kairos-manuscript-deliverables-builder-v4.js"' cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js
           grep -Fq "${DIGITAL_ASSET_PACKAGE_CONTRACT}" cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v4.js
           grep -Fq 'packageFiles.length !== 6' cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js
-          grep -Fq 'X-Kairos-Manuscript-Package-File-Count' cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js
           grep -Fq '"X-Kairos-Manuscript-Package-File-Count": "6"' cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js
           grep -Fq 'canvaExcluded: true' cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v4.js
+          for token in CUSTOMER_SPEC_SHEET_PDF KDP_INTERIOR_PDF DIGITAL_EDITION_V2_PDF COVER_PORTRAIT_PNG COVER_THUMBNAIL_PNG README_TXT ZIP_ARCHIVE; do
+            grep -Fq "${token}" cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v4.js
+          done
           ! grep -Eiq 'canva\.com|from .*canva|import .*canva' \
             cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js \
             cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v4.js \
@@ -83,8 +81,9 @@ jobs:
 
       - name: Validate active source chain
         working-directory: ${{ env.WORKER_DIRECTORY }}
+        shell: bash
         run: |
-          set -euo pipefail
+          set -euxo pipefail
           test -f package.json
           test -f wrangler.toml
           test -f src/kairos-production-entry-local-canonical-v1.js
