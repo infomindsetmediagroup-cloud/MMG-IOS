@@ -1,0 +1,70 @@
+name: Install Canonical Digital Asset Edition V2
+
+on:
+  push:
+    branches:
+      - fix/canonical-digital-asset-v2-20260805
+    paths:
+      - '.github/canonical-v2-payloads/**'
+      - '.github/workflows/install-canonical-digital-asset-v2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/canonical-digital-asset-v2-20260805
+          fetch-depth: 0
+
+      - name: Decode canonical implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          decode() {
+            local payload="$1"
+            local target="$2"
+            mkdir -p "$(dirname "$target")"
+            base64 --decode "$payload" | gzip --decompress > "$target"
+          }
+          decode .github/canonical-v2-payloads/kairos-manuscript-deliverables-builder-v4.js.gz.b64 cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v4.js
+          decode .github/canonical-v2-payloads/kairos-manuscript-deliverables-http-v1.js.gz.b64 cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js
+          decode .github/canonical-v2-payloads/manuscript-project-setup.js.gz.b64 web/kairos-dashboard/scripts/manuscript-project-setup.js
+          decode .github/canonical-v2-payloads/manuscript-final-deliverable-engine.js.gz.b64 web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js
+
+      - name: Verify decoded sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v4.js
+          node --check cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js
+          node --check web/kairos-dashboard/scripts/manuscript-project-setup.js
+          node --check web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js
+          grep -q 'mmg-canonical-digital-asset-edition-v2' cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v4.js
+          grep -q 'REQUIRED_PACKAGE_FILE_COUNT = 6' cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v4.js
+          grep -q 'MINIMUM_KDP_INTERIOR_PAGES = 100' cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v4.js
+
+      - name: Remove temporary installer payloads
+        shell: bash
+        run: |
+          rm -rf .github/canonical-v2-payloads
+          rm -f .github/workflows/install-canonical-digital-asset-v2.yml
+
+      - name: Commit canonical implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'Canonical implementation already installed.'
+            exit 0
+          fi
+          git commit -m 'Install canonical six-file Digital Asset Edition V2 engine'
+          git push origin HEAD:fix/canonical-digital-asset-v2-20260805
