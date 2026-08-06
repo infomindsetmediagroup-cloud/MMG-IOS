@@ -1,5 +1,5 @@
 export const KAIROS_CANONICAL_PUBLISHING_CONTRACT_BUILD =
-  "kairos-canonical-publishing-contract-20260806-1";
+  "kairos-canonical-publishing-contract-20260806-2";
 
 export const MMG_DIGITAL_ASSET_CONTRACT_ID =
   "mmg-digital-asset-edition-v2-customer-package-v1";
@@ -27,6 +27,7 @@ export const CANONICAL_INVOCATIONS = Object.freeze({
 });
 
 const FORBIDDEN_PUBLIC_NAME = /\bmichael\s+king\b/iu;
+const FORBIDDEN_PUBLIC_NAME_GLOBAL = /\bmichael\s+king\b/giu;
 const CUSTOMER_FILE_SUFFIXES = Object.freeze([
   "Customer-Spec-Sheet.pdf",
   "KDP-Interior_6x9.pdf",
@@ -36,6 +37,15 @@ const CUSTOMER_FILE_SUFFIXES = Object.freeze([
   "README.txt",
 ]);
 
+const SOURCE_CUSTOMER_ARTIFACT_INDEX = Object.freeze({
+  "customer-spec-sheet.pdf": 0,
+  "kdp-interior-6x9.pdf": 1,
+  "digital-asset-edition-v2.pdf": 2,
+  "cover-portrait-2048x3072.png": 3,
+  "cover-thumbnail-2048x2048.png": 4,
+  "readme.txt": 5,
+});
+
 const IDENTITY_FIELDS = new Set([
   "author",
   "creator",
@@ -44,6 +54,7 @@ const IDENTITY_FIELDS = new Set([
   "publisher",
   "writtenBy",
   "written_by",
+  "vendor",
 ]);
 
 export function normalizeTitleSlug(value) {
@@ -65,6 +76,42 @@ export function canonicalCustomerPackageFiles(titleOrSlug) {
     customerFiles,
     archive: `${stem}_Digital-Asset-Edition-V2_Customer-Package.zip`,
   });
+}
+
+export function canonicalCustomerArtifactFilename(sourceName, titleOrSlug) {
+  const name = clean(sourceName, 320);
+  const expected = canonicalCustomerPackageFiles(titleOrSlug);
+  if (!name) return "";
+  if (expected.customerFiles.includes(name) || name === expected.archive) return name;
+
+  const lower = name.toLowerCase();
+  if (lower === "complete-production-package.zip") return expected.archive;
+  const index = SOURCE_CUSTOMER_ARTIFACT_INDEX[lower];
+  return Number.isInteger(index) ? expected.customerFiles[index] : name;
+}
+
+export function sanitizeCanonicalPublicRecord(value, key = "") {
+  if (typeof value === "string") {
+    if (IDENTITY_FIELDS.has(String(key))) {
+      return key === "vendor"
+        ? MMG_CANONICAL_IDENTITY.vendor
+        : MMG_CANONICAL_IDENTITY.author;
+    }
+    return value.replace(
+      FORBIDDEN_PUBLIC_NAME_GLOBAL,
+      MMG_CANONICAL_IDENTITY.author,
+    );
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeCanonicalPublicRecord(item, key));
+  }
+  if (!value || typeof value !== "object") return value;
+
+  const output = {};
+  for (const [childKey, childValue] of Object.entries(value)) {
+    output[childKey] = sanitizeCanonicalPublicRecord(childValue, childKey);
+  }
+  return output;
 }
 
 export function assertNoForbiddenPublicIdentity(value, path = "root") {
@@ -132,17 +179,37 @@ export function canonicalizePublicationMetadata(input = {}) {
 }
 
 export function canonicalizePipelineRecord(record = {}) {
-  assertNoForbiddenPublicIdentity(record);
-  const metadata = canonicalizePublicationMetadata(record.metadata || {});
+  const sanitized = sanitizeCanonicalPublicRecord(record);
+  const rawMetadata = sanitizeCanonicalPublicRecord(sanitized.metadata || {});
+  const metadata = canonicalizePublicationMetadata({
+    ...rawMetadata,
+    author: MMG_CANONICAL_IDENTITY.author,
+    creator: MMG_CANONICAL_IDENTITY.creator,
+    writtenBy: MMG_CANONICAL_IDENTITY.writtenBy,
+    copyrightHolder: MMG_CANONICAL_IDENTITY.copyrightHolder,
+    publisher: MMG_CANONICAL_IDENTITY.publisher,
+    vendor: MMG_CANONICAL_IDENTITY.vendor,
+  });
   const expected = canonicalCustomerPackageFiles(metadata.title);
-  const observedFiles = collectObservedFilenames(record);
+  const observedSourceFiles = collectObservedFilenames(sanitized);
+  const observedFiles = new Set(
+    [...observedSourceFiles].map((name) =>
+      canonicalCustomerArtifactFilename(name, metadata.title),
+    ),
+  );
   const missingFiles = expected.customerFiles.filter((name) => !observedFiles.has(name));
   const archivePresent = observedFiles.has(expected.archive);
-  const integrityPassed = record?.vault?.integrity?.passed !== false;
+  const integrityPassed = sanitized?.vault?.integrity?.passed === true;
   const packageReady = missingFiles.length === 0 && archivePresent && integrityPassed;
+  const sourceAliases = [...observedSourceFiles]
+    .map((source) => ({
+      source,
+      canonical: canonicalCustomerArtifactFilename(source, metadata.title),
+    }))
+    .filter((entry) => entry.source !== entry.canonical);
 
   return Object.freeze({
-    ...record,
+    ...sanitized,
     metadata,
     canonicalContracts: {
       digitalAsset: MMG_DIGITAL_ASSET_CONTRACT_ID,
@@ -153,7 +220,9 @@ export function canonicalizePipelineRecord(record = {}) {
       stem: expected.stem,
       expectedCustomerFiles: expected.customerFiles,
       expectedArchive: expected.archive,
+      observedSourceFiles: [...observedSourceFiles].sort(),
       observedFiles: [...observedFiles].sort(),
+      sourceAliases,
       missingFiles,
       archivePresent,
       integrityPassed,
@@ -216,6 +285,7 @@ export function canonicalContractSnapshot() {
       coverPreservationRequired: true,
       kdpInteriorCoverFree: true,
       internalFilesExcludedFromCustomerZip: true,
+      legacySourceAliasesNormalized: true,
     },
     shopify: {
       contractId: MMG_SHOPIFY_PUBLISHING_CONTRACT_ID,
