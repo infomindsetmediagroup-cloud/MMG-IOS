@@ -46,7 +46,7 @@ jobs:
         run: bun install agents@0.20.0 --no-save
 
       - name: Deploy Kairos Worker to production traffic
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: 9f81b4b13a3053004c105ccc9e3de67b
