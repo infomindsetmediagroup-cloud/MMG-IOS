@@ -55,7 +55,7 @@ jobs:
           node-version: "22"
 
       - name: Install repository dependencies
-        run: npm ci --ignore-scripts --no-audit --no-fund
+        run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
 
       - name: Enforce manuscript governance invariants
         run: node scripts/validate-kairos-manuscript-governance.mjs
@@ -91,7 +91,7 @@ jobs:
 
       - name: Install Worker dependencies
         working-directory: ${{ env.WORKER_DIRECTORY }}
-        run: npm ci --ignore-scripts --no-audit --no-fund
+        run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
 
       - name: Validate deployable Worker bundle
         working-directory: ${{ env.WORKER_DIRECTORY }}
@@ -118,7 +118,7 @@ jobs:
 
       - name: Install Worker dependencies
         working-directory: ${{ env.WORKER_DIRECTORY }}
-        run: npm ci --ignore-scripts --no-audit --no-fund
+        run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
 
       - name: Deploy canonical Kairos Worker
         working-directory: ${{ env.WORKER_DIRECTORY }}
