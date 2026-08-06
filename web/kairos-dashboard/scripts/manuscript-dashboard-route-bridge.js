@@ -1,6 +1,6 @@
 (() => {
-  const BUILD = "kairos-manuscript-dashboard-route-20260805-4-project-preserving";
-  const RELEASE = "manuscript-command-center-root-20260805-2";
+  const BUILD = "kairos-manuscript-dashboard-route-20260805-5-durable-project-handoff";
+  const RELEASE = "manuscript-command-center-root-20260805-3";
   const GLOBAL_KEY = "__KAIROS_MANUSCRIPT_DASHBOARD_ROUTE__";
   const ACTIVE_KEY = "kairos.production.active-workspace";
   const MANUSCRIPT_TRIGGER_SELECTOR = [
@@ -27,6 +27,8 @@
 
   let navigating = false;
   let observer = null;
+  let durableProject = normalizeProject(readJSON(ACTIVE_KEY))
+    || normalizeProject(new URL(location.href).searchParams.get("project"));
 
   const api = Object.freeze({
     build: BUILD,
@@ -46,6 +48,7 @@
         rootRoute: isRootDashboardRoute(),
         embeddedRuntimePresent: Boolean(document.querySelector(EMBEDDED_RUNTIME_SELECTOR)),
         activeWorkspacePresent: Boolean(readJSON(ACTIVE_KEY)),
+        durableProjectId: durableProject?.projectId || null,
       };
     },
   });
@@ -57,6 +60,7 @@
 
   normalizeRootURL();
 
+  document.addEventListener("pointerdown", captureProjectFromTrigger, true);
   document.addEventListener("click", event => {
     const trigger = event.target instanceof Element
       ? event.target.closest(MANUSCRIPT_TRIGGER_SELECTOR)
@@ -88,8 +92,19 @@
   observer.observe(document.documentElement, { childList: true, subtree: true });
   queueMicrotask(() => enforceCommandCenterRoot("root-bootstrap"));
 
+  function captureProjectFromTrigger(event) {
+    const trigger = event.target instanceof Element
+      ? event.target.closest(MANUSCRIPT_TRIGGER_SELECTOR)
+      : null;
+    if (!trigger) return;
+    durableProject = projectFromElement(trigger) || durableProject || normalizeProject(readJSON(ACTIVE_KEY));
+  }
+
   function normalizeRootURL() {
     const current = new URL(location.href);
+    durableProject = durableProject
+      || normalizeProject(current.searchParams.get("project"))
+      || normalizeProject(readJSON(ACTIVE_KEY));
     let changed = false;
     for (const key of ["open", "project", "handoff", "reason", "release", "editorialHardStop", "cacheBust"]) {
       if (!current.searchParams.has(key)) continue;
@@ -119,9 +134,12 @@
     if (navigating) return { status: "already-routing", build: BUILD };
     if (!isRootDashboardRoute()) return { status: "already-dedicated", build: BUILD };
 
-    const selected = normalizeProject(project) || normalizeProject(readJSON(ACTIVE_KEY));
+    const selected = normalizeProject(project)
+      || durableProject
+      || normalizeProject(readJSON(ACTIVE_KEY));
     const projectId = selected?.projectId || null;
     if (projectId) {
+      durableProject = { projectId };
       sessionStorage.setItem(ACTIVE_KEY, JSON.stringify({
         ...readJSON(ACTIVE_KEY),
         workspace: "manuscript-studio",
@@ -154,7 +172,7 @@
   }
 
   function projectFromElement(element) {
-    if (!(element instanceof Element)) return normalizeProject(readJSON(ACTIVE_KEY));
+    if (!(element instanceof Element)) return durableProject || normalizeProject(readJSON(ACTIVE_KEY));
     const owner = element.closest("[data-project-id],[data-manuscript-project-id],[data-restored-project-id]") || element;
     const projectId = owner.getAttribute("data-project-id")
       || owner.getAttribute("data-manuscript-project-id")
@@ -163,20 +181,31 @@
       || owner.dataset?.manuscriptProjectId
       || owner.dataset?.restoredProjectId
       || null;
-    return projectId ? { projectId: String(projectId) } : normalizeProject(readJSON(ACTIVE_KEY));
+    return normalizeProject(projectId)
+      || durableProject
+      || normalizeProject(readJSON(ACTIVE_KEY));
   }
 
   function projectFromEvent(event) {
     return normalizeProject(event?.detail?.project)
       || normalizeProject(event?.detail)
+      || durableProject
       || normalizeProject(readJSON(ACTIVE_KEY));
   }
 
   function normalizeProject(project) {
+    if (typeof project === "string" || typeof project === "number") {
+      const projectId = String(project).trim();
+      return projectId ? { projectId } : null;
+    }
+    const nested = project?.project && project.project !== project
+      ? normalizeProject(project.project)
+      : null;
     const projectId = project?.projectId
       || project?.manuscriptProjectId
       || project?.sourceProjectId
       || project?.id
+      || nested?.projectId
       || null;
     return projectId ? { projectId: String(projectId) } : null;
   }
