@@ -6,13 +6,25 @@ name: Deploy Canonical Kairos Worker
     paths:
       - "cloudflare/mmg-ios/**"
       - "web/kairos-dashboard/**"
+      - "browser-tests/manuscript-pipeline-orchestrator.spec.mjs"
+      - "playwright.manuscript-orchestration.config.mjs"
+      - "scripts/validate-kairos-manuscript-governance.mjs"
+      - "package.json"
+      - "package-lock.json"
       - ".github/workflows/deploy-kairos-canonical-worker.yml"
+      - ".github/workflows/deploy-kairos-manuscript-runtime.yml"
   push:
     branches: [main]
     paths:
       - "cloudflare/mmg-ios/**"
       - "web/kairos-dashboard/**"
+      - "browser-tests/manuscript-pipeline-orchestrator.spec.mjs"
+      - "playwright.manuscript-orchestration.config.mjs"
+      - "scripts/validate-kairos-manuscript-governance.mjs"
+      - "package.json"
+      - "package-lock.json"
       - ".github/workflows/deploy-kairos-canonical-worker.yml"
+      - ".github/workflows/deploy-kairos-manuscript-runtime.yml"
   workflow_dispatch:
 
 permissions:
@@ -32,7 +44,7 @@ jobs:
   validate:
     name: Validate canonical Worker
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -41,6 +53,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: npm
+
+      - name: Install repository dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Enforce manuscript governance invariants
+        run: node scripts/validate-kairos-manuscript-governance.mjs
 
       - name: Validate active source chain
         working-directory: ${{ env.WORKER_DIRECTORY }}
@@ -52,6 +71,7 @@ jobs:
           test -f src/kairos-manuscript-canonical-identity-router-v1.js
           test -f src/kairos-manuscript-source-shard-v1.js
           test -f src/kairos-manuscript-package-state-v1.js
+          test -f src/kairos-manuscript-deliverables-http-v1.js
           grep -Fq 'main = "src/kairos-production-entry-local-canonical-v1.js"' wrangler.toml
           grep -Fq 'resolveCanonicalManuscriptRequest(request, env)' src/kairos-production-entry-local-canonical-v1.js
           grep -Fq 'handleManuscriptPackageState(canonicalRequest, env, ctx)' src/kairos-production-entry-local-canonical-v1.js
@@ -62,10 +82,17 @@ jobs:
           node --check src/kairos-manuscript-canonical-identity-router-v1.js
           node --check src/kairos-manuscript-source-shard-v1.js
           node --check src/kairos-manuscript-package-state-v1.js
+          node --check src/kairos-manuscript-deliverables-http-v1.js
+
+      - name: Install browser used by synthetic manuscript test
+        run: npx playwright install --with-deps webkit
+
+      - name: Run manuscript production synthetic E2E
+        run: npx playwright test -c playwright.manuscript-orchestration.config.mjs
 
       - name: Install Worker dependencies
         working-directory: ${{ env.WORKER_DIRECTORY }}
-        run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+        run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Validate deployable Worker bundle
         working-directory: ${{ env.WORKER_DIRECTORY }}
@@ -92,7 +119,7 @@ jobs:
 
       - name: Install Worker dependencies
         working-directory: ${{ env.WORKER_DIRECTORY }}
-        run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+        run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Deploy canonical Kairos Worker
         working-directory: ${{ env.WORKER_DIRECTORY }}
