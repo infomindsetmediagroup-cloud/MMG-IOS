@@ -1,7 +1,9 @@
 (() => {
-  const BUILD = "kairos-manuscript-final-delivery-control-20260805-6-canonical-digital-asset-v2";
+  const BUILD = "kairos-manuscript-final-delivery-control-20260805-6-digital-asset-v2";
   const CERTIFIED_SNAPSHOT_BUILD = "kairos-manuscript-final-deliverable-engine-20260805-3";
-  const PACKAGE_CONTRACT = "mmg-digital-asset-edition-v2-customer-package-v1";
+  const PACKAGE_CONTRACT = "mmg-canonical-digital-asset-edition-v2";
+  const PACKAGE_FILE_COUNT = 6;
+  const MINIMUM_INTERIOR_PAGES = 100;
   const REQUIRED_KINDS = new Set([
     "CUSTOMER_SPEC_SHEET_PDF",
     "KDP_INTERIOR_PDF",
@@ -14,7 +16,7 @@
   const ACTIVE_KEY = "kairos.production.active-workspace";
   const READ_TIMEOUT_MS = 15_000;
   const WRITE_TIMEOUT_MS = 240_000;
-  const AUTO_TRIGGER_KEY = "kairos.final-delivery.auto-triggered.v6";
+  const AUTO_TRIGGER_KEY = "kairos.final-delivery.auto-triggered.digital-asset-v2";
 
   const state = {
     busy: false,
@@ -31,6 +33,8 @@
     build: BUILD,
     certifiedBuild: CERTIFIED_SNAPSHOT_BUILD,
     packageContract: PACKAGE_CONTRACT,
+    packageFileCount: PACKAGE_FILE_COUNT,
+    minimumInteriorPages: MINIMUM_INTERIOR_PAGES,
     ready: true,
     manufacture: manufactureFinalDeliverable,
     refresh: refreshFinalDeliverable,
@@ -55,13 +59,13 @@
     panel.innerHTML = `
       <div class="kairos-final-delivery-copy">
         <p class="kairos-final-delivery-eyebrow">Final delivery</p>
-        <strong data-kairos-final-delivery-title>Produce the Digital Asset Edition V2 package</strong>
-        <span data-kairos-final-delivery-status>Spec Sheet, KDP Interior, Digital Edition V2, portrait cover, square thumbnail, and README.</span>
+        <strong data-kairos-final-delivery-title>Produce Digital Asset Edition V2</strong>
+        <span data-kairos-final-delivery-status>Spec Sheet, 6×9 KDP Interior, Digital Edition V2, portrait cover, square thumbnail, and README.</span>
       </div>
       <div class="kairos-final-delivery-actions">
         <button type="button" data-kairos-final-delivery-run>Produce Final Deliverable</button>
         <button type="button" data-kairos-final-delivery-check>Check Saved Package</button>
-        <a hidden data-kairos-final-delivery-download>Download Complete Package</a>
+        <a hidden data-kairos-final-delivery-download>Download Customer Package</a>
       </div>`;
     document.body.append(panel);
   }
@@ -87,14 +91,18 @@
     state.busy = true;
     state.projectId = projectId;
     state.operationId = createId();
-    state.phase = "manufacturing-canonical-digital-asset-v2";
+    state.phase = "manufacturing-digital-asset-edition-v2";
     state.lastError = "";
     state.lastRecord = null;
     disableButtons(true);
     hideDownload();
 
     try {
-      updateControl("working", "Manufacturing Digital Asset Edition V2", "All retired package contracts will be rejected and replaced.");
+      updateControl(
+        "working",
+        "Manufacturing Digital Asset Edition V2",
+        `Validating the approved manuscript, ${MINIMUM_INTERIOR_PAGES}-page minimum, canonical cover, and exact six-file package.`,
+      );
       let body;
       try {
         body = await buildCanonicalPackage(projectId);
@@ -131,7 +139,7 @@
     disableButtons(true);
     hideDownload();
     try {
-      updateControl("working", "Checking the saved package", "Only the canonical six-file Digital Asset Edition V2 package will be accepted.");
+      updateControl("working", "Checking the saved customer package", "Only the canonical six-file Digital Asset Edition V2 package will be accepted.");
       const body = await requestJSON(`${route(projectId)}/deliverables/build`, { method: "GET" }, READ_TIMEOUT_MS);
       const record = requireCanonicalRecord(projectId, body);
       state.lastRecord = record;
@@ -154,12 +162,12 @@
 
   async function buildCanonicalPackage(projectId) {
     return requestJSON(`${route(projectId)}/deliverables/build`, post({
-      confirmation: "MANUFACTURE DIGITAL ASSET EDITION V2",
+      confirmation: "MANUFACTURE DELIVERY PACKAGE",
       actor: "MMG Executive",
       sourceMode: "approved-editorial-version",
       packageContract: PACKAGE_CONTRACT,
       replaceRetiredPackage: true,
-      canvaExcluded: true,
+      minimumInteriorPages: MINIMUM_INTERIOR_PAGES,
     }), WRITE_TIMEOUT_MS);
   }
 
@@ -171,18 +179,31 @@
 
     const contract = body?.packageContract || build?.metadata?.packageContract || "";
     if (contract !== PACKAGE_CONTRACT) {
-      throw new Error(`Saved package contract is ${contract || "unknown"}, not the canonical Digital Asset Edition V2 contract.`);
+      throw new Error(`Saved package contract is ${contract || "unknown"}, not ${PACKAGE_CONTRACT}.`);
     }
 
     const artifacts = Array.isArray(build.artifacts) ? build.artifacts : [];
     const packageFiles = artifacts.filter(asset => asset?.kind !== "ZIP_ARCHIVE");
     const kinds = new Set(packageFiles.map(asset => asset?.kind));
     const missing = [...REQUIRED_KINDS].filter(kind => !kinds.has(kind));
-    if (packageFiles.length !== 6 || missing.length) {
-      throw new Error(`The package does not contain the six required customer deliverables${missing.length ? `; missing ${missing.join(", ")}` : ""}.`);
+    if (packageFiles.length !== PACKAGE_FILE_COUNT || missing.length) {
+      throw new Error(`The package does not contain the six required customer files${missing.length ? `; missing ${missing.join(", ")}` : ""}.`);
     }
-    if (packageFiles.some(asset => Number(asset?.byteSize || 0) <= 0)) {
-      throw new Error("One or more Digital Asset Edition V2 deliverables are empty.");
+    if (packageFiles.some(asset => Number(asset?.bytes || asset?.byteSize || 0) <= 0)) {
+      throw new Error("One or more canonical customer files are empty.");
+    }
+    if (!artifacts.some(asset => asset?.kind === "ZIP_ARCHIVE")) {
+      throw new Error("The canonical customer package ZIP record is missing.");
+    }
+    const pageCount = Number(build?.metadata?.kdpInteriorPageCount || build?.metadata?.pageCount || 0);
+    if (pageCount < MINIMUM_INTERIOR_PAGES) {
+      throw new Error(`The KDP interior contains ${pageCount} pages. MMG requires at least ${MINIMUM_INTERIOR_PAGES} pages.`);
+    }
+    if (build?.metadata?.portraitCoverDimensions !== "2048x3072") {
+      throw new Error("The portrait cover is not the canonical 2048×3072 PNG.");
+    }
+    if (build?.metadata?.thumbnailCoverDimensions !== "2048x2048") {
+      throw new Error("The square thumbnail is not the canonical 2048×2048 PNG.");
     }
 
     return {
@@ -191,13 +212,14 @@
       packageContract: contract,
       metadata: {
         title: build?.metadata?.workingTitle || "Digital Asset Edition V2",
-        publisher: build?.metadata?.publisher || "Mindset Media Group™",
-        pageCount: Number(build?.metadata?.pageCount || 0),
+        author: build?.metadata?.author || "Mindset Media Group",
+        pageCount,
+        digitalPageCount: Number(build?.metadata?.digitalEditionPageCount || 0),
       },
       vault: {
         assets: packageFiles,
         packageDownloadURL: `${route(projectId)}/deliverables/zip?contract=${encodeURIComponent(PACKAGE_CONTRACT)}&build=${encodeURIComponent(build.id || Date.now())}`,
-        integrity: { passed: true, assetCount: 6 },
+        integrity: { passed: true, assetCount: PACKAGE_FILE_COUNT },
       },
       recovery: {
         engine: "canonical-digital-asset-edition-v2",
@@ -237,27 +259,31 @@
   function renderPackage(record) {
     const assets = record.vault.assets;
     const url = record.vault.packageDownloadURL;
-    updateControl("ready", record.metadata.title, `6 verified deliverables are ready · ${record.metadata.pageCount || "100+"} substantive pages`);
+    updateControl(
+      "ready",
+      record.metadata.title,
+      `${PACKAGE_FILE_COUNT} verified customer files · ${record.metadata.pageCount} KDP pages · Digital Asset Edition V2`,
+    );
     const panel = control();
     const download = panel.querySelector("[data-kairos-final-delivery-download]");
     download.hidden = false;
     download.href = url;
     download.target = "_blank";
     download.rel = "noopener";
-    download.textContent = "Download Complete Package";
+    download.textContent = "Download Customer Package";
     panel.querySelector("[data-kairos-final-delivery-run]").textContent = "Rebuild Digital Asset V2";
 
     const section = ensurePipelineSection();
     section.hidden = false;
     section.innerHTML = `
-      <p class="eyebrow">Canonical Digital Asset Edition V2</p>
+      <p class="eyebrow">Canonical final delivery package</p>
       <h3>${escapeHTML(record.metadata.title)}</h3>
-      <p>Exactly six customer-facing deliverables are ready. No source, internal, QA, Canva, DOCX, HTML, Markdown, or JSON files are included.</p>
+      <p>Exactly six title-specific customer files are ready under ${escapeHTML(PACKAGE_CONTRACT)}.</p>
       <div class="manuscript-manufacturing-grid">
-        ${assets.map(asset => `<article><b>${escapeHTML(asset.filename || asset.kind)}</b><p>${escapeHTML(asset.kind)}</p><small>${Number(asset.byteSize || 0).toLocaleString()} bytes</small></article>`).join("")}
+        ${assets.map(asset => `<article><b>${escapeHTML(asset.filename || asset.kind)}</b><p>${escapeHTML(asset.kind)}</p><small>${Number(asset.bytes || asset.byteSize || 0).toLocaleString()} bytes</small></article>`).join("")}
       </div>
       <div class="manuscript-actions">
-        <a class="primary" href="${escapeHTML(url)}" target="_blank" rel="noopener">Download Complete Package</a>
+        <a class="primary" href="${escapeHTML(url)}" target="_blank" rel="noopener">Download Customer Package</a>
         <button type="button" class="secondary" data-kairos-final-delivery-run>Rebuild Digital Asset V2</button>
       </div>`;
     return record;
@@ -350,33 +376,23 @@
     } catch { return ""; }
   }
 
-  function route(projectId) {
-    return `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}`;
-  }
-
-  function control() {
-    mountControl();
-    return document.querySelector("#kairos-final-delivery-control");
-  }
-
+  function route(projectId) { return `/api/production-registry/manuscripts/${encodeURIComponent(projectId)}`; }
+  function control() { mountControl(); return document.querySelector("#kairos-final-delivery-control"); }
   function updateControl(mode, title, status) {
     const panel = control();
     panel.dataset.state = mode;
     panel.querySelector("[data-kairos-final-delivery-title]").textContent = title;
     panel.querySelector("[data-kairos-final-delivery-status]").textContent = status;
   }
-
   function hideDownload() {
     const download = control().querySelector("[data-kairos-final-delivery-download]");
     download.hidden = true;
     download.removeAttribute("href");
   }
-
   function disableButtons(disabled) {
     document.querySelectorAll("[data-kairos-final-delivery-run], [data-kairos-final-delivery-check], [data-final-deliverable-retry], [data-final-deliverable-refresh]")
       .forEach(button => { button.disabled = disabled; });
   }
-
   function ensurePipelineSection() {
     let section = document.querySelector("#manuscript-auto-pipeline");
     if (section) return section;
@@ -388,7 +404,6 @@
       || document.body).append(section);
     return section;
   }
-
   function announce(reason, projectId, record) {
     dispatchEvent(new CustomEvent("kairos:production:state-changed", {
       detail: { reason, projectId, status: record.status, packageContract: PACKAGE_CONTRACT, build: BUILD },
@@ -405,14 +420,8 @@
     document.head.append(style);
   }
 
-  function createId() {
-    return crypto?.randomUUID?.() || `delivery-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  }
-
-  function message(error) {
-    return error instanceof Error ? error.message : String(error || "Final delivery package generation failed.");
-  }
-
+  function createId() { return crypto?.randomUUID?.() || `delivery-${Date.now()}-${Math.random().toString(16).slice(2)}`; }
+  function message(error) { return error instanceof Error ? error.message : String(error || "Final delivery package generation failed."); }
   function escapeHTML(value) {
     return String(value || "").replace(/[&<>"']/g, character => ({
       "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;",
