@@ -16,18 +16,19 @@ const lockedFiles = [
   'metadata.json',
 ];
 
+const productionUrl = 'https://mmg-ios.info-mindsetmediagroup.workers.dev';
 const workflowsDir = path.join(root, '.github', 'workflows');
 const workflowNames = (await readdir(workflowsDir)).filter((name) => /\.ya?ml$/i.test(name));
 const deployAuthorities = [];
 for (const name of workflowNames) {
   const source = await read(path.join('.github', 'workflows', name));
-  if (/\bnpx\s+wrangler\s+deploy\b/.test(source) && /mmg-ios|WORKER_DIRECTORY:\s*cloudflare\/mmg-ios/.test(source)) {
+  if (/\bnpx\s+wrangler\s+deploy\b/.test(source) && source.includes(productionUrl)) {
     deployAuthorities.push(name);
   }
 }
 
 if (deployAuthorities.length !== 1 || deployAuthorities[0] !== 'deploy-kairos-canonical-worker.yml') {
-  fail(`expected one Kairos Worker deployment authority; found ${deployAuthorities.join(', ') || 'none'}`);
+  fail(`expected one production Kairos Worker deployment authority; found ${deployAuthorities.join(', ') || 'none'}`);
 }
 
 const deliverables = await read('cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js');
