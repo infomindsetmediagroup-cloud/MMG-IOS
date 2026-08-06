@@ -6,7 +6,31 @@
 
 This document is the single controlling package standard for every Mindset Media Group digital asset. It supersedes every earlier five-file, twelve-artifact, Gold Master, full-wrap, development, or generic manuscript package specification for customer-facing digital-asset delivery.
 
-## Invocation contract
+## Permanent invocation triggers
+
+Either of the following immediately invokes the complete A-to-Z manuscript production pipeline without a follow-up question:
+
+1. The user says **Digital Asset**.
+2. The user uploads both a manuscript and a cover image, in either order, in the same active project or conversation.
+
+The second trigger is complete as soon as both files are present. The system must not interpret a cover upload as a request to generate, redesign, edit, or replace an image. It must preserve the uploaded cover as the approved source asset and begin manuscript analysis and production.
+
+On invocation, the system must:
+
+- enter Manuscript Engine Mode;
+- register the uploaded cover and manuscript to the same project;
+- inspect the complete manuscript before drafting;
+- research current facts and platform requirements when the manuscript requests research or contains time-sensitive claims;
+- remove duplication, filler, dead material, formatting defects, and unsupported claims;
+- preserve the author’s purpose, voice, title, series identity, and approved cover direction;
+- substantively expand the manuscript to the MMG minimum of 100 finished pages without page-count padding;
+- prepare the customer-ready digital edition and KDP-ready interior;
+- manufacture the canonical customer package;
+- validate every file and the final ZIP before reporting completion.
+
+Invocation alone must never call an image-generation tool. Image generation is used only when the user explicitly asks for a new cover, cover modification, replacement artwork, or additional interior/marketing imagery. When an approved cover is uploaded, the default operation is preservation, sizing, and package preparation—not visual regeneration.
+
+## Production contract
 
 When a cover image and manuscript are supplied for a digital-asset project, Kairos must:
 
@@ -16,8 +40,8 @@ When a cover image and manuscript are supplied for a digital-asset project, Kair
 4. Produce a developed field guide with at least 100 substantive finished pages, at least eight developed sections, and multiple practical frameworks, workflows, checklists, worksheets, templates, prompts, labs, decision rules, action steps, or implementation tools.
 5. Reject padding, duplicated paragraphs, filler, false page-count inflation, placeholders, and incomplete editorial output.
 6. Use the checksum-verified approved final editorial manuscript as the sole manufacturing authority.
-7. Use ChatGPT image generation and the approved uploaded cover for visual production. Canva is excluded from the base pipeline.
-8. Manufacture and validate the exact title-specific six-file customer package below.
+7. Preserve the approved uploaded cover. Canva is excluded from the base pipeline.
+8. Manufacture and validate the exact title-specific customer package below.
 
 ## Exact customer package
 
@@ -81,7 +105,7 @@ No seventh customer file is permitted.
 ### README
 
 - Plain text
-- Exact six-file manifest
+- Exact package manifest
 - Edition information and file-use instructions
 - No internal workflow, repository, QA, storefront, or production-system language
 
@@ -112,15 +136,15 @@ Internal production artifacts may exist outside the customer ZIP when needed for
 A package is complete only when automated validation proves:
 
 - contract ID matches the canonical contract
-- exactly six non-ZIP artifacts exist
-- all six exact title-specific filenames exist in the required order
-- ZIP contains exactly those six files
+- exact required non-ZIP artifacts exist
+- all exact title-specific filenames exist in the required order
+- ZIP contains exactly the canonical customer files
 - every file is non-empty and opens successfully
 - KDP Interior is 6 × 9 inches and at least 100 pages
 - Digital Edition is US Letter and includes the approved cover
 - portrait cover is 2048 × 3072 PNG
 - square thumbnail is 2048 × 2048 PNG
-- README names all six files
+- README names all customer files
 - forbidden files and internal language are absent
 - approved editorial checksum is the manufacturing authority
 - Canva is excluded
