@@ -1,4 +1,4 @@
-import { readFile, readdir } from 'node:fs/promises';
+import { access, readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 
 const root = process.cwd();
@@ -15,6 +15,13 @@ const lockedFiles = [
   'cover.png',
   'metadata.json',
 ];
+const retiredAuthority = '.github/workflows/deploy-kairos-manuscript-runtime.yml';
+try {
+  await access(path.join(root, retiredAuthority));
+  fail(`retired deployment authority still exists: ${retiredAuthority}`);
+} catch (error) {
+  if (error?.code !== 'ENOENT') throw error;
+}
 
 const productionUrl = 'https://mmg-ios.info-mindsetmediagroup.workers.dev';
 const workflowsDir = path.join(root, '.github', 'workflows');
@@ -26,7 +33,6 @@ for (const name of workflowNames) {
     deployAuthorities.push(name);
   }
 }
-
 if (deployAuthorities.length !== 1 || deployAuthorities[0] !== 'deploy-kairos-canonical-worker.yml') {
   fail(`expected one production Kairos Worker deployment authority; found ${deployAuthorities.join(', ') || 'none'}`);
 }
@@ -57,11 +63,19 @@ const routeOwnerCount = (canonicalEntry.match(/handleManuscriptPackageState\(can
 if (routeOwnerCount !== 1) fail(`manuscript package route must have one owner; found ${routeOwnerCount}`);
 
 const orchestrator = await read('browser-tests/manuscript-pipeline-orchestrator.spec.mjs');
-for (const evidence of ['intake', 'review', 'final', 'zip', 'download']) {
-  if (!orchestrator.toLowerCase().includes(evidence)) fail(`synthetic E2E lacks ${evidence} evidence`);
-}
-for (const file of lockedFiles) {
-  if (!orchestrator.includes(file)) fail(`synthetic E2E does not assert ZIP member ${file}`);
+const syntheticEvidence = [
+  'Project Setup stores the cover and assignment in one idempotent transaction',
+  'ready-for-manufacturing',
+  '/deliverables/build',
+  'mmg-locked-five-asset-kdp-delivery-package-v1',
+  'Exactly five customer deliverables are ready.',
+  'Download Complete Package',
+  '/deliverables/zip',
+  'assetCount).toBe(5)',
+  'x-kairos-idempotency-key',
+];
+for (const evidence of syntheticEvidence) {
+  if (!orchestrator.includes(evidence)) fail(`synthetic E2E lacks executable evidence: ${evidence}`);
 }
 
 const workflow = await read('.github/workflows/deploy-kairos-canonical-worker.yml');
@@ -71,14 +85,18 @@ if (!workflow.includes('playwright.manuscript-orchestration.config.mjs')) {
 if (!workflow.includes('node scripts/validate-kairos-manuscript-governance.mjs')) {
   fail('canonical workflow must execute this governance validator');
 }
+if (!workflow.includes('Verify exact production deployment') || !workflow.includes('deploymentSha')) {
+  fail('canonical workflow must verify the exact deployed commit');
+}
 
 if (!process.exitCode) {
   console.log(JSON.stringify({
     ok: true,
     deploymentAuthority: deployAuthorities[0],
+    retiredAuthorityRemoved: true,
     lockedFiles,
     manuscriptRouteOwners: routeOwnerCount,
     canvaExcluded: true,
-    syntheticE2E: true,
+    syntheticJourney: ['setup', 'editorial-review', 'five-file-build', 'zip', 'download'],
   }, null, 2));
 }
