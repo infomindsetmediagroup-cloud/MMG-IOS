@@ -80,7 +80,7 @@ async function createProject(state, projectId, manuscript, coverBytes) {
   const setupForm = new FormData();
   setupForm.set("authorName", "Michael King");
   setupForm.set("publicationTitle", "AI Video Prompt Mastery");
-  setupForm.set("service", "digital-asset-edition-v2");
+  setupForm.set("service", "complete-publishing-package");
   setupForm.set("edition", "Digital Asset Edition V2.0");
   setupForm.set("trimSize", "6x9");
   setupForm.set("isbnStatus", "not-required");
