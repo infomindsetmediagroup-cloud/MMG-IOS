@@ -4,38 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#05070a">
-  <meta name="mmg-build" content="kairos-five-center-dashboard-post-intake-20260731-1">
-  <meta name="mmg-release" content="five-center-manuscript-flow-recovery-20260803-3">
+  <meta name="mmg-build" content="kairos-command-center-root-20260805-1">
+  <meta name="mmg-compatible-build" content="kairos-five-center-dashboard-post-intake-20260731-1">
+  <meta name="mmg-release" content="canonical-dashboard-manufacturing-flow-20260805-1">
   <meta name="mmg-command-asset-release" content="five-center-manuscript-flow-recovery-20260803-3">
-  <meta name="mmg-production-flow-release" content="manuscript-flow-recovery-20260803-3">
-  <meta name="mmg-receipt-continuation-release" content="manuscript-receipt-continuation-20260804-1">
+  <meta name="mmg-production-flow-release" content="canonical-dashboard-manufacturing-flow-20260805-1">
   <meta name="mmg-command-runtime-target" content="./scripts/legacy-runtime-loader.js?v=five-center-manuscript-flow-recovery-20260803-3">
   <meta name="mmg-production-controller-target" content="./scripts/manuscript-auto-pipeline.js?v=five-center-manuscript-flow-recovery-20260803-3">
   <meta name="mmg-post-intake-guard-target" content="./scripts/manuscript-post-intake-guard.js?v=five-center-manuscript-flow-recovery-20260803-3">
   <meta name="mmg-direct-open-target" content="./scripts/manuscript-direct-open-controller.js?v=manuscript-flow-recovery-20260803-3">
   <meta name="mmg-dedicated-manuscript-route" content="./manuscript">
   <meta name="mmg-state-fetch-target" content="./scripts/kairos-state-fetch.js?v=kairos-state-fetch-20260731-2-buffered">
-  <meta name="mmg-previous-dashboard-build" content="kairos-five-center-dashboard-restored-20260730-1">
-  <meta name="mmg-previous-production-flow" content="manuscript-local-production-controller-20260731-5-state-timeout">
   <meta name="mmg-visible-first-paint" content="kairos-canonical-header-20260803-1">
-  <!-- Dynamic command-runtime assets loaded by scripts/legacy-runtime-loader.js:
-       scripts/objective-router.js styles/objective-router.css
-       scripts/objective-controller-v2.js
-       scripts/website-builder-studio.js styles/website-builder-studio.css
-       scripts/workflow-runtime.js styles/workflow-runtime.css
-       scripts/deliverables.js styles/deliverables.css
-       scripts/customer-portal.js styles/customer-portal.css
-       scripts/customer-journeys.js styles/customer-journeys.css
-       scripts/visitor-activity.js styles/visitor-activity.css
-       scripts/revenue-intelligence.js styles/revenue-intelligence.css
-       scripts/growth-plan.js styles/growth-plan.css
-       scripts/offer-builder.js styles/offer-builder.css
-       scripts/campaign-operations.js styles/campaign-operations.css
-       scripts/product-launch-studio.js styles/product-launch-studio.css
-       scripts/complete-product-engine.js
-       scripts/publishing-studio.js styles/publishing-studio.css
-       scripts/creative-studio.js styles/creative-studio.css
-       scripts/social-production.js styles/social-production.css -->
+  <meta name="mmg-dashboard-route-owner" content="kairos-manuscript-dashboard-route-20260805-3-command-center-root">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -61,7 +42,6 @@
       window.__KAIROS_COMMAND_FIRST_PAINT__ = !executiveRoute;
       if (executiveRoute) document.documentElement.dataset.kairosRoute = "executive";
       if (current.searchParams.get("open") !== "manuscript") return;
-
       const target = new URL("./manuscript", current);
       target.search = current.search;
       target.searchParams.delete("mode");
@@ -77,14 +57,13 @@
       <div>
         <p class="eyebrow">Executive Command Center</p>
         <h1>Opening Kairos</h1>
-        <p>Restoring the five operating centers and production tools…</p>
+        <p>Loading the five operating centers and production tools…</p>
       </div>
     </section>
   </div>
   <noscript>Kairos requires JavaScript to run.</noscript>
+  <script src="./scripts/manuscript-dashboard-route-bridge.js?v=kairos-manuscript-dashboard-route-20260805-3-command-center-root"></script>
   <script type="module" src="./scripts/safari-manuscript-intake-compat.js?v=safari-native-docx-20260730-1"></script>
-  <script src="./scripts/manuscript-receipt-continuation-recovery.js?v=manuscript-receipt-continuation-20260804-1"></script>
-  <script src="./scripts/manuscript-dashboard-route-bridge.js?v=kairos-manuscript-dashboard-route-20260804-1"></script>
   <script type="module" data-kairos-command-script="command-hub.js command-center-layout.js">
     if (window.__KAIROS_COMMAND_FIRST_PAINT__) {
       await import("./scripts/command-hub.js?v=kairos-canonical-header-20260803-1");

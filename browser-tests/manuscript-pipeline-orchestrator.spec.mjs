@@ -15,6 +15,7 @@ const finalControlOwnerSource = readFileSync(
 );
 
 const PROJECT_ID = "manuscript-studio-a2z-project";
+const PACKAGE_CONTRACT = "mmg-locked-five-asset-kdp-delivery-package-v1";
 
 function baseHTML(body) {
   return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>${body}</body></html>`;
@@ -198,8 +199,8 @@ test("approved editorial state manufactures a downloadable delivery package", as
   expect(runRequests).toBe(1);
 });
 
-test("final deliverable engine recovers a failed canonical build through the deterministic builder", async ({ page }) => {
-  const calls = { primary: 0, fallback: 0 };
+test("final deliverable control manufactures directly through the locked five-file builder", async ({ page }) => {
+  const calls = { retiredPipeline: 0, fiveFileBuilder: 0 };
 
   await page.route("https://kairos.test/**", async route => {
     const request = route.request();
@@ -239,33 +240,38 @@ test("final deliverable engine recovers a failed canonical build through the det
     }
 
     if (request.method() === "POST" && url.pathname.endsWith("/auto-pipeline/run")) {
-      calls.primary += 1;
-      return route.fulfill({
-        status: 503,
-        contentType: "application/json",
-        body: JSON.stringify({ error: { message: "Canonical package engine unavailable in the recovery fixture." } }),
-      });
+      calls.retiredPipeline += 1;
+      return route.fulfill({ status: 500, contentType: "application/json", body: "{}" });
     }
 
     if (request.method() === "POST" && url.pathname.endsWith("/deliverables/build")) {
-      calls.fallback += 1;
+      calls.fiveFileBuilder += 1;
       return route.fulfill({
         status: 201,
         contentType: "application/json",
         body: JSON.stringify({
           status: "completed",
+          packageContract: PACKAGE_CONTRACT,
           manuscriptAuthority: "checksum-verified-final-editorial-version",
           deliverablesBuild: {
-            id: "fallback-build-123",
+            id: "five-file-build-123",
             status: "COMPLETED",
             metadata: {
               workingTitle: "Recovered Final Package",
               author: "MMG Test Author",
               manuscriptAuthority: "checksum-verified-final-editorial-version",
+              packageContract: PACKAGE_CONTRACT,
+              packageFileCount: 5,
+              packageContentsVerified: true,
+              uploadedCoverIncluded: true,
             },
             artifacts: [
-              { kind: "FINAL_MANUSCRIPT", filename: "final-manuscript.md", byteSize: 5000, sha256: "a".repeat(64) },
-              { kind: "ZIP_ARCHIVE", filename: "deliverables-recovered-final-package.zip", byteSize: 9000, sha256: "b".repeat(64) },
+              { kind: "GOLD_MASTER_DOCX", filename: "Recovered_Final_Package_Gold_Master.docx", byteSize: 5100, sha256: "a".repeat(64) },
+              { kind: "DIGITAL_ASSET_PDF", filename: "Recovered_Final_Package_Digital_Asset.pdf", byteSize: 5200, sha256: "b".repeat(64) },
+              { kind: "KDP_INTERIOR_PDF", filename: "Recovered_Final_Package_Interior.pdf", byteSize: 5300, sha256: "c".repeat(64) },
+              { kind: "KDP_FULL_WRAP_COVER_PDF", filename: "Recovered_Final_Package_Full_Wrap.pdf", byteSize: 5400, sha256: "d".repeat(64) },
+              { kind: "STANDALONE_COVER_IMAGE", filename: "Recovered_Final_Package_Cover.png", byteSize: 5500, sha256: "e".repeat(64) },
+              { kind: "ZIP_ARCHIVE", filename: "Recovered_Final_Package_Complete_Delivery_Package.zip", byteSize: 9000, sha256: "f".repeat(64) },
             ],
           },
         }),
@@ -289,19 +295,25 @@ test("final deliverable engine recovers a failed canonical build through the det
 
   const pipeline = page.locator("#manuscript-auto-pipeline");
   await expect(pipeline).toContainText("Recovered Final Package", { timeout: 5_000 });
-  await expect(pipeline).toContainText("deterministic-deliverables-fallback");
+  await expect(pipeline).toContainText("Exactly five customer deliverables are ready.");
+  await expect(pipeline).toContainText("Recovered_Final_Package_Gold_Master.docx");
+  await expect(pipeline).toContainText("Recovered_Final_Package_Digital_Asset.pdf");
+  await expect(pipeline).toContainText("Recovered_Final_Package_Interior.pdf");
+  await expect(pipeline).toContainText("Recovered_Final_Package_Full_Wrap.pdf");
+  await expect(pipeline).toContainText("Recovered_Final_Package_Cover.png");
   const download = pipeline.getByRole("link", { name: "Download Complete Package" });
   await expect(download).toBeVisible();
   await expect(download).toHaveAttribute(
     "href",
-    `/api/production-registry/manuscripts/${PROJECT_ID}/deliverables/zip`,
+    new RegExp(`/api/production-registry/manuscripts/${PROJECT_ID}/deliverables/zip\\?contract=${PACKAGE_CONTRACT}`),
   );
 
   const snapshot = await page.evaluate(() => window.KairosManuscriptFinalDeliverableEngine.snapshot());
   const owner = await page.evaluate(() => window.KairosManuscriptFinalDeliverableControlOwner.snapshot());
-  expect(snapshot.engine).toBe("deterministic-deliverables-fallback");
-  expect(snapshot.status).toBe("production-ready");
-  expect(snapshot.primaryError).toContain("Canonical package engine unavailable");
+  expect(snapshot.engine).toBe("five-file-deterministic-deliverables");
+  expect(snapshot.phase).toBe("ready");
+  expect(snapshot.packageContract).toBe(PACKAGE_CONTRACT);
+  expect(snapshot.lastRecord.vault.integrity.assetCount).toBe(5);
   expect(owner.claimedManufacture).toBeGreaterThanOrEqual(1);
-  expect(calls).toEqual({ primary: 1, fallback: 1 });
+  expect(calls).toEqual({ retiredPipeline: 0, fiveFileBuilder: 1 });
 });

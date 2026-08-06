@@ -2,8 +2,8 @@
  * Kairos Manuscript Deliverables — HTTP routing adapter.
  *
  * The deterministic builder manufactures the locked five-file MMG/KDP delivery
- * package. Retired package contracts are never returned as completed customer
- * delivery packages.
+ * package. Missing setup records on legacy projects are normalized in place
+ * from the saved source, registry metadata, and exact saved customer cover.
  */
 
 import {
@@ -15,7 +15,7 @@ import {
 } from "./kairos-manuscript-deliverables-builder-v3.js";
 
 export const KAIROS_MANUSCRIPT_DELIVERABLES_HTTP_BUILD =
-  "kairos-manuscript-deliverables-http-20260805-5-reject-retired-packages";
+  "kairos-manuscript-deliverables-http-20260805-6-legacy-setup-normalization";
 
 const ROUTE = /^\/registry\/manuscripts\/([a-z0-9-]{8,})\/deliverables\/(build|zip)$/i;
 const REQUIRED_KINDS = new Set([
@@ -36,18 +36,20 @@ export async function handleManuscriptDeliverablesObjectRequest(state, request, 
 
   try {
     if (action === "build" && request.method === "POST") {
+      const setupMigration = await ensureManufacturingSetup(state, projectId, handlers);
       const resolved = await resolveApprovedEditorialHandlers(state, projectId, handlers);
       const { build } = await runManuscriptDeliverablesBuild(state, projectId, resolved.handlers);
       requireLockedPackage(build);
 
-      if (resolved.approvedEditorial) {
-        build.metadata = {
-          ...(build.metadata || {}),
+      build.metadata = {
+        ...(build.metadata || {}),
+        setupMigration,
+        ...(resolved.approvedEditorial ? {
           approvedEditorial: resolved.approvedEditorial,
           manuscriptAuthority: "checksum-verified-final-editorial-version",
-        };
-        await state.storage.put(`manuscript-deliverables-build:${projectId}`, build);
-      }
+        } : {}),
+      };
+      await state.storage.put(`manuscript-deliverables-build:${projectId}`, build);
 
       return json({
         status: "completed",
@@ -56,6 +58,7 @@ export async function handleManuscriptDeliverablesObjectRequest(state, request, 
           ? "checksum-verified-final-editorial-version"
           : "stored-intake-source",
         approvedEditorial: resolved.approvedEditorial,
+        setupMigration,
         packageContract: PACKAGE_CONTRACT,
         deliverablesBuild: build,
       }, 201);
@@ -73,11 +76,8 @@ export async function handleManuscriptDeliverablesObjectRequest(state, request, 
           },
         }, 404);
       }
-      try {
-        requireLockedPackage(stored);
-      } catch (error) {
-        return stalePackage(error, stored);
-      }
+      try { requireLockedPackage(stored); }
+      catch (error) { return stalePackage(error, stored); }
       return json({
         status: "ready",
         build: KAIROS_MANUSCRIPT_DELIVERABLES_HTTP_BUILD,
@@ -98,11 +98,8 @@ export async function handleManuscriptDeliverablesObjectRequest(state, request, 
           },
         }, 404);
       }
-      try {
-        requireLockedPackage(stored);
-      } catch (error) {
-        return stalePackage(error, stored);
-      }
+      try { requireLockedPackage(stored); }
+      catch (error) { return stalePackage(error, stored); }
 
       const zipBytes = await getStoredManuscriptDeliverablesZip(state, projectId);
       if (!zipBytes) {
@@ -151,6 +148,105 @@ export async function handleManuscriptDeliverablesObjectRequest(state, request, 
       deliverablesBuild: error?.build || null,
     }, Number(error?.status || 500));
   }
+}
+
+async function ensureManufacturingSetup(state, projectId, handlers) {
+  const setupHandler = handlers?.handleManuscriptProjectSetupObjectRequest;
+  const sourceHandler = handlers?.handleManuscriptSourceObjectRequest;
+  if (typeof setupHandler !== "function" || typeof sourceHandler !== "function") {
+    throw fail(500, "manuscript_setup_migration_unavailable", "The manuscript setup and source handlers are required for final manufacturing.");
+  }
+
+  const setupURL = `https://kairos.internal/registry/manuscripts/${projectId}/setup`;
+  const currentResponse = await setupHandler(state, new Request(setupURL, { method: "GET" }));
+  const currentBody = await readJSON(currentResponse);
+  if (currentResponse?.ok && currentBody?.setup) {
+    return {
+      status: "existing",
+      build: KAIROS_MANUSCRIPT_DELIVERABLES_HTTP_BUILD,
+      projectId,
+      setupCreated: false,
+      coverPreserved: Boolean(currentBody.setup.cover),
+    };
+  }
+  if (currentResponse && ![404, 409].includes(currentResponse.status)) {
+    throw fail(currentResponse.status, currentBody?.error?.code || "manuscript_setup_read_failed", currentBody?.error?.message || "The saved project setup could not be read.");
+  }
+
+  const sourceResponse = await sourceHandler(
+    state,
+    new Request(`https://kairos.internal/registry/manuscripts/${projectId}/source`, { method: "GET" }),
+  );
+  const sourceBody = await readJSON(sourceResponse);
+  if (!sourceResponse?.ok || !sourceBody?.source) {
+    throw fail(sourceResponse?.status || 404, sourceBody?.error?.code || "manuscript_source_required", sourceBody?.error?.message || "The saved manuscript source was not found.");
+  }
+
+  const coverResponse = await setupHandler(
+    state,
+    new Request(`${setupURL}/cover`, { method: "GET" }),
+  );
+  if (!coverResponse?.ok) {
+    const coverBody = await readJSON(coverResponse);
+    throw fail(409, coverBody?.error?.code || "uploaded_cover_required", coverBody?.error?.message || "The saved customer cover is required before final manufacturing.");
+  }
+
+  const records = (await state.storage.get("production-registry")) || {};
+  const registry = records?.[projectId] || {};
+  const source = sourceBody.source;
+  const operationId = `legacy-setup-normalization-${crypto.randomUUID()}`;
+  const authorName = firstText(
+    registry.authorName,
+    registry.author,
+    registry.metadata?.authorName,
+    registry.metadata?.author,
+    registry.customer?.authorName,
+    source.authorName,
+    source.author,
+    summaryAuthor(registry.summary),
+    "Mindset Media Group",
+  ).slice(0, 160);
+  const publicationTitle = firstText(
+    registry.publicationTitle,
+    registry.title,
+    source.title,
+    filenameTitle(source.filename),
+    "Untitled Manuscript",
+  ).slice(0, 240);
+
+  const saveResponse = await setupHandler(state, new Request(setupURL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Kairos-Operation-Id": operationId,
+      "X-Kairos-Idempotency-Key": `legacy-setup:${projectId}`,
+    },
+    body: JSON.stringify({
+      authorName,
+      publicationTitle,
+      service: approvedService(registry.service || registry.projectService || registry.metadata?.service),
+      edition: approvedEdition(registry.edition || registry.metadata?.edition),
+      trimSize: firstText(registry.trimSize, registry.metadata?.trimSize, "6x9"),
+      isbnStatus: approvedISBN(registry.isbnStatus || registry.metadata?.isbnStatus),
+      notes: "Canonical legacy-project setup normalized in place for final manufacturing. Existing manuscript and cover bytes were preserved.",
+    }),
+  }));
+  const saveBody = await readJSON(saveResponse);
+  if (!saveResponse?.ok || !saveBody?.setup) {
+    throw fail(saveResponse?.status || 500, saveBody?.error?.code || "manuscript_setup_normalization_failed", saveBody?.error?.message || "The saved project setup could not be normalized for final manufacturing.");
+  }
+
+  return {
+    status: "normalized",
+    build: KAIROS_MANUSCRIPT_DELIVERABLES_HTTP_BUILD,
+    projectId,
+    setupCreated: true,
+    coverPreserved: Boolean(saveBody.setup.cover),
+    publicationTitle: saveBody.setup.publicationTitle,
+    authorName: saveBody.setup.authorName,
+    trimSize: saveBody.setup.trimSize,
+    operationId,
+  };
 }
 
 function requireLockedPackage(build) {
@@ -263,6 +359,49 @@ async function resolveApprovedEditorialHandlers(state, projectId, handlers) {
       handleManuscriptSourceObjectRequest: approvedSourceHandler,
     },
   };
+}
+
+function approvedService(value) {
+  const service = String(value || "").trim();
+  return new Set(["manuscript-correction", "editorial-production", "complete-publishing-package", "digital-edition-production"]).has(service)
+    ? service
+    : "complete-publishing-package";
+}
+
+function approvedEdition(value) {
+  const edition = String(value || "").trim();
+  return new Set(["ebook", "paperback", "hardcover", "digital-pdf", "multi-format"]).has(edition)
+    ? edition
+    : "multi-format";
+}
+
+function approvedISBN(value) {
+  const status = String(value || "").trim();
+  return new Set(["customer-supplied", "kdp-free", "not-decided", "not-required"]).has(status)
+    ? status
+    : "not-decided";
+}
+
+function firstText(...values) {
+  for (const value of values) {
+    const text = String(value || "").trim();
+    if (text) return text;
+  }
+  return "";
+}
+
+function summaryAuthor(value) {
+  const text = String(value || "").trim();
+  if (!text.includes(" · ")) return "";
+  return text.split(" · ")[0].trim();
+}
+
+function filenameTitle(value) {
+  return String(value || "")
+    .replace(/\.[a-z0-9]{1,8}$/i, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 async function readJSON(response) {

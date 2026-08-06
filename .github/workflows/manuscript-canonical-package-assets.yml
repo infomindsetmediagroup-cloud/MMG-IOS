@@ -8,13 +8,16 @@ on:
       - "cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js"
       - "cloudflare/mmg-ios/test/kairos-manuscript-canonical-package-assets.test.js"
       - "cloudflare/mmg-ios/test/kairos-manuscript-approved-editorial-deliverables.test.js"
-      - "web/kairos-dashboard/scripts/manuscript-final-deliverable-control-owner.js"
+      - "cloudflare/mmg-ios/test/kairos-manuscript-legacy-setup-normalization.test.js"
+      - "web/kairos-dashboard/index.html"
+      - "web/kairos-dashboard/scripts/manuscript-dashboard-route-bridge.js"
+      - "test/kairos-dashboard-root-route.test.mjs"
       - "browser-tests/manuscript-final-delivery-navigation.spec.mjs"
       - ".github/workflows/manuscript-canonical-package-assets.yml"
   push:
     branches:
       - main
-      - fix/locked-five-asset-delivery-package-20260805
+      - "fix/canonical-dashboard-manufacturing-flow-*"
 
 permissions:
   contents: read
@@ -34,12 +37,15 @@ jobs:
         run: |
           node --check cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v3.js
           node --check cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js
-          node --check web/kairos-dashboard/scripts/manuscript-final-deliverable-control-owner.js
-      - name: Verify locked five-file package
+          node --check web/kairos-dashboard/scripts/manuscript-dashboard-route-bridge.js
+          node --check web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js
+      - name: Verify dashboard root and five-file manufacturing
         run: |
           node --test \
+            test/kairos-dashboard-root-route.test.mjs \
             cloudflare/mmg-ios/test/kairos-manuscript-canonical-package-assets.test.js \
-            cloudflare/mmg-ios/test/kairos-manuscript-approved-editorial-deliverables.test.js
+            cloudflare/mmg-ios/test/kairos-manuscript-approved-editorial-deliverables.test.js \
+            cloudflare/mmg-ios/test/kairos-manuscript-legacy-setup-normalization.test.js
       - name: Install WebKit
         run: npx playwright install --with-deps webkit > /dev/null
       - name: Verify final-state navigation

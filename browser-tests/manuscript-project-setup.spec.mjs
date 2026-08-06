@@ -203,7 +203,8 @@ test("Command Center manuscript event routes through the production workspace co
 });
 
 test("dashboard keeps production controllers behind the guarded five-center command runtime", async () => {
-  expect(indexSource).toMatch(/<meta name="mmg-build" content="kairos-five-center-dashboard-post-intake-[^"]+">/);
+  expect(indexSource).toMatch(/<meta name="mmg-build" content="kairos-command-center-root-[^"]+">/);
+  expect(indexSource).toMatch(/<meta name="mmg-compatible-build" content="kairos-five-center-dashboard-post-intake-[^"]+">/);
   expect(indexSource).toMatch(/<meta name="mmg-command-runtime-target" content="\.\/scripts\/legacy-runtime-loader\.js\?v=five-center-manuscript-flow-recovery-[^"]+">/);
   expect(indexSource).toMatch(/manuscript-production-flow-bootstrap\.js\?v=manuscript-flow-recovery-20260803-3/);
   expect(indexSource).toMatch(/manuscript-auto-pipeline\.js\?v=five-center-manuscript-flow-recovery-20260803-3/);
