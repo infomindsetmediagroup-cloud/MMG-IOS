@@ -36,7 +36,7 @@ function approvedManuscript() {
   const chapters = [];
   for (let chapter = 1; chapter <= 10; chapter += 1) {
     const paragraphs = [];
-    for (let section = 1; section <= 30; section += 1) {
+    for (let section = 1; section <= 50; section += 1) {
       paragraphs.push(`The approved editorial version develops production framework ${chapter}-${section} with a distinct workflow, checklist, worksheet, template, prompt lab, action step, decision rule, implementation sequence, camera strategy, movement constraint, lighting specification, audience objective, commercial use case, diagnostic method, and revision standard. Each lesson is independently written and preserves the approved customer-facing authority for manufacturing.`);
     }
     chapters.push(`Chapter ${chapter} — Approved Editorial System ${chapter}\n\n${paragraphs.join("\n\n")}`);
@@ -124,6 +124,7 @@ test("the canonical package uses only the checksum-verified approved final edito
   assert.equal(body.deliverablesBuild.metadata.approvedEditorial.versionId, versionId);
   assert.equal(body.deliverablesBuild.metadata.wordCount, (approved.match(/\b[\w’'-]+\b/g) || []).length);
   assert.ok(body.deliverablesBuild.metadata.wordCount > (original.match(/\b[\w’'-]+\b/g) || []).length);
+  assert.ok(body.deliverablesBuild.metadata.pageCount >= 100);
   assert.equal(body.deliverablesBuild.metadata.packageFileCount, 6);
 
   const zipResponse = await handleManuscriptDeliverablesObjectRequest(
