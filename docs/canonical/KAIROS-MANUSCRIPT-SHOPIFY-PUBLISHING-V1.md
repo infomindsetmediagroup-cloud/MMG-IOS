@@ -70,6 +70,13 @@ Every customer-facing and storefront-facing identity is locked to:
 
 The personal name `Michael King` is prohibited in covers, interiors, metadata, Shopify fields, filenames, manifests, README files, SEO, social metadata, and delivery records.
 
+The canonical Worker entry enforces this identity at two boundaries:
+
+1. before a manufacturing job enters the `KairosProject` Durable Object; and
+2. before any manuscript auto-pipeline record is persisted or returned through the canonical publishing API.
+
+Legacy records are sanitized at the boundary; new manufacturing jobs are created with the canonical MMG identity from the start.
+
 ## Manuscript-to-Digital-Asset state machine
 
 ```text
@@ -118,7 +125,9 @@ Archive:
 <Title-Slug>_Digital-Asset-Edition-V2_Customer-Package.zip
 ```
 
-Shopify publication is blocked until all six files and the exact archive are present and integrity validation passes.
+The existing manufacturing engine internally exposes the six deliverables under stable generic artifact keys. The canonical contract maps those keys to the exact title-specific customer names and validates the underlying integrity-checked archive. The canonical package download route sets the required title-specific archive filename without altering the verified ZIP bytes.
+
+Shopify publication is blocked until all six deliverables, the archive, and a positive integrity result are present.
 
 ## Shopify publishing state machine
 
@@ -172,28 +181,40 @@ Live publication requires a separate approval receipt bound to the current manif
 GET  /api/kairos/publishing/contracts
 GET  /api/kairos/publishing/manuscripts/:projectId/status
 POST /api/kairos/publishing/manuscripts/:projectId/digital-asset
+GET  /api/kairos/publishing/manuscripts/:projectId/package
 POST /api/kairos/publishing/manuscripts/:projectId/shopify-draft
 POST /api/kairos/publishing/manuscripts/:projectId/shopify-publish
 ```
 
-These routes are the canonical Command Center surface. They delegate to the existing manuscript manufacturing and Shopify engines while enforcing the MMG contracts before draft or live publication.
+These routes are the canonical Command Center surface. They delegate to the existing manuscript manufacturing and Shopify engines while enforcing the MMG contracts before customer delivery, draft creation, or live publication.
 
 ## Failure behavior
 
 Kairos must stop and return a machine-readable error when:
 
 - public identity is noncanonical;
-- prohibited personal attribution is detected;
+- prohibited personal attribution is detected in a new public request;
 - the approved editorial checksum does not match;
 - required customer files are missing;
 - the package archive is missing;
-- package integrity fails;
+- package integrity is not positively verified;
 - the exact Shopify confirmation is absent;
 - the product draft changed after approval;
 - digital delivery is not configured;
 - the live publication cannot be verified.
 
 No failure may be converted into a false success state.
+
+## Validation
+
+The canonical contract test suite verifies:
+
+- exact six-file title-specific package naming;
+- existing generic manufacturing artifact compatibility;
+- public-identity rejection and legacy-record sanitization;
+- exact draft and live confirmation phrases;
+- package completeness and positive integrity gates;
+- draft-first and separately approved live publication behavior.
 
 ## Dead-code rule
 
