@@ -1,0 +1,80 @@
+name: Deploy Kairos Once
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/5 * * * *"
+
+concurrency:
+  group: kairos-cloudflare-production
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.2.15"
+
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Cloudflare Agents SDK
+        run: bun install agents@0.20.0 --no-save
+
+      - name: Deploy Kairos Worker to production traffic
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: 9f81b4b13a3053004c105ccc9e3de67b
+          workingDirectory: cloudflare/mmg-ios
+          command: deploy
+
+      - name: Verify production dashboard
+        run: |
+          set -euo pipefail
+          response_headers="$(curl --fail --silent --show-error --location --head --max-time 30 https://mmg-ios.info-mindsetmediagroup.workers.dev/)"
+          echo "$response_headers"
+          echo "$response_headers" | grep -qi '^content-type: text/html'
+
+      - name: Verify Shopify analytics endpoint
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 45 \
+            https://mmg-ios.info-mindsetmediagroup.workers.dev/api/analytics/shopify \
+            | tee /tmp/kairos-shopify-analytics.json
+          grep -q '"analytics"' /tmp/kairos-shopify-analytics.json
+
+      - name: Verify canonical publishing contracts
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 45 \
+            https://mmg-ios.info-mindsetmediagroup.workers.dev/api/kairos/publishing/contracts \
+            | tee /tmp/kairos-publishing-contracts.json
+          grep -q 'mmg-digital-asset-edition-v2-customer-package-v1' /tmp/kairos-publishing-contracts.json
+          grep -q 'mmg-shopify-product-publishing-v1' /tmp/kairos-publishing-contracts.json
+
+      - name: Remove completed one-time workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          self_path=".github/workflows/deploy-kairos-once.yml"
+          self_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${self_path}?ref=main" --jq '.sha')"
+          gh api --method DELETE \
+            "repos/${GITHUB_REPOSITORY}/contents/${self_path}" \
+            -f message="Remove completed one-time Kairos deploy workflow" \
+            -f sha="$self_sha" \
+            -f branch="main"
