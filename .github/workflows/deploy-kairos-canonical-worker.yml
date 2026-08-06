@@ -8,7 +8,6 @@ name: Deploy Canonical Kairos Worker
       - "web/kairos-dashboard/**"
       - "browser-tests/manuscript-pipeline-orchestrator.spec.mjs"
       - "playwright.manuscript-orchestration.config.mjs"
-      - "scripts/validate-kairos-manuscript-governance.mjs"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/deploy-kairos-canonical-worker.yml"
@@ -20,7 +19,6 @@ name: Deploy Canonical Kairos Worker
       - "web/kairos-dashboard/**"
       - "browser-tests/manuscript-pipeline-orchestrator.spec.mjs"
       - "playwright.manuscript-orchestration.config.mjs"
-      - "scripts/validate-kairos-manuscript-governance.mjs"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/deploy-kairos-canonical-worker.yml"
@@ -58,7 +56,22 @@ jobs:
         run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
 
       - name: Enforce manuscript governance invariants
-        run: node scripts/validate-kairos-manuscript-governance.mjs
+        run: |
+          set -euo pipefail
+          test ! -e .github/workflows/deploy-kairos-manuscript-runtime.yml
+          grep -Fq 'npx wrangler deploy' .github/workflows/deploy-kairos-canonical-worker.yml
+          grep -Fq 'handleManuscriptPackageState(canonicalRequest, env, ctx)' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
+          test "$(grep -Fc 'handleManuscriptPackageState(canonicalRequest, env, ctx)' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js)" -eq 1
+          for token in GOLD_MASTER_DOCX DIGITAL_ASSET_PDF KDP_INTERIOR_PDF KDP_FULL_WRAP_COVER_PDF STANDALONE_COVER_IMAGE ZIP_ARCHIVE; do
+            grep -Fq "${token}" cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js
+          done
+          grep -Fq 'packageFiles.length !== 5' cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js
+          grep -Fq 'X-Kairos-Manuscript-Package-File-Count' cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js
+          ! grep -Eiq 'canva' \
+            cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js \
+            cloudflare/mmg-ios/src/kairos-manuscript-canonical-identity-router-v1.js \
+            cloudflare/mmg-ios/src/kairos-manuscript-package-state-v1.js \
+            cloudflare/mmg-ios/public/manuscript-studio.js
 
       - name: Validate active source chain
         working-directory: ${{ env.WORKER_DIRECTORY }}
