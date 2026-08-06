@@ -28,7 +28,7 @@ jobs:
 
     steps:
       - name: Check out exact branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: agent/kairos-shopify-admin-release-v1
           fetch-depth: 0
