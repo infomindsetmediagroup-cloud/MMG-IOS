@@ -50,7 +50,7 @@ jobs:
             --data "${payload}"
 
       - name: Check out exact revision
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Validate Shopify Admin auth and dashboard contracts
         run: |
