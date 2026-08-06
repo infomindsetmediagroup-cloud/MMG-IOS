@@ -65,10 +65,10 @@ for (const file of lockedFiles) {
 }
 
 const workflow = await read('.github/workflows/deploy-kairos-canonical-worker.yml');
-if (!workflow.includes('test:manuscript-orchestration')) {
+if (!workflow.includes('playwright.manuscript-orchestration.config.mjs')) {
   fail('canonical workflow must execute the manuscript orchestration E2E test');
 }
-if (!workflow.includes('validate:kairos-manuscript-governance')) {
+if (!workflow.includes('node scripts/validate-kairos-manuscript-governance.mjs')) {
   fail('canonical workflow must execute this governance validator');
 }
 
