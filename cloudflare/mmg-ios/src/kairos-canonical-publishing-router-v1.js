@@ -7,13 +7,14 @@ import {
   assertShopifyDraftAuthorization,
   assertShopifyPublishAuthorization,
   canonicalContractSnapshot,
+  canonicalCustomerPackageFiles,
   canonicalizePipelineRecord,
 } from "./kairos-canonical-publishing-contract-v1.js";
 
 export const KAIROS_CANONICAL_PUBLISHING_ROUTER_BUILD =
-  "kairos-canonical-publishing-router-20260806-1";
+  "kairos-canonical-publishing-router-20260806-2";
 
-const ROUTE = /^\/api\/kairos\/publishing\/manuscripts\/([a-z0-9-]{8,})(?:\/(status|digital-asset|shopify-draft|shopify-publish))?$/i;
+const ROUTE = /^\/api\/kairos\/publishing\/manuscripts\/([a-z0-9-]{8,})(?:\/(status|digital-asset|package|shopify-draft|shopify-publish))?$/i;
 
 export async function handleCanonicalPublishingRequest(
   request,
@@ -54,6 +55,44 @@ export async function handleCanonicalPublishingRequest(
         projectId,
         action,
         enforceCanonicalPackage: false,
+      });
+    }
+
+    if (action === "package") {
+      if (request.method !== "GET") return methodNotAllowed("GET");
+      const current = await readCanonicalPipelineRecord(
+        request,
+        manuscriptPipeline,
+        env,
+        projectId,
+      );
+      const normalized = assertCanonicalPackageReady(current);
+      const delegated = await delegatePackage(
+        request,
+        manuscriptPipeline,
+        env,
+        projectId,
+      );
+      if (!delegated.ok) {
+        return decoratePipelineResponse(delegated, {
+          projectId,
+          action,
+          enforceCanonicalPackage: false,
+        });
+      }
+      const expected = canonicalCustomerPackageFiles(normalized.metadata.title);
+      const headers = new Headers(delegated.headers);
+      headers.set(
+        "Content-Disposition",
+        `attachment; filename="${expected.archive.replace(/["\r\n]/g, "")}"`,
+      );
+      for (const [key, value] of canonicalHeaders(projectId, action)) {
+        headers.set(key, value);
+      }
+      return new Response(delegated.body, {
+        status: delegated.status,
+        statusText: delegated.statusText,
+        headers,
       });
     }
 
@@ -143,6 +182,8 @@ export function canonicalRouteSnapshot() {
       "GET /api/kairos/publishing/manuscripts/:projectId/status",
     digitalAsset:
       "POST /api/kairos/publishing/manuscripts/:projectId/digital-asset",
+    package:
+      "GET /api/kairos/publishing/manuscripts/:projectId/package",
     shopifyDraft:
       "POST /api/kairos/publishing/manuscripts/:projectId/shopify-draft",
     shopifyPublish:
@@ -209,6 +250,36 @@ async function delegate(
       502,
       "CANONICAL_PIPELINE_DELEGATE_MISSING",
       "The manuscript pipeline did not return an executable response.",
+    );
+  }
+  return response;
+}
+
+async function delegatePackage(
+  request,
+  manuscriptPipeline,
+  env,
+  projectId,
+) {
+  const origin = new URL(request.url).origin;
+  const headers = new Headers(request.headers);
+  headers.set("X-Kairos-Canonical-Publishing", KAIROS_CANONICAL_PUBLISHING_ROUTER_BUILD);
+  headers.set(
+    "X-Kairos-Canonical-Contract",
+    KAIROS_CANONICAL_PUBLISHING_CONTRACT_BUILD,
+  );
+  const response = await manuscriptPipeline(
+    new Request(
+      `${origin}/api/admin-asset-vault/projects/${encodeURIComponent(projectId)}/package`,
+      { method: "GET", headers },
+    ),
+    env,
+  );
+  if (!(response instanceof Response)) {
+    throw routeError(
+      502,
+      "CANONICAL_PACKAGE_DELEGATE_MISSING",
+      "The customer package route did not return an executable response.",
     );
   }
   return response;
