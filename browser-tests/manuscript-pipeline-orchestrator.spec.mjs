@@ -15,7 +15,7 @@ const finalControlOwnerSource = readFileSync(
 );
 
 const PROJECT_ID = "manuscript-studio-a2z-project";
-const PACKAGE_CONTRACT = "mmg-locked-five-asset-kdp-delivery-package-v1";
+const PACKAGE_CONTRACT = "mmg-digital-asset-edition-v2-customer-package-v1";
 
 function baseHTML(body) {
   return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>${body}</body></html>`;
@@ -199,8 +199,8 @@ test("approved editorial state manufactures a downloadable delivery package", as
   expect(runRequests).toBe(1);
 });
 
-test("final deliverable control manufactures directly through the locked five-file builder", async ({ page }) => {
-  const calls = { retiredPipeline: 0, fiveFileBuilder: 0 };
+test("final deliverable control manufactures directly through the canonical six-file Digital Asset Edition V2 builder", async ({ page }) => {
+  const calls = { retiredPipeline: 0, digitalAssetV2Builder: 0 };
 
   await page.route("https://kairos.test/**", async route => {
     const request = route.request();
@@ -245,7 +245,7 @@ test("final deliverable control manufactures directly through the locked five-fi
     }
 
     if (request.method() === "POST" && url.pathname.endsWith("/deliverables/build")) {
-      calls.fiveFileBuilder += 1;
+      calls.digitalAssetV2Builder += 1;
       return route.fulfill({
         status: 201,
         contentType: "application/json",
@@ -254,24 +254,26 @@ test("final deliverable control manufactures directly through the locked five-fi
           packageContract: PACKAGE_CONTRACT,
           manuscriptAuthority: "checksum-verified-final-editorial-version",
           deliverablesBuild: {
-            id: "five-file-build-123",
+            id: "digital-asset-v2-build-123",
             status: "COMPLETED",
             metadata: {
               workingTitle: "Recovered Final Package",
-              author: "MMG Test Author",
+              publisher: "Mindset Media Group™",
               manuscriptAuthority: "checksum-verified-final-editorial-version",
               packageContract: PACKAGE_CONTRACT,
-              packageFileCount: 5,
+              packageFileCount: 6,
               packageContentsVerified: true,
-              uploadedCoverIncluded: true,
+              approvedCoverIncluded: true,
+              pageCount: 124,
             },
             artifacts: [
-              { kind: "GOLD_MASTER_DOCX", filename: "Recovered_Final_Package_Gold_Master.docx", byteSize: 5100, sha256: "a".repeat(64) },
-              { kind: "DIGITAL_ASSET_PDF", filename: "Recovered_Final_Package_Digital_Asset.pdf", byteSize: 5200, sha256: "b".repeat(64) },
-              { kind: "KDP_INTERIOR_PDF", filename: "Recovered_Final_Package_Interior.pdf", byteSize: 5300, sha256: "c".repeat(64) },
-              { kind: "KDP_FULL_WRAP_COVER_PDF", filename: "Recovered_Final_Package_Full_Wrap.pdf", byteSize: 5400, sha256: "d".repeat(64) },
-              { kind: "STANDALONE_COVER_IMAGE", filename: "Recovered_Final_Package_Cover.png", byteSize: 5500, sha256: "e".repeat(64) },
-              { kind: "ZIP_ARCHIVE", filename: "Recovered_Final_Package_Complete_Delivery_Package.zip", byteSize: 9000, sha256: "f".repeat(64) },
+              { kind: "CUSTOMER_SPEC_SHEET_PDF", filename: "Recovered-Final-Package_Customer-Spec-Sheet.pdf", byteSize: 5100, sha256: "a".repeat(64) },
+              { kind: "KDP_INTERIOR_PDF", filename: "Recovered-Final-Package_KDP-Interior_6x9.pdf", byteSize: 5200, sha256: "b".repeat(64) },
+              { kind: "DIGITAL_EDITION_V2_PDF", filename: "Recovered-Final-Package_Digital-Edition-V2.pdf", byteSize: 5300, sha256: "c".repeat(64) },
+              { kind: "COVER_PORTRAIT_PNG", filename: "Recovered-Final-Package_Cover-Portrait_2048x3072.png", byteSize: 5400, sha256: "d".repeat(64) },
+              { kind: "COVER_THUMBNAIL_PNG", filename: "Recovered-Final-Package_Cover-Thumbnail_2048x2048.png", byteSize: 5500, sha256: "e".repeat(64) },
+              { kind: "README_TXT", filename: "Recovered-Final-Package_README.txt", byteSize: 5600, sha256: "f".repeat(64) },
+              { kind: "ZIP_ARCHIVE", filename: "Recovered-Final-Package_Digital-Asset-Edition-V2_Customer-Package.zip", byteSize: 9000, sha256: "0".repeat(64) },
             ],
           },
         }),
@@ -295,12 +297,14 @@ test("final deliverable control manufactures directly through the locked five-fi
 
   const pipeline = page.locator("#manuscript-auto-pipeline");
   await expect(pipeline).toContainText("Recovered Final Package", { timeout: 5_000 });
-  await expect(pipeline).toContainText("Exactly five customer deliverables are ready.");
-  await expect(pipeline).toContainText("Recovered_Final_Package_Gold_Master.docx");
-  await expect(pipeline).toContainText("Recovered_Final_Package_Digital_Asset.pdf");
-  await expect(pipeline).toContainText("Recovered_Final_Package_Interior.pdf");
-  await expect(pipeline).toContainText("Recovered_Final_Package_Full_Wrap.pdf");
-  await expect(pipeline).toContainText("Recovered_Final_Package_Cover.png");
+  await expect(pipeline).toContainText("Exactly six customer-facing deliverables are ready.");
+  await expect(pipeline).toContainText("Recovered-Final-Package_Customer-Spec-Sheet.pdf");
+  await expect(pipeline).toContainText("Recovered-Final-Package_KDP-Interior_6x9.pdf");
+  await expect(pipeline).toContainText("Recovered-Final-Package_Digital-Edition-V2.pdf");
+  await expect(pipeline).toContainText("Recovered-Final-Package_Cover-Portrait_2048x3072.png");
+  await expect(pipeline).toContainText("Recovered-Final-Package_Cover-Thumbnail_2048x2048.png");
+  await expect(pipeline).toContainText("Recovered-Final-Package_README.txt");
+  await expect(pipeline).not.toContainText(".docx");
   const download = pipeline.getByRole("link", { name: "Download Complete Package" });
   await expect(download).toBeVisible();
   await expect(download).toHaveAttribute(
@@ -310,10 +314,10 @@ test("final deliverable control manufactures directly through the locked five-fi
 
   const snapshot = await page.evaluate(() => window.KairosManuscriptFinalDeliverableEngine.snapshot());
   const owner = await page.evaluate(() => window.KairosManuscriptFinalDeliverableControlOwner.snapshot());
-  expect(snapshot.engine).toBe("five-file-deterministic-deliverables");
+  expect(snapshot.engine).toBe("canonical-digital-asset-edition-v2");
   expect(snapshot.phase).toBe("ready");
   expect(snapshot.packageContract).toBe(PACKAGE_CONTRACT);
-  expect(snapshot.lastRecord.vault.integrity.assetCount).toBe(5);
+  expect(snapshot.lastRecord.vault.integrity.assetCount).toBe(6);
   expect(owner.claimedManufacture).toBeGreaterThanOrEqual(1);
-  expect(calls).toEqual({ retiredPipeline: 0, fiveFileBuilder: 1 });
+  expect(calls).toEqual({ retiredPipeline: 0, digitalAssetV2Builder: 1 });
 });

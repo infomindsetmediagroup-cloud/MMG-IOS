@@ -4,20 +4,26 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - "cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v3.js"
+      - "cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v4.js"
       - "cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-digital-asset-edition-v2-contract-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-creation-artifacts-v1.js"
       - "cloudflare/mmg-ios/test/kairos-manuscript-canonical-package-assets.test.js"
       - "cloudflare/mmg-ios/test/kairos-manuscript-approved-editorial-deliverables.test.js"
       - "cloudflare/mmg-ios/test/kairos-manuscript-legacy-setup-normalization.test.js"
       - "web/kairos-dashboard/index.html"
+      - "web/kairos-dashboard/manuscript.html"
       - "web/kairos-dashboard/scripts/manuscript-dashboard-route-bridge.js"
+      - "web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js"
       - "test/kairos-dashboard-root-route.test.mjs"
       - "browser-tests/manuscript-final-delivery-navigation.spec.mjs"
+      - "browser-tests/manuscript-final-delivery-control.spec.mjs"
+      - "docs/canonical/MMG-DIGITAL-ASSET-EDITION-V2.md"
       - ".github/workflows/manuscript-canonical-package-assets.yml"
   push:
     branches:
       - main
-      - "fix/canonical-dashboard-manufacturing-flow-*"
+      - "fix/canonical-digital-asset-v2-*"
 
 permissions:
   contents: read
@@ -25,7 +31,7 @@ permissions:
 jobs:
   verify-canonical-package:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -33,13 +39,18 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
-      - name: Validate syntax
+      - name: Validate syntax and package authority
         run: |
-          node --check cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v3.js
+          node --check cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v4.js
           node --check cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-digital-asset-edition-v2-contract-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-creation-artifacts-v1.js
           node --check web/kairos-dashboard/scripts/manuscript-dashboard-route-bridge.js
           node --check web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js
-      - name: Verify dashboard root and five-file manufacturing
+          grep -q 'mmg-digital-asset-edition-v2-customer-package-v1' cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v4.js
+          grep -q 'packageFileCount: 6' cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v4.js
+          ! test -e cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v3.js
+      - name: Verify dashboard root and six-file manufacturing
         run: |
           node --test \
             test/kairos-dashboard-root-route.test.mjs \
@@ -48,8 +59,12 @@ jobs:
             cloudflare/mmg-ios/test/kairos-manuscript-legacy-setup-normalization.test.js
       - name: Install WebKit
         run: npx playwright install --with-deps webkit > /dev/null
-      - name: Verify final-state navigation
-        run: npx playwright test browser-tests/manuscript-final-delivery-navigation.spec.mjs --project=webkit --workers=1
+      - name: Verify final-state navigation and package control
+        run: |
+          npx playwright test \
+            browser-tests/manuscript-final-delivery-navigation.spec.mjs \
+            browser-tests/manuscript-final-delivery-control.spec.mjs \
+            --project=webkit --workers=1
       - name: Validate Worker bundle
         working-directory: cloudflare/mmg-ios
         run: |

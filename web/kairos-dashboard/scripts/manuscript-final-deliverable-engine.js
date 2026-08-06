@@ -1,19 +1,20 @@
 (() => {
-  const BUILD = "kairos-manuscript-final-delivery-control-20260805-5-five-file-route";
-  const CERTIFIED_SNAPSHOT_BUILD = "kairos-manuscript-final-deliverable-engine-20260805-2";
-  const PACKAGE_CONTRACT = "mmg-locked-five-asset-kdp-delivery-package-v1";
+  const BUILD = "kairos-manuscript-final-delivery-control-20260805-6-canonical-digital-asset-v2";
+  const CERTIFIED_SNAPSHOT_BUILD = "kairos-manuscript-final-deliverable-engine-20260805-3";
+  const PACKAGE_CONTRACT = "mmg-digital-asset-edition-v2-customer-package-v1";
   const REQUIRED_KINDS = new Set([
-    "GOLD_MASTER_DOCX",
-    "DIGITAL_ASSET_PDF",
+    "CUSTOMER_SPEC_SHEET_PDF",
     "KDP_INTERIOR_PDF",
-    "KDP_FULL_WRAP_COVER_PDF",
-    "STANDALONE_COVER_IMAGE",
+    "DIGITAL_EDITION_V2_PDF",
+    "COVER_PORTRAIT_PNG",
+    "COVER_THUMBNAIL_PNG",
+    "README_TXT",
   ]);
   const GLOBAL_KEY = "__KAIROS_MANUSCRIPT_FINAL_DELIVERABLE_ENGINE__";
   const ACTIVE_KEY = "kairos.production.active-workspace";
   const READ_TIMEOUT_MS = 15_000;
-  const WRITE_TIMEOUT_MS = 180_000;
-  const AUTO_TRIGGER_KEY = "kairos.final-delivery.auto-triggered.v5";
+  const WRITE_TIMEOUT_MS = 240_000;
+  const AUTO_TRIGGER_KEY = "kairos.final-delivery.auto-triggered.v6";
 
   const state = {
     busy: false,
@@ -22,7 +23,7 @@
     phase: "waiting",
     lastError: "",
     lastRecord: null,
-    engine: "five-file-deterministic-deliverables",
+    engine: "canonical-digital-asset-edition-v2",
     autoTriggered: false,
   };
 
@@ -54,8 +55,8 @@
     panel.innerHTML = `
       <div class="kairos-final-delivery-copy">
         <p class="kairos-final-delivery-eyebrow">Final delivery</p>
-        <strong data-kairos-final-delivery-title>Produce the five-file delivery package</strong>
-        <span data-kairos-final-delivery-status>Gold Master DOCX, Digital PDF, KDP Interior, KDP Full Wrap, and the saved cover image.</span>
+        <strong data-kairos-final-delivery-title>Produce the Digital Asset Edition V2 package</strong>
+        <span data-kairos-final-delivery-status>Spec Sheet, KDP Interior, Digital Edition V2, portrait cover, square thumbnail, and README.</span>
       </div>
       <div class="kairos-final-delivery-actions">
         <button type="button" data-kairos-final-delivery-run>Produce Final Deliverable</button>
@@ -86,25 +87,25 @@
     state.busy = true;
     state.projectId = projectId;
     state.operationId = createId();
-    state.phase = "manufacturing-five-file-package";
+    state.phase = "manufacturing-canonical-digital-asset-v2";
     state.lastError = "";
     state.lastRecord = null;
     disableButtons(true);
     hideDownload();
 
     try {
-      updateControl("working", "Manufacturing the five-file package", "The old 12-artifact package is not accepted or reused.");
+      updateControl("working", "Manufacturing Digital Asset Edition V2", "All retired package contracts will be rejected and replaced.");
       let body;
       try {
-        body = await buildFiveFilePackage(projectId);
+        body = await buildCanonicalPackage(projectId);
       } catch (firstError) {
         if (!needsEditorialPreparation(firstError)) throw firstError;
         updateControl("working", "Preparing approved editorial state", message(firstError));
         await prepareEditorial(projectId);
-        body = await buildFiveFilePackage(projectId);
+        body = await buildCanonicalPackage(projectId);
       }
 
-      const record = requireFiveFileRecord(projectId, body);
+      const record = requireCanonicalRecord(projectId, body);
       state.lastRecord = record;
       state.phase = "ready";
       renderPackage(record);
@@ -130,9 +131,9 @@
     disableButtons(true);
     hideDownload();
     try {
-      updateControl("working", "Checking the saved package", "Only the locked five-file package will be accepted.");
+      updateControl("working", "Checking the saved package", "Only the canonical six-file Digital Asset Edition V2 package will be accepted.");
       const body = await requestJSON(`${route(projectId)}/deliverables/build`, { method: "GET" }, READ_TIMEOUT_MS);
-      const record = requireFiveFileRecord(projectId, body);
+      const record = requireCanonicalRecord(projectId, body);
       state.lastRecord = record;
       state.phase = "ready";
       renderPackage(record);
@@ -140,8 +141,8 @@
     } catch (error) {
       state.lastError = message(error);
       renderFailure(
-        /package contract|five required/i.test(state.lastError)
-          ? "The saved package is the retired 12-artifact build. Press Produce Final Deliverable to replace it."
+        /package contract|six required|retired/i.test(state.lastError)
+          ? "The saved package uses a retired contract. Press Produce Final Deliverable to replace it with Digital Asset Edition V2."
           : state.lastError,
       );
       return null;
@@ -151,36 +152,37 @@
     }
   }
 
-  async function buildFiveFilePackage(projectId) {
+  async function buildCanonicalPackage(projectId) {
     return requestJSON(`${route(projectId)}/deliverables/build`, post({
-      confirmation: "MANUFACTURE DELIVERY PACKAGE",
+      confirmation: "MANUFACTURE DIGITAL ASSET EDITION V2",
       actor: "MMG Executive",
       sourceMode: "approved-editorial-version",
       packageContract: PACKAGE_CONTRACT,
       replaceRetiredPackage: true,
+      canvaExcluded: true,
     }), WRITE_TIMEOUT_MS);
   }
 
-  function requireFiveFileRecord(projectId, body) {
+  function requireCanonicalRecord(projectId, body) {
     const build = body?.deliverablesBuild || body?.buildRecord || body;
     if (!build || String(build.status || "").toUpperCase() !== "COMPLETED") {
-      throw new Error(body?.error?.message || "The five-file deliverables builder did not complete.");
+      throw new Error(body?.error?.message || "The Digital Asset Edition V2 builder did not complete.");
     }
 
     const contract = body?.packageContract || build?.metadata?.packageContract || "";
     if (contract !== PACKAGE_CONTRACT) {
-      throw new Error(`Saved package contract is ${contract || "unknown"}, not the locked five-file package contract.`);
+      throw new Error(`Saved package contract is ${contract || "unknown"}, not the canonical Digital Asset Edition V2 contract.`);
     }
 
     const artifacts = Array.isArray(build.artifacts) ? build.artifacts : [];
     const packageFiles = artifacts.filter(asset => asset?.kind !== "ZIP_ARCHIVE");
     const kinds = new Set(packageFiles.map(asset => asset?.kind));
     const missing = [...REQUIRED_KINDS].filter(kind => !kinds.has(kind));
-    if (packageFiles.length !== 5 || missing.length) {
-      throw new Error(`The package does not contain the five required deliverables${missing.length ? `; missing ${missing.join(", ")}` : ""}.`);
+    if (packageFiles.length !== 6 || missing.length) {
+      throw new Error(`The package does not contain the six required customer deliverables${missing.length ? `; missing ${missing.join(", ")}` : ""}.`);
     }
     if (packageFiles.some(asset => Number(asset?.byteSize || 0) <= 0)) {
-      throw new Error("One or more five-file deliverables are empty.");
+      throw new Error("One or more Digital Asset Edition V2 deliverables are empty.");
     }
 
     return {
@@ -188,16 +190,17 @@
       projectId,
       packageContract: contract,
       metadata: {
-        title: build?.metadata?.workingTitle || "Complete publishing package",
-        author: build?.metadata?.author || "Mindset Media Group",
+        title: build?.metadata?.workingTitle || "Digital Asset Edition V2",
+        publisher: build?.metadata?.publisher || "Mindset Media Group™",
+        pageCount: Number(build?.metadata?.pageCount || 0),
       },
       vault: {
         assets: packageFiles,
         packageDownloadURL: `${route(projectId)}/deliverables/zip?contract=${encodeURIComponent(PACKAGE_CONTRACT)}&build=${encodeURIComponent(build.id || Date.now())}`,
-        integrity: { passed: true, assetCount: 5 },
+        integrity: { passed: true, assetCount: 6 },
       },
       recovery: {
-        engine: "deterministic-deliverables-fallback",
+        engine: "canonical-digital-asset-edition-v2",
         deliverablesBuildId: build.id || null,
       },
     };
@@ -234,7 +237,7 @@
   function renderPackage(record) {
     const assets = record.vault.assets;
     const url = record.vault.packageDownloadURL;
-    updateControl("ready", record.metadata.title, "5 verified deliverables are ready · locked MMG/KDP package");
+    updateControl("ready", record.metadata.title, `6 verified deliverables are ready · ${record.metadata.pageCount || "100+"} substantive pages`);
     const panel = control();
     const download = panel.querySelector("[data-kairos-final-delivery-download]");
     download.hidden = false;
@@ -242,20 +245,20 @@
     download.target = "_blank";
     download.rel = "noopener";
     download.textContent = "Download Complete Package";
-    panel.querySelector("[data-kairos-final-delivery-run]").textContent = "Rebuild Five-File Package";
+    panel.querySelector("[data-kairos-final-delivery-run]").textContent = "Rebuild Digital Asset V2";
 
     const section = ensurePipelineSection();
     section.hidden = false;
     section.innerHTML = `
-      <p class="eyebrow">Locked final delivery package</p>
+      <p class="eyebrow">Canonical Digital Asset Edition V2</p>
       <h3>${escapeHTML(record.metadata.title)}</h3>
-      <p>Exactly five customer deliverables are ready.</p>
+      <p>Exactly six customer-facing deliverables are ready. No source, internal, QA, Canva, DOCX, HTML, Markdown, or JSON files are included.</p>
       <div class="manuscript-manufacturing-grid">
         ${assets.map(asset => `<article><b>${escapeHTML(asset.filename || asset.kind)}</b><p>${escapeHTML(asset.kind)}</p><small>${Number(asset.byteSize || 0).toLocaleString()} bytes</small></article>`).join("")}
       </div>
       <div class="manuscript-actions">
         <a class="primary" href="${escapeHTML(url)}" target="_blank" rel="noopener">Download Complete Package</a>
-        <button type="button" class="secondary" data-kairos-final-delivery-run>Rebuild Five-File Package</button>
+        <button type="button" class="secondary" data-kairos-final-delivery-run>Rebuild Digital Asset V2</button>
       </div>`;
     return record;
   }
@@ -267,7 +270,7 @@
     const section = ensurePipelineSection();
     section.hidden = false;
     section.innerHTML = `
-      <p class="eyebrow">Final delivery package</p>
+      <p class="eyebrow">Digital Asset Edition V2</p>
       <h3>Final package needs attention</h3>
       <p class="manuscript-error" role="alert">${escapeHTML(state.lastError)}</p>
       <div class="manuscript-actions">

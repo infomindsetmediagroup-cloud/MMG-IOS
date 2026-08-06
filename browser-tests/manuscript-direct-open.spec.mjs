@@ -185,7 +185,8 @@ test("legacy advanced manuscript URL redirects before the command runtime and op
   expect(watchdog.requestTimeoutMs).toBe(6_000);
 
   const engine = await page.evaluate(() => window.KairosManuscriptFinalDeliverableEngine.snapshot());
-  expect(engine.build).toBe("kairos-manuscript-final-deliverable-engine-20260804-1");
+  expect(engine.build).toBe("kairos-manuscript-final-delivery-control-20260805-6-canonical-digital-asset-v2");
+  expect(engine.packageContract).toBe("mmg-digital-asset-edition-v2-customer-package-v1");
 
   const guard = await page.evaluate(() => window.KairosManuscriptPostIntakeGuard.snapshot());
   expect(guard.build).toBe("kairos-manuscript-post-intake-guard-20260731-1");

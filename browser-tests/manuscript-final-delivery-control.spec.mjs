@@ -8,13 +8,14 @@ const controlSource = readFileSync(
 
 const PROJECT_ID = "manuscript-final-delivery-control-test";
 const BASE = `/api/production-registry/manuscripts/${PROJECT_ID}`;
-const CONTRACT = "mmg-locked-five-asset-kdp-delivery-package-v1";
-const FIVE = [
-  ["GOLD_MASTER_DOCX", "Verified_Final_Package_Gold_Master.docx"],
-  ["DIGITAL_ASSET_PDF", "Verified_Final_Package_Digital_Asset.pdf"],
-  ["KDP_INTERIOR_PDF", "Verified_Final_Package_Interior.pdf"],
-  ["KDP_FULL_WRAP_COVER_PDF", "Verified_Final_Package_Full_Wrap.pdf"],
-  ["STANDALONE_COVER_IMAGE", "Verified_Final_Package_Cover.png"],
+const CONTRACT = "mmg-digital-asset-edition-v2-customer-package-v1";
+const SIX = [
+  ["CUSTOMER_SPEC_SHEET_PDF", "Verified-Final-Package_Customer-Spec-Sheet.pdf"],
+  ["KDP_INTERIOR_PDF", "Verified-Final-Package_KDP-Interior_6x9.pdf"],
+  ["DIGITAL_EDITION_V2_PDF", "Verified-Final-Package_Digital-Edition-V2.pdf"],
+  ["COVER_PORTRAIT_PNG", "Verified-Final-Package_Cover-Portrait_2048x3072.png"],
+  ["COVER_THUMBNAIL_PNG", "Verified-Final-Package_Cover-Thumbnail_2048x2048.png"],
+  ["README_TXT", "Verified-Final-Package_README.txt"],
 ];
 
 function html() {
@@ -30,22 +31,24 @@ function completedBody() {
   return {
     packageContract: CONTRACT,
     deliverablesBuild: {
-      id: "five-file-build-1",
+      id: "digital-asset-v2-build-1",
       status: "COMPLETED",
       metadata: {
         workingTitle: "Verified Final Package",
+        publisher: "Mindset Media Group™",
         packageContract: CONTRACT,
-        packageFileCount: 5,
+        packageFileCount: 6,
+        pageCount: 124,
       },
       artifacts: [
-        ...FIVE.map(([kind, filename], index) => ({ kind, filename, byteSize: 1024 + index })),
-        { kind: "ZIP_ARCHIVE", filename: "Verified_Final_Package_Complete_Delivery_Package.zip", byteSize: 8192 },
+        ...SIX.map(([kind, filename], index) => ({ kind, filename, byteSize: 2048 + index })),
+        { kind: "ZIP_ARCHIVE", filename: "Verified-Final-Package_Digital-Asset-Edition-V2_Customer-Package.zip", byteSize: 16384 },
       ],
     },
   };
 }
 
-test("Produce Final Deliverable bypasses the old auto-pipeline and manufactures exactly five files", async ({ page }) => {
+test("Produce Final Deliverable manufactures exactly the canonical six-file Digital Asset Edition V2 package", async ({ page }) => {
   const calls = { build: 0, autoPipeline: 0 };
   await page.route("https://kairos.test/**", async route => {
     const request = route.request();
@@ -55,23 +58,14 @@ test("Produce Final Deliverable bypasses the old auto-pipeline and manufactures 
     }
     if (url.pathname.includes("/auto-pipeline")) {
       calls.autoPipeline += 1;
-      return route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          status: "production-ready",
-          vault: {
-            packageDownloadURL: `${BASE}/deliverables/zip`,
-            assets: Array.from({ length: 12 }, (_, index) => ({ filename: `retired-${index}.md` })),
-          },
-        }),
-      });
+      return route.fulfill({ status: 500, body: "retired route must not be used" });
     }
     if (request.method() === "POST" && url.pathname === `${BASE}/deliverables/build`) {
       calls.build += 1;
       const body = request.postDataJSON();
       expect(body.packageContract).toBe(CONTRACT);
       expect(body.replaceRetiredPackage).toBe(true);
+      expect(body.canvaExcluded).toBe(true);
       return route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify(completedBody()) });
     }
     if (request.method() === "GET" && url.pathname === `${BASE}/deliverables/build`) {
@@ -88,17 +82,19 @@ test("Produce Final Deliverable bypasses the old auto-pipeline and manufactures 
 
   const control = page.locator("#kairos-final-delivery-control");
   await expect(control).toBeVisible();
-  await control.getByRole("button", { name: /Produce Final Deliverable|Rebuild Five-File Package/ }).tap();
+  await control.getByRole("button", { name: /Produce Final Deliverable|Rebuild Digital Asset V2/ }).tap();
   await expect(control.getByRole("link", { name: "Download Complete Package" })).toBeVisible();
-  await expect(control).toContainText("5 verified deliverables");
-  await expect(page.locator("#manuscript-auto-pipeline article")).toHaveCount(5);
-  await expect(page.locator("#manuscript-auto-pipeline")).toContainText("Gold_Master.docx");
-  await expect(page.locator("#manuscript-auto-pipeline")).toContainText("Cover.png");
+  await expect(control).toContainText("6 verified deliverables");
+  await expect(page.locator("#manuscript-auto-pipeline article")).toHaveCount(6);
+  await expect(page.locator("#manuscript-auto-pipeline")).toContainText("Customer-Spec-Sheet.pdf");
+  await expect(page.locator("#manuscript-auto-pipeline")).toContainText("Digital-Edition-V2.pdf");
+  await expect(page.locator("#manuscript-auto-pipeline")).toContainText("Cover-Thumbnail_2048x2048.png");
+  await expect(page.locator("#manuscript-auto-pipeline")).not.toContainText(".docx");
   expect(calls.build).toBeGreaterThanOrEqual(1);
   expect(calls.autoPipeline).toBe(0);
 });
 
-test("Check Saved Package refuses a retired 12-artifact package", async ({ page }) => {
+test("Check Saved Package refuses every retired package contract", async ({ page }) => {
   await page.route("https://kairos.test/**", async route => {
     const request = route.request();
     const url = new URL(request.url());
@@ -110,11 +106,11 @@ test("Check Saved Package refuses a retired 12-artifact package", async ({ page 
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          packageContract: "canonical-12-artifact-manuscript-package-v1",
+          packageContract: "mmg-locked-five-asset-kdp-delivery-package-v1",
           deliverablesBuild: {
             status: "COMPLETED",
-            metadata: { packageContract: "canonical-12-artifact-manuscript-package-v1" },
-            artifacts: Array.from({ length: 12 }, (_, index) => ({ kind: `OLD_${index}`, filename: `old-${index}.md`, byteSize: 100 })),
+            metadata: { packageContract: "mmg-locked-five-asset-kdp-delivery-package-v1" },
+            artifacts: Array.from({ length: 5 }, (_, index) => ({ kind: `OLD_${index}`, filename: `old-${index}.pdf`, byteSize: 100 })),
           },
         }),
       });
@@ -129,7 +125,7 @@ test("Check Saved Package refuses a retired 12-artifact package", async ({ page 
   await page.addScriptTag({ content: controlSource });
   const control = page.locator("#kairos-final-delivery-control");
   await control.getByRole("button", { name: "Check Saved Package" }).tap();
-  await expect(control).toContainText("retired 12-artifact build");
+  await expect(control).toContainText("retired contract");
   await expect(control.getByRole("link", { name: "Download Complete Package" })).toBeHidden();
 });
 
