@@ -5,6 +5,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+  workflow_run:
+    workflows:
+      - pages build and deployment
+    types:
+      - completed
 
 concurrency:
   group: kairos-cloudflare-production
@@ -15,6 +20,10 @@ permissions:
 
 jobs:
   deploy:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     name: Deploy mmg-ios production Worker
     timeout-minutes: 20
@@ -22,14 +31,19 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.2.15"
 
-      - name: Install dependencies
+      - name: Install locked dependencies
         run: bun install --frozen-lockfile
+
+      - name: Install Cloudflare Agents SDK
+        run: bun install agents@0.20.0 --no-save
 
       - name: Deploy Kairos Worker to production traffic
         uses: cloudflare/wrangler-action@v3
@@ -53,3 +67,12 @@ jobs:
             https://mmg-ios.info-mindsetmediagroup.workers.dev/api/analytics/shopify \
             | tee /tmp/kairos-shopify-analytics.json
           grep -q '"analytics"' /tmp/kairos-shopify-analytics.json
+
+      - name: Verify canonical publishing contracts
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 45 \
+            https://mmg-ios.info-mindsetmediagroup.workers.dev/api/kairos/publishing/contracts \
+            | tee /tmp/kairos-publishing-contracts.json
+          grep -q 'mmg-digital-asset-edition-v2-customer-package-v1' /tmp/kairos-publishing-contracts.json
+          grep -q 'mmg-shopify-product-publishing-v1' /tmp/kairos-publishing-contracts.json
