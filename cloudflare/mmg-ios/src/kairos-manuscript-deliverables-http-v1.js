@@ -1,9 +1,9 @@
 /**
  * Kairos Manuscript Deliverables — HTTP routing adapter.
  *
- * The deterministic builder manufactures the locked five-file MMG/KDP delivery
- * package. Retired package contracts are never returned as completed customer
- * delivery packages.
+ * The authoritative builder manufactures the canonical six-file MMG Digital
+ * Asset Edition V2 customer package. Every older manuscript or digital-asset
+ * package contract is stale and must be rebuilt before customer delivery.
  */
 
 import {
@@ -12,18 +12,19 @@ import {
   getStoredManuscriptDeliverablesZip,
   KAIROS_MANUSCRIPT_DELIVERABLES_BUILDER_BUILD,
   PACKAGE_CONTRACT,
-} from "./kairos-manuscript-deliverables-builder-v3.js";
+} from "./kairos-manuscript-deliverables-builder-v4.js";
 
 export const KAIROS_MANUSCRIPT_DELIVERABLES_HTTP_BUILD =
-  "kairos-manuscript-deliverables-http-20260805-5-reject-retired-packages";
+  "kairos-manuscript-deliverables-http-20260805-6-canonical-digital-asset-v2";
 
 const ROUTE = /^\/registry\/manuscripts\/([a-z0-9-]{8,})\/deliverables\/(build|zip)$/i;
 const REQUIRED_KINDS = new Set([
-  "GOLD_MASTER_DOCX",
-  "DIGITAL_ASSET_PDF",
+  "CUSTOMER_SPEC_SHEET_PDF",
   "KDP_INTERIOR_PDF",
-  "KDP_FULL_WRAP_COVER_PDF",
-  "STANDALONE_COVER_IMAGE",
+  "DIGITAL_EDITION_V2_PDF",
+  "COVER_PORTRAIT_PNG",
+  "COVER_THUMBNAIL_PNG",
+  "README_TXT",
 ]);
 
 export async function handleManuscriptDeliverablesObjectRequest(state, request, handlers) {
@@ -38,7 +39,7 @@ export async function handleManuscriptDeliverablesObjectRequest(state, request, 
     if (action === "build" && request.method === "POST") {
       const resolved = await resolveApprovedEditorialHandlers(state, projectId, handlers);
       const { build } = await runManuscriptDeliverablesBuild(state, projectId, resolved.handlers);
-      requireLockedPackage(build);
+      requireCanonicalPackage(build);
 
       if (resolved.approvedEditorial) {
         build.metadata = {
@@ -74,7 +75,7 @@ export async function handleManuscriptDeliverablesObjectRequest(state, request, 
         }, 404);
       }
       try {
-        requireLockedPackage(stored);
+        requireCanonicalPackage(stored);
       } catch (error) {
         return stalePackage(error, stored);
       }
@@ -94,12 +95,12 @@ export async function handleManuscriptDeliverablesObjectRequest(state, request, 
           build: KAIROS_MANUSCRIPT_DELIVERABLES_HTTP_BUILD,
           error: {
             code: "manuscript_deliverables_zip_not_found",
-            message: "No locked five-file deliverables ZIP has been generated for this project yet.",
+            message: "No canonical six-file Digital Asset Edition V2 ZIP has been generated for this project yet.",
           },
         }, 404);
       }
       try {
-        requireLockedPackage(stored);
+        requireCanonicalPackage(stored);
       } catch (error) {
         return stalePackage(error, stored);
       }
@@ -111,7 +112,7 @@ export async function handleManuscriptDeliverablesObjectRequest(state, request, 
           build: KAIROS_MANUSCRIPT_DELIVERABLES_HTTP_BUILD,
           error: {
             code: "manuscript_deliverables_zip_not_found",
-            message: "The locked five-file package record exists, but its ZIP bytes are unavailable. Rebuild the final deliverable.",
+            message: "The canonical package record exists, but its ZIP bytes are unavailable. Rebuild the final deliverable.",
           },
         }, 404);
       }
@@ -125,7 +126,7 @@ export async function handleManuscriptDeliverablesObjectRequest(state, request, 
           "Content-Length": String(zipBytes.byteLength),
           "Cache-Control": "no-store, no-cache, must-revalidate",
           "X-Kairos-Manuscript-Package-Contract": PACKAGE_CONTRACT,
-          "X-Kairos-Manuscript-Package-File-Count": "5",
+          "X-Kairos-Manuscript-Package-File-Count": "6",
           "X-Kairos-Manuscript-Deliverables-Http": KAIROS_MANUSCRIPT_DELIVERABLES_HTTP_BUILD,
           "X-Kairos-Manuscript-Deliverables-Builder": KAIROS_MANUSCRIPT_DELIVERABLES_BUILDER_BUILD,
         },
@@ -153,7 +154,7 @@ export async function handleManuscriptDeliverablesObjectRequest(state, request, 
   }
 }
 
-function requireLockedPackage(build) {
+function requireCanonicalPackage(build) {
   const contract = String(build?.metadata?.packageContract || "");
   if (contract !== PACKAGE_CONTRACT) {
     throw fail(409, "retired_manuscript_package_contract", `The stored package uses the retired ${contract || "unknown"} contract and must be rebuilt.`);
@@ -162,11 +163,11 @@ function requireLockedPackage(build) {
   const packageFiles = artifacts.filter((artifact) => artifact?.kind !== "ZIP_ARCHIVE");
   const kinds = new Set(packageFiles.map((artifact) => artifact?.kind));
   const missing = [...REQUIRED_KINDS].filter((kind) => !kinds.has(kind));
-  if (packageFiles.length !== 5 || missing.length) {
-    throw fail(409, "locked_manuscript_package_incomplete", `The stored package is not the locked five-file package${missing.length ? `; missing ${missing.join(", ")}` : ""}.`);
+  if (packageFiles.length !== 6 || missing.length) {
+    throw fail(409, "canonical_digital_asset_v2_package_incomplete", `The stored package is not the canonical six-file Digital Asset Edition V2 package${missing.length ? `; missing ${missing.join(", ")}` : ""}.`);
   }
   if (!artifacts.some((artifact) => artifact?.kind === "ZIP_ARCHIVE")) {
-    throw fail(409, "locked_manuscript_package_zip_missing", "The locked package ZIP record is missing.");
+    throw fail(409, "canonical_digital_asset_v2_package_zip_missing", "The canonical package ZIP record is missing.");
   }
   return build;
 }
@@ -179,7 +180,7 @@ function stalePackage(error, stored) {
     requiredPackageContract: PACKAGE_CONTRACT,
     error: {
       code: error?.code || "retired_manuscript_package_contract",
-      message: error?.message || "The saved package must be rebuilt using the locked five-file contract.",
+      message: error?.message || "The saved package must be rebuilt using the canonical six-file Digital Asset Edition V2 contract.",
     },
   }, 409);
 }
@@ -216,7 +217,7 @@ async function resolveApprovedEditorialHandlers(state, projectId, handlers) {
   }
 
   const manuscript = String(versionBody?.manuscript || "");
-  if (manuscript.trim().length < 50) {
+  if (manuscript.trim().length < 500) {
     throw fail(409, "approved_editorial_incomplete", "The approved final editorial manuscript is incomplete.");
   }
 
