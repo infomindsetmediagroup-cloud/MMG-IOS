@@ -12,7 +12,7 @@ import {
 } from "./kairos-canonical-publishing-contract-v1.js";
 
 export const KAIROS_CANONICAL_PUBLISHING_ROUTER_BUILD =
-  "kairos-canonical-publishing-router-20260806-2";
+  "kairos-canonical-publishing-router-20260806-3";
 
 const ROUTE = /^\/api\/kairos\/publishing\/manuscripts\/([a-z0-9-]{8,})(?:\/(status|digital-asset|package|shopify-draft|shopify-publish))?$/i;
 
@@ -59,7 +59,9 @@ export async function handleCanonicalPublishingRequest(
     }
 
     if (action === "package") {
-      if (request.method !== "GET") return methodNotAllowed("GET");
+      if (request.method !== "GET" && request.method !== "HEAD") {
+        return methodNotAllowed("GET or HEAD");
+      }
       const current = await readCanonicalPipelineRecord(
         request,
         manuscriptPipeline,
@@ -89,7 +91,7 @@ export async function handleCanonicalPublishingRequest(
       for (const [key, value] of canonicalHeaders(projectId, action)) {
         headers.set(key, value);
       }
-      return new Response(delegated.body, {
+      return new Response(request.method === "HEAD" ? null : delegated.body, {
         status: delegated.status,
         statusText: delegated.statusText,
         headers,
@@ -183,7 +185,7 @@ export function canonicalRouteSnapshot() {
     digitalAsset:
       "POST /api/kairos/publishing/manuscripts/:projectId/digital-asset",
     package:
-      "GET /api/kairos/publishing/manuscripts/:projectId/package",
+      "GET|HEAD /api/kairos/publishing/manuscripts/:projectId/package",
     shopifyDraft:
       "POST /api/kairos/publishing/manuscripts/:projectId/shopify-draft",
     shopifyPublish:
@@ -271,7 +273,7 @@ async function delegatePackage(
   const response = await manuscriptPipeline(
     new Request(
       `${origin}/api/admin-asset-vault/projects/${encodeURIComponent(projectId)}/package`,
-      { method: "GET", headers },
+      { method: request.method, headers },
     ),
     env,
   );
@@ -301,10 +303,19 @@ async function decoratePipelineResponse(
 
   const normalized = canonicalizePipelineRecord(body);
   if (enforceCanonicalPackage) assertCanonicalPackageReady(normalized);
+  const result = {
+    ...normalized,
+    canonicalPackage: {
+      ...normalized.canonicalPackage,
+      downloadURL: normalized.canonicalPackage.ready
+        ? `/api/kairos/publishing/manuscripts/${encodeURIComponent(projectId)}/package`
+        : null,
+    },
+  };
 
   return canonicalJSON(
     {
-      ...normalized,
+      ...result,
       canonicalInvocation: {
         projectId,
         action,
