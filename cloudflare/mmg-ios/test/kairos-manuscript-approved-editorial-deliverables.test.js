@@ -78,7 +78,7 @@ test("the canonical package uses only the checksum-verified approved final edito
   const setup = new FormData();
   setup.set("authorName", "Michael King");
   setup.set("publicationTitle", "Approved Editorial Digital Asset");
-  setup.set("service", "digital-asset-edition-v2");
+  setup.set("service", "complete-publishing-package");
   setup.set("edition", "Digital Asset Edition V2.0");
   setup.set("trimSize", "6x9");
   setup.set("isbnStatus", "not-required");
