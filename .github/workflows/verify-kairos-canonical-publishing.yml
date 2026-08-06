@@ -1,0 +1,48 @@
+name: Verify Kairos Canonical Publishing
+
+on:
+  pull_request:
+    paths:
+      - "cloudflare/mmg-ios/**"
+      - "docs/canonical/KAIROS-MANUSCRIPT-SHOPIFY-PUBLISHING-V1.md"
+      - ".github/workflows/verify-kairos-canonical-publishing.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kairos-canonical-publishing-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: cloudflare/mmg-ios
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cloudflare/mmg-ios/package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Run canonical publishing tests
+        run: >-
+          node --test
+          test/kairos-canonical-publishing-contract-v1.test.js
+          test/kairos-canonical-publishing-router-v1.test.js
+          test/kairos-canonical-publishing-entry-v1.test.js
+
+      - name: Validate Worker bundle and bindings
+        run: npx wrangler deploy --dry-run
