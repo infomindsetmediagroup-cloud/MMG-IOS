@@ -214,7 +214,7 @@ test("root dashboard cannot retain a legacy embedded manuscript runtime", async 
   const url = new URL(page.url());
   expect(url.searchParams.get("open")).toBe("manuscript");
   expect(url.searchParams.get("project")).toBe(projectId);
-  expect(url.searchParams.get("release")).toBe("manuscript-command-center-root-20260805-2");
+  expect(url.searchParams.get("release")).toBe("manuscript-command-center-root-20260805-3");
   expect(url.searchParams.get("reason")).toBe("embedded-runtime-mutation");
 });
 
