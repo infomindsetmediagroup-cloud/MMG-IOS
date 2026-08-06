@@ -9,8 +9,11 @@ import {
   assertShopifyDraftAuthorization,
   assertShopifyPublishAuthorization,
   canonicalContractSnapshot,
+  canonicalCustomerArtifactFilename,
   canonicalCustomerPackageFiles,
+  canonicalizePipelineRecord,
   canonicalizePublicationMetadata,
+  sanitizeCanonicalPublicRecord,
 } from "../src/kairos-canonical-publishing-contract-v1.js";
 
 test("builds the exact six-file Digital Asset V2 customer package", () => {
@@ -30,6 +33,23 @@ test("builds the exact six-file Digital Asset V2 customer package", () => {
   );
 });
 
+test("maps existing manufacturing artifact names to canonical customer filenames", () => {
+  assert.equal(
+    canonicalCustomerArtifactFilename(
+      "customer-spec-sheet.pdf",
+      "AI Prompting for Beginners",
+    ),
+    "AI-Prompting-for-Beginners_Customer-Spec-Sheet.pdf",
+  );
+  assert.equal(
+    canonicalCustomerArtifactFilename(
+      "complete-production-package.zip",
+      "AI Prompting for Beginners",
+    ),
+    "AI-Prompting-for-Beginners_Digital-Asset-Edition-V2_Customer-Package.zip",
+  );
+});
+
 test("locks every public identity field to Mindset Media Group", () => {
   const metadata = canonicalizePublicationMetadata({
     title: "Creator Systems",
@@ -44,14 +64,31 @@ test("locks every public identity field to Mindset Media Group", () => {
   assert.equal(metadata.contracts.digitalAsset, MMG_DIGITAL_ASSET_CONTRACT_ID);
 });
 
-test("rejects prohibited personal attribution anywhere in public data", () => {
+test("rejects prohibited personal attribution anywhere in public input", () => {
   assert.throws(
-    () => assertNoForbiddenPublicIdentity({ seo: { description: "Written by Michael King" } }),
+    () =>
+      assertNoForbiddenPublicIdentity({
+        seo: { description: "Written by Michael King" },
+      }),
     (error) => error.code === "FORBIDDEN_PUBLIC_IDENTITY" && error.status === 422,
   );
 });
 
-test("rejects noncanonical author identity", () => {
+test("sanitizes legacy public records before they cross the canonical boundary", () => {
+  const sanitized = sanitizeCanonicalPublicRecord({
+    author: "Michael King",
+    vendor: "Michael King",
+    description: "A guide written by Michael King.",
+  });
+  assert.equal(sanitized.author, "Mindset Media Group™");
+  assert.equal(sanitized.vendor, "Mindset Media Group");
+  assert.equal(
+    sanitized.description,
+    "A guide written by Mindset Media Group™.",
+  );
+});
+
+test("rejects noncanonical author identity in direct publication metadata", () => {
   assert.throws(
     () => canonicalizePublicationMetadata({ title: "Test", author: "Another Author" }),
     (error) => error.code === "NONCANONICAL_PUBLIC_IDENTITY",
@@ -60,11 +97,15 @@ test("rejects noncanonical author identity", () => {
 
 test("requires exact Shopify draft and live confirmations", () => {
   assert.equal(
-    assertShopifyDraftAuthorization({ confirmation: CANONICAL_CONFIRMATIONS.shopifyDraft }),
+    assertShopifyDraftAuthorization({
+      confirmation: CANONICAL_CONFIRMATIONS.shopifyDraft,
+    }),
     true,
   );
   assert.equal(
-    assertShopifyPublishAuthorization({ confirmation: CANONICAL_CONFIRMATIONS.shopifyPublish }),
+    assertShopifyPublishAuthorization({
+      confirmation: CANONICAL_CONFIRMATIONS.shopifyPublish,
+    }),
     true,
   );
   assert.throws(
@@ -77,7 +118,7 @@ test("requires exact Shopify draft and live confirmations", () => {
   );
 });
 
-test("accepts only a complete canonical package before Shopify handoff", () => {
+test("accepts a complete exact-name canonical package before Shopify handoff", () => {
   const expected = canonicalCustomerPackageFiles("Creator Systems");
   const record = {
     status: "production-ready",
@@ -97,6 +138,34 @@ test("accepts only a complete canonical package before Shopify handoff", () => {
   const validated = assertCanonicalPackageReady(record);
   assert.equal(validated.canonicalPackage.ready, true);
   assert.deepEqual(validated.canonicalPackage.missingFiles, []);
+});
+
+test("accepts the existing manufacturing record after canonical alias normalization", () => {
+  const record = {
+    status: "production-ready",
+    metadata: {
+      title: "Creator Systems",
+      author: "Michael King",
+      publisher: "Mindset Media Group",
+    },
+    vault: {
+      integrity: { passed: true },
+      assets: [
+        { filename: "customer-spec-sheet.pdf" },
+        { filename: "kdp-interior-6x9.pdf" },
+        { filename: "digital-asset-edition-v2.pdf" },
+        { filename: "cover-portrait-2048x3072.png" },
+        { filename: "cover-thumbnail-2048x2048.png" },
+        { filename: "README.txt" },
+        { filename: "complete-production-package.zip" },
+      ],
+    },
+  };
+  const validated = canonicalizePipelineRecord(record);
+  assert.equal(validated.metadata.author, "Mindset Media Group™");
+  assert.equal(validated.metadata.publisher, "Mindset Media Group™");
+  assert.equal(validated.canonicalPackage.ready, true);
+  assert.equal(validated.canonicalPackage.sourceAliases.length, 7);
 });
 
 test("blocks Shopify handoff when any customer deliverable is absent", () => {
@@ -123,10 +192,33 @@ test("blocks Shopify handoff when any customer deliverable is absent", () => {
   );
 });
 
+test("blocks Shopify handoff when integrity was not positively verified", () => {
+  const expected = canonicalCustomerPackageFiles("Creator Systems");
+  assert.throws(
+    () =>
+      assertCanonicalPackageReady({
+        metadata: {
+          title: "Creator Systems",
+          author: "Mindset Media Group™",
+          publisher: "Mindset Media Group™",
+        },
+        vault: {
+          integrity: { passed: false },
+          assets: [
+            ...expected.customerFiles.map((filename) => ({ filename })),
+            { filename: expected.archive },
+          ],
+        },
+      }),
+    (error) => error.code === "CANONICAL_CUSTOMER_PACKAGE_INCOMPLETE",
+  );
+});
+
 test("exposes both canonical invocation contracts", () => {
   const snapshot = canonicalContractSnapshot();
   assert.equal(snapshot.digitalAsset.exactCustomerFileCount, 6);
   assert.equal(snapshot.digitalAsset.minimumFinishedPages, 100);
+  assert.equal(snapshot.digitalAsset.legacySourceAliasesNormalized, true);
   assert.equal(snapshot.shopify.draftFirst, true);
   assert.equal(snapshot.shopify.livePublishRequiresSeparateApproval, true);
 });
