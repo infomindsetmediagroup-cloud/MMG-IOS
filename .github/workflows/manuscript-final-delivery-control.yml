@@ -4,47 +4,21 @@ on:
   push:
     branches:
       - main
-      - fix/live-five-file-route-20260805
+      - fix/canonical-digital-asset-v2-main-20260805
   pull_request:
     branches:
       - main
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate-final-delivery:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Load the five-file route with a fresh cache key
-        if: github.event_name == 'push' && github.ref == 'refs/heads/fix/live-five-file-route-20260805'
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('web/kairos-dashboard/manuscript.html')
-          text = path.read_text()
-          old = 'kairos-manuscript-final-delivery-control-20260804-4'
-          new = 'kairos-manuscript-final-delivery-control-20260805-5-five-file-route'
-          text = text.replace(old, new)
-          path.write_text(text)
-          PY
-          if git diff --quiet -- web/kairos-dashboard/manuscript.html; then
-            echo "Five-file route cache key already current."
-          else
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add web/kairos-dashboard/manuscript.html
-            git commit -m "Load the live five-file Final Delivery route"
-            git push origin HEAD:${GITHUB_REF_NAME}
-          fi
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -54,27 +28,35 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
 
-      - name: Validate five-file route contracts
+      - name: Validate canonical Digital Asset Edition V2 contracts
         run: |
-          node --check web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js
+          node --check cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v4.js
           node --check cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js
-          grep -q 'kairos-manuscript-final-delivery-control-20260805-5-five-file-route' web/kairos-dashboard/manuscript.html
-          grep -q 'mmg-locked-five-asset-kdp-delivery-package-v1' web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js
-          grep -q 'replaceRetiredPackage' web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js
-          grep -q 'retired_manuscript_package_contract' cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js
-          ! grep -q 'buildCanonical' web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js
-          ! grep -q '/auto-pipeline/run' web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js
+          node --check cloudflare/mmg-ios/src/kairos-digital-asset-edition-v2-contract-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-creation-artifacts-v1.js
+          node --check web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js
+          grep -q 'mmg-digital-asset-edition-v2-customer-package-v1' cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v4.js
+          grep -q 'packageFileCount: 6' cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v4.js
+          grep -q 'MINIMUM_FINISHED_PAGES' cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v4.js
+          grep -q 'canvaExcluded: true' cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v4.js
+          grep -q 'Digital-Asset-Edition-V2_Customer-Package.zip' cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v4.js
+          grep -q 'X-Kairos-Manuscript-Package-File-Count.*6' cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js
+          grep -q 'ensureManufacturingSetup' cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js
+          ! grep -q 'mmg-locked-five-asset-kdp-delivery-package-v1' cloudflare/mmg-ios/src/kairos-manuscript-deliverables-http-v1.js
+          ! grep -q 'GOLD_MASTER_DOCX' web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js
+          ! grep -q 'KDP_FULL_WRAP_COVER_PDF' web/kairos-dashboard/scripts/manuscript-final-deliverable-engine.js
 
-      - name: Verify backend five-file package
+      - name: Verify exact six-file customer package, approved editorial authority, and legacy setup preservation
         run: |
           node --test \
             cloudflare/mmg-ios/test/kairos-manuscript-canonical-package-assets.test.js \
-            cloudflare/mmg-ios/test/kairos-manuscript-approved-editorial-deliverables.test.js
+            cloudflare/mmg-ios/test/kairos-manuscript-approved-editorial-deliverables.test.js \
+            cloudflare/mmg-ios/test/kairos-manuscript-legacy-setup-normalization.test.js
 
       - name: Install WebKit
         run: npx playwright install --with-deps webkit > /dev/null
 
-      - name: Verify the actual Final Delivery control path
+      - name: Verify browser final-delivery control
         run: |
           npx playwright test \
             browser-tests/manuscript-final-delivery-control.spec.mjs \
