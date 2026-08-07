@@ -78,6 +78,11 @@ jobs:
           node --check cloudflare/mmg-ios/src/kairos-runtime-health-v1.js
           node --check cloudflare/mmg-ios/src/kairos-manuscript-operation-boundary-v1.js
           node --check cloudflare/mmg-ios/src/kairos-production-entry-manuscript-online-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-shopify-site-admin-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-shopify-capability-registry-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-shopify-execution-policy-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-tool-objective-integration-v1.js
+          node --check web/kairos-dashboard/scripts/shopify-capability-ui.js
           node --check web/kairos-dashboard/scripts/executive-os.js
           node --check web/kairos-dashboard/scripts/executive-os-live-details.js
           node --check web/kairos-dashboard/scripts/safari-manuscript-intake-compat.js
@@ -148,6 +153,10 @@ jobs:
       - name: Validate Kairos Shopify policy
         if: ${{ always() }}
         run: npm run validate:kairos-shopify
+
+      - name: Test governed Kairos Shopify capabilities
+        if: ${{ always() }}
+        run: npx vitest run backend-tests/kairos-shopify-capability-registry.test.ts backend-tests/kairos-shopify-site-admin.test.ts
 
       - name: Validate manuscript activation and builder plugins
         if: ${{ always() }}
