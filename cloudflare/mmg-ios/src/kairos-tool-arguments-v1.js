@@ -1,4 +1,4 @@
-export const KAIROS_TOOL_ARGUMENTS_BUILD = "kairos-tool-arguments-20260807-3-shopify-site-capabilities";
+export const KAIROS_TOOL_ARGUMENTS_BUILD = "kairos-tool-arguments-20260807-4-shopify-optional-tags";
 
 const SCHEMAS = Object.freeze({
   "knowledge.search": Object.freeze({ required: ["query"], optional: ["department", "limit"] }),
@@ -172,7 +172,7 @@ function assignHandle(target, input, key) { if (input[key] != null) { const valu
 function handleValue(value) { const result = text(value, 255).toLowerCase(); return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(result) ? result : ""; }
 function enumValue(value, allowed, label) { const result = text(value, 80).toUpperCase(); return allowed.has(result) ? result : failure("TOOL_ARGUMENT_INVALID_VALUE", `${label} is not allowlisted.`); }
 function gidList(value, type, max, label) { if (!Array.isArray(value) || value.length > max) return failure("TOOL_ARGUMENT_INVALID_VALUE", `${label} must be an array with at most ${max} entries.`); const output = []; for (const raw of value) { const parsed = shopifyId(raw, "id", type); if (!parsed.ok) return parsed; output.push(parsed.arguments.id); } return { ok: true, value: output }; }
-function stringList(value, maxItems, maxLength, label) { if (!Array.isArray(value) || value.length > maxItems) return failure("TOOL_ARGUMENT_INVALID_VALUE", `${label} must be an array with at most ${maxItems} entries.`); return { ok: true, value: value.map((item) => text(item, maxLength)).filter(Boolean) }; }
+function stringList(value, maxItems, maxLength, label) { if (value == null) return { ok: true, value: [] }; if (!Array.isArray(value) || value.length > maxItems) return failure("TOOL_ARGUMENT_INVALID_VALUE", `${label} must be an array with at most ${maxItems} entries.`); return { ok: true, value: value.map((item) => text(item, maxLength)).filter(Boolean) }; }
 function identifier(value, key, max) { const result = text(value, max); return result ? { ok: true, arguments: { [key]: result } } : failure("TOOL_ARGUMENT_INVALID_VALUE", `${key} is invalid.`); }
 function shopifyId(value, key, expectedType) { const result = text(value, 220); const pattern = new RegExp(`^gid:\/\/shopify\/${expectedType}\/\\d+$`); return pattern.test(result) ? { ok: true, arguments: { [key]: result } } : failure("TOOL_ARGUMENT_INVALID_VALUE", `${key} must be a Shopify ${expectedType} GID.`); }
 function extras(value, allowed) { return Object.keys(value).filter((key) => !allowed.has(key)); }
