@@ -1,7 +1,7 @@
-export const KAIROS_RUNTIME_PROJECT_BUILD = "kairos-runtime-project-20260727-1";
+export const KAIROS_RUNTIME_PROJECT_BUILD = "kairos-runtime-project-20260807-2-customer-changes-event";
 
 const STATES = new Set(["initialized","intake","objective_analysis","planning","awaiting_approval","queued","executing","quality_review","packaging","delivery","follow_up","archived","blocked","failed","cancelled"]);
-const EVENTS = new Set(["project_created","asset_received","objective_submitted","objective_analyzed","plan_created","approval_requested","approval_granted","approval_rejected","execution_queued","execution_started","execution_completed","qa_started","qa_passed","qa_failed","package_created","delivery_started","delivered","follow_up_started","archived","blocked","unblocked","failed","cancelled"]);
+const EVENTS = new Set(["project_created","asset_received","objective_submitted","objective_analyzed","plan_created","approval_requested","approval_granted","approval_rejected","approval_changes_requested","execution_queued","execution_started","execution_completed","qa_started","qa_passed","qa_failed","package_created","delivery_started","delivered","follow_up_started","archived","blocked","unblocked","failed","cancelled"]);
 const TRANSITIONS = Object.freeze({
   initialized: ["intake","cancelled"],
   intake: ["objective_analysis","blocked","cancelled"],

@@ -33,7 +33,8 @@ concurrency:
 env:
   WORKER_DIRECTORY: cloudflare/mmg-ios
   WORKER_BASE_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
-  CANONICAL_ENTRY_BUILD: kairos-local-canonical-entry-20260804-1-manuscript-canonical-shard-identity
+  CANONICAL_ENTRY_BUILD: kairos-local-canonical-entry-20260807-1-customer-portal-runtime
+  PUBLISHING_ENTRY_BUILD: kairos-canonical-publishing-entry-20260806-3
   MANUSCRIPT_IDENTITY_BUILD: kairos-manuscript-canonical-identity-20260804-1-server-shard-resolution
   DIGITAL_ASSET_PACKAGE_CONTRACT: mmg-digital-asset-edition-v2-customer-package-v1
 
@@ -86,24 +87,34 @@ jobs:
           set -euxo pipefail
           test -f package.json
           test -f wrangler.toml
+          test -f src/kairos-production-entry-canonical-publishing-v1.js
           test -f src/kairos-production-entry-local-canonical-v1.js
+          test -f src/kairos-customer-runtime-projection-store-v1.js
           test -f src/kairos-manuscript-canonical-identity-router-v1.js
           test -f src/kairos-manuscript-source-shard-v1.js
           test -f src/kairos-manuscript-package-state-v1.js
           test -f src/kairos-manuscript-deliverables-http-v1.js
           test -f src/kairos-manuscript-deliverables-builder-v4.js
-          grep -Fq 'main = "src/kairos-production-entry-local-canonical-v1.js"' wrangler.toml
+          grep -Fq 'main = "src/kairos-production-entry-canonical-publishing-v1.js"' wrangler.toml
+          grep -Fq 'from "./kairos-production-entry-local-canonical-v1.js"' src/kairos-production-entry-canonical-publishing-v1.js
+          grep -Fq "${PUBLISHING_ENTRY_BUILD}" src/kairos-production-entry-canonical-publishing-v1.js
           grep -Fq 'resolveCanonicalManuscriptRequest(request, env)' src/kairos-production-entry-local-canonical-v1.js
           grep -Fq 'handleManuscriptPackageState(canonicalRequest, env, ctx)' src/kairos-production-entry-local-canonical-v1.js
           grep -Fq 'handleDedicatedManuscriptSource(canonicalRequest, env)' src/kairos-production-entry-local-canonical-v1.js
+          grep -Fq 'handleKairosCustomerRuntimeProjectionAPI(request, env)' src/kairos-production-entry-local-canonical-v1.js
           grep -Fq "${CANONICAL_ENTRY_BUILD}" src/kairos-production-entry-local-canonical-v1.js
           grep -Fq "${MANUSCRIPT_IDENTITY_BUILD}" src/kairos-manuscript-canonical-identity-router-v1.js
+          node --check src/kairos-production-entry-canonical-publishing-v1.js
           node --check src/kairos-production-entry-local-canonical-v1.js
+          node --check src/kairos-customer-runtime-projection-store-v1.js
           node --check src/kairos-manuscript-canonical-identity-router-v1.js
           node --check src/kairos-manuscript-source-shard-v1.js
           node --check src/kairos-manuscript-package-state-v1.js
           node --check src/kairos-manuscript-deliverables-builder-v4.js
           node --check src/kairos-manuscript-deliverables-http-v1.js
+
+      - name: Run customer runtime security tests
+        run: npx vitest run backend-tests/kairos-customer-runtime-projection-store.test.ts backend-tests/kairos-customer-runtime-projection.test.ts backend-tests/kairos-customer-runtime-actions.test.ts
 
       - name: Install browser used by synthetic manuscript test
         run: npx playwright install --with-deps webkit
