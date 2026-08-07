@@ -31,6 +31,7 @@ name: Deploy Canonical Kairos Worker
 
 permissions:
   contents: read
+  checks: read
 
 concurrency:
   group: kairos-canonical-worker-${{ github.ref }}
@@ -169,11 +170,12 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     needs: validate
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     environment: production
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -252,3 +254,118 @@ jobs:
           grep -qi "location: ${WORKER_BASE_URL}/api/customer/auth/start" "${portal_headers}"
           grep -qi "x-kairos-customer-auth: ${CUSTOMER_AUTH_BUILD}" "${portal_headers}"
           echo "Verified Shopify Customer Account OAuth entrypoint and protected portal boundary."
+
+      - name: Observe external Cloudflare Workers Build before final write
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/check-runs?per_page=100"
+          headers=(
+            -H "Authorization: Bearer ${GH_TOKEN}"
+            -H "Accept: application/vnd.github+json"
+            -H "X-GitHub-Api-Version: 2022-11-28"
+          )
+
+          row=""
+          for attempt in $(seq 1 120); do
+            payload="$(curl --fail-with-body --silent --show-error "${headers[@]}" "${api}")"
+            row="$(printf '%s' "${payload}" | jq -c '[.check_runs[] | select(.name == "Workers Builds: mmg-ios" and .app.slug == "cloudflare-workers-and-pages")] | sort_by(.started_at) | last // empty')"
+            if [ -n "${row}" ]; then
+              echo "Observed external Cloudflare Workers Build for ${GITHUB_SHA}."
+              break
+            fi
+            echo "External Workers Build has not appeared yet (${attempt}/120)."
+            sleep 5
+          done
+
+          if [ -z "${row}" ]; then
+            echo "No external Workers Build appeared in the guarded observation window. Canonical deployment remains authoritative."
+            exit 0
+          fi
+
+          for attempt in $(seq 1 180); do
+            payload="$(curl --fail-with-body --silent --show-error "${headers[@]}" "${api}")"
+            row="$(printf '%s' "${payload}" | jq -c '[.check_runs[] | select(.name == "Workers Builds: mmg-ios" and .app.slug == "cloudflare-workers-and-pages")] | sort_by(.started_at) | last // empty')"
+            status="$(printf '%s' "${row}" | jq -r '.status // empty')"
+            conclusion="$(printf '%s' "${row}" | jq -r '.conclusion // empty')"
+            echo "External Workers Build status: ${status:-unknown} ${conclusion:-} (${attempt}/180)."
+            if [ "${status}" = "completed" ]; then
+              echo "External Cloudflare writer finished. Reasserting the exact canonical SHA now."
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "External Cloudflare Workers Build did not complete inside the guarded window; refusing to claim a stable final deployment." >&2
+          exit 1
+
+      - name: Reassert exact canonical Kairos Worker as final writer
+        if: github.event_name == 'push'
+        working-directory: ${{ env.WORKER_DIRECTORY }}
+        run: |
+          set -euo pipefail
+          npx wrangler deploy \
+            --var "DEPLOYMENT_SHA:${GITHUB_SHA}" \
+            --var "DEPLOYED_AT:$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+      - name: Verify final exact production deployment
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 24); do
+            body="${RUNNER_TEMP}/final-deployment-identity-${attempt}.json"
+            headers="${RUNNER_TEMP}/final-deployment-identity-${attempt}.headers"
+            status="$(curl --silent --show-error --max-time 30 \
+              -D "${headers}" \
+              -H 'Cache-Control: no-cache, no-store, must-revalidate' \
+              "${WORKER_BASE_URL}/api/deployment/identity?sha=${GITHUB_SHA}&final=${attempt}" \
+              -o "${body}" -w '%{http_code}' || true)"
+            echo "Final canonical deployment verification ${attempt}/24 HTTP ${status}"
+            cat "${body}" || true
+            if [ "${status}" = "200" ] \
+              && grep -Fq "\"deploymentSha\":\"${GITHUB_SHA}\"" "${body}" \
+              && grep -qi "x-kairos-canonical-local: ${CANONICAL_ENTRY_BUILD}" "${headers}" \
+              && grep -qi "x-kairos-customer-auth: ${CUSTOMER_AUTH_BUILD}" "${headers}" \
+              && grep -qi "x-kairos-manuscript-identity-build: ${MANUSCRIPT_IDENTITY_BUILD}" "${headers}"; then
+              echo "Verified canonical Worker is the final exact-SHA production deployment."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Final exact canonical Worker deployment could not be verified." >&2
+          exit 1
+
+      - name: Verify final Customer Portal OAuth boundary
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          headers="${RUNNER_TEMP}/final-customer-oauth.headers"
+          body="${RUNNER_TEMP}/final-customer-oauth.body"
+          status="$(curl --silent --show-error --max-time 30 \
+            -D "${headers}" \
+            -H 'Cache-Control: no-cache, no-store, must-revalidate' \
+            "${WORKER_BASE_URL}/api/customer/auth/start?verify=${GITHUB_SHA}&final=1" \
+            -o "${body}" -w '%{http_code}')"
+          echo "Final Customer OAuth entrypoint HTTP ${status}"
+          test "${status}" = "302"
+          grep -qi "x-kairos-customer-auth: ${CUSTOMER_AUTH_BUILD}" "${headers}"
+          location="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub(/^[^:]+:[[:space:]]*/, ""); sub(/\r$/, ""); print; exit}' "${headers}")"
+          test -n "${location}"
+          printf '%s\n' "${location}" | grep -Fq 'client_id=0de689abad167c3e9b4197728bfd6b55'
+          printf '%s\n' "${location}" | grep -Fq 'redirect_uri=https%3A%2F%2Fmmg-ios.info-mindsetmediagroup.workers.dev%2Fapi%2Fcustomer%2Fauth%2Fcallback'
+          printf '%s\n' "${location}" | grep -Fq 'response_type=code'
+
+          portal_headers="${RUNNER_TEMP}/final-customer-portal.headers"
+          portal_status="$(curl --silent --show-error --max-time 30 \
+            -D "${portal_headers}" \
+            -H 'Cache-Control: no-cache, no-store, must-revalidate' \
+            "${WORKER_BASE_URL}/customer-portal?verify=${GITHUB_SHA}&final=1" \
+            -o /dev/null -w '%{http_code}')"
+          echo "Final unauthenticated secure portal boundary HTTP ${portal_status}"
+          test "${portal_status}" = "302"
+          grep -qi "location: ${WORKER_BASE_URL}/api/customer/auth/start" "${portal_headers}"
+          grep -qi "x-kairos-customer-auth: ${CUSTOMER_AUTH_BUILD}" "${portal_headers}"
+          echo "Verified final Shopify Customer Account OAuth entrypoint and protected portal boundary."
