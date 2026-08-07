@@ -1,19 +1,48 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { createHmac } from "node:crypto";
+import { describe, expect, it } from "vitest";
 import { handleKairosCustomerRuntimeProjectionAPI, handleKairosCustomerRuntimeProjectionObjectRequest } from "../cloudflare/mmg-ios/src/kairos-customer-runtime-projection-store-v1.js";
 
 function storage(records = []) { const map = new Map([["kairos-runtime-projects:records", records]]); return { get: async (key: string) => map.get(key), put: async (key: string, value: unknown) => map.set(key, value) }; }
 
 const project = { projectId: "kproject_customer", customerId: "customer_1", title: "Book project", state: "awaiting_approval", progress: { percent: 40, stage: "planning" }, approvals: [{ required: true, gate: "production_plan", status: "pending" }], deliverables: [], events: [{ type: "project_created", state: "initialized", occurredAt: "2026-07-27T00:00:00Z" }] };
 const shopifyCustomerId = "gid://shopify/Customer/123456789";
+const shopifyClientId = "kairos-customer-account-client";
+const shopifyClientSecret = "test-only-shopify-client-secret";
+const shopifyShopDomain = "07kd8e-qw.myshopify.com";
 
-function authenticatedFetch() {
-  return vi.spyOn(globalThis, "fetch")
-    .mockResolvedValueOnce(new Response(JSON.stringify({ graphql_api: "https://account.example.com/customer/api/2026-07/graphql" }), { status: 200, headers: { "Content-Type": "application/json" } }))
-    .mockResolvedValueOnce(new Response(JSON.stringify({ data: { customer: { id: shopifyCustomerId } } }), { status: 200, headers: { "Content-Type": "application/json" } }));
+function encodeJson(value: unknown) {
+  return Buffer.from(JSON.stringify(value)).toString("base64url");
+}
+
+function createSessionToken(customerId = shopifyCustomerId, overrides: Record<string, unknown> = {}, secret = shopifyClientSecret) {
+  const now = Math.floor(Date.now() / 1000);
+  const header = encodeJson({ alg: "HS256", typ: "JWT" });
+  const payload = encodeJson({
+    dest: shopifyShopDomain,
+    aud: shopifyClientId,
+    sub: customerId,
+    iat: now,
+    nbf: now - 1,
+    exp: now + 300,
+    jti: "vitest-session",
+    ...overrides,
+  });
+  const signingInput = `${header}.${payload}`;
+  const signature = createHmac("sha256", secret).update(signingInput).digest("base64url");
+  return `${signingInput}.${signature}`;
+}
+
+function authenticatedRequest(path = "/api/kairos/customer/projects", token = createSessionToken()) {
+  return new Request(`https://example.com${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
 }
 
 function envWithForwarder(onForward: (value: any) => void = () => {}) {
   return {
+    SHOPIFY_CLIENT_ID: shopifyClientId,
+    SHOPIFY_CLIENT_SECRET: shopifyClientSecret,
+    SHOPIFY_STORE_DOMAIN: shopifyShopDomain,
     KAIROS_SHOPIFY_CUSTOMER_MAP: JSON.stringify({ [shopifyCustomerId]: "customer_1" }),
     KAIROS_PROJECTS: {
       idFromName: () => "id",
@@ -26,8 +55,6 @@ function envWithForwarder(onForward: (value: any) => void = () => {}) {
     },
   };
 }
-
-afterEach(() => vi.restoreAllMocks());
 
 describe("Kairos customer runtime projection store", () => {
   it("requires authenticated Shopify customer context", async () => {
@@ -45,23 +72,46 @@ describe("Kairos customer runtime projection store", () => {
     expect(response?.status).toBe(401);
   });
 
-  it("routes reads using the server-mapped Shopify customer identity", async () => {
-    authenticatedFetch();
+  it("routes reads using the server-verified Shopify customer session identity", async () => {
     let forwarded: any;
-    await handleKairosCustomerRuntimeProjectionAPI(new Request("https://example.com/api/kairos/customer/projects", {
-      headers: { Authorization: "Bearer shcat_test_customer_token" },
-    }), envWithForwarder((value) => { forwarded = value; }));
+    const response = await handleKairosCustomerRuntimeProjectionAPI(
+      authenticatedRequest(),
+      envWithForwarder((value) => { forwarded = value; }),
+    );
+    expect(response?.status).toBe(200);
     expect(forwarded).toEqual({ operation: "customer-list", customerId: "customer_1" });
   });
 
-  it("rejects invalid or expired Shopify tokens", async () => {
-    vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(new Response(JSON.stringify({ graphql_api: "https://account.example.com/customer/api/2026-07/graphql" }), { status: 200, headers: { "Content-Type": "application/json" } }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ errors: [{ message: "Unauthenticated" }] }), { status: 200, headers: { "Content-Type": "application/json" } }));
-    const response = await handleKairosCustomerRuntimeProjectionAPI(new Request("https://example.com/api/kairos/customer/projects", {
-      headers: { Authorization: "Bearer expired" },
-    }), envWithForwarder());
+  it("rejects invalid Shopify session signatures", async () => {
+    const response = await handleKairosCustomerRuntimeProjectionAPI(
+      authenticatedRequest("/api/kairos/customer/projects", createSessionToken(shopifyCustomerId, {}, "wrong-secret")),
+      envWithForwarder(),
+    );
     expect(response?.status).toBe(401);
+  });
+
+  it("returns 503 when Shopify session verification is not configured", async () => {
+    const response = await handleKairosCustomerRuntimeProjectionAPI(
+      authenticatedRequest(),
+      { KAIROS_PROJECTS: envWithForwarder().KAIROS_PROJECTS },
+    );
+    expect(response?.status).toBe(503);
+    const payload = await response?.json();
+    expect(payload.error.code).toBe("CUSTOMER_AUTH_UNAVAILABLE");
+  });
+
+  it("serves Customer Account extension CORS preflight before authentication", async () => {
+    const response = await handleKairosCustomerRuntimeProjectionAPI(new Request("https://example.com/api/kairos/customer/projects", {
+      method: "OPTIONS",
+      headers: {
+        Origin: "null",
+        "Access-Control-Request-Method": "GET",
+        "Access-Control-Request-Headers": "authorization",
+      },
+    }), {});
+    expect(response?.status).toBe(204);
+    expect(response?.headers.get("access-control-allow-origin")).toBe("*");
+    expect(response?.headers.get("access-control-allow-headers")).toContain("Authorization");
   });
 
   it("returns only projects belonging to the authenticated customer", async () => {
