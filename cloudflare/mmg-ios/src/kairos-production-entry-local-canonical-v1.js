@@ -38,6 +38,12 @@ import {
   handleKairosCustomerRuntimeProjectionObjectRequest,
   KAIROS_CUSTOMER_RUNTIME_PROJECTION_STORE_BUILD,
 } from "./kairos-customer-runtime-projection-store-v1.js";
+import {
+  handleKairosCustomerAccountAuth,
+  prepareKairosCustomerApiRequest,
+  stampKairosCustomerSession,
+  KAIROS_CUSTOMER_ACCOUNT_AUTH_BUILD,
+} from "./kairos-customer-account-auth-v1.js";
 
 export {
   KairosProjectAgent,
@@ -67,7 +73,7 @@ export class KairosManuscriptSource extends BaseKairosManuscriptSource {
 }
 
 export const KAIROS_LOCAL_CANONICAL_ENTRY_BUILD =
-  "kairos-local-canonical-entry-20260807-1-customer-portal-runtime";
+  "kairos-local-canonical-entry-20260807-2-customer-account-oauth";
 
 const PROVIDER_INDEPENDENT_OPERATIONAL_PATHS = new Set([
   "/api/hub/run",
@@ -85,9 +91,15 @@ export default {
     const url = new URL(request.url);
     const autonomousEnv = providerBlockedEnv(env);
 
+    const customerAuthResponse = await handleKairosCustomerAccountAuth(request, env);
+    if (customerAuthResponse) return stamp(customerAuthResponse);
+
+    const preparedCustomerRequest = await prepareKairosCustomerApiRequest(request, env);
     const customerResponse =
-      await handleKairosCustomerRuntimeProjectionAPI(request, env);
-    if (customerResponse) return stamp(customerResponse);
+      await handleKairosCustomerRuntimeProjectionAPI(preparedCustomerRequest.request, env);
+    if (customerResponse) {
+      return stamp(stampKairosCustomerSession(customerResponse, preparedCustomerRequest.setCookie));
+    }
 
     const dashboardResponse = await handleKairosDashboardRequest(request, env, ctx, {
       operationsEnv: autonomousEnv,
@@ -180,6 +192,7 @@ function stamp(response, manuscriptIdentity = null) {
   headers.set("X-Kairos-Autonomy-Scheduler-Build", headers.get("X-Kairos-Autonomy-Scheduler-Build") || KAIROS_AUTONOMY_SCHEDULER_BUILD);
   headers.set("X-Kairos-Dashboard-Build", headers.get("X-Kairos-Dashboard-Build") || KAIROS_DASHBOARD_BUILD);
   headers.set("X-Kairos-Customer-Runtime-Store", headers.get("X-Kairos-Customer-Runtime-Store") || KAIROS_CUSTOMER_RUNTIME_PROJECTION_STORE_BUILD);
+  headers.set("X-Kairos-Customer-Auth", headers.get("X-Kairos-Customer-Auth") || KAIROS_CUSTOMER_ACCOUNT_AUTH_BUILD);
   if (manuscriptIdentity?.requestedProjectId) {
     headers.set("X-Kairos-Requested-Manuscript-Project", manuscriptIdentity.requestedProjectId);
   }
