@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { writeFileSync } from 'node:fs';
+
 const ORIGIN = (process.env.MMG_STOREFRONT_ORIGIN || 'https://themindsetmediagroup.com').replace(/\/+$/, '');
 const MAX_URLS = Number(process.env.MMG_AUDIT_MAX_URLS || 500);
 const CONCURRENCY = Number(process.env.MMG_AUDIT_CONCURRENCY || 8);
@@ -25,5 +27,5 @@ async function mapLimit(items,fn){ const out=new Array(items.length); let i=0; a
  for(const r of records){ if(r.error || r.status>=400) broken.push(r); if(r.redirected) redirects.push(r); if(r.status<400 && /text\/html/i.test(r.contentType) && r.mainTextLength<180) thin.push(r); if(!sitemap.has(r.url)&&r.url!==normalize(origin+'/')) orphaned.push(r); }
  const unresolved=[]; for(const [target,srcs] of sources){ const r=byUrl.get(target); if(!r || r.error || r.status>=400) unresolved.push({target,status:r?.status??null,error:r?.error??null,sources:[...srcs]}); }
  const report={generatedAt:new Date().toISOString(),origin,limits:{maxUrls:MAX_URLS,concurrency:CONCURRENCY},summary:{sitemapUrls:sitemap.size,crawled:records.length,broken:broken.length,unresolvedInternalLinks:unresolved.length,redirects:redirects.length,thinPages:thin.length,reachableOutsideSitemap:orphaned.length},broken,unresolvedInternalLinks:unresolved,redirects,thinPages:thin,reachableOutsideSitemap:orphaned,records:records.map(r=>({...r,inbound:[...(sources.get(r.url)||[])]}))};
- require('node:fs').writeFileSync(OUT,JSON.stringify(report,null,2)); console.log(JSON.stringify(report.summary,null,2)); if(broken.length||unresolved.length) process.exitCode=2;
+ writeFileSync(OUT,JSON.stringify(report,null,2)); console.log(JSON.stringify(report.summary,null,2)); if(broken.length||unresolved.length) process.exitCode=2;
 })().catch(e=>{console.error(e);process.exit(1)});
