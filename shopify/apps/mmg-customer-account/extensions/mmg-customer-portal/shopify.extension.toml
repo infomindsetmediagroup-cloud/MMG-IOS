@@ -1,0 +1,14 @@
+api_version = "2026-07"
+
+[[extensions]]
+type = "ui_extension"
+name = "Customer Portal"
+handle = "mmg-customer-portal"
+uid = "cc3ead1a-ec65-445d-914e-22622377e54b"
+
+[extensions.capabilities]
+network_access = true
+
+[[extensions.targeting]]
+target = "customer-account.page.render"
+module = "./src/CustomerPortal.tsx"
