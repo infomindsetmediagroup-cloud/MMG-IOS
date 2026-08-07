@@ -1,102 +1,33 @@
-name: Deploy Cloudflare Production
+name: Legacy Cloudflare Production Check
 
-on:
-  push:
-    branches: [main]
-    paths:
-      - "cloudflare/mmg-ios/**"
-      - "web/kairos-dashboard/**"
-      - "scripts/validate-kairos-entrypoint-graph.mjs"
-      - "backend-tests/kairos-local-execution.test.ts"
-      - "package.json"
-      - "package-lock.json"
-      - ".github/workflows/validate-kairos-change.yml"
-      - ".github/workflows/deploy-cloudflare-production.yml"
-  workflow_dispatch: {}
+# Production deployment authority has moved to deploy-kairos-canonical-worker.yml.
+# This file is intentionally manual-only and non-deploying so an obsolete workflow
+# cannot race, overwrite, or contradict the exact-SHA canonical Kairos deployment.
+"on":
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: kairos-cloudflare-production
-  cancel-in-progress: false
+  group: kairos-legacy-cloudflare-check
+  cancel-in-progress: true
 
 jobs:
-  deploy:
-    name: Deploy Kairos Worker
+  retired:
+    name: Confirm canonical deployment ownership
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-    environment: production
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CLOUDFLARE_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      KAIROS_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
-
+    timeout-minutes: 5
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: cloudflare/mmg-ios/package-lock.json
-
-      - name: Validate active Kairos entrypoint graph
-        run: node scripts/validate-kairos-entrypoint-graph.mjs
-
-      - name: Verify deployment credentials
+      - name: Verify canonical deployment workflow owns production
         shell: bash
         run: |
           set -euo pipefail
-          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo "::error::CLOUDFLARE_API_TOKEN is missing"; exit 1; }
-          test -n "${CLOUDFLARE_ACCOUNT_ID:-}" || { echo "::error::CLOUDFLARE_ACCOUNT_ID is missing"; exit 1; }
-
-      - name: Install Worker dependencies
-        working-directory: cloudflare/mmg-ios
-        run: npm ci
-
-      - name: Run Worker tests
-        working-directory: cloudflare/mmg-ios
-        run: npm test
-
-      - name: Validate Worker configuration
-        working-directory: cloudflare/mmg-ios
-        run: |
-          npm run validate:production
-          npx wrangler deploy --dry-run
-
-      - name: Deploy Worker and Command Center
-        working-directory: cloudflare/mmg-ios
-        run: npx wrangler deploy
-
-      - name: Verify publishing readiness
-        shell: bash
-        run: |
-          set -euo pipefail
-          for attempt in $(seq 1 24); do
-            code="$(curl --silent --show-error --location --max-time 20 \
-              --output /tmp/kairos-readiness.json \
-              --write-out '%{http_code}' \
-              "${KAIROS_URL}/api/kairos/readiness?attempt=${attempt}" || true)"
-            if [ "${code}" = "200" ] && node -e '
-              const body = require("/tmp/kairos-readiness.json");
-              if (body.ready !== true || body.status !== "ready") process.exit(1);
-              if (body.safeguards?.shopifyTargetStatus !== "DRAFT") process.exit(1);
-              if (body.safeguards?.livePublicationAuthorized !== false) process.exit(1);
-              if (body.safeguards?.storefrontThemeMutationAuthorized !== false) process.exit(1);
-            '; then
-              cat /tmp/kairos-readiness.json
-              echo "Kairos publishing runtime is ready."
-              exit 0
-            fi
-            echo "Readiness attempt ${attempt}/24 returned HTTP ${code:-000}."
-            cat /tmp/kairos-readiness.json 2>/dev/null || true
-            sleep 5
-          done
-          echo "::error::Kairos did not reach publishing readiness."
-          exit 1
-
-# This workflow deploys the Worker and dashboard only.
-# It does not publish Shopify themes, pages, products, or sales-channel content.
+          test -f .github/workflows/deploy-kairos-canonical-worker.yml
+          grep -Fq 'name: Deploy Canonical Kairos Worker' .github/workflows/deploy-kairos-canonical-worker.yml
+          grep -Fq 'npx wrangler deploy' .github/workflows/deploy-kairos-canonical-worker.yml
+          echo 'Production deployment is owned exclusively by deploy-kairos-canonical-worker.yml.'
+          echo 'This legacy workflow performs no deployment.'
