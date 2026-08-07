@@ -196,3 +196,35 @@ jobs:
           done
           echo "The exact canonical Worker deployment could not be verified." >&2
           exit 1
+
+      - name: Verify customer OAuth production entrypoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          headers="${RUNNER_TEMP}/customer-oauth.headers"
+          body="${RUNNER_TEMP}/customer-oauth.body"
+          status="$(curl --silent --show-error --max-time 30 \
+            -D "${headers}" \
+            -H 'Cache-Control: no-cache, no-store, must-revalidate' \
+            "${WORKER_BASE_URL}/api/customer/auth/start?verify=${GITHUB_SHA}" \
+            -o "${body}" -w '%{http_code}')"
+          echo "Customer OAuth entrypoint HTTP ${status}"
+          test "${status}" = "302"
+          grep -qi "x-kairos-customer-auth: ${CUSTOMER_AUTH_BUILD}" "${headers}"
+          location="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub(/^[^:]+:[[:space:]]*/, ""); sub(/\r$/, ""); print; exit}' "${headers}")"
+          test -n "${location}"
+          printf '%s\n' "${location}" | grep -Fq 'client_id=0de689abad167c3e9b4197728bfd6b55'
+          printf '%s\n' "${location}" | grep -Fq 'redirect_uri=https%3A%2F%2Fmmg-ios.info-mindsetmediagroup.workers.dev%2Fapi%2Fcustomer%2Fauth%2Fcallback'
+          printf '%s\n' "${location}" | grep -Fq 'response_type=code'
+
+          portal_headers="${RUNNER_TEMP}/customer-portal.headers"
+          portal_status="$(curl --silent --show-error --max-time 30 \
+            -D "${portal_headers}" \
+            -H 'Cache-Control: no-cache, no-store, must-revalidate' \
+            "${WORKER_BASE_URL}/customer-portal?verify=${GITHUB_SHA}" \
+            -o /dev/null -w '%{http_code}')"
+          echo "Unauthenticated secure portal boundary HTTP ${portal_status}"
+          test "${portal_status}" = "302"
+          grep -qi "location: ${WORKER_BASE_URL}/api/customer/auth/start" "${portal_headers}"
+          grep -qi "x-kairos-customer-auth: ${CUSTOMER_AUTH_BUILD}" "${portal_headers}"
+          echo "Verified Shopify Customer Account OAuth entrypoint and protected portal boundary."
