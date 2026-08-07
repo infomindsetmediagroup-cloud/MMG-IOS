@@ -1,49 +1,52 @@
 import { createKairosCustomerRuntimeProjection, KAIROS_CUSTOMER_RUNTIME_PROJECTION_BUILD } from "./kairos-customer-runtime-projection-v1.js";
 import { applyKairosCustomerApproval, recordKairosCustomerNotification, KAIROS_CUSTOMER_RUNTIME_ACTIONS_BUILD } from "./kairos-customer-runtime-actions-v1.js";
+import { authenticateKairosCustomerRequest, customerCorsPreflight, withCustomerPortalCors, KAIROS_CUSTOMER_AUTH_SESSION_BUILD } from "./kairos-customer-auth-session-v1.js";
 
-export const KAIROS_CUSTOMER_RUNTIME_PROJECTION_STORE_BUILD = "kairos-customer-runtime-projection-store-20260807-3-shopify-customer-auth";
+export const KAIROS_CUSTOMER_RUNTIME_PROJECTION_STORE_BUILD = "kairos-customer-runtime-projection-store-20260807-4-secure-session";
 const INTERNAL_PATH = "/registry/kairos-customer-runtime-projections";
 const COLLECTION_ROUTE = /^\/api\/kairos\/customer\/projects\/?$/i;
 const ITEM_ROUTE = /^\/api\/kairos\/customer\/projects\/([^/]+)\/?$/i;
 const ACTION_ROUTE = /^\/api\/kairos\/customer\/projects\/([^/]+)\/(approve|notifications)\/?$/i;
-const DEFAULT_STOREFRONT_DOMAIN = "themindsetmediagroup.com";
 
 export async function handleKairosCustomerRuntimeProjectionAPI(request, env) {
   const pathname = new URL(request.url).pathname;
   const action = pathname.match(ACTION_ROUTE);
   const item = action ? null : pathname.match(ITEM_ROUTE);
   if (!COLLECTION_ROUTE.test(pathname) && !item && !action) return null;
+  if (request.method === "OPTIONS") return customerCorsPreflight(request, env);
 
-  const identity = await authenticateCustomer(request, env);
+  const identity = await authenticateKairosCustomerRequest(request, env);
   if (!identity) {
-    return json({
+    return withCustomerPortalCors(json({
       success: false,
       error: {
         code: "CUSTOMER_AUTH_REQUIRED",
         message: "Authenticated Shopify customer access is required.",
       },
-    }, 401);
+    }, 401), request, env);
   }
 
   const customerId = identity.kairosCustomerId;
   if (action) {
-    if (request.method !== "POST") return method("POST");
+    if (request.method !== "POST") return withCustomerPortalCors(method("POST"), request, env);
     const input = await request.json().catch(() => ({}));
-    return forward(env, {
+    const response = await forward(env, {
       operation: action[2] === "approve" ? "customer-approve" : "customer-notify",
       customerId,
       projectId: clean(action[1], 180),
       input: {
         ...input,
-        customerIdentityHash: hashIdentity(identity.shopifyCustomerId),
+        customerIdentityHash: await hashIdentity(identity.shopifyCustomerId),
       },
     });
+    return withCustomerPortalCors(response, request, env);
   }
 
-  if (request.method !== "GET") return method("GET");
-  return forward(env, item
+  if (request.method !== "GET") return withCustomerPortalCors(method("GET"), request, env);
+  const response = await forward(env, item
     ? { operation: "customer-read", customerId, projectId: clean(item[1], 180) }
     : { operation: "customer-list", customerId });
+  return withCustomerPortalCors(response, request, env);
 }
 
 export async function handleKairosCustomerRuntimeProjectionObjectRequest(state, request) {
@@ -93,77 +96,9 @@ async function mutateCustomerProject(state, customerId, projectId, callback) {
   }
 }
 
-async function authenticateCustomer(request, env) {
-  const authorization = clean(request.headers.get("authorization"), 4096);
-  if (!authorization) return null;
-
-  // Shopify Customer Account API expects the access token value in the
-  // Authorization header. Accept an optional Bearer prefix from portal clients,
-  // but never derive authorization from browser-controlled customer-id headers.
-  const accessToken = authorization.replace(/^Bearer\s+/i, "").trim();
-  if (!accessToken) return null;
-
-  const storefrontDomain = clean(env?.KAIROS_SHOPIFY_STOREFRONT_DOMAIN || DEFAULT_STOREFRONT_DOMAIN, 255)
-    .replace(/^https?:\/\//i, "")
-    .replace(/\/$/, "");
-
-  try {
-    const discoveryResponse = await fetch(`https://${storefrontDomain}/.well-known/customer-account-api`, {
-      method: "GET",
-      headers: { Accept: "application/json" },
-      cf: { cacheTtl: 300, cacheEverything: true },
-    });
-    if (!discoveryResponse.ok) return null;
-    const discovery = await discoveryResponse.json().catch(() => ({}));
-    const graphqlEndpoint = clean(discovery?.graphql_api, 1024);
-    if (!graphqlEndpoint || !/^https:\/\//i.test(graphqlEndpoint)) return null;
-
-    const identityResponse = await fetch(graphqlEndpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        Authorization: accessToken,
-      },
-      body: JSON.stringify({
-        operationName: "KairosCustomerIdentity",
-        query: "query KairosCustomerIdentity { customer { id } }",
-        variables: {},
-      }),
-    });
-    if (!identityResponse.ok) return null;
-    const identityPayload = await identityResponse.json().catch(() => ({}));
-    if (Array.isArray(identityPayload?.errors) && identityPayload.errors.length) return null;
-    const shopifyCustomerId = clean(identityPayload?.data?.customer?.id, 255);
-    if (!/^gid:\/\/shopify\/Customer\/\d+$/i.test(shopifyCustomerId)) return null;
-
-    return {
-      shopifyCustomerId,
-      kairosCustomerId: mapKairosCustomerId(shopifyCustomerId, env),
-    };
-  } catch {
-    return null;
-  }
-}
-
-function mapKairosCustomerId(shopifyCustomerId, env) {
-  const rawMap = clean(env?.KAIROS_SHOPIFY_CUSTOMER_MAP, 65535);
-  if (rawMap) {
-    try {
-      const parsed = JSON.parse(rawMap);
-      const mapped = clean(parsed?.[shopifyCustomerId], 180);
-      if (mapped) return mapped;
-    } catch {
-      // Invalid optional mapping must never weaken authentication. Fall through
-      // to the immutable Shopify customer GID as the canonical Kairos identity.
-    }
-  }
-  return clean(shopifyCustomerId, 180);
-}
-
 function forward(env, input) {
   if (!env?.KAIROS_PROJECTS) {
-    return json({ success: false, error: { code: "CUSTOMER_RUNTIME_STORAGE_UNAVAILABLE", message: "Customer runtime storage is unavailable." } }, 503);
+    return Promise.resolve(json({ success: false, error: { code: "CUSTOMER_RUNTIME_STORAGE_UNAVAILABLE", message: "Customer runtime storage is unavailable." } }, 503));
   }
   const stub = env.KAIROS_PROJECTS.get(env.KAIROS_PROJECTS.idFromName("mmg-production-project-registry"));
   return stub.fetch(new Request(`https://kairos.internal${INTERNAL_PATH}`, {
@@ -178,10 +113,12 @@ async function load(state) {
   return Array.isArray(value) ? value : [];
 }
 
-function hashIdentity(value) {
-  let hash = 2166136261;
-  for (const char of String(value)) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
-  return `kcid_${(hash >>> 0).toString(16).padStart(8, "0")}`;
+async function hashIdentity(value) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(value || "")));
+  const bytes = new Uint8Array(digest);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return `kcid_${btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "").slice(0, 16)}`;
 }
 
 function clean(value, max) {
@@ -193,6 +130,7 @@ function builds() {
     projection: KAIROS_CUSTOMER_RUNTIME_PROJECTION_BUILD,
     store: KAIROS_CUSTOMER_RUNTIME_PROJECTION_STORE_BUILD,
     actions: KAIROS_CUSTOMER_RUNTIME_ACTIONS_BUILD,
+    auth: KAIROS_CUSTOMER_AUTH_SESSION_BUILD,
   };
 }
 
@@ -217,6 +155,7 @@ function json(value, status = 200) {
       "X-Kairos-Customer-Runtime-Projection": KAIROS_CUSTOMER_RUNTIME_PROJECTION_BUILD,
       "X-Kairos-Customer-Runtime-Projection-Store": KAIROS_CUSTOMER_RUNTIME_PROJECTION_STORE_BUILD,
       "X-Kairos-Customer-Runtime-Actions": KAIROS_CUSTOMER_RUNTIME_ACTIONS_BUILD,
+      "X-Kairos-Customer-Auth": KAIROS_CUSTOMER_AUTH_SESSION_BUILD,
     },
   });
 }
