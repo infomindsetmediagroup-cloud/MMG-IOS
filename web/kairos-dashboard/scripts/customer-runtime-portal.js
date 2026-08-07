@@ -1,9 +1,84 @@
-const API="/api/kairos/customer/projects";
-const root=document.querySelector("#kairos-hub");
-const customerId=()=>document.querySelector('meta[name="kairos-customer-id"]')?.content||localStorage.getItem("kairosCustomerId")||"";
-const request=async(path="",options={})=>{const id=customerId();const response=await fetch(`${API}${path}`,{credentials:"include",cache:"no-store",headers:{"Content-Type":"application/json",...(id?{"X-Kairos-Customer-Id":id}:{}),...(options.headers||{})},...options});const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body?.error?.message||`Request failed: ${response.status}`);return body;};
-const esc=(value)=>String(value??"").replace(/[&<>"']/g,(char)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
-function projectCard(project){const action=project.nextAction;const timeline=(project.timeline||[]).slice(-6).reverse();return `<article class="customer-runtime-card" data-project-id="${esc(project.projectId)}"><header><div><p class="customer-runtime-state">${esc(project.statusLabel)}</p><h3>${esc(project.title)}</h3></div><strong>${Number(project.progress?.percent||0)}%</strong></header><div class="customer-runtime-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Number(project.progress?.percent||0)}"><span style="width:${Math.max(0,Math.min(100,Number(project.progress?.percent||0)))}%"></span></div><p class="customer-runtime-stage">${esc(project.progress?.stage||project.state)}</p>${project.blockedReason?`<p class="customer-runtime-blocked">${esc(project.blockedReason)}</p>`:""}${action?`<div class="customer-runtime-next"><strong>Next step</strong><span>${esc(action.label)}</span></div>`:""}<div class="customer-runtime-grid"><section><h4>Approvals</h4>${(project.approvals||[]).length?(project.approvals||[]).map(item=>`<p><span>${esc(item.gate)}</span><strong>${esc(item.status)}</strong></p>`).join(""):"<p>No approvals pending.</p>"}</section><section><h4>Deliverables</h4>${(project.deliverables||[]).length?(project.deliverables||[]).map(item=>`<p><span>${esc(item.type)}</span><strong>${esc(item.status)}</strong></p>`).join(""):"<p>Deliverables will appear after approval.</p>"}</section></div>${action?.type==="review_approval"?`<div class="customer-runtime-actions"><button data-decision="approved">Approve plan</button><button data-decision="changes_requested">Request changes</button></div>`:""}<details><summary>Project timeline</summary><ol>${timeline.length?timeline.map(item=>`<li><strong>${esc(item.summary||item.type)}</strong><span>${esc(item.occurredAt||"")}</span></li>`).join(""):"<li>No customer-visible events yet.</li>"}</ol></details></article>`;}
-function render(payload){let section=document.querySelector("#customer-runtime-portal");if(!section){section=document.createElement("section");section.id="customer-runtime-portal";section.className="customer-runtime-portal";root?.appendChild(section);}const projects=payload?.projects||[];section.innerHTML=`<header><p class="eyebrow">Customer portal</p><h2>Your projects</h2><p>Live progress, approvals, deliverables, and customer-safe project history.</p></header><div class="customer-runtime-list">${projects.length?projects.map(projectCard).join(""):"<article><h3>No active projects</h3><p>Your projects will appear here after purchase and activation.</p></article>"}</div>`;bind();}
-function bind(){document.querySelectorAll(".customer-runtime-card [data-decision]").forEach(button=>button.addEventListener("click",async()=>{const card=button.closest(".customer-runtime-card");button.disabled=true;try{await request(`/${encodeURIComponent(card.dataset.projectId)}/approve`,{method:"POST",body:JSON.stringify({decision:button.dataset.decision,rationale:button.dataset.decision==="changes_requested"?"Customer requested changes through the portal.":"Customer approved the production plan."})});render(await request());}catch(error){button.disabled=false;card.insertAdjacentHTML("beforeend",`<p class="customer-runtime-error">${esc(error.message)}</p>`);}}));}
-(async()=>{try{if(!root)return;render(await request());}catch(error){root?.insertAdjacentHTML("beforeend",`<section id="customer-runtime-portal" class="customer-runtime-portal"><h2>Your projects</h2><p>${esc(error.message)}</p></section>`);}})();
+const API = "/api/kairos/customer/projects";
+const LOGIN = "/api/customer/auth/start";
+const root = document.querySelector("#kairos-hub");
+
+const request = async (path = "", options = {}) => {
+  const response = await fetch(`${API}${path}`, {
+    credentials: "include",
+    cache: "no-store",
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+    ...options,
+  });
+
+  if (response.status === 401) {
+    window.location.assign(LOGIN);
+    throw new Error("Authentication required.");
+  }
+
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body?.error?.message || `Request failed: ${response.status}`);
+  return body;
+};
+
+const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
+}[char]));
+
+function projectCard(project) {
+  const action = project.nextAction;
+  const timeline = (project.timeline || []).slice(-6).reverse();
+  return `<article class="customer-runtime-card" data-project-id="${esc(project.projectId)}"><header><div><p class="customer-runtime-state">${esc(project.statusLabel)}</p><h3>${esc(project.title)}</h3></div><strong>${Number(project.progress?.percent || 0)}%</strong></header><div class="customer-runtime-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Number(project.progress?.percent || 0)}"><span style="width:${Math.max(0, Math.min(100, Number(project.progress?.percent || 0)))}%"></span></div><p class="customer-runtime-stage">${esc(project.progress?.stage || project.state)}</p>${project.blockedReason ? `<p class="customer-runtime-blocked">${esc(project.blockedReason)}</p>` : ""}${action ? `<div class="customer-runtime-next"><strong>Next step</strong><span>${esc(action.label)}</span></div>` : ""}<div class="customer-runtime-grid"><section><h4>Approvals</h4>${(project.approvals || []).length ? (project.approvals || []).map((item) => `<p><span>${esc(item.gate)}</span><strong>${esc(item.status)}</strong></p>`).join("") : "<p>No approvals pending.</p>"}</section><section><h4>Deliverables</h4>${(project.deliverables || []).length ? (project.deliverables || []).map((item) => `<p><span>${esc(item.type)}</span><strong>${esc(item.status)}</strong></p>`).join("") : "<p>Deliverables will appear after approval.</p>"}</section></div>${action?.type === "review_approval" ? `<div class="customer-runtime-actions"><button data-decision="approved">Approve plan</button><button data-decision="changes_requested">Request changes</button></div>` : ""}<details><summary>Project timeline</summary><ol>${timeline.length ? timeline.map((item) => `<li><strong>${esc(item.summary || item.type)}</strong><span>${esc(item.occurredAt || "")}</span></li>`).join("") : "<li>No customer-visible events yet.</li>"}</ol></details></article>`;
+}
+
+function render(payload) {
+  let section = document.querySelector("#customer-runtime-portal");
+  if (!section) {
+    section = document.createElement("section");
+    section.id = "customer-runtime-portal";
+    section.className = "customer-runtime-portal";
+    root?.appendChild(section);
+  }
+  const projects = payload?.projects || [];
+  section.innerHTML = `<header><p class="eyebrow">Customer portal</p><h2>Your projects</h2><p>Live progress, approvals, deliverables, and customer-safe project history.</p></header><div class="customer-runtime-list">${projects.length ? projects.map(projectCard).join("") : "<article><h3>No active projects</h3><p>Your projects will appear here after purchase and activation.</p></article>"}</div>`;
+  bind();
+}
+
+function bind() {
+  document.querySelectorAll(".customer-runtime-card [data-decision]").forEach((button) => button.addEventListener("click", async () => {
+    const card = button.closest(".customer-runtime-card");
+    button.disabled = true;
+    try {
+      await request(`/${encodeURIComponent(card.dataset.projectId)}/approve`, {
+        method: "POST",
+        body: JSON.stringify({
+          decision: button.dataset.decision,
+          rationale: button.dataset.decision === "changes_requested"
+            ? "Customer requested changes through the portal."
+            : "Customer approved the production plan.",
+        }),
+      });
+      render(await request());
+    } catch (error) {
+      if (error?.message === "Authentication required.") return;
+      button.disabled = false;
+      card.insertAdjacentHTML("beforeend", `<p class="customer-runtime-error">${esc(error.message)}</p>`);
+    }
+  }));
+}
+
+(async () => {
+  try {
+    if (!root) return;
+    render(await request());
+  } catch (error) {
+    if (error?.message === "Authentication required.") return;
+    root?.insertAdjacentHTML("beforeend", `<section id="customer-runtime-portal" class="customer-runtime-portal"><h2>Your projects</h2><p>${esc(error.message)}</p></section>`);
+  }
+})();

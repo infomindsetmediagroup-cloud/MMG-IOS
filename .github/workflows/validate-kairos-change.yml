@@ -87,6 +87,7 @@ jobs:
           node --check web/kairos-dashboard/scripts/kairos-local-inference.js
           node --check web/kairos-dashboard/scripts/manuscript-auto-pipeline.js
           node --check web/kairos-dashboard/scripts/publication-performance.js
+          node --check web/kairos-dashboard/scripts/customer-runtime-portal.js
           node --check scripts/validate-kairos-shopify-policy.mjs
           node --check scripts/validate-kairos-manuscript-activation.mjs
           node --check scripts/validate-kairos-entrypoint-graph.mjs
@@ -102,6 +103,9 @@ jobs:
 
       - name: Test Kairos self-hosted runtime
         run: npx vitest run backend-tests/kairos-self-hosted-runtime.test.ts
+
+      - name: Test customer portal authentication and isolation
+        run: npx vitest run backend-tests/kairos-customer-account-auth.test.ts backend-tests/kairos-customer-runtime-projection-store.test.ts backend-tests/kairos-customer-runtime-portal.test.ts
 
       - name: Test Kairos project agent foundation
         run: npx vitest run backend-tests/kairos-project-agent-foundation.test.ts

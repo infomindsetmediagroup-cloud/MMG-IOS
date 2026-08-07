@@ -9,6 +9,7 @@ const firewallPath = path.join(root, "cloudflare/kairos/scope-firewall.js");
 const workerPath = path.join(root, "cloudflare/mmg-ios-worker.js");
 const rootWranglerPath = path.join(root, "wrangler.toml");
 const productionWranglerPath = path.join(root, "cloudflare/mmg-ios/wrangler.toml");
+const publishingEntryPath = path.join(root, "cloudflare/mmg-ios/src/kairos-production-entry-canonical-publishing-v1.js");
 const canonicalEntryPath = path.join(root, "cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js");
 const localOnlyEntryPath = path.join(root, "cloudflare/mmg-ios/src/kairos-production-entry-local-only-v1.js");
 const localExecutionEntryPath = path.join(root, "cloudflare/mmg-ios/src/kairos-production-entry-local-execution-v1.js");
@@ -26,6 +27,7 @@ const requiredFiles = [
   workerPath,
   rootWranglerPath,
   productionWranglerPath,
+  publishingEntryPath,
   canonicalEntryPath,
   localOnlyEntryPath,
   localExecutionEntryPath,
@@ -52,6 +54,7 @@ const firewall = fs.readFileSync(firewallPath, "utf8");
 const worker = fs.readFileSync(workerPath, "utf8");
 const rootWrangler = fs.readFileSync(rootWranglerPath, "utf8");
 const productionWrangler = fs.readFileSync(productionWranglerPath, "utf8");
+const publishingEntry = fs.readFileSync(publishingEntryPath, "utf8");
 const canonicalEntry = fs.readFileSync(canonicalEntryPath, "utf8");
 const localOnlyEntry = fs.readFileSync(localOnlyEntryPath, "utf8");
 const localExecutionEntry = fs.readFileSync(localExecutionEntryPath, "utf8");
@@ -76,7 +79,9 @@ assert(!rootWrangler.includes('name = "mmg-ios"'), "Root Wrangler config must no
 assert(rootWrangler.includes('KAIROS_SHOPIFY_WRITES_ENABLED = "false"'), "Root staging Shopify writes must default to disabled.");
 
 assert(productionWrangler.includes('name = "mmg-ios"'), "Production Wrangler config must retain the canonical Worker name.");
-assert(productionWrangler.includes('main = "src/kairos-production-entry-local-canonical-v1.js"'), "Production Worker must use the canonical local provider firewall.");
+assert(productionWrangler.includes('main = "src/kairos-production-entry-canonical-publishing-v1.js"'), "Production Worker must use the canonical publishing wrapper.");
+assert(publishingEntry.includes('from "./kairos-production-entry-local-canonical-v1.js"'), "Canonical publishing wrapper must delegate to the local provider firewall.");
+assert(publishingEntry.includes("canonicalRuntime.fetch(request, env, ctx)"), "Canonical publishing wrapper must preserve the local governed runtime fallback.");
 for (const marker of [
   'KAIROS_MODEL_PROVIDER = "browser-webgpu"',
   'KAIROS_NO_COST_MODE = "true"',
@@ -169,6 +174,6 @@ assert(firewall.includes("RECEIPT_STORE_REQUIRED"), "Persistent receipt requirem
 assert(doctrine.includes("storeWideAuthorityFromTaskIntent: false"), "Doctrine must deny implied store-wide authority.");
 assert(doctrine.includes("arbitraryGraphqlAllowed: false"), "Doctrine must deny arbitrary GraphQL.");
 
-console.log("Kairos canonical local-only generation and Shopify operation policy validation passed.");
+console.log("Kairos canonical publishing wrapper, local-only generation, and Shopify operation policy validation passed.");
 function assert(condition, message) { if (!condition) fail(message); }
 function fail(message) { console.error(`Kairos Shopify policy validation failed: ${message}`); process.exit(1); }
