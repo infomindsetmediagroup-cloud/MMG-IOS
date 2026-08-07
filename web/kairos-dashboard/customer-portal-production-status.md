@@ -18,6 +18,8 @@ The required Kairos validation gate runs customer-account authentication, two-cu
 
 ## Deployment ownership
 
-`deploy-kairos-canonical-worker.yml` is the canonical GitHub Actions production deployment path for the Kairos Worker. The former `deploy-cloudflare-production.yml` and `deploy-cloudflare-workers.yml` automatic deployment paths are retired and non-deploying.
+`deploy-kairos-canonical-worker.yml` is the sole automatic GitHub Actions production deployment path for the Kairos Worker.
+
+The former `deploy-cloudflare-production.yml` and `deploy-cloudflare-workers.yml` automatic deployment paths are retired and non-deploying. `deploy-sprint-44-revenue-storage.yml` and `deploy-kairos-digital-asset-v2.yml` are validation-only and retain their browser/manuscript and Digital Asset V2 test coverage without production deployment authority. `validate-kairos-deployment-ownership.yml` fails future changes if those workflows regain a production environment, Cloudflare deploy credential, Cloudflare deploy action, or direct production `wrangler deploy`.
 
 Cloudflare Workers Builds Git integration remains an external control-plane trigger because the repository's existing Cloudflare deploy credential does not have Workers CI/Builds configuration access. Attempts to remove that trigger were fail-closed and performed no mutation. The canonical exact-SHA deployment must therefore be verified as the final live deployment after repository changes until that Cloudflare account permission is changed.
