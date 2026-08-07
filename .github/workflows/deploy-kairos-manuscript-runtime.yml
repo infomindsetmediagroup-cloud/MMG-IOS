@@ -1,0 +1,103 @@
+name: DEPLOY KAIROS LOCAL RUNTIME
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: "Immutable release identifier for this production deployment"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-kairos-manuscript-runtime-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
+      RELEASE_ID: ${{ inputs.release_id }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install validation dependencies
+        run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund > /dev/null
+
+      - name: Build same-origin WebLLM runtime
+        run: |
+          npm run build:webllm
+          test -s web/kairos-dashboard/vendor/webllm-bundle.js
+          grep -q 'CreateMLCEngine' web/kairos-dashboard/vendor/webllm-bundle.js
+
+      - name: Validate local-only production contract
+        run: |
+          set -euo pipefail
+          test -n "${RELEASE_ID}"
+          grep -q 'main = "src/kairos-production-entry-canonical-publishing-v1.js"' cloudflare/mmg-ios/wrangler.toml
+          grep -q 'KAIROS_MODEL_PROVIDER = "browser-webgpu"' cloudflare/mmg-ios/wrangler.toml
+          grep -q 'KAIROS_LOCAL_INFERENCE_ENABLED = "true"' cloudflare/mmg-ios/wrangler.toml
+          grep -q 'KAIROS_NO_COST_MODE = "true"' cloudflare/mmg-ios/wrangler.toml
+          grep -q 'KAIROS_CLOUDFLARE_NEURONS_ENABLED = "false"' cloudflare/mmg-ios/wrangler.toml
+          grep -q 'LOCAL_INFERENCE_REQUIRED' cloudflare/mmg-ios/src/kairos-production-entry-local-only-v1.js
+          grep -q 'browser-webgpu' cloudflare/mmg-ios/src/kairos-production-entry-local-only-v1.js
+          grep -q 'externalPaidAPIUsed' cloudflare/mmg-ios/src/kairos-production-entry-local-only-v1.js
+          grep -q 'cloudflareNeuronsUsed' cloudflare/mmg-ios/src/kairos-production-entry-local-only-v1.js
+          grep -q 'from "./kairos-production-entry-local-canonical-v1.js"' cloudflare/mmg-ios/src/kairos-production-entry-canonical-publishing-v1.js
+          ! grep -q 'api.openai.com' cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
+          node scripts/validate-kairos-manuscript-activation.mjs
+
+      - name: Install Worker dependencies
+        working-directory: cloudflare/mmg-ios
+        run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund > /dev/null
+
+      - name: Validate Worker bundle
+        working-directory: cloudflare/mmg-ios
+        run: npx wrangler deploy --dry-run
+
+      - name: Deploy production Worker
+        working-directory: cloudflare/mmg-ios
+        run: npx wrangler deploy
+
+      - name: Verify production local-runtime boundary
+        run: |
+          set -euo pipefail
+          readiness="${RUNNER_TEMP}/readiness.json"
+          headers="${RUNNER_TEMP}/readiness.headers"
+          workflows="${RUNNER_TEMP}/workflows.json"
+
+          for attempt in $(seq 1 30); do
+            readiness_status="$(curl --silent --show-error --max-time 20 -D "${headers}" "${WORKER_URL}/api/operational-readiness?release=${RELEASE_ID}&attempt=${attempt}" -o "${readiness}" -w '%{http_code}' || true)"
+            workflows_status="$(curl --silent --show-error --max-time 20 "${WORKER_URL}/api/workflows?release=${RELEASE_ID}&attempt=${attempt}" -o "${workflows}" -w '%{http_code}' || true)"
+
+            if [ "${readiness_status}" = "200" ] \
+              && grep -qi '^x-kairos-openai-calls: disabled' "${headers}" \
+              && grep -q 'browser-webgpu' "${readiness}" \
+              && grep -q 'externalPaidAPIUsed' "${readiness}" \
+              && grep -q 'cloudflareNeuronsUsed' "${readiness}" \
+              && { [ "${workflows_status}" = "200" ] || [ "${workflows_status}" = "401" ] || [ "${workflows_status}" = "403" ]; }; then
+              cat "${readiness}"
+              exit 0
+            fi
+            sleep 5
+          done
+
+          cat "${headers}" || true
+          cat "${readiness}" || true
+          cat "${workflows}" || true
+          exit 1
