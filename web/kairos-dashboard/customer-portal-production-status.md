@@ -18,8 +18,8 @@ The required Kairos validation gate runs customer-account authentication, two-cu
 
 ## Deployment ownership
 
-`deploy-kairos-canonical-worker.yml` remains the canonical GitHub Actions production deployment path for the Kairos Worker. The former `deploy-cloudflare-production.yml` and `deploy-cloudflare-workers.yml` automatic deployment paths are retired and non-deploying.
+`deploy-kairos-canonical-worker.yml` is the sole automatic GitHub Actions production deployment path for the Kairos Worker. The former `deploy-cloudflare-production.yml`, `deploy-cloudflare-workers.yml`, and remaining feature-specific Worker deployers are retired or validation-only.
 
 Cloudflare Workers Builds Git integration remains an external control-plane trigger because the repository's existing Cloudflare deploy credential does not have Workers CI/Builds configuration access. Attempts to remove that trigger were fail-closed and performed no mutation.
 
-To prevent the external integration from becoming the final production writer, `finalize-kairos-after-cloudflare-builds.yml` runs on `main`, re-runs the Customer Portal security gate and Worker dry-run, observes the external `Workers Builds: mmg-ios` check, waits for that writer to finish when present, then deploys the exact current Git SHA and re-verifies deployment identity, Shopify Customer Account OAuth start, and the unauthenticated protected-portal redirect. This preserves the canonical GitHub-controlled build as the final live deployment until the Cloudflare account permission is changed and the external trigger can be removed.
+To preserve deterministic production ownership until that Cloudflare permission is corrected, the canonical deployment job now observes the external `Workers Builds: mmg-ios` check for the current main SHA. If the external writer appears, the canonical job waits for it to finish, then re-deploys the exact current Git SHA and re-verifies deployment identity, Shopify Customer Account OAuth start, and the unauthenticated protected-portal redirect. If the external writer does not finish inside the guarded window, the canonical job fails rather than claiming a stable final deployment.
