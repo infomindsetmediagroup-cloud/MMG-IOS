@@ -1,4 +1,4 @@
-export const KAIROS_SHOPIFY_READ_BOUNDARY_BUILD = "kairos-shopify-read-boundary-20260807-2-site-capabilities";
+export const KAIROS_SHOPIFY_READ_BOUNDARY_BUILD = "kairos-shopify-read-boundary-20260807-3-scope-implication";
 
 const ALLOWED_API_VERSIONS = new Set(["2026-07"]);
 const CAPABILITY_SCOPES = Object.freeze({
@@ -70,8 +70,14 @@ export function buildShopifyAdminGraphQLEndpointFromConfiguration(configuration)
 function scopesSatisfied(requirement, configuredScopes) {
   const all = requirement.all || [];
   const any = requirement.any || [];
-  return all.every((scope) => configuredScopes.has(scope))
-    && any.every((group) => group.some((scope) => configuredScopes.has(scope)));
+  return all.every((scope) => hasScope(configuredScopes, scope))
+    && any.every((group) => group.some((scope) => hasScope(configuredScopes, scope)));
+}
+
+function hasScope(configuredScopes, scope) {
+  if (configuredScopes.has(scope)) return true;
+  if (scope.startsWith("read_")) return configuredScopes.has(`write_${scope.slice(5)}`);
+  return false;
 }
 
 function normalizeShopDomain(value) {
