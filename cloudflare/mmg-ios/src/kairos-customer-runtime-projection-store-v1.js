@@ -1,7 +1,8 @@
 import { createKairosCustomerRuntimeProjection, KAIROS_CUSTOMER_RUNTIME_PROJECTION_BUILD } from "./kairos-customer-runtime-projection-v1.js";
 import { applyKairosCustomerApproval, recordKairosCustomerNotification, KAIROS_CUSTOMER_RUNTIME_ACTIONS_BUILD } from "./kairos-customer-runtime-actions-v1.js";
+import { verifyShopifyCustomerSession, KAIROS_SHOPIFY_CUSTOMER_AUTH_BUILD } from "./shopify/kairos-shopify-customer-auth-v1.js";
 
-export const KAIROS_CUSTOMER_RUNTIME_PROJECTION_STORE_BUILD = "kairos-customer-runtime-projection-store-20260807-3-shopify-customer-auth";
+export const KAIROS_CUSTOMER_RUNTIME_PROJECTION_STORE_BUILD = "kairos-customer-runtime-projection-store-20260807-4-shopify-session-bridge";
 const INTERNAL_PATH = "/registry/kairos-customer-runtime-projections";
 const COLLECTION_ROUTE = /^\/api\/kairos\/customer\/projects\/?$/i;
 const ITEM_ROUTE = /^\/api\/kairos\/customer\/projects\/([^/]+)\/?$/i;
@@ -13,6 +14,8 @@ export async function handleKairosCustomerRuntimeProjectionAPI(request, env) {
   const action = pathname.match(ACTION_ROUTE);
   const item = action ? null : pathname.match(ITEM_ROUTE);
   if (!COLLECTION_ROUTE.test(pathname) && !item && !action) return null;
+
+  if (request.method === "OPTIONS") return corsPreflight();
 
   const identity = await authenticateCustomer(request, env);
   if (!identity) {
@@ -94,15 +97,26 @@ async function mutateCustomerProject(state, customerId, projectId, callback) {
 }
 
 async function authenticateCustomer(request, env) {
-  const authorization = clean(request.headers.get("authorization"), 4096);
+  const authorization = clean(request.headers.get("authorization"), 8192);
   if (!authorization) return null;
+  const token = authorization.replace(/^Bearer\s+/i, "").trim();
+  if (!token) return null;
 
-  // Shopify Customer Account API expects the access token value in the
-  // Authorization header. Accept an optional Bearer prefix from portal clients,
-  // but never derive authorization from browser-controlled customer-id headers.
-  const accessToken = authorization.replace(/^Bearer\s+/i, "").trim();
-  if (!accessToken) return null;
+  // Customer-account UI extensions authenticate external backend calls with a
+  // Shopify-signed session JWT. Verify that JWT first and derive customer
+  // identity only from its signed `sub` claim.
+  if (token.split(".").length === 3) {
+    const session = await verifyShopifyCustomerSession(request, env);
+    if (!session.ok) return null;
+    return {
+      shopifyCustomerId: session.shopifyCustomerId,
+      kairosCustomerId: mapKairosCustomerId(session.shopifyCustomerId, env),
+      authMode: "shopify-customer-session",
+    };
+  }
 
+  // Backward-compatible path for a server-controlled Shopify Customer Account
+  // access token. Browser-provided customer IDs remain ignored.
   const storefrontDomain = clean(env?.KAIROS_SHOPIFY_STOREFRONT_DOMAIN || DEFAULT_STOREFRONT_DOMAIN, 255)
     .replace(/^https?:\/\//i, "")
     .replace(/\/$/, "");
@@ -123,7 +137,7 @@ async function authenticateCustomer(request, env) {
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
-        Authorization: accessToken,
+        Authorization: token,
       },
       body: JSON.stringify({
         operationName: "KairosCustomerIdentity",
@@ -140,6 +154,7 @@ async function authenticateCustomer(request, env) {
     return {
       shopifyCustomerId,
       kairosCustomerId: mapKairosCustomerId(shopifyCustomerId, env),
+      authMode: "shopify-customer-access-token",
     };
   } catch {
     return null;
@@ -161,16 +176,17 @@ function mapKairosCustomerId(shopifyCustomerId, env) {
   return clean(shopifyCustomerId, 180);
 }
 
-function forward(env, input) {
+async function forward(env, input) {
   if (!env?.KAIROS_PROJECTS) {
     return json({ success: false, error: { code: "CUSTOMER_RUNTIME_STORAGE_UNAVAILABLE", message: "Customer runtime storage is unavailable." } }, 503);
   }
   const stub = env.KAIROS_PROJECTS.get(env.KAIROS_PROJECTS.idFromName("mmg-production-project-registry"));
-  return stub.fetch(new Request(`https://kairos.internal${INTERNAL_PATH}`, {
+  const response = await stub.fetch(new Request(`https://kairos.internal${INTERNAL_PATH}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   }));
+  return withCustomerCors(response);
 }
 
 async function load(state) {
@@ -193,6 +209,7 @@ function builds() {
     projection: KAIROS_CUSTOMER_RUNTIME_PROJECTION_BUILD,
     store: KAIROS_CUSTOMER_RUNTIME_PROJECTION_STORE_BUILD,
     actions: KAIROS_CUSTOMER_RUNTIME_ACTIONS_BUILD,
+    customerAuth: KAIROS_SHOPIFY_CUSTOMER_AUTH_BUILD,
   };
 }
 
@@ -205,18 +222,49 @@ function failure(error) {
 }
 
 function method(allowed) {
-  return json({ success: false, error: { code: "METHOD_NOT_ALLOWED", message: `Use ${allowed}.` } }, 405);
+  const response = json({ success: false, error: { code: "METHOD_NOT_ALLOWED", message: `Use ${allowed}.` } }, 405);
+  response.headers.set("Allow", allowed);
+  return response;
+}
+
+function corsPreflight() {
+  return new Response(null, {
+    status: 204,
+    headers: customerCorsHeaders(),
+  });
+}
+
+function withCustomerCors(response) {
+  const headers = new Headers(response.headers);
+  for (const [name, value] of customerCorsHeaders()) headers.set(name, value);
+  headers.set("Cache-Control", "private, no-store");
+  headers.set("Vary", "Authorization");
+  headers.set("X-Kairos-Shopify-Customer-Auth", KAIROS_SHOPIFY_CUSTOMER_AUTH_BUILD);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+function customerCorsHeaders() {
+  return new Headers({
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Authorization, Content-Type",
+    "Access-Control-Max-Age": "600",
+    "X-Content-Type-Options": "nosniff",
+  });
 }
 
 function json(value, status = 200) {
-  return new Response(JSON.stringify(value), {
-    status,
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "private, no-store",
-      "X-Kairos-Customer-Runtime-Projection": KAIROS_CUSTOMER_RUNTIME_PROJECTION_BUILD,
-      "X-Kairos-Customer-Runtime-Projection-Store": KAIROS_CUSTOMER_RUNTIME_PROJECTION_STORE_BUILD,
-      "X-Kairos-Customer-Runtime-Actions": KAIROS_CUSTOMER_RUNTIME_ACTIONS_BUILD,
-    },
-  });
+  const headers = customerCorsHeaders();
+  headers.set("Content-Type", "application/json; charset=utf-8");
+  headers.set("Cache-Control", "private, no-store");
+  headers.set("Vary", "Authorization");
+  headers.set("X-Kairos-Customer-Runtime-Projection", KAIROS_CUSTOMER_RUNTIME_PROJECTION_BUILD);
+  headers.set("X-Kairos-Customer-Runtime-Projection-Store", KAIROS_CUSTOMER_RUNTIME_PROJECTION_STORE_BUILD);
+  headers.set("X-Kairos-Customer-Runtime-Actions", KAIROS_CUSTOMER_RUNTIME_ACTIONS_BUILD);
+  headers.set("X-Kairos-Shopify-Customer-Auth", KAIROS_SHOPIFY_CUSTOMER_AUTH_BUILD);
+  return new Response(JSON.stringify(value), { status, headers });
 }
