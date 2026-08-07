@@ -1,0 +1,1 @@
+Retry native Shopify page repair after applying the runtime syntax correction in the executable PR workflow.

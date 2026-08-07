@@ -1,0 +1,1 @@
+Execute the native Shopify page repair through the pull-request workflow gate.
