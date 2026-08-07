@@ -16,6 +16,10 @@ import {
   canonicalizePipelineRecord,
   sanitizeCanonicalPublicRecord,
 } from "./kairos-canonical-publishing-contract-v1.js";
+import {
+  handleKairosCustomerRuntimeProjectionAPI,
+  handleKairosCustomerRuntimeProjectionObjectRequest,
+} from "./kairos-customer-runtime-projection-store-v1.js";
 
 export {
   KairosProjectAgent,
@@ -26,16 +30,28 @@ export {
 };
 
 export const KAIROS_CANONICAL_PUBLISHING_ENTRY_BUILD =
-  "kairos-canonical-publishing-entry-20260806-3";
+  "kairos-canonical-publishing-entry-20260807-4-customer-portal";
 
 export class KairosProject extends BaseKairosProject {
   async fetch(request) {
+    const customerResponse =
+      await handleKairosCustomerRuntimeProjectionObjectRequest(
+        this.state,
+        request.clone(),
+      );
+    if (customerResponse) return customerResponse;
     return super.fetch(await canonicalizeDurableRequest(request));
   }
 }
 
 export default {
   async fetch(request, env, ctx) {
+    const customerResponse = await handleKairosCustomerRuntimeProjectionAPI(
+      request.clone(),
+      env,
+    );
+    if (customerResponse) return customerResponse;
+
     const publishingResponse = await handleCanonicalPublishingRequest(
       request,
       env,
