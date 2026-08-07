@@ -1,5 +1,5 @@
 import canonicalRuntime, {
-  KairosProject,
+  KairosProject as BaseKairosProject,
   KairosProjectAgent,
   KairosProjectFoundationWorkflow,
   KairosManuscriptGenerationWorkflow,
@@ -33,14 +33,30 @@ import {
   KAIROS_AUTONOMY_SCHEDULER_BUILD,
   KAIROS_AUTONOMY_HEALTH_CRON,
 } from "./autonomy/kairos-autonomy-scheduler-v2.js";
+import {
+  handleKairosCustomerRuntimeProjectionAPI,
+  handleKairosCustomerRuntimeProjectionObjectRequest,
+  KAIROS_CUSTOMER_RUNTIME_PROJECTION_STORE_BUILD,
+} from "./kairos-customer-runtime-projection-store-v1.js";
 
 export {
-  KairosProject,
   KairosProjectAgent,
   KairosProjectFoundationWorkflow,
   KairosManuscriptGenerationWorkflow,
   KairosAutonomyLedger,
 };
+
+export class KairosProject extends BaseKairosProject {
+  async fetch(request) {
+    const customerProjectionResponse =
+      await handleKairosCustomerRuntimeProjectionObjectRequest(
+        this.state,
+        request.clone(),
+      );
+    if (customerProjectionResponse) return customerProjectionResponse;
+    return super.fetch(request);
+  }
+}
 
 export class KairosManuscriptSource extends BaseKairosManuscriptSource {
   async fetch(request) {
@@ -51,7 +67,7 @@ export class KairosManuscriptSource extends BaseKairosManuscriptSource {
 }
 
 export const KAIROS_LOCAL_CANONICAL_ENTRY_BUILD =
-  "kairos-local-canonical-entry-20260804-1-manuscript-canonical-shard-identity";
+  "kairos-local-canonical-entry-20260807-1-customer-portal-runtime";
 
 const PROVIDER_INDEPENDENT_OPERATIONAL_PATHS = new Set([
   "/api/hub/run",
@@ -68,6 +84,10 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const autonomousEnv = providerBlockedEnv(env);
+
+    const customerResponse =
+      await handleKairosCustomerRuntimeProjectionAPI(request, env);
+    if (customerResponse) return stamp(customerResponse);
 
     const dashboardResponse = await handleKairosDashboardRequest(request, env, ctx, {
       operationsEnv: autonomousEnv,
@@ -140,10 +160,6 @@ function operationalCompatibilityEnv(env) {
   const blocked = providerBlockedEnv(env);
   return new Proxy(blocked, {
     get(target, property) {
-      // The retired operational module still uses key presence as a readiness
-      // flag for objective intake and workflow projection. These two routes are
-      // non-generative, so a non-secret sentinel preserves compatibility without
-      // permitting or performing any external provider request.
       if (property === "OPENAI_API_KEY") return "kairos-local-readiness-sentinel-not-a-provider-key";
       return Reflect.get(target, property);
     },
@@ -163,6 +179,7 @@ function stamp(response, manuscriptIdentity = null) {
   headers.set("X-Kairos-Autonomy-API-Build", headers.get("X-Kairos-Autonomy-API-Build") || KAIROS_AUTONOMY_API_BUILD);
   headers.set("X-Kairos-Autonomy-Scheduler-Build", headers.get("X-Kairos-Autonomy-Scheduler-Build") || KAIROS_AUTONOMY_SCHEDULER_BUILD);
   headers.set("X-Kairos-Dashboard-Build", headers.get("X-Kairos-Dashboard-Build") || KAIROS_DASHBOARD_BUILD);
+  headers.set("X-Kairos-Customer-Runtime-Store", headers.get("X-Kairos-Customer-Runtime-Store") || KAIROS_CUSTOMER_RUNTIME_PROJECTION_STORE_BUILD);
   if (manuscriptIdentity?.requestedProjectId) {
     headers.set("X-Kairos-Requested-Manuscript-Project", manuscriptIdentity.requestedProjectId);
   }
