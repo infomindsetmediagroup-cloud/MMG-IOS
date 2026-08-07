@@ -16,6 +16,11 @@ import {
   canonicalizePipelineRecord,
   sanitizeCanonicalPublicRecord,
 } from "./kairos-canonical-publishing-contract-v1.js";
+import {
+  handleKairosCustomerRuntimeProjectionAPI,
+  handleKairosCustomerRuntimeProjectionObjectRequest,
+  KAIROS_CUSTOMER_RUNTIME_PROJECTION_STORE_BUILD,
+} from "./kairos-customer-runtime-projection-store-v1.js";
 
 export {
   KairosProjectAgent,
@@ -26,16 +31,21 @@ export {
 };
 
 export const KAIROS_CANONICAL_PUBLISHING_ENTRY_BUILD =
-  "kairos-canonical-publishing-entry-20260806-3";
+  "kairos-canonical-publishing-entry-20260807-4-customer-runtime";
 
 export class KairosProject extends BaseKairosProject {
   async fetch(request) {
+    const customerRuntime = await handleKairosCustomerRuntimeProjectionObjectRequest(this.state, request.clone());
+    if (customerRuntime) return customerRuntime;
     return super.fetch(await canonicalizeDurableRequest(request));
   }
 }
 
 export default {
   async fetch(request, env, ctx) {
+    const customerRuntime = await handleKairosCustomerRuntimeProjectionAPI(request.clone(), env);
+    if (customerRuntime) return stamp(customerRuntime);
+
     const publishingResponse = await handleCanonicalPublishingRequest(
       request,
       env,
@@ -112,6 +122,9 @@ function stamp(response) {
     headers.get("X-Kairos-Canonical-Contract") ||
       KAIROS_CANONICAL_PUBLISHING_CONTRACT_BUILD,
   );
+  if (headers.get("X-Kairos-Customer-Runtime-Projection")) {
+    headers.set("X-Kairos-Customer-Runtime-Projection-Store", KAIROS_CUSTOMER_RUNTIME_PROJECTION_STORE_BUILD);
+  }
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
