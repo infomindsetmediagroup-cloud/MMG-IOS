@@ -1,0 +1,117 @@
+name: Disable Cloudflare Workers Builds Production Trigger
+
+# One-time control-plane migration. This workflow removes only the Cloudflare
+# Workers Builds trigger that promotes the mmg-ios production branch. Preview
+# builds remain untouched. GitHub Actions then remains the production deploy owner.
+"on":
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/disable-cloudflare-workers-builds-production.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: disable-cloudflare-workers-builds-production
+  cancel-in-progress: false
+
+env:
+  CLOUDFLARE_ACCOUNT_ID: 9f81b4b13a3053004c105ccc9e3de67b
+  WORKER_NAME: mmg-ios
+  EXPECTED_REPOSITORY: MMG-IOS
+  PRODUCTION_BRANCH: main
+
+jobs:
+  disable-production-trigger:
+    name: Disable Workers Builds production trigger
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Resolve Worker tag and production trigger
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo "CLOUDFLARE_API_TOKEN is unavailable." >&2; exit 1; }
+
+          api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}"
+          auth="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
+
+          curl --fail-with-body --silent --show-error \
+            -H "${auth}" \
+            "${api}/workers/scripts" > /tmp/workers.json
+          jq -e '.success == true' /tmp/workers.json > /dev/null
+
+          worker_tag="$(jq -r --arg worker "${WORKER_NAME}" '.result[] | select(.id == $worker) | .tag // empty' /tmp/workers.json | head -n 1)"
+          test -n "${worker_tag}" || { echo "Could not resolve immutable Worker tag for ${WORKER_NAME}." >&2; exit 1; }
+
+          curl --fail-with-body --silent --show-error \
+            -H "${auth}" \
+            "${api}/builds/workers/${worker_tag}/triggers" > /tmp/triggers.json
+          jq -e '.success == true' /tmp/triggers.json > /dev/null
+
+          jq -c --arg branch "${PRODUCTION_BRANCH}" --arg repo "${EXPECTED_REPOSITORY}" '
+            .result[]
+            | select((.branch_includes // []) | index($branch))
+            | select((.repo_connection.repo_name // "") == $repo)
+            | {trigger_uuid, trigger_name, branch_includes, branch_excludes, deploy_command, repo_name: .repo_connection.repo_name}
+          ' /tmp/triggers.json > /tmp/production-triggers.jsonl
+
+          count="$(wc -l < /tmp/production-triggers.jsonl | tr -d ' ')"
+          if [ "${count}" = "0" ]; then
+            echo "No Cloudflare Workers Builds production trigger remains for ${EXPECTED_REPOSITORY}:${PRODUCTION_BRANCH}."
+            echo "already_disabled=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          if [ "${count}" != "1" ]; then
+            echo "Refusing to mutate Cloudflare: expected exactly one guarded production trigger, found ${count}." >&2
+            cat /tmp/production-triggers.jsonl >&2
+            exit 1
+          fi
+
+          cat /tmp/production-triggers.jsonl
+          trigger_uuid="$(jq -r '.trigger_uuid' /tmp/production-triggers.jsonl)"
+          test -n "${trigger_uuid}" && test "${trigger_uuid}" != "null"
+          echo "trigger_uuid=${trigger_uuid}" >> "${GITHUB_OUTPUT}"
+          echo "worker_tag=${worker_tag}" >> "${GITHUB_OUTPUT}"
+          echo "already_disabled=false" >> "${GITHUB_OUTPUT}"
+
+      - name: Delete guarded production trigger
+        if: steps.resolve.outputs.already_disabled == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}"
+          response="$(curl --fail-with-body --silent --show-error \
+            -X DELETE \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            "${api}/builds/triggers/${{ steps.resolve.outputs.trigger_uuid }}")"
+          printf '%s' "${response}" | jq -e '.success == true' > /dev/null
+          echo "Cloudflare Workers Builds production trigger deleted."
+
+      - name: Verify production trigger is absent
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.resolve.outputs.already_disabled }}" = "true" ]; then
+            echo "Production trigger was already absent."
+            exit 0
+          fi
+
+          api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}"
+          curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            "${api}/builds/workers/${{ steps.resolve.outputs.worker_tag }}/triggers" > /tmp/triggers-after.json
+          jq -e '.success == true' /tmp/triggers-after.json > /dev/null
+
+          remaining="$(jq --arg branch "${PRODUCTION_BRANCH}" --arg repo "${EXPECTED_REPOSITORY}" '[
+            .result[]
+            | select((.branch_includes // []) | index($branch))
+            | select((.repo_connection.repo_name // "") == $repo)
+          ] | length' /tmp/triggers-after.json)"
+          test "${remaining}" = "0" || { echo "Production trigger still exists after deletion." >&2; exit 1; }
+          echo "Verified: Cloudflare Workers Builds no longer owns ${EXPECTED_REPOSITORY}:${PRODUCTION_BRANCH} production deployment."
