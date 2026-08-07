@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { classifyKairosToolRequest, getKairosTool } from "../cloudflare/mmg-ios/src/kairos-tool-registry-v1.js";
 import { validateKairosToolArguments } from "../cloudflare/mmg-ios/src/kairos-tool-arguments-v1.js";
 import { assertKairosShopifyToolAllowed, getKairosShopifyCapability, listKairosShopifyCapabilities } from "../cloudflare/mmg-ios/src/kairos-shopify-capability-registry-v1.js";
+import { validateKairosShopifyExecutionPolicy } from "../cloudflare/mmg-ios/src/kairos-shopify-execution-policy-v1.js";
 
 describe("Kairos Shopify capability registry", () => {
   it("maps Shopify only into applicable five-center child apps", () => {
@@ -38,13 +39,20 @@ describe("Kairos Shopify capability registry", () => {
     expect(getKairosTool("shopify.site.inspect")?.approvalRequired).toBe(false);
   });
 
-  it("defaults product and page creation to non-public state", () => {
+  it("defaults argument normalization to non-public state", () => {
     const product = validateKairosToolArguments("shopify.product.create", { title: "Test Product" });
     expect(product.ok).toBe(true);
     expect(product.arguments.status).toBe("DRAFT");
     const page = validateKairosToolArguments("shopify.page.create", { title: "Help" });
     expect(page.ok).toBe(true);
     expect(page.arguments.isPublished).toBe(false);
+  });
+
+  it("blocks unsafe create proposals before approval", () => {
+    expect(validateKairosShopifyExecutionPolicy("shopify.product.create", { title: "No handle", status: "DRAFT" })).toMatchObject({ ok: false, error: { code: "SHOPIFY_IDEMPOTENCY_HANDLE_REQUIRED" } });
+    expect(validateKairosShopifyExecutionPolicy("shopify.product.create", { title: "Live", handle: "live", status: "ACTIVE" })).toMatchObject({ ok: false, error: { code: "SHOPIFY_PRODUCT_CREATE_DRAFT_ONLY" } });
+    expect(validateKairosShopifyExecutionPolicy("shopify.page.create", { title: "Live page", handle: "live-page", isPublished: true })).toMatchObject({ ok: false, error: { code: "SHOPIFY_PAGE_CREATE_UNPUBLISHED_ONLY" } });
+    expect(validateKairosShopifyExecutionPolicy("shopify.collection.create", { title: "Safe", handle: "safe" })).toMatchObject({ ok: true });
   });
 
   it("rejects arbitrary fields and unsafe theme paths", () => {
