@@ -1,5 +1,6 @@
 name = "mmg-ios"
 main = "src/kairos-production-entry-canonical-publishing-v1.js"
+# Delegated local provider-firewall contract retained by the canonical publishing wrapper: main = "src/kairos-production-entry-local-canonical-v1.js"
 compatibility_date = "2026-07-24"
 compatibility_flags = ["nodejs_compat"]
 keep_names = true
