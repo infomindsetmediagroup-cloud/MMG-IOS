@@ -1,0 +1,84 @@
+name: Validate Kairos Deployment Ownership
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/deploy-kairos-canonical-worker.yml'
+      - '.github/workflows/deploy-cloudflare-production.yml'
+      - '.github/workflows/deploy-cloudflare-workers.yml'
+      - '.github/workflows/deploy-sprint-44-revenue-storage.yml'
+      - '.github/workflows/deploy-kairos-digital-asset-v2.yml'
+      - '.github/workflows/validate-kairos-deployment-ownership.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/deploy-kairos-canonical-worker.yml'
+      - '.github/workflows/deploy-cloudflare-production.yml'
+      - '.github/workflows/deploy-cloudflare-workers.yml'
+      - '.github/workflows/deploy-sprint-44-revenue-storage.yml'
+      - '.github/workflows/deploy-kairos-digital-asset-v2.yml'
+      - '.github/workflows/validate-kairos-deployment-ownership.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Enforce single automatic production deploy owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify canonical production deployment authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          canonical='.github/workflows/deploy-kairos-canonical-worker.yml'
+          grep -Fq 'name: Deploy Canonical Kairos Worker' "${canonical}"
+          grep -Fq 'environment: production' "${canonical}"
+          grep -Fq 'CLOUDFLARE_API_TOKEN' "${canonical}"
+          grep -Fq 'npx wrangler deploy' "${canonical}"
+          grep -Fq 'Verify exact production deployment' "${canonical}"
+          grep -Fq 'Verify customer OAuth production entrypoint' "${canonical}"
+
+      - name: Verify former and feature workflows cannot deploy production
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            '.github/workflows/deploy-cloudflare-production.yml'
+            '.github/workflows/deploy-cloudflare-workers.yml'
+            '.github/workflows/deploy-sprint-44-revenue-storage.yml'
+            '.github/workflows/deploy-kairos-digital-asset-v2.yml'
+          )
+
+          for file in "${files[@]}"; do
+            test -f "${file}"
+            if grep -Fq 'environment: production' "${file}"; then
+              echo "${file} must not own the production environment." >&2
+              exit 1
+            fi
+            if grep -Fq 'CLOUDFLARE_API_TOKEN' "${file}"; then
+              echo "${file} must not hold a Cloudflare deployment credential." >&2
+              exit 1
+            fi
+            if grep -Fq 'cloudflare/wrangler-action@' "${file}"; then
+              echo "${file} must not invoke a Cloudflare deployment action." >&2
+              exit 1
+            fi
+            if grep -Eq '^[[:space:]]*run:[[:space:]]*npx wrangler deploy([[:space:]]*$|[[:space:]]*\\)' "${file}"; then
+              echo "${file} contains a direct production wrangler deploy." >&2
+              exit 1
+            fi
+            if grep -Eq '^[[:space:]]*npx wrangler deploy([[:space:]]*$|[[:space:]]*\\)' "${file}"; then
+              echo "${file} contains a direct production wrangler deploy." >&2
+              exit 1
+            fi
+          done
+
+          grep -Fq 'npx wrangler deploy --dry-run' '.github/workflows/deploy-sprint-44-revenue-storage.yml'
+          grep -Fq 'npx wrangler deploy --dry-run' '.github/workflows/deploy-kairos-digital-asset-v2.yml'
+          echo 'Kairos GitHub Actions production deployment has one owner: deploy-kairos-canonical-worker.yml.'
