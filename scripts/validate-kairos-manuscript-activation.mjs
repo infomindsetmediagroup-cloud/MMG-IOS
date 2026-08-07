@@ -4,6 +4,7 @@ import path from "node:path";
 const root = process.cwd();
 const paths = {
   wrangler: "cloudflare/mmg-ios/wrangler.toml",
+  publishingEntry: "cloudflare/mmg-ios/src/kairos-production-entry-canonical-publishing-v1.js",
   canonicalEntry: "cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js",
   localOnlyEntry: "cloudflare/mmg-ios/src/kairos-production-entry-local-only-v1.js",
   localExecutionEntry: "cloudflare/mmg-ios/src/kairos-production-entry-local-execution-v1.js",
@@ -29,9 +30,10 @@ const paths = {
 };
 for (const [name, relative] of Object.entries(paths)) if (!fs.existsSync(path.join(root, relative))) fail(`Missing ${name}: ${relative}`);
 const values = Object.fromEntries(Object.entries(paths).map(([name, relative]) => [name, name === "governanceContract" || name === "registry" ? JSON.parse(read(relative)) : read(relative)]));
-const { wrangler, canonicalEntry, localOnlyEntry, localExecutionEntry, localInference, entry, deliveryEntry, delivery, boundary, autoPipeline, productPublication, digitalAssetContract, creationArtifacts, localBridge, localBrowserRuntime, runtimeLoader, commandLoader, commandHub, index, governanceContract, doctrine, registry, deploy } = values;
+const { wrangler, publishingEntry, canonicalEntry, localOnlyEntry, localExecutionEntry, localInference, entry, deliveryEntry, delivery, boundary, autoPipeline, productPublication, digitalAssetContract, creationArtifacts, localBridge, localBrowserRuntime, runtimeLoader, commandLoader, commandHub, index, governanceContract, doctrine, registry, deploy } = values;
 
-assert(wrangler.includes('main = "src/kairos-production-entry-local-canonical-v1.js"'), "The active Worker must use the canonical local provider firewall.");
+assert(wrangler.includes('main = "src/kairos-production-entry-canonical-publishing-v1.js"'), "The active Worker must use the canonical publishing entry.");
+for (const marker of ['./kairos-production-entry-local-canonical-v1.js','KAIROS_CANONICAL_PUBLISHING_ENTRY_BUILD','canonicalRuntime.fetch(request, env, ctx)']) assert(publishingEntry.includes(marker), `The canonical publishing wrapper must retain the local provider firewall: ${marker}`);
 for (const marker of ['KAIROS_MANUSCRIPT_RUNTIME_ENABLED = "true"','KAIROS_MANUSCRIPT_START_MODE = "local-browser"','KAIROS_MODEL_PROVIDER = "browser-webgpu"','KAIROS_NO_COST_MODE = "true"','KAIROS_LOCAL_INFERENCE_ENABLED = "true"','KAIROS_CLOUDFLARE_NEURONS_ENABLED = "false"','binding = "KAIROS_PROJECT_WORKFLOW"','binding = "KAIROS_MANUSCRIPT_WORKFLOW"']) assert(wrangler.includes(marker), `Local manuscript runtime configuration is missing: ${marker}`);
 assert(!wrangler.includes('KAIROS_MODEL_PROVIDER = "openai"'), "OpenAI must not be configured as the production model provider.");
 assert(!wrangler.includes('KAIROS_MODEL_ENDPOINT ='), "A backend model endpoint must not be configured.");
@@ -113,7 +115,7 @@ assert(registry.productionReleasePolicy?.livePublishRequiresExplicitUserAction =
 assert(registry.productionReleasePolicy?.themeMutationAuthorized === false, "Theme mutation must remain unauthorized.");
 assert(registry.productionReleasePolicy?.navigationMutationAuthorized === false, "Navigation mutation must remain unauthorized.");
 for (const advisor of registry.advisors || []) { assert(advisor.productionDependency === false, `${advisor.id} cannot be a production dependency by default.`); assert(advisor.mutationAuthority !== true, `${advisor.id} cannot have unrestricted mutation authority.`); }
-console.log("Kairos five-center dashboard, canonical local-only manuscript generation, Digital Asset Edition V2, customer delivery, Admin Asset Vault, and governed product-release validation passed.");
+console.log("Kairos five-center dashboard, canonical publishing wrapper, canonical local-only manuscript generation, Digital Asset Edition V2, customer delivery, Admin Asset Vault, and governed product-release validation passed.");
 function read(relative) { return fs.readFileSync(path.join(root, relative), "utf8"); }
 function assert(condition, message) { if (!condition) fail(message); }
 function fail(message) { console.error(`Kairos manuscript activation validation failed: ${message}`); process.exit(1); }
