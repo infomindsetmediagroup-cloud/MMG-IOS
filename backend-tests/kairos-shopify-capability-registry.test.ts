@@ -39,11 +39,18 @@ describe("Kairos Shopify capability registry", () => {
     expect(getKairosTool("shopify.site.inspect")?.approvalRequired).toBe(false);
   });
 
-  it("defaults argument normalization to non-public state", () => {
-    const product = validateKairosToolArguments("shopify.product.create", { title: "Test Product" });
+  it("normalizes valid create arguments to non-public state", () => {
+    const product = validateKairosToolArguments("shopify.product.create", {
+      title: "Test Product",
+      handle: "test-product",
+    });
     expect(product.ok).toBe(true);
     expect(product.arguments.status).toBe("DRAFT");
-    const page = validateKairosToolArguments("shopify.page.create", { title: "Help" });
+
+    const page = validateKairosToolArguments("shopify.page.create", {
+      title: "Help",
+      handle: "help",
+    });
     expect(page.ok).toBe(true);
     expect(page.arguments.isPublished).toBe(false);
   });
