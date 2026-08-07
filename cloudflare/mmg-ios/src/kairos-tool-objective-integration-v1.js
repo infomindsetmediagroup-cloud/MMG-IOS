@@ -3,10 +3,21 @@ import { validateKairosToolArguments } from "./kairos-tool-arguments-v1.js";
 import { executeKairosTool, KAIROS_TOOL_EXECUTORS_BUILD } from "./kairos-tool-executors-v1.js";
 import { handleKairosToolApprovalAPI } from "./kairos-tool-approval-v1.js";
 
-export const KAIROS_TOOL_OBJECTIVE_INTEGRATION_BUILD = "kairos-tool-objective-integration-20260725-4-operator-controls";
+export const KAIROS_TOOL_OBJECTIVE_INTEGRATION_BUILD = "kairos-tool-objective-integration-20260807-5-shopify-site-capabilities";
 const ROUTE = /^\/api\/kairos\/?$/i;
 const MAX_CONTEXT = 30000;
-const CONNECTED_MUTATION_EXECUTORS = new Set(["shopify-product-update", "shopify-product-publish"]);
+const CONNECTED_MUTATION_EXECUTORS = new Set([
+  "shopify-product-create",
+  "shopify-product-update",
+  "shopify-product-publish",
+  "shopify-collection-create",
+  "shopify-collection-update",
+  "shopify-page-create",
+  "shopify-page-update",
+  "shopify-menu-create",
+  "shopify-menu-update",
+  "shopify-theme-files-upsert",
+]);
 
 export async function handleToolAwareKairosObjective(request, env, handler) {
   const url = new URL(request.url);
@@ -67,7 +78,7 @@ export async function handleToolAwareKairosObjective(request, env, handler) {
     const response = await handler(contextualRequest);
     return stamp(await appendEvidence(response, evidence));
   } catch (error) {
-    return stamp(json({ success: false, status: "failed", requiresApproval: false, actions: [], error: { code: error?.code || "READ_EXECUTOR_FAILED", message: error?.message || "The governed read executor failed." } }, 502));
+    return stamp(json({ success: false, status: "failed", requiresApproval: false, actions: [], error: { code: error?.code || "READ_EXECUTOR_FAILED", message: error?.message || "The governed read executor failed." } }, error?.status || 502));
   }
 }
 
