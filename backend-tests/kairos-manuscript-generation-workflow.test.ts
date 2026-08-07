@@ -7,6 +7,7 @@ const router = readFileSync("cloudflare/mmg-ios/src/kairos-manuscript-start-rout
 const health = readFileSync("cloudflare/mmg-ios/src/kairos-runtime-health-v1.js", "utf8");
 const agent = readFileSync("cloudflare/mmg-ios/src/kairos-project-agent-v1.js", "utf8");
 const api = readFileSync("cloudflare/mmg-ios/src/kairos-project-agent-api-v1.js", "utf8");
+const publishingEntry = readFileSync("cloudflare/mmg-ios/src/kairos-production-entry-canonical-publishing-v1.js", "utf8");
 const canonicalEntry = readFileSync("cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js", "utf8");
 const localOnlyEntry = readFileSync("cloudflare/mmg-ios/src/kairos-production-entry-local-only-v1.js", "utf8");
 const localExecutionEntry = readFileSync("cloudflare/mmg-ios/src/kairos-production-entry-local-execution-v1.js", "utf8");
@@ -14,8 +15,10 @@ const wrangler = readFileSync("cloudflare/mmg-ios/wrangler.toml", "utf8");
 const localUI = readFileSync("web/kairos-dashboard/scripts/executive-local-inference.js", "utf8");
 
 describe("Kairos durable manuscript generation migration", () => {
-  it("retains durable Workflow bindings while routing active generation through the canonical local firewall", () => {
-    expect(wrangler).toContain('main = "src/kairos-production-entry-local-canonical-v1.js"');
+  it("retains durable Workflow bindings while routing active generation through the canonical publishing wrapper and local firewall", () => {
+    expect(wrangler).toContain('main = "src/kairos-production-entry-canonical-publishing-v1.js"');
+    expect(publishingEntry).toContain('from "./kairos-production-entry-local-canonical-v1.js"');
+    expect(publishingEntry).toContain("canonicalRuntime.fetch(request, env, ctx)");
     expect(wrangler).toContain('binding = "KAIROS_MANUSCRIPT_WORKFLOW"');
     expect(wrangler).toContain('class_name = "KairosManuscriptGenerationWorkflow"');
     expect(wrangler).toContain('KAIROS_MANUSCRIPT_START_MODE = "local-browser"');
