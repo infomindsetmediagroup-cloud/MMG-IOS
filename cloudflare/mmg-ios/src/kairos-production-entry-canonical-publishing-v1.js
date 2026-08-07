@@ -16,6 +16,7 @@ import {
   canonicalizePipelineRecord,
   sanitizeCanonicalPublicRecord,
 } from "./kairos-canonical-publishing-contract-v1.js";
+import { handleKairosCustomerAssetAPI } from "./kairos-customer-assets-v1.js";
 
 export {
   KairosProjectAgent,
@@ -36,6 +37,9 @@ export class KairosProject extends BaseKairosProject {
 
 export default {
   async fetch(request, env, ctx) {
+    const customerAssetResponse = await handleKairosCustomerAssetAPI(request, env);
+    if (customerAssetResponse) return stamp(customerAssetResponse);
+
     const publishingResponse = await handleCanonicalPublishingRequest(
       request,
       env,
