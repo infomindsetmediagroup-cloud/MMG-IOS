@@ -1,0 +1,68 @@
+{
+  "build": "mmg-customer-portal-config-20260807-1",
+  "canonicalPortalUrl": "https://themindsetmediagroup.com/pages/customer-portal",
+  "customerAccountUrl": "https://account.themindsetmediagroup.com",
+  "authentication": {
+    "provider": "shopify_customer_accounts",
+    "publicProjectApiDefault": "fail_closed",
+    "projectApiPath": "/api/kairos/customer/projects",
+    "notes": "Kairos customer project data is never authorized by a browser-supplied customer identifier alone."
+  },
+  "serviceProject": {
+    "title": "Service Project Onboarding",
+    "guide": {
+      "title": "MMG Project Guide — Golden Master v1.0",
+      "url": "https://cdn.shopify.com/s/files/1/0754/4337/2186/files/MMG-Project-Guide-Golden-Master-v1.0.pdf?v=1784667842"
+    },
+    "intakeFields": [
+      "Shopify order number",
+      "Project files",
+      "Project goals",
+      "References",
+      "Rights confirmation",
+      "Production notes"
+    ],
+    "workflow": [
+      "Purchase",
+      "Portal intake",
+      "Review",
+      "Production",
+      "Quality assurance",
+      "Delivery",
+      "Next steps"
+    ]
+  },
+  "subscriptionMember": {
+    "title": "Subscription Member Onboarding",
+    "guide": {
+      "title": "MMG Subscription Member Guide — Golden Master v1.0",
+      "url": "https://cdn.shopify.com/s/files/1/0754/4337/2186/files/MMG-Subscription-Member-Guide-Golden-Master-v1.0.pdf?v=1784667841"
+    },
+    "profileFields": [
+      "Shopify order number",
+      "Primary role",
+      "Goals",
+      "Topics and interests",
+      "Experience level",
+      "Delivery preferences"
+    ],
+    "workflow": [
+      "Join",
+      "Profile",
+      "Curate",
+      "Preview",
+      "Delivery",
+      "Library",
+      "Evolve"
+    ]
+  },
+  "workspace": [
+    "Projects",
+    "Files",
+    "Proofs and approvals",
+    "Deliverables",
+    "Member library",
+    "Subscription preferences",
+    "Support"
+  ]
+}

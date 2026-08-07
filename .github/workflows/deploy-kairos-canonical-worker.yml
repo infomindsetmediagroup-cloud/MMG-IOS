@@ -6,6 +6,7 @@ name: Deploy Canonical Kairos Worker
     paths:
       - "cloudflare/mmg-ios/**"
       - "web/kairos-dashboard/**"
+      - "backend-tests/**"
       - "browser-tests/manuscript-pipeline-orchestrator.spec.mjs"
       - "playwright.config.mjs"
       - "package.json"
@@ -16,6 +17,7 @@ name: Deploy Canonical Kairos Worker
     paths:
       - "cloudflare/mmg-ios/**"
       - "web/kairos-dashboard/**"
+      - "backend-tests/**"
       - "browser-tests/manuscript-pipeline-orchestrator.spec.mjs"
       - "playwright.config.mjs"
       - "package.json"
@@ -86,18 +88,24 @@ jobs:
           set -euxo pipefail
           test -f package.json
           test -f wrangler.toml
+          test -f src/kairos-production-entry-canonical-publishing-v1.js
           test -f src/kairos-production-entry-local-canonical-v1.js
+          test -f src/kairos-customer-runtime-projection-store-v1.js
           test -f src/kairos-manuscript-canonical-identity-router-v1.js
           test -f src/kairos-manuscript-source-shard-v1.js
           test -f src/kairos-manuscript-package-state-v1.js
           test -f src/kairos-manuscript-deliverables-http-v1.js
           test -f src/kairos-manuscript-deliverables-builder-v4.js
-          grep -Fq 'main = "src/kairos-production-entry-local-canonical-v1.js"' wrangler.toml
+          grep -Fq 'main = "src/kairos-production-entry-canonical-publishing-v1.js"' wrangler.toml
+          grep -Fq 'handleKairosCustomerRuntimeProjectionAPI' src/kairos-production-entry-canonical-publishing-v1.js
+          grep -Fq 'handleKairosCustomerRuntimeProjectionObjectRequest' src/kairos-production-entry-canonical-publishing-v1.js
           grep -Fq 'resolveCanonicalManuscriptRequest(request, env)' src/kairos-production-entry-local-canonical-v1.js
           grep -Fq 'handleManuscriptPackageState(canonicalRequest, env, ctx)' src/kairos-production-entry-local-canonical-v1.js
           grep -Fq 'handleDedicatedManuscriptSource(canonicalRequest, env)' src/kairos-production-entry-local-canonical-v1.js
           grep -Fq "${CANONICAL_ENTRY_BUILD}" src/kairos-production-entry-local-canonical-v1.js
           grep -Fq "${MANUSCRIPT_IDENTITY_BUILD}" src/kairos-manuscript-canonical-identity-router-v1.js
+          node --check src/kairos-production-entry-canonical-publishing-v1.js
+          node --check src/kairos-customer-runtime-projection-store-v1.js
           node --check src/kairos-production-entry-local-canonical-v1.js
           node --check src/kairos-manuscript-canonical-identity-router-v1.js
           node --check src/kairos-manuscript-source-shard-v1.js
@@ -168,9 +176,21 @@ jobs:
               && grep -qi "x-kairos-canonical-local: ${CANONICAL_ENTRY_BUILD}" "${headers}" \
               && grep -qi "x-kairos-manuscript-identity-build: ${MANUSCRIPT_IDENTITY_BUILD}" "${headers}"; then
               echo "Exact canonical Worker deployment is live."
-              exit 0
+              break
+            fi
+            if [ "${attempt}" = "24" ]; then
+              echo "The exact canonical Worker deployment could not be verified." >&2
+              exit 1
             fi
             sleep 5
           done
-          echo "The exact canonical Worker deployment could not be verified." >&2
-          exit 1
+
+          customer_body="${RUNNER_TEMP}/customer-portal-auth.json"
+          customer_status="$(curl --silent --show-error --max-time 30 \
+            -H 'Cache-Control: no-cache, no-store, must-revalidate' \
+            "${WORKER_BASE_URL}/api/kairos/customer/projects" \
+            -o "${customer_body}" -w '%{http_code}')"
+          cat "${customer_body}"
+          test "${customer_status}" = "401"
+          grep -Fq 'CUSTOMER_AUTH_REQUIRED' "${customer_body}"
+          echo "Customer Portal project API is live and fail-closed without authenticated identity."
