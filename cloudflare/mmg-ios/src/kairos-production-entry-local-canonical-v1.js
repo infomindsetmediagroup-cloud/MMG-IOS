@@ -38,6 +38,11 @@ import {
   handleKairosCustomerRuntimeProjectionObjectRequest,
   KAIROS_CUSTOMER_RUNTIME_PROJECTION_STORE_BUILD,
 } from "./kairos-customer-runtime-projection-store-v1.js";
+import {
+  handleKairosCustomerAuthAPI,
+  handleKairosCustomerAuthObjectRequest,
+  KAIROS_CUSTOMER_AUTH_SESSION_BUILD,
+} from "./kairos-customer-auth-session-v1.js";
 
 export {
   KairosProjectAgent,
@@ -48,6 +53,10 @@ export {
 
 export class KairosProject extends BaseKairosProject {
   async fetch(request) {
+    const customerAuthResponse =
+      await handleKairosCustomerAuthObjectRequest(this.state, request.clone());
+    if (customerAuthResponse) return customerAuthResponse;
+
     const customerProjectionResponse =
       await handleKairosCustomerRuntimeProjectionObjectRequest(
         this.state,
@@ -67,7 +76,7 @@ export class KairosManuscriptSource extends BaseKairosManuscriptSource {
 }
 
 export const KAIROS_LOCAL_CANONICAL_ENTRY_BUILD =
-  "kairos-local-canonical-entry-20260807-1-customer-portal-runtime";
+  "kairos-local-canonical-entry-20260807-2-customer-auth-session";
 
 const PROVIDER_INDEPENDENT_OPERATIONAL_PATHS = new Set([
   "/api/hub/run",
@@ -84,6 +93,9 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const autonomousEnv = providerBlockedEnv(env);
+
+    const customerAuthResponse = await handleKairosCustomerAuthAPI(request, env);
+    if (customerAuthResponse) return stamp(customerAuthResponse);
 
     const customerResponse =
       await handleKairosCustomerRuntimeProjectionAPI(request, env);
@@ -180,6 +192,7 @@ function stamp(response, manuscriptIdentity = null) {
   headers.set("X-Kairos-Autonomy-Scheduler-Build", headers.get("X-Kairos-Autonomy-Scheduler-Build") || KAIROS_AUTONOMY_SCHEDULER_BUILD);
   headers.set("X-Kairos-Dashboard-Build", headers.get("X-Kairos-Dashboard-Build") || KAIROS_DASHBOARD_BUILD);
   headers.set("X-Kairos-Customer-Runtime-Store", headers.get("X-Kairos-Customer-Runtime-Store") || KAIROS_CUSTOMER_RUNTIME_PROJECTION_STORE_BUILD);
+  headers.set("X-Kairos-Customer-Auth", headers.get("X-Kairos-Customer-Auth") || KAIROS_CUSTOMER_AUTH_SESSION_BUILD);
   if (manuscriptIdentity?.requestedProjectId) {
     headers.set("X-Kairos-Requested-Manuscript-Project", manuscriptIdentity.requestedProjectId);
   }
