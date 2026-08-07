@@ -1,78 +1,33 @@
-name: Deploy Kairos to Cloudflare Workers
+name: Legacy Kairos Workers Check
 
-on:
-  push:
-    branches:
-      - main
+# Production Worker deployment authority is exclusively owned by
+# deploy-kairos-canonical-worker.yml. This legacy workflow is intentionally
+# manual-only and non-deploying so it cannot race the canonical exact-SHA release.
+"on":
   workflow_dispatch:
-  workflow_run:
-    workflows:
-      - pages build and deployment
-    types:
-      - completed
-
-concurrency:
-  group: kairos-cloudflare-production
-  cancel-in-progress: false
 
 permissions:
   contents: read
 
+concurrency:
+  group: kairos-legacy-workers-check
+  cancel-in-progress: true
+
 jobs:
-  deploy:
-    if: >-
-      github.event_name != 'workflow_run' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'main')
+  retired:
+    name: Confirm canonical Worker deployment ownership
     runs-on: ubuntu-latest
-    name: Deploy mmg-ios production Worker
-    timeout-minutes: 20
-
+    timeout-minutes: 5
     steps:
-      - name: Checkout code
+      - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: "1.2.15"
-
-      - name: Install locked dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Install Cloudflare Agents SDK
-        run: bun install agents@0.20.0 --no-save
-
-      - name: Deploy Kairos Worker to production traffic
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: 9f81b4b13a3053004c105ccc9e3de67b
-          workingDirectory: cloudflare/mmg-ios
-          command: deploy
-
-      - name: Verify production dashboard
+      - name: Verify canonical workflow owns production
+        shell: bash
         run: |
           set -euo pipefail
-          response_headers="$(curl --fail --silent --show-error --location --head --max-time 30 https://mmg-ios.info-mindsetmediagroup.workers.dev/)"
-          echo "$response_headers"
-          echo "$response_headers" | grep -qi '^content-type: text/html'
-
-      - name: Verify Shopify analytics endpoint
-        run: |
-          set -euo pipefail
-          curl --fail --silent --show-error --max-time 45 \
-            https://mmg-ios.info-mindsetmediagroup.workers.dev/api/analytics/shopify \
-            | tee /tmp/kairos-shopify-analytics.json
-          grep -q '"analytics"' /tmp/kairos-shopify-analytics.json
-
-      - name: Verify canonical publishing contracts
-        run: |
-          set -euo pipefail
-          curl --fail --silent --show-error --max-time 45 \
-            https://mmg-ios.info-mindsetmediagroup.workers.dev/api/kairos/publishing/contracts \
-            | tee /tmp/kairos-publishing-contracts.json
-          grep -q 'mmg-digital-asset-edition-v2-customer-package-v1' /tmp/kairos-publishing-contracts.json
-          grep -q 'mmg-shopify-product-publishing-v1' /tmp/kairos-publishing-contracts.json
+          test -f .github/workflows/deploy-kairos-canonical-worker.yml
+          grep -Fq 'name: Deploy Canonical Kairos Worker' .github/workflows/deploy-kairos-canonical-worker.yml
+          grep -Fq 'npx wrangler deploy' .github/workflows/deploy-kairos-canonical-worker.yml
+          echo 'Production Worker deployment is owned exclusively by deploy-kairos-canonical-worker.yml.'
+          echo 'This legacy workflow performs no deployment.'

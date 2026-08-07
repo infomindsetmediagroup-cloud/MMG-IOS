@@ -13,6 +13,7 @@ name: Deploy Canonical Kairos Worker
       - "package-lock.json"
       - ".github/workflows/deploy-kairos-canonical-worker.yml"
       - ".github/workflows/deploy-cloudflare-production.yml"
+      - ".github/workflows/deploy-cloudflare-workers.yml"
   push:
     branches: [main]
     paths:
@@ -25,6 +26,7 @@ name: Deploy Canonical Kairos Worker
       - "package-lock.json"
       - ".github/workflows/deploy-kairos-canonical-worker.yml"
       - ".github/workflows/deploy-cloudflare-production.yml"
+      - ".github/workflows/deploy-cloudflare-workers.yml"
   workflow_dispatch:
 
 permissions:
@@ -68,10 +70,23 @@ jobs:
           grep -Fq 'workflow_dispatch:' .github/workflows/deploy-kairos-manuscript-runtime.yml
           ! grep -Eq '^[[:space:]]{2}push:' .github/workflows/deploy-kairos-manuscript-runtime.yml
           grep -Fq "github.ref == 'refs/heads/main'" .github/workflows/deploy-kairos-manuscript-runtime.yml
+
           test -e .github/workflows/deploy-cloudflare-production.yml
+          grep -Fq 'name: Legacy Cloudflare Production Check' .github/workflows/deploy-cloudflare-production.yml
           grep -Fq 'workflow_dispatch:' .github/workflows/deploy-cloudflare-production.yml
           ! grep -Eq '^[[:space:]]{2}push:' .github/workflows/deploy-cloudflare-production.yml
-          ! grep -Fq 'npx wrangler deploy' .github/workflows/deploy-cloudflare-production.yml
+          ! grep -Fq 'CLOUDFLARE_API_TOKEN' .github/workflows/deploy-cloudflare-production.yml
+          ! grep -Fq 'environment: production' .github/workflows/deploy-cloudflare-production.yml
+
+          test -e .github/workflows/deploy-cloudflare-workers.yml
+          grep -Fq 'name: Legacy Kairos Workers Check' .github/workflows/deploy-cloudflare-workers.yml
+          grep -Fq 'workflow_dispatch:' .github/workflows/deploy-cloudflare-workers.yml
+          ! grep -Eq '^[[:space:]]{2}push:' .github/workflows/deploy-cloudflare-workers.yml
+          ! grep -Eq '^[[:space:]]{2}workflow_run:' .github/workflows/deploy-cloudflare-workers.yml
+          ! grep -Fq 'cloudflare/wrangler-action@' .github/workflows/deploy-cloudflare-workers.yml
+          ! grep -Fq 'CLOUDFLARE_API_TOKEN' .github/workflows/deploy-cloudflare-workers.yml
+          ! grep -Fq 'environment: production' .github/workflows/deploy-cloudflare-workers.yml
+
           test ! -e cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v3.js
           test -e cloudflare/mmg-ios/src/kairos-manuscript-deliverables-builder-v4.js
           grep -Fq 'npx wrangler deploy' .github/workflows/deploy-kairos-canonical-worker.yml
