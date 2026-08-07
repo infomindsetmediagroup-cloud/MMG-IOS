@@ -1,7 +1,17 @@
-name: Deploy Kairos Digital Asset V2
+name: Validate Kairos Digital Asset V2
 
 on:
   push:
+    branches: [main]
+    paths:
+      - 'cloudflare/mmg-ios/src/kairos-production-entry-digital-asset-v2-v1.js'
+      - 'cloudflare/mmg-ios/src/kairos-digital-asset-*.js'
+      - 'cloudflare/mmg-ios/src/kairos-creation-artifacts-v1.js'
+      - 'cloudflare/mmg-ios/wrangler.toml'
+      - 'scripts/validate-kairos-manuscript-activation.mjs'
+      - 'governance/mmg-digital-asset-edition-v2-contract-v1.json'
+      - '.github/workflows/deploy-kairos-digital-asset-v2.yml'
+  pull_request:
     branches: [main]
     paths:
       - 'cloudflare/mmg-ios/src/kairos-production-entry-digital-asset-v2-v1.js'
@@ -15,33 +25,17 @@ on:
 
 permissions:
   contents: read
-  statuses: write
 
 concurrency:
-  group: deploy-kairos-digital-asset-v2
-  cancel-in-progress: false
+  group: validate-kairos-digital-asset-v2-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  deploy:
+  validate:
+    name: Validate Digital Asset V2 runtime
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      WORKER_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
-
+    timeout-minutes: 30
     steps:
-      - name: Mark deployment pending
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          curl --fail --silent --show-error \
-            -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"pending\",\"context\":\"kairos-digital-asset-v2\",\"description\":\"Validating and deploying the V2 writing engine\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
-
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
@@ -51,7 +45,7 @@ jobs:
       - name: Install root dependencies
         run: npm install --ignore-scripts --no-audit --no-fund > /dev/null
 
-      - name: Validate V2 runtime syntax
+      - name: Validate V2 runtime syntax and activation contract
         run: |
           node --check cloudflare/mmg-ios/src/kairos-digital-asset-edition-v2-contract-v1.js
           node --check cloudflare/mmg-ios/src/kairos-digital-asset-v2-manuscript-writer-v1.js
@@ -67,53 +61,7 @@ jobs:
         working-directory: cloudflare/mmg-ios
         run: npx wrangler deploy --dry-run
 
-      - name: Deploy V2 Worker
-        working-directory: cloudflare/mmg-ios
-        run: npx wrangler deploy
-
-      - name: Verify V2 runtime headers
+      - name: Confirm canonical deployment ownership
         run: |
-          set -euo pipefail
-          for attempt in $(seq 1 30); do
-            headers="${RUNNER_TEMP}/headers.txt"
-            body="${RUNNER_TEMP}/status.json"
-            status="$(curl --silent --show-error --max-time 20 \
-              -D "${headers}" \
-              "${WORKER_URL}/api/kairos/manuscripts/status?attempt=${attempt}" \
-              -o "${body}" -w '%{http_code}' || true)"
-            if [ "${status}" = "200" ] \
-              && grep -qi '^x-kairos-digital-asset-edition: V2' "${headers}" \
-              && grep -qi '^x-kairos-digital-asset-writer: kairos-digital-asset-v2-writer-' "${headers}" \
-              && grep -q '"ready":true' "${body}"; then
-              cat "${body}"
-              exit 0
-            fi
-            sleep 5
-          done
-          cat "${headers}" || true
-          cat "${body}" || true
-          exit 1
-
-      - name: Report deployment success
-        if: ${{ success() }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          curl --fail --silent --show-error \
-            -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"success\",\"context\":\"kairos-digital-asset-v2\",\"description\":\"V2 writing engine deployed and verified\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
-
-      - name: Report deployment failure
-        if: ${{ failure() || cancelled() }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          curl --fail --silent --show-error \
-            -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data "{\"state\":\"failure\",\"context\":\"kairos-digital-asset-v2\",\"description\":\"V2 writing engine deployment failed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+          grep -Fq 'name: Deploy Canonical Kairos Worker' .github/workflows/deploy-kairos-canonical-worker.yml
+          echo 'Digital Asset V2 validation complete. Production deployment is owned by deploy-kairos-canonical-worker.yml.'
