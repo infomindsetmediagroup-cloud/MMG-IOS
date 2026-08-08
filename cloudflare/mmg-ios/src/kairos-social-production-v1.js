@@ -1,35 +1,68 @@
-const BUILD = "kairos-social-production-20260713-1";
+import {
+  KAIROS_TIKTOK_CONTENT_FRAMEWORK_BUILD,
+  SOCIAL_CARD_CAPABILITIES,
+  TIKTOK_BRAND,
+  TIKTOK_MODES,
+  TIKTOK_PUBLISHING_CADENCE,
+  buildTikTokCore,
+  connectorContract,
+  validateTikTokPackage,
+} from "./kairos-tiktok-content-framework-v1.js";
+
+const BUILD = "kairos-social-production-20260807-2-tiktok-framework";
 const CACHE_SECONDS = 60 * 60 * 24 * 14;
-const MODES = new Set(["tiktok-single-image", "tiktok-carousel", "tiktok-video", "cross-platform-caption", "social-asset-queue"]);
+const LEGACY_MODES = new Set(["cross-platform-caption", "social-asset-queue"]);
+const MODES = new Set([...TIKTOK_MODES, ...LEGACY_MODES]);
 
 export async function prepareSocialPackage(request, payload) {
   const mode = String(payload?.mode || "").trim();
   const objective = String(payload?.objective || "").trim();
   const audience = String(payload?.audience || "creators, entrepreneurs, authors, and small businesses").trim();
-  const CTA = String(payload?.cta || "Follow for practical creator systems.").trim();
+  const ctaMode = String(payload?.ctaMode || "follow").trim();
+  const CTA = String(payload?.cta || "").trim();
+  const sourceCard = String(payload?.sourceCard || "social-production").trim();
+  const carouselCount = Number(payload?.carouselCount || 5);
   if (!MODES.has(mode)) throw new Error("Select a supported social production mode.");
   if (objective.length < 8) throw new Error("Describe the social content objective.");
 
   const packageID = `social-${crypto.randomUUID()}`;
   const createdAt = new Date().toISOString();
-  const core = buildCore(mode, objective, audience, CTA);
+  const isTikTok = TIKTOK_MODES.includes(mode);
+  const core = isTikTok
+    ? buildTikTokCore({ mode, objective, audience, cta: CTA, ctaMode, carouselCount })
+    : buildLegacyCore(mode, objective, audience, CTA || `Follow ${TIKTOK_BRAND.account} for practical creator systems.`);
+  if (isTikTok) validateTikTokPackage(core);
+
   const socialPackage = {
     id: packageID,
     build: BUILD,
+    frameworkBuild: isTikTok ? KAIROS_TIKTOK_CONTENT_FRAMEWORK_BUILD : "legacy-cross-platform-adapter",
     status: "awaiting-executive-approval",
     createdAt,
+    platform: isTikTok ? "tiktok" : "multi-platform",
+    account: isTikTok ? TIKTOK_BRAND.account : "",
+    sourceCard,
+    sourceCardCapability: SOCIAL_CARD_CAPABILITIES[sourceCard] || SOCIAL_CARD_CAPABILITIES["social-production"],
     mode,
     objective,
     audience,
     title: core.title,
     hook: core.hook,
     body: core.body,
-    CTA,
+    textPost: core.textPost || "",
+    CTA: core.CTA || CTA,
+    ctaMode: core.ctaMode || ctaMode,
     hashtags: core.hashtags,
+    hashtagPyramid: core.hashtagPyramid || null,
     accessibilityText: core.accessibilityText,
     mediaRequirements: core.mediaRequirements,
     sequence: core.sequence,
-    platformVariants: core.platformVariants,
+    retentionRules: core.retentionRules || null,
+    identityRules: core.identityRules || null,
+    measurementPlan: core.measurementPlan || null,
+    productionSlices: buildProductionSlices(core, isTikTok),
+    platformVariants: core.platformVariants || [],
+    scheduling: isTikTok ? TIKTOK_PUBLISHING_CADENCE : { connectorSchedulingEnabled: false },
     disclosure: {
       yourBrand: true,
       paidPartnership: false,
@@ -54,22 +87,15 @@ export async function prepareSocialPackage(request, payload) {
       state: "pending",
       actions: ["approve", "fix", "deny"],
     },
-    connectorReadyPayload: {
-      platform: mode.startsWith("tiktok") ? "tiktok" : "multi-platform",
-      mode,
-      title: core.title,
-      caption: `${core.body}\n\n${core.hashtags.join(" ")}`,
-      CTA,
-      accessibilityText: core.accessibilityText,
-      disclosure: { yourBrand: true, paidPartnership: false, brandPartner: false },
-      media: core.mediaRequirements,
-      publish: false,
-    },
+    connectorReadyPayload: isTikTok
+      ? connectorContract(core)
+      : legacyConnectorPayload(mode, core, CTA),
     safeguards: {
       externalPublishingAutomatic: false,
       connectorClaimsForbidden: true,
       approvalBeforeHandoff: true,
       evidenceAndReceiptRequiredAfterFuturePublication: true,
+      futureConnectorMustConsumeApprovedPackageWithoutRewriting: true,
     },
   };
   await persist(request, socialPackage);
@@ -120,25 +146,49 @@ export async function readLatestSocialPackage(request) {
   try { return await response.json(); } catch { return null; }
 }
 
-function buildCore(mode, objective, audience, CTA) {
-  const clean = sentence(objective);
-  const title = titleFor(clean);
-  const hook = hookFor(clean);
-  const body = captionFor(clean, audience, CTA);
-  const hashtags = hashtagsFor(mode);
-  const accessibilityText = `Social content about ${clean.toLowerCase()} for ${audience}. Key message: ${hook}`;
-  if (mode === "tiktok-single-image") return { title, hook, body, hashtags, accessibilityText, mediaRequirements: [{ type: "image", count: 1, aspectRatio: "9:16", minimumResolution: "1080x1920", textSafeAreaRequired: true }], sequence: [{ order: 1, role: "hero", instruction: "Use one high-clarity image with the title as the visual priority." }], platformVariants: [] };
-  if (mode === "tiktok-carousel") return { title, hook, body, hashtags, accessibilityText, mediaRequirements: [{ type: "image", count: 5, aspectRatio: "9:16", minimumResolution: "1080x1920", sequenceRequired: true }], sequence: ["Hook", "Problem", "Insight", "Action", "CTA"].map((role, index) => ({ order: index + 1, role, instruction: `${role} slide supporting ${clean}` })), platformVariants: [] };
-  if (mode === "tiktok-video") return { title, hook, body, hashtags, accessibilityText, mediaRequirements: [{ type: "video", count: 1, aspectRatio: "9:16", recommendedDuration: "20-35 seconds", captionsRequired: true, coverRequired: true }], sequence: [{ order: 1, role: "0-3s Hook", instruction: hook }, { order: 2, role: "3-10s Promise", instruction: `State the problem and outcome for ${clean}.` }, { order: 3, role: "10-20s Value", instruction: "Demonstrate the practical method or proof." }, { order: 4, role: "Final 3s CTA", instruction: CTA }], platformVariants: [] };
-  if (mode === "cross-platform-caption") return { title, hook, body, hashtags, accessibilityText, mediaRequirements: [{ type: "existing-approved-media", count: 1, platformCroppingReviewRequired: true }], sequence: [], platformVariants: [{ platform: "TikTok", caption: body }, { platform: "Instagram", caption: body }, { platform: "Facebook", caption: `${body} ${CTA}` }, { platform: "LinkedIn", caption: `${hook}\n\n${body}` }] };
-  return { title: "Social Asset Production Queue", hook, body, hashtags, accessibilityText, mediaRequirements: [{ type: "mixed", count: 1, productionBriefRequired: true }], sequence: [{ order: 1, role: "Intake", instruction: clean }, { order: 2, role: "Production", instruction: "Create the required approved media and copy assets." }, { order: 3, role: "Review", instruction: "Verify brand, accessibility, disclosure, and export readiness." }], platformVariants: [] };
+function buildProductionSlices(core, isTikTok) {
+  const slices = [
+    { order: 1, id: "objective", name: "Objective", instruction: "Define the audience problem, useful outcome, and intended action before writing copy." },
+    { order: 2, id: "format", name: "Format", instruction: isTikTok ? `Use the approved TikTok format: ${core.mode}.` : "Use the approved social format." },
+    { order: 3, id: "hook", name: "Hook", instruction: isTikTok ? "Earn attention immediately. The first three seconds or first visual must lead with result, tension, proof, or curiosity." : "Lead with the strongest audience-relevant idea." },
+    { order: 4, id: "copy", name: "Copy", instruction: "Create clean, copy-paste-ready public copy. Keep internal labels out of the published caption." },
+    { order: 5, id: "hashtags", name: "Hashtag Pyramid", instruction: isTikTok ? "Use exactly five hashtags: 2 broad/reach + 2 niche/topic + 1 #MindsetMediaGroup brand hashtag." : "Use platform-appropriate tags only when required." },
+    { order: 6, id: "media", name: "Media Brief", instruction: "Produce the approved single image, carousel sequence, native text post, or vertical video specification without changing approved messaging." },
+    { order: 7, id: "qa", name: "QA & Approval", instruction: "Verify brand identity, accessibility, format constraints, CTA, disclosure, and package completeness before approval." },
+    { order: 8, id: "connector", name: "Connector Handoff", instruction: "After approval, hand the immutable approved payload to the future platform connector. The connector publishes; it does not rewrite." },
+  ];
+  return slices;
 }
 
-function sentence(value) { const text = String(value).replace(/\s+/g, " ").trim(); return /[.!?]$/.test(text) ? text : `${text}.`; }
-function titleFor(objective) { const base = objective.replace(/[.!?]+$/, "").split(/\s+/).slice(0, 8).join(" "); return `${base} 🚀`; }
-function hookFor(objective) { return `Stop scrolling—${objective.charAt(0).toLowerCase()}${objective.slice(1)}`; }
-function captionFor(objective, audience, CTA) { return `${objective} Built for ${audience}. ${CTA}`; }
-function hashtagsFor(mode) { const niche = mode.includes("video") ? "#creatorvideo" : mode.includes("carousel") ? "#contentcarousel" : mode.includes("single") ? "#creatorgraphics" : "#contentstrategy"; return [niche, "#creatortips", "#contentcreation", "#smallbusiness", "#mindsetmediagroup"]; }
+function buildLegacyCore(mode, objective, audience, CTA) {
+  const clean = sentence(objective);
+  const title = clean.replace(/[.!?]+$/, "").split(/\s+/).slice(0, 8).join(" ");
+  const hook = `Before you scroll: ${clean.charAt(0).toLowerCase()}${clean.slice(1)}`;
+  const body = `${clean} Built for ${audience}. ${CTA}`;
+  const hashtags = ["#CreatorTips", "#ContentStrategy", "#CreatorEducation", "#SmallBusiness", "#MindsetMediaGroup"];
+  const accessibilityText = `Social content about ${clean.toLowerCase()} for ${audience}. Key message: ${hook}`;
+  if (mode === "cross-platform-caption") return { title, hook, body, CTA, hashtags, accessibilityText, mediaRequirements: [{ type: "existing-approved-media", count: 1, platformCroppingReviewRequired: true }], sequence: [], platformVariants: [{ platform: "TikTok", caption: body }, { platform: "Instagram", caption: body }, { platform: "Facebook", caption: `${body} ${CTA}` }, { platform: "LinkedIn", caption: `${hook}\n\n${body}` }] };
+  return { title: "Social Asset Production Queue", hook, body, CTA, hashtags, accessibilityText, mediaRequirements: [{ type: "mixed", count: 1, productionBriefRequired: true }], sequence: [{ order: 1, role: "Intake", instruction: clean }, { order: 2, role: "Production", instruction: "Create the required approved media and copy assets." }, { order: 3, role: "Review", instruction: "Verify brand, accessibility, disclosure, and export readiness." }], platformVariants: [] };
+}
+
+function legacyConnectorPayload(mode, core, CTA) {
+  return {
+    schema: "kairos-social-connector-payload-v1",
+    platform: "multi-platform",
+    mode,
+    title: core.title,
+    caption: `${core.body}\n\n${core.hashtags.join(" ")}`,
+    CTA,
+    accessibilityText: core.accessibilityText,
+    media: core.mediaRequirements,
+    publish: false,
+  };
+}
+
+function sentence(value) {
+  const text = String(value).replace(/\s+/g, " ").trim();
+  return /[.!?]$/.test(text) ? text : `${text}.`;
+}
 
 async function persist(request, socialPackage) {
   const response = stored(socialPackage);
