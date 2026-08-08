@@ -16,6 +16,11 @@ import {
   canonicalizePipelineRecord,
   sanitizeCanonicalPublicRecord,
 } from "./kairos-canonical-publishing-contract-v1.js";
+import {
+  MMG_PUBLICATION_VISUAL_STANDARD_ID,
+  applyPublicationVisualStandardToManufacturingPayload,
+  assertPublicationVisualStandardInvariant,
+} from "./kairos-publication-visual-standard-v1.js";
 
 export {
   KairosProjectAgent,
@@ -26,7 +31,7 @@ export {
 };
 
 export const KAIROS_CANONICAL_PUBLISHING_ENTRY_BUILD =
-  "kairos-canonical-publishing-entry-20260806-3";
+  "kairos-canonical-publishing-entry-20260808-4-visual-standard";
 
 export class KairosProject extends BaseKairosProject {
   async fetch(request) {
@@ -53,7 +58,7 @@ export default {
   },
 };
 
-async function canonicalizeDurableRequest(request) {
+export async function canonicalizeDurableRequest(request) {
   const url = new URL(request.url);
 
   if (
@@ -61,11 +66,16 @@ async function canonicalizeDurableRequest(request) {
     url.pathname === "/product-manufacturing/create"
   ) {
     const body = await request.clone().json().catch(() => ({}));
-    const canonicalBody = sanitizeCanonicalPublicRecord({
-      ...body,
-      author: MMG_CANONICAL_IDENTITY.author,
+    assertPublicationVisualStandardInvariant();
+    const canonicalBody = applyPublicationVisualStandardToManufacturingPayload(
+      sanitizeCanonicalPublicRecord({
+        ...body,
+        author: MMG_CANONICAL_IDENTITY.author,
+      }),
+    );
+    return replaceJSONBody(request, canonicalBody, {
+      publicationVisualStandard: MMG_PUBLICATION_VISUAL_STANDARD_ID,
     });
-    return replaceJSONBody(request, canonicalBody);
   }
 
   if (
@@ -81,13 +91,19 @@ async function canonicalizeDurableRequest(request) {
   return request;
 }
 
-function replaceJSONBody(request, body) {
+function replaceJSONBody(request, body, options = {}) {
   const headers = new Headers(request.headers);
   headers.set("Content-Type", "application/json; charset=utf-8");
   headers.set(
     "X-Kairos-Canonical-Contract",
     KAIROS_CANONICAL_PUBLISHING_CONTRACT_BUILD,
   );
+  if (options.publicationVisualStandard) {
+    headers.set(
+      "X-Kairos-Publication-Visual-Standard",
+      options.publicationVisualStandard,
+    );
+  }
   return new Request(request.url, {
     method: request.method,
     headers,
@@ -111,6 +127,11 @@ function stamp(response) {
     "X-Kairos-Canonical-Contract",
     headers.get("X-Kairos-Canonical-Contract") ||
       KAIROS_CANONICAL_PUBLISHING_CONTRACT_BUILD,
+  );
+  headers.set(
+    "X-Kairos-Publication-Visual-Standard",
+    headers.get("X-Kairos-Publication-Visual-Standard") ||
+      MMG_PUBLICATION_VISUAL_STANDARD_ID,
   );
   return new Response(response.body, {
     status: response.status,
