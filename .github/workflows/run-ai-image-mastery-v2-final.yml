@@ -116,7 +116,7 @@ jobs:
 
       - name: Upload final package and evidence
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ai-image-mastery-v2-final-customer-package
           path: |
