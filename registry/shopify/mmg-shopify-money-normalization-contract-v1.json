@@ -1,0 +1,72 @@
+{
+  "contract_id": "mmg-shopify-money-normalization-v1",
+  "version": "1.0.0",
+  "status": "approved_for_production_repair",
+  "approved_date": "2026-07-21",
+  "purpose": "Prevent Shopify storefront prices from being multiplied or divided by 100 through ambiguous unit inference.",
+  "implementation": {
+    "module": "shopify/lib/mmg-shopify-money-normalization.ts",
+    "tests": "backend-tests/mmg-shopify-money-normalization.test.ts"
+  },
+  "source_contracts": {
+    "storefront_product_js_cents": {
+      "endpoint_pattern": "/products/<handle>.js",
+      "accepted_shape": "nonnegative integer cents",
+      "formatter": "formatShopifyCents",
+      "examples": {
+        "995": "$9.95",
+        "39795": "$397.95"
+      }
+    },
+    "catalog_products_json_decimal": {
+      "endpoint_pattern": "/products.json",
+      "accepted_shape": "nonnegative decimal major-unit amount with no more than two fractional digits",
+      "formatter": "formatShopifyDecimal",
+      "examples": {
+        "9.95": "$9.95",
+        "397.95": "$397.95"
+      }
+    },
+    "admin_graphql_decimal": {
+      "endpoint_pattern": "Shopify Admin GraphQL Money or MoneyV2 amount",
+      "accepted_shape": "nonnegative decimal major-unit amount with no more than two fractional digits",
+      "formatter": "formatShopifyDecimal"
+    }
+  },
+  "prohibited_logic": [
+    "Do not infer cents from whether a value is numeric.",
+    "Do not infer cents from whether a string contains only digits.",
+    "Do not infer units from amount magnitude.",
+    "Do not strip a decimal point and then format the remaining digits as dollars.",
+    "Do not divide decimal Shopify values by 100.",
+    "Do not treat integer-cent Shopify values as major currency units."
+  ],
+  "required_regression_values": [
+    "$4.95",
+    "$9.95",
+    "$14.95",
+    "$97.95",
+    "$197.95",
+    "$397.95"
+  ],
+  "live_product_scope": [
+    "AI Image Mastery™",
+    "Professional Cover Design Service™",
+    "Every MMG product page or catalog carousel that formats Shopify money"
+  ],
+  "repair_boundary": {
+    "catalog_prices_changed": false,
+    "variant_ids_changed": false,
+    "product_status_changed": false,
+    "presentation_formatter_only": true
+  },
+  "release_gates": [
+    "All required regression values pass for explicit cents sources.",
+    "All required regression values pass for explicit decimal sources.",
+    "Malformed or ambiguous values fail closed to the configured fallback.",
+    "Live product variant prices remain unchanged.",
+    "The Professional tier renders $397.95 on mobile and desktop.",
+    "AI Image Mastery renders $9.95 on mobile and desktop.",
+    "Cart and checkout use the matching Shopify variant price."
+  ]
+}

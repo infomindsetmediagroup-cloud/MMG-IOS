@@ -18,9 +18,18 @@
     });
   };
 
-  const formatMoney = (value) => {
-    const amount = Number.parseFloat(String(value));
-    return Number.isFinite(amount) ? `$${amount.toFixed(2)}` : '';
+  const formatCents = (value) => {
+    const normalized = String(value ?? '').trim();
+    if (!/^\d+$/.test(normalized)) return '';
+    const cents = Number(normalized);
+    return Number.isSafeInteger(cents) && cents >= 0
+      ? new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        }).format(cents / 100)
+      : '';
   };
 
   const setPurchaseEnabled = (enabled) => {
@@ -58,7 +67,7 @@
       }
 
       if (variant) {
-        const price = formatMoney(variant.price);
+        const price = formatCents(variant.price);
         if (price) setText('[data-mmg-price]', price);
       }
 
