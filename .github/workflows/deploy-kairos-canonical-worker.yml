@@ -42,7 +42,7 @@ env:
   WORKER_BASE_URL: https://mmg-ios.info-mindsetmediagroup.workers.dev
   CANONICAL_ENTRY_BUILD: kairos-local-canonical-entry-20260807-2-customer-account-oauth
   CUSTOMER_AUTH_BUILD: kairos-customer-account-auth-20260807-1-confidential-session
-  PUBLISHING_ENTRY_BUILD: kairos-canonical-publishing-entry-20260806-3
+  PUBLISHING_ENTRY_BUILD: kairos-canonical-publishing-entry-20260808-4-visual-standard
   MANUSCRIPT_IDENTITY_BUILD: kairos-manuscript-canonical-identity-20260804-1-server-shard-resolution
   DIGITAL_ASSET_PACKAGE_CONTRACT: mmg-digital-asset-edition-v2-customer-package-v1
 
