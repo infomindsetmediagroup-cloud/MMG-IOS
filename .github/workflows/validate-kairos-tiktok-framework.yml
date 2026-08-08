@@ -6,8 +6,13 @@ name: Validate Kairos TikTok Framework
     paths:
       - "cloudflare/mmg-ios/src/kairos-tiktok-content-framework-v1.js"
       - "cloudflare/mmg-ios/src/kairos-social-production-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-tiktok-connector-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-canonical-publishing-v1.js"
       - "cloudflare/mmg-ios/src/kairos-production-entry-v2.js"
+      - "cloudflare/mmg-ios/wrangler.toml"
       - "cloudflare/mmg-ios/test/kairos-tiktok-content-framework-v1.test.js"
+      - "cloudflare/mmg-ios/test/kairos-tiktok-connector-v1.test.js"
       - "cloudflare/mmg-ios/test/kairos-social-production-ui-contract-v1.test.js"
       - "web/kairos-dashboard/scripts/social-production.js"
       - "web/kairos-dashboard/scripts/command-hub.js"
@@ -19,8 +24,13 @@ name: Validate Kairos TikTok Framework
     paths:
       - "cloudflare/mmg-ios/src/kairos-tiktok-content-framework-v1.js"
       - "cloudflare/mmg-ios/src/kairos-social-production-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-tiktok-connector-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-canonical-publishing-v1.js"
       - "cloudflare/mmg-ios/src/kairos-production-entry-v2.js"
+      - "cloudflare/mmg-ios/wrangler.toml"
       - "cloudflare/mmg-ios/test/kairos-tiktok-content-framework-v1.test.js"
+      - "cloudflare/mmg-ios/test/kairos-tiktok-connector-v1.test.js"
       - "cloudflare/mmg-ios/test/kairos-social-production-ui-contract-v1.test.js"
       - "web/kairos-dashboard/scripts/social-production.js"
       - "web/kairos-dashboard/scripts/command-hub.js"
@@ -38,7 +48,7 @@ concurrency:
 
 jobs:
   validate:
-    name: Validate TikTok content framework
+    name: Validate TikTok framework and connector
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -54,17 +64,20 @@ jobs:
         working-directory: cloudflare/mmg-ios
         run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
 
-      - name: Validate TikTok framework syntax
+      - name: Validate TikTok framework and connector syntax
         run: |
           node --check cloudflare/mmg-ios/src/kairos-tiktok-content-framework-v1.js
           node --check cloudflare/mmg-ios/src/kairos-social-production-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-tiktok-connector-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-production-entry-canonical-publishing-v1.js
           node --check web/kairos-dashboard/scripts/social-production.js
 
-      - name: Run TikTok framework contracts
+      - name: Run TikTok framework and connector contracts
         working-directory: cloudflare/mmg-ios
-        run: node --test test/kairos-tiktok-content-framework-v1.test.js test/kairos-social-production-ui-contract-v1.test.js
+        run: node --test test/kairos-tiktok-content-framework-v1.test.js test/kairos-tiktok-connector-v1.test.js test/kairos-social-production-ui-contract-v1.test.js
 
-      - name: Enforce connector boundary
+      - name: Enforce governed connector boundary
         shell: bash
         run: |
           set -euxo pipefail
@@ -75,6 +88,17 @@ jobs:
           grep -Fq '@mindset.media.group' cloudflare/mmg-ios/src/kairos-tiktok-content-framework-v1.js
           grep -Fq '#MindsetMediaGroup' cloudflare/mmg-ios/src/kairos-tiktok-content-framework-v1.js
           grep -Fq '2 broad + 2 niche + 1 brand' cloudflare/mmg-ios/src/kairos-tiktok-content-framework-v1.js
+          grep -Fq 'TIKTOK_EXPORT_CONSENT_REQUIRED' cloudflare/mmg-ios/src/kairos-tiktok-connector-v1.js
+          grep -Fq 'TIKTOK_DIRECT_POST_AUDIT_REQUIRED' cloudflare/mmg-ios/src/kairos-tiktok-connector-v1.js
+          grep -Fq 'TIKTOK_ACCOUNT_MISMATCH' cloudflare/mmg-ios/src/kairos-tiktok-connector-v1.js
+          grep -Fq 'TIKTOK_MEDIA_ORIGIN_NOT_VERIFIED' cloudflare/mmg-ios/src/kairos-tiktok-connector-v1.js
+          grep -Fq 'TikTok native text posts are not supported by the current Content Posting API' cloudflare/mmg-ios/src/kairos-tiktok-connector-v1.js
+          grep -Fq 'name = "KAIROS_TIKTOK_CONNECTOR"' cloudflare/mmg-ios/wrangler.toml
+          grep -Fq 'class_name = "KairosTikTokConnectorVault"' cloudflare/mmg-ios/wrangler.toml
+          grep -Fq 'KAIROS_TIKTOK_DIRECT_POST_AUDITED = "false"' cloudflare/mmg-ios/wrangler.toml
+          grep -Fq 'KAIROS_TIKTOK_VERIFIED_MEDIA_ORIGINS = ""' cloudflare/mmg-ios/wrangler.toml
+          ! grep -Fq 'KAIROS_TIKTOK_CLIENT_SECRET =' cloudflare/mmg-ios/wrangler.toml
+          ! grep -Fq 'KAIROS_TIKTOK_CLIENT_KEY =' cloudflare/mmg-ios/wrangler.toml
 
       - name: Validate deployable Worker bundle
         working-directory: cloudflare/mmg-ios
