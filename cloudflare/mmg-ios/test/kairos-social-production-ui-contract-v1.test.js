@@ -59,7 +59,7 @@ test("social package exposes the eight-step connector handoff process", () => {
 test("Social Production exposes authenticated TikTok connect, publish and receipt controls", () => {
   assert.match(ui, /const CONNECTOR_ROOT="\/api\/social-connectors\/tiktok"/);
   for (const suffix of ["/status", "/connect-url", "/disconnect", "/creator-info", "/publish", "/receipt/refresh"]) {
-    assert.ok(ui.includes(`\${"${CONNECTOR_ROOT}"}${suffix}`), `Missing connector UI route suffix: ${suffix}`);
+    assert.ok(ui.includes("${CONNECTOR_ROOT}" + suffix), `Missing connector UI route suffix: ${suffix}`);
   }
   assert.match(ui, /window\.shopify\.idToken/);
   assert.match(ui, /Authorization:`Bearer \$\{token\}`/);
