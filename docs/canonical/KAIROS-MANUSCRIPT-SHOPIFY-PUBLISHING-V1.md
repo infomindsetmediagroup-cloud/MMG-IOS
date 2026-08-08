@@ -4,12 +4,15 @@
 **Owner:** Mindset Media Group™  
 **Runtime entry:** `cloudflare/mmg-ios/src/kairos-production-entry-canonical-publishing-v1.js`  
 **Digital Asset contract:** `mmg-digital-asset-edition-v2-customer-package-v1`  
-**Shopify contract:** `mmg-shopify-product-publishing-v1`
+**Shopify publishing contract:** `mmg-shopify-product-publishing-v1`  
+**Shopify product-page contract:** `mmg-shopify-product-page-canonical-v1`
 
 This contract defines exactly how the two publishing portions of the Kairos Command Center operate:
 
 1. manuscript development through the final **Digital Asset** customer deliverable; and
 2. approval-gated **Shopify product publishing** using the approved Digital Asset release.
+
+It also defines the permanent product-page content contract Kairos must use whenever it writes, rewrites, prepares, updates, or publishes any Shopify product page for Mindset Media Group™. The product-page rules are not limited to manuscript-derived products.
 
 The existing Digital Asset Edition V2 contract remains authoritative for file specifications. This document binds that contract to executable Worker routes and the Shopify publication sequence.
 
@@ -144,36 +147,104 @@ CUSTOMER_PACKAGE_READY
   -> STOREFRONT_PUBLICATION_VERIFIED
 ```
 
+## Permanent Shopify product-page content contract
+
+`mmg-shopify-product-page-canonical-v1` is mandatory every time Kairos creates product-page copy, rewrites an existing product page, prepares a Shopify listing, creates/updates a product draft, or publishes a product live.
+
+Kairos must generate and retain the complete product-page package below. A field may be explicitly `null` only when it is structurally inapplicable, such as `series` or `bookNumber`; Kairos may not silently omit a required field.
+
+1. Product Title (`title`)
+2. Product Listing Title (`listingTitle`)
+3. SEO Title (`seoTitle`)
+4. Meta Description (`metaDescription`)
+5. URL Handle (`handle`)
+6. Product Type (`productType`)
+7. Vendor (`vendor`)
+8. Collections (`collections`) — normally 3–5 relevant MMG collections
+9. Product Tags (`tags`) — digital products include `Digital Download`
+10. Primary Keyword (`primaryKeyword`)
+11. Secondary Keywords (`secondaryKeywords`)
+12. Product Price (`price`)
+13. Currency (`currency`)
+14. Product Status (`status`)
+15. Product Format (`productFormat`)
+16. Product Family (`productFamily`)
+17. Series (`series`) when applicable
+18. Book Number (`bookNumber`) when applicable
+19. Product Image Alt Text (`productImageAltText`)
+20. Canonical URL (`canonicalURL`)
+21. Social Title (`socialTitle`)
+22. Social Description (`socialDescription`)
+23. Full HTML Description (`descriptionHtml`)
+24. Product Media (`productMedia`)
+25. Approved Product Template (`templateSuffix`)
+26. Release/manifest/file/checksum linkage (`releaseLinkage`) when applicable
+27. Digital-delivery configuration (`digitalDelivery`) when applicable
+
+SEO, canonical URL, social metadata, accessibility alt text, collections/tags/keywords, price/status, template selection, and applicable media/delivery/release data are release-blocking fields. Kairos must not label a product page publish-ready when any required portion is absent.
+
+### Canonical product-page architecture
+
+The approved product page is a structural clone of the current MMG product-page golden master. Kairos preserves the established architecture and swaps only product-specific content and identifiers unless a separate redesign is explicitly approved.
+
+The canonical architecture includes:
+
+- approved structural clone/template and section order;
+- existing MMG styling and responsive behavior;
+- Shopify-safe purchase system and add-to-cart behavior;
+- full-cover image containment;
+- multiple purchase opportunities where the approved template uses them;
+- **Your Learning Journey**;
+- **Continue Your Journey**;
+- Judge.me review layer;
+- Intelligent Carousel Engine;
+- final CTA;
+- product-specific title/copy, identifiers, series data, handle, price, and featured media substitutions only.
+
+A product-page content task must retrieve and reuse this approved architecture before generating a new page. Kairos must not improvise a different product-page information architecture merely because the product is new.
+
+### Content-production sequence
+
+For every Shopify product page, Kairos follows this sequence:
+
+```text
+RETRIEVE APPROVED PRODUCT-PAGE BLUEPRINT
+  -> WRITE COMPLETE PRODUCT CONTENT PACKAGE
+  -> SEO / CANONICAL / SOCIAL / ACCESSIBILITY QC
+  -> TAXONOMY / PRICE / STATUS / TEMPLATE QC
+  -> CREATE OR UPDATE AS DRAFT
+  -> SHOPIFY READBACK
+  -> MEDIA / DELIVERY / RELEASE LINKAGE
+  -> FINAL PRODUCT-PAGE QC
+  -> SEPARATE LIVE APPROVAL
+  -> ACTIVATE + PUBLISH
+  -> STOREFRONT READBACK / VERIFICATION
+  -> RECORD EVIDENCE
+```
+
+No step may be skipped by treating a partial Shopify record as a completed product page.
+
 ### Draft behavior
 
-Kairos creates or updates a Shopify product only as `DRAFT`. The product record must include:
-
-- product title and listing title;
-- full HTML description;
-- price and currency;
-- vendor and product type;
-- URL handle;
-- SEO title and meta description;
-- social title and social description;
-- tags, collections, keywords, and image alt text;
-- product media;
-- approved custom product template;
-- manifest/checksum linkage to the approved Digital Asset release;
-- digital-delivery configuration status.
+Kairos creates or updates a Shopify product only as `DRAFT`. The product record and its Kairos release record must together include the entire `mmg-shopify-product-page-canonical-v1` field package.
 
 Existing active products are protected from silent overwrite or demotion.
 
 ### Live behavior
 
-Live publication requires a separate approval receipt bound to the current manifest and Shopify draft. Kairos must:
+Live publication requires a separate approval receipt bound to the current product-page contract, manifest/release when applicable, and Shopify draft. Kairos must:
 
 1. verify the draft has not changed since approval;
-2. verify the approved delivery asset is attached;
-3. change the product to `ACTIVE`;
-4. publish it to the approved Shopify publication/channel;
-5. read the product back from Shopify;
-6. record the product ID, variant ID, handle, live URL, publication IDs, and verification time;
-7. retain a rollback record.
+2. verify the canonical product-page content contract is complete;
+3. verify SEO title/meta description, handle, vendor/type, tags, collections, template, price, product media, and image alt text from Shopify readback where those fields are Shopify-native;
+4. verify the approved delivery asset and release linkage for digital products;
+5. change the product to `ACTIVE` when the approved workflow requires it;
+6. publish it to the approved Shopify publication/channel;
+7. read the product back from Shopify;
+8. record the product ID, variant ID, handle, live URL, publication IDs, contract ID, and verification time;
+9. retain a rollback record.
+
+Publication is a verified state transition, not the act of sending a mutation.
 
 ## API surface
 
@@ -198,9 +269,11 @@ Kairos must stop and return a machine-readable error when:
 - required customer files are missing;
 - the package archive is missing;
 - package integrity is not positively verified;
+- the canonical Shopify product-page contract is incomplete;
+- required SEO, canonical, social, accessibility, taxonomy, commerce, template, media, or applicable delivery/release data is absent;
 - the exact Shopify confirmation is absent;
 - the product draft changed after approval;
-- digital delivery is not configured;
+- digital delivery is not configured when required;
 - the live publication cannot be verified.
 
 No failure may be converted into a false success state.
@@ -214,6 +287,8 @@ The canonical contract test suite verifies:
 - public-identity rejection and legacy-record sanitization;
 - exact draft and live confirmation phrases;
 - package completeness and positive integrity gates;
+- complete Shopify product-page field/architecture contract exposure;
+- draft and live product-page readiness gates;
 - draft-first and separately approved live publication behavior.
 
 ## Dead-code rule
