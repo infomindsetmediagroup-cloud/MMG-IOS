@@ -1,11 +1,19 @@
-const CONCIERGE_BUILD = "kairos-concierge-20260807-3-account-aware";
+const CONCIERGE_BUILD = "kairos-concierge-20260807-4-v38-compatible";
 const BASE_STORAGE_KEY = "kairos:concierge:history:v2";
 const MAX_HISTORY = 32;
-const CUSTOMER_PORTAL = location.pathname === "/customer-portal"
-  || location.pathname === "/customer-portal/"
-  || location.pathname.endsWith("/customer-portal.html");
+const WORKER_ORIGIN = "https://mmg-ios.info-mindsetmediagroup.workers.dev";
+const SECURE_PORTAL_URL = `${WORKER_ORIGIN}/customer-portal`;
+const CURRENT_PATH = location.pathname;
+const SECURE_CUSTOMER_PORTAL = CURRENT_PATH === "/customer-portal"
+  || CURRENT_PATH === "/customer-portal/"
+  || CURRENT_PATH.endsWith("/customer-portal.html");
+const PUBLIC_CUSTOMER_PORTAL = CURRENT_PATH === "/pages/customer-portal"
+  || CURRENT_PATH === "/pages/customer-portal/";
+const STOREFRONT = /(^|\.)themindsetmediagroup\.com$/iu.test(location.hostname);
+const CUSTOMER_PORTAL = SECURE_CUSTOMER_PORTAL || PUBLIC_CUSTOMER_PORTAL;
+const SURFACE = SECURE_CUSTOMER_PORTAL ? "customer" : STOREFRONT ? "storefront" : "operator";
 
-let storageKey = `${BASE_STORAGE_KEY}:${CUSTOMER_PORTAL ? "customer-session" : "operator"}`;
+let storageKey = `${BASE_STORAGE_KEY}:${SURFACE === "customer" ? "customer-session" : SURFACE}`;
 
 const state = {
   open: false,
@@ -28,7 +36,7 @@ function mount() {
   style.setAttribute("nonce", "kairos-dashboard-v1");
   style.textContent = `
     #kairos-concierge{position:fixed;right:22px;bottom:22px;z-index:2147483000;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;color:#111827}
-    #kairos-concierge[data-offset="back-to-top"]{bottom:80px}
+    #kairos-concierge[data-offset="back-to-top"]{bottom:88px}
     .kc-launcher{width:58px;height:58px;border:0;border-radius:50%;background:#0071e3;color:#fff;box-shadow:0 16px 45px rgba(0,113,227,.34);font-size:25px;cursor:pointer;display:grid;place-items:center}
     .kc-panel{position:absolute;right:0;bottom:70px;width:min(390px,calc(100vw - 28px));height:min(620px,calc(100vh - 120px));background:rgba(255,255,255,.98);border:1px solid rgba(15,23,42,.12);border-radius:24px;box-shadow:0 24px 80px rgba(15,23,42,.2);overflow:hidden;display:none;grid-template-rows:auto auto 1fr auto;backdrop-filter:blur(20px)}
     .kc-panel[data-open="true"]{display:grid}
@@ -41,7 +49,7 @@ function mount() {
     .kc-msg{max-width:86%;padding:11px 13px;border-radius:16px;line-height:1.42;font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere}.kc-user{align-self:flex-end;background:#0071e3;color:#fff;border-bottom-right-radius:5px}.kc-kairos{align-self:flex-start;background:#fff;border:1px solid rgba(15,23,42,.1);border-bottom-left-radius:5px}.kc-status{align-self:flex-start;color:#6b7280;font-size:12px;padding:0 3px}
     .kc-compose{padding:12px;border-top:1px solid rgba(15,23,42,.09);background:#fff}.kc-row{display:grid;grid-template-columns:42px 1fr 42px;gap:8px;align-items:end}.kc-mic,.kc-send{width:42px;height:42px;border-radius:50%;border:1px solid rgba(15,23,42,.12);background:#fff;cursor:pointer;font-size:17px}.kc-mic[data-listening="true"]{background:#fee2e2;border-color:#fecaca}.kc-mic[data-voice="true"]{box-shadow:0 0 0 3px rgba(0,113,227,.12)}.kc-send{background:#111827;color:#fff;border-color:#111827}.kc-send:disabled,.kc-mic:disabled{opacity:.55;cursor:wait}.kc-input{width:100%;min-height:42px;max-height:120px;resize:none;border:1px solid rgba(15,23,42,.14);border-radius:18px;padding:10px 12px;font:inherit;line-height:1.35;outline:none}.kc-input:focus{border-color:#2997ff;box-shadow:0 0 0 3px rgba(41,151,255,.12)}
     .kc-note{font-size:11px;color:#7b8493;margin:7px 4px 0;text-align:center}
-    @media(max-width:600px){#kairos-concierge{right:14px;bottom:14px}#kairos-concierge[data-offset="back-to-top"]{bottom:76px}.kc-panel{position:fixed;inset:12px;width:auto;height:auto;border-radius:22px}.kc-launcher{width:54px;height:54px}}
+    @media(max-width:600px){#kairos-concierge{right:14px;bottom:14px}#kairos-concierge[data-offset="back-to-top"]{bottom:82px}.kc-panel{position:fixed;inset:12px;width:auto;height:auto;border-radius:22px}.kc-launcher{width:54px;height:54px}}
     @media(prefers-reduced-motion:reduce){.kc-panel,.kc-launcher,.kc-log{scroll-behavior:auto}}
   `;
   document.head.appendChild(style);
@@ -49,10 +57,9 @@ function mount() {
   const host = document.createElement("aside");
   host.id = "kairos-concierge";
   host.setAttribute("aria-label", "Kairos Concierge");
-  if (document.querySelector(".back")) host.dataset.offset = "back-to-top";
   host.innerHTML = `
     <section class="kc-panel" data-open="false" role="dialog" aria-modal="false" aria-label="Kairos Concierge" aria-busy="false">
-      <header class="kc-head"><div class="kc-title"><span class="kc-mark">K</span><span><strong>Kairos Concierge</strong><small>${CUSTOMER_PORTAL ? "Authenticated customer assistant" : "Private runtime assistant"}</small></span></div><button class="kc-close" type="button" aria-label="Close Concierge">×</button></header>
+      <header class="kc-head"><div class="kc-title"><span class="kc-mark">K</span><span><strong>Kairos Concierge</strong><small>${surfaceLabel()}</small></span></div><button class="kc-close" type="button" aria-label="Close Concierge">×</button></header>
       <div class="kc-quick" aria-label="Quick requests"></div>
       <div class="kc-log" aria-live="polite" aria-relevant="additions text"></div>
       <form class="kc-compose"><div class="kc-row"><button class="kc-mic" type="button" aria-label="Speak to Kairos" title="Microphone permission is requested only when you tap this button">🎙</button><textarea class="kc-input" rows="1" maxlength="6000" placeholder="Ask Kairos…" aria-label="Message Kairos"></textarea><button class="kc-send" type="submit" aria-label="Send">↑</button></div><div class="kc-note">Text always works. Voice activates only after your permission.</div></form>
@@ -62,12 +69,14 @@ function mount() {
   const panel = host.querySelector(".kc-panel");
   panel.id = "kairos-concierge-panel";
   document.body.appendChild(host);
+  syncBackToTopOffset();
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", syncBackToTopOffset, { once: true });
+  }
+  setTimeout(syncBackToTopOffset, 250);
 
   const quick = host.querySelector(".kc-quick");
-  const prompts = CUSTOMER_PORTAL
-    ? ["Project status", "Approvals", "Deliverables", "Support"]
-    : ["Runtime status", "Support intelligence", "Customer journey", "What needs attention?"];
-  prompts.forEach((label) => {
+  quickPrompts().forEach((label) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "kc-chip";
@@ -92,8 +101,28 @@ function mount() {
   renderMessages();
 }
 
+function surfaceLabel() {
+  if (SECURE_CUSTOMER_PORTAL) return "Authenticated customer assistant";
+  if (STOREFRONT) return "Mindset Media Group assistant";
+  return "Private runtime assistant";
+}
+
+function quickPrompts() {
+  if (SECURE_CUSTOMER_PORTAL) return ["Project status", "Approvals", "Deliverables", "Support"];
+  if (PUBLIC_CUSTOMER_PORTAL) return ["Secure Portal", "Project Guide", "Customer Service", "Services"];
+  if (STOREFRONT) return ["Customer Portal", "Services", "Free Tools", "Customer Service"];
+  return ["Runtime status", "Command Center", "Customer Portal", "Support boundary"];
+}
+
+function syncBackToTopOffset() {
+  const host = document.querySelector("#kairos-concierge");
+  if (!host) return;
+  if (document.querySelector(".back, .mmg-global-backtop")) host.dataset.offset = "back-to-top";
+  else delete host.dataset.offset;
+}
+
 async function hydrateIdentity() {
-  if (!CUSTOMER_PORTAL) return;
+  if (!SECURE_CUSTOMER_PORTAL) return;
   try {
     const response = await fetch("/api/customer/auth/session?t=" + Date.now(), {
       headers: { Accept: "application/json" },
@@ -152,9 +181,10 @@ async function submitMessage(raw) {
   renderMessages("Kairos is working…");
 
   try {
-    let reply = null;
-    if (CUSTOMER_PORTAL) reply = await answerCustomerRequest(text);
-    if (!reply) reply = await runGovernedHub(text);
+    let reply;
+    if (SECURE_CUSTOMER_PORTAL) reply = await answerCustomerRequest(text);
+    else if (STOREFRONT) reply = answerStorefrontRequest(text);
+    else reply = answerRuntimeRequest(text);
     append("kairos", reply);
     if (state.voiceEnabled) speak(reply);
   } catch (error) {
@@ -187,7 +217,7 @@ async function answerCustomerRequest(text) {
   }
 
   if (!/\b(project|status|progress|timeline|approval|approve|proof|review|deliverable|download|file|package|asset)\b/u.test(normalized)) {
-    return null;
+    return "I can securely help with your project status, approvals, deliverables, or customer support. Tell me which one you need.";
   }
 
   const payload = await customerProjects();
@@ -223,6 +253,48 @@ async function answerCustomerRequest(text) {
   return `${projects.length} project${projects.length === 1 ? "" : "s"} found; ${active.length} currently active. ${String(top?.title || top?.projectId || "Your leading project")} is at ${percent}%${next ? ` — next action: ${next}` : ""}.`;
 }
 
+function answerStorefrontRequest(text) {
+  const normalized = text.toLowerCase();
+  if (/\b(project|status|progress|timeline|approval|approve|proof|review|deliverable|download package|account|secure portal|secure workspace)\b/u.test(normalized)) {
+    return `Private project and account data is available only inside the authenticated Kairos workspace. Open Customer Portal and use “Kairos Customer Portal” to continue securely: ${SECURE_PORTAL_URL}`;
+  }
+  if (/\b(customer portal|portal)\b/u.test(normalized)) {
+    return PUBLIC_CUSTOMER_PORTAL
+      ? `You are on the public Customer Portal entry page. Use the Kairos Customer Portal button to enter the secure workspace: ${SECURE_PORTAL_URL}`
+      : "Open Customer Portal from the site navigation. Private project details remain inside the authenticated Kairos workspace.";
+  }
+  if (/\b(customer service|support|billing|help|problem|issue)\b/u.test(normalized)) {
+    return "Use Customer Service from the site footer for account help, billing questions, delivery issues, or resolution requests.";
+  }
+  if (/\b(project guide|guide)\b/u.test(normalized)) {
+    return "Open the Project Guide from the Customer Portal or Services experience for publishing-project instructions and next steps.";
+  }
+  if (/\b(free tool|free tools|creator tool|toolkit)\b/u.test(normalized)) {
+    return "Open Free Tools from the main navigation to access Mindset Media Group creator resources.";
+  }
+  if (/\b(service|publishing|publish|book build|cover design)\b/u.test(normalized)) {
+    return "Open Services from the main navigation to review Mindset Media Group publishing and production services.";
+  }
+  if (/\b(catalog|product|digital download|download)\b/u.test(normalized)) {
+    return "Open Catalog from the main navigation to browse Mindset Media Group digital products and resources.";
+  }
+  return "I can guide you to Catalog, Free Tools, Services, Customer Portal, or Customer Service. Private project and account information is handled only inside the authenticated Kairos workspace.";
+}
+
+function answerRuntimeRequest(text) {
+  const normalized = text.toLowerCase();
+  if (/\b(runtime|status|provider|inference)\b/u.test(normalized)) {
+    return "Kairos Concierge is mounted on the governed runtime surface. External model-provider calls are disabled; operational actions stay inside the Command Center and approval-gated workflows.";
+  }
+  if (/\b(customer|portal)\b/u.test(normalized)) {
+    return `Customer account and project assistance belongs in the authenticated Kairos Customer Portal: ${SECURE_PORTAL_URL}`;
+  }
+  if (/\b(command|objective|workflow|operation|action)\b/u.test(normalized)) {
+    return "Use the Kairos Command Center controls for governed objectives and operational workflows. Concierge does not convert free-form chat into operational project creation.";
+  }
+  return "Kairos Concierge is available here for runtime guidance. Use the Command Center for governed operational actions, or the authenticated Customer Portal for private customer-project assistance.";
+}
+
 async function customerProjects() {
   const response = await fetch("/api/kairos/customer/projects?t=" + Date.now(), {
     headers: { Accept: "application/json" },
@@ -235,43 +307,6 @@ async function customerProjects() {
     throw new Error(payload?.error?.message || "Customer project data is unavailable right now.");
   }
   return payload;
-}
-
-async function runGovernedHub(text) {
-  const history = state.messages.slice(-10).map(({ role, text: messageText }) => ({ role, text: messageText }));
-  const response = await fetch("/api/hub/run", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-MMG-Client-Build": CONCIERGE_BUILD },
-    credentials: "include",
-    cache: "no-store",
-    body: JSON.stringify({
-      action: CUSTOMER_PORTAL ? "customer-journey" : "support-intelligence",
-      objective: text,
-      context: { surface: "kairos-concierge", history },
-    }),
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (response.status === 401) {
-    throw new Error(CUSTOMER_PORTAL
-      ? "Your secure customer session has expired. Sign in again to continue."
-      : "Your secure Kairos session has expired. Sign in again to continue.");
-  }
-  if (!response.ok) throw new Error(payload?.error?.message || "Kairos could not complete that request.");
-  return normalizeReply(payload);
-}
-
-function normalizeReply(payload) {
-  if (typeof payload?.answer === "string" && payload.answer.trim()) return payload.answer.trim();
-  if (typeof payload?.summary === "string" && payload.summary.trim()) {
-    const sections = Array.isArray(payload.sections)
-      ? payload.sections.map(section => section?.content).filter(Boolean)
-      : [];
-    return [payload.summary, ...sections, payload.nextAction ? `Next: ${payload.nextAction}` : ""]
-      .filter(Boolean)
-      .join("\n\n");
-  }
-  if (typeof payload?.result === "string") return payload.result;
-  return "Kairos completed the request, but no conversational response was returned.";
 }
 
 async function toggleVoice() {
@@ -359,16 +394,17 @@ function renderMessages(status = "") {
   if (!log) return;
   const items = state.messages.length
     ? state.messages
-    : [{
-        role: "kairos",
-        text: CUSTOMER_PORTAL
-          ? "I’m Kairos Concierge. Ask me about your project status, approvals, deliverables, or customer support."
-          : "I’m Kairos Concierge. Ask me about your work, projects, publishing, site operations, or the next action.",
-      }];
+    : [{ role: "kairos", text: welcomeMessage() }];
   log.innerHTML = items
     .map(item => `<div class="kc-msg ${item.role === "user" ? "kc-user" : "kc-kairos"}">${escapeHTML(item.text)}</div>`)
     .join("") + (status ? `<div class="kc-status">${escapeHTML(status)}</div>` : "");
   log.scrollTop = log.scrollHeight;
+}
+
+function welcomeMessage() {
+  if (SECURE_CUSTOMER_PORTAL) return "I’m Kairos Concierge. Ask me about your project status, approvals, deliverables, or customer support.";
+  if (STOREFRONT) return "I’m Kairos Concierge. I can guide you through Mindset Media Group services, tools, Customer Portal, and support without exposing private account data on the public storefront.";
+  return "I’m Kairos Concierge. I can guide you across the governed Kairos runtime; use Command Center controls for operational actions.";
 }
 
 function human(value) {
@@ -390,6 +426,8 @@ function escapeHTML(value) {
 
 window.KairosConcierge = Object.freeze({
   build: CONCIERGE_BUILD,
+  surface: SURFACE,
+  securePortalUrl: SECURE_PORTAL_URL,
   open: () => setOpen(true),
   close: () => setOpen(false),
   send: submitMessage,

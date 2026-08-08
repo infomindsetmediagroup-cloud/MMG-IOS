@@ -75,7 +75,7 @@ export class KairosManuscriptSource extends BaseKairosManuscriptSource {
 export const KAIROS_LOCAL_CANONICAL_ENTRY_BUILD =
   "kairos-local-canonical-entry-20260807-2-customer-account-oauth";
 
-const KAIROS_CONCIERGE_BUILD = "kairos-concierge-20260807-3-account-aware";
+const KAIROS_CONCIERGE_BUILD = "kairos-concierge-20260807-4-v38-compatible";
 const KAIROS_CONCIERGE_SCRIPT = `/scripts/kairos-concierge.js?v=${KAIROS_CONCIERGE_BUILD}`;
 
 const PROVIDER_INDEPENDENT_OPERATIONAL_PATHS = new Set([
