@@ -1,4 +1,4 @@
-const CONCIERGE_BUILD = "kairos-concierge-20260807-1";
+const CONCIERGE_BUILD = "kairos-concierge-20260807-2";
 const STORAGE_KEY = "kairos:concierge:history:v1";
 const MAX_HISTORY = 24;
 
@@ -6,6 +6,7 @@ const state = {
   open: false,
   busy: false,
   listening: false,
+  voiceEnabled: false,
   recognition: null,
   messages: loadHistory(),
 };
@@ -25,7 +26,7 @@ function mount() {
     .kc-close{border:0;background:transparent;font-size:22px;cursor:pointer;color:#4b5563}
     .kc-log{padding:17px;overflow:auto;display:flex;flex-direction:column;gap:12px;background:linear-gradient(#fbfdff,#f7faff)}
     .kc-msg{max-width:86%;padding:11px 13px;border-radius:16px;line-height:1.42;font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere}.kc-user{align-self:flex-end;background:#0071e3;color:#fff;border-bottom-right-radius:5px}.kc-kairos{align-self:flex-start;background:#fff;border:1px solid rgba(15,23,42,.1);border-bottom-left-radius:5px}.kc-status{align-self:flex-start;color:#6b7280;font-size:12px;padding:0 3px}
-    .kc-compose{padding:12px;border-top:1px solid rgba(15,23,42,.09);background:#fff}.kc-row{display:grid;grid-template-columns:42px 1fr 42px;gap:8px;align-items:end}.kc-mic,.kc-send{width:42px;height:42px;border-radius:50%;border:1px solid rgba(15,23,42,.12);background:#fff;cursor:pointer;font-size:17px}.kc-mic[data-listening="true"]{background:#fee2e2;border-color:#fecaca}.kc-send{background:#111827;color:#fff;border-color:#111827}.kc-input{width:100%;min-height:42px;max-height:120px;resize:none;border:1px solid rgba(15,23,42,.14);border-radius:18px;padding:10px 12px;font:inherit;line-height:1.35;outline:none}.kc-input:focus{border-color:#2997ff;box-shadow:0 0 0 3px rgba(41,151,255,.12)}
+    .kc-compose{padding:12px;border-top:1px solid rgba(15,23,42,.09);background:#fff}.kc-row{display:grid;grid-template-columns:42px 1fr 42px;gap:8px;align-items:end}.kc-mic,.kc-send{width:42px;height:42px;border-radius:50%;border:1px solid rgba(15,23,42,.12);background:#fff;cursor:pointer;font-size:17px}.kc-mic[data-listening="true"]{background:#fee2e2;border-color:#fecaca}.kc-mic[data-voice="true"]{box-shadow:0 0 0 3px rgba(0,113,227,.12)}.kc-send{background:#111827;color:#fff;border-color:#111827}.kc-input{width:100%;min-height:42px;max-height:120px;resize:none;border:1px solid rgba(15,23,42,.14);border-radius:18px;padding:10px 12px;font:inherit;line-height:1.35;outline:none}.kc-input:focus{border-color:#2997ff;box-shadow:0 0 0 3px rgba(41,151,255,.12)}
     .kc-note{font-size:11px;color:#7b8493;margin:7px 4px 0;text-align:center}
     @media(max-width:600px){#kairos-concierge{right:14px;bottom:14px}.kc-panel{position:fixed;inset:12px;width:auto;height:auto;border-radius:22px}.kc-launcher{width:54px;height:54px}}
     @media(prefers-reduced-motion:reduce){.kc-panel,.kc-launcher{scroll-behavior:auto}}
@@ -89,9 +90,13 @@ async function onSubmit(event){
     const payload = await response.json().catch(() => ({}));
     if (response.status === 401) throw new Error("Your secure session has expired. Sign in again to continue.");
     if (!response.ok) throw new Error(payload?.error?.message || "Kairos could not complete that request.");
-    append("kairos", normalizeReply(payload));
+    const reply = normalizeReply(payload);
+    append("kairos", reply);
+    if (state.voiceEnabled) speak(reply);
   } catch (error) {
-    append("kairos", error?.message || "Kairos could not complete that request.");
+    const reply = error?.message || "Kairos could not complete that request.";
+    append("kairos", reply);
+    if (state.voiceEnabled) speak(reply);
   } finally {
     state.busy = false;
     renderMessages();
@@ -111,11 +116,17 @@ function normalizeReply(payload){
 async function toggleVoice(){
   if (state.listening) { stopVoice(); return; }
   const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!Recognition) { append("kairos", "Voice input is not supported by this browser. Type your request instead."); return; }
+  if (!Recognition || !navigator.mediaDevices?.getUserMedia) {
+    append("kairos", "Voice input is not supported by this browser. Type your request instead.");
+    return;
+  }
   try {
     const stream = await navigator.mediaDevices.getUserMedia({audio:true});
     stream.getTracks().forEach(track => track.stop());
+    state.voiceEnabled = true;
+    document.querySelector("#kairos-concierge .kc-mic").dataset.voice = "true";
   } catch {
+    state.voiceEnabled = false;
     append("kairos", "Microphone access was not granted. Text input remains available.");
     return;
   }
@@ -125,7 +136,11 @@ async function toggleVoice(){
   recognition.maxAlternatives = 1;
   recognition.onresult = event => {
     const transcript = event.results?.[0]?.[0]?.transcript?.trim();
-    if (transcript) document.querySelector("#kairos-concierge .kc-input").value = transcript;
+    if (!transcript) return;
+    const form = document.querySelector("#kairos-concierge .kc-compose");
+    const input = document.querySelector("#kairos-concierge .kc-input");
+    input.value = transcript;
+    queueMicrotask(() => form.requestSubmit());
   };
   recognition.onerror = () => stopVoice();
   recognition.onend = () => stopVoice();
@@ -141,6 +156,17 @@ function stopVoice(){
   state.listening = false;
   const button = document.querySelector("#kairos-concierge .kc-mic");
   if (button) button.dataset.listening = "false";
+}
+
+function speak(text){
+  if (!state.voiceEnabled || !("speechSynthesis" in window)) return;
+  try {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(String(text).slice(0, 3500));
+    utterance.lang = document.documentElement.lang || "en-US";
+    utterance.rate = 1;
+    window.speechSynthesis.speak(utterance);
+  } catch {}
 }
 
 function append(role,text){
