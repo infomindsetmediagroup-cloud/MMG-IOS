@@ -1,0 +1,81 @@
+name: Validate Kairos TikTok Framework
+
+"on":
+  pull_request:
+    branches: [main]
+    paths:
+      - "cloudflare/mmg-ios/src/kairos-tiktok-content-framework-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-social-production-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-v2.js"
+      - "cloudflare/mmg-ios/test/kairos-tiktok-content-framework-v1.test.js"
+      - "cloudflare/mmg-ios/test/kairos-social-production-ui-contract-v1.test.js"
+      - "web/kairos-dashboard/scripts/social-production.js"
+      - "web/kairos-dashboard/scripts/command-hub.js"
+      - "web/kairos-dashboard/scripts/legacy-runtime-loader.js"
+      - "web/kairos-dashboard/styles/social-production.css"
+      - ".github/workflows/validate-kairos-tiktok-framework.yml"
+  push:
+    branches: [main]
+    paths:
+      - "cloudflare/mmg-ios/src/kairos-tiktok-content-framework-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-social-production-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-v2.js"
+      - "cloudflare/mmg-ios/test/kairos-tiktok-content-framework-v1.test.js"
+      - "cloudflare/mmg-ios/test/kairos-social-production-ui-contract-v1.test.js"
+      - "web/kairos-dashboard/scripts/social-production.js"
+      - "web/kairos-dashboard/scripts/command-hub.js"
+      - "web/kairos-dashboard/scripts/legacy-runtime-loader.js"
+      - "web/kairos-dashboard/styles/social-production.css"
+      - ".github/workflows/validate-kairos-tiktok-framework.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kairos-tiktok-framework-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate TikTok content framework
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Worker dependencies
+        working-directory: cloudflare/mmg-ios
+        run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+
+      - name: Validate TikTok framework syntax
+        run: |
+          node --check cloudflare/mmg-ios/src/kairos-tiktok-content-framework-v1.js
+          node --check cloudflare/mmg-ios/src/kairos-social-production-v1.js
+          node --check web/kairos-dashboard/scripts/social-production.js
+
+      - name: Run TikTok framework contracts
+        working-directory: cloudflare/mmg-ios
+        run: node --test test/kairos-tiktok-content-framework-v1.test.js test/kairos-social-production-ui-contract-v1.test.js
+
+      - name: Enforce connector boundary
+        shell: bash
+        run: |
+          set -euxo pipefail
+          grep -Fq 'publish: false' cloudflare/mmg-ios/src/kairos-tiktok-content-framework-v1.js
+          grep -Fq 'connectorSchedulingEnabled: false' cloudflare/mmg-ios/src/kairos-tiktok-content-framework-v1.js
+          grep -Fq 'externalPublishingAutomatic: false' cloudflare/mmg-ios/src/kairos-social-production-v1.js
+          grep -Fq 'futureConnectorMustConsumeApprovedPackageWithoutRewriting: true' cloudflare/mmg-ios/src/kairos-social-production-v1.js
+          grep -Fq '@mindset.media.group' cloudflare/mmg-ios/src/kairos-tiktok-content-framework-v1.js
+          grep -Fq '#MindsetMediaGroup' cloudflare/mmg-ios/src/kairos-tiktok-content-framework-v1.js
+          grep -Fq '2 broad + 2 niche + 1 brand' cloudflare/mmg-ios/src/kairos-tiktok-content-framework-v1.js
+
+      - name: Validate deployable Worker bundle
+        working-directory: cloudflare/mmg-ios
+        run: npx wrangler deploy --dry-run
