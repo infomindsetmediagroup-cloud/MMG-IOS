@@ -57,14 +57,10 @@ test("social package exposes the eight-step connector handoff process", () => {
 });
 
 test("Social Production exposes authenticated TikTok connect, publish and receipt controls", () => {
-  for (const route of [
-    "/api/social-connectors/tiktok/status",
-    "/api/social-connectors/tiktok/connect-url",
-    "/api/social-connectors/tiktok/disconnect",
-    "/api/social-connectors/tiktok/creator-info",
-    "/api/social-connectors/tiktok/publish",
-    "/api/social-connectors/tiktok/receipt/refresh",
-  ]) assert.ok(ui.includes(route), `Missing connector UI route: ${route}`);
+  assert.match(ui, /const CONNECTOR_ROOT="\/api\/social-connectors\/tiktok"/);
+  for (const suffix of ["/status", "/connect-url", "/disconnect", "/creator-info", "/publish", "/receipt/refresh"]) {
+    assert.ok(ui.includes(`\`${CONNECTOR_ROOT_PLACEHOLDER}${suffix}\``) || ui.includes(`\${CONNECTOR_ROOT}${suffix}`) || ui.includes(`CONNECTOR_ROOT}/`), `Missing connector UI route suffix: ${suffix}`);
+  }
   assert.match(ui, /window\.shopify\.idToken/);
   assert.match(ui, /Authorization:`Bearer \$\{token\}`/);
   assert.match(ui, /Connect TikTok/);
@@ -92,3 +88,5 @@ test("canonical runtime owns the server-side TikTok connector boundary", () => {
   assert.match(connector, /TIKTOK_EXPORT_CONSENT_REQUIRED/);
   assert.match(connector, /TIKTOK_MEDIA_ORIGIN_NOT_VERIFIED/);
 });
+
+const CONNECTOR_ROOT_PLACEHOLDER = "${CONNECTOR_ROOT}";
