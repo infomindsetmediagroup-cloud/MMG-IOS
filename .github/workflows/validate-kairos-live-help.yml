@@ -1,0 +1,72 @@
+name: Validate Kairos Live Help
+
+on:
+  pull_request:
+    paths:
+      - "cloudflare/mmg-ios/src/kairos-live-help-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js"
+      - "cloudflare/mmg-ios/test/kairos-live-help-v1.test.js"
+      - "cloudflare/mmg-ios/wrangler.toml"
+      - ".github/workflows/validate-kairos-live-help.yml"
+  push:
+    branches: [main]
+    paths:
+      - "cloudflare/mmg-ios/src/kairos-live-help-v1.js"
+      - "cloudflare/mmg-ios/src/kairos-production-entry-local-canonical-v1.js"
+      - "cloudflare/mmg-ios/test/kairos-live-help-v1.test.js"
+      - "cloudflare/mmg-ios/wrangler.toml"
+      - ".github/workflows/validate-kairos-live-help.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-live-help:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cloudflare/mmg-ios
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: cloudflare/mmg-ios/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Syntax check Live Help
+        run: node --check src/kairos-live-help-v1.js
+
+      - name: Syntax check canonical entry
+        run: node --check src/kairos-production-entry-local-canonical-v1.js
+
+      - name: Run Live Help contract tests
+        run: node --test test/kairos-live-help-v1.test.js
+
+      - name: Verify public privacy boundary
+        run: |
+          grep -Fq 'privateCustomerDataAccessed: false' src/kairos-live-help-v1.js
+          grep -Fq 'messagePersisted: false' src/kairos-live-help-v1.js
+          grep -Fq 'event_payload_rejected' src/kairos-live-help-v1.js
+
+      - name: Verify no external inference endpoint
+        run: |
+          ! grep -Eqi 'api\.openai\.com|anthropic\.com|generativelanguage\.googleapis\.com' src/kairos-live-help-v1.js
+          ! grep -Fq 'OPENAI_API_KEY' src/kairos-live-help-v1.js
+
+      - name: Verify storefront and theme contract
+        run: |
+          grep -Fq '/api/live-help/widget.js' src/kairos-live-help-v1.js
+          grep -Fq 'KAIROS_LIVE_HELP_V1_START' src/kairos-live-help-v1.js
+          grep -Fq 'KAIROS_LIVE_HELP_THEME_PUBLISH_ENABLED = "true"' wrangler.toml
+          grep -Fq 'handleKairosLiveHelpRequest' src/kairos-production-entry-local-canonical-v1.js
+
+      - name: Wrangler dry run
+        run: npx wrangler deploy --dry-run --outdir /tmp/kairos-live-help-dry-run
