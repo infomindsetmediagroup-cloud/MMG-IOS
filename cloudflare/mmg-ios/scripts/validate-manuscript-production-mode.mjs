@@ -3,11 +3,12 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const BUILD = "kairos-manuscript-production-validator-20260802-autonomy-cron-2";
+const BUILD = "kairos-manuscript-production-validator-20260807-canonical-publishing-wrapper-1";
 const here = dirname(fileURLToPath(import.meta.url));
 const workerRoot = join(here, "..");
 const sourceRoot = join(workerRoot, "src");
 const wranglerPath = join(workerRoot, "wrangler.toml");
+const canonicalPublishingEntryPath = join(sourceRoot, "kairos-production-entry-canonical-publishing-v1.js");
 const canonicalEntryPath = join(sourceRoot, "kairos-production-entry-local-canonical-v1.js");
 const localOnlyEntryPath = join(sourceRoot, "kairos-production-entry-local-only-v1.js");
 const localExecutionEntryPath = join(sourceRoot, "kairos-production-entry-local-execution-v1.js");
@@ -21,6 +22,7 @@ const productPublicationPath = join(sourceRoot, "kairos-product-publication-v1.j
 
 for (const file of [
   wranglerPath,
+  canonicalPublishingEntryPath,
   canonicalEntryPath,
   localOnlyEntryPath,
   localExecutionEntryPath,
@@ -36,11 +38,26 @@ for (const file of [
 const wrangler = readFileSync(wranglerPath, "utf8");
 const activeEntryMatch = wrangler.match(/^main\s*=\s*"src\/(kairos-production-entry-[^"]+\.js)"/m);
 assert.ok(activeEntryMatch, "Wrangler must declare an explicit Kairos production entry.");
-assert.equal(
-  activeEntryMatch[1],
+const allowedProductionEntries = new Set([
   "kairos-production-entry-local-canonical-v1.js",
-  "Wrangler must point to the canonical local provider firewall.",
+  "kairos-production-entry-canonical-publishing-v1.js",
+]);
+assert.ok(
+  allowedProductionEntries.has(activeEntryMatch[1]),
+  "Wrangler must point to the canonical local provider firewall or the canonical publishing wrapper that delegates to it.",
 );
+
+const canonicalPublishingEntry = readFileSync(canonicalPublishingEntryPath, "utf8");
+if (activeEntryMatch[1] === "kairos-production-entry-canonical-publishing-v1.js") {
+  assert.ok(
+    canonicalPublishingEntry.includes('./kairos-production-entry-local-canonical-v1.js'),
+    "Canonical publishing wrapper must delegate to the canonical local provider firewall.",
+  );
+  assert.ok(
+    canonicalPublishingEntry.includes("canonicalRuntime.fetch(request, env, ctx)"),
+    "Canonical publishing wrapper must fall through to the canonical local runtime.",
+  );
+}
 
 for (const marker of [
   'KAIROS_MANUSCRIPT_RUNTIME_ENABLED = "true"',
@@ -62,7 +79,7 @@ for (const marker of [
 const triggerMatch = wrangler.match(/^\[triggers\]\s*\ncrons\s*=\s*\[([^\]]*)\]/mu);
 assert.ok(triggerMatch, "Wrangler must declare the governed production cron list.");
 const configuredCrons = [...triggerMatch[1].matchAll(/"([^"]+)"/gu)].map((match) => match[1]);
-for (const requiredCron of ["0 15 * * *", "0 2 * * *", "0 * * * *"]) {
+for (const requiredCron of ["0 15 * * *", "0 2 * * * *", "0 * * * *"]) {
   assert.equal(
     configuredCrons.filter((cron) => cron === requiredCron).length,
     1,
@@ -178,6 +195,7 @@ console.log(JSON.stringify({
   directWebsiteMutationAuthorized: false,
   minuteWebsiteCronEnabled: false,
   productionEntry: activeEntryMatch[1],
+  canonicalPublishingWrapperValidated: activeEntryMatch[1] === "kairos-production-entry-canonical-publishing-v1.js",
   canonicalProviderFirewallValidated: true,
   runtimeVerification: "wrangler-dry-run-and-live-local-evidence",
 }, null, 2));
