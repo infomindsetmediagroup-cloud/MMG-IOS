@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   MMG_CANONICAL_CUSTOMER_DELIVERABLES,
   MMG_PUBLICATION_VISUAL_BENCHMARKS,
@@ -91,4 +92,17 @@ test("manufacturing payload receives the permanent production directive without 
   assert.match(payload.objective, /premium professional publication/i);
   assert.match(payload.objective, /KDP 6x9 interior/i);
   assert.match(payload.objective, /six-customer-deliverable package/i);
+});
+
+test("canonical production entry applies the visual contract to manufacturing requests", () => {
+  const entry = readFileSync(
+    new URL("../src/kairos-production-entry-canonical-publishing-v1.js", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(entry, /applyPublicationVisualStandardToManufacturingPayload/);
+  assert.match(entry, /assertPublicationVisualStandardInvariant\(\)/);
+  assert.match(entry, /url\.pathname === "\/product-manufacturing\/create"/);
+  assert.match(entry, /X-Kairos-Publication-Visual-Standard/);
+  assert.match(entry, /MMG_PUBLICATION_VISUAL_STANDARD_ID/);
 });
