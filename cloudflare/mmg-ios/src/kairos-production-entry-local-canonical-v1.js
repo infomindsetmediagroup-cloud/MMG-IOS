@@ -44,6 +44,10 @@ import {
   stampKairosCustomerSession,
   KAIROS_CUSTOMER_ACCOUNT_AUTH_BUILD,
 } from "./kairos-customer-account-auth-v1.js";
+import {
+  handleKairosLiveHelpRequest,
+  KAIROS_LIVE_HELP_BUILD,
+} from "./kairos-live-help-v1.js";
 
 export {
   KairosProjectAgent,
@@ -73,7 +77,7 @@ export class KairosManuscriptSource extends BaseKairosManuscriptSource {
 }
 
 export const KAIROS_LOCAL_CANONICAL_ENTRY_BUILD =
-  "kairos-local-canonical-entry-20260807-2-customer-account-oauth";
+  "kairos-local-canonical-entry-20260807-3-live-help";
 
 const PROVIDER_INDEPENDENT_OPERATIONAL_PATHS = new Set([
   "/api/hub/run",
@@ -90,6 +94,9 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const autonomousEnv = providerBlockedEnv(env);
+
+    const liveHelpResponse = await handleKairosLiveHelpRequest(request, env);
+    if (liveHelpResponse) return stamp(liveHelpResponse);
 
     const customerAuthResponse = await handleKairosCustomerAccountAuth(request, env);
     if (customerAuthResponse) return stamp(customerAuthResponse);
@@ -185,6 +192,7 @@ function stamp(response, manuscriptIdentity = null) {
   headers.set("X-Kairos-Inference-Provider", "browser-webgpu");
   headers.set("X-Kairos-External-Provider", "disabled");
   headers.set("X-Kairos-OpenAI-Calls", "disabled");
+  headers.set("X-Kairos-Live-Help", headers.get("X-Kairos-Live-Help") || KAIROS_LIVE_HELP_BUILD);
   headers.set("X-Kairos-Source-Shard", KAIROS_MANUSCRIPT_SOURCE_SHARD_BUILD);
   headers.set("X-Kairos-Package-State-Build", headers.get("X-Kairos-Package-State-Build") || KAIROS_MANUSCRIPT_PACKAGE_STATE_BUILD);
   headers.set("X-Kairos-Manuscript-Identity-Build", KAIROS_MANUSCRIPT_CANONICAL_IDENTITY_BUILD);
