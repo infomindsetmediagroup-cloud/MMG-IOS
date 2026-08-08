@@ -1,11 +1,14 @@
 export const KAIROS_CANONICAL_PUBLISHING_CONTRACT_BUILD =
-  "kairos-canonical-publishing-contract-20260806-2";
+  "kairos-canonical-publishing-contract-20260807-3-product-page-content";
 
 export const MMG_DIGITAL_ASSET_CONTRACT_ID =
   "mmg-digital-asset-edition-v2-customer-package-v1";
 
 export const MMG_SHOPIFY_PUBLISHING_CONTRACT_ID =
   "mmg-shopify-product-publishing-v1";
+
+export const MMG_SHOPIFY_PRODUCT_PAGE_CONTRACT_ID =
+  "mmg-shopify-product-page-canonical-v1";
 
 export const MMG_CANONICAL_IDENTITY = Object.freeze({
   writtenBy: "Mindset Media Group™",
@@ -15,6 +18,51 @@ export const MMG_CANONICAL_IDENTITY = Object.freeze({
   publisher: "Mindset Media Group™",
   vendor: "Mindset Media Group",
 });
+
+export const MMG_SHOPIFY_PRODUCT_PAGE_FIELDS = Object.freeze([
+  "title",
+  "listingTitle",
+  "seoTitle",
+  "metaDescription",
+  "handle",
+  "productType",
+  "vendor",
+  "collections",
+  "tags",
+  "primaryKeyword",
+  "secondaryKeywords",
+  "price",
+  "currency",
+  "status",
+  "productFormat",
+  "productFamily",
+  "series",
+  "bookNumber",
+  "productImageAltText",
+  "canonicalURL",
+  "socialTitle",
+  "socialDescription",
+  "descriptionHtml",
+  "productMedia",
+  "templateSuffix",
+  "releaseLinkage",
+  "digitalDelivery",
+]);
+
+export const MMG_SHOPIFY_PRODUCT_PAGE_ARCHITECTURE = Object.freeze([
+  "approved structural clone/template",
+  "canonical section order and styling",
+  "Shopify-safe purchase system",
+  "Learning Journey",
+  "Judge.me review layer",
+  "Intelligent Carousel Engine",
+  "responsive behavior",
+  "full-cover containment",
+  "multiple purchase opportunities",
+  "Continue Your Journey",
+  "final CTA",
+  "product-specific copy/identifiers/series/handle/price/featured-image substitutions only",
+]);
 
 export const CANONICAL_CONFIRMATIONS = Object.freeze({
   shopifyDraft: "CREATE SHOPIFY PRODUCT DRAFT",
@@ -26,6 +74,7 @@ export const CANONICAL_INVOCATIONS = Object.freeze({
   shopifyPublishing: "Shopify Publishing",
 });
 
+const MMG_CANONICAL_DOMAIN = "https://themindsetmediagroup.com";
 const FORBIDDEN_PUBLIC_NAME = /\bmichael\s+king\b/iu;
 const FORBIDDEN_PUBLIC_NAME_GLOBAL = /\bmichael\s+king\b/giu;
 const CUSTOMER_FILE_SUFFIXES = Object.freeze([
@@ -144,37 +193,154 @@ export function assertNoForbiddenPublicIdentity(value, path = "root") {
 export function canonicalizePublicationMetadata(input = {}) {
   assertNoForbiddenPublicIdentity(input);
   const title = clean(input.title, 255) || "Untitled Digital Asset";
+  const listingTitle = clean(input.listingTitle, 255) || title;
   const handle = normalizeHandle(input.handle || title);
   const description = clean(input.description || input.summary, 5000);
+  const descriptionHtml = clean(
+    input.descriptionHtml || input.shopifyHTML || input.shopifyHtml || description,
+    100000,
+  );
   const keywords = uniqueStrings(input.keywords, 20);
+  const primaryKeyword = clean(input.primaryKeyword, 160) || keywords[0] || title;
+  const secondaryKeywords = uniqueStrings(
+    Array.isArray(input.secondaryKeywords) ? input.secondaryKeywords : keywords.slice(1),
+    20,
+  );
+  const collections = uniqueStrings(
+    Array.isArray(input.collections) ? input.collections : input.categories,
+    10,
+  );
+  const productType = clean(input.productType, 255) || "Digital Download";
+  const isDigital = /digital|download|ebook|e-book|pdf/iu.test(productType) ||
+    /digital|download|ebook|e-book|pdf/iu.test(clean(input.productFormat, 120));
   const tags = uniqueStrings(
     [
       ...(Array.isArray(input.tags) ? input.tags : []),
-      "Digital Download",
+      ...(isDigital ? ["Digital Download"] : []),
       "Mindset Media Group",
     ],
     40,
   );
+  const seoTitle = clean(input.seoTitle || input.seo?.title, 255) || listingTitle;
+  const metaDescription = clean(
+    input.metaDescription || input.seoDescription || input.seo?.description || description,
+    500,
+  );
+  const socialTitle = clean(input.socialTitle, 255) || seoTitle;
+  const socialDescription = clean(input.socialDescription, 500) || metaDescription;
+  const canonicalURL = clean(input.canonicalURL || input.canonicalUrl, 2000) ||
+    `${MMG_CANONICAL_DOMAIN}/products/${handle}`;
+  const productImageAltText = clean(input.productImageAltText || input.imageAltText, 500) ||
+    `${listingTitle} — Mindset Media Group`;
+  const productFormat = clean(input.productFormat, 120) || (isDigital ? "Digital" : "");
+  const productFamily = clean(input.productFamily, 160) || clean(input.series, 160) || productType;
+  const releaseLinkage = normalizeReleaseLinkage(input.releaseLinkage, input);
+  const digitalDelivery = normalizeDigitalDelivery(input.digitalDelivery, input);
 
   return Object.freeze({
     ...input,
     title,
+    listingTitle,
     handle,
     description,
+    descriptionHtml,
+    seoTitle,
+    metaDescription,
+    socialTitle,
+    socialDescription,
+    canonicalURL,
+    productImageAltText,
+    primaryKeyword,
+    secondaryKeywords,
     author: MMG_CANONICAL_IDENTITY.author,
     creator: MMG_CANONICAL_IDENTITY.creator,
     writtenBy: MMG_CANONICAL_IDENTITY.writtenBy,
     copyrightHolder: MMG_CANONICAL_IDENTITY.copyrightHolder,
     publisher: MMG_CANONICAL_IDENTITY.publisher,
     vendor: MMG_CANONICAL_IDENTITY.vendor,
-    productType: clean(input.productType, 255) || "Digital Download",
-    status: clean(input.status, 32).toUpperCase() || "DRAFT",
+    productType,
+    productFormat,
+    productFamily,
+    series: clean(input.series, 160) || null,
+    bookNumber: clean(input.bookNumber, 80) || null,
+    price: normalizeMoney(input.price ?? input.productPrice),
+    currency: clean(input.currency, 12).toUpperCase() || "USD",
+    status: clean(input.status || input.publicationStatus, 32).toUpperCase() || "DRAFT",
     keywords,
+    collections,
     tags,
+    productMedia: Array.isArray(input.productMedia) ? input.productMedia.slice(0, 50) : [],
+    templateSuffix: clean(input.templateSuffix, 160),
+    releaseLinkage,
+    digitalDelivery,
+    productPageContract: MMG_SHOPIFY_PRODUCT_PAGE_CONTRACT_ID,
     contracts: {
       digitalAsset: MMG_DIGITAL_ASSET_CONTRACT_ID,
       shopifyPublishing: MMG_SHOPIFY_PUBLISHING_CONTRACT_ID,
+      shopifyProductPage: MMG_SHOPIFY_PRODUCT_PAGE_CONTRACT_ID,
     },
+  });
+}
+
+export function assertCanonicalShopifyProductPageReady(input = {}, { stage = "draft" } = {}) {
+  const metadata = canonicalizePublicationMetadata(input);
+  const normalizedStage = String(stage || "draft").trim().toLowerCase();
+  if (!new Set(["draft", "live"]).has(normalizedStage)) {
+    throw contractError("SHOPIFY_PRODUCT_PAGE_STAGE_INVALID", "Product-page readiness stage must be draft or live.", 400);
+  }
+
+  const missing = [];
+  requireValue(metadata.title, "title", missing);
+  requireValue(metadata.listingTitle, "listingTitle", missing);
+  requireValue(metadata.descriptionHtml, "descriptionHtml", missing);
+  requireValue(metadata.seoTitle, "seoTitle", missing);
+  requireValue(metadata.metaDescription, "metaDescription", missing);
+  requireValue(metadata.handle, "handle", missing);
+  requireValue(metadata.productType, "productType", missing);
+  requireValue(metadata.vendor, "vendor", missing);
+  requireValue(metadata.primaryKeyword, "primaryKeyword", missing);
+  requireValue(metadata.productFormat, "productFormat", missing);
+  requireValue(metadata.productFamily, "productFamily", missing);
+  requireValue(metadata.productImageAltText, "productImageAltText", missing);
+  requireValue(metadata.canonicalURL, "canonicalURL", missing);
+  requireValue(metadata.socialTitle, "socialTitle", missing);
+  requireValue(metadata.socialDescription, "socialDescription", missing);
+  requireValue(metadata.templateSuffix, "templateSuffix", missing);
+  if (!metadata.price || Number(metadata.price) <= 0) missing.push("price");
+  if (!Array.isArray(metadata.tags) || metadata.tags.length === 0) missing.push("tags");
+  if (!Array.isArray(metadata.collections) || metadata.collections.length < 3 || metadata.collections.length > 5) {
+    missing.push("collections(3-5)");
+  }
+
+  if (/digital|download|ebook|e-book|pdf/iu.test(`${metadata.productType} ${metadata.productFormat}`) &&
+      !metadata.tags.includes("Digital Download")) {
+    missing.push("Digital Download tag");
+  }
+
+  if (normalizedStage === "live") {
+    if (!Array.isArray(metadata.productMedia) || metadata.productMedia.length === 0) missing.push("productMedia");
+    if (!releaseLinkageReady(metadata.releaseLinkage) && /digital|download|ebook|e-book|pdf/iu.test(`${metadata.productType} ${metadata.productFormat}`)) {
+      missing.push("releaseLinkage");
+    }
+    if (!digitalDeliveryReady(metadata.digitalDelivery) && /digital|download|ebook|e-book|pdf/iu.test(`${metadata.productType} ${metadata.productFormat}`)) {
+      missing.push("digitalDelivery");
+    }
+  }
+
+  if (missing.length) {
+    throw contractError(
+      "SHOPIFY_PRODUCT_PAGE_CONTRACT_INCOMPLETE",
+      `The canonical Shopify product-page contract is incomplete for ${normalizedStage}: ${missing.join(", ")}.`,
+      409,
+      { stage: normalizedStage, missing, metadata },
+    );
+  }
+
+  return Object.freeze({
+    ready: true,
+    stage: normalizedStage,
+    contractId: MMG_SHOPIFY_PRODUCT_PAGE_CONTRACT_ID,
+    metadata,
   });
 }
 
@@ -214,6 +380,7 @@ export function canonicalizePipelineRecord(record = {}) {
     canonicalContracts: {
       digitalAsset: MMG_DIGITAL_ASSET_CONTRACT_ID,
       shopifyPublishing: MMG_SHOPIFY_PUBLISHING_CONTRACT_ID,
+      shopifyProductPage: MMG_SHOPIFY_PRODUCT_PAGE_CONTRACT_ID,
       build: KAIROS_CANONICAL_PUBLISHING_CONTRACT_BUILD,
     },
     canonicalPackage: {
@@ -289,6 +456,15 @@ export function canonicalContractSnapshot() {
     },
     shopify: {
       contractId: MMG_SHOPIFY_PUBLISHING_CONTRACT_ID,
+      productPageContract: {
+        contractId: MMG_SHOPIFY_PRODUCT_PAGE_CONTRACT_ID,
+        fields: MMG_SHOPIFY_PRODUCT_PAGE_FIELDS,
+        architecture: MMG_SHOPIFY_PRODUCT_PAGE_ARCHITECTURE,
+        collectionStandard: "3-5",
+        seriesAndBookNumberMayBeExplicitlyNull: true,
+        draftReadinessRequiredBeforeProductContentIsApproved: true,
+        liveReadinessRequiredBeforePublication: true,
+      },
       draftFirst: true,
       livePublishRequiresSeparateApproval: true,
       approvedStatusSequence: ["DRAFT", "ACTIVE"],
@@ -317,6 +493,51 @@ function collectObservedFilenames(record) {
   );
   if (packageName) values.add(packageName);
   return values;
+}
+
+function normalizeReleaseLinkage(value, input) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return sanitizeCanonicalPublicRecord(value);
+  }
+  const releaseId = clean(input.releaseId || input.manifestId || input.releaseManifestId, 240);
+  const checksum = clean(input.releaseChecksum || input.manifestChecksum || input.checksum, 240);
+  const files = uniqueStrings(
+    input.releaseFiles || input.filenames || input.deliveryFiles,
+    50,
+  );
+  return { releaseId: releaseId || null, checksum: checksum || null, files };
+}
+
+function normalizeDigitalDelivery(value, input) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return sanitizeCanonicalPublicRecord(value);
+  }
+  if (value === true) return { configured: true };
+  if (value === false) return { configured: false };
+  const configured = input.digitalDeliveryConfigured === true || input.deliveryConfigured === true;
+  return { configured };
+}
+
+function releaseLinkageReady(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const releaseId = clean(value.releaseId || value.manifestId, 240);
+  const checksum = clean(value.checksum || value.manifestChecksum, 240);
+  const files = Array.isArray(value.files) ? value.files.filter(Boolean) : [];
+  return Boolean((releaseId || checksum) && files.length);
+}
+
+function digitalDeliveryReady(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value) && value.configured === true);
+}
+
+function requireValue(value, field, missing) {
+  if (value == null || (typeof value === "string" && !value.trim())) missing.push(field);
+}
+
+function normalizeMoney(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return "";
+  return number.toFixed(2);
 }
 
 function walk(value, path, visit, key = "") {
