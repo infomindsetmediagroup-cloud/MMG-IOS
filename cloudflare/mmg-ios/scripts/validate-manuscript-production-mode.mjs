@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const BUILD = "kairos-manuscript-production-validator-20260807-canonical-publishing-wrapper-1";
+const BUILD = "kairos-manuscript-production-validator-20260807-canonical-publishing-wrapper-2";
 const here = dirname(fileURLToPath(import.meta.url));
 const workerRoot = join(here, "..");
 const sourceRoot = join(workerRoot, "src");
@@ -79,7 +79,7 @@ for (const marker of [
 const triggerMatch = wrangler.match(/^\[triggers\]\s*\ncrons\s*=\s*\[([^\]]*)\]/mu);
 assert.ok(triggerMatch, "Wrangler must declare the governed production cron list.");
 const configuredCrons = [...triggerMatch[1].matchAll(/"([^"]+)"/gu)].map((match) => match[1]);
-for (const requiredCron of ["0 15 * * *", "0 2 * * * *", "0 * * * *"]) {
+for (const requiredCron of ["0 15 * * *", "0 2 * * *", "0 * * * *"]) {
   assert.equal(
     configuredCrons.filter((cron) => cron === requiredCron).length,
     1,
