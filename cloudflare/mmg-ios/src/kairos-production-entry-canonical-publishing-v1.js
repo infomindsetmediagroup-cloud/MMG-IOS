@@ -5,6 +5,7 @@ import canonicalRuntime, {
   KairosManuscriptGenerationWorkflow,
   KairosManuscriptSource,
   KairosAutonomyLedger,
+  KairosTikTokConnectorVault,
 } from "./kairos-production-entry-local-canonical-v1.js";
 import {
   handleCanonicalPublishingRequest,
@@ -23,6 +24,7 @@ export {
   KairosManuscriptGenerationWorkflow,
   KairosManuscriptSource,
   KairosAutonomyLedger,
+  KairosTikTokConnectorVault,
 };
 
 export const KAIROS_CANONICAL_PUBLISHING_ENTRY_BUILD =
