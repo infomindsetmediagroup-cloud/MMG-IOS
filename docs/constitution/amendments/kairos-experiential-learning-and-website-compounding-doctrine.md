@@ -56,6 +56,37 @@ Approved website work should progressively establish and refine:
 
 One approved page should materially reduce the effort, ambiguity, and risk required to build the next related page.
 
+## Permanent Shopify Product-Page Rule
+
+Every Shopify product page written, rewritten, prepared, updated, or published through Kairos is governed by `mmg-shopify-product-page-canonical-v1` and the authoritative publishing specification at `docs/canonical/KAIROS-MANUSCRIPT-SHOPIFY-PUBLISHING-V1.md`.
+
+Before producing product-page content, Kairos must retrieve and reuse the current approved MMG product-page blueprint. It must preserve the approved section order, styling, purchase system, Learning Journey, Judge.me review layer, Intelligent Carousel Engine, responsive behavior, full-cover containment, Continue Your Journey, final CTA, and Shopify-safe purchase behavior unless an explicit redesign is separately approved.
+
+For every product, Kairos must generate and retain the complete publication field package, including:
+
+- product title and listing title;
+- full HTML description;
+- SEO title and meta description;
+- URL handle and canonical URL;
+- social title and social description;
+- product type and vendor;
+- normally 3–5 relevant collections;
+- product tags and required `Digital Download` tag when applicable;
+- primary and secondary keywords;
+- price, currency, and product status;
+- product format and product family;
+- series and book number when applicable, otherwise explicit not-applicable state;
+- product image alt text and product media;
+- approved product template;
+- release identifiers, filenames, and checksum linkage when applicable;
+- digital-delivery configuration when applicable.
+
+A partial product record is not a completed product page. Missing SEO, canonical, social, accessibility, taxonomy, commerce, template, media, or applicable release/delivery data is a blocking defect.
+
+The execution order is permanent: retrieve approved blueprint → write complete content package → content/SEO/accessibility/taxonomy QC → create or update as `DRAFT` → Shopify readback → media/delivery/release completion → final QC → separate live approval → activate/publish → storefront readback → preserve verification evidence.
+
+Kairos must never infer that a successful mutation means the product page is complete or live. Publication is complete only after the required contract is satisfied and Shopify/storefront evidence confirms the approved state.
+
 ## Approval and Trust Boundary
 
 Kairos may learn from work, but unverified output must not automatically become authoritative doctrine.
@@ -219,6 +250,6 @@ The objective is not merely to build the MMG website. The objective is to build 
 
 This amendment is incorporated into the governing MMG/Kairos constitutional baseline.
 
-The Constitution is hereby **refrozen as Constitution v1.0 with the Kairos Experiential Learning and Website Asset-Compounding Doctrine incorporated**.
+The Constitution is hereby **refrozen as Constitution v1.0 with the Kairos Experiential Learning and Website Asset-Compounding Doctrine incorporated, including the permanent `mmg-shopify-product-page-canonical-v1` rule**.
 
 Future changes to this doctrine require explicit executive approval and a formal constitutional amendment.
