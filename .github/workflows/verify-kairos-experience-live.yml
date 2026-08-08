@@ -99,24 +99,31 @@ jobs:
               -H 'Content-Type: application/json' --data '{}' \
               -o "${denial_body}" -w '%{http_code}' || true)"
 
+            status_ready=0; grep -q '"ready":true' "${status_file}" && status_ready=1 || true
+            status_mode=0; grep -q '"mode":"manuscript-only"' "${status_file}" && status_mode=1 || true
+            client_build=0; grep -q 'kairos-manuscript-project-setup-ui-20260803-4-flow-recovery' "${client_file}" && client_build=1 || true
+            client_controller=0; grep -q 'KairosManuscriptSetupController' "${client_file}" && client_controller=1 || true
+            probe_header=0; grep -qi 'X-Kairos-Manuscript-Setup: kairos-manuscript-project-setup-20260722-3' "${probe_headers}" && probe_header=1 || true
+            denial_marker=0; grep -q '"code":"WEBSITE_MUTATION_DENIED"' "${denial_body}" && denial_marker=1 || true
+
             if [ "${status_code}" = "200" ] \
-              && grep -q '"ready":true' "${status_file}" \
-              && grep -q '"mode":"manuscript-only"' "${status_file}" \
+              && [ "${status_ready}" = "1" ] \
+              && [ "${status_mode}" = "1" ] \
               && [ "${client_code}" = "200" ] \
-              && grep -q 'kairos-manuscript-project-setup-ui-20260722-2' "${client_file}" \
-              && grep -q 'two-phase-resumable' "${client_file}" \
+              && [ "${client_build}" = "1" ] \
+              && [ "${client_controller}" = "1" ] \
               && [ "${probe_code}" = "404" ] \
-              && grep -qi 'X-Kairos-Manuscript-Setup: kairos-manuscript-project-setup-20260722-3' "${probe_headers}" \
+              && [ "${probe_header}" = "1" ] \
               && [ "${denial_code}" = "403" ] \
-              && grep -q '"code":"WEBSITE_MUTATION_DENIED"' "${denial_body}"; then
+              && [ "${denial_marker}" = "1" ]; then
               success=1
               echo "Live manuscript experience verified on attempt ${attempt}."
               rm -f "${status_file}" "${client_file}" "${probe_headers}" "${probe_body}" "${denial_body}"
               break
             fi
 
+            echo "Live proof attempt ${attempt}/24: status=${status_code} ready=${status_ready} mode=${status_mode}; client=${client_code} build=${client_build} controller=${client_controller}; probe=${probe_code} header=${probe_header}; denial=${denial_code} marker=${denial_marker}."
             rm -f "${status_file}" "${client_file}" "${probe_headers}" "${probe_body}" "${denial_body}"
-            echo "Manuscript experience deployment not ready (attempt ${attempt}/24)."
             sleep 5
           done
 
