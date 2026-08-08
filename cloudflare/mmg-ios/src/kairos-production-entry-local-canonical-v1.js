@@ -75,6 +75,9 @@ export class KairosManuscriptSource extends BaseKairosManuscriptSource {
 export const KAIROS_LOCAL_CANONICAL_ENTRY_BUILD =
   "kairos-local-canonical-entry-20260807-2-customer-account-oauth";
 
+const KAIROS_CONCIERGE_BUILD = "kairos-concierge-20260807-3-account-aware";
+const KAIROS_CONCIERGE_SCRIPT = `/scripts/kairos-concierge.js?v=${KAIROS_CONCIERGE_BUILD}`;
+
 const PROVIDER_INDEPENDENT_OPERATIONAL_PATHS = new Set([
   "/api/hub/run",
   "/api/workflows",
@@ -181,6 +184,7 @@ function operationalCompatibilityEnv(env) {
 function stamp(response, manuscriptIdentity = null) {
   const headers = new Headers(response.headers);
   headers.set("Cache-Control", "no-store");
+  headers.set("Permissions-Policy", "camera=(), microphone=(self), geolocation=(), payment=(), usb=()");
   headers.set("X-Kairos-Canonical-Local", KAIROS_LOCAL_CANONICAL_ENTRY_BUILD);
   headers.set("X-Kairos-Inference-Provider", "browser-webgpu");
   headers.set("X-Kairos-External-Provider", "disabled");
@@ -200,11 +204,47 @@ function stamp(response, manuscriptIdentity = null) {
     headers.set("X-Kairos-Canonical-Manuscript-Project", manuscriptIdentity.canonicalProjectId);
   }
   headers.set("X-Kairos-Manuscript-Identity-Resolved", manuscriptIdentity?.resolved ? "true" : "false");
-  return new Response(response.body, {
+
+  const contentType = String(headers.get("Content-Type") || "").toLowerCase();
+  const isHtml = contentType.includes("text/html") && response.body !== null;
+  if (isHtml) allowSameOriginConcierge(headers);
+
+  const stamped = new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
     headers,
   });
+
+  if (!isHtml || typeof HTMLRewriter !== "function") return stamped;
+  headers.delete("Content-Length");
+  const transformable = new Response(stamped.body, {
+    status: stamped.status,
+    statusText: stamped.statusText,
+    headers,
+  });
+  return new HTMLRewriter()
+    .on("body", {
+      element(element) {
+        element.append(`\n<script type="module" src="${KAIROS_CONCIERGE_SCRIPT}"></script>`, { html: true });
+      },
+    })
+    .transform(transformable);
+}
+
+function allowSameOriginConcierge(headers) {
+  const policy = String(headers.get("Content-Security-Policy") || "").trim();
+  if (!policy) return;
+  const directives = policy.split(";").map((item) => item.trim()).filter(Boolean);
+  let foundScript = false;
+  const upgraded = directives.map((directive) => {
+    if (!directive.toLowerCase().startsWith("script-src ")) return directive;
+    foundScript = true;
+    const tokens = directive.split(/\s+/u);
+    if (!tokens.includes("'self'")) tokens.splice(1, 0, "'self'");
+    return tokens.join(" ");
+  });
+  if (!foundScript) upgraded.push("script-src 'self'");
+  headers.set("Content-Security-Policy", upgraded.join("; "));
 }
 
 function json(value, status = 200) {
