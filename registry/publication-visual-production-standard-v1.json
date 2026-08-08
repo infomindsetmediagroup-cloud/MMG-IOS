@@ -1,0 +1,42 @@
+{
+  "registry": "publication-visual-production-standard",
+  "status": "active",
+  "version": "1.0.0",
+  "contractId": "mmg-publication-visual-production-standard-v1",
+  "owner": "Mindset Media Group™",
+  "effectiveDate": "2026-08-08",
+  "authoritativeSpec": "docs/canonical/MMG-PUBLICATION-VISUAL-PRODUCTION-STANDARD-V1.md",
+  "executableContract": "cloudflare/mmg-ios/src/kairos-publication-visual-standard-v1.js",
+  "benchmarks": [
+    "MMG Project Guide Golden Master v1.0",
+    "MMG Subscription Member Guide Golden Master v1.0"
+  ],
+  "immutableRules": {
+    "manuscriptIsContentAuthority": true,
+    "visualUpgradeDoesNotAuthorizeEditorialRewrite": true,
+    "preserveApprovedTitleSpecificColorIdentity": true,
+    "doNotHomogenizeAllTitlesToMMGBlue": true,
+    "exactCustomerDeliverableCount": 6,
+    "customerDeliverableSetUnchanged": true,
+    "archiveStructureUnchanged": true,
+    "changingDeliverableCountRequiresExplicitExecutiveApproval": true
+  },
+  "digitalEdition": {
+    "fileRole": "Digital-Edition-V2.pdf",
+    "productionClass": "premium-customer-facing-publication",
+    "instruction": "Build the approved manuscript into a polished professional MMG publication using the approved guide/handbook visual-quality language while preserving the individual title's established color identity and adapting layout to the publication type."
+  },
+  "kdpInterior": {
+    "fileRole": "KDP-Interior_6x9.pdf",
+    "productionClass": "professional-submission-only-interior",
+    "instruction": "Produce a clean cover-free professional KDP submission interior with restrained book typography, hierarchy, margins, gutters, pagination, and print-safe structure; exclude customer-facing brochure or storefront decoration."
+  },
+  "customerDeliverables": [
+    "Customer-Spec-Sheet.pdf",
+    "KDP-Interior_6x9.pdf",
+    "Digital-Edition-V2.pdf",
+    "Cover-Portrait_2048x3072.png",
+    "Cover-Thumbnail_2048x2048.png",
+    "README.txt"
+  ]
+}
