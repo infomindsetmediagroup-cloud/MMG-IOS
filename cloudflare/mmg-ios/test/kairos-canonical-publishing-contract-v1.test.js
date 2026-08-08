@@ -4,7 +4,10 @@ import {
   CANONICAL_CONFIRMATIONS,
   MMG_CANONICAL_IDENTITY,
   MMG_DIGITAL_ASSET_CONTRACT_ID,
+  MMG_SHOPIFY_PRODUCT_PAGE_CONTRACT_ID,
+  MMG_SHOPIFY_PRODUCT_PAGE_FIELDS,
   assertCanonicalPackageReady,
+  assertCanonicalShopifyProductPageReady,
   assertNoForbiddenPublicIdentity,
   assertShopifyDraftAuthorization,
   assertShopifyPublishAuthorization,
@@ -62,6 +65,86 @@ test("locks every public identity field to Mindset Media Group", () => {
   assert.equal(metadata.publisher, MMG_CANONICAL_IDENTITY.publisher);
   assert.equal(metadata.status, "DRAFT");
   assert.equal(metadata.contracts.digitalAsset, MMG_DIGITAL_ASSET_CONTRACT_ID);
+  assert.equal(metadata.contracts.shopifyProductPage, MMG_SHOPIFY_PRODUCT_PAGE_CONTRACT_ID);
+});
+
+test("canonicalizes the complete Shopify product-page SEO and content package", () => {
+  const metadata = canonicalizePublicationMetadata({
+    title: "Creator Systems",
+    description: "Build a repeatable creator operating system.",
+    keywords: ["creator systems", "content workflow", "creator business"],
+    collections: ["Digital Downloads", "Creator Tools", "AI Guides"],
+    price: 9.95,
+    templateSuffix: "mmg-book-product",
+  });
+  assert.equal(metadata.listingTitle, "Creator Systems");
+  assert.equal(metadata.seoTitle, "Creator Systems");
+  assert.equal(metadata.primaryKeyword, "creator systems");
+  assert.deepEqual(metadata.secondaryKeywords, ["content workflow", "creator business"]);
+  assert.equal(metadata.canonicalURL, "https://themindsetmediagroup.com/products/creator-systems");
+  assert.equal(metadata.socialTitle, metadata.seoTitle);
+  assert.equal(metadata.productImageAltText, "Creator Systems — Mindset Media Group");
+  assert.equal(metadata.price, "9.95");
+  assert.equal(metadata.productPageContract, MMG_SHOPIFY_PRODUCT_PAGE_CONTRACT_ID);
+});
+
+test("requires the canonical Shopify product-page package before draft content is approved", () => {
+  const ready = assertCanonicalShopifyProductPageReady({
+    title: "Creator Systems",
+    descriptionHtml: "<p>Build a repeatable creator operating system.</p>",
+    keywords: ["creator systems", "content workflow", "creator business"],
+    collections: ["Digital Downloads", "Creator Tools", "AI Guides"],
+    tags: ["Creator Education"],
+    price: 9.95,
+    templateSuffix: "mmg-book-product",
+  }, { stage: "draft" });
+  assert.equal(ready.ready, true);
+  assert.equal(ready.contractId, MMG_SHOPIFY_PRODUCT_PAGE_CONTRACT_ID);
+  assert.equal(ready.metadata.collections.length, 3);
+
+  assert.throws(
+    () => assertCanonicalShopifyProductPageReady({
+      title: "Creator Systems",
+      descriptionHtml: "<p>Build a repeatable creator operating system.</p>",
+      keywords: ["creator systems"],
+      collections: ["Digital Downloads"],
+      price: 9.95,
+      templateSuffix: "mmg-book-product",
+    }, { stage: "draft" }),
+    (error) => error.code === "SHOPIFY_PRODUCT_PAGE_CONTRACT_INCOMPLETE" && error.record.missing.includes("collections(3-5)"),
+  );
+});
+
+test("requires media, release linkage, and delivery readiness before a digital product is live-ready", () => {
+  const base = {
+    title: "Creator Systems",
+    descriptionHtml: "<p>Build a repeatable creator operating system.</p>",
+    keywords: ["creator systems", "content workflow"],
+    collections: ["Digital Downloads", "Creator Tools", "AI Guides"],
+    tags: ["Creator Education"],
+    price: 9.95,
+    templateSuffix: "mmg-book-product",
+  };
+
+  assert.throws(
+    () => assertCanonicalShopifyProductPageReady(base, { stage: "live" }),
+    (error) => error.code === "SHOPIFY_PRODUCT_PAGE_CONTRACT_INCOMPLETE" &&
+      error.record.missing.includes("productMedia") &&
+      error.record.missing.includes("releaseLinkage") &&
+      error.record.missing.includes("digitalDelivery"),
+  );
+
+  const ready = assertCanonicalShopifyProductPageReady({
+    ...base,
+    productMedia: [{ role: "featured", filename: "creator-systems-cover.png" }],
+    releaseLinkage: {
+      releaseId: "release-creator-systems-v1",
+      checksum: "sha256:example",
+      files: ["Creator-Systems_Digital-Edition-V2.pdf"],
+    },
+    digitalDelivery: { configured: true },
+  }, { stage: "live" });
+  assert.equal(ready.ready, true);
 });
 
 test("rejects prohibited personal attribution anywhere in public input", () => {
@@ -214,11 +297,16 @@ test("blocks Shopify handoff when integrity was not positively verified", () => 
   );
 });
 
-test("exposes both canonical invocation contracts", () => {
+test("exposes both canonical invocation contracts and the permanent Shopify product-page contract", () => {
   const snapshot = canonicalContractSnapshot();
   assert.equal(snapshot.digitalAsset.exactCustomerFileCount, 6);
   assert.equal(snapshot.digitalAsset.minimumFinishedPages, 100);
   assert.equal(snapshot.digitalAsset.legacySourceAliasesNormalized, true);
   assert.equal(snapshot.shopify.draftFirst, true);
   assert.equal(snapshot.shopify.livePublishRequiresSeparateApproval, true);
+  assert.equal(snapshot.shopify.productPageContract.contractId, MMG_SHOPIFY_PRODUCT_PAGE_CONTRACT_ID);
+  assert.deepEqual(snapshot.shopify.productPageContract.fields, MMG_SHOPIFY_PRODUCT_PAGE_FIELDS);
+  assert.equal(snapshot.shopify.productPageContract.collectionStandard, "3-5");
+  assert.equal(snapshot.shopify.productPageContract.architecture.includes("Learning Journey"), true);
+  assert.equal(snapshot.shopify.productPageContract.architecture.includes("Judge.me review layer"), true);
 });
