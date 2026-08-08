@@ -35,6 +35,10 @@ class_name = "KairosManuscriptSource"
 name = "KAIROS_AUTONOMY_LEDGER"
 class_name = "KairosAutonomyLedger"
 
+[[durable_objects.bindings]]
+name = "KAIROS_TIKTOK_CONNECTOR"
+class_name = "KairosTikTokConnectorVault"
+
 [[workflows]]
 name = "kairos-project-foundation-workflow"
 binding = "KAIROS_PROJECT_WORKFLOW"
@@ -61,6 +65,10 @@ new_sqlite_classes = ["KairosManuscriptSource"]
 tag = "kairos-autonomy-ledger-v1"
 new_sqlite_classes = ["KairosAutonomyLedger"]
 
+[[migrations]]
+tag = "kairos-tiktok-connector-v1"
+new_sqlite_classes = ["KairosTikTokConnectorVault"]
+
 # Existing production secrets are retained by keep_vars=true, but the canonical local entry masks external inference credentials from runtime execution.
 # Dashboard document and API routes execute Worker authentication before any UI or operations data is returned.
 # Kairos dashboard APIs require a Shopify Admin ID token signed by the Kairos app secret and scoped to the exact MMG shop.
@@ -84,7 +92,9 @@ new_sqlite_classes = ["KairosAutonomyLedger"]
 # The authenticated autonomy API is available through the canonical Worker boundary.
 # Hourly autonomous operations use the governed collect, persist, prioritize, orchestrate, execute-safe, and record cycle.
 # Certified execution is limited to website reinspection, collector refresh, internal incident recording, and inert repair proposals.
-# GitHub, Cloudflare production deployment, Shopify, publication, and customer communication actions remain approval-required.
+# GitHub, Cloudflare production deployment, Shopify, publication, customer communication, and social publication actions remain approval-required.
+# TikTok OAuth and platform tokens are stored server-side in the dedicated connector Durable Object; browser code never receives TikTok access or refresh tokens.
+# TikTok Direct Post remains disabled until the Content Posting API client audit is explicitly complete. Upload-to-TikTok remains independently connector-gated.
 
 [vars]
 SHOPIFY_STORE_DOMAIN = "07kd8e-qw.myshopify.com"
@@ -96,6 +106,12 @@ KAIROS_SHOPIFY_STOREFRONT_DOMAIN = "themindsetmediagroup.com"
 KAIROS_CUSTOMER_AUTH_CALLBACK_URL = "https://mmg-ios.info-mindsetmediagroup.workers.dev/api/customer/auth/callback"
 KAIROS_CUSTOMER_PORTAL_URL = "https://mmg-ios.info-mindsetmediagroup.workers.dev/customer-portal"
 KAIROS_CUSTOMER_PUBLIC_PORTAL_URL = "https://themindsetmediagroup.com/pages/customer-portal"
+KAIROS_TIKTOK_CONNECTOR_ENABLED = "true"
+KAIROS_TIKTOK_REDIRECT_URI = "https://mmg-ios.info-mindsetmediagroup.workers.dev/api/social-connectors/tiktok/callback"
+KAIROS_TIKTOK_EXPECTED_USERNAME = "mindset.media.group"
+KAIROS_TIKTOK_SCOPES = "user.info.basic,video.list,video.upload,video.publish"
+KAIROS_TIKTOK_DIRECT_POST_AUDITED = "false"
+KAIROS_TIKTOK_VERIFIED_MEDIA_ORIGINS = ""
 SHOPIFY_API_VERSION = "2026-07"
 MMG_STOREFRONT_ORIGIN = "https://themindsetmediagroup.com"
 KAIROS_MODEL_PROVIDER = "browser-webgpu"

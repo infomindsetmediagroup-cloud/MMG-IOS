@@ -12,6 +12,8 @@ const loader = readFileSync(join(repoRoot, "web/kairos-dashboard/scripts/legacy-
 const commandHub = readFileSync(join(repoRoot, "web/kairos-dashboard/scripts/command-hub.js"), "utf8");
 const runtime = readFileSync(join(workerRoot, "src/kairos-production-entry-v2.js"), "utf8");
 const engine = readFileSync(join(workerRoot, "src/kairos-social-production-v1.js"), "utf8");
+const connector = readFileSync(join(workerRoot, "src/kairos-tiktok-connector-v1.js"), "utf8");
+const localCanonical = readFileSync(join(workerRoot, "src/kairos-production-entry-local-canonical-v1.js"), "utf8");
 
 test("Social Production remains the permanent Content Center TikTok entry point", () => {
   assert.match(commandHub, /"Social Production"/);
@@ -28,7 +30,6 @@ test("TikTok UI exposes the four format choices and canonical account identity",
   assert.match(ui, /@mindset\.media\.group/);
   assert.match(ui, /2 broad \+ 2 niche \+ 1 #MindsetMediaGroup/);
   assert.match(ui, /Build TikTok Package/);
-  assert.match(ui, /TikTok connector: not connected yet/);
 });
 
 test("applicable Content and Business cards expose context-aware TikTok entry points", () => {
@@ -53,4 +54,37 @@ test("social package exposes the eight-step connector handoff process", () => {
   for (const name of ["Objective", "Format", "Hook", "Copy", "Hashtag Pyramid", "Media Brief", "QA & Approval", "Connector Handoff"]) {
     assert.ok(engine.includes(`name: "${name}"`), `Missing production slice: ${name}`);
   }
+});
+
+test("Social Production exposes authenticated TikTok connect, publish and receipt controls", () => {
+  assert.match(ui, /const CONNECTOR_ROOT="\/api\/social-connectors\/tiktok"/);
+  for (const suffix of ["/status", "/connect-url", "/disconnect", "/creator-info", "/publish", "/receipt/refresh"]) {
+    assert.ok(ui.includes("${CONNECTOR_ROOT}" + suffix), `Missing connector UI route suffix: ${suffix}`);
+  }
+  assert.match(ui, /window\.shopify\.idToken/);
+  assert.match(ui, /Authorization:`Bearer \$\{token\}`/);
+  assert.match(ui, /Connect TikTok/);
+  assert.match(ui, /Upload Approved Package/);
+  assert.match(ui, /Publish Approved Package/);
+  assert.match(ui, /Refresh TikTok Status/);
+});
+
+test("TikTok connector UI keeps native text manual and requires explicit export consent", () => {
+  assert.match(ui, /Manual TikTok native text handoff/);
+  assert.match(ui, /Content Posting API does not expose native text-post publishing/);
+  assert.match(ui, /I explicitly consent to export this approved package to TikTok now/);
+  assert.match(ui, /TikTok Content Sharing Guidelines/);
+  assert.match(ui, /publish:false/);
+});
+
+test("canonical runtime owns the server-side TikTok connector boundary", () => {
+  assert.match(localCanonical, /handleTikTokConnectorRequest\(request, env, ctx\)/);
+  assert.match(localCanonical, /KairosTikTokConnectorVault/);
+  assert.match(localCanonical, /X-Kairos-TikTok-Connector/);
+  assert.match(connector, /verifyShopifyAdminSession/);
+  assert.match(connector, /KAIROS_TIKTOK_CLIENT_SECRET/);
+  assert.match(connector, /TIKTOK_DIRECT_POST_AUDIT_REQUIRED/);
+  assert.match(connector, /TIKTOK_ACCOUNT_MISMATCH/);
+  assert.match(connector, /TIKTOK_EXPORT_CONSENT_REQUIRED/);
+  assert.match(connector, /TIKTOK_MEDIA_ORIGIN_NOT_VERIFIED/);
 });

@@ -44,12 +44,18 @@ import {
   stampKairosCustomerSession,
   KAIROS_CUSTOMER_ACCOUNT_AUTH_BUILD,
 } from "./kairos-customer-account-auth-v1.js";
+import {
+  handleTikTokConnectorRequest,
+  KairosTikTokConnectorVault,
+  KAIROS_TIKTOK_CONNECTOR_BUILD,
+} from "./kairos-tiktok-connector-v1.js";
 
 export {
   KairosProjectAgent,
   KairosProjectFoundationWorkflow,
   KairosManuscriptGenerationWorkflow,
   KairosAutonomyLedger,
+  KairosTikTokConnectorVault,
 };
 
 export class KairosProject extends BaseKairosProject {
@@ -103,6 +109,9 @@ export default {
     if (customerResponse) {
       return stamp(stampKairosCustomerSession(customerResponse, preparedCustomerRequest.setCookie));
     }
+
+    const tiktokConnectorResponse = await handleTikTokConnectorRequest(request, env, ctx);
+    if (tiktokConnectorResponse) return stamp(tiktokConnectorResponse);
 
     const dashboardResponse = await handleKairosDashboardRequest(request, env, ctx, {
       operationsEnv: autonomousEnv,
@@ -197,6 +206,7 @@ function stamp(response, manuscriptIdentity = null) {
   headers.set("X-Kairos-Dashboard-Build", headers.get("X-Kairos-Dashboard-Build") || KAIROS_DASHBOARD_BUILD);
   headers.set("X-Kairos-Customer-Runtime-Store", headers.get("X-Kairos-Customer-Runtime-Store") || KAIROS_CUSTOMER_RUNTIME_PROJECTION_STORE_BUILD);
   headers.set("X-Kairos-Customer-Auth", headers.get("X-Kairos-Customer-Auth") || KAIROS_CUSTOMER_ACCOUNT_AUTH_BUILD);
+  headers.set("X-Kairos-TikTok-Connector", headers.get("X-Kairos-TikTok-Connector") || KAIROS_TIKTOK_CONNECTOR_BUILD);
   if (manuscriptIdentity?.requestedProjectId) {
     headers.set("X-Kairos-Requested-Manuscript-Project", manuscriptIdentity.requestedProjectId);
   }
